@@ -1,0 +1,98 @@
+import type { DailyLog, IsoLine, PlannedProgressPoint } from '../types'
+import { generateSampleSvg, SAMPLE_LINES } from './sampleSvg'
+import { makeId } from '../lib/id'
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+function line(meta: (typeof SAMPLE_LINES)[number], status: IsoLine['status']): IsoLine {
+  return {
+    id: makeId('line'),
+    svgElementId: meta.svgElementId,
+    size: meta.size,
+    spec: meta.spec,
+    service: meta.service,
+    contractor: meta.contractor,
+    plannedLength: meta.plannedLength,
+    totalWelds: meta.totalWelds,
+    status,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+export function buildSeedProject(): {
+  svgRaw: string
+  lines: IsoLine[]
+  logs: Omit<DailyLog, 'id' | 'createdAt'>[]
+  plannedCurve: PlannedProgressPoint[]
+} {
+  const svgRaw = generateSampleSvg()
+
+  const lines: IsoLine[] = [
+    line(SAMPLE_LINES[0], 'in_progress'), // L-1001 6"
+    line(SAMPLE_LINES[1], 'in_progress'), // L-1002 4"
+    line(SAMPLE_LINES[2], 'testing'), // L-1003 8"
+    line(SAMPLE_LINES[3], 'not_started'), // L-1004 2"
+    line(SAMPLE_LINES[4], 'in_progress'), // L-1005 10"
+    line(SAMPLE_LINES[5], 'completed'), // L-1006 3"
+    line(SAMPLE_LINES[6], 'completed'), // L-1007 12" main
+    line(SAMPLE_LINES[7], 'in_progress'), // L-1008 4"
+  ]
+
+  const byElementId = new Map(lines.map((l) => [l.svgElementId, l]))
+  const idOf = (elementId: string) => byElementId.get(elementId)!.id
+
+  const logs: Omit<DailyLog, 'id' | 'createdAt'>[] = [
+    // L-1001-6-A1A (in progress ~60%)
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(24), lengthDone: 12, weldCount: 4, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'شروع اسپول‌های اولیه', delayReason: '' },
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(17), lengthDone: 10, weldCount: 3, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(9), lengthDone: 8, weldCount: 3, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: 'عدم تامین شیرآلات ۶ اینچ' },
+
+    // L-1002-4-B2B (in progress, slow ~35%)
+    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(20), lengthDone: 6, weldCount: 2, weldPass: 'root', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(6), lengthDone: 4, weldCount: 1, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: 'تاخیر در تامین نیروی جوشکار' },
+
+    // L-1003-8-A1A (testing - full length/weld + hydrotest log)
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(28), lengthDone: 20, weldCount: 7, weldPass: 'root', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(22), lengthDone: 18, weldCount: 6, weldPass: 'fill', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(15), lengthDone: 17, weldCount: 5, weldPass: 'cap', contractor: 'پیمانکار ب', notes: 'اتمام جوشکاری', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(4), lengthDone: 0, weldCount: 0, weldPass: 'hydrotest', contractor: 'پیمانکار ب', notes: 'تست هیدرواستاتیک در حال انجام', delayReason: '' },
+
+    // L-1005-10-A1A (in progress ~55%)
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(26), lengthDone: 14, weldCount: 5, weldPass: 'root', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(18), lengthDone: 12, weldCount: 4, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(10), lengthDone: 9, weldCount: 3, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(3), lengthDone: 0, weldCount: 0, weldPass: 'ndt', contractor: 'پیمانکار الف', notes: 'رادیوگرافی جوش‌های اصلی', delayReason: '' },
+
+    // L-1006-3-B2B (completed 100%)
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(29), lengthDone: 10, weldCount: 3, weldPass: 'root', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(25), lengthDone: 6, weldCount: 2, weldPass: 'fill', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(21), lengthDone: 5, weldCount: 2, weldPass: 'cap', contractor: 'پیمانکار ج', notes: 'تکمیل و تست شد', delayReason: '' },
+
+    // L-1007-12-A1A (completed main line 100%)
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(30), lengthDone: 20, weldCount: 7, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'خط اصلی - شروع', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(24), lengthDone: 18, weldCount: 6, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(19), lengthDone: 17, weldCount: 6, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(12), lengthDone: 16, weldCount: 5, weldPass: 'hydrotest', contractor: 'پیمانکار الف', notes: 'تست هیدرواستاتیک با موفقیت انجام شد', delayReason: '' },
+
+    // L-1008-4-C1C (in progress ~30%)
+    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(14), lengthDone: 6, weldCount: 2, weldPass: 'root', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(5), lengthDone: 4, weldCount: 1, weldPass: 'fill', contractor: 'پیمانکار ج', notes: '', delayReason: 'باران و توقف کار' },
+  ]
+
+  const plannedCurve: PlannedProgressPoint[] = [
+    { date: daysAgo(30), plannedPercent: 5 },
+    { date: daysAgo(25), plannedPercent: 15 },
+    { date: daysAgo(20), plannedPercent: 28 },
+    { date: daysAgo(15), plannedPercent: 42 },
+    { date: daysAgo(10), plannedPercent: 58 },
+    { date: daysAgo(5), plannedPercent: 74 },
+    { date: daysAgo(0), plannedPercent: 88 },
+    { date: daysAgo(-10), plannedPercent: 100 },
+  ]
+
+  return { svgRaw, lines, logs, plannedCurve }
+}

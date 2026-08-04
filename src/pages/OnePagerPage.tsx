@@ -1,0 +1,149 @@
+import { useMemo, useRef } from 'react'
+import { Ruler, GitCommitVertical, Gauge, ListChecks, FileDown } from 'lucide-react'
+import type { Project } from '../types'
+import { STATUS_COLOR, STATUS_LABEL_FA } from '../types'
+import { computeAllProgress, computeProjectKpis } from '../lib/progress'
+import { serializeColoredSvg } from '../lib/svg'
+import { exportElementToPdf } from '../lib/export'
+
+export function OnePagerPage({ project }: { project: Project }) {
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const progressMap = useMemo(() => computeAllProgress(project), [project])
+  const kpis = useMemo(() => computeProjectKpis(project), [project])
+
+  const coloredSvg = useMemo(() => {
+    if (!project.svgRaw) return null
+    const colorMap = new Map<string, string>()
+    for (const line of project.lines) {
+      const p = progressMap.get(line.id)
+      colorMap.set(line.svgElementId, STATUS_COLOR[p?.status ?? line.status])
+    }
+    return serializeColoredSvg(project.svgRaw, colorMap)
+  }, [project, progressMap])
+
+  const sortedLines = [...project.lines].sort((a, b) => {
+    const pa = progressMap.get(a.id)?.percent ?? 0
+    const pb = progressMap.get(b.id)?.percent ?? 0
+    return pa - pb
+  })
+
+  return (
+    <div className="p-4 h-full overflow-y-auto flex flex-col items-center gap-3">
+      <div className="no-print flex w-full max-w-[1200px] items-center justify-between">
+        <p className="text-sm text-secondary">پیش‌نمایش گزارش تک‌صفحه‌ای — مناسب چاپ A4 افقی</p>
+        <button
+          onClick={() => sheetRef.current && exportElementToPdf(sheetRef.current, `${project.name}-executive-summary.pdf`)}
+          className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+        >
+          <FileDown size={15} /> دانلود PDF
+        </button>
+      </div>
+
+      <div
+        ref={sheetRef}
+        className="onepager-sheet w-full max-w-[1200px] aspect-[297/210] shrink-0 rounded-xl p-6 flex flex-col gap-3"
+        style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0' }}
+      >
+        <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: '#e2e8f0' }}>
+          <div>
+            <h1 className="text-lg font-extrabold">{project.name}</h1>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>
+              کارفرما: {project.client || '—'} &nbsp;|&nbsp; موقعیت: {project.location || '—'} &nbsp;|&nbsp; واحد: {project.unit || '—'}
+            </p>
+          </div>
+          <div className="text-left text-[11px]" style={{ color: '#64748b' }}>
+            <p>تاریخ گزارش: {new Date().toLocaleDateString('fa-IR')}</p>
+            <p>Executive Progress Summary</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2.5">
+          <MiniKpi icon={Gauge} label="پیشرفت کلی" value={`${kpis.overallPercent}%`} color="#0ea5e9" />
+          <MiniKpi icon={Ruler} label="متراژ کل (m)" value={`${kpis.totalLengthDone} / ${kpis.totalPlannedLength}`} color="#2ecc71" />
+          <MiniKpi icon={GitCommitVertical} label="کل سرجوش‌ها" value={`${kpis.totalWeldsDone} / ${kpis.totalPlannedWelds}`} color="#f1c40f" />
+          <MiniKpi icon={ListChecks} label="خطوط تکمیل شده" value={`${kpis.completedLines} / ${kpis.lineCount}`} color="#3498db" />
+        </div>
+
+        <div className="grid grid-cols-[1.5fr_1fr] gap-3 flex-1 min-h-0">
+          <div className="rounded-lg p-2 flex flex-col min-h-0" style={{ border: '1px solid #e2e8f0' }}>
+            <div className="flex items-center justify-between px-1 pb-1">
+              <p className="text-[11px] font-bold" style={{ color: '#334155' }}>
+                نقشه ایزومتریک — وضعیت خطوط
+              </p>
+              <PrintLegend />
+            </div>
+            <div className="flex-1 min-h-0" dangerouslySetInnerHTML={coloredSvg ? { __html: coloredSvg } : { __html: '' }} />
+          </div>
+
+          <div className="rounded-lg overflow-hidden flex flex-col min-h-0" style={{ border: '1px solid #e2e8f0' }}>
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr style={{ background: '#f1f5f9', color: '#334155' }}>
+                  <th className="p-1.5 text-right font-semibold">خط</th>
+                  <th className="p-1.5 text-right font-semibold">سایز</th>
+                  <th className="p-1.5 text-right font-semibold">پیشرفت</th>
+                  <th className="p-1.5 text-right font-semibold">وضعیت</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedLines.map((line) => {
+                  const p = progressMap.get(line.id)
+                  const status = p?.status ?? line.status
+                  return (
+                    <tr key={line.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      <td className="p-1.5 font-mono">{line.svgElementId}</td>
+                      <td className="p-1.5">{line.size}</td>
+                      <td className="p-1.5 num">{p?.percent ?? 0}%</td>
+                      <td className="p-1.5">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: STATUS_COLOR[status] }} />
+                          {STATUS_LABEL_FA[status]}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p className="text-[9px] text-center" style={{ color: '#94a3b8' }}>
+          تولید شده توسط سامانه پایش پیشرفت ایزومتریک لوله‌کشی — {new Date().toLocaleString('fa-IR')}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function MiniKpi({ icon: Icon, label, value, color }: { icon: typeof Gauge; label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-lg p-2.5 flex items-center gap-2" style={{ border: '1px solid #e2e8f0' }}>
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0" style={{ background: `${color}1a`, color }}>
+        <Icon size={15} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px]" style={{ color: '#64748b' }}>
+          {label}
+        </p>
+        <p className="text-sm font-extrabold num" style={{ color: '#0f172a' }}>
+          {value}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function PrintLegend() {
+  const items = STATUS_LABEL_FA
+  return (
+    <div className="flex items-center gap-2">
+      {(Object.keys(items) as (keyof typeof items)[]).map((k) => (
+        <span key={k} className="flex items-center gap-1 text-[9px]" style={{ color: '#475569' }}>
+          <span className="inline-block h-1.5 w-3 rounded-full" style={{ background: STATUS_COLOR[k] }} />
+          {items[k]}
+        </span>
+      ))}
+    </div>
+  )
+}
