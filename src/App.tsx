@@ -14,7 +14,7 @@ import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
 import { canEdit } from './lib/permissions'
-import { Logo } from './components/common/Logo'
+import { LogoFull } from './components/common/Logo'
 
 export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
 
@@ -76,7 +76,7 @@ function App() {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="glass-panel max-w-lg rounded-3xl p-10 text-center">
-          <Logo size={56} className="mx-auto mb-4 rounded-2xl shadow-lg shadow-brand-500/30" />
+          <LogoFull width={190} className="mx-auto mb-4" />
           <h1 className="mb-2 text-xl font-extrabold">سامانه پایش پیشرفت ایزومتریک لوله‌کشی</h1>
           <p className="mb-7 text-sm text-secondary leading-7">
             مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک ایستگاه‌های گاز و پتروشیمی — آپلود SVG، ثبت کارکرد، گزارش‌های

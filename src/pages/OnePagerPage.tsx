@@ -85,7 +85,7 @@ export function OnePagerPage({ project }: { project: Project }) {
           style={{ background: 'linear-gradient(135deg, #0c4a6e 0%, #0369a1 55%, #0ea5e9 100%)' }}
         >
           <div className="flex items-center gap-3.5">
-            <Logo size={48} className="shrink-0 rounded-xl ring-2 ring-white/40" />
+            <Logo size={56} className="shrink-0" />
             <div>
               <h1 className="text-3xl font-black text-white tracking-tight">{project.name}</h1>
               <p className="mt-1 text-[12px] font-medium" style={{ color: '#e0f2fe' }}>
