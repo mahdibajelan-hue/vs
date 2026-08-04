@@ -5,6 +5,7 @@ import { computeSCurve, computeWeldsBySize } from '../lib/progress'
 import { SCurveChart } from '../components/Reports/SCurveChart'
 import { WeldsBySizeChart } from '../components/Reports/WeldsBySizeChart'
 import { LogsTable } from '../components/Reports/LogsTable'
+import { MilestoneTimeline } from '../components/Reports/MilestoneTimeline'
 import { exportProjectToExcel } from '../lib/export'
 
 export function ReportsPage({ project }: { project: Project }) {
@@ -13,6 +14,8 @@ export function ReportsPage({ project }: { project: Project }) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
+      <MilestoneTimeline projectId={project.id} milestones={project.milestones} />
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-secondary">تحلیل پیشرفت، جوشکاری و گزارش‌های تفکیکی پروژه {project.name}</p>
         <button

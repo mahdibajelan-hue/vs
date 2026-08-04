@@ -1,6 +1,7 @@
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, PlannedProgressPoint } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint } from '../types'
 import { generateSampleSvg, SAMPLE_LINES } from './sampleSvg'
 import { makeId } from '../lib/id'
+import { MILESTONE_COLOR_PALETTE } from '../lib/milestones'
 
 function daysAgo(n: number): string {
   const d = new Date()
@@ -12,6 +13,7 @@ function line(meta: (typeof SAMPLE_LINES)[number], status: IsoLine['status']): I
   return {
     id: makeId('line'),
     svgElementId: meta.svgElementId,
+    svgElementIds: [meta.svgElementId],
     size: meta.size,
     spec: meta.spec,
     service: meta.service,
@@ -41,6 +43,7 @@ export function buildSeedProject(): {
   logs: Omit<DailyLog, 'id' | 'createdAt'>[]
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
+  milestones: Milestone[]
 } {
   const svgRaw = generateSampleSvg()
 
@@ -151,5 +154,19 @@ export function buildSeedProject(): {
     sched(idOf('L-1008-4-C1C'), 'welding', daysAgo(16), daysAgo(3), daysAgo(14), null, 30),
   ]
 
-  return { svgRaw, lines, logs, plannedCurve, schedules }
+  const milestoneData: [string, number][] = [
+    ['اتمام طراحی', 100],
+    ['اتمام خرید کالا', 90],
+    ['اتمام جوشکاری', 65],
+    ['اتمام رادیوگرافی', 40],
+    ['راه‌اندازی و تحویل', 10],
+  ]
+  const milestones: Milestone[] = milestoneData.map(([label, percentComplete], i) => ({
+    id: makeId('mile'),
+    label,
+    percentComplete,
+    color: MILESTONE_COLOR_PALETTE[i % MILESTONE_COLOR_PALETTE.length],
+  }))
+
+  return { svgRaw, lines, logs, plannedCurve, schedules, milestones }
 }

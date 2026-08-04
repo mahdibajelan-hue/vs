@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { Maximize, ZoomIn, ZoomOut } from 'lucide-react'
 import type { IsoLine } from '../../types'
 import type { LineProgress } from '../../lib/progress'
 import { STATUS_COLOR } from '../../types'
+import { parseSvgCandidates } from '../../lib/svg'
 
 interface IsoViewportProps {
   svgRaw: string
@@ -10,12 +11,24 @@ interface IsoViewportProps {
   progressMap: Map<string, LineProgress>
   selectedLineId: string | null
   onSelectLine: (lineId: string) => void
+  fixMode?: boolean
+  selectedFragmentIds?: Set<string>
+  onToggleFragment?: (elementId: string) => void
 }
 
 const MIN_SCALE = 0.3
 const MAX_SCALE = 6
 
-export function IsoViewport({ svgRaw, lines, progressMap, selectedLineId, onSelectLine }: IsoViewportProps) {
+export function IsoViewport({
+  svgRaw,
+  lines,
+  progressMap,
+  selectedLineId,
+  onSelectLine,
+  fixMode = false,
+  selectedFragmentIds,
+  onToggleFragment,
+}: IsoViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
@@ -26,6 +39,14 @@ export function IsoViewport({ svgRaw, lines, progressMap, selectedLineId, onSele
     origX: 0,
     origY: 0,
   })
+
+  const candidateIds = useMemo(() => {
+    try {
+      return parseSvgCandidates(svgRaw).map((c) => c.elementId)
+    } catch {
+      return []
+    }
+  }, [svgRaw])
 
   // Inject svg once per svgRaw change
   useEffect(() => {
@@ -47,29 +68,55 @@ export function IsoViewport({ svgRaw, lines, progressMap, selectedLineId, onSele
     const root = stageRef.current
 
     for (const line of lines) {
-      const el = root.querySelector<SVGElement>(`#${cssEscape(line.svgElementId)}`)
-      if (!el) continue
       const progress = progressMap.get(line.id)
       const color = STATUS_COLOR[progress?.status ?? line.status]
-      el.style.stroke = color
-      el.style.color = color
-      if (!el.getAttribute('data-orig-width')) {
-        el.setAttribute('data-orig-width', el.getAttribute('stroke-width') ?? '3')
+      for (const elementId of line.svgElementIds) {
+        const el = root.querySelector<SVGElement>(`#${cssEscape(elementId)}`)
+        if (!el) continue
+        el.style.stroke = color
+        el.style.color = color
+        if (!el.getAttribute('data-orig-width')) {
+          el.setAttribute('data-orig-width', el.getAttribute('stroke-width') ?? '3')
+        }
+        el.classList.add('iso-line-hit')
+        el.dataset.lineRef = line.id
+        el.classList.toggle('is-selected', line.id === selectedLineId)
       }
-      el.classList.add('iso-line-hit')
-      el.dataset.lineRef = line.id
-      el.classList.toggle('is-selected', line.id === selectedLineId)
     }
   }, [lines, progressMap, selectedLineId])
 
+  // Fix-mode: make every identifiable fragment clickable for multi-select, independent of line assignment
+  useEffect(() => {
+    if (!stageRef.current) return
+    const root = stageRef.current
+
+    for (const id of candidateIds) {
+      const el = root.querySelector<SVGElement>(`#${cssEscape(id)}`)
+      if (!el) continue
+      el.classList.toggle('iso-fix-candidate', fixMode)
+      if (fixMode) {
+        el.dataset.fixRef = id
+        el.classList.toggle('is-fix-selected', selectedFragmentIds?.has(id) ?? false)
+      } else {
+        delete el.dataset.fixRef
+        el.classList.remove('is-fix-selected')
+      }
+    }
+  }, [candidateIds, fixMode, selectedFragmentIds])
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
+      if (fixMode) {
+        const target = (e.target as SVGElement).closest?.('[data-fix-ref]') as HTMLElement | null
+        if (target?.dataset.fixRef) onToggleFragment?.(target.dataset.fixRef)
+        return
+      }
       const target = (e.target as SVGElement).closest?.('[data-line-ref]') as HTMLElement | null
       if (target?.dataset.lineRef) {
         onSelectLine(target.dataset.lineRef)
       }
     },
-    [onSelectLine],
+    [fixMode, onToggleFragment, onSelectLine],
   )
 
   const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
@@ -132,7 +179,7 @@ export function IsoViewport({ svgRaw, lines, progressMap, selectedLineId, onSele
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl" ref={containerRef}>
       <div
-        className="h-full w-full cursor-grab active:cursor-grabbing"
+        className={`h-full w-full active:cursor-grabbing ${fixMode ? 'cursor-pointer' : 'cursor-grab'}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onClick={handleClick}

@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import { Modal } from '../common/Modal'
+import { Modal } from './Modal'
 
 interface LineMetaModalProps {
   onClose: () => void
   onConfirm: (svgElementId: string, size: string) => void
+  title?: string
+  subtitle?: string
+  confirmLabel?: string
 }
 
-export function LineMetaModal({ onClose, onConfirm }: LineMetaModalProps) {
+export function LineMetaModal({
+  onClose,
+  onConfirm,
+  title = 'مشخصات خط لوله',
+  subtitle = 'شناسه خط را وارد کنید تا در پروژه قابل پیگیری باشد',
+  confirmLabel = 'تایید',
+}: LineMetaModalProps) {
   const [svgElementId, setSvgElementId] = useState('')
   const [size, setSize] = useState('')
 
@@ -16,7 +25,7 @@ export function LineMetaModal({ onClose, onConfirm }: LineMetaModalProps) {
   }
 
   return (
-    <Modal title="مشخصات خط لوله" subtitle="شناسه خط را وارد کنید تا در پروژه قابل پیگیری باشد" onClose={onClose}>
+    <Modal title={title} subtitle={subtitle} onClose={onClose}>
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">شناسه خط (Line Number) *</span>
@@ -42,7 +51,7 @@ export function LineMetaModal({ onClose, onConfirm }: LineMetaModalProps) {
             disabled={!svgElementId.trim()}
             className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
           >
-            تایید و افزودن خط
+            {confirmLabel}
           </button>
         </div>
       </div>

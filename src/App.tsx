@@ -35,6 +35,7 @@ function App() {
   const addLog = useStore((s) => s.addLog)
   const setPlannedCurve = useStore((s) => s.setPlannedCurve)
   const addSchedules = useStore((s) => s.addSchedules)
+  const setMilestones = useStore((s) => s.setMilestones)
   const selectProject = useStore((s) => s.selectProject)
   const role = useAuthStore((s) => s.currentUser()?.role)
   const editable = canEdit(role)
@@ -62,6 +63,7 @@ function App() {
     for (const log of seed.logs) addLog(id, log)
     setPlannedCurve(id, seed.plannedCurve)
     addSchedules(id, seed.schedules)
+    setMilestones(id, seed.milestones)
     selectProject(id)
   }
 

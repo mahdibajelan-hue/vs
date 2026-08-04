@@ -21,7 +21,8 @@ export function OnePagerPage({ project }: { project: Project }) {
     const colorMap = new Map<string, string>()
     for (const line of project.lines) {
       const p = progressMap.get(line.id)
-      colorMap.set(line.svgElementId, STATUS_COLOR[p?.status ?? line.status])
+      const color = STATUS_COLOR[p?.status ?? line.status]
+      for (const elementId of line.svgElementIds) colorMap.set(elementId, color)
     }
     return serializeColoredSvg(project.svgRaw, colorMap)
   }, [project, progressMap])

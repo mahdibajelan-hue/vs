@@ -110,6 +110,21 @@ body {
   filter: drop-shadow(0 0 10px currentColor);
 }
 
+.iso-fix-candidate {
+  cursor: pointer;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+}
+.iso-fix-candidate:hover {
+  stroke: #38bdf8 !important;
+  filter: drop-shadow(0 0 5px #38bdf8);
+}
+.iso-fix-candidate.is-fix-selected {
+  stroke: #38bdf8 !important;
+  stroke-width: 5 !important;
+  stroke-dasharray: 5 3 !important;
+  filter: drop-shadow(0 0 8px #38bdf8);
+}
+
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }

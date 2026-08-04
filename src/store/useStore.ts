@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, PlannedProgressPoint, Project, ThemeMode } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Project, ThemeMode } from '../types'
 import { makeId } from '../lib/id'
+import { createDefaultMilestones } from '../lib/milestones'
 
 interface AppState {
   projects: Project[]
@@ -20,6 +21,9 @@ interface AppState {
   addLine: (projectId: string, line: Omit<IsoLine, 'id' | 'createdAt'>) => void
   updateLine: (projectId: string, lineId: string, data: Partial<IsoLine>) => void
   deleteLine: (projectId: string, lineId: string) => void
+  mergeFragmentsIntoNewLine: (projectId: string, data: { svgElementIds: string[]; svgElementId: string; size: string }) => void
+  addFragmentsToLine: (projectId: string, lineId: string, elementIds: string[]) => void
+  removeFragmentsFromLines: (projectId: string, elementIds: string[]) => void
 
   addLog: (projectId: string, log: Omit<DailyLog, 'id' | 'createdAt'>) => void
   updateLog: (projectId: string, logId: string, data: Partial<DailyLog>) => void
@@ -34,6 +38,8 @@ interface AppState {
     data: Partial<Omit<ActivitySchedule, 'id' | 'lineId' | 'activity'>>,
   ) => void
   addSchedules: (projectId: string, schedules: ActivitySchedule[]) => void
+
+  setMilestones: (projectId: string, milestones: Milestone[]) => void
 
   toggleTheme: () => void
 }
@@ -64,6 +70,7 @@ export const useStore = create<AppState>()(
           logs: [],
           plannedCurve: [],
           schedules: [],
+          milestones: createDefaultMilestones(),
           createdAt: new Date().toISOString(),
         }
         set((s) => ({ projects: [...s.projects, project], currentProjectId: id }))
@@ -151,6 +158,50 @@ export const useStore = create<AppState>()(
         }))
       },
 
+      mergeFragmentsIntoNewLine: (projectId, { svgElementIds, svgElementId, size }) => {
+        set((s) => ({
+          projects: s.projects.map((p) => {
+            if (p.id !== projectId) return p
+            const stripped = stripFragmentsFromLines(p.lines, svgElementIds)
+            const newLine: IsoLine = {
+              id: makeId('line'),
+              svgElementId,
+              svgElementIds,
+              size,
+              spec: '',
+              service: '',
+              contractor: '',
+              plannedLength: 10,
+              totalWelds: 1,
+              status: 'not_started',
+              createdAt: new Date().toISOString(),
+            }
+            return { ...p, lines: [...stripped, newLine] }
+          }),
+        }))
+      },
+
+      addFragmentsToLine: (projectId, lineId, elementIds) => {
+        set((s) => ({
+          projects: s.projects.map((p) => {
+            if (p.id !== projectId) return p
+            const stripped = stripFragmentsFromLines(p.lines, elementIds)
+            return {
+              ...p,
+              lines: stripped.map((l) =>
+                l.id === lineId ? { ...l, svgElementIds: [...new Set([...l.svgElementIds, ...elementIds])] } : l,
+              ),
+            }
+          }),
+        }))
+      },
+
+      removeFragmentsFromLines: (projectId, elementIds) => {
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, lines: stripFragmentsFromLines(p.lines, elementIds) } : p)),
+        }))
+      },
+
       addLog: (projectId, log) => {
         const newLog: DailyLog = { ...log, id: makeId('log'), createdAt: new Date().toISOString() }
         set((s) => ({
@@ -219,17 +270,28 @@ export const useStore = create<AppState>()(
         }))
       },
 
+      setMilestones: (projectId, milestones) => {
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, milestones } : p)),
+        }))
+      },
+
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
     }),
     {
       name: 'piping-iso-tracker-storage',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => {
         const state = persistedState as AppState
         if (state?.projects) {
           state.projects = state.projects.map((p) => ({
             ...p,
             schedules: p.schedules ?? [],
+            milestones: p.milestones && p.milestones.length ? p.milestones : createDefaultMilestones(),
+            lines: (p.lines ?? []).map((l) => ({
+              ...l,
+              svgElementIds: l.svgElementIds && l.svgElementIds.length ? l.svgElementIds : [l.svgElementId],
+            })),
             logs: (p.logs ?? []).map((l) => ({
               ...l,
               approvalStatus: l.approvalStatus ?? 'approved',
@@ -243,3 +305,8 @@ export const useStore = create<AppState>()(
     },
   ),
 )
+
+function stripFragmentsFromLines(lines: IsoLine[], elementIds: string[]): IsoLine[] {
+  const idSet = new Set(elementIds)
+  return lines.map((l) => ({ ...l, svgElementIds: l.svgElementIds.filter((id) => !idSet.has(id)) }))
+}

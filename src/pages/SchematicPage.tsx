@@ -19,7 +19,7 @@ import { makeId } from '../lib/id'
 import { useStore } from '../store/useStore'
 import { SymbolPalette, type EditorMode } from '../components/Schematic/SymbolPalette'
 import { IsoCanvas, CANVAS_WIDTH, CANVAS_HEIGHT, type CanvasSelection } from '../components/Schematic/IsoCanvas'
-import { LineMetaModal } from '../components/Schematic/LineMetaModal'
+import { LineMetaModal } from '../components/common/LineMetaModal'
 import { TeeMetaModal } from '../components/Schematic/TeeMetaModal'
 import { CoordinateLineModal } from '../components/Schematic/CoordinateLineModal'
 import { SchematicGuideModal } from '../components/Schematic/SchematicGuideModal'
@@ -161,6 +161,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       return {
         id: makeId('line'),
         svgElementId: l.svgElementId,
+        svgElementIds: [l.svgElementId],
         size: l.size,
         spec: '',
         service: '',
@@ -346,7 +347,9 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       </div>
 
       {showGuide && <SchematicGuideModal onClose={closeGuide} />}
-      {showMetaModal && <LineMetaModal onClose={() => setShowMetaModal(false)} onConfirm={confirmLineMeta} />}
+      {showMetaModal && (
+        <LineMetaModal onClose={() => setShowMetaModal(false)} onConfirm={confirmLineMeta} confirmLabel="تایید و افزودن خط" />
+      )}
       {showCoordinateModal && <CoordinateLineModal onClose={() => setShowCoordinateModal(false)} onConfirm={confirmCoordinateLine} />}
       {pendingTeeId && <TeeMetaModal onClose={() => setPendingTeeId(null)} onConfirm={confirmTeeMeta} />}
 

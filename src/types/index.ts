@@ -16,7 +16,10 @@ export const STATUS_LABEL_FA: Record<LineStatus, string> = {
 
 export interface IsoLine {
   id: string
+  /** Line number / label shown throughout the UI. */
   svgElementId: string
+  /** Raw SVG element ids that make up this line on the map — can be several when merged from fragmented CAD exports. */
+  svgElementIds: string[]
   size: string
   spec: string
   service: string
@@ -97,6 +100,13 @@ export interface ActivitySchedule {
   percentComplete: number
 }
 
+export interface Milestone {
+  id: string
+  label: string
+  percentComplete: number
+  color: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -109,6 +119,7 @@ export interface Project {
   logs: DailyLog[]
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
+  milestones: Milestone[]
   createdAt: string
 }
 

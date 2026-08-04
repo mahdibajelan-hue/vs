@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Upload, Table2, Download } from 'lucide-react'
+import { Upload, Table2, Download, Wrench, PlusSquare, Unlink, XCircle } from 'lucide-react'
 import type { Project } from '../types'
 import { computeAllProgress } from '../lib/progress'
 import { IsoViewport } from '../components/IsoViewer/IsoViewport'
@@ -7,6 +7,7 @@ import { LineListPanel } from '../components/IsoViewer/LineListPanel'
 import { UploadSvgModal } from '../components/IsoViewer/UploadSvgModal'
 import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
+import { LineMetaModal } from '../components/common/LineMetaModal'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -16,12 +17,20 @@ import { exportColoredSvg } from '../lib/export'
 
 export function ViewerPage({ project }: { project: Project }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
+  const mergeFragmentsIntoNewLine = useStore((s) => s.mergeFragmentsIntoNewLine)
+  const addFragmentsToLine = useStore((s) => s.addFragmentsToLine)
+  const removeFragmentsFromLines = useStore((s) => s.removeFragmentsFromLines)
   const role = useAuthStore((s) => s.currentUser()?.role)
   const editable = canEdit(role)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [showLinesTable, setShowLinesTable] = useState(false)
   const [logLineId, setLogLineId] = useState<string | null>(null)
+
+  const [fixMode, setFixMode] = useState(false)
+  const [selectedFragments, setSelectedFragments] = useState<Set<string>>(new Set())
+  const [showCreateLine, setShowCreateLine] = useState(false)
+  const [addToLineId, setAddToLineId] = useState('')
 
   const progressMap = useMemo(() => computeAllProgress(project), [project])
   const selectedLine = project.lines.find((l) => l.id === selectedLineId) ?? null
@@ -32,6 +41,7 @@ export function ViewerPage({ project }: { project: Project }) {
     const newLines = selectedIds.map((svgElementId) => ({
       id: makeId('line'),
       svgElementId,
+      svgElementIds: [svgElementId],
       size: '',
       spec: '',
       service: '',
@@ -44,6 +54,38 @@ export function ViewerPage({ project }: { project: Project }) {
     setProjectSvg(project.id, svgRaw, fileName, newLines)
     setShowUpload(false)
     setShowLinesTable(true)
+  }
+
+  const toggleFixMode = () => {
+    setFixMode((f) => !f)
+    setSelectedFragments(new Set())
+  }
+
+  const toggleFragment = (elementId: string) => {
+    setSelectedFragments((prev) => {
+      const next = new Set(prev)
+      if (next.has(elementId)) next.delete(elementId)
+      else next.add(elementId)
+      return next
+    })
+  }
+
+  const confirmCreateLine = (svgElementId: string, size: string) => {
+    mergeFragmentsIntoNewLine(project.id, { svgElementIds: [...selectedFragments], svgElementId, size })
+    setSelectedFragments(new Set())
+    setShowCreateLine(false)
+  }
+
+  const handleAddToLine = () => {
+    if (!addToLineId || selectedFragments.size === 0) return
+    addFragmentsToLine(project.id, addToLineId, [...selectedFragments])
+    setSelectedFragments(new Set())
+  }
+
+  const handleUnmap = () => {
+    if (selectedFragments.size === 0) return
+    removeFragmentsFromLines(project.id, [...selectedFragments])
+    setSelectedFragments(new Set())
   }
 
   if (!project.svgRaw) {
@@ -79,7 +121,7 @@ export function ViewerPage({ project }: { project: Project }) {
           selectedLineId={selectedLineId}
           onSelectLine={setSelectedLineId}
           onLogLine={setLogLineId}
-          editable={editable}
+          editable={editable && !fixMode}
         />
       </div>
 
@@ -109,8 +151,64 @@ export function ViewerPage({ project }: { project: Project }) {
                 <Upload size={14} /> آپلود مجدد
               </button>
             )}
+            {editable && (
+              <button
+                onClick={toggleFixMode}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+                  fixMode ? 'bg-brand-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
+              >
+                <Wrench size={14} /> اصلاح نقشه
+              </button>
+            )}
           </div>
         </div>
+
+        {fixMode && (
+          <div className="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
+            <p className="text-xs text-secondary leading-6">
+              روی تکه‌های شکسته‌شده روی نقشه کلیک کنید تا انتخاب شوند (می‌تواند چند تکه از چند خط مختلف باشد)، سپس
+              آن‌ها را زیر یک شناسه ادغام کنید یا از خط فعلی جدا کنید.
+            </p>
+            <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300 shrink-0">
+              {selectedFragments.size} قطعه انتخاب شده
+            </span>
+            <div className="flex flex-wrap items-center gap-2 mr-auto">
+              <select value={addToLineId} onChange={(e) => setAddToLineId(e.target.value)} className="input !w-auto text-xs">
+                <option value="">افزودن به خط...</option>
+                {project.lines.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.svgElementId}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddToLine}
+                disabled={!addToLineId || selectedFragments.size === 0}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
+              >
+                <PlusSquare size={13} /> افزودن
+              </button>
+              <button
+                onClick={() => setShowCreateLine(true)}
+                disabled={selectedFragments.size === 0}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-30 transition-colors"
+              >
+                <PlusSquare size={13} /> ساخت خط جدید از انتخاب
+              </button>
+              <button
+                onClick={handleUnmap}
+                disabled={selectedFragments.size === 0}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-30 transition-colors"
+              >
+                <Unlink size={13} /> جدا کردن از خط فعلی
+              </button>
+              <button onClick={toggleFixMode} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors">
+                <XCircle size={13} /> پایان اصلاح
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 glass-panel rounded-2xl p-2 min-h-0">
           <IsoViewport
@@ -119,10 +217,13 @@ export function ViewerPage({ project }: { project: Project }) {
             progressMap={progressMap}
             selectedLineId={selectedLineId}
             onSelectLine={setSelectedLineId}
+            fixMode={fixMode}
+            selectedFragmentIds={selectedFragments}
+            onToggleFragment={toggleFragment}
           />
         </div>
 
-        {selectedLine && selectedProgress && (
+        {!fixMode && selectedLine && selectedProgress && (
           <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-6 text-sm">
             <div>
               <p className="text-xs text-muted">خط انتخاب‌شده</p>
@@ -144,6 +245,10 @@ export function ViewerPage({ project }: { project: Project }) {
                 {selectedProgress.weldsDone} / {selectedLine.totalWelds}
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted">تعداد قطعه SVG</p>
+              <p className="font-bold num">{selectedLine.svgElementIds.length}</p>
+            </div>
             {editable && (
               <button
                 onClick={() => setLogLineId(selectedLine.id)}
@@ -162,6 +267,15 @@ export function ViewerPage({ project }: { project: Project }) {
       )}
       {logLineId && (
         <DailyLogForm projectId={project.id} lines={project.lines} initialLineId={logLineId} onClose={() => setLogLineId(null)} />
+      )}
+      {showCreateLine && (
+        <LineMetaModal
+          onClose={() => setShowCreateLine(false)}
+          onConfirm={confirmCreateLine}
+          title="ساخت خط جدید از قطعات انتخاب‌شده"
+          subtitle={`${selectedFragments.size} قطعه به این خط جدید متصل می‌شود`}
+          confirmLabel="ساخت خط"
+        />
       )}
     </div>
   )

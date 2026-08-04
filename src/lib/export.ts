@@ -43,7 +43,8 @@ export function exportColoredSvg(project: Project, filename: string) {
   const colorMap = new Map<string, string>()
   for (const line of project.lines) {
     const p = progressMap.get(line.id)
-    colorMap.set(line.svgElementId, STATUS_COLOR[p?.status ?? line.status])
+    const color = STATUS_COLOR[p?.status ?? line.status]
+    for (const elementId of line.svgElementIds) colorMap.set(elementId, color)
   }
   const svg = serializeColoredSvg(project.svgRaw, colorMap)
   downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)

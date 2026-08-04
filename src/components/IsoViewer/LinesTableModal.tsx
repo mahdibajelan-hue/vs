@@ -39,7 +39,14 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
           <tbody className="divide-y divide-white/5">
             {lines.map((line) => (
               <tr key={line.id} className="hover:bg-white/[0.03]">
-                <td className="p-1.5 font-mono text-xs">{line.svgElementId}</td>
+                <td className="p-1.5 font-mono text-xs">
+                  {line.svgElementId}
+                  {line.svgElementIds.length > 1 && (
+                    <span className="mr-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-secondary" title="این خط از چند قطعه SVG ادغام شده است">
+                      {line.svgElementIds.length} قطعه
+                    </span>
+                  )}
+                </td>
                 <TextCell value={line.size} onChange={(v) => updateLine(projectId, line.id, { size: v })} placeholder='مثلا 6"' width="w-16" />
                 <TextCell value={line.spec} onChange={(v) => updateLine(projectId, line.id, { spec: v })} placeholder="A1A" width="w-16" />
                 <TextCell value={line.service} onChange={(v) => updateLine(projectId, line.id, { service: v })} placeholder="سرویس" width="w-28" />
