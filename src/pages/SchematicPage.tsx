@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil } from 'lucide-react'
+import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil, HelpCircle } from 'lucide-react'
 import type { DraftLine, IsoLine, PlacedSymbol, Project } from '../types'
 import type { Point } from '../lib/isoGeometry'
 import {
@@ -22,9 +22,11 @@ import { IsoCanvas, CANVAS_WIDTH, CANVAS_HEIGHT, type CanvasSelection } from '..
 import { LineMetaModal } from '../components/Schematic/LineMetaModal'
 import { TeeMetaModal } from '../components/Schematic/TeeMetaModal'
 import { CoordinateLineModal } from '../components/Schematic/CoordinateLineModal'
+import { SchematicGuideModal } from '../components/Schematic/SchematicGuideModal'
 import { Modal } from '../components/common/Modal'
 
 const ORIGIN: Point = { x: 450, y: 550 }
+const GUIDE_SEEN_KEY = 'piping-iso-tracker-schematic-guide-seen'
 
 export function SchematicPage({ project, onSaved }: { project: Project; onSaved: () => void }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
@@ -39,6 +41,12 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
   const [showCoordinateModal, setShowCoordinateModal] = useState(false)
   const [pendingTeeId, setPendingTeeId] = useState<string | null>(null)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem(GUIDE_SEEN_KEY))
+
+  const closeGuide = () => {
+    localStorage.setItem(GUIDE_SEEN_KEY, '1')
+    setShowGuide(false)
+  }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -176,9 +184,25 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
           <div className="flex items-center gap-4 text-xs text-secondary">
             <span>{lines.length} خط ترسیم‌شده</span>
             <span>{symbols.length} علامت</span>
-            {mode === 'draw' && <span className="text-brand-300">حالت ترسیم — کلیک برای افزودن نقطه، Backspace برای حذف آخرین نقطه</span>}
+            {mode === 'draw' && (
+              <span className="text-brand-300">
+                حالت ترسیم — روی نقشه کلیک کنید تا نقطه اضافه شود، سپس «پایان خط» را بزنید
+              </span>
+            )}
+            {mode === 'select' && <span className="text-brand-300">حالت انتخاب — روی یک خط یا علامت کلیک کنید تا ویرایش/حذف شود</span>}
+            {mode.startsWith('symbol:') && (
+              <span className="text-brand-300">
+                حالت افزودن «{SYMBOL_DEFS[mode.slice('symbol:'.length) as SymbolType].label}» — روی نقطه‌ای از خط کلیک کنید
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+            >
+              <HelpCircle size={13} /> راهنما
+            </button>
             {mode === 'draw' && draftPoints.length > 0 && (
               <>
                 <button
@@ -289,6 +313,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
         )}
       </div>
 
+      {showGuide && <SchematicGuideModal onClose={closeGuide} />}
       {showMetaModal && <LineMetaModal onClose={() => setShowMetaModal(false)} onConfirm={confirmLineMeta} />}
       {showCoordinateModal && <CoordinateLineModal onClose={() => setShowCoordinateModal(false)} onConfirm={confirmCoordinateLine} />}
       {pendingTeeId && <TeeMetaModal onClose={() => setPendingTeeId(null)} onConfirm={confirmTeeMeta} />}

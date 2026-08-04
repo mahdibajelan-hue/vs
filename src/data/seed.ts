@@ -1,4 +1,4 @@
-import type { DailyLog, IsoLine, PlannedProgressPoint } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, PlannedProgressPoint } from '../types'
 import { generateSampleSvg, SAMPLE_LINES } from './sampleSvg'
 import { makeId } from '../lib/id'
 
@@ -23,11 +23,24 @@ function line(meta: (typeof SAMPLE_LINES)[number], status: IsoLine['status']): I
   }
 }
 
+function sched(
+  lineId: string,
+  activity: ActivityKind,
+  plannedStart: string,
+  plannedEnd: string,
+  actualStart: string | null,
+  actualEnd: string | null,
+  percentComplete: number,
+): ActivitySchedule {
+  return { id: makeId('sched'), lineId, activity, plannedStart, plannedEnd, actualStart, actualEnd, percentComplete }
+}
+
 export function buildSeedProject(): {
   svgRaw: string
   lines: IsoLine[]
   logs: Omit<DailyLog, 'id' | 'createdAt'>[]
   plannedCurve: PlannedProgressPoint[]
+  schedules: ActivitySchedule[]
 } {
   const svgRaw = generateSampleSvg()
 
@@ -94,5 +107,40 @@ export function buildSeedProject(): {
     { date: daysAgo(-10), plannedPercent: 100 },
   ]
 
-  return { svgRaw, lines, logs, plannedCurve }
+  const schedules: ActivitySchedule[] = [
+    // L-1001-6-A1A — welding in progress, ndt/coating upcoming
+    sched(idOf('L-1001-6-A1A'), 'welding', daysAgo(25), daysAgo(-2), daysAgo(24), null, 70),
+    sched(idOf('L-1001-6-A1A'), 'ndt', daysAgo(-3), daysAgo(-8), null, null, 0),
+    sched(idOf('L-1001-6-A1A'), 'coating', daysAgo(-10), daysAgo(-16), null, null, 0),
+
+    // L-1002-4-B2B — welding behind schedule
+    sched(idOf('L-1002-4-B2B'), 'welding', daysAgo(22), daysAgo(2), daysAgo(20), null, 35),
+
+    // L-1003-8-A1A — welding done on time, ndt in progress, coating upcoming
+    sched(idOf('L-1003-8-A1A'), 'welding', daysAgo(30), daysAgo(14), daysAgo(28), daysAgo(15), 100),
+    sched(idOf('L-1003-8-A1A'), 'ndt', daysAgo(6), daysAgo(-1), daysAgo(4), null, 60),
+    sched(idOf('L-1003-8-A1A'), 'coating', daysAgo(-5), daysAgo(-12), null, null, 0),
+
+    // L-1004-2-C1C — not started, planned for later
+    sched(idOf('L-1004-2-C1C'), 'welding', daysAgo(-5), daysAgo(-15), null, null, 0),
+
+    // L-1005-10-A1A — welding overdue, ndt upcoming
+    sched(idOf('L-1005-10-A1A'), 'welding', daysAgo(28), daysAgo(1), daysAgo(26), null, 57),
+    sched(idOf('L-1005-10-A1A'), 'ndt', daysAgo(-2), daysAgo(-9), null, null, 0),
+
+    // L-1006-3-B2B — fully completed, on time
+    sched(idOf('L-1006-3-B2B'), 'welding', daysAgo(29), daysAgo(22), daysAgo(29), daysAgo(21), 100),
+    sched(idOf('L-1006-3-B2B'), 'ndt', daysAgo(21), daysAgo(18), daysAgo(20), daysAgo(17), 100),
+    sched(idOf('L-1006-3-B2B'), 'coating', daysAgo(17), daysAgo(14), daysAgo(16), daysAgo(13), 100),
+
+    // L-1007-12-A1A — main line, fully completed
+    sched(idOf('L-1007-12-A1A'), 'welding', daysAgo(30), daysAgo(20), daysAgo(30), daysAgo(19), 100),
+    sched(idOf('L-1007-12-A1A'), 'ndt', daysAgo(19), daysAgo(14), daysAgo(18), daysAgo(13), 100),
+    sched(idOf('L-1007-12-A1A'), 'coating', daysAgo(13), daysAgo(8), daysAgo(12), daysAgo(9), 100),
+
+    // L-1008-4-C1C — welding delayed by weather
+    sched(idOf('L-1008-4-C1C'), 'welding', daysAgo(16), daysAgo(3), daysAgo(14), null, 30),
+  ]
+
+  return { svgRaw, lines, logs, plannedCurve, schedules }
 }

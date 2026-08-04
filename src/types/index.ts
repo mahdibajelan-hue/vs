@@ -45,6 +45,27 @@ export interface PlannedProgressPoint {
   plannedPercent: number
 }
 
+export type ActivityKind = 'welding' | 'ndt' | 'coating'
+
+export const ACTIVITY_KINDS: ActivityKind[] = ['welding', 'ndt', 'coating']
+
+export const ACTIVITY_LABEL_FA: Record<ActivityKind, string> = {
+  welding: 'جوشکاری',
+  ndt: 'تست NDT',
+  coating: 'پوشش',
+}
+
+export interface ActivitySchedule {
+  id: string
+  lineId: string
+  activity: ActivityKind
+  plannedStart: string
+  plannedEnd: string
+  actualStart: string | null
+  actualEnd: string | null
+  percentComplete: number
+}
+
 export interface Project {
   id: string
   name: string
@@ -56,6 +77,7 @@ export interface Project {
   lines: IsoLine[]
   logs: DailyLog[]
   plannedCurve: PlannedProgressPoint[]
+  schedules: ActivitySchedule[]
   createdAt: string
 }
 

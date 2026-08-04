@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { DailyLog, IsoLine, PlannedProgressPoint, Project, ThemeMode } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, PlannedProgressPoint, Project, ThemeMode } from '../types'
 import { makeId } from '../lib/id'
 
 interface AppState {
@@ -25,6 +25,14 @@ interface AppState {
   deleteLog: (projectId: string, logId: string) => void
 
   setPlannedCurve: (projectId: string, curve: PlannedProgressPoint[]) => void
+
+  upsertSchedule: (
+    projectId: string,
+    lineId: string,
+    activity: ActivityKind,
+    data: Partial<Omit<ActivitySchedule, 'id' | 'lineId' | 'activity'>>,
+  ) => void
+  addSchedules: (projectId: string, schedules: ActivitySchedule[]) => void
 
   toggleTheme: () => void
 }
@@ -54,6 +62,7 @@ export const useStore = create<AppState>()(
           lines: [],
           logs: [],
           plannedCurve: [],
+          schedules: [],
           createdAt: new Date().toISOString(),
         }
         set((s) => ({ projects: [...s.projects, project], currentProjectId: id }))
@@ -151,8 +160,53 @@ export const useStore = create<AppState>()(
         }))
       },
 
+      upsertSchedule: (projectId, lineId, activity, data) => {
+        set((s) => ({
+          projects: s.projects.map((p) => {
+            if (p.id !== projectId) return p
+            const existing = p.schedules.find((a) => a.lineId === lineId && a.activity === activity)
+            if (existing) {
+              return {
+                ...p,
+                schedules: p.schedules.map((a) => (a.id === existing.id ? { ...a, ...data } : a)),
+              }
+            }
+            const newSchedule: ActivitySchedule = {
+              id: makeId('sched'),
+              lineId,
+              activity,
+              plannedStart: '',
+              plannedEnd: '',
+              actualStart: null,
+              actualEnd: null,
+              percentComplete: 0,
+              ...data,
+            }
+            return { ...p, schedules: [...p.schedules, newSchedule] }
+          }),
+        }))
+      },
+
+      addSchedules: (projectId, schedules) => {
+        set((s) => ({
+          projects: s.projects.map((p) =>
+            p.id === projectId ? { ...p, schedules: [...p.schedules, ...schedules] } : p,
+          ),
+        }))
+      },
+
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
     }),
-    { name: 'piping-iso-tracker-storage' },
+    {
+      name: 'piping-iso-tracker-storage',
+      version: 1,
+      migrate: (persistedState) => {
+        const state = persistedState as AppState
+        if (state?.projects) {
+          state.projects = state.projects.map((p) => ({ ...p, schedules: p.schedules ?? [] }))
+        }
+        return state
+      },
+    },
   ),
 )

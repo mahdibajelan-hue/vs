@@ -8,16 +8,18 @@ import { ViewerPage } from './pages/ViewerPage'
 import { OnePagerPage } from './pages/OnePagerPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SchematicPage } from './pages/SchematicPage'
+import { SchedulePage } from './pages/SchedulePage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 
-export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'about'
+export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'about'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
   onepager: 'داشبورد مدیریتی تک‌صفحه‌ای',
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراح نقشه شماتیک',
+  schedule: 'برنامه زمان‌بندی',
   about: 'درباره ما',
 }
 
@@ -30,6 +32,7 @@ function App() {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
   const addLog = useStore((s) => s.addLog)
   const setPlannedCurve = useStore((s) => s.setPlannedCurve)
+  const addSchedules = useStore((s) => s.addSchedules)
   const selectProject = useStore((s) => s.selectProject)
 
   const [page, setPage] = useState<Page>('viewer')
@@ -50,6 +53,7 @@ function App() {
     setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
     for (const log of seed.logs) addLog(id, log)
     setPlannedCurve(id, seed.plannedCurve)
+    addSchedules(id, seed.schedules)
     selectProject(id)
   }
 
@@ -97,6 +101,7 @@ function App() {
           {currentProject && page === 'schematic' && (
             <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />
           )}
+          {currentProject && page === 'schedule' && <SchedulePage project={currentProject} />}
           {currentProject && page === 'about' && <AboutPage />}
         </main>
       </div>
