@@ -1,10 +1,12 @@
-import { useRef } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { canEdit } from '../../lib/permissions'
 import { exportProjectJson, parseProjectJson } from '../../lib/projectIO'
 import { Logo } from '../common/Logo'
+import { NewProjectModal } from './NewProjectModal'
+import type { Project } from '../../types'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -29,10 +31,13 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
   const currentProject = useStore((s) => s.currentProject())
   const selectProject = useStore((s) => s.selectProject)
   const importProject = useStore((s) => s.importProject)
+  const deleteProject = useStore((s) => s.deleteProject)
   const role = useAuthStore((s) => s.currentUser()?.role)
   const editable = canEdit(role)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nav = NAV.filter((n) => n.id !== 'schematic' || editable)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const handleImportFile = (file: File) => {
     const reader = new FileReader()
@@ -85,15 +90,50 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {projects.map((p) => (
-          <button
+          <div
             key={p.id}
-            onClick={() => selectProject(p.id)}
-            className={`w-full truncate rounded-lg px-3 py-2 text-right text-xs transition-colors ${
+            className={`group flex items-center gap-1 rounded-lg text-xs transition-colors ${
               p.id === currentProjectId ? 'bg-white/10 text-current font-medium' : 'text-secondary hover:bg-white/5'
             }`}
           >
-            {p.name}
-          </button>
+            <button onClick={() => selectProject(p.id)} className="flex-1 min-w-0 truncate px-3 py-2 text-right">
+              {p.name}
+            </button>
+            {editable &&
+              (confirmDeleteId === p.id ? (
+                <div className="flex items-center gap-1 shrink-0 pl-1.5">
+                  <button
+                    onClick={() => {
+                      deleteProject(p.id)
+                      setConfirmDeleteId(null)
+                    }}
+                    className="text-[10px] text-red-400 hover:underline"
+                  >
+                    تایید حذف
+                  </button>
+                  <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] text-secondary hover:underline">
+                    انصراف
+                  </button>
+                </div>
+              ) : (
+                <div className="hidden shrink-0 items-center gap-0.5 pl-1.5 group-hover:flex">
+                  <button
+                    onClick={() => setEditingProject(p)}
+                    className="rounded p-1 text-muted hover:text-brand-400 transition-colors"
+                    title="ویرایش پروژه"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(p.id)}
+                    className="rounded p-1 text-muted hover:text-red-400 transition-colors"
+                    title="حذف پروژه"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+          </div>
         ))}
       </div>
 
@@ -131,6 +171,8 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
       <div className="px-5 py-4 text-[11px] text-muted border-t" style={{ borderColor: 'var(--border-soft)' }}>
         ذخیره‌سازی محلی (Local Browser Storage)
       </div>
+
+      {editingProject && <NewProjectModal project={editingProject} onClose={() => setEditingProject(null)} />}
     </aside>
   )
 }

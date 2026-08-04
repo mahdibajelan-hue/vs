@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Modal } from '../common/Modal'
 import type { IsoLine } from '../../types'
@@ -14,6 +14,45 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
   const updateLine = useStore((s) => s.updateLine)
   const deleteLine = useStore((s) => s.deleteLine)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return lines
+    return lines.filter((l) => l.svgElementId.toLowerCase().includes(q) || l.service.toLowerCase().includes(q) || l.spec.toLowerCase().includes(q))
+  }, [lines, query])
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))
+
+  const toggleAll = () => {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev)
+        for (const l of filtered) next.delete(l.id)
+        return next
+      }
+      const next = new Set(prev)
+      for (const l of filtered) next.add(l.id)
+      return next
+    })
+  }
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const bulkDelete = () => {
+    for (const id of selectedIds) deleteLine(projectId, id)
+    setSelectedIds(new Set())
+    setConfirmBulkDelete(false)
+  }
 
   return (
     <Modal
@@ -22,10 +61,41 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
       onClose={onClose}
       width="max-w-5xl"
     >
+      <div className="mb-3 flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="جستجو در شناسه، سرویس یا اسپک..."
+          className="flex-1 rounded-lg bg-black/20 border border-white/10 px-3 py-1.5 text-sm outline-none focus:border-brand-400"
+        />
+        {selectedIds.size > 0 &&
+          (confirmBulkDelete ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-red-400">حذف {selectedIds.size} خط قطعی است؟</span>
+              <button onClick={bulkDelete} className="text-xs text-red-400 hover:underline">
+                تایید حذف
+              </button>
+              <button onClick={() => setConfirmBulkDelete(false)} className="text-xs text-secondary hover:underline">
+                انصراف
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmBulkDelete(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/25 transition-colors shrink-0"
+            >
+              <Trash2 size={13} /> حذف {selectedIds.size} خط انتخاب‌شده
+            </button>
+          ))}
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-white/5 text-secondary text-xs">
+              <th className="p-2 text-center">
+                <input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} className="h-3.5 w-3.5 accent-brand-500" />
+              </th>
               <th className="p-2 text-right font-medium">شناسه خط (SVG)</th>
               <th className="p-2 text-right font-medium">سایز</th>
               <th className="p-2 text-right font-medium">اسپک</th>
@@ -37,8 +107,16 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {lines.map((line) => (
-              <tr key={line.id} className="hover:bg-white/[0.03]">
+            {filtered.map((line) => (
+              <tr key={line.id} className={`hover:bg-white/[0.03] ${selectedIds.has(line.id) ? 'bg-brand-500/[0.06]' : ''}`}>
+                <td className="p-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(line.id)}
+                    onChange={() => toggleOne(line.id)}
+                    className="h-3.5 w-3.5 accent-brand-500"
+                  />
+                </td>
                 <td className="p-1.5 font-mono text-xs">
                   {line.svgElementId}
                   {line.svgElementIds.length > 1 && (
@@ -71,17 +149,18 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
                 </td>
               </tr>
             ))}
-            {lines.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-xs text-muted">
-                  هیچ خطی وارد نشده است. ابتدا یک فایل SVG آپلود کنید.
+                <td colSpan={9} className="p-6 text-center text-xs text-muted">
+                  {lines.length === 0 ? 'هیچ خطی وارد نشده است. ابتدا یک فایل SVG آپلود کنید.' : 'موردی یافت نشد'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-xs text-muted">{lines.length} خط در مجموع</span>
         <button onClick={onClose} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 transition-colors">
           بستن
         </button>

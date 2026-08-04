@@ -22,7 +22,10 @@ interface AppState {
   addLine: (projectId: string, line: Omit<IsoLine, 'id' | 'createdAt'>) => void
   updateLine: (projectId: string, lineId: string, data: Partial<IsoLine>) => void
   deleteLine: (projectId: string, lineId: string) => void
-  mergeFragmentsIntoNewLine: (projectId: string, data: { svgElementIds: string[]; svgElementId: string; size: string }) => void
+  mergeFragmentsIntoNewLine: (
+    projectId: string,
+    data: { svgElementIds: string[]; svgElementId: string; size: string; plannedLength?: number; totalWelds?: number },
+  ) => void
   addFragmentsToLine: (projectId: string, lineId: string, elementIds: string[]) => void
   removeFragmentsFromLines: (projectId: string, elementIds: string[]) => void
 
@@ -167,7 +170,7 @@ export const useStore = create<AppState>()(
         }))
       },
 
-      mergeFragmentsIntoNewLine: (projectId, { svgElementIds, svgElementId, size }) => {
+      mergeFragmentsIntoNewLine: (projectId, { svgElementIds, svgElementId, size, plannedLength, totalWelds }) => {
         set((s) => ({
           projects: s.projects.map((p) => {
             if (p.id !== projectId) return p
@@ -180,8 +183,8 @@ export const useStore = create<AppState>()(
               spec: '',
               service: '',
               contractor: '',
-              plannedLength: 10,
-              totalWelds: 1,
+              plannedLength: plannedLength ?? 10,
+              totalWelds: totalWelds ?? 1,
               status: 'not_started',
               createdAt: new Date().toISOString(),
             }

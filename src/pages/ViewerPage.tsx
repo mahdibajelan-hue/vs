@@ -7,7 +7,7 @@ import { LineListPanel } from '../components/IsoViewer/LineListPanel'
 import { UploadSvgModal } from '../components/IsoViewer/UploadSvgModal'
 import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
-import { LineMetaModal } from '../components/common/LineMetaModal'
+import { LineMetaModal, type LineMetaExtra } from '../components/common/LineMetaModal'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -84,8 +84,22 @@ export function ViewerPage({ project }: { project: Project }) {
     })
   }
 
-  const confirmCreateLine = (svgElementId: string, size: string) => {
-    mergeFragmentsIntoNewLine(project.id, { svgElementIds: [...selectedFragments], svgElementId, size })
+  const handleMarqueeSelect = useCallback((elementIds: string[]) => {
+    setSelectedFragments((prev) => {
+      const next = new Set(prev)
+      for (const id of elementIds) next.add(id)
+      return next
+    })
+  }, [])
+
+  const confirmCreateLine = (svgElementId: string, size: string, extra?: LineMetaExtra) => {
+    mergeFragmentsIntoNewLine(project.id, {
+      svgElementIds: [...selectedFragments],
+      svgElementId,
+      size,
+      plannedLength: extra?.plannedLength,
+      totalWelds: extra?.totalWelds,
+    })
     setSelectedFragments(new Set())
     setShowCreateLine(false)
   }
@@ -194,9 +208,9 @@ export function ViewerPage({ project }: { project: Project }) {
         {fixMode && (
           <div className="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
             <p className="text-xs text-secondary leading-6">
-              روی یک یا چند تکه شکسته‌شده کلیک کنید، سپس «انتخاب قطعات هم‌خط» را بزنید تا بقیه تکه‌های همان مسیر
-              به‌صورت خودکار انتخاب شوند — دیگر لازم نیست تک‌تک کلیک کنید. در پایان آن‌ها را زیر یک شناسه ادغام کنید یا
-              از خط فعلی جدا کنید.
+              روی نقشه کلیک کنید یا با درگ کردن یک کادر دور چند قطعه بکشید تا همه با هم انتخاب شوند. برای تکه‌های
+              متصل‌به‌هم می‌توانید یکی را انتخاب و «انتخاب قطعات هم‌خط» را بزنید. در پایان آن‌ها را زیر یک شناسه با
+              طول و تعداد سرجوش مشخص ادغام کنید یا از خط فعلی جدا کنید.
             </p>
             <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300 shrink-0">
               {selectedFragments.size} قطعه انتخاب شده
@@ -257,6 +271,7 @@ export function ViewerPage({ project }: { project: Project }) {
             selectedFragmentIds={selectedFragments}
             onToggleFragment={toggleFragment}
             onSvgReady={handleSvgReady}
+            onMarqueeSelect={handleMarqueeSelect}
           />
         </div>
 
@@ -312,6 +327,8 @@ export function ViewerPage({ project }: { project: Project }) {
           title="ساخت خط جدید از قطعات انتخاب‌شده"
           subtitle={`${selectedFragments.size} قطعه به این خط جدید متصل می‌شود`}
           confirmLabel="ساخت خط"
+          collectLengthWelds
+          selectionHint={`${selectedFragments.size} قطعه انتخاب شده — طول و تعداد سرجوش را مطابق نقشه وارد کنید`}
         />
       )}
     </div>

@@ -15,6 +15,8 @@ interface IsoViewportProps {
   selectedFragmentIds?: Set<string>
   onToggleFragment?: (elementId: string) => void
   onSvgReady?: (svgRoot: SVGSVGElement | null) => void
+  /** Fired when the user drag-selects a rectangle over the canvas in fix mode, with the ids of every fragment it touches. */
+  onMarqueeSelect?: (elementIds: string[]) => void
 }
 
 const MIN_SCALE = 0.3
@@ -30,6 +32,7 @@ export function IsoViewport({
   selectedFragmentIds,
   onToggleFragment,
   onSvgReady,
+  onMarqueeSelect,
 }: IsoViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -41,6 +44,14 @@ export function IsoViewport({
     origX: 0,
     origY: 0,
   })
+  const marqueeState = useRef<{ active: boolean; startClientX: number; startClientY: number; endClientX: number; endClientY: number }>({
+    active: false,
+    startClientX: 0,
+    startClientY: 0,
+    endClientX: 0,
+    endClientY: 0,
+  })
+  const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
 
   const candidateIds = useMemo(() => {
     try {
@@ -150,26 +161,81 @@ export function IsoViewport({
     [zoomAt],
   )
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return
-    dragState.current = {
-      dragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: transform.x,
-      origY: transform.y,
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return
+      if (fixMode) {
+        marqueeState.current = {
+          active: true,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          endClientX: e.clientX,
+          endClientY: e.clientY,
+        }
+        return
+      }
+      dragState.current = {
+        dragging: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: transform.x,
+        origY: transform.y,
+      }
+    },
+    [transform.x, transform.y, fixMode],
+  )
+
+  const finishMarquee = useCallback(() => {
+    const { startClientX, startClientY, endClientX, endClientY } = marqueeState.current
+    const width = Math.abs(endClientX - startClientX)
+    const height = Math.abs(endClientY - startClientY)
+    if (width < 4 || height < 4) return // treat as a plain click, not a drag
+    const left = Math.min(startClientX, endClientX)
+    const right = Math.max(startClientX, endClientX)
+    const top = Math.min(startClientY, endClientY)
+    const bottom = Math.max(startClientY, endClientY)
+    const root = stageRef.current
+    if (!root) return
+    const matched: string[] = []
+    for (const id of candidateIds) {
+      const el = root.querySelector<SVGGraphicsElement>(`#${cssEscape(id)}`)
+      if (!el) continue
+      const box = el.getBoundingClientRect()
+      const intersects = box.left < right && box.right > left && box.top < bottom && box.bottom > top
+      if (intersects) matched.push(id)
     }
-  }, [transform.x, transform.y])
+    if (matched.length > 0) onMarqueeSelect?.(matched)
+  }, [candidateIds, onMarqueeSelect])
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
-      if (!dragState.current.dragging) return
-      const dx = e.clientX - dragState.current.startX
-      const dy = e.clientY - dragState.current.startY
-      setTransform((t) => ({ ...t, x: dragState.current.origX + dx, y: dragState.current.origY + dy }))
+      if (dragState.current.dragging) {
+        const dx = e.clientX - dragState.current.startX
+        const dy = e.clientY - dragState.current.startY
+        setTransform((t) => ({ ...t, x: dragState.current.origX + dx, y: dragState.current.origY + dy }))
+      }
+      if (marqueeState.current.active) {
+        marqueeState.current.endClientX = e.clientX
+        marqueeState.current.endClientY = e.clientY
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (rect) {
+          const { startClientX, startClientY } = marqueeState.current
+          setMarqueeRect({
+            left: Math.min(startClientX, e.clientX) - rect.left,
+            top: Math.min(startClientY, e.clientY) - rect.top,
+            width: Math.abs(e.clientX - startClientX),
+            height: Math.abs(e.clientY - startClientY),
+          })
+        }
+      }
     }
     function onUp() {
       dragState.current.dragging = false
+      if (marqueeState.current.active) {
+        finishMarquee()
+        marqueeState.current.active = false
+        setMarqueeRect(null)
+      }
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -177,7 +243,7 @@ export function IsoViewport({
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [])
+  }, [finishMarquee])
 
   const reset = () => setTransform({ x: 0, y: 0, scale: 1 })
 
@@ -201,6 +267,13 @@ export function IsoViewport({
           <div ref={stageRef} className="h-full w-full" style={{ color: '#94a3b8' }} />
         </div>
       </div>
+
+      {marqueeRect && (
+        <div
+          className="pointer-events-none absolute rounded-sm border border-brand-400 bg-brand-400/15"
+          style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }}
+        />
+      )}
 
       <div className="absolute bottom-4 left-4 flex flex-col gap-1.5 no-print">
         <button

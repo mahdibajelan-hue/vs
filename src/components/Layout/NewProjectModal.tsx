@@ -1,23 +1,38 @@
 import { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useStore } from '../../store/useStore'
+import type { Project } from '../../types'
 
-export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated?: (id: string) => void }) {
+export function NewProjectModal({
+  onClose,
+  onCreated,
+  project,
+}: {
+  onClose: () => void
+  onCreated?: (id: string) => void
+  /** When provided, the modal edits this project's metadata instead of creating a new one. */
+  project?: Project
+}) {
   const createProject = useStore((s) => s.createProject)
-  const [name, setName] = useState('')
-  const [client, setClient] = useState('')
-  const [location, setLocation] = useState('')
-  const [unit, setUnit] = useState('')
+  const updateProjectMeta = useStore((s) => s.updateProjectMeta)
+  const [name, setName] = useState(project?.name ?? '')
+  const [client, setClient] = useState(project?.client ?? '')
+  const [location, setLocation] = useState(project?.location ?? '')
+  const [unit, setUnit] = useState(project?.unit ?? '')
 
   const submit = () => {
     if (!name.trim()) return
-    const id = createProject({ name: name.trim(), client, location, unit })
-    onCreated?.(id)
+    if (project) {
+      updateProjectMeta(project.id, { name: name.trim(), client, location, unit })
+    } else {
+      const id = createProject({ name: name.trim(), client, location, unit })
+      onCreated?.(id)
+    }
     onClose()
   }
 
   return (
-    <Modal title="پروژه جدید" subtitle="اطلاعات کلی پروژه را وارد کنید" onClose={onClose}>
+    <Modal title={project ? 'ویرایش پروژه' : 'پروژه جدید'} subtitle="اطلاعات کلی پروژه را وارد کنید" onClose={onClose}>
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">نام پروژه *</span>
@@ -46,7 +61,7 @@ export function NewProjectModal({ onClose, onCreated }: { onClose: () => void; o
             disabled={!name.trim()}
             className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
           >
-            ایجاد پروژه
+            {project ? 'ذخیره تغییرات' : 'ایجاد پروژه'}
           </button>
         </div>
       </div>
