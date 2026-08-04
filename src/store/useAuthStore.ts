@@ -25,6 +25,8 @@ interface AuthState {
   addAccount: (data: { username: string; password: string; fullName: string; role: UserRole }) => Promise<{ ok: boolean; error?: string }>
   removeAccount: (id: string) => void
   changePassword: (accountId: string, oldPassword: string, newPassword: string) => Promise<boolean>
+  /** Owner-only admin reset — no old-password check, gated entirely by UI permission. */
+  adminResetPassword: (accountId: string, newPassword: string) => Promise<void>
 }
 
 async function hashText(text: string): Promise<string> {
@@ -101,6 +103,11 @@ export const useAuthStore = create<AuthState>()(
         const newHash = await hashText(newPassword)
         set({ accounts: accounts.map((a) => (a.id === accountId ? { ...a, passwordHash: newHash } : a)) })
         return true
+      },
+
+      adminResetPassword: async (accountId, newPassword) => {
+        const newHash = await hashText(newPassword)
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === accountId ? { ...a, passwordHash: newHash } : a)) }))
       },
     }),
     {

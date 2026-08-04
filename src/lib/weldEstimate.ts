@@ -1,4 +1,4 @@
-export const DEFAULT_STOCK_LENGTH_M = 6
+export const DEFAULT_STOCK_LENGTH_M = 12
 
 /**
  * Rough weld-count estimate for a pipe run: butt welds between standard pipe

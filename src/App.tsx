@@ -9,12 +9,13 @@ import { OnePagerPage } from './pages/OnePagerPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
+import { RisksPage } from './pages/RisksPage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
 import { canEdit } from './lib/permissions'
 
-export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'about'
+export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
@@ -22,6 +23,7 @@ const PAGE_TITLE: Record<Page, string> = {
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراح نقشه شماتیک',
   schedule: 'برنامه زمان‌بندی',
+  risks: 'ریسک‌ها و مشکلات پروژه',
   about: 'درباره ما',
 }
 
@@ -36,6 +38,7 @@ function App() {
   const setPlannedCurve = useStore((s) => s.setPlannedCurve)
   const addSchedules = useStore((s) => s.addSchedules)
   const setMilestones = useStore((s) => s.setMilestones)
+  const addRisk = useStore((s) => s.addRisk)
   const selectProject = useStore((s) => s.selectProject)
   const role = useAuthStore((s) => s.currentUser()?.role)
   const editable = canEdit(role)
@@ -64,6 +67,7 @@ function App() {
     setPlannedCurve(id, seed.plannedCurve)
     addSchedules(id, seed.schedules)
     setMilestones(id, seed.milestones)
+    for (const risk of seed.risks) addRisk(id, risk)
     selectProject(id)
   }
 
@@ -118,6 +122,7 @@ function App() {
             <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />
           )}
           {currentProject && page === 'schedule' && <SchedulePage project={currentProject} />}
+          {currentProject && page === 'risks' && <RisksPage project={currentProject} />}
           {currentProject && page === 'about' && <AboutPage />}
         </main>
       </div>

@@ -1,4 +1,5 @@
 import type { ActivitySchedule, Project } from '../types'
+import type { SCurvePoint } from './progress'
 
 function toDate(iso: string): Date {
   return new Date(`${iso}T00:00:00`)
@@ -125,4 +126,51 @@ export function computeProjectSchedule(project: Project, today = todayIso()): Pr
     achievementRatio,
     configuredCount: valid.length,
   }
+}
+
+/** Interpolated actual completion (%) of one activity as of a given date — a heuristic, not recorded history. */
+function activityActualPercentAt(a: ActivitySchedule, date: string, today: string): number {
+  if (!a.actualStart) return 0
+  if (date <= a.actualStart) return 0
+  if (a.percentComplete >= 100 && a.actualEnd) {
+    if (date >= a.actualEnd) return 100
+    const total = daysBetween(a.actualStart, a.actualEnd) || 1
+    return Math.round((daysBetween(a.actualStart, date) / total) * 100)
+  }
+  const referenceDate = today < date ? today : date
+  if (referenceDate <= a.actualStart) return 0
+  const elapsedToRef = daysBetween(a.actualStart, referenceDate)
+  const elapsedToToday = daysBetween(a.actualStart, today) || 1
+  return Math.round((Math.min(elapsedToRef, elapsedToToday) / elapsedToToday) * a.percentComplete)
+}
+
+/**
+ * Time-based S-Curve from the activity schedule (welding/NDT/coating plans),
+ * distinct from the length-based S-Curve on the Reports page. Planned % uses
+ * `plannedPercentToDate`; actual % is interpolated from each activity's
+ * actualStart/percentComplete since we only keep a live snapshot, not a full
+ * history of daily actuals.
+ */
+export function computeScheduleSCurve(project: Project, today = todayIso()): SCurvePoint[] {
+  const valid = project.schedules.filter((a) => a.plannedStart && a.plannedEnd)
+  if (valid.length === 0) return []
+
+  const dateSet = new Set<string>([today])
+  for (const a of valid) {
+    dateSet.add(a.plannedStart)
+    dateSet.add(a.plannedEnd)
+    if (a.actualStart) dateSet.add(a.actualStart)
+    if (a.actualEnd) dateSet.add(a.actualEnd)
+  }
+  const sortedDates = [...dateSet].sort()
+
+  return sortedDates.map((date) => {
+    const plannedPercent = Math.round(
+      valid.reduce((sum, a) => sum + plannedPercentToDate(a, date), 0) / valid.length,
+    )
+    const actualPercent = Math.round(
+      valid.reduce((sum, a) => sum + activityActualPercentAt(a, date, today), 0) / valid.length,
+    )
+    return { date, plannedPercent, actualPercent }
+  })
 }

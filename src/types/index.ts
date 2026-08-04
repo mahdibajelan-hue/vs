@@ -107,6 +107,69 @@ export interface Milestone {
   color: string
 }
 
+export type RiskStatus = 'open' | 'mitigating' | 'closed'
+
+export const RISK_STATUS_LABEL_FA: Record<RiskStatus, string> = {
+  open: 'باز',
+  mitigating: 'در حال کنترل',
+  closed: 'بسته شده',
+}
+
+export type RiskCategory = 'schedule' | 'technical' | 'safety' | 'procurement' | 'quality' | 'financial'
+
+export const RISK_CATEGORY_LABEL_FA: Record<RiskCategory, string> = {
+  schedule: 'زمان‌بندی',
+  technical: 'فنی/اجرایی',
+  safety: 'HSE و ایمنی',
+  procurement: 'تامین کالا',
+  quality: 'کیفیت',
+  financial: 'مالی',
+}
+
+export interface Risk {
+  id: string
+  title: string
+  description: string
+  category: RiskCategory
+  /** 1 (نادر) تا 5 (تقریبا قطعی) */
+  probability: number
+  /** 1 (ناچیز) تا 5 (بحرانی) */
+  impact: number
+  status: RiskStatus
+  mitigationPlan: string
+  owner: string
+  createdAt: string
+}
+
+export type ReportTemplate = 'standard' | 'detailed'
+
+export interface ReportSections {
+  kpis: boolean
+  map: boolean
+  legend: boolean
+  linesTable: boolean
+  milestones: boolean
+  scheduleSCurve: boolean
+  weldsChart: boolean
+  riskHeatmap: boolean
+}
+
+export const REPORT_SECTION_LABEL_FA: Record<keyof ReportSections, string> = {
+  kpis: 'شاخص‌های کلیدی (KPI)',
+  map: 'نقشه ایزومتریک رنگی',
+  legend: 'راهنمای رنگ‌ها (Legend)',
+  linesTable: 'جدول خطوط و پیشرفت',
+  milestones: 'مراحل کلی پروژه (مایلستون‌ها)',
+  scheduleSCurve: 'نمودار S-Curve برنامه زمان‌بندی',
+  weldsChart: 'نمودار سرجوش به تفکیک سایز',
+  riskHeatmap: 'نقشه حرارتی ریسک‌ها',
+}
+
+export interface ReportConfig {
+  template: ReportTemplate
+  sections: ReportSections
+}
+
 export interface Project {
   id: string
   name: string
@@ -120,6 +183,8 @@ export interface Project {
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
   milestones: Milestone[]
+  risks: Risk[]
+  reportConfig: ReportConfig
   createdAt: string
 }
 

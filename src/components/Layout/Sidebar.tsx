@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { canEdit } from '../../lib/permissions'
@@ -16,6 +16,7 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'viewer', label: 'نقشه ایزومتریک', icon: Map },
   { id: 'schematic', label: 'طراح نقشه شماتیک', icon: PenTool },
   { id: 'schedule', label: 'برنامه زمان‌بندی', icon: CalendarRange },
+  { id: 'risks', label: 'ریسک‌ها', icon: ShieldAlert },
   { id: 'onepager', label: 'داشبورد مدیریتی', icon: LayoutDashboard },
   { id: 'reports', label: 'گزارش‌ها', icon: BarChart3 },
   { id: 'about', label: 'درباره ما', icon: Info },

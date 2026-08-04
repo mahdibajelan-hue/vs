@@ -1,23 +1,26 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, Gauge, TrendingDown, Flag, AlarmClockOff } from 'lucide-react'
+import { CalendarClock, Gauge, TrendingDown, AlarmClockOff } from 'lucide-react'
 import type { IsoLine, Project } from '../types'
-import { computeProjectSchedule, computeActivityStatus, ACTIVITY_STATUS_COLOR } from '../lib/schedule'
-import { formatJalali } from '../lib/jalali'
+import { computeProjectSchedule, computeScheduleSCurve, computeActivityStatus, ACTIVITY_STATUS_COLOR } from '../lib/schedule'
 import { KpiCard } from '../components/Dashboard/KpiCard'
 import { GanttChart } from '../components/Schedule/GanttChart'
 import { ScheduleEditModal } from '../components/Schedule/ScheduleEditModal'
+import { CountdownWidget } from '../components/Schedule/CountdownWidget'
+import { SCurveChart } from '../components/Reports/SCurveChart'
 import { useAuthStore } from '../store/useAuthStore'
 import { canEdit } from '../lib/permissions'
 
 export function SchedulePage({ project }: { project: Project }) {
   const [editingLine, setEditingLine] = useState<IsoLine | null>(null)
   const summary = useMemo(() => computeProjectSchedule(project), [project])
+  const scheduleSCurve = useMemo(() => computeScheduleSCurve(project), [project])
   const role = useAuthStore((s) => s.currentUser()?.role)
   const editable = canEdit(role)
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-[280px_repeat(4,1fr)] gap-3">
+        <CountdownWidget summary={summary} />
         <KpiCard label="پیشرفت برنامه‌ای (تا امروز)" value={`${summary.overallPlannedPercent}%`} icon={CalendarClock} accent="#f1c40f" />
         <KpiCard label="پیشرفت واقعی" value={`${summary.overallActualPercent}%`} icon={Gauge} accent="#3498db" />
         <KpiCard
@@ -27,16 +30,16 @@ export function SchedulePage({ project }: { project: Project }) {
           accent={summary.achievementRatio !== null && summary.achievementRatio < 90 ? '#e74c3c' : '#2ecc71'}
         />
         <KpiCard label="تاخیر کل پروژه" value={summary.totalDelayDays > 0 ? `${summary.totalDelayDays} روز` : 'بدون تاخیر'} icon={AlarmClockOff} accent={summary.totalDelayDays > 0 ? '#e74c3c' : '#2ecc71'} />
-        <KpiCard
-          label="پیش‌بینی پایان پروژه"
-          value={summary.forecastEnd ? formatJalali(summary.forecastEnd) : '—'}
-          sub={summary.plannedProjectEnd ? `برنامه: ${formatJalali(summary.plannedProjectEnd)}` : undefined}
-          icon={Flag}
-          accent="#a78bfa"
-        />
       </div>
 
-      <div className="flex gap-4" style={{ height: 'calc(100% - 108px)' }}>
+      <div className="glass-panel rounded-2xl p-4 h-64 flex flex-col">
+        <p className="mb-2 text-sm font-bold">S-Curve برنامه زمان‌بندی — پیشرفت برنامه‌ای در برابر واقعی فعالیت‌ها</p>
+        <div className="flex-1 min-h-0">
+          <SCurveChart data={scheduleSCurve} />
+        </div>
+      </div>
+
+      <div className="flex gap-4" style={{ height: 'calc(100% - 108px - 272px)', minHeight: 380 }}>
         <div className="w-72 shrink-0 glass-panel rounded-2xl overflow-hidden flex flex-col">
           <p className="px-3 py-2.5 text-xs font-bold text-secondary border-b" style={{ borderColor: 'var(--border-soft)' }}>
             {editable ? 'انتخاب خط برای تنظیم برنامه' : 'خطوط پروژه'}

@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Project, ThemeMode } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Project, ReportConfig, Risk, ThemeMode } from '../types'
 import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
+import { defaultReportConfig } from '../lib/reportConfig'
 
 interface AppState {
   projects: Project[]
@@ -41,6 +42,12 @@ interface AppState {
 
   setMilestones: (projectId: string, milestones: Milestone[]) => void
 
+  addRisk: (projectId: string, risk: Omit<Risk, 'id' | 'createdAt'>) => void
+  updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) => void
+  deleteRisk: (projectId: string, riskId: string) => void
+
+  setReportConfig: (projectId: string, config: ReportConfig) => void
+
   toggleTheme: () => void
 }
 
@@ -71,6 +78,8 @@ export const useStore = create<AppState>()(
           plannedCurve: [],
           schedules: [],
           milestones: createDefaultMilestones(),
+          risks: [],
+          reportConfig: defaultReportConfig(),
           createdAt: new Date().toISOString(),
         }
         set((s) => ({ projects: [...s.projects, project], currentProjectId: id }))
@@ -276,11 +285,40 @@ export const useStore = create<AppState>()(
         }))
       },
 
+      addRisk: (projectId, risk) => {
+        const newRisk: Risk = { ...risk, id: makeId('risk'), createdAt: new Date().toISOString() }
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, risks: [...p.risks, newRisk] } : p)),
+        }))
+      },
+
+      updateRisk: (projectId, riskId, data) => {
+        set((s) => ({
+          projects: s.projects.map((p) =>
+            p.id === projectId
+              ? { ...p, risks: p.risks.map((r) => (r.id === riskId ? { ...r, ...data } : r)) }
+              : p,
+          ),
+        }))
+      },
+
+      deleteRisk: (projectId, riskId) => {
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, risks: p.risks.filter((r) => r.id !== riskId) } : p)),
+        }))
+      },
+
+      setReportConfig: (projectId, config) => {
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, reportConfig: config } : p)),
+        }))
+      },
+
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
     }),
     {
       name: 'piping-iso-tracker-storage',
-      version: 3,
+      version: 5,
       migrate: (persistedState) => {
         const state = persistedState as AppState
         if (state?.projects) {
@@ -288,6 +326,8 @@ export const useStore = create<AppState>()(
             ...p,
             schedules: p.schedules ?? [],
             milestones: p.milestones && p.milestones.length ? p.milestones : createDefaultMilestones(),
+            risks: p.risks ?? [],
+            reportConfig: p.reportConfig ?? defaultReportConfig(),
             lines: (p.lines ?? []).map((l) => ({
               ...l,
               svgElementIds: l.svgElementIds && l.svgElementIds.length ? l.svgElementIds : [l.svgElementId],
