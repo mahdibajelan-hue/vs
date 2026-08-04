@@ -14,6 +14,7 @@ interface IsoViewportProps {
   fixMode?: boolean
   selectedFragmentIds?: Set<string>
   onToggleFragment?: (elementId: string) => void
+  onSvgReady?: (svgRoot: SVGSVGElement | null) => void
 }
 
 const MIN_SCALE = 0.3
@@ -28,6 +29,7 @@ export function IsoViewport({
   fixMode = false,
   selectedFragmentIds,
   onToggleFragment,
+  onSvgReady,
 }: IsoViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -60,6 +62,9 @@ export function IsoViewport({
       svgEl.style.overflow = 'visible'
     }
     setTransform({ x: 0, y: 0, scale: 1 })
+    onSvgReady?.(svgEl as SVGSVGElement | null)
+    // onSvgReady intentionally excluded — re-injecting innerHTML must only happen when the SVG itself changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [svgRaw])
 
   // Colorize + wire up interactivity whenever lines/progress/selection change

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Upload, Table2, Download, Wrench, PlusSquare, Unlink, XCircle } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { Upload, Table2, Download, Wrench, PlusSquare, Unlink, XCircle, Sparkles } from 'lucide-react'
 import type { Project } from '../types'
 import { computeAllProgress } from '../lib/progress'
 import { IsoViewport } from '../components/IsoViewer/IsoViewport'
@@ -14,6 +14,8 @@ import { useAuthStore } from '../store/useAuthStore'
 import { canEdit } from '../lib/permissions'
 import { makeId } from '../lib/id'
 import { exportColoredSvg } from '../lib/export'
+import { parseSvgCandidates, isLikelyLineId } from '../lib/svg'
+import { pickGroupLabel, extractSegmentEndpoints, computeMergeGroups, defaultMergeTolerance } from '../lib/lineMerge'
 
 export function ViewerPage({ project }: { project: Project }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
@@ -31,17 +33,29 @@ export function ViewerPage({ project }: { project: Project }) {
   const [selectedFragments, setSelectedFragments] = useState<Set<string>>(new Set())
   const [showCreateLine, setShowCreateLine] = useState(false)
   const [addToLineId, setAddToLineId] = useState('')
+  const [svgRoot, setSvgRoot] = useState<SVGSVGElement | null>(null)
 
   const progressMap = useMemo(() => computeAllProgress(project), [project])
   const selectedLine = project.lines.find((l) => l.id === selectedLineId) ?? null
   const selectedProgress = selectedLineId ? progressMap.get(selectedLineId) : null
 
-  const handleConfirmUpload = (svgRaw: string, fileName: string, selectedIds: string[]) => {
+  const candidateIds = useMemo(() => {
+    if (!project.svgRaw) return []
+    try {
+      return parseSvgCandidates(project.svgRaw).map((c) => c.elementId)
+    } catch {
+      return []
+    }
+  }, [project.svgRaw])
+
+  const handleSvgReady = useCallback((root: SVGSVGElement | null) => setSvgRoot(root), [])
+
+  const handleConfirmUpload = (svgRaw: string, fileName: string, groups: string[][]) => {
     const now = new Date().toISOString()
-    const newLines = selectedIds.map((svgElementId) => ({
+    const newLines = groups.map((group) => ({
       id: makeId('line'),
-      svgElementId,
-      svgElementIds: [svgElementId],
+      svgElementId: pickGroupLabel(group, isLikelyLineId),
+      svgElementIds: group,
       size: '',
       spec: '',
       service: '',
@@ -86,6 +100,19 @@ export function ViewerPage({ project }: { project: Project }) {
     if (selectedFragments.size === 0) return
     removeFragmentsFromLines(project.id, [...selectedFragments])
     setSelectedFragments(new Set())
+  }
+
+  const selectConnectedChain = () => {
+    if (!svgRoot || selectedFragments.size === 0 || candidateIds.length === 0) return
+    const endpoints = extractSegmentEndpoints(svgRoot, candidateIds)
+    const tolerance = defaultMergeTolerance(svgRoot)
+    const groups = computeMergeGroups(candidateIds, endpoints, tolerance)
+    const next = new Set(selectedFragments)
+    for (const seedId of selectedFragments) {
+      const group = groups.find((g) => g.includes(seedId))
+      if (group) for (const id of group) next.add(id)
+    }
+    setSelectedFragments(next)
   }
 
   if (!project.svgRaw) {
@@ -167,8 +194,9 @@ export function ViewerPage({ project }: { project: Project }) {
         {fixMode && (
           <div className="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
             <p className="text-xs text-secondary leading-6">
-              روی تکه‌های شکسته‌شده روی نقشه کلیک کنید تا انتخاب شوند (می‌تواند چند تکه از چند خط مختلف باشد)، سپس
-              آن‌ها را زیر یک شناسه ادغام کنید یا از خط فعلی جدا کنید.
+              روی یک یا چند تکه شکسته‌شده کلیک کنید، سپس «انتخاب قطعات هم‌خط» را بزنید تا بقیه تکه‌های همان مسیر
+              به‌صورت خودکار انتخاب شوند — دیگر لازم نیست تک‌تک کلیک کنید. در پایان آن‌ها را زیر یک شناسه ادغام کنید یا
+              از خط فعلی جدا کنید.
             </p>
             <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300 shrink-0">
               {selectedFragments.size} قطعه انتخاب شده
@@ -188,6 +216,14 @@ export function ViewerPage({ project }: { project: Project }) {
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
               >
                 <PlusSquare size={13} /> افزودن
+              </button>
+              <button
+                onClick={selectConnectedChain}
+                disabled={selectedFragments.size === 0 || !svgRoot}
+                title="از قطعات انتخاب‌شده، بقیه قطعات هم‌خط (متصل به هم) را هم به‌صورت خودکار انتخاب می‌کند"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
+              >
+                <Sparkles size={13} /> انتخاب قطعات هم‌خط
               </button>
               <button
                 onClick={() => setShowCreateLine(true)}
@@ -220,6 +256,7 @@ export function ViewerPage({ project }: { project: Project }) {
             fixMode={fixMode}
             selectedFragmentIds={selectedFragments}
             onToggleFragment={toggleFragment}
+            onSvgReady={handleSvgReady}
           />
         </div>
 
