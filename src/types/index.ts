@@ -60,3 +60,18 @@ export interface Project {
 }
 
 export type ThemeMode = 'dark' | 'light'
+
+export interface DraftLine {
+  id: string
+  svgElementId: string
+  size: string
+  points: { x: number; y: number }[]
+}
+
+export interface PlacedSymbol {
+  id: string
+  type: import('../data/pipingSymbols').SymbolType
+  x: number
+  y: number
+  rotation: number
+}

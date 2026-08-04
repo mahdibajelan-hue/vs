@@ -1,0 +1,239 @@
+import { useEffect, useState } from 'react'
+import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle } from 'lucide-react'
+import type { DraftLine, IsoLine, PlacedSymbol, Project } from '../types'
+import type { Point } from '../lib/isoGeometry'
+import { snapIsoPoint, snapToGrid, nearestPointOnPolylines } from '../lib/isoGeometry'
+import type { SymbolType } from '../data/pipingSymbols'
+import { SYMBOL_DEFS } from '../data/pipingSymbols'
+import { buildSchematicSvg } from '../lib/schematicExport'
+import { makeId } from '../lib/id'
+import { useStore } from '../store/useStore'
+import { SymbolPalette, type EditorMode } from '../components/Schematic/SymbolPalette'
+import { IsoCanvas, CANVAS_WIDTH, CANVAS_HEIGHT, type CanvasSelection } from '../components/Schematic/IsoCanvas'
+import { LineMetaModal } from '../components/Schematic/LineMetaModal'
+import { Modal } from '../components/common/Modal'
+
+export function SchematicPage({ project, onSaved }: { project: Project; onSaved: () => void }) {
+  const setProjectSvg = useStore((s) => s.setProjectSvg)
+
+  const [mode, setMode] = useState<EditorMode>('draw')
+  const [lines, setLines] = useState<DraftLine[]>([])
+  const [symbols, setSymbols] = useState<PlacedSymbol[]>([])
+  const [draftPoints, setDraftPoints] = useState<Point[]>([])
+  const [hoverPreview, setHoverPreview] = useState<Point | null>(null)
+  const [selection, setSelection] = useState<CanvasSelection | null>(null)
+  const [showMetaModal, setShowMetaModal] = useState(false)
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'Escape') {
+        setDraftPoints([])
+        setSelection(null)
+      } else if (e.key === 'Backspace' && draftPoints.length > 0) {
+        setDraftPoints((pts) => pts.slice(0, -1))
+      } else if (e.key === 'Delete' && selection) {
+        deleteSelection()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftPoints, selection])
+
+  const handleCanvasClick = (point: Point, target: { kind: 'background' | 'line' | 'symbol'; id?: string }) => {
+    if (mode === 'select') {
+      if (target.kind === 'line' && target.id) setSelection({ kind: 'line', id: target.id })
+      else if (target.kind === 'symbol' && target.id) setSelection({ kind: 'symbol', id: target.id })
+      else setSelection(null)
+      return
+    }
+
+    if (mode === 'draw') {
+      setDraftPoints((pts) => {
+        const prev = pts[pts.length - 1]
+        const snapped = prev ? snapIsoPoint(prev, point) : snapToGrid(point)
+        return [...pts, snapped]
+      })
+      return
+    }
+
+    if (mode.startsWith('symbol:')) {
+      const type = mode.slice('symbol:'.length) as SymbolType
+      const near = nearestPointOnPolylines(point, lines, 40)
+      const symbol: PlacedSymbol = {
+        id: makeId('sym'),
+        type,
+        x: near ? near.point.x : point.x,
+        y: near ? near.point.y : point.y,
+        rotation: near ? near.angleDeg : 0,
+      }
+      setSymbols((s) => [...s, symbol])
+    }
+  }
+
+  const finishLine = () => {
+    if (draftPoints.length < 2) return
+    setShowMetaModal(true)
+  }
+
+  const confirmLineMeta = (svgElementId: string, size: string) => {
+    setLines((ls) => [...ls, { id: makeId('dline'), svgElementId, size, points: draftPoints }])
+    setDraftPoints([])
+    setShowMetaModal(false)
+  }
+
+  const deleteSelection = () => {
+    if (!selection) return
+    if (selection.kind === 'line') setLines((ls) => ls.filter((l) => l.id !== selection.id))
+    else setSymbols((ss) => ss.filter((s) => s.id !== selection.id))
+    setSelection(null)
+  }
+
+  const rotateSelectedSymbol = (delta: number) => {
+    if (selection?.kind !== 'symbol') return
+    setSymbols((ss) => ss.map((s) => (s.id === selection.id ? { ...s, rotation: (s.rotation + delta + 360) % 360 } : s)))
+  }
+
+  const doSave = () => {
+    const svgRaw = buildSchematicSvg(lines, symbols, CANVAS_WIDTH, CANVAS_HEIGHT)
+    const newIsoLines: IsoLine[] = lines.map((l) => ({
+      id: makeId('line'),
+      svgElementId: l.svgElementId,
+      size: l.size,
+      spec: '',
+      service: '',
+      contractor: '',
+      plannedLength: 10,
+      totalWelds: 1,
+      status: 'not_started',
+      createdAt: new Date().toISOString(),
+    }))
+    setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
+    setShowOverwriteConfirm(false)
+    onSaved()
+  }
+
+  const handleSaveClick = () => {
+    if (lines.length === 0) return
+    if (project.svgRaw) setShowOverwriteConfirm(true)
+    else doSave()
+  }
+
+  const selectedLine = selection?.kind === 'line' ? lines.find((l) => l.id === selection.id) : null
+  const selectedSymbol = selection?.kind === 'symbol' ? symbols.find((s) => s.id === selection.id) : null
+
+  return (
+    <div className="flex h-full gap-4 p-4">
+      <div className="w-72 shrink-0 glass-panel rounded-2xl overflow-hidden">
+        <SymbolPalette mode={mode} onModeChange={setMode} />
+      </div>
+
+      <div className="flex-1 flex flex-col gap-3 min-w-0">
+        <div className="flex items-center justify-between glass-panel rounded-2xl px-4 py-2.5">
+          <div className="flex items-center gap-4 text-xs text-secondary">
+            <span>{lines.length} خط ترسیم‌شده</span>
+            <span>{symbols.length} علامت</span>
+            {mode === 'draw' && <span className="text-brand-300">حالت ترسیم — کلیک برای افزودن نقطه، Backspace برای حذف آخرین نقطه</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            {mode === 'draw' && draftPoints.length > 0 && (
+              <>
+                <button
+                  onClick={finishLine}
+                  disabled={draftPoints.length < 2}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
+                >
+                  <CornerDownLeft size={13} /> پایان خط
+                </button>
+                <button
+                  onClick={() => setDraftPoints([])}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+                >
+                  <XCircle size={13} /> لغو
+                </button>
+              </>
+            )}
+            <button
+              onClick={handleSaveClick}
+              disabled={lines.length === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
+            >
+              <Save size={14} /> ذخیره در پروژه
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0">
+          <IsoCanvas
+            lines={lines}
+            symbols={symbols}
+            draftPoints={draftPoints}
+            selection={selection}
+            onCanvasClick={handleCanvasClick}
+            onHoverPoint={setHoverPreview}
+            hoverPreview={hoverPreview}
+          />
+        </div>
+
+        {selectedLine && (
+          <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-6 text-sm">
+            <div>
+              <p className="text-xs text-muted">خط انتخاب‌شده</p>
+              <p className="font-bold">
+                {selectedLine.svgElementId} {selectedLine.size && `— ${selectedLine.size}`}
+              </p>
+            </div>
+            <button
+              onClick={deleteSelection}
+              className="mr-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 size={14} /> حذف خط
+            </button>
+          </div>
+        )}
+
+        {selectedSymbol && (
+          <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-4 text-sm">
+            <div>
+              <p className="text-xs text-muted">علامت انتخاب‌شده</p>
+              <p className="font-bold">{SYMBOL_DEFS[selectedSymbol.type].label}</p>
+            </div>
+            <button onClick={() => rotateSelectedSymbol(-15)} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="چرخش پادساعتگرد">
+              <RotateCcw size={15} />
+            </button>
+            <button onClick={() => rotateSelectedSymbol(15)} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="چرخش ساعتگرد">
+              <RotateCw size={15} />
+            </button>
+            <button
+              onClick={deleteSelection}
+              className="mr-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Delete size={14} /> حذف علامت
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showMetaModal && <LineMetaModal onClose={() => setShowMetaModal(false)} onConfirm={confirmLineMeta} />}
+
+      {showOverwriteConfirm && (
+        <Modal title="جایگزینی نقشه پروژه" subtitle="این پروژه از قبل یک نقشه دارد" onClose={() => setShowOverwriteConfirm(false)}>
+          <p className="text-sm text-secondary leading-7">
+            با ذخیره این نقشه شماتیک، نقشه فعلی پروژه و لیست خطوط آن جایگزین می‌شود. کارکردهای روزانه‌ی ثبت‌شده قبلی که به خطوط قدیمی مرتبط بودند دیگر روی نقشه نمایش داده نمی‌شوند. ادامه می‌دهید؟
+          </p>
+          <div className="flex justify-end gap-2 pt-4">
+            <button onClick={() => setShowOverwriteConfirm(false)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+              انصراف
+            </button>
+            <button onClick={doSave} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 transition-colors">
+              جایگزین کن و ذخیره کن
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}

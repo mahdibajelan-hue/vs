@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import type { Page } from '../../App'
 
@@ -10,6 +10,7 @@ interface SidebarProps {
 
 const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'viewer', label: 'نقشه ایزومتریک', icon: Map },
+  { id: 'schematic', label: 'طراح نقشه شماتیک', icon: PenTool },
   { id: 'onepager', label: 'داشبورد مدیریتی', icon: LayoutDashboard },
   { id: 'reports', label: 'گزارش‌ها', icon: BarChart3 },
 ]

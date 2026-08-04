@@ -7,14 +7,16 @@ import { NewProjectModal } from './components/Layout/NewProjectModal'
 import { ViewerPage } from './pages/ViewerPage'
 import { OnePagerPage } from './pages/OnePagerPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { SchematicPage } from './pages/SchematicPage'
 import { buildSeedProject } from './data/seed'
 
-export type Page = 'viewer' | 'onepager' | 'reports'
+export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
   onepager: 'داشبورد مدیریتی تک‌صفحه‌ای',
   reports: 'گزارش‌های تحلیلی',
+  schematic: 'طراح نقشه شماتیک',
 }
 
 function App() {
@@ -90,6 +92,9 @@ function App() {
           {currentProject && page === 'viewer' && <ViewerPage project={currentProject} />}
           {currentProject && page === 'onepager' && <OnePagerPage project={currentProject} />}
           {currentProject && page === 'reports' && <ReportsPage project={currentProject} />}
+          {currentProject && page === 'schematic' && (
+            <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />
+          )}
         </main>
       </div>
       {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
