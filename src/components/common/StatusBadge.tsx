@@ -5,9 +5,9 @@ export function StatusBadge({ status, className = '' }: { status: LineStatus; cl
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
-      style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}
+      style={{ background: `${color}22`, color: 'var(--text-primary)', border: `1px solid ${color}66` }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: color }} />
       {STATUS_LABEL_FA[status]}
     </span>
   )

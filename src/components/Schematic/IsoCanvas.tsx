@@ -156,6 +156,11 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
                 {isSelected && (
                   <circle cx={s.x} cy={s.y} r={16} fill="none" stroke="#38bdf8" strokeWidth={1.5} strokeDasharray="3 3" style={{ pointerEvents: 'none' }} />
                 )}
+                {s.type === 'fitting-tee' && (s.mainSize || s.branchSize) && (
+                  <text x={s.x + 8} y={s.y - 10} fontSize="10" fill="#94a3b8" style={{ pointerEvents: 'none' }}>
+                    {s.mainSize || '—'}x{s.branchSize || '—'}
+                  </text>
+                )}
               </g>
             )
           })}

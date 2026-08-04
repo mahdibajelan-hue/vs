@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle } from 'lucide-react'
+import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil } from 'lucide-react'
 import type { DraftLine, IsoLine, PlacedSymbol, Project } from '../types'
 import type { Point } from '../lib/isoGeometry'
-import { snapIsoPoint, snapToGrid, nearestPointOnPolylines } from '../lib/isoGeometry'
+import {
+  snapIsoPoint,
+  snapToGrid,
+  nearestPointOnPolylines,
+  projectIso3D,
+  distance3D,
+  polylineLength,
+  PIXELS_PER_METER,
+} from '../lib/isoGeometry'
+import { estimateWeldCount } from '../lib/weldEstimate'
 import type { SymbolType } from '../data/pipingSymbols'
 import { SYMBOL_DEFS } from '../data/pipingSymbols'
 import { buildSchematicSvg } from '../lib/schematicExport'
@@ -11,7 +20,11 @@ import { useStore } from '../store/useStore'
 import { SymbolPalette, type EditorMode } from '../components/Schematic/SymbolPalette'
 import { IsoCanvas, CANVAS_WIDTH, CANVAS_HEIGHT, type CanvasSelection } from '../components/Schematic/IsoCanvas'
 import { LineMetaModal } from '../components/Schematic/LineMetaModal'
+import { TeeMetaModal } from '../components/Schematic/TeeMetaModal'
+import { CoordinateLineModal } from '../components/Schematic/CoordinateLineModal'
 import { Modal } from '../components/common/Modal'
+
+const ORIGIN: Point = { x: 450, y: 550 }
 
 export function SchematicPage({ project, onSaved }: { project: Project; onSaved: () => void }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
@@ -23,6 +36,8 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
   const [hoverPreview, setHoverPreview] = useState<Point | null>(null)
   const [selection, setSelection] = useState<CanvasSelection | null>(null)
   const [showMetaModal, setShowMetaModal] = useState(false)
+  const [showCoordinateModal, setShowCoordinateModal] = useState(false)
+  const [pendingTeeId, setPendingTeeId] = useState<string | null>(null)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
 
   useEffect(() => {
@@ -63,14 +78,17 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
     if (mode.startsWith('symbol:')) {
       const type = mode.slice('symbol:'.length) as SymbolType
       const near = nearestPointOnPolylines(point, lines, 40)
+      const id = makeId('sym')
       const symbol: PlacedSymbol = {
-        id: makeId('sym'),
+        id,
         type,
         x: near ? near.point.x : point.x,
         y: near ? near.point.y : point.y,
         rotation: near ? near.angleDeg : 0,
+        lineId: near?.lineId,
       }
       setSymbols((s) => [...s, symbol])
+      if (type === 'fitting-tee') setPendingTeeId(id)
     }
   }
 
@@ -83,6 +101,24 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
     setLines((ls) => [...ls, { id: makeId('dline'), svgElementId, size, points: draftPoints }])
     setDraftPoints([])
     setShowMetaModal(false)
+  }
+
+  const confirmCoordinateLine = (data: { svgElementId: string; size: string; start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } }) => {
+    const startCanvas = projectIso3D(data.start, ORIGIN)
+    const endCanvas = projectIso3D(data.end, ORIGIN)
+    const realLengthMeters = distance3D(data.start, data.end)
+    setLines((ls) => [
+      ...ls,
+      { id: makeId('dline'), svgElementId: data.svgElementId, size: data.size, points: [startCanvas, endCanvas], realLengthMeters },
+    ])
+    setShowCoordinateModal(false)
+  }
+
+  const confirmTeeMeta = (mainSize: string, branchSize: string) => {
+    if (pendingTeeId) {
+      setSymbols((ss) => ss.map((s) => (s.id === pendingTeeId ? { ...s, mainSize, branchSize } : s)))
+    }
+    setPendingTeeId(null)
   }
 
   const deleteSelection = () => {
@@ -99,18 +135,22 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
 
   const doSave = () => {
     const svgRaw = buildSchematicSvg(lines, symbols, CANVAS_WIDTH, CANVAS_HEIGHT)
-    const newIsoLines: IsoLine[] = lines.map((l) => ({
-      id: makeId('line'),
-      svgElementId: l.svgElementId,
-      size: l.size,
-      spec: '',
-      service: '',
-      contractor: '',
-      plannedLength: 10,
-      totalWelds: 1,
-      status: 'not_started',
-      createdAt: new Date().toISOString(),
-    }))
+    const newIsoLines: IsoLine[] = lines.map((l) => {
+      const lengthMeters = l.realLengthMeters ?? polylineLength(l.points) / PIXELS_PER_METER
+      const fittingCount = symbols.filter((s) => s.lineId === l.id).length
+      return {
+        id: makeId('line'),
+        svgElementId: l.svgElementId,
+        size: l.size,
+        spec: '',
+        service: '',
+        contractor: '',
+        plannedLength: Math.round(lengthMeters * 10) / 10,
+        totalWelds: estimateWeldCount(lengthMeters, fittingCount),
+        status: 'not_started',
+        createdAt: new Date().toISOString(),
+      }
+    })
     setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
     setShowOverwriteConfirm(false)
     onSaved()
@@ -157,6 +197,12 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
               </>
             )}
             <button
+              onClick={() => setShowCoordinateModal(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+            >
+              <Ruler size={13} /> افزودن خط با مختصات
+            </button>
+            <button
               onClick={handleSaveClick}
               disabled={lines.length === 0}
               className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
@@ -186,6 +232,15 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
                 {selectedLine.svgElementId} {selectedLine.size && `— ${selectedLine.size}`}
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted">طول تخمینی</p>
+              <p className="font-bold num">
+                {Math.round(
+                  ((selectedLine.realLengthMeters ?? polylineLength(selectedLine.points) / PIXELS_PER_METER) * 10),
+                ) / 10}{' '}
+                m
+              </p>
+            </div>
             <button
               onClick={deleteSelection}
               className="mr-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
@@ -199,8 +254,25 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
           <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-4 text-sm">
             <div>
               <p className="text-xs text-muted">علامت انتخاب‌شده</p>
-              <p className="font-bold">{SYMBOL_DEFS[selectedSymbol.type].label}</p>
+              <p className="font-bold">
+                {SYMBOL_DEFS[selectedSymbol.type].label}
+                {selectedSymbol.type === 'fitting-tee' && (selectedSymbol.mainSize || selectedSymbol.branchSize) && (
+                  <span className="text-secondary font-normal">
+                    {' '}
+                    ({selectedSymbol.mainSize || '—'} × {selectedSymbol.branchSize || '—'})
+                  </span>
+                )}
+              </p>
             </div>
+            {selectedSymbol.type === 'fitting-tee' && (
+              <button
+                onClick={() => setPendingTeeId(selectedSymbol.id)}
+                className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors"
+                title="ویرایش سایزها"
+              >
+                <Pencil size={15} />
+              </button>
+            )}
             <button onClick={() => rotateSelectedSymbol(-15)} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="چرخش پادساعتگرد">
               <RotateCcw size={15} />
             </button>
@@ -218,11 +290,13 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       </div>
 
       {showMetaModal && <LineMetaModal onClose={() => setShowMetaModal(false)} onConfirm={confirmLineMeta} />}
+      {showCoordinateModal && <CoordinateLineModal onClose={() => setShowCoordinateModal(false)} onConfirm={confirmCoordinateLine} />}
+      {pendingTeeId && <TeeMetaModal onClose={() => setPendingTeeId(null)} onConfirm={confirmTeeMeta} />}
 
       {showOverwriteConfirm && (
         <Modal title="جایگزینی نقشه پروژه" subtitle="این پروژه از قبل یک نقشه دارد" onClose={() => setShowOverwriteConfirm(false)}>
           <p className="text-sm text-secondary leading-7">
-            با ذخیره این نقشه شماتیک، نقشه فعلی پروژه و لیست خطوط آن جایگزین می‌شود. کارکردهای روزانه‌ی ثبت‌شده قبلی که به خطوط قدیمی مرتبط بودند دیگر روی نقشه نمایش داده نمی‌شوند. ادامه می‌دهید؟
+            با ذخیره این نقشه شماتیک، نقشه فعلی پروژه و لیست خطوط آن جایگزین می‌شود. کارکردهای روزانه‌ی ثبت‌شده قبلی که به خطوط قدیمی مرتبط بودند دیگر روی نقشه نمایش داده نمی‌شوند. طول و تعداد سرجوش هر خط به‌صورت تخمینی محاسبه شده و در «مدیریت خطوط» قابل ویرایش است. ادامه می‌دهید؟
           </p>
           <div className="flex justify-end gap-2 pt-4">
             <button onClick={() => setShowOverwriteConfirm(false)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">

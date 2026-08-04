@@ -8,6 +8,9 @@ export type SymbolType =
   | 'valve-relief'
   | 'insulating-joint'
   | 'fitting-tee'
+  | 'fitting-elbow-30'
+  | 'fitting-elbow-45'
+  | 'fitting-elbow-90'
   | 'fitting-reducer'
   | 'fitting-flange'
   | 'fitting-cap'
@@ -120,6 +123,30 @@ export const SYMBOL_DEFS: Record<SymbolType, SymbolDef> = {
     markup: `
       <line x1="0" y1="0" x2="0" y2="-10" stroke="${S}" stroke-width="${SW}"/>
       <circle cx="0" cy="0" r="1.8" fill="${S}" stroke="none"/>
+    `,
+  },
+  'fitting-elbow-30': {
+    type: 'fitting-elbow-30',
+    label: 'زانو ۳۰ درجه (Elbow 30°)',
+    category: 'fitting',
+    markup: `
+      <path d="M -10 0 L -3 0 Q -0.5 -0.8 3.06 -3.5" fill="none" stroke="${S}" stroke-width="${SW}"/>
+    `,
+  },
+  'fitting-elbow-45': {
+    type: 'fitting-elbow-45',
+    label: 'زانو ۴۵ درجه (Elbow 45°)',
+    category: 'fitting',
+    markup: `
+      <path d="M -10 0 L -3 0 Q -1 -1 1.95 -4.95" fill="none" stroke="${S}" stroke-width="${SW}"/>
+    `,
+  },
+  'fitting-elbow-90': {
+    type: 'fitting-elbow-90',
+    label: 'زانو ۹۰ درجه (Elbow 90°)',
+    category: 'fitting',
+    markup: `
+      <path d="M -10 0 L -4 0 A 4 4 0 0 1 0 -4 L 0 -10" fill="none" stroke="${S}" stroke-width="${SW}"/>
     `,
   },
   'fitting-reducer': {

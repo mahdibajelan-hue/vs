@@ -33,9 +33,20 @@ export function buildSchematicSvg(
     .map((s) => `<g transform="translate(${s.x} ${s.y}) rotate(${s.rotation})">${SYMBOL_DEFS[s.type].markup}</g>`)
     .join('\n  ')
 
+  const teeLabelsMarkup = symbols
+    .filter((s) => s.type === 'fitting-tee' && (s.mainSize || s.branchSize))
+    .map(
+      (s) =>
+        `<text x="${s.x + 8}" y="${s.y - 10}" font-size="10" fill="#94a3b8" font-family="sans-serif">${escapeXml(
+          `${s.mainSize || '—'}x${s.branchSize || '—'}`,
+        )}</text>`,
+    )
+    .join('\n  ')
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" font-family="sans-serif">
   ${pathsMarkup}
   ${labelsMarkup}
   ${symbolsMarkup}
+  ${teeLabelsMarkup}
 </svg>`
 }

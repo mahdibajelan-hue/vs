@@ -66,6 +66,8 @@ export interface DraftLine {
   svgElementId: string
   size: string
   points: { x: number; y: number }[]
+  /** Set when the line was created via real-world coordinate entry (true 3D length, meters). */
+  realLengthMeters?: number
 }
 
 export interface PlacedSymbol {
@@ -74,4 +76,9 @@ export interface PlacedSymbol {
   x: number
   y: number
   rotation: number
+  /** DraftLine.id this symbol was snapped to, if any — used for weld-count estimation. */
+  lineId?: string
+  /** Tee fittings only: main run size and branch/outlet size. */
+  mainSize?: string
+  branchSize?: string
 }

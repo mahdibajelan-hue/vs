@@ -3,6 +3,8 @@ import { Trash2 } from 'lucide-react'
 import type { DailyLog, LineStatus, Project } from '../../types'
 import { STATUS_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
+import { JalaliDateInput } from '../common/JalaliDateInput'
+import { formatJalali } from '../../lib/jalali'
 
 const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
   root: 'ریشه',
@@ -41,11 +43,11 @@ export function LogsTable({ project }: { project: Project }) {
       <div className="flex flex-wrap items-center gap-2 p-3 border-b" style={{ borderColor: 'var(--border-soft)' }}>
         <label className="flex items-center gap-1.5 text-xs text-secondary">
           از تاریخ
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input !w-auto num" />
+          <JalaliDateInput value={from} onChange={setFrom} className="!w-40" />
         </label>
         <label className="flex items-center gap-1.5 text-xs text-secondary">
           تا تاریخ
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input !w-auto num" />
+          <JalaliDateInput value={to} onChange={setTo} className="!w-40" />
         </label>
         <select value={contractor} onChange={(e) => setContractor(e.target.value)} className="input !w-auto">
           <option value="all">همه پیمانکاران</option>
@@ -83,7 +85,7 @@ export function LogsTable({ project }: { project: Project }) {
           <tbody className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
             {rows.map(({ log, line }) => (
               <tr key={log.id} className="hover:bg-white/[0.03]">
-                <td className="p-2.5 num whitespace-nowrap">{log.date}</td>
+                <td className="p-2.5 num whitespace-nowrap">{formatJalali(log.date)}</td>
                 <td className="p-2.5 font-mono text-xs">{line?.svgElementId ?? '—'}</td>
                 <td className="p-2.5 num">{log.lengthDone}m</td>
                 <td className="p-2.5 num">{log.weldCount}</td>

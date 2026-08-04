@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Modal } from '../common/Modal'
+import { JalaliDateInput } from '../common/JalaliDateInput'
 import type { DailyLog, IsoLine } from '../../types'
 import { useStore } from '../../store/useStore'
 
@@ -74,8 +75,8 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="تاریخ">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input num" />
+          <Field label="تاریخ (شمسی)">
+            <JalaliDateInput value={date} onChange={setDate} />
           </Field>
           <Field label="پیمانکار">
             <input value={contractor} onChange={(e) => setContractor(e.target.value)} className="input" placeholder="نام پیمانکار" />

@@ -16,7 +16,12 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   return (
-    <Modal title="مدیریت مشخصات خطوط" subtitle="متراژ برنامه‌ای، تعداد سرجوش، سایز و پیمانکار هر خط را تکمیل کنید" onClose={onClose} width="max-w-5xl">
+    <Modal
+      title="مدیریت مشخصات خطوط"
+      subtitle="تمام مقادیر — از جمله متراژ و تعداد سرجوش تخمینی — قابل ویرایش هستند؛ روی هر فیلد کلیک کنید و مقدار را اصلاح کنید"
+      onClose={onClose}
+      width="max-w-5xl"
+    >
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full text-sm">
           <thead>
