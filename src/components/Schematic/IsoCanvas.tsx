@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Maximize, ZoomIn, ZoomOut } from 'lucide-react'
 import type { DraftLine, PlacedSymbol } from '../../types'
 import type { Point } from '../../lib/isoGeometry'
@@ -23,19 +23,34 @@ interface IsoCanvasProps {
   onCanvasClick: (point: Point, target: CanvasTarget) => void
   onHoverPoint?: (point: Point | null) => void
   hoverPreview?: Point | null
+  onSymbolMove?: (id: string, point: Point) => void
 }
 
 export const CANVAS_WIDTH = 1200
 export const CANVAS_HEIGHT = 700
 const MIN_SCALE = 0.4
 const MAX_SCALE = 4
+const DRAG_THRESHOLD = 3
 
-export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClick, onHoverPoint, hoverPreview }: IsoCanvasProps) {
+interface DragState {
+  id: string
+  startClientX: number
+  startClientY: number
+  startX: number
+  startY: number
+  moved: boolean
+  liveX: number
+  liveY: number
+}
+
+export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClick, onHoverPoint, hoverPreview, onSymbolMove }: IsoCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 })
+  const [drag, setDrag] = useState<DragState | null>(null)
+  const dragRef = useRef<DragState | null>(null)
 
   const toCanvasPoint = useCallback(
-    (e: React.MouseEvent): Point => {
+    (e: { clientX: number; clientY: number }): Point => {
       const rect = containerRef.current!.getBoundingClientRect()
       return {
         x: (e.clientX - rect.left - transform.x) / transform.scale,
@@ -67,6 +82,52 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
   }
 
   const reset = () => setTransform({ x: 0, y: 0, scale: 1 })
+
+  const startSymbolDrag = (e: React.MouseEvent, s: PlacedSymbol) => {
+    e.stopPropagation()
+    const next: DragState = {
+      id: s.id,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startX: s.x,
+      startY: s.y,
+      moved: false,
+      liveX: s.x,
+      liveY: s.y,
+    }
+    dragRef.current = next
+    setDrag(next)
+  }
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const d = dragRef.current
+      if (!d) return
+      const dx = (e.clientX - d.startClientX) / transform.scale
+      const dy = (e.clientY - d.startClientY) / transform.scale
+      const moved = d.moved || Math.hypot(dx, dy) > DRAG_THRESHOLD
+      const next = { ...d, moved, liveX: d.startX + dx, liveY: d.startY + dy }
+      dragRef.current = next
+      setDrag(next)
+    }
+    function onUp() {
+      const d = dragRef.current
+      if (!d) return
+      if (d.moved) onSymbolMove?.(d.id, { x: d.liveX, y: d.liveY })
+      else onCanvasClick({ x: d.startX, y: d.startY }, { kind: 'symbol', id: d.id })
+      dragRef.current = null
+      setDrag(null)
+    }
+    if (drag) {
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag !== null, transform.scale])
 
   return (
     <div className="relative h-full w-full overflow-auto rounded-2xl bg-black/10" dir="ltr" ref={containerRef}>
@@ -142,22 +203,22 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
 
           {symbols.map((s) => {
             const isSelected = selection?.kind === 'symbol' && selection.id === s.id
+            const isDragging = drag?.id === s.id
+            const px = isDragging ? drag.liveX : s.x
+            const py = isDragging ? drag.liveY : s.y
             return (
-              <g key={s.id}>
+              <g key={s.id} opacity={isDragging ? 0.75 : 1}>
                 <g
-                  transform={`translate(${s.x} ${s.y}) rotate(${s.rotation})`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onCanvasClick(toCanvasPoint(e), { kind: 'symbol', id: s.id })
-                  }}
+                  transform={`translate(${px} ${py}) rotate(${s.rotation})`}
+                  style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                  onMouseDown={(e) => startSymbolDrag(e, s)}
                   dangerouslySetInnerHTML={{ __html: SYMBOL_DEFS[s.type].markup }}
                 />
                 {isSelected && (
-                  <circle cx={s.x} cy={s.y} r={16} fill="none" stroke="#38bdf8" strokeWidth={1.5} strokeDasharray="3 3" style={{ pointerEvents: 'none' }} />
+                  <circle cx={px} cy={py} r={16} fill="none" stroke="#38bdf8" strokeWidth={1.5} strokeDasharray="3 3" style={{ pointerEvents: 'none' }} />
                 )}
                 {s.type === 'fitting-tee' && (s.mainSize || s.branchSize) && (
-                  <text x={s.x + 8} y={s.y - 10} fontSize="10" fill="#94a3b8" style={{ pointerEvents: 'none' }}>
+                  <text x={px + 8} y={py - 10} fontSize="10" fill="#94a3b8" style={{ pointerEvents: 'none' }}>
                     {s.mainSize || '—'}x{s.branchSize || '—'}
                   </text>
                 )}

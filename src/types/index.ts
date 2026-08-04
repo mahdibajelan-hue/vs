@@ -27,6 +27,20 @@ export interface IsoLine {
   createdAt: string
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export const APPROVAL_LABEL_FA: Record<ApprovalStatus, string> = {
+  pending: 'در انتظار تایید',
+  approved: 'تایید شده',
+  rejected: 'رد شده',
+}
+
+export const APPROVAL_COLOR: Record<ApprovalStatus, string> = {
+  pending: '#f1c40f',
+  approved: '#2ecc71',
+  rejected: '#e74c3c',
+}
+
 export interface DailyLog {
   id: string
   lineId: string
@@ -37,7 +51,24 @@ export interface DailyLog {
   contractor: string
   notes: string
   delayReason: string
+  approvalStatus: ApprovalStatus
+  reviewedBy: string | null
+  reviewNote: string
   createdAt: string
+}
+
+export type UserRole = 'contractor' | 'consultant' | 'owner'
+
+export const ROLE_LABEL_FA: Record<UserRole, string> = {
+  contractor: 'پیمانکار',
+  consultant: 'مشاور پروژه',
+  owner: 'کارفرما',
+}
+
+export const ROLE_DESCRIPTION_FA: Record<UserRole, string> = {
+  contractor: 'ورود اطلاعات کارکرد روزانه و برنامه زمان‌بندی',
+  consultant: 'بررسی و صحه‌گذاری (تایید یا رد) اطلاعات ثبت‌شده',
+  owner: 'مشاهده گزارش‌ها و ارسال برای مدیران ستادی (فقط خواندنی)',
 }
 
 export interface PlannedProgressPoint {

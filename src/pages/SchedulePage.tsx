@@ -6,10 +6,14 @@ import { formatJalali } from '../lib/jalali'
 import { KpiCard } from '../components/Dashboard/KpiCard'
 import { GanttChart } from '../components/Schedule/GanttChart'
 import { ScheduleEditModal } from '../components/Schedule/ScheduleEditModal'
+import { useAuthStore } from '../store/useAuthStore'
+import { canEdit } from '../lib/permissions'
 
 export function SchedulePage({ project }: { project: Project }) {
   const [editingLine, setEditingLine] = useState<IsoLine | null>(null)
   const summary = useMemo(() => computeProjectSchedule(project), [project])
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const editable = canEdit(role)
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
@@ -35,7 +39,7 @@ export function SchedulePage({ project }: { project: Project }) {
       <div className="flex gap-4" style={{ height: 'calc(100% - 108px)' }}>
         <div className="w-72 shrink-0 glass-panel rounded-2xl overflow-hidden flex flex-col">
           <p className="px-3 py-2.5 text-xs font-bold text-secondary border-b" style={{ borderColor: 'var(--border-soft)' }}>
-            انتخاب خط برای تنظیم برنامه
+            {editable ? 'انتخاب خط برای تنظیم برنامه' : 'خطوط پروژه'}
           </p>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {project.lines.length === 0 && <p className="text-center text-xs text-muted py-8">ابتدا خطوطی به پروژه اضافه کنید</p>}
@@ -46,8 +50,9 @@ export function SchedulePage({ project }: { project: Project }) {
               return (
                 <button
                   key={line.id}
-                  onClick={() => setEditingLine(line)}
-                  className="w-full rounded-xl p-2.5 text-right bg-white/[0.02] hover:bg-white/[0.06] transition-colors border border-transparent"
+                  onClick={() => editable && setEditingLine(line)}
+                  disabled={!editable}
+                  className="w-full rounded-xl p-2.5 text-right bg-white/[0.02] hover:bg-white/[0.06] disabled:hover:bg-white/[0.02] transition-colors border border-transparent"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium truncate">{line.svgElementId}</span>

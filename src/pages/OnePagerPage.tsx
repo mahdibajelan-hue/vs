@@ -1,15 +1,20 @@
-import { useMemo, useRef } from 'react'
-import { Ruler, GitCommitVertical, Gauge, ListChecks, FileDown } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { Ruler, GitCommitVertical, Gauge, ListChecks, FileDown, Send } from 'lucide-react'
 import type { Project } from '../types'
 import { STATUS_COLOR, STATUS_LABEL_FA } from '../types'
 import { computeAllProgress, computeProjectKpis } from '../lib/progress'
 import { serializeColoredSvg } from '../lib/svg'
 import { exportElementToPdf } from '../lib/export'
+import { useAuthStore } from '../store/useAuthStore'
+import { isReadOnly } from '../lib/permissions'
+import { SendReportModal } from '../components/Dashboard/SendReportModal'
 
 export function OnePagerPage({ project }: { project: Project }) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const progressMap = useMemo(() => computeAllProgress(project), [project])
   const kpis = useMemo(() => computeProjectKpis(project), [project])
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const [showSend, setShowSend] = useState(false)
 
   const coloredSvg = useMemo(() => {
     if (!project.svgRaw) return null
@@ -31,13 +36,24 @@ export function OnePagerPage({ project }: { project: Project }) {
     <div className="p-4 h-full overflow-y-auto flex flex-col items-center gap-3">
       <div className="no-print flex w-full max-w-[1200px] items-center justify-between">
         <p className="text-sm text-secondary">پیش‌نمایش گزارش تک‌صفحه‌ای — مناسب چاپ A4 افقی</p>
-        <button
-          onClick={() => sheetRef.current && exportElementToPdf(sheetRef.current, `${project.name}-executive-summary.pdf`)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-        >
-          <FileDown size={15} /> دانلود PDF
-        </button>
+        <div className="flex items-center gap-2">
+          {isReadOnly(role) && (
+            <button
+              onClick={() => setShowSend(true)}
+              className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm text-secondary hover:bg-white/5 transition-colors"
+            >
+              <Send size={15} /> ارسال برای مدیران ستادی
+            </button>
+          )}
+          <button
+            onClick={() => sheetRef.current && exportElementToPdf(sheetRef.current, `${project.name}-executive-summary.pdf`)}
+            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+          >
+            <FileDown size={15} /> دانلود PDF
+          </button>
+        </div>
       </div>
+      {showSend && <SendReportModal projectName={project.name} onClose={() => setShowSend(false)} />}
 
       <div
         ref={sheetRef}

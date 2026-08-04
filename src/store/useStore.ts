@@ -11,6 +11,7 @@ interface AppState {
   currentProject: () => Project | null
 
   createProject: (data: { name: string; client: string; location: string; unit: string }) => string
+  importProject: (project: Project) => string
   deleteProject: (id: string) => void
   selectProject: (id: string) => void
   updateProjectMeta: (id: string, data: Partial<Pick<Project, 'name' | 'client' | 'location' | 'unit'>>) => void
@@ -66,6 +67,29 @@ export const useStore = create<AppState>()(
           createdAt: new Date().toISOString(),
         }
         set((s) => ({ projects: [...s.projects, project], currentProjectId: id }))
+        return id
+      },
+
+      importProject: (project) => {
+        const id = makeId('proj')
+        const idMap = new Map<string, string>()
+        const lines = project.lines.map((l) => {
+          const newId = makeId('line')
+          idMap.set(l.id, newId)
+          return { ...l, id: newId }
+        })
+        const logs = project.logs.map((l) => ({ ...l, id: makeId('log'), lineId: idMap.get(l.lineId) ?? l.lineId }))
+        const schedules = project.schedules.map((a) => ({ ...a, id: makeId('sched'), lineId: idMap.get(a.lineId) ?? a.lineId }))
+        const imported: Project = {
+          ...project,
+          id,
+          name: `${project.name} (وارد شده)`,
+          lines,
+          logs,
+          schedules,
+          createdAt: new Date().toISOString(),
+        }
+        set((s) => ({ projects: [...s.projects, imported], currentProjectId: id }))
         return id
       },
 
@@ -199,11 +223,20 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'piping-iso-tracker-storage',
-      version: 1,
+      version: 2,
       migrate: (persistedState) => {
         const state = persistedState as AppState
         if (state?.projects) {
-          state.projects = state.projects.map((p) => ({ ...p, schedules: p.schedules ?? [] }))
+          state.projects = state.projects.map((p) => ({
+            ...p,
+            schedules: p.schedules ?? [],
+            logs: (p.logs ?? []).map((l) => ({
+              ...l,
+              approvalStatus: l.approvalStatus ?? 'approved',
+              reviewedBy: l.reviewedBy ?? null,
+              reviewNote: l.reviewNote ?? '',
+            })),
+          }))
         }
         return state
       },

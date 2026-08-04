@@ -1,5 +1,9 @@
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange } from 'lucide-react'
+import { useRef } from 'react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload } from 'lucide-react'
 import { useStore } from '../../store/useStore'
+import { useAuthStore } from '../../store/useAuthStore'
+import { canEdit } from '../../lib/permissions'
+import { exportProjectJson, parseProjectJson } from '../../lib/projectIO'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -20,7 +24,27 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
 export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
   const projects = useStore((s) => s.projects)
   const currentProjectId = useStore((s) => s.currentProjectId)
+  const currentProject = useStore((s) => s.currentProject())
   const selectProject = useStore((s) => s.selectProject)
+  const importProject = useStore((s) => s.importProject)
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const editable = canEdit(role)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const nav = NAV.filter((n) => n.id !== 'schematic' || editable)
+
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const project = parseProjectJson(String(reader.result ?? ''))
+      if (project) {
+        const id = importProject(project)
+        selectProject(id)
+      } else {
+        window.alert('فایل JSON پروژه معتبر نیست.')
+      }
+    }
+    reader.readAsText(file)
+  }
 
   return (
     <aside className="no-print flex h-full w-64 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0">
@@ -35,7 +59,7 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
       </div>
 
       <nav className="px-3 space-y-1">
-        {NAV.map(({ id, label, icon: Icon }) => (
+        {nav.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => onPageChange(id)}
@@ -53,9 +77,11 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
         <span className="flex items-center gap-1.5">
           <FolderKanban size={13} /> پروژه‌ها
         </span>
-        <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
-          <Plus size={15} />
-        </button>
+        {editable && (
+          <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
+            <Plus size={15} />
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {projects.map((p) => (
@@ -69,6 +95,37 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
             {p.name}
           </button>
         ))}
+      </div>
+
+      <div className="px-3 py-2 flex items-center gap-1.5 border-t" style={{ borderColor: 'var(--border-soft)' }}>
+        <button
+          disabled={!currentProject}
+          onClick={() => currentProject && exportProjectJson(currentProject)}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
+          title="خروجی JSON پروژه فعلی برای انتقال به دستگاه دیگر"
+        >
+          <Download size={12} /> خروجی پروژه
+        </button>
+        {editable && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+            title="ورود پروژه از فایل JSON"
+          >
+            <Upload size={12} /> ورود پروژه
+          </button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) handleImportFile(f)
+            e.target.value = ''
+          }}
+        />
       </div>
 
       <div className="px-5 py-4 text-[11px] text-muted border-t" style={{ borderColor: 'var(--border-soft)' }}>

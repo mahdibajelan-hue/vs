@@ -1,5 +1,5 @@
 import type { Project } from '../types'
-import { STATUS_COLOR, STATUS_LABEL_FA } from '../types'
+import { STATUS_COLOR, STATUS_LABEL_FA, APPROVAL_LABEL_FA } from '../types'
 import { computeAllProgress } from './progress'
 import { serializeColoredSvg } from './svg'
 
@@ -87,6 +87,7 @@ export async function exportProjectToExcel(project: Project, filename: string) {
         'پیمانکار': log.contractor,
         'توضیحات': log.notes,
         'علت تاخیر': log.delayReason,
+        'وضعیت تایید': APPROVAL_LABEL_FA[log.approvalStatus],
       }
     })
   const logSheet = XLSX.utils.json_to_sheet(logRows)

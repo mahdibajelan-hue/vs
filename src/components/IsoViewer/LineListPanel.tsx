@@ -11,9 +11,10 @@ interface LineListPanelProps {
   selectedLineId: string | null
   onSelectLine: (lineId: string) => void
   onLogLine: (lineId: string) => void
+  editable?: boolean
 }
 
-export function LineListPanel({ lines, progressMap, selectedLineId, onSelectLine, onLogLine }: LineListPanelProps) {
+export function LineListPanel({ lines, progressMap, selectedLineId, onSelectLine, onLogLine, editable = true }: LineListPanelProps) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<LineStatus | 'all'>('all')
 
@@ -74,7 +75,7 @@ export function LineListPanel({ lines, progressMap, selectedLineId, onSelectLine
               role="button"
               tabIndex={0}
               onClick={() => onSelectLine(line.id)}
-              onDoubleClick={() => onLogLine(line.id)}
+              onDoubleClick={() => editable && onLogLine(line.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') onSelectLine(line.id)
               }}
@@ -89,16 +90,18 @@ export function LineListPanel({ lines, progressMap, selectedLineId, onSelectLine
                   <StatusDot status={status} />
                   <span className="text-sm font-medium truncate">{line.svgElementId}</span>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onLogLine(line.id)
-                  }}
-                  className="shrink-0 text-brand-400 hover:text-brand-300"
-                  title="ثبت کارکرد روزانه"
-                >
-                  <PlusCircle size={16} />
-                </button>
+                {editable && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onLogLine(line.id)
+                    }}
+                    className="shrink-0 text-brand-400 hover:text-brand-300"
+                    title="ثبت کارکرد روزانه"
+                  >
+                    <PlusCircle size={16} />
+                  </button>
+                )}
               </div>
               <div className="mt-1.5 flex items-center gap-2 text-xs text-secondary">
                 <span>{line.size}</span>

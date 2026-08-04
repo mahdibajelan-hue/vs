@@ -1,5 +1,10 @@
 import type { DailyLog, IsoLine, LineStatus, Project } from '../types'
 
+/** Rejected entries never count toward progress; pending entries still count (provisionally) until reviewed. */
+export function isCountedLog(log: DailyLog): boolean {
+  return log.approvalStatus !== 'rejected'
+}
+
 export interface LineProgress {
   lineId: string
   lengthDone: number
@@ -11,7 +16,7 @@ export interface LineProgress {
 }
 
 export function computeLineProgress(line: IsoLine, logs: DailyLog[]): LineProgress {
-  const lineLogs = logs.filter((l) => l.lineId === line.id)
+  const lineLogs = logs.filter((l) => l.lineId === line.id && isCountedLog(l))
   const lengthDone = round1(lineLogs.reduce((sum, l) => sum + (l.lengthDone || 0), 0))
   const weldsDone = lineLogs.reduce((sum, l) => sum + (l.weldCount || 0), 0)
   const hasHydrotest = lineLogs.some((l) => l.weldPass === 'hydrotest')
@@ -116,6 +121,7 @@ export function computeSCurve(project: Project): SCurvePoint[] {
 
   const logsByDate = new Map<string, number>()
   for (const log of project.logs) {
+    if (!isCountedLog(log)) continue
     logsByDate.set(log.date, (logsByDate.get(log.date) || 0) + (log.lengthDone || 0))
   }
 
@@ -145,7 +151,7 @@ export interface WeldsBySize {
 export function computeWeldsBySize(project: Project): WeldsBySize[] {
   const map = new Map<string, number>()
   for (const line of project.lines) {
-    const lineLogs = project.logs.filter((l) => l.lineId === line.id)
+    const lineLogs = project.logs.filter((l) => l.lineId === line.id && isCountedLog(l))
     const welds = lineLogs.reduce((s, l) => s + (l.weldCount || 0), 0)
     map.set(line.size, (map.get(line.size) || 0) + welds)
   }

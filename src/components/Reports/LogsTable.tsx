@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Trash2 } from 'lucide-react'
-import type { DailyLog, LineStatus, Project } from '../../types'
-import { STATUS_LABEL_FA } from '../../types'
+import { Trash2, Check, X } from 'lucide-react'
+import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
+import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
+import { useAuthStore } from '../../store/useAuthStore'
+import { canApprove, canEdit } from '../../lib/permissions'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import { formatJalali } from '../../lib/jalali'
 
@@ -17,10 +19,16 @@ const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
 
 export function LogsTable({ project }: { project: Project }) {
   const deleteLog = useStore((s) => s.deleteLog)
+  const updateLog = useStore((s) => s.updateLog)
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const reviewerName = useAuthStore((s) => s.currentUser()?.fullName ?? '')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [contractor, setContractor] = useState('all')
   const [status, setStatus] = useState<LineStatus | 'all'>('all')
+  const [approval, setApproval] = useState<ApprovalStatus | 'all'>('all')
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectNote, setRejectNote] = useState('')
 
   const contractors = useMemo(() => [...new Set(project.lines.map((l) => l.contractor).filter(Boolean))], [project.lines])
 
@@ -30,13 +38,23 @@ export function LogsTable({ project }: { project: Project }) {
         if (from && log.date < from) return false
         if (to && log.date > to) return false
         if (contractor !== 'all' && log.contractor !== contractor) return false
+        if (approval !== 'all' && log.approvalStatus !== approval) return false
         const line = project.lines.find((l) => l.id === log.lineId)
         if (status !== 'all' && line?.status !== status) return false
         return true
       })
       .sort((a, b) => (a.date < b.date ? 1 : -1))
       .map((log) => ({ log, line: project.lines.find((l) => l.id === log.lineId) }))
-  }, [project.logs, project.lines, from, to, contractor, status])
+  }, [project.logs, project.lines, from, to, contractor, status, approval])
+
+  const approve = (logId: string) => {
+    updateLog(project.id, logId, { approvalStatus: 'approved', reviewedBy: reviewerName, reviewNote: '' })
+  }
+  const confirmReject = (logId: string) => {
+    updateLog(project.id, logId, { approvalStatus: 'rejected', reviewedBy: reviewerName, reviewNote: rejectNote.trim() })
+    setRejectingId(null)
+    setRejectNote('')
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -65,6 +83,14 @@ export function LogsTable({ project }: { project: Project }) {
             </option>
           ))}
         </select>
+        <select value={approval} onChange={(e) => setApproval(e.target.value as ApprovalStatus | 'all')} className="input !w-auto">
+          <option value="all">همه وضعیت‌های تایید</option>
+          {(Object.keys(APPROVAL_LABEL_FA) as ApprovalStatus[]).map((a) => (
+            <option key={a} value={a}>
+              {APPROVAL_LABEL_FA[a]}
+            </option>
+          ))}
+        </select>
         <span className="mr-auto text-xs text-muted">{rows.length} رکورد</span>
       </div>
 
@@ -79,6 +105,7 @@ export function LogsTable({ project }: { project: Project }) {
               <th className="p-2.5 text-right font-medium">پاس/تست</th>
               <th className="p-2.5 text-right font-medium">پیمانکار</th>
               <th className="p-2.5 text-right font-medium">توضیحات</th>
+              <th className="p-2.5 text-right font-medium">تایید</th>
               <th className="p-2.5" />
             </tr>
           </thead>
@@ -95,15 +122,60 @@ export function LogsTable({ project }: { project: Project }) {
                   {log.delayReason ? <span className="text-amber-400">{log.delayReason}</span> : log.notes}
                 </td>
                 <td className="p-2.5">
-                  <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors">
-                    <Trash2 size={14} />
-                  </button>
+                  {rejectingId === log.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        value={rejectNote}
+                        onChange={(e) => setRejectNote(e.target.value)}
+                        placeholder="علت رد"
+                        className="w-28 rounded-md bg-black/20 border border-white/10 px-2 py-1 text-xs outline-none focus:border-brand-400"
+                      />
+                      <button onClick={() => confirmReject(log.id)} className="text-red-400 hover:underline text-xs">
+                        ثبت
+                      </button>
+                      <button onClick={() => setRejectingId(null)} className="text-muted hover:underline text-xs">
+                        لغو
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap"
+                        style={{
+                          background: `${APPROVAL_COLOR[log.approvalStatus]}22`,
+                          color: 'var(--text-primary)',
+                          border: `1px solid ${APPROVAL_COLOR[log.approvalStatus]}66`,
+                        }}
+                        title={log.reviewNote || undefined}
+                      >
+                        {APPROVAL_LABEL_FA[log.approvalStatus]}
+                      </span>
+                      {canApprove(role) && log.approvalStatus !== 'approved' && (
+                        <button onClick={() => approve(log.id)} className="text-green-400 hover:text-green-300" title="تایید">
+                          <Check size={14} />
+                        </button>
+                      )}
+                      {canApprove(role) && log.approvalStatus !== 'rejected' && (
+                        <button onClick={() => setRejectingId(log.id)} className="text-red-400 hover:text-red-300" title="رد">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </td>
+                <td className="p-2.5">
+                  {canEdit(role) && (
+                    <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-xs text-muted">
+                <td colSpan={9} className="p-8 text-center text-xs text-muted">
                   رکوردی یافت نشد
                 </td>
               </tr>

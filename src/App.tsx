@@ -11,6 +11,8 @@ import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
+import { useAuthStore } from './store/useAuthStore'
+import { canEdit } from './lib/permissions'
 
 export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'about'
 
@@ -34,6 +36,8 @@ function App() {
   const setPlannedCurve = useStore((s) => s.setPlannedCurve)
   const addSchedules = useStore((s) => s.addSchedules)
   const selectProject = useStore((s) => s.selectProject)
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const editable = canEdit(role)
 
   const [page, setPage] = useState<Page>('viewer')
   const [showNewProject, setShowNewProject] = useState(false)
@@ -41,6 +45,10 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (page === 'schematic' && !editable) setPage('viewer')
+  }, [page, editable])
 
   const loadDemo = () => {
     const seed = buildSeedProject()
@@ -70,18 +78,24 @@ function App() {
             بصری و خروجی حرفه‌ای.
           </p>
           <div className="flex flex-col gap-2.5">
-            <button
-              onClick={() => setShowNewProject(true)}
-              className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-            >
-              <Plus size={17} /> ایجاد پروژه جدید
-            </button>
-            <button
-              onClick={loadDemo}
-              className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 transition-colors"
-            >
-              <Sparkles size={17} /> بارگذاری پروژه نمایشی
-            </button>
+            {editable ? (
+              <>
+                <button
+                  onClick={() => setShowNewProject(true)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+                >
+                  <Plus size={17} /> ایجاد پروژه جدید
+                </button>
+                <button
+                  onClick={loadDemo}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 transition-colors"
+                >
+                  <Sparkles size={17} /> بارگذاری پروژه نمایشی
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-muted">هنوز پروژه‌ای ایجاد نشده — از پیمانکار یا مشاور پروژه بخواهید یک پروژه بسازد یا فایل JSON آن را برایتان ارسال کند.</p>
+            )}
           </div>
         </div>
         {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}

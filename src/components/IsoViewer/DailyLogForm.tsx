@@ -40,11 +40,22 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
 
   const submit = () => {
     if (!lineId) return
-    const payload = { lineId, date, lengthDone, weldCount, weldPass, contractor, notes, delayReason }
     if (editingLog) {
-      updateLog(projectId, editingLog.id, payload)
+      updateLog(projectId, editingLog.id, { lineId, date, lengthDone, weldCount, weldPass, contractor, notes, delayReason })
     } else {
-      addLog(projectId, payload)
+      addLog(projectId, {
+        lineId,
+        date,
+        lengthDone,
+        weldCount,
+        weldPass,
+        contractor,
+        notes,
+        delayReason,
+        approvalStatus: 'pending',
+        reviewedBy: null,
+        reviewNote: '',
+      })
     }
     onClose()
   }

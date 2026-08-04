@@ -58,7 +58,7 @@ export function buildSeedProject(): {
   const byElementId = new Map(lines.map((l) => [l.svgElementId, l]))
   const idOf = (elementId: string) => byElementId.get(elementId)!.id
 
-  const logs: Omit<DailyLog, 'id' | 'createdAt'>[] = [
+  const rawLogs: Omit<DailyLog, 'id' | 'createdAt' | 'approvalStatus' | 'reviewedBy' | 'reviewNote'>[] = [
     // L-1001-6-A1A (in progress ~60%)
     { lineId: idOf('L-1001-6-A1A'), date: daysAgo(24), lengthDone: 12, weldCount: 4, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'شروع اسپول‌های اولیه', delayReason: '' },
     { lineId: idOf('L-1001-6-A1A'), date: daysAgo(17), lengthDone: 10, weldCount: 3, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
@@ -95,6 +95,15 @@ export function buildSeedProject(): {
     { lineId: idOf('L-1008-4-C1C'), date: daysAgo(14), lengthDone: 6, weldCount: 2, weldPass: 'root', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
     { lineId: idOf('L-1008-4-C1C'), date: daysAgo(5), lengthDone: 4, weldCount: 1, weldPass: 'fill', contractor: 'پیمانکار ج', notes: '', delayReason: 'باران و توقف کار' },
   ]
+
+  // Most recent couple of entries are shown as still awaiting the consultant's review.
+  const pendingIndexes = new Set([2, rawLogs.length - 1])
+  const logs: Omit<DailyLog, 'id' | 'createdAt'>[] = rawLogs.map((l, i) => ({
+    ...l,
+    approvalStatus: pendingIndexes.has(i) ? 'pending' : 'approved',
+    reviewedBy: pendingIndexes.has(i) ? null : 'مشاور پروژه',
+    reviewNote: '',
+  }))
 
   const plannedCurve: PlannedProgressPoint[] = [
     { date: daysAgo(30), plannedPercent: 5 },

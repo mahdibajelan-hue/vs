@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil, HelpCircle } from 'lucide-react'
+import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil, HelpCircle, FlipHorizontal } from 'lucide-react'
 import type { DraftLine, IsoLine, PlacedSymbol, Project } from '../types'
 import type { Point } from '../lib/isoGeometry'
 import {
@@ -27,6 +27,7 @@ import { Modal } from '../components/common/Modal'
 
 const ORIGIN: Point = { x: 450, y: 550 }
 const GUIDE_SEEN_KEY = 'piping-iso-tracker-schematic-guide-seen'
+const SNAP_THRESHOLD = 25
 
 export function SchematicPage({ project, onSaved }: { project: Project; onSaved: () => void }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
@@ -85,7 +86,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
 
     if (mode.startsWith('symbol:')) {
       const type = mode.slice('symbol:'.length) as SymbolType
-      const near = nearestPointOnPolylines(point, lines, 40)
+      const near = nearestPointOnPolylines(point, lines, SNAP_THRESHOLD)
       const id = makeId('sym')
       const symbol: PlacedSymbol = {
         id,
@@ -141,6 +142,17 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
     setSymbols((ss) => ss.map((s) => (s.id === selection.id ? { ...s, rotation: (s.rotation + delta + 360) % 360 } : s)))
   }
 
+  const setSelectedSymbolRotation = (deg: number) => {
+    if (selection?.kind !== 'symbol') return
+    const normalized = ((deg % 360) + 360) % 360
+    setSymbols((ss) => ss.map((s) => (s.id === selection.id ? { ...s, rotation: normalized } : s)))
+  }
+
+  const handleSymbolMove = (id: string, point: Point) => {
+    const near = nearestPointOnPolylines(point, lines, SNAP_THRESHOLD * 2)
+    setSymbols((ss) => ss.map((s) => (s.id === id ? { ...s, x: point.x, y: point.y, lineId: near?.lineId ?? s.lineId } : s)))
+  }
+
   const doSave = () => {
     const svgRaw = buildSchematicSvg(lines, symbols, CANVAS_WIDTH, CANVAS_HEIGHT)
     const newIsoLines: IsoLine[] = lines.map((l) => {
@@ -189,7 +201,9 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
                 حالت ترسیم — روی نقشه کلیک کنید تا نقطه اضافه شود، سپس «پایان خط» را بزنید
               </span>
             )}
-            {mode === 'select' && <span className="text-brand-300">حالت انتخاب — روی یک خط یا علامت کلیک کنید تا ویرایش/حذف شود</span>}
+            {mode === 'select' && (
+              <span className="text-brand-300">حالت انتخاب — روی خط/علامت کلیک کنید تا ویرایش شود، یا علامت را بکشید تا جابه‌جا شود</span>
+            )}
             {mode.startsWith('symbol:') && (
               <span className="text-brand-300">
                 حالت افزودن «{SYMBOL_DEFS[mode.slice('symbol:'.length) as SymbolType].label}» — روی نقطه‌ای از خط کلیک کنید
@@ -245,6 +259,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             onCanvasClick={handleCanvasClick}
             onHoverPoint={setHoverPreview}
             hoverPreview={hoverPreview}
+            onSymbolMove={handleSymbolMove}
           />
         </div>
 
@@ -303,6 +318,23 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             <button onClick={() => rotateSelectedSymbol(15)} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="چرخش ساعتگرد">
               <RotateCw size={15} />
             </button>
+            <button
+              onClick={() => rotateSelectedSymbol(180)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+              title="معکوس کردن جهت (۱۸۰ درجه)"
+            >
+              <FlipHorizontal size={15} /> معکوس
+            </button>
+            <label className="flex items-center gap-1.5 text-xs text-secondary">
+              زاویه
+              <input
+                type="number"
+                value={Math.round(selectedSymbol.rotation)}
+                onChange={(e) => setSelectedSymbolRotation(parseInt(e.target.value, 10) || 0)}
+                className="w-16 rounded-md bg-black/20 border border-white/10 px-2 py-1 text-xs outline-none focus:border-brand-400 num"
+              />
+              °
+            </label>
             <button
               onClick={deleteSelection}
               className="mr-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"

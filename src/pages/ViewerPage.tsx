@@ -9,11 +9,15 @@ import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
+import { useAuthStore } from '../store/useAuthStore'
+import { canEdit } from '../lib/permissions'
 import { makeId } from '../lib/id'
 import { exportColoredSvg } from '../lib/export'
 
 export function ViewerPage({ project }: { project: Project }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
+  const role = useAuthStore((s) => s.currentUser()?.role)
+  const editable = canEdit(role)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [showLinesTable, setShowLinesTable] = useState(false)
@@ -48,14 +52,18 @@ export function ViewerPage({ project }: { project: Project }) {
         <div className="glass-panel max-w-md rounded-2xl p-8 text-center">
           <p className="mb-1 text-lg font-bold">هنوز نقشه‌ای آپلود نشده</p>
           <p className="mb-5 text-sm text-secondary">
-            فایل SVG نقشه ایزومتریک این پروژه را بارگذاری کنید تا خطوط لوله به‌صورت خودکار استخراج شوند.
+            {editable
+              ? 'فایل SVG نقشه ایزومتریک این پروژه را بارگذاری کنید تا خطوط لوله به‌صورت خودکار استخراج شوند.'
+              : 'هنوز نقشه‌ای برای این پروژه بارگذاری نشده است.'}
           </p>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-          >
-            <Upload size={16} /> آپلود فایل SVG
-          </button>
+          {editable && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+            >
+              <Upload size={16} /> آپلود فایل SVG
+            </button>
+          )}
         </div>
         {showUpload && <UploadSvgModal onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
       </div>
@@ -71,6 +79,7 @@ export function ViewerPage({ project }: { project: Project }) {
           selectedLineId={selectedLineId}
           onSelectLine={setSelectedLineId}
           onLogLine={setLogLineId}
+          editable={editable}
         />
       </div>
 
@@ -84,18 +93,22 @@ export function ViewerPage({ project }: { project: Project }) {
             >
               <Download size={14} /> خروجی SVG رنگی
             </button>
-            <button
-              onClick={() => setShowLinesTable(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
-            >
-              <Table2 size={14} /> مدیریت خطوط
-            </button>
-            <button
-              onClick={() => setShowUpload(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
-            >
-              <Upload size={14} /> آپلود مجدد
-            </button>
+            {editable && (
+              <button
+                onClick={() => setShowLinesTable(true)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+              >
+                <Table2 size={14} /> مدیریت خطوط
+              </button>
+            )}
+            {editable && (
+              <button
+                onClick={() => setShowUpload(true)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+              >
+                <Upload size={14} /> آپلود مجدد
+              </button>
+            )}
           </div>
         </div>
 
@@ -131,12 +144,14 @@ export function ViewerPage({ project }: { project: Project }) {
                 {selectedProgress.weldsDone} / {selectedLine.totalWelds}
               </p>
             </div>
-            <button
-              onClick={() => setLogLineId(selectedLine.id)}
-              className="mr-auto rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-400 transition-colors"
-            >
-              ثبت کارکرد روزانه
-            </button>
+            {editable && (
+              <button
+                onClick={() => setLogLineId(selectedLine.id)}
+                className="mr-auto rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-400 transition-colors"
+              >
+                ثبت کارکرد روزانه
+              </button>
+            )}
           </div>
         )}
       </div>
