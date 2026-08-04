@@ -15,6 +15,7 @@ import { ReportMilestonesMini } from '../components/Dashboard/ReportMilestonesMi
 import { ReportSCurveMini } from '../components/Dashboard/ReportSCurveMini'
 import { ReportWeldsMini } from '../components/Dashboard/ReportWeldsMini'
 import { ReportRiskHeatMini } from '../components/Dashboard/ReportRiskHeatMini'
+import { Logo } from '../components/common/Logo'
 
 export function OnePagerPage({ project }: { project: Project }) {
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -83,11 +84,14 @@ export function OnePagerPage({ project }: { project: Project }) {
           className="flex items-center justify-between rounded-xl px-5 py-4 -mx-1"
           style={{ background: 'linear-gradient(135deg, #0c4a6e 0%, #0369a1 55%, #0ea5e9 100%)' }}
         >
-          <div>
-            <h1 className="text-3xl font-black text-white tracking-tight">{project.name}</h1>
-            <p className="mt-1 text-[12px] font-medium" style={{ color: '#e0f2fe' }}>
-              کارفرما: {project.client || '—'} &nbsp;|&nbsp; موقعیت: {project.location || '—'} &nbsp;|&nbsp; واحد: {project.unit || '—'}
-            </p>
+          <div className="flex items-center gap-3.5">
+            <Logo size={48} className="shrink-0 rounded-xl ring-2 ring-white/40" />
+            <div>
+              <h1 className="text-3xl font-black text-white tracking-tight">{project.name}</h1>
+              <p className="mt-1 text-[12px] font-medium" style={{ color: '#e0f2fe' }}>
+                کارفرما: {project.client || '—'} &nbsp;|&nbsp; موقعیت: {project.location || '—'} &nbsp;|&nbsp; واحد: {project.unit || '—'}
+              </p>
+            </div>
           </div>
           <div className="text-left text-[11px] shrink-0" style={{ color: '#e0f2fe' }}>
             <p className="text-sm font-bold text-white">گزارش پیشرفت مدیریتی</p>
@@ -121,7 +125,7 @@ export function OnePagerPage({ project }: { project: Project }) {
                   </p>
                   {sections.legend && <PrintLegend />}
                 </div>
-                <div className="flex-1 min-h-0" dangerouslySetInnerHTML={coloredSvg ? { __html: coloredSvg } : { __html: '' }} />
+                <div className="onepager-map flex-1 min-h-0" dangerouslySetInnerHTML={coloredSvg ? { __html: coloredSvg } : { __html: '' }} />
               </div>
             )}
 

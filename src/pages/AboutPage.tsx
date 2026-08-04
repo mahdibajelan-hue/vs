@@ -1,4 +1,5 @@
 import { Mail, MapPin, Layers, PenTool, BarChart3, ShieldCheck, Sparkles } from 'lucide-react'
+import { Logo } from '../components/common/Logo'
 
 const DESIGNER_NAME = 'مهدی باجلان'
 const DESIGNER_EMAIL = 'bajelanmahdi6900@gmail.com'
@@ -15,9 +16,7 @@ export function AboutPage() {
     <div className="h-full overflow-y-auto p-4">
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="glass-panel rounded-2xl p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white font-bold text-xl shadow-lg shadow-brand-500/30">
-            IP
-          </div>
+          <Logo size={56} className="mx-auto mb-4 rounded-2xl shadow-lg shadow-brand-500/30" />
           <h1 className="mb-2 text-xl font-extrabold">سامانه پایش پیشرفت ایزومتریک لوله‌کشی</h1>
           <p className="text-sm text-secondary leading-7">
             نرم‌افزاری برای مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک لوله‌کشی در پروژه‌های گاز و پتروشیمی — از

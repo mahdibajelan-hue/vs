@@ -4,6 +4,7 @@ import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { canEdit } from '../../lib/permissions'
 import { exportProjectJson, parseProjectJson } from '../../lib/projectIO'
+import { Logo } from '../common/Logo'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -50,9 +51,7 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
   return (
     <aside className="no-print flex h-full w-64 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white font-bold shadow-lg shadow-brand-500/20">
-          IP
-        </div>
+        <Logo size={36} className="shrink-0 rounded-xl shadow-lg shadow-brand-500/20" />
         <div className="leading-tight">
           <p className="text-sm font-bold">پایش ایزومتریک</p>
           <p className="text-[11px] text-muted">Piping Progress Tracker</p>

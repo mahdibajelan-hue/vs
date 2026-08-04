@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, User } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, User } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
+import { Logo } from '../common/Logo'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const hasAccounts = useAuthStore((s) => s.accounts.length > 0)
@@ -12,13 +13,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-function Shell({ icon: Icon, title, subtitle, children, wide }: { icon: typeof Lock; title: string; subtitle: string; children: ReactNode; wide?: boolean }) {
+function Shell({ title, subtitle, children, wide }: { title: string; subtitle: string; children: ReactNode; wide?: boolean }) {
   return (
     <div className="flex h-screen w-screen items-center justify-center p-4">
       <div className={`glass-panel w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-3xl p-8`}>
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-lg shadow-brand-500/30">
-          <Icon size={24} />
-        </div>
+        <Logo size={56} className="mx-auto mb-4 rounded-2xl shadow-lg shadow-brand-500/30" />
         <h1 className="mb-1 text-center text-lg font-extrabold">{title}</h1>
         <p className="mb-6 text-center text-sm text-secondary leading-6">{subtitle}</p>
         {children}
@@ -108,7 +107,7 @@ function SetupScreen() {
   }
 
   return (
-    <Shell icon={ShieldCheck} title="راه‌اندازی اولین حساب کاربری" subtitle="این حساب اولین کاربر سامانه است — بعداً می‌توانید حساب‌های دیگر (پیمانکار، مشاور، کارفرما) را هم اضافه کنید" wide>
+    <Shell title="راه‌اندازی اولین حساب کاربری" subtitle="این حساب اولین کاربر سامانه است — بعداً می‌توانید حساب‌های دیگر (پیمانکار، مشاور، کارفرما) را هم اضافه کنید" wide>
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">نام و نام خانوادگی</span>
@@ -156,7 +155,7 @@ function LoginScreen() {
   }
 
   return (
-    <Shell icon={Lock} title="ورود به سامانه" subtitle={`سامانه پایش پیشرفت ایزومتریک لوله‌کشی${accounts.length ? ` — ${accounts.length} حساب فعال` : ''}`}>
+    <Shell title="ورود به سامانه" subtitle={`سامانه پایش پیشرفت ایزومتریک لوله‌کشی${accounts.length ? ` — ${accounts.length} حساب فعال` : ''}`}>
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">نام کاربری</span>
