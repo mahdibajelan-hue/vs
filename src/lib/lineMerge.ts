@@ -14,12 +14,23 @@ export interface SegmentEndpoints {
 
 const MERGEABLE_TAGS = new Set(['path', 'line', 'polyline'])
 
+/** Indexes every id'd element under `root` in a single DOM pass — reused instead of repeated per-id querySelector calls. */
+export function indexElementsById(root: Element): Map<string, SVGGraphicsElement> {
+  const index = new Map<string, SVGGraphicsElement>()
+  root.querySelectorAll<SVGGraphicsElement>('[id]').forEach((el) => index.set(el.id, el))
+  return index
+}
+
 /** Extracts the start/end point of each mergeable candidate, normalized into the root <svg>'s own coordinate space. */
 export function extractSegmentEndpoints(svgRoot: SVGSVGElement, elementIds: string[]): Map<string, SegmentEndpoints> {
   const result = new Map<string, SegmentEndpoints>()
 
+  // One DOM pass to index every id, instead of a separate querySelector (CSS-selector match) per candidate —
+  // for CAD exports with thousands of fragments this turns an O(n) series of selector lookups into O(1) map reads.
+  const index = indexElementsById(svgRoot)
+
   for (const id of elementIds) {
-    const el = svgRoot.querySelector<SVGGraphicsElement>(`#${cssEscape(id)}`)
+    const el = index.get(id)
     if (!el) continue
     const tag = el.tagName.toLowerCase()
     if (!MERGEABLE_TAGS.has(tag)) continue
@@ -127,32 +138,35 @@ export function computeMergeGroups(allIds: string[], endpoints: Map<string, Segm
       continue
     }
     visited.add(id)
-    const chain = [id]
-    walk(id, 'end', +1, chain)
-    walk(id, 'start', -1, chain)
-    groups.push(chain)
+    const forward = walk(id, 'end')
+    const backward = walk(id, 'start')
+    // backward was collected outward from `id`, so it needs reversing before it goes in front of `id`
+    groups.push([...backward.reverse(), id, ...forward])
   }
 
   return groups
 
-  function walk(fromId: string, fromSide: 'start' | 'end', dir: 1 | -1, chain: string[]) {
+  // Collects a chain extension as a flat array (never mutates an already-built chain in place),
+  // so a very long straight run doesn't degrade into the O(n^2) cost of repeated Array#unshift.
+  function walk(fromId: string, fromSide: 'start' | 'end'): string[] {
+    const collected: string[] = []
     let currentId = fromId
     let currentSide = fromSide
-    for (let guard = 0; guard < 5000; guard++) {
+    for (let guard = 0; guard < 200_000; guard++) {
       const seg = endpoints.get(currentId)
-      if (!seg) return
+      if (!seg) break
       const pt = currentSide === 'end' ? seg.end : seg.start
       const atPoint = pointIndex.get(key(pt)) ?? []
       const others = atPoint.filter((r) => !(r.id === currentId && r.role === currentSide))
-      if (others.length !== 1) return // free end (0) or branch point (2+)
+      if (others.length !== 1) break // free end (0) or branch point (2+)
       const next = others[0]
-      if (visited.has(next.id)) return
+      if (visited.has(next.id)) break
       visited.add(next.id)
-      if (dir === 1) chain.push(next.id)
-      else chain.unshift(next.id)
+      collected.push(next.id)
       currentId = next.id
       currentSide = next.role === 'start' ? 'end' : 'start'
     }
+    return collected
   }
 }
 
@@ -165,9 +179,4 @@ function pushIndex(map: Map<string, PointRef[]>, k: string, ref: PointRef) {
 /** Picks the most "line-number-like" id in a merged group to use as the display label. */
 export function pickGroupLabel(group: string[], isLikelyLineId: (id: string) => boolean): string {
   return group.find(isLikelyLineId) ?? group[0]
-}
-
-function cssEscape(id: string) {
-  if (window.CSS?.escape) return window.CSS.escape(id)
-  return id.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
 }

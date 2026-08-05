@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { UploadCloud, CheckSquare, Square, Wand2, X } from 'lucide-react'
 import type { IsoLine } from '../../types'
 import type { LineProgress } from '../../lib/progress'
@@ -79,14 +79,17 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
       .filter(({ group, label }) => !q || label.toLowerCase().includes(q) || group.some((id) => id.toLowerCase().includes(q)))
   }, [groups, query])
 
-  const toggle = (index: number) => {
+  // Stable reference (not recreated every render) so memoized GroupRow instances that didn't
+  // change can skip re-rendering — with 1000+ candidate groups, a fresh callback per click would
+  // otherwise force React to reconcile every row instead of just the one that got toggled.
+  const toggle = useCallback((index: number) => {
     setSelected((s) => {
       const next = new Set(s)
       if (next.has(index)) next.delete(index)
       else next.add(index)
       return next
     })
-  }
+  }, [])
 
   // Fake "lines" so IsoViewport colors every candidate green (included) or red (excluded)
   // and clicking a fragment on the canvas reports back the group index via onSelectLine.
@@ -197,21 +200,7 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-white/5">
               {filtered.map(({ index, group, label }) => (
-                <button
-                  key={index}
-                  onClick={() => toggle(index)}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-right hover:bg-white/5 transition-colors"
-                >
-                  {selected.has(index) ? (
-                    <CheckSquare size={16} className="text-green-400 shrink-0" />
-                  ) : (
-                    <Square size={16} className="text-muted shrink-0" />
-                  )}
-                  <span className="truncate flex-1">{label}</span>
-                  {group.length > 1 && (
-                    <span className="text-[11px] rounded-full bg-brand-500/15 text-brand-300 px-2 py-0.5 shrink-0">{group.length} قطعه</span>
-                  )}
-                </button>
+                <GroupRow key={index} index={index} label={label} count={group.length} selected={selected.has(index)} onToggle={toggle} />
               ))}
               {filtered.length === 0 && <p className="p-4 text-center text-xs text-muted">موردی یافت نشد</p>}
             </div>
@@ -232,3 +221,29 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
     </div>
   )
 }
+
+/** Memoized so toggling one group only re-renders that row, not the whole (potentially 1000+ row) list. */
+const GroupRow = memo(function GroupRow({
+  index,
+  label,
+  count,
+  selected,
+  onToggle,
+}: {
+  index: number
+  label: string
+  count: number
+  selected: boolean
+  onToggle: (index: number) => void
+}) {
+  return (
+    <button
+      onClick={() => onToggle(index)}
+      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-right hover:bg-white/5 transition-colors"
+    >
+      {selected ? <CheckSquare size={16} className="text-green-400 shrink-0" /> : <Square size={16} className="text-muted shrink-0" />}
+      <span className="truncate flex-1">{label}</span>
+      {count > 1 && <span className="text-[11px] rounded-full bg-brand-500/15 text-brand-300 px-2 py-0.5 shrink-0">{count} قطعه</span>}
+    </button>
+  )
+})

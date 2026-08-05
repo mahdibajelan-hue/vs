@@ -4,6 +4,7 @@ import type { IsoLine } from '../../types'
 import type { LineProgress } from '../../lib/progress'
 import { STATUS_COLOR } from '../../types'
 import { parseSvgCandidates } from '../../lib/svg'
+import { indexElementsById } from '../../lib/lineMerge'
 
 interface IsoViewportProps {
   svgRaw: string
@@ -52,6 +53,15 @@ export function IsoViewport({
     endClientY: 0,
   })
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  // Built once per svgRaw injection (single DOM pass) and reused by every lookup below, instead of a fresh
+  // querySelector (CSS-selector match) per element on every render — the previous approach turned every click
+  // in fix mode into an O(candidate count) DOM scan, which got noticeably slow on CAD exports with hundreds+ fragments.
+  const elementIndexRef = useRef<Map<string, SVGGraphicsElement>>(new Map())
+  // Last-applied per-element state, so re-renders only touch the handful of elements that actually
+  // changed (e.g. one toggled fragment) instead of re-writing style/class on every candidate every time.
+  const lastColorStateRef = useRef<Map<string, string>>(new Map())
+  const lastFixModeRef = useRef(false)
+  const lastFixSelectedRef = useRef<Set<string>>(new Set())
 
   const candidateIds = useMemo(() => {
     try {
@@ -72,52 +82,102 @@ export function IsoViewport({
       svgEl.style.display = 'block'
       svgEl.style.overflow = 'visible'
     }
+    elementIndexRef.current = indexElementsById(stageRef.current)
+    lastColorStateRef.current = new Map()
+    lastFixModeRef.current = false
+    lastFixSelectedRef.current = new Set()
     setTransform({ x: 0, y: 0, scale: 1 })
     onSvgReady?.(svgEl as SVGSVGElement | null)
     // onSvgReady intentionally excluded — re-injecting innerHTML must only happen when the SVG itself changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [svgRaw])
 
-  // Colorize + wire up interactivity whenever lines/progress/selection change
+  // Colorize + wire up interactivity whenever lines/progress/selection change.
+  // Only touches elements whose (color, selected, lineId) actually changed since last run — with hundreds+
+  // of fragments, re-writing every element's style/class on every click (e.g. just toggling one selection)
+  // was the main source of per-interaction lag.
   useEffect(() => {
     if (!stageRef.current) return
-    const root = stageRef.current
+    const index = elementIndexRef.current
+    const nextState = new Map<string, string>()
 
     for (const line of lines) {
       const progress = progressMap.get(line.id)
       const color = STATUS_COLOR[progress?.status ?? line.status]
+      const signature = `${color}|${line.id === selectedLineId}|${line.id}`
       for (const elementId of line.svgElementIds) {
-        const el = root.querySelector<SVGElement>(`#${cssEscape(elementId)}`)
-        if (!el) continue
-        el.style.stroke = color
-        el.style.color = color
-        if (!el.getAttribute('data-orig-width')) {
-          el.setAttribute('data-orig-width', el.getAttribute('stroke-width') ?? '3')
-        }
-        el.classList.add('iso-line-hit')
-        el.dataset.lineRef = line.id
-        el.classList.toggle('is-selected', line.id === selectedLineId)
+        nextState.set(elementId, signature)
       }
     }
+
+    for (const elementId of lastColorStateRef.current.keys()) {
+      if (nextState.has(elementId)) continue
+      const el = index.get(elementId)
+      if (!el) continue
+      el.style.stroke = ''
+      el.style.color = ''
+      el.classList.remove('iso-line-hit', 'is-selected')
+      delete el.dataset.lineRef
+    }
+
+    for (const [elementId, signature] of nextState) {
+      if (lastColorStateRef.current.get(elementId) === signature) continue
+      const el = index.get(elementId)
+      if (!el) continue
+      const [color, isSelected, lineId] = signature.split('|')
+      el.style.stroke = color
+      el.style.color = color
+      if (!el.getAttribute('data-orig-width')) {
+        el.setAttribute('data-orig-width', el.getAttribute('stroke-width') ?? '3')
+      }
+      el.classList.add('iso-line-hit')
+      el.dataset.lineRef = lineId
+      el.classList.toggle('is-selected', isSelected === 'true')
+    }
+
+    lastColorStateRef.current = nextState
   }, [lines, progressMap, selectedLineId])
 
-  // Fix-mode: make every identifiable fragment clickable for multi-select, independent of line assignment
+  // Fix-mode: make every identifiable fragment clickable for multi-select, independent of line assignment.
+  // Candidate-class setup happens once per fix-mode entry; only the selection diff runs on every click.
   useEffect(() => {
     if (!stageRef.current) return
-    const root = stageRef.current
+    const index = elementIndexRef.current
 
-    for (const id of candidateIds) {
-      const el = root.querySelector<SVGElement>(`#${cssEscape(id)}`)
-      if (!el) continue
-      el.classList.toggle('iso-fix-candidate', fixMode)
-      if (fixMode) {
-        el.dataset.fixRef = id
-        el.classList.toggle('is-fix-selected', selectedFragmentIds?.has(id) ?? false)
-      } else {
-        delete el.dataset.fixRef
-        el.classList.remove('is-fix-selected')
+    if (!fixMode) {
+      if (lastFixModeRef.current) {
+        for (const id of candidateIds) {
+          const el = index.get(id)
+          if (!el) continue
+          el.classList.remove('iso-fix-candidate', 'is-fix-selected')
+          delete el.dataset.fixRef
+        }
+        lastFixModeRef.current = false
+        lastFixSelectedRef.current = new Set()
       }
+      return
     }
+
+    if (!lastFixModeRef.current) {
+      for (const id of candidateIds) {
+        const el = index.get(id)
+        if (!el) continue
+        el.classList.add('iso-fix-candidate')
+        el.dataset.fixRef = id
+      }
+      lastFixModeRef.current = true
+    }
+
+    const nextSelected = selectedFragmentIds ?? new Set<string>()
+    for (const id of lastFixSelectedRef.current) {
+      if (nextSelected.has(id)) continue
+      index.get(id)?.classList.remove('is-fix-selected')
+    }
+    for (const id of nextSelected) {
+      if (lastFixSelectedRef.current.has(id)) continue
+      index.get(id)?.classList.add('is-fix-selected')
+    }
+    lastFixSelectedRef.current = new Set(nextSelected)
   }, [candidateIds, fixMode, selectedFragmentIds])
 
   const handleClick = useCallback(
@@ -194,11 +254,10 @@ export function IsoViewport({
     const right = Math.max(startClientX, endClientX)
     const top = Math.min(startClientY, endClientY)
     const bottom = Math.max(startClientY, endClientY)
-    const root = stageRef.current
-    if (!root) return
+    const index = elementIndexRef.current
     const matched: string[] = []
     for (const id of candidateIds) {
-      const el = root.querySelector<SVGGraphicsElement>(`#${cssEscape(id)}`)
+      const el = index.get(id)
       if (!el) continue
       const box = el.getBoundingClientRect()
       const intersects = box.left < right && box.right > left && box.top < bottom && box.bottom > top
@@ -304,9 +363,4 @@ export function IsoViewport({
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
-}
-
-function cssEscape(id: string) {
-  if (window.CSS?.escape) return window.CSS.escape(id)
-  return id.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
 }

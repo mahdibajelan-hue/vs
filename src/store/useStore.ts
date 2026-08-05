@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Project, ReportConfig, Risk, ThemeMode } from '../types'
 import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
+import { createSafeLocalStorage } from '../lib/safeStorage'
 
 interface AppState {
   projects: Project[]
@@ -321,6 +322,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'piping-iso-tracker-storage',
+      storage: createJSONStorage(createSafeLocalStorage),
       version: 5,
       migrate: (persistedState) => {
         const state = persistedState as AppState

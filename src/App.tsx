@@ -15,6 +15,7 @@ import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
 import { canEdit } from './lib/permissions'
 import { LogoFull } from './components/common/Logo'
+import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
 export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
 
@@ -74,33 +75,36 @@ function App() {
 
   if (projects.length === 0 || !currentProjectId) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="glass-panel max-w-lg rounded-3xl p-10 text-center">
-          <LogoFull width={190} className="mx-auto mb-4" />
-          <h1 className="mb-2 text-xl font-extrabold">سامانه پایش پیشرفت ایزومتریک لوله‌کشی</h1>
-          <p className="mb-7 text-sm text-secondary leading-7">
-            مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک ایستگاه‌های گاز و پتروشیمی — آپلود SVG، ثبت کارکرد، گزارش‌های
-            بصری و خروجی حرفه‌ای.
-          </p>
-          <div className="flex flex-col gap-2.5">
-            {editable ? (
-              <>
-                <button
-                  onClick={() => setShowNewProject(true)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-                >
-                  <Plus size={17} /> ایجاد پروژه جدید
-                </button>
-                <button
-                  onClick={loadDemo}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 transition-colors"
-                >
-                  <Sparkles size={17} /> بارگذاری پروژه نمایشی
-                </button>
-              </>
-            ) : (
-              <p className="text-xs text-muted">هنوز پروژه‌ای ایجاد نشده — از پیمانکار یا مشاور پروژه بخواهید یک پروژه بسازد یا فایل JSON آن را برایتان ارسال کند.</p>
-            )}
+      <div className="flex h-screen w-screen flex-col">
+        <StorageErrorBanner />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="glass-panel max-w-lg rounded-3xl p-10 text-center">
+            <LogoFull width={190} className="mx-auto mb-4" />
+            <h1 className="mb-2 text-xl font-extrabold">سامانه پایش پیشرفت ایزومتریک لوله‌کشی</h1>
+            <p className="mb-7 text-sm text-secondary leading-7">
+              مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک ایستگاه‌های گاز و پتروشیمی — آپلود SVG، ثبت کارکرد،
+              گزارش‌های بصری و خروجی حرفه‌ای.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              {editable ? (
+                <>
+                  <button
+                    onClick={() => setShowNewProject(true)}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+                  >
+                    <Plus size={17} /> ایجاد پروژه جدید
+                  </button>
+                  <button
+                    onClick={loadDemo}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 transition-colors"
+                  >
+                    <Sparkles size={17} /> بارگذاری پروژه نمایشی
+                  </button>
+                </>
+              ) : (
+                <p className="text-xs text-muted">هنوز پروژه‌ای ایجاد نشده — از پیمانکار یا مشاور پروژه بخواهید یک پروژه بسازد یا فایل JSON آن را برایتان ارسال کند.</p>
+              )}
+            </div>
           </div>
         </div>
         {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
@@ -113,6 +117,7 @@ function App() {
       <Sidebar page={page} onPageChange={setPage} onNewProject={() => setShowNewProject(true)} />
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar project={currentProject} title={PAGE_TITLE[page]} />
+        <StorageErrorBanner />
         <main className="flex-1 min-h-0">
           {currentProject && page === 'viewer' && <ViewerPage project={currentProject} />}
           {currentProject && page === 'onepager' && <OnePagerPage project={currentProject} />}
