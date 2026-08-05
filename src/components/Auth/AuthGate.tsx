@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Eye, EyeOff, KeyRound, User } from 'lucide-react'
+import { Check, Eye, EyeOff, KeyRound, User } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
 import { LogoFull } from '../common/Logo'
@@ -13,10 +13,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-function Shell({ title, subtitle, children, wide }: { title: string; subtitle: string; children: ReactNode; wide?: boolean }) {
+function Shell({
+  title,
+  subtitle,
+  children,
+  wide,
+  panelClassName = '',
+}: {
+  title: string
+  subtitle: string
+  children: ReactNode
+  wide?: boolean
+  panelClassName?: string
+}) {
   return (
     <div className="flex h-screen w-screen items-center justify-center p-4">
-      <div className={`glass-panel w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-3xl p-8`}>
+      <div className={`glass-panel w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-3xl p-8 ${panelClassName}`}>
         <LogoFull width={180} className="mx-auto mb-4" />
         <h1 className="mb-1 text-center text-lg font-extrabold">{title}</h1>
         <p className="mb-6 text-center text-sm text-secondary leading-6">{subtitle}</p>
@@ -142,20 +154,45 @@ function SetupScreen() {
   )
 }
 
+type LoginStatus = 'idle' | 'submitting' | 'success' | 'error'
+
 function LoginScreen() {
-  const login = useAuthStore((s) => s.login)
+  const verifyPassword = useAuthStore((s) => s.verifyPassword)
+  const commitLogin = useAuthStore((s) => s.commitLogin)
   const accounts = useAuthStore((s) => s.accounts)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [status, setStatus] = useState<LoginStatus>('idle')
+  const [exiting, setExiting] = useState(false)
+
+  const busy = status === 'submitting' || status === 'success'
 
   const submit = async () => {
-    const ok = await login(username.trim(), password)
-    if (!ok) setError('نام کاربری یا رمز عبور اشتباه است')
+    if (busy) return
+    setError('')
+    setStatus('submitting')
+    const ok = await verifyPassword(username.trim(), password)
+    if (!ok) {
+      setError('نام کاربری یا رمز عبور اشتباه است')
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 450)
+      return
+    }
+    setStatus('success')
+    setTimeout(() => setExiting(true), 500)
+    setTimeout(() => commitLogin(username.trim()), 850)
   }
 
+  const fieldStateClass =
+    status === 'success' ? '!border-green-400/70 !bg-green-500/10 !text-green-200' : status === 'error' ? 'auth-shake !border-red-400/70' : ''
+
   return (
-    <Shell title="ورود به سامانه" subtitle={`سامانه پایش پیشرفت ایزومتریک لوله‌کشی${accounts.length ? ` — ${accounts.length} حساب فعال` : ''}`}>
+    <Shell
+      title="ورود به سامانه"
+      subtitle={`سامانه پایش پیشرفت ایزومتریک لوله‌کشی${accounts.length ? ` — ${accounts.length} حساب فعال` : ''}`}
+      panelClassName={exiting ? 'auth-card-exit' : ''}
+    >
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">نام کاربری</span>
@@ -164,7 +201,8 @@ function LoginScreen() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
-              className="input pl-9"
+              disabled={busy}
+              className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
               placeholder="نام کاربری"
               autoFocus
             />
@@ -179,18 +217,30 @@ function LoginScreen() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
-              className="input pl-9"
+              disabled={busy}
+              className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
               placeholder="رمز عبور"
             />
             <KeyRound size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
           </div>
         </label>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {status === 'error' && error && <p className="text-xs text-red-400">{error}</p>}
         <button
           onClick={submit}
-          className="w-full rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+          disabled={busy}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors duration-300 ${
+            status === 'success' ? 'bg-green-500' : 'bg-brand-500 hover:bg-brand-400'
+          }`}
         >
-          ورود
+          {status === 'success' ? (
+            <>
+              <Check size={16} className="auth-success-check" /> ورود موفق
+            </>
+          ) : status === 'submitting' ? (
+            'در حال بررسی...'
+          ) : (
+            'ورود'
+          )}
         </button>
       </div>
     </Shell>

@@ -20,6 +20,10 @@ interface AuthState {
 
   setupFirstAccount: (data: { username: string; password: string; fullName: string; role: UserRole }) => Promise<void>
   login: (username: string, password: string) => Promise<boolean>
+  /** Checks credentials only — does not change auth state. Lets the UI play a success animation before committing. */
+  verifyPassword: (username: string, password: string) => Promise<boolean>
+  /** Commits a session after verifyPassword succeeded. */
+  commitLogin: (username: string) => void
   logout: () => void
 
   addAccount: (data: { username: string; password: string; fullName: string; role: UserRole }) => Promise<{ ok: boolean; error?: string }>
@@ -66,6 +70,21 @@ export const useAuthStore = create<AuthState>()(
         if (inputHash !== account.passwordHash) return false
         set({ currentUserId: account.id, isAuthed: true })
         return true
+      },
+
+      verifyPassword: async (username, password) => {
+        const { accounts } = get()
+        const account = accounts.find((a) => a.username === username)
+        if (!account) return false
+        const inputHash = await hashText(password)
+        return inputHash === account.passwordHash
+      },
+
+      commitLogin: (username) => {
+        const { accounts } = get()
+        const account = accounts.find((a) => a.username === username)
+        if (!account) return
+        set({ currentUserId: account.id, isAuthed: true })
       },
 
       logout: () => set({ isAuthed: false, currentUserId: null }),
