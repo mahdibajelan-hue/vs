@@ -4,7 +4,7 @@ import type { Project } from '../types'
 import { computeAllProgress } from '../lib/progress'
 import { IsoViewport } from '../components/IsoViewer/IsoViewport'
 import { LineListPanel } from '../components/IsoViewer/LineListPanel'
-import { UploadSvgModal } from '../components/IsoViewer/UploadSvgModal'
+import { SvgImportWorkspace } from '../components/IsoViewer/SvgImportWorkspace'
 import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
 import { LineMetaModal, type LineMetaExtra } from '../components/common/LineMetaModal'
@@ -148,7 +148,7 @@ export function ViewerPage({ project }: { project: Project }) {
             </button>
           )}
         </div>
-        {showUpload && <UploadSvgModal onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
+        {showUpload && <SvgImportWorkspace onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
       </div>
     )
   }
@@ -313,7 +313,7 @@ export function ViewerPage({ project }: { project: Project }) {
         )}
       </div>
 
-      {showUpload && <UploadSvgModal onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
+      {showUpload && <SvgImportWorkspace onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
       {showLinesTable && (
         <LinesTableModal projectId={project.id} lines={project.lines} onClose={() => setShowLinesTable(false)} />
       )}

@@ -54,6 +54,23 @@ export function AboutPage() {
               </a>
             </div>
           </div>
+
+          <p className="mt-4 text-sm text-secondary leading-7">
+            مهدی باجلان توسعه‌دهنده نرم‌افزار است و روی ساخت ابزارهای وب کاربردی برای صنایع نفت، گاز و پتروشیمی تمرکز
+            دارد. این سامانه از دل نیاز واقعی پیمانکاران و مشاوران پروژه‌های لوله‌کشی برای جایگزین‌کردن گزارش‌های
+            پراکنده اکسل و پیام‌رسان‌ها با یک ابزار یکپارچه، تصویری و قابل‌اعتماد شکل گرفته است. اولویت اصلی طراحی این
+            سامانه، سادگی در استفاده روزمره، دقت داده‌ها، و رابط کاربری تمیز و بدون پیچیدگی‌های غیرضروری نرم‌افزارهای
+            سازمانی سنگین بوده است.
+          </p>
+
+          <div className="mt-5 flex flex-col items-end gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
+            <p style={{ fontFamily: "'Dancing Script', cursive" }} className="text-4xl leading-none text-brand-300">
+              Mahdi Bajelan
+            </p>
+            <p style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: '0.2em' }} className="text-xs font-extrabold text-secondary">
+              MAHDI BAJELAN
+            </p>
+          </div>
         </div>
 
         <div className="glass-panel rounded-2xl p-6 text-xs text-muted leading-6 flex items-start gap-2.5">
