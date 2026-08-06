@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
-import { useAuthStore } from '../../store/useAuthStore'
+import { useCurrentRole } from '../../store/useMembersStore'
 import { canEdit } from '../../lib/permissions'
 import { exportProjectJson, parseProjectJson } from '../../lib/projectIO'
 import { Logo } from '../common/Logo'
 import { NewProjectModal } from './NewProjectModal'
-import type { Project } from '../../types'
+import type { ProjectSummary } from '../../lib/supabaseData'
 import type { Page } from '../../App'
 
 interface SidebarProps {
@@ -32,20 +32,19 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
   const selectProject = useStore((s) => s.selectProject)
   const importProject = useStore((s) => s.importProject)
   const deleteProject = useStore((s) => s.deleteProject)
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const editable = canEdit(role)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nav = NAV.filter((n) => n.id !== 'schematic' || editable)
-  const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const handleImportFile = (file: File) => {
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const project = parseProjectJson(String(reader.result ?? ''))
       if (project) {
-        const id = importProject(project)
-        selectProject(id)
+        await importProject(project)
       } else {
         window.alert('فایل JSON پروژه معتبر نیست.')
       }
@@ -82,11 +81,9 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
         <span className="flex items-center gap-1.5">
           <FolderKanban size={13} /> پروژه‌ها
         </span>
-        {editable && (
-          <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
-            <Plus size={15} />
-          </button>
-        )}
+        <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
+          <Plus size={15} />
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {projects.map((p) => (
@@ -146,15 +143,13 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
         >
           <Download size={12} /> خروجی پروژه
         </button>
-        {editable && (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
-            title="ورود پروژه از فایل JSON"
-          >
-            <Upload size={12} /> ورود پروژه
-          </button>
-        )}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+          title="ورود پروژه از فایل JSON"
+        >
+          <Upload size={12} /> ورود پروژه
+        </button>
         <input
           ref={fileInputRef}
           type="file"
@@ -169,7 +164,7 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
       </div>
 
       <div className="px-5 py-4 text-[11px] text-muted border-t" style={{ borderColor: 'var(--border-soft)' }}>
-        ذخیره‌سازی محلی (Local Browser Storage)
+        ذخیره‌سازی ابری (Supabase) — اشتراکی بین اعضای دعوت‌شده
       </div>
 
       {editingProject && <NewProjectModal project={editingProject} onClose={() => setEditingProject(null)} />}

@@ -1,15 +1,21 @@
 import { useState, type ReactNode } from 'react'
-import { Check, Eye, EyeOff, KeyRound, User } from 'lucide-react'
+import { Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
 import { LogoFull } from '../common/Logo'
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const hasAccounts = useAuthStore((s) => s.accounts.length > 0)
+  const authLoading = useAuthStore((s) => s.authLoading)
   const isAuthed = useAuthStore((s) => s.isAuthed)
 
-  if (!hasAccounts) return <SetupScreen />
-  if (!isAuthed) return <LoginScreen />
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <Loader2 size={26} className="animate-spin text-brand-400" />
+      </div>
+    )
+  }
+  if (!isAuthed) return <AuthScreen />
   return <>{children}</>
 }
 
@@ -100,70 +106,19 @@ export function RolePicker({ value, onChange }: { value: UserRole; onChange: (r:
   )
 }
 
-function SetupScreen() {
-  const setupFirstAccount = useAuthStore((s) => s.setupFirstAccount)
+type Status = 'idle' | 'submitting' | 'success' | 'error'
+
+function AuthScreen() {
+  const signIn = useAuthStore((s) => s.signIn)
+  const signUp = useAuthStore((s) => s.signUp)
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [fullName, setFullName] = useState('')
-  const [username, setUsername] = useState('')
-  const [role, setRole] = useState<UserRole>('contractor')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
-
-  const submit = async () => {
-    if (!fullName.trim()) return setError('نام و نام خانوادگی را وارد کنید')
-    if (!username.trim()) return setError('نام کاربری را وارد کنید')
-    if (password.length < 4) return setError('رمز عبور باید حداقل ۴ کاراکتر باشد')
-    if (password !== confirm) return setError('رمز عبور و تکرار آن یکسان نیستند')
-    setError('')
-    await setupFirstAccount({ username: username.trim(), password, fullName: fullName.trim(), role })
-  }
-
-  return (
-    <Shell title="راه‌اندازی اولین حساب کاربری" subtitle="این حساب اولین کاربر سامانه است — بعداً می‌توانید حساب‌های دیگر (پیمانکار، مشاور، کارفرما) را هم اضافه کنید" wide>
-      <div className="space-y-3">
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">نام و نام خانوادگی</span>
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" placeholder="مثلاً مهدی باجلان" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">نام کاربری</span>
-          <div className="relative">
-            <input value={username} onChange={(e) => setUsername(e.target.value)} className="input pl-9" placeholder="مثلاً admin" />
-            <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          </div>
-        </label>
-        <div>
-          <p className="mb-1.5 text-xs text-secondary">نقش شما</p>
-          <RolePicker value={role} onChange={setRole} />
-        </div>
-        <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۴ کاراکتر" />
-        <PasswordField label="تکرار رمز عبور" value={confirm} onChange={setConfirm} />
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        <button
-          onClick={submit}
-          className="w-full rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-        >
-          ایجاد حساب و ورود
-        </button>
-        <p className="text-[11px] text-muted leading-5 pt-1">
-          حساب‌ها به‌صورت محلی در همین مرورگر ذخیره می‌شوند. برای اینکه چند نفر روی دستگاه‌های مختلف با نقش‌های
-          متفاوت کار کنند، از خروجی/ورودی JSON پروژه (کنار لیست پروژه‌ها) برای انتقال داده استفاده کنید.
-        </p>
-      </div>
-    </Shell>
-  )
-}
-
-type LoginStatus = 'idle' | 'submitting' | 'success' | 'error'
-
-function LoginScreen() {
-  const verifyPassword = useAuthStore((s) => s.verifyPassword)
-  const commitLogin = useAuthStore((s) => s.commitLogin)
-  const accounts = useAuthStore((s) => s.accounts)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [status, setStatus] = useState<LoginStatus>('idle')
+  const [info, setInfo] = useState('')
+  const [status, setStatus] = useState<Status>('idle')
   const [exiting, setExiting] = useState(false)
 
   const busy = status === 'submitting' || status === 'success'
@@ -171,17 +126,44 @@ function LoginScreen() {
   const submit = async () => {
     if (busy) return
     setError('')
+    setInfo('')
+    if (!email.trim() || !password) {
+      setError('ایمیل و رمز عبور را وارد کنید')
+      return
+    }
+    if (mode === 'signup' && !fullName.trim()) {
+      setError('نام و نام خانوادگی را وارد کنید')
+      return
+    }
+    if (mode === 'signup' && password !== confirm) {
+      setError('رمز عبور و تکرار آن یکسان نیستند')
+      return
+    }
     setStatus('submitting')
-    const ok = await verifyPassword(username.trim(), password)
-    if (!ok) {
-      setError('نام کاربری یا رمز عبور اشتباه است')
+    if (mode === 'signup') {
+      const res = await signUp({ email: email.trim(), password, fullName: fullName.trim() })
+      if (!res.ok) {
+        setError(res.error ?? 'خطا در ثبت‌نام')
+        setStatus('error')
+        setTimeout(() => setStatus('idle'), 450)
+        return
+      }
+      setStatus('idle')
+      setInfo('ثبت‌نام انجام شد — اکنون وارد شوید. اگر تایید ایمیل فعال باشد، ابتدا ایمیل خود را تایید کنید.')
+      setMode('login')
+      setPassword('')
+      setConfirm('')
+      return
+    }
+    const res = await signIn(email.trim(), password)
+    if (!res.ok) {
+      setError(res.error ?? 'ورود ناموفق بود')
       setStatus('error')
       setTimeout(() => setStatus('idle'), 450)
       return
     }
     setStatus('success')
     setTimeout(() => setExiting(true), 500)
-    setTimeout(() => commitLogin(username.trim()), 850)
   }
 
   const fieldStateClass =
@@ -189,42 +171,41 @@ function LoginScreen() {
 
   return (
     <Shell
-      title="ورود به سامانه"
-      subtitle={`سامانه پایش پیشرفت ایزومتریک لوله‌کشی${accounts.length ? ` — ${accounts.length} حساب فعال` : ''}`}
+      title={mode === 'login' ? 'ورود به سامانه' : 'ایجاد حساب کاربری'}
+      subtitle="سامانه پایش پیشرفت ایزومتریک لوله‌کشی — اطلاعات پروژه روی سرور ذخیره و بین اعضای دعوت‌شده به اشتراک گذاشته می‌شود"
+      wide={mode === 'signup'}
       panelClassName={exiting ? 'auth-card-exit' : ''}
     >
       <div className="space-y-3">
+        {mode === 'signup' && (
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">نام و نام خانوادگی</span>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" placeholder="مثلاً مهدی باجلان" disabled={busy} />
+          </label>
+        )}
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">نام کاربری</span>
+          <span className="mb-1 block text-xs text-secondary">ایمیل</span>
           <div className="relative">
             <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
               disabled={busy}
               className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
-              placeholder="نام کاربری"
+              placeholder="person@example.com"
+              dir="ltr"
               autoFocus
             />
-            <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
           </div>
         </label>
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">رمز عبور</span>
-          <div className="relative">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-              disabled={busy}
-              className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
-              placeholder="رمز عبور"
-            />
-            <KeyRound size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          </div>
-        </label>
-        {status === 'error' && error && <p className="text-xs text-red-400">{error}</p>}
+        <div className="relative">
+          <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
+        </div>
+        {mode === 'signup' && <PasswordField label="تکرار رمز عبور" value={confirm} onChange={setConfirm} />}
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        {info && <p className="text-xs text-green-400">{info}</p>}
         <button
           onClick={submit}
           disabled={busy}
@@ -238,9 +219,24 @@ function LoginScreen() {
             </>
           ) : status === 'submitting' ? (
             'در حال بررسی...'
+          ) : mode === 'login' ? (
+            <>
+              <KeyRound size={15} /> ورود
+            </>
           ) : (
-            'ورود'
+            'ایجاد حساب'
           )}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode((m) => (m === 'login' ? 'signup' : 'login'))
+            setError('')
+            setInfo('')
+          }}
+          className="w-full text-center text-xs text-secondary hover:text-brand-300 transition-colors"
+        >
+          {mode === 'login' ? 'حساب کاربری ندارید؟ ثبت‌نام کنید' : 'قبلاً ثبت‌نام کرده‌اید؟ وارد شوید'}
         </button>
       </div>
     </Shell>

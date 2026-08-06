@@ -10,7 +10,7 @@ import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
 import { LineMetaModal, type LineMetaExtra } from '../components/common/LineMetaModal'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
-import { useAuthStore } from '../store/useAuthStore'
+import { useCurrentRole } from '../store/useMembersStore'
 import { canEdit } from '../lib/permissions'
 import { makeId } from '../lib/id'
 import { exportColoredSvg } from '../lib/export'
@@ -22,7 +22,7 @@ export function ViewerPage({ project }: { project: Project }) {
   const mergeFragmentsIntoNewLine = useStore((s) => s.mergeFragmentsIntoNewLine)
   const addFragmentsToLine = useStore((s) => s.addFragmentsToLine)
   const removeFragmentsFromLines = useStore((s) => s.removeFragmentsFromLines)
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const editable = canEdit(role)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
@@ -50,7 +50,7 @@ export function ViewerPage({ project }: { project: Project }) {
 
   const handleSvgReady = useCallback((root: SVGSVGElement | null) => setSvgRoot(root), [])
 
-  const handleConfirmUpload = (svgRaw: string, fileName: string, groups: string[][]) => {
+  const handleConfirmUpload = async (svgRaw: string, fileName: string, groups: string[][]) => {
     const now = new Date().toISOString()
     const newLines = groups.map((group) => ({
       id: makeId('line'),
@@ -65,7 +65,7 @@ export function ViewerPage({ project }: { project: Project }) {
       status: 'not_started' as const,
       createdAt: now,
     }))
-    setProjectSvg(project.id, svgRaw, fileName, newLines)
+    await setProjectSvg(project.id, svgRaw, fileName, newLines)
     setShowUpload(false)
     setShowLinesTable(true)
   }
@@ -92,8 +92,8 @@ export function ViewerPage({ project }: { project: Project }) {
     })
   }, [])
 
-  const confirmCreateLine = (svgElementId: string, size: string, extra?: LineMetaExtra) => {
-    mergeFragmentsIntoNewLine(project.id, {
+  const confirmCreateLine = async (svgElementId: string, size: string, extra?: LineMetaExtra) => {
+    await mergeFragmentsIntoNewLine(project.id, {
       svgElementIds: [...selectedFragments],
       svgElementId,
       size,
@@ -104,15 +104,15 @@ export function ViewerPage({ project }: { project: Project }) {
     setShowCreateLine(false)
   }
 
-  const handleAddToLine = () => {
+  const handleAddToLine = async () => {
     if (!addToLineId || selectedFragments.size === 0) return
-    addFragmentsToLine(project.id, addToLineId, [...selectedFragments])
+    await addFragmentsToLine(project.id, addToLineId, [...selectedFragments])
     setSelectedFragments(new Set())
   }
 
-  const handleUnmap = () => {
+  const handleUnmap = async () => {
     if (selectedFragments.size === 0) return
-    removeFragmentsFromLines(project.id, [...selectedFragments])
+    await removeFragmentsFromLines(project.id, [...selectedFragments])
     setSelectedFragments(new Set())
   }
 

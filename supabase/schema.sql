@@ -1,6 +1,7 @@
 -- IsoTrack — Supabase schema + Row Level Security policies
 -- Run this once in the Supabase project's SQL editor (Dashboard → SQL Editor → New query → paste → Run).
--- Safe to re-run: every statement is guarded with IF NOT EXISTS / OR REPLACE / DROP ... IF EXISTS.
+-- Safe to re-run, and safe to run even if you already ran an earlier version of this file —
+-- every statement is guarded with IF NOT EXISTS / OR REPLACE / DROP ... IF EXISTS.
 
 -- ============================================================================
 -- 1. Extensions
@@ -19,7 +20,6 @@ create table if not exists profiles (
 
 alter table profiles enable row level security;
 
--- Anyone signed in can look up basic profile info (needed to show "invited by" / member names).
 drop policy if exists "profiles_select_authenticated" on profiles;
 create policy "profiles_select_authenticated" on profiles
   for select using (auth.uid() is not null);
@@ -28,7 +28,6 @@ drop policy if exists "profiles_update_own" on profiles;
 create policy "profiles_update_own" on profiles
   for update using (auth.uid() = id);
 
--- Auto-create a profile row whenever someone signs up.
 create or replace function handle_new_user()
 returns trigger as $$
 begin
@@ -45,7 +44,10 @@ create trigger on_auth_user_created
   for each row execute function handle_new_user();
 
 -- ============================================================================
--- 3. Projects
+-- 3. Projects — core metadata plus JSONB blobs for data that's always read/
+--    written as a whole array (schedules, milestones, risks, report config,
+--    baseline planned curve). Lines and daily logs get real tables below
+--    since those are the high-frequency, genuinely row-level collaborative data.
 -- ============================================================================
 create table if not exists projects (
   id uuid primary key default gen_random_uuid(),
@@ -55,9 +57,28 @@ create table if not exists projects (
   unit text not null default '',
   svg_raw text,
   svg_file_name text,
+  schedules jsonb not null default '[]'::jsonb,
+  milestones jsonb not null default '[]'::jsonb,
+  risks jsonb not null default '[]'::jsonb,
+  report_config jsonb not null default '{}'::jsonb,
+  planned_curve jsonb not null default '[]'::jsonb,
   created_by uuid references profiles (id),
   created_at timestamptz not null default now()
 );
+
+-- Upgrade path if an earlier version of this file already created the table without these columns.
+alter table projects add column if not exists schedules jsonb not null default '[]'::jsonb;
+alter table projects add column if not exists milestones jsonb not null default '[]'::jsonb;
+alter table projects add column if not exists risks jsonb not null default '[]'::jsonb;
+alter table projects add column if not exists report_config jsonb not null default '{}'::jsonb;
+alter table projects add column if not exists planned_curve jsonb not null default '[]'::jsonb;
+
+-- Superseded by the JSONB columns above — drop if an earlier version of this file created them.
+drop table if exists activity_schedules cascade;
+drop table if exists planned_progress_points cascade;
+drop table if exists milestones cascade;
+drop table if exists risks cascade;
+drop table if exists report_configs cascade;
 
 alter table projects enable row level security;
 
@@ -74,9 +95,9 @@ create table if not exists project_members (
 
 alter table project_members enable row level security;
 
--- Pending invites: a project owner/member invites by email before the invitee has an account,
+-- Pending invites: a project member invites by email before the invitee has an account,
 -- or before they've accepted. Once the invited email signs in, the app converts this row into
--- a project_members row (see accept_project_invite() below).
+-- a project_members row (see accept_pending_invites() below).
 create table if not exists project_invites (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references projects (id) on delete cascade,
@@ -133,6 +154,38 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Creates a project and its first membership row atomically, then returns the new project.
+-- Needed because RLS gates INSERT ... RETURNING by the SELECT policy — without this, a plain
+-- client-side "insert project, then insert membership" would return an empty row on step 1
+-- (the creator isn't a member yet at that instant, so the just-inserted row isn't visible back).
+create or replace function create_project_with_owner(
+  p_name text,
+  p_role text,
+  p_client text default '',
+  p_location text default '',
+  p_unit text default '',
+  p_svg_raw text default null,
+  p_svg_file_name text default null,
+  p_schedules jsonb default '[]'::jsonb,
+  p_milestones jsonb default '[]'::jsonb,
+  p_risks jsonb default '[]'::jsonb,
+  p_report_config jsonb default '{}'::jsonb,
+  p_planned_curve jsonb default '[]'::jsonb
+)
+returns projects as $$
+declare
+  new_project projects;
+begin
+  insert into projects (name, client, location, unit, svg_raw, svg_file_name, schedules, milestones, risks, report_config, planned_curve, created_by)
+  values (p_name, p_client, p_location, p_unit, p_svg_raw, p_svg_file_name, p_schedules, p_milestones, p_risks, p_report_config, p_planned_curve, auth.uid())
+  returning * into new_project;
+
+  insert into project_members (project_id, user_id, role) values (new_project.id, auth.uid(), p_role);
+
+  return new_project;
+end;
+$$ language plpgsql security definer;
+
 -- ============================================================================
 -- 6. Policies — projects
 -- ============================================================================
@@ -159,19 +212,25 @@ drop policy if exists "members_select_member" on project_members;
 create policy "members_select_member" on project_members
   for select using (is_project_member(project_id));
 
--- Only an existing 'owner' role member (or the very first member, i.e. project creator with
--- no members yet) can add/remove members — mirrors canManageUsers() in permissions.ts.
+-- An existing 'owner' role member can always add people. As a bootstrap escape hatch — mirrors
+-- canManageUsers() in permissions.ts — any existing member may also add people as long as no
+-- 'owner' has joined the project yet (so a contractor/consultant who created the project solo
+-- isn't permanently locked out of inviting anyone, including a future owner).
 drop policy if exists "members_insert_owner_or_bootstrap" on project_members;
 create policy "members_insert_owner_or_bootstrap" on project_members
   for insert with check (
     project_role(project_id) = 'owner'
-    or not exists (select 1 from project_members where project_id = project_members.project_id)
+    or not exists (select 1 from project_members where project_id = project_members.project_id and role = 'owner')
     or user_id = auth.uid() -- accept_pending_invites() inserting for the current user
   );
 
 drop policy if exists "members_delete_owner" on project_members;
 create policy "members_delete_owner" on project_members
   for delete using (project_role(project_id) = 'owner');
+
+drop policy if exists "members_update_owner" on project_members;
+create policy "members_update_owner" on project_members
+  for update using (project_role(project_id) = 'owner');
 
 drop policy if exists "invites_select_member_or_invitee" on project_invites;
 create policy "invites_select_member_or_invitee" on project_invites
@@ -189,7 +248,7 @@ create policy "invites_delete_member" on project_invites
   for delete using (is_project_member(project_id));
 
 -- ============================================================================
--- 8. Project-scoped data tables
+-- 8. Project-scoped data tables — high-frequency, genuinely row-level data
 -- ============================================================================
 create table if not exists lines (
   id uuid primary key default gen_random_uuid(),
@@ -223,69 +282,14 @@ create table if not exists daily_logs (
   created_at timestamptz not null default now()
 );
 
-create table if not exists planned_progress_points (
-  project_id uuid not null references projects (id) on delete cascade,
-  date date not null,
-  planned_percent numeric not null,
-  primary key (project_id, date)
-);
-
-create table if not exists activity_schedules (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references projects (id) on delete cascade,
-  line_id uuid not null references lines (id) on delete cascade,
-  activity text not null check (activity in ('welding', 'ndt', 'coating')),
-  planned_start date,
-  planned_end date,
-  actual_start date,
-  actual_end date,
-  percent_complete numeric not null default 0,
-  unique (line_id, activity)
-);
-
-create table if not exists milestones (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references projects (id) on delete cascade,
-  label text not null,
-  percent_complete numeric not null,
-  color text not null default '#3498db',
-  sort_order integer not null default 0
-);
-
-create table if not exists risks (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid not null references projects (id) on delete cascade,
-  title text not null,
-  description text not null default '',
-  category text not null check (category in ('schedule', 'technical', 'safety', 'procurement', 'quality', 'financial')),
-  probability integer not null check (probability between 1 and 5),
-  impact integer not null check (impact between 1 and 5),
-  status text not null default 'open' check (status in ('open', 'mitigating', 'closed')),
-  mitigation_plan text not null default '',
-  owner text not null default '',
-  created_at timestamptz not null default now()
-);
-
-create table if not exists report_configs (
-  project_id uuid primary key references projects (id) on delete cascade,
-  template text not null default 'standard' check (template in ('standard', 'detailed')),
-  sections jsonb not null default '{}'::jsonb
-);
-
 alter table lines enable row level security;
 alter table daily_logs enable row level security;
-alter table planned_progress_points enable row level security;
-alter table activity_schedules enable row level security;
-alter table milestones enable row level security;
-alter table risks enable row level security;
-alter table report_configs enable row level security;
 
--- One read policy + one write policy per project-scoped table, all following the same shape.
 do $$
 declare
   t text;
 begin
-  foreach t in array array['lines', 'daily_logs', 'planned_progress_points', 'activity_schedules', 'milestones', 'risks', 'report_configs']
+  foreach t in array array['lines', 'daily_logs']
   loop
     execute format('drop policy if exists "%1$s_select_member" on %1$s', t);
     execute format('create policy "%1$s_select_member" on %1$s for select using (is_project_member(project_id))', t);
@@ -302,7 +306,4 @@ create index if not exists idx_project_members_user on project_members (user_id)
 create index if not exists idx_lines_project on lines (project_id);
 create index if not exists idx_daily_logs_project on daily_logs (project_id);
 create index if not exists idx_daily_logs_line on daily_logs (line_id);
-create index if not exists idx_activity_schedules_project on activity_schedules (project_id);
-create index if not exists idx_milestones_project on milestones (project_id);
-create index if not exists idx_risks_project on risks (project_id);
 create index if not exists idx_project_invites_email on project_invites (email);

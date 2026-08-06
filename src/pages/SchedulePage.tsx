@@ -7,14 +7,14 @@ import { GanttChart } from '../components/Schedule/GanttChart'
 import { ScheduleEditModal } from '../components/Schedule/ScheduleEditModal'
 import { CountdownWidget } from '../components/Schedule/CountdownWidget'
 import { SCurveChart } from '../components/Reports/SCurveChart'
-import { useAuthStore } from '../store/useAuthStore'
+import { useCurrentRole } from '../store/useMembersStore'
 import { canEdit } from '../lib/permissions'
 
 export function SchedulePage({ project }: { project: Project }) {
   const [editingLine, setEditingLine] = useState<IsoLine | null>(null)
   const summary = useMemo(() => computeProjectSchedule(project), [project])
   const scheduleSCurve = useMemo(() => computeScheduleSCurve(project), [project])
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const editable = canEdit(role)
 
   return (

@@ -7,7 +7,7 @@ import { computeAllProgress, computeProjectKpis, computeWeldsBySize } from '../l
 import { computeScheduleSCurve } from '../lib/schedule'
 import { serializeColoredSvg } from '../lib/svg'
 import { exportElementToPdf } from '../lib/export'
-import { useAuthStore } from '../store/useAuthStore'
+import { useCurrentRole } from '../store/useMembersStore'
 import { isReadOnly } from '../lib/permissions'
 import { SendReportModal } from '../components/Dashboard/SendReportModal'
 import { ReportConfigModal } from '../components/Dashboard/ReportConfigModal'
@@ -23,7 +23,7 @@ export function OnePagerPage({ project }: { project: Project }) {
   const kpis = useMemo(() => computeProjectKpis(project), [project])
   const scheduleSCurve = useMemo(() => computeScheduleSCurve(project), [project])
   const weldsBySize = useMemo(() => computeWeldsBySize(project), [project])
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const [showSend, setShowSend] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const sections = project.reportConfig.sections

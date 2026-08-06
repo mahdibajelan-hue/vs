@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import type { Milestone } from '../../types'
-import { useAuthStore } from '../../store/useAuthStore'
+import { useCurrentRole } from '../../store/useMembersStore'
 import { canEdit } from '../../lib/permissions'
 import { MilestoneEditModal } from './MilestoneEditModal'
 
 export function MilestoneTimeline({ projectId, milestones }: { projectId: string; milestones: Milestone[] }) {
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const [showEdit, setShowEdit] = useState(false)
 
   if (milestones.length === 0) return null

@@ -153,7 +153,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
     setSymbols((ss) => ss.map((s) => (s.id === id ? { ...s, x: point.x, y: point.y, lineId: near?.lineId ?? s.lineId } : s)))
   }
 
-  const doSave = () => {
+  const doSave = async () => {
     const svgRaw = buildSchematicSvg(lines, symbols, CANVAS_WIDTH, CANVAS_HEIGHT)
     const newIsoLines: IsoLine[] = lines.map((l) => {
       const lengthMeters = l.realLengthMeters ?? polylineLength(l.points) / PIXELS_PER_METER
@@ -172,7 +172,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
         createdAt: new Date().toISOString(),
       }
     })
-    setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
+    await setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
     setShowOverwriteConfirm(false)
     onSaved()
   }

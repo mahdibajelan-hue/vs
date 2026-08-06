@@ -4,6 +4,7 @@ import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
 import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useCurrentRole } from '../../store/useMembersStore'
 import { canApprove, canEdit } from '../../lib/permissions'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import { formatJalali } from '../../lib/jalali'
@@ -20,7 +21,7 @@ const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
 export function LogsTable({ project }: { project: Project }) {
   const deleteLog = useStore((s) => s.deleteLog)
   const updateLog = useStore((s) => s.updateLog)
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const reviewerName = useAuthStore((s) => s.currentUser()?.fullName ?? '')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')

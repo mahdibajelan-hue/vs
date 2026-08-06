@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useStore } from '../../store/useStore'
-import type { Project } from '../../types'
+import { RolePicker } from '../Auth/AuthGate'
+import type { UserRole } from '../../types'
 
 export function NewProjectModal({
   onClose,
@@ -11,7 +12,7 @@ export function NewProjectModal({
   onClose: () => void
   onCreated?: (id: string) => void
   /** When provided, the modal edits this project's metadata instead of creating a new one. */
-  project?: Project
+  project?: { id: string; name: string; client: string; location: string; unit: string }
 }) {
   const createProject = useStore((s) => s.createProject)
   const updateProjectMeta = useStore((s) => s.updateProjectMeta)
@@ -19,16 +20,23 @@ export function NewProjectModal({
   const [client, setClient] = useState(project?.client ?? '')
   const [location, setLocation] = useState(project?.location ?? '')
   const [unit, setUnit] = useState(project?.unit ?? '')
+  const [role, setRole] = useState<UserRole>('contractor')
+  const [busy, setBusy] = useState(false)
 
-  const submit = () => {
-    if (!name.trim()) return
-    if (project) {
-      updateProjectMeta(project.id, { name: name.trim(), client, location, unit })
-    } else {
-      const id = createProject({ name: name.trim(), client, location, unit })
-      onCreated?.(id)
+  const submit = async () => {
+    if (!name.trim() || busy) return
+    setBusy(true)
+    try {
+      if (project) {
+        await updateProjectMeta(project.id, { name: name.trim(), client, location, unit })
+      } else {
+        const id = await createProject({ name: name.trim(), client, location, unit, role })
+        onCreated?.(id)
+      }
+      onClose()
+    } finally {
+      setBusy(false)
     }
-    onClose()
   }
 
   return (
@@ -52,16 +60,22 @@ export function NewProjectModal({
             <input value={unit} onChange={(e) => setUnit(e.target.value)} className="input" placeholder="واحد ۱۰۰" />
           </label>
         </div>
+        {!project && (
+          <div>
+            <p className="mb-1.5 text-xs text-secondary">نقش شما در این پروژه</p>
+            <RolePicker value={role} onChange={setRole} />
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
             انصراف
           </button>
           <button
             onClick={submit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || busy}
             className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
           >
-            {project ? 'ذخیره تغییرات' : 'ایجاد پروژه'}
+            {busy ? 'در حال ذخیره...' : project ? 'ذخیره تغییرات' : 'ایجاد پروژه'}
           </button>
         </div>
       </div>

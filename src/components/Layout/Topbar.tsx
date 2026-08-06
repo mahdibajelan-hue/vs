@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useCurrentRole } from '../../store/useMembersStore'
 import { UserManagementModal } from '../Auth/UserManagementModal'
 import { ROLE_LABEL_FA, type Project } from '../../types'
 
@@ -9,7 +10,8 @@ export function Topbar({ project, title }: { project: Project | null; title: str
   const theme = useStore((s) => s.theme)
   const toggleTheme = useStore((s) => s.toggleTheme)
   const currentUser = useAuthStore((s) => s.currentUser())
-  const logout = useAuthStore((s) => s.logout)
+  const role = useCurrentRole()
+  const signOut = useAuthStore((s) => s.signOut)
   const [showUsers, setShowUsers] = useState(false)
 
   return (
@@ -30,19 +32,21 @@ export function Topbar({ project, title }: { project: Project | null; title: str
       <div className="flex items-center gap-2">
         {currentUser && (
           <button
-            onClick={() => setShowUsers(true)}
-            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
-            title="مدیریت کاربران"
+            onClick={() => project && setShowUsers(true)}
+            disabled={!project}
+            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-50 transition-colors"
+            title="اعضای پروژه"
           >
             <UserCircle2 size={14} />
-            {currentUser.fullName}
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{ROLE_LABEL_FA[currentUser.role]}</span>
+            {currentUser.fullName || currentUser.email}
+            {role && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{ROLE_LABEL_FA[role]}</span>}
           </button>
         )}
         <button
-          onClick={() => setShowUsers(true)}
-          className="glass-panel rounded-lg p-2 hover:brightness-125 transition"
-          title="مدیریت کاربران"
+          onClick={() => project && setShowUsers(true)}
+          disabled={!project}
+          className="glass-panel rounded-lg p-2 hover:brightness-125 disabled:opacity-50 transition"
+          title="اعضای پروژه"
         >
           <Users size={16} />
         </button>
@@ -54,14 +58,14 @@ export function Topbar({ project, title }: { project: Project | null; title: str
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
         <button
-          onClick={logout}
+          onClick={() => signOut()}
           className="glass-panel rounded-lg p-2 hover:brightness-125 transition text-red-400"
           title="خروج از حساب"
         >
           <LogOut size={16} />
         </button>
       </div>
-      {showUsers && <UserManagementModal onClose={() => setShowUsers(false)} />}
+      {showUsers && project && <UserManagementModal onClose={() => setShowUsers(false)} />}
     </header>
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Plus } from 'lucide-react'
+import { Sparkles, Plus, Loader2 } from 'lucide-react'
 import { useStore } from './store/useStore'
 import { Sidebar } from './components/Layout/Sidebar'
 import { Topbar } from './components/Layout/Topbar'
@@ -13,6 +13,8 @@ import { RisksPage } from './pages/RisksPage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
+import { useCurrentRole } from './store/useMembersStore'
+import { supabase } from './lib/supabaseClient'
 import { canEdit } from './lib/permissions'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
@@ -34,6 +36,8 @@ function App() {
   const projects = useStore((s) => s.projects)
   const currentProjectId = useStore((s) => s.currentProjectId)
   const currentProject = useStore((s) => s.currentProject())
+  const loadingProjects = useStore((s) => s.loadingProjects)
+  const fetchProjects = useStore((s) => s.fetchProjects)
   const createProject = useStore((s) => s.createProject)
   const setProjectSvg = useStore((s) => s.setProjectSvg)
   const addLog = useStore((s) => s.addLog)
@@ -42,35 +46,53 @@ function App() {
   const setMilestones = useStore((s) => s.setMilestones)
   const addRisk = useStore((s) => s.addRisk)
   const selectProject = useStore((s) => s.selectProject)
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const isAuthed = useAuthStore((s) => s.isAuthed)
+  const role = useCurrentRole()
   const editable = canEdit(role)
 
   const [page, setPage] = useState<Page>('viewer')
   const [showNewProject, setShowNewProject] = useState(false)
+  const [demoLoading, setDemoLoading] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
   useEffect(() => {
+    if (!isAuthed) return
+    supabase.rpc('accept_pending_invites').then(() => fetchProjects())
+  }, [isAuthed, fetchProjects])
+
+  useEffect(() => {
     if (page === 'schematic' && !editable) setPage('viewer')
   }, [page, editable])
 
-  const loadDemo = () => {
+  const loadDemo = async () => {
+    setDemoLoading(true)
     const seed = buildSeedProject()
-    const id = createProject({
+    const id = await createProject({
       name: 'ایستگاه تقویت فشار گاز - نمونه',
       client: 'شرکت ملی گاز ایران',
       location: 'پارس جنوبی',
       unit: 'واحد ۱۰۰',
+      role: 'contractor',
     })
-    setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
-    for (const log of seed.logs) addLog(id, log)
-    setPlannedCurve(id, seed.plannedCurve)
-    addSchedules(id, seed.schedules)
-    setMilestones(id, seed.milestones)
-    for (const risk of seed.risks) addRisk(id, risk)
-    selectProject(id)
+    await setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
+    for (const log of seed.logs) await addLog(id, log)
+    await setPlannedCurve(id, seed.plannedCurve)
+    await addSchedules(id, seed.schedules)
+    await setMilestones(id, seed.milestones)
+    for (const risk of seed.risks) await addRisk(id, risk)
+    await selectProject(id)
+    setDemoLoading(false)
+  }
+
+  if (loadingProjects && projects.length === 0) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <Loader2 size={26} className="animate-spin text-brand-400" />
+      </div>
+    )
   }
 
   if (projects.length === 0 || !currentProjectId) {
@@ -85,25 +107,23 @@ function App() {
               مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک ایستگاه‌های گاز و پتروشیمی — آپلود SVG، ثبت کارکرد،
               گزارش‌های بصری و خروجی حرفه‌ای.
             </p>
+            <p className="mb-4 text-xs text-muted leading-6">
+              اگر همکارتان از قبل پروژه‌ای ساخته، از او بخواهید شما را با ایمیل‌تان به آن پروژه دعوت کند.
+            </p>
             <div className="flex flex-col gap-2.5">
-              {editable ? (
-                <>
-                  <button
-                    onClick={() => setShowNewProject(true)}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
-                  >
-                    <Plus size={17} /> ایجاد پروژه جدید
-                  </button>
-                  <button
-                    onClick={loadDemo}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 transition-colors"
-                  >
-                    <Sparkles size={17} /> بارگذاری پروژه نمایشی
-                  </button>
-                </>
-              ) : (
-                <p className="text-xs text-muted">هنوز پروژه‌ای ایجاد نشده — از پیمانکار یا مشاور پروژه بخواهید یک پروژه بسازد یا فایل JSON آن را برایتان ارسال کند.</p>
-              )}
+              <button
+                onClick={() => setShowNewProject(true)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
+              >
+                <Plus size={17} /> ایجاد پروژه جدید
+              </button>
+              <button
+                onClick={loadDemo}
+                disabled={demoLoading}
+                className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-secondary hover:bg-white/5 disabled:opacity-50 transition-colors"
+              >
+                {demoLoading ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />} بارگذاری پروژه نمایشی
+              </button>
             </div>
           </div>
         </div>
@@ -119,6 +139,11 @@ function App() {
         <Topbar project={currentProject} title={PAGE_TITLE[page]} />
         <StorageErrorBanner />
         <main className="flex-1 min-h-0">
+          {!currentProject && (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 size={24} className="animate-spin text-brand-400" />
+            </div>
+          )}
           {currentProject && page === 'viewer' && <ViewerPage project={currentProject} />}
           {currentProject && page === 'onepager' && <OnePagerPage project={currentProject} />}
           {currentProject && page === 'reports' && <ReportsPage project={currentProject} />}

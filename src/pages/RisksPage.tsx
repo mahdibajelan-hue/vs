@@ -6,11 +6,11 @@ import { riskScore, riskScoreColor, riskScoreLabel, sortRisksBySeverity } from '
 import { RiskHeatMap } from '../components/Risks/RiskHeatMap'
 import { RiskEditModal } from '../components/Risks/RiskEditModal'
 import { KpiCard } from '../components/Dashboard/KpiCard'
-import { useAuthStore } from '../store/useAuthStore'
+import { useCurrentRole } from '../store/useMembersStore'
 import { canEdit } from '../lib/permissions'
 
 export function RisksPage({ project }: { project: Project }) {
-  const role = useAuthStore((s) => s.currentUser()?.role)
+  const role = useCurrentRole()
   const editable = canEdit(role)
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null)
   const [showAdd, setShowAdd] = useState(false)
