@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert, Pencil, Trash2 } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert, Pencil, Trash2, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useCurrentRole } from '../../store/useMembersStore'
 import { canEdit } from '../../lib/permissions'
@@ -13,6 +13,9 @@ interface SidebarProps {
   page: Page
   onPageChange: (p: Page) => void
   onNewProject: () => void
+  /** Mobile drawer state — irrelevant at md+ where the sidebar is always visible in-flow. */
+  mobileOpen: boolean
+  onMobileClose: () => void
 }
 
 const NAV: { id: Page; label: string; icon: typeof Map }[] = [
@@ -25,7 +28,7 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
-export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
+export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobileClose }: SidebarProps) {
   const projects = useStore((s) => s.projects)
   const currentProjectId = useStore((s) => s.currentProjectId)
   const currentProject = useStore((s) => s.currentProject())
@@ -53,20 +56,34 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
   }
 
   return (
-    <aside className="no-print flex h-full w-64 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0">
+    <>
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={onMobileClose} />
+      )}
+      <aside
+        className={`no-print fixed inset-y-0 right-0 z-40 flex h-full w-72 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0 transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
       <div className="flex items-center gap-2.5 px-5 py-5">
         <Logo size={36} className="shrink-0 rounded-xl shadow-lg shadow-brand-500/20" />
-        <div className="leading-tight">
+        <div className="leading-tight flex-1 min-w-0">
           <p className="text-sm font-bold">پایش ایزومتریک</p>
           <p className="text-[11px] text-muted">Piping Progress Tracker</p>
         </div>
+        <button onClick={onMobileClose} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-white/5 md:hidden">
+          <X size={16} />
+        </button>
       </div>
 
       <nav className="px-3 space-y-1">
         {nav.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => onPageChange(id)}
+            onClick={() => {
+              onPageChange(id)
+              onMobileClose()
+            }}
             className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors ${
               page === id ? 'bg-brand-500/15 text-brand-300 font-medium' : 'text-secondary hover:bg-white/5'
             }`}
@@ -93,7 +110,13 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
               p.id === currentProjectId ? 'bg-white/10 text-current font-medium' : 'text-secondary hover:bg-white/5'
             }`}
           >
-            <button onClick={() => selectProject(p.id)} className="flex-1 min-w-0 truncate px-3 py-2 text-right">
+            <button
+              onClick={() => {
+                selectProject(p.id)
+                onMobileClose()
+              }}
+              className="flex-1 min-w-0 truncate px-3 py-2 text-right"
+            >
               {p.name}
             </button>
             {editable &&
@@ -168,6 +191,7 @@ export function Sidebar({ page, onPageChange, onNewProject }: SidebarProps) {
       </div>
 
       {editingProject && <NewProjectModal project={editingProject} onClose={() => setEditingProject(null)} />}
-    </aside>
+      </aside>
+    </>
   )
 }

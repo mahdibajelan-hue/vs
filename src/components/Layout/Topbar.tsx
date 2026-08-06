@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
+import { Menu, Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
 import { UserManagementModal } from '../Auth/UserManagementModal'
 import { ROLE_LABEL_FA, type Project } from '../../types'
 
-export function Topbar({ project, title }: { project: Project | null; title: string }) {
+export function Topbar({ project, title, onMenuClick }: { project: Project | null; title: string; onMenuClick: () => void }) {
   const theme = useStore((s) => s.theme)
   const toggleTheme = useStore((s) => s.toggleTheme)
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -15,21 +15,26 @@ export function Topbar({ project, title }: { project: Project | null; title: str
   const [showUsers, setShowUsers] = useState(false)
 
   return (
-    <header className="no-print flex items-center justify-between glass-panel !rounded-none border-t-0 border-x-0 px-6 py-3.5">
-      <div>
-        <h1 className="text-base font-bold">{title}</h1>
-        {project && (
-          <div className="mt-0.5 flex items-center gap-3 text-xs text-secondary">
-            <span className="flex items-center gap-1">
-              <Building2 size={12} /> {project.client || 'بدون کارفرما'}
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin size={12} /> {project.location || 'بدون موقعیت'}
-            </span>
-          </div>
-        )}
+    <header className="no-print flex items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-3 sm:px-6 sm:py-3.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <button onClick={onMenuClick} className="shrink-0 rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors md:hidden" title="منو">
+          <Menu size={18} />
+        </button>
+        <div className="min-w-0">
+          <h1 className="text-sm sm:text-base font-bold truncate">{title}</h1>
+          {project && (
+            <div className="mt-0.5 flex items-center gap-3 text-xs text-secondary">
+              <span className="hidden sm:flex items-center gap-1 truncate">
+                <Building2 size={12} className="shrink-0" /> <span className="truncate">{project.client || 'بدون کارفرما'}</span>
+              </span>
+              <span className="hidden sm:flex items-center gap-1 truncate">
+                <MapPin size={12} className="shrink-0" /> <span className="truncate">{project.location || 'بدون موقعیت'}</span>
+              </span>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {currentUser && (
           <button
             onClick={() => project && setShowUsers(true)}

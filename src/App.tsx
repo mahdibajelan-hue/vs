@@ -53,6 +53,7 @@ function App() {
   const [page, setPage] = useState<Page>('viewer')
   const [showNewProject, setShowNewProject] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -139,9 +140,15 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar page={page} onPageChange={setPage} onNewProject={() => setShowNewProject(true)} />
+      <Sidebar
+        page={page}
+        onPageChange={setPage}
+        onNewProject={() => setShowNewProject(true)}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
       <div className="flex flex-1 flex-col min-w-0">
-        <Topbar project={currentProject} title={PAGE_TITLE[page]} />
+        <Topbar project={currentProject} title={PAGE_TITLE[page]} onMenuClick={() => setMobileSidebarOpen(true)} />
         <StorageErrorBanner />
         <main className="flex-1 min-h-0">
           {!currentProject && (

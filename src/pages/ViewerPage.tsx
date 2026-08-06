@@ -76,8 +76,8 @@ export function ViewerPage({ project }: { project: Project }) {
   }
 
   return (
-    <div className="flex h-full gap-4 p-4">
-      <div className="w-80 shrink-0 glass-panel rounded-2xl overflow-hidden">
+    <div className="flex h-full flex-col gap-2 p-2 sm:gap-4 sm:p-4 md:flex-row">
+      <div className="max-h-56 shrink-0 glass-panel rounded-2xl overflow-hidden md:h-auto md:max-h-none md:w-80">
         <LineListPanel
           lines={project.lines}
           progressMap={progressMap}
@@ -88,10 +88,10 @@ export function ViewerPage({ project }: { project: Project }) {
         />
       </div>
 
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
-        <div className="flex items-center justify-between glass-panel rounded-2xl px-4 py-2.5">
+      <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 glass-panel rounded-2xl px-4 py-2.5">
           <Legend />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => exportColoredSvg(project, `${project.name}-iso-colored.svg`)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
@@ -136,7 +136,7 @@ export function ViewerPage({ project }: { project: Project }) {
         </div>
 
         {selectedLine && selectedProgress && (
-          <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-6 text-sm">
+          <div className="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <div>
               <p className="text-xs text-muted">خط انتخاب‌شده</p>
               <p className="font-bold">{selectedLine.svgElementId}</p>
