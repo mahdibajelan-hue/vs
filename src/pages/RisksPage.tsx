@@ -40,7 +40,7 @@ export function RisksPage({ project }: { project: Project }) {
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <KpiCard label="ریسک‌های باز" value={String(openCount)} icon={ShieldAlert} accent="#f59e0b" />
         <KpiCard label="ریسک‌های بحرانی/بالا (باز)" value={String(criticalCount)} icon={Siren} accent="#ef4444" />
         <KpiCard label="ریسک‌های بسته‌شده" value={String(closedCount)} icon={CheckCircle2} accent="#2ecc71" />

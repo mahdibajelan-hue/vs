@@ -19,8 +19,10 @@ export function SchedulePage({ project }: { project: Project }) {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
-      <div className="grid grid-cols-[280px_repeat(4,1fr)] gap-3">
-        <CountdownWidget summary={summary} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-[280px_repeat(4,1fr)]">
+        <div className="col-span-2 md:col-span-1">
+          <CountdownWidget summary={summary} />
+        </div>
         <KpiCard label="پیشرفت برنامه‌ای (تا امروز)" value={`${summary.overallPlannedPercent}%`} icon={CalendarClock} accent="#f1c40f" />
         <KpiCard label="پیشرفت واقعی" value={`${summary.overallActualPercent}%`} icon={Gauge} accent="#3498db" />
         <KpiCard

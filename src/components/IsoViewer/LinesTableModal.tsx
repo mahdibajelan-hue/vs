@@ -117,7 +117,7 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
                     className="h-3.5 w-3.5 accent-brand-500"
                   />
                 </td>
-                <td className="p-1.5 font-mono text-xs">
+                <td className="p-1.5 font-mono text-xs whitespace-nowrap">
                   {line.svgElementId}
                   {line.svgElementIds.length > 1 && (
                     <span className="mr-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-secondary" title="این خط از چند قطعه SVG ادغام شده است">

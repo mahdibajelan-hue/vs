@@ -25,7 +25,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
         )}
       </div>
 
-      <div className="flex items-start">
+      <div className="flex items-start overflow-x-auto">
         {milestones.map((m, i) => (
           <div key={m.id} className="flex flex-1 items-start">
             {i > 0 && (

@@ -89,10 +89,10 @@ export function MapFixWorkspace({ project, onClose }: { project: Project; onClos
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
       <header className="no-print glass-panel !rounded-none border-t-0 border-x-0 px-6 py-3.5 shrink-0">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-base font-bold">اصلاح نقشه — {project.name}</h1>
-            <p className="mt-0.5 text-xs text-secondary leading-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-base font-bold truncate">اصلاح نقشه — {project.name}</h1>
+            <p className="mt-0.5 hidden text-xs text-secondary leading-6 sm:block">
               روی نقشه کلیک کنید یا با درگ یک کادر دور چند قطعه بکشید تا انتخاب شوند. برای تکه‌های متصل‌به‌هم یکی را
               انتخاب و «انتخاب قطعات هم‌خط» را بزنید.
             </p>
