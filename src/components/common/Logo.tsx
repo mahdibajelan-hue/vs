@@ -2,7 +2,7 @@
 export function Logo({ size = 36, className = '' }: { size?: number; className?: string }) {
   return (
     <img
-      src="/logo-icon.png"
+      src={`${import.meta.env.BASE_URL}logo-icon.png`}
       alt="لوگوی سامانه پایش پیشرفت ایزومتریک لوله‌کشی"
       width={size}
       height={size}
@@ -16,7 +16,7 @@ export function Logo({ size = 36, className = '' }: { size?: number; className?:
 export function LogoFull({ width = 220, className = '' }: { width?: number; className?: string }) {
   return (
     <img
-      src="/logo-full.png"
+      src={`${import.meta.env.BASE_URL}logo-full.png`}
       alt="IsoTrack — سامانه پایش پیشرفت ایزومتریک لوله‌کشی"
       width={width}
       className={`object-contain ${className}`}

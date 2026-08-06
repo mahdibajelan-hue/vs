@@ -1,54 +1,35 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Upload, Table2, Download, Wrench, PlusSquare, Unlink, XCircle, Sparkles } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Upload, Table2, Download, Wrench } from 'lucide-react'
 import type { Project } from '../types'
 import { computeAllProgress } from '../lib/progress'
 import { IsoViewport } from '../components/IsoViewer/IsoViewport'
 import { LineListPanel } from '../components/IsoViewer/LineListPanel'
 import { SvgImportWorkspace } from '../components/IsoViewer/SvgImportWorkspace'
+import { MapFixWorkspace } from '../components/IsoViewer/MapFixWorkspace'
 import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
-import { LineMetaModal, type LineMetaExtra } from '../components/common/LineMetaModal'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
 import { useCurrentRole } from '../store/useMembersStore'
 import { canEdit } from '../lib/permissions'
 import { makeId } from '../lib/id'
 import { exportColoredSvg } from '../lib/export'
-import { parseSvgCandidates, isLikelyLineId } from '../lib/svg'
-import { pickGroupLabel, extractSegmentEndpoints, computeMergeGroups, defaultMergeTolerance } from '../lib/lineMerge'
+import { isLikelyLineId } from '../lib/svg'
+import { pickGroupLabel } from '../lib/lineMerge'
 
 export function ViewerPage({ project }: { project: Project }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
-  const mergeFragmentsIntoNewLine = useStore((s) => s.mergeFragmentsIntoNewLine)
-  const addFragmentsToLine = useStore((s) => s.addFragmentsToLine)
-  const removeFragmentsFromLines = useStore((s) => s.removeFragmentsFromLines)
   const role = useCurrentRole()
   const editable = canEdit(role)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [showLinesTable, setShowLinesTable] = useState(false)
   const [logLineId, setLogLineId] = useState<string | null>(null)
-
-  const [fixMode, setFixMode] = useState(false)
-  const [selectedFragments, setSelectedFragments] = useState<Set<string>>(new Set())
-  const [showCreateLine, setShowCreateLine] = useState(false)
-  const [addToLineId, setAddToLineId] = useState('')
-  const [svgRoot, setSvgRoot] = useState<SVGSVGElement | null>(null)
+  const [showFixWorkspace, setShowFixWorkspace] = useState(false)
 
   const progressMap = useMemo(() => computeAllProgress(project), [project])
   const selectedLine = project.lines.find((l) => l.id === selectedLineId) ?? null
   const selectedProgress = selectedLineId ? progressMap.get(selectedLineId) : null
-
-  const candidateIds = useMemo(() => {
-    if (!project.svgRaw) return []
-    try {
-      return parseSvgCandidates(project.svgRaw).map((c) => c.elementId)
-    } catch {
-      return []
-    }
-  }, [project.svgRaw])
-
-  const handleSvgReady = useCallback((root: SVGSVGElement | null) => setSvgRoot(root), [])
 
   const handleConfirmUpload = async (svgRaw: string, fileName: string, groups: string[][]) => {
     const now = new Date().toISOString()
@@ -68,65 +49,6 @@ export function ViewerPage({ project }: { project: Project }) {
     await setProjectSvg(project.id, svgRaw, fileName, newLines)
     setShowUpload(false)
     setShowLinesTable(true)
-  }
-
-  const toggleFixMode = () => {
-    setFixMode((f) => !f)
-    setSelectedFragments(new Set())
-  }
-
-  const toggleFragment = (elementId: string) => {
-    setSelectedFragments((prev) => {
-      const next = new Set(prev)
-      if (next.has(elementId)) next.delete(elementId)
-      else next.add(elementId)
-      return next
-    })
-  }
-
-  const handleMarqueeSelect = useCallback((elementIds: string[]) => {
-    setSelectedFragments((prev) => {
-      const next = new Set(prev)
-      for (const id of elementIds) next.add(id)
-      return next
-    })
-  }, [])
-
-  const confirmCreateLine = async (svgElementId: string, size: string, extra?: LineMetaExtra) => {
-    await mergeFragmentsIntoNewLine(project.id, {
-      svgElementIds: [...selectedFragments],
-      svgElementId,
-      size,
-      plannedLength: extra?.plannedLength,
-      totalWelds: extra?.totalWelds,
-    })
-    setSelectedFragments(new Set())
-    setShowCreateLine(false)
-  }
-
-  const handleAddToLine = async () => {
-    if (!addToLineId || selectedFragments.size === 0) return
-    await addFragmentsToLine(project.id, addToLineId, [...selectedFragments])
-    setSelectedFragments(new Set())
-  }
-
-  const handleUnmap = async () => {
-    if (selectedFragments.size === 0) return
-    await removeFragmentsFromLines(project.id, [...selectedFragments])
-    setSelectedFragments(new Set())
-  }
-
-  const selectConnectedChain = () => {
-    if (!svgRoot || selectedFragments.size === 0 || candidateIds.length === 0) return
-    const endpoints = extractSegmentEndpoints(svgRoot, candidateIds)
-    const tolerance = defaultMergeTolerance(svgRoot)
-    const groups = computeMergeGroups(candidateIds, endpoints, tolerance)
-    const next = new Set(selectedFragments)
-    for (const seedId of selectedFragments) {
-      const group = groups.find((g) => g.includes(seedId))
-      if (group) for (const id of group) next.add(id)
-    }
-    setSelectedFragments(next)
   }
 
   if (!project.svgRaw) {
@@ -162,7 +84,7 @@ export function ViewerPage({ project }: { project: Project }) {
           selectedLineId={selectedLineId}
           onSelectLine={setSelectedLineId}
           onLogLine={setLogLineId}
-          editable={editable && !fixMode}
+          editable={editable}
         />
       </div>
 
@@ -194,71 +116,14 @@ export function ViewerPage({ project }: { project: Project }) {
             )}
             {editable && (
               <button
-                onClick={toggleFixMode}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
-                  fixMode ? 'bg-brand-500 text-white' : 'text-secondary hover:bg-white/5'
-                }`}
+                onClick={() => setShowFixWorkspace(true)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
               >
                 <Wrench size={14} /> اصلاح نقشه
               </button>
             )}
           </div>
         </div>
-
-        {fixMode && (
-          <div className="glass-panel rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
-            <p className="text-xs text-secondary leading-6">
-              روی نقشه کلیک کنید یا با درگ کردن یک کادر دور چند قطعه بکشید تا همه با هم انتخاب شوند. برای تکه‌های
-              متصل‌به‌هم می‌توانید یکی را انتخاب و «انتخاب قطعات هم‌خط» را بزنید. در پایان آن‌ها را زیر یک شناسه با
-              طول و تعداد سرجوش مشخص ادغام کنید یا از خط فعلی جدا کنید.
-            </p>
-            <span className="rounded-full bg-brand-500/15 px-2.5 py-1 text-xs text-brand-300 shrink-0">
-              {selectedFragments.size} قطعه انتخاب شده
-            </span>
-            <div className="flex flex-wrap items-center gap-2 mr-auto">
-              <select value={addToLineId} onChange={(e) => setAddToLineId(e.target.value)} className="input !w-auto text-xs">
-                <option value="">افزودن به خط...</option>
-                {project.lines.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.svgElementId}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleAddToLine}
-                disabled={!addToLineId || selectedFragments.size === 0}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
-              >
-                <PlusSquare size={13} /> افزودن
-              </button>
-              <button
-                onClick={selectConnectedChain}
-                disabled={selectedFragments.size === 0 || !svgRoot}
-                title="از قطعات انتخاب‌شده، بقیه قطعات هم‌خط (متصل به هم) را هم به‌صورت خودکار انتخاب می‌کند"
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-30 transition-colors"
-              >
-                <Sparkles size={13} /> انتخاب قطعات هم‌خط
-              </button>
-              <button
-                onClick={() => setShowCreateLine(true)}
-                disabled={selectedFragments.size === 0}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-30 transition-colors"
-              >
-                <PlusSquare size={13} /> ساخت خط جدید از انتخاب
-              </button>
-              <button
-                onClick={handleUnmap}
-                disabled={selectedFragments.size === 0}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-30 transition-colors"
-              >
-                <Unlink size={13} /> جدا کردن از خط فعلی
-              </button>
-              <button onClick={toggleFixMode} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors">
-                <XCircle size={13} /> پایان اصلاح
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="flex-1 glass-panel rounded-2xl p-2 min-h-0">
           <IsoViewport
@@ -267,15 +132,10 @@ export function ViewerPage({ project }: { project: Project }) {
             progressMap={progressMap}
             selectedLineId={selectedLineId}
             onSelectLine={setSelectedLineId}
-            fixMode={fixMode}
-            selectedFragmentIds={selectedFragments}
-            onToggleFragment={toggleFragment}
-            onSvgReady={handleSvgReady}
-            onMarqueeSelect={handleMarqueeSelect}
           />
         </div>
 
-        {!fixMode && selectedLine && selectedProgress && (
+        {selectedLine && selectedProgress && (
           <div className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-6 text-sm">
             <div>
               <p className="text-xs text-muted">خط انتخاب‌شده</p>
@@ -314,22 +174,12 @@ export function ViewerPage({ project }: { project: Project }) {
       </div>
 
       {showUpload && <SvgImportWorkspace onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
+      {showFixWorkspace && <MapFixWorkspace project={project} onClose={() => setShowFixWorkspace(false)} />}
       {showLinesTable && (
         <LinesTableModal projectId={project.id} lines={project.lines} onClose={() => setShowLinesTable(false)} />
       )}
       {logLineId && (
         <DailyLogForm projectId={project.id} lines={project.lines} initialLineId={logLineId} onClose={() => setLogLineId(null)} />
-      )}
-      {showCreateLine && (
-        <LineMetaModal
-          onClose={() => setShowCreateLine(false)}
-          onConfirm={confirmCreateLine}
-          title="ساخت خط جدید از قطعات انتخاب‌شده"
-          subtitle={`${selectedFragments.size} قطعه به این خط جدید متصل می‌شود`}
-          confirmLabel="ساخت خط"
-          collectLengthWelds
-          selectionHint={`${selectedFragments.size} قطعه انتخاب شده — طول و تعداد سرجوش را مطابق نقشه وارد کنید`}
-        />
       )}
     </div>
   )

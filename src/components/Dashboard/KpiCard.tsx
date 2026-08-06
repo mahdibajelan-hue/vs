@@ -10,7 +10,7 @@ interface KpiCardProps {
 
 export function KpiCard({ label, value, sub, icon: Icon, accent = 'var(--color-brand-400)' }: KpiCardProps) {
   return (
-    <div className="glass-panel rounded-2xl p-4 flex items-center gap-3">
+    <div className="glass-panel rounded-2xl p-4 flex items-center gap-3 min-w-0">
       <div
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{ background: `${accent}1f`, color: accent }}
@@ -19,7 +19,7 @@ export function KpiCard({ label, value, sub, icon: Icon, accent = 'var(--color-b
       </div>
       <div className="min-w-0">
         <p className="text-xs text-secondary truncate">{label}</p>
-        <p className="text-xl font-extrabold num leading-tight">{value}</p>
+        <p className="text-xl font-extrabold num leading-tight truncate">{value}</p>
         {sub && <p className="text-[11px] text-muted num truncate">{sub}</p>}
       </div>
     </div>
