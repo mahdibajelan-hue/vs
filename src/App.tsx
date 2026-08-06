@@ -62,8 +62,20 @@ function App() {
   useEffect(() => {
     if (!isAuthed) return
     useStore.setState({ loadingProjects: true })
-    supabase.rpc('accept_pending_invites').then(() => fetchProjects())
-  }, [isAuthed, fetchProjects])
+    supabase
+      .rpc('accept_pending_invites')
+      .then(() => fetchProjects())
+      .then(() => {
+        // currentProjectId is never persisted (only projectDetail-of-the-moment is fetched
+        // live), so without this, a returning user with real projects would land on the
+        // empty "create a project" screen on every single visit — projects.length > 0 but
+        // currentProjectId is still null. Auto-select one so they see their own work.
+        const state = useStore.getState()
+        if (!state.currentProjectId && state.projects.length > 0) {
+          selectProject(state.projects[0].id)
+        }
+      })
+  }, [isAuthed, fetchProjects, selectProject])
 
   useEffect(() => {
     if (page === 'schematic' && !editable) setPage('viewer')
