@@ -76,8 +76,8 @@ export function ViewerPage({ project }: { project: Project }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2 sm:gap-4 sm:p-4 md:flex-row">
-      <div className="max-h-56 shrink-0 glass-panel rounded-2xl overflow-hidden md:h-auto md:max-h-none md:w-80">
+    <div className="flex h-full flex-col gap-2 p-2 sm:gap-4 sm:p-4 lg:flex-row">
+      <div className="max-h-56 shrink-0 glass-panel rounded-2xl overflow-hidden lg:h-auto lg:max-h-none lg:w-80">
         <LineListPanel
           lines={project.lines}
           progressMap={progressMap}

@@ -17,7 +17,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
   return (
     <header className="no-print flex items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-3 sm:px-6 sm:py-3.5">
       <div className="flex items-center gap-2 min-w-0">
-        <button onClick={onMenuClick} className="shrink-0 rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors md:hidden" title="منو">
+        <button onClick={onMenuClick} className="shrink-0 rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors lg:hidden" title="منو">
           <Menu size={18} />
         </button>
         <div className="min-w-0">

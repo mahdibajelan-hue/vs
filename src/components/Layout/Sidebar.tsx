@@ -13,7 +13,7 @@ interface SidebarProps {
   page: Page
   onPageChange: (p: Page) => void
   onNewProject: () => void
-  /** Mobile drawer state — irrelevant at md+ where the sidebar is always visible in-flow. */
+  /** Mobile drawer state — irrelevant at lg+ where the sidebar is always visible in-flow. */
   mobileOpen: boolean
   onMobileClose: () => void
 }
@@ -58,10 +58,10 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
   return (
     <>
       {mobileOpen && (
-        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={onMobileClose} />
+        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={onMobileClose} />
       )}
       <aside
-        className={`no-print fixed inset-y-0 right-0 z-40 flex h-full w-72 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0 transition-transform duration-200 md:static md:z-auto md:w-64 md:translate-x-0 ${
+        className={`no-print fixed inset-y-0 right-0 z-40 flex h-full w-72 flex-col glass-panel !rounded-none border-l-0 border-t-0 border-b-0 transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -71,7 +71,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
           <p className="text-sm font-bold">پایش ایزومتریک</p>
           <p className="text-[11px] text-muted">Piping Progress Tracker</p>
         </div>
-        <button onClick={onMobileClose} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-white/5 md:hidden">
+        <button onClick={onMobileClose} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-white/5 lg:hidden">
           <X size={16} />
         </button>
       </div>

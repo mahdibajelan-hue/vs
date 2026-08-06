@@ -61,6 +61,7 @@ function App() {
 
   useEffect(() => {
     if (!isAuthed) return
+    useStore.setState({ loadingProjects: true })
     supabase.rpc('accept_pending_invites').then(() => fetchProjects())
   }, [isAuthed, fetchProjects])
 

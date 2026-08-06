@@ -92,7 +92,11 @@ export const useStore = create<AppState>()(
       projects: [],
       currentProjectId: null,
       projectDetail: null,
-      loadingProjects: false,
+      // Starts true (not false) so the loading spinner in App.tsx covers the gap between
+      // "user is authed" and "fetchProjects() has actually run" — otherwise that gap briefly
+      // shows the empty "create project / load demo" screen on every single page load, and an
+      // impatient click there creates a duplicate project even though real ones exist.
+      loadingProjects: true,
       loadingDetail: false,
       theme: 'dark',
 
