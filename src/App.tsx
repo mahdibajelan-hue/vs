@@ -69,22 +69,27 @@ function App() {
 
   const loadDemo = async () => {
     setDemoLoading(true)
-    const seed = buildSeedProject()
-    const id = await createProject({
-      name: 'ایستگاه تقویت فشار گاز - نمونه',
-      client: 'شرکت ملی گاز ایران',
-      location: 'پارس جنوبی',
-      unit: 'واحد ۱۰۰',
-      role: 'contractor',
-    })
-    await setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
-    for (const log of seed.logs) await addLog(id, log)
-    await setPlannedCurve(id, seed.plannedCurve)
-    await addSchedules(id, seed.schedules)
-    await setMilestones(id, seed.milestones)
-    for (const risk of seed.risks) await addRisk(id, risk)
-    await selectProject(id)
-    setDemoLoading(false)
+    try {
+      const seed = buildSeedProject()
+      const id = await createProject({
+        name: 'ایستگاه تقویت فشار گاز - نمونه',
+        client: 'شرکت ملی گاز ایران',
+        location: 'پارس جنوبی',
+        unit: 'واحد ۱۰۰',
+        role: 'contractor',
+      })
+      await setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
+      for (const log of seed.logs) await addLog(id, log)
+      await setPlannedCurve(id, seed.plannedCurve)
+      await addSchedules(id, seed.schedules)
+      await setMilestones(id, seed.milestones)
+      for (const risk of seed.risks) await addRisk(id, risk)
+      await selectProject(id)
+    } catch {
+      // error already surfaced via the storage-error banner
+    } finally {
+      setDemoLoading(false)
+    }
   }
 
   if (loadingProjects && projects.length === 0) {

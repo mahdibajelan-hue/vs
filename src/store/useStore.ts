@@ -7,7 +7,19 @@ import { defaultReportConfig } from '../lib/reportConfig'
 import { createSafeLocalStorage } from '../lib/safeStorage'
 import { supabase } from '../lib/supabaseClient'
 import { useMembersStore } from './useMembersStore'
+import { useSystemStore } from './useSystemStore'
 import { lineFromRow, lineToRow, logFromRow, logToRow, projectFromRow, projectSummaryFromRow, type ProjectSummary } from '../lib/supabaseData'
+
+/**
+ * Supabase calls fail silently by default (RLS rejection, network error, schema mismatch) —
+ * a mutation just does nothing with no visible feedback. Every write path funnels its error
+ * through here so it surfaces in the StorageErrorBanner instead of vanishing.
+ */
+function reportSupabaseError(action: string, error: { message: string } | null): boolean {
+  if (!error) return false
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  return true
+}
 
 interface AppState {
   projects: ProjectSummary[]
@@ -91,7 +103,8 @@ export const useStore = create<AppState>()(
 
       fetchProjects: async () => {
         set({ loadingProjects: true })
-        const { data } = await supabase.from('projects').select('id,name,client,location,unit,created_at').order('created_at', { ascending: false })
+        const { data, error } = await supabase.from('projects').select('id,name,client,location,unit,created_at').order('created_at', { ascending: false })
+        reportSupabaseError('بارگذاری فهرست پروژه‌ها', error)
         set({ projects: (data ?? []).map(projectSummaryFromRow), loadingProjects: false })
       },
 
@@ -112,7 +125,10 @@ export const useStore = create<AppState>()(
           p_milestones: createDefaultMilestones(),
           p_report_config: defaultReportConfig(),
         })
-        if (error || !data) throw new Error(error?.message ?? 'خطا در ایجاد پروژه')
+        if (error || !data) {
+          reportSupabaseError('ایجاد پروژه', error ?? { message: 'خطای نامشخص' })
+          throw new Error(error?.message ?? 'خطا در ایجاد پروژه')
+        }
         await get().fetchProjects()
         await get().selectProject(data.id)
         return data.id as string
@@ -134,7 +150,10 @@ export const useStore = create<AppState>()(
           p_report_config: project.reportConfig ?? defaultReportConfig(),
           p_planned_curve: project.plannedCurve ?? [],
         })
-        if (error || !data) throw new Error(error?.message ?? 'خطا در وارد کردن پروژه')
+        if (error || !data) {
+          reportSupabaseError('وارد کردن پروژه', error ?? { message: 'خطای نامشخص' })
+          throw new Error(error?.message ?? 'خطا در وارد کردن پروژه')
+        }
         const newProjectId = data.id as string
 
         const lineResults = await Promise.all(
@@ -158,7 +177,8 @@ export const useStore = create<AppState>()(
       },
 
       deleteProject: async (id) => {
-        await supabase.from('projects').delete().eq('id', id)
+        const { error } = await supabase.from('projects').delete().eq('id', id)
+        if (reportSupabaseError('حذف پروژه', error)) return
         const wasCurrent = get().currentProjectId === id
         set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }))
         if (!wasCurrent) return
@@ -172,7 +192,8 @@ export const useStore = create<AppState>()(
       },
 
       updateProjectMeta: async (id, data) => {
-        await supabase.from('projects').update(data).eq('id', id)
+        const { error } = await supabase.from('projects').update(data).eq('id', id)
+        if (reportSupabaseError('ذخیره اطلاعات پروژه', error)) return
         set((s) => ({
           projects: s.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
           projectDetail: s.projectDetail?.id === id ? { ...s.projectDetail, ...data } : s.projectDetail,
@@ -180,11 +201,14 @@ export const useStore = create<AppState>()(
       },
 
       setProjectSvg: async (projectId, svgRaw, fileName, lines) => {
-        await supabase.from('projects').update({ svg_raw: svgRaw, svg_file_name: fileName }).eq('id', projectId)
-        await supabase.from('lines').delete().eq('project_id', projectId)
+        const { error: updateErr } = await supabase.from('projects').update({ svg_raw: svgRaw, svg_file_name: fileName }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره نقشه SVG', updateErr)) return
+        const { error: deleteErr } = await supabase.from('lines').delete().eq('project_id', projectId)
+        if (reportSupabaseError('پاک‌سازی خطوط قبلی', deleteErr)) return
         let newLines: IsoLine[] = []
         if (lines.length) {
-          const { data } = await supabase.from('lines').insert(lines.map((l) => lineToRow(projectId, l))).select()
+          const { data, error: insertErr } = await supabase.from('lines').insert(lines.map((l) => lineToRow(projectId, l))).select()
+          if (reportSupabaseError('ذخیره خطوط استخراج‌شده', insertErr)) return
           newLines = (data ?? []).map(lineFromRow)
         }
         set((s) =>
@@ -195,14 +219,15 @@ export const useStore = create<AppState>()(
       },
 
       addLine: async (projectId, line) => {
-        const { data } = await supabase.from('lines').insert(lineToRow(projectId, line)).select().single()
-        if (!data) return
+        const { data, error } = await supabase.from('lines').insert(lineToRow(projectId, line)).select().single()
+        if (reportSupabaseError('افزودن خط', error) || !data) return
         const newLine = lineFromRow(data)
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, lines: [...s.projectDetail.lines, newLine] } } : {}))
       },
 
       updateLine: async (projectId, lineId, data) => {
-        await supabase.from('lines').update(lineToRow(projectId, data)).eq('id', lineId)
+        const { error } = await supabase.from('lines').update(lineToRow(projectId, data)).eq('id', lineId)
+        if (reportSupabaseError('ذخیره تغییرات خط', error)) return
         set((s) =>
           s.projectDetail?.id === projectId
             ? { projectDetail: { ...s.projectDetail, lines: s.projectDetail.lines.map((l) => (l.id === lineId ? { ...l, ...data } : l)) } }
@@ -211,7 +236,8 @@ export const useStore = create<AppState>()(
       },
 
       deleteLine: async (projectId, lineId) => {
-        await supabase.from('lines').delete().eq('id', lineId)
+        const { error } = await supabase.from('lines').delete().eq('id', lineId)
+        if (reportSupabaseError('حذف خط', error)) return
         set((s) =>
           s.projectDetail?.id === projectId
             ? {
@@ -233,7 +259,7 @@ export const useStore = create<AppState>()(
         await Promise.all(
           affected.map((l) => supabase.from('lines').update({ svg_element_ids: l.svgElementIds.filter((id) => !idSet.has(id)) }).eq('id', l.id)),
         )
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('lines')
           .insert(
             lineToRow(projectId, {
@@ -250,6 +276,7 @@ export const useStore = create<AppState>()(
           )
           .select()
           .single()
+        if (reportSupabaseError('ساخت خط جدید از قطعات', error)) return
         const newLine = data ? lineFromRow(data) : null
         set((s) => {
           if (!s.projectDetail || s.projectDetail.id !== projectId) return {}
@@ -309,14 +336,15 @@ export const useStore = create<AppState>()(
       },
 
       addLog: async (projectId, log) => {
-        const { data } = await supabase.from('daily_logs').insert(logToRow(projectId, log)).select().single()
-        if (!data) return
+        const { data, error } = await supabase.from('daily_logs').insert(logToRow(projectId, log)).select().single()
+        if (reportSupabaseError('ثبت گزارش روزانه', error) || !data) return
         const newLog = logFromRow(data)
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, logs: [...s.projectDetail.logs, newLog] } } : {}))
       },
 
       updateLog: async (projectId, logId, data) => {
-        await supabase.from('daily_logs').update(logToRow(projectId, data)).eq('id', logId)
+        const { error } = await supabase.from('daily_logs').update(logToRow(projectId, data)).eq('id', logId)
+        if (reportSupabaseError('ذخیره تغییرات گزارش', error)) return
         set((s) =>
           s.projectDetail?.id === projectId
             ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.map((l) => (l.id === logId ? { ...l, ...data } : l)) } }
@@ -325,7 +353,8 @@ export const useStore = create<AppState>()(
       },
 
       deleteLog: async (projectId, logId) => {
-        await supabase.from('daily_logs').delete().eq('id', logId)
+        const { error } = await supabase.from('daily_logs').delete().eq('id', logId)
+        if (reportSupabaseError('حذف گزارش', error)) return
         set((s) =>
           s.projectDetail?.id === projectId
             ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.filter((l) => l.id !== logId) } }
@@ -334,7 +363,8 @@ export const useStore = create<AppState>()(
       },
 
       setPlannedCurve: async (projectId, curve) => {
-        await supabase.from('projects').update({ planned_curve: curve }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ planned_curve: curve }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره منحنی برنامه‌ریزی‌شده', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, plannedCurve: curve } } : {}))
       },
 
@@ -358,7 +388,8 @@ export const useStore = create<AppState>()(
                 ...data,
               } as ActivitySchedule,
             ]
-        await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره زمان‌بندی', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
       },
 
@@ -366,12 +397,14 @@ export const useStore = create<AppState>()(
         const detail = get().projectDetail
         if (!detail || detail.id !== projectId) return
         const next = [...detail.schedules, ...schedules]
-        await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره زمان‌بندی', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
       },
 
       setMilestones: async (projectId, milestones) => {
-        await supabase.from('projects').update({ milestones }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ milestones }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره مایلستون‌ها', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, milestones } } : {}))
       },
 
@@ -379,7 +412,8 @@ export const useStore = create<AppState>()(
         const detail = get().projectDetail
         if (!detail || detail.id !== projectId) return
         const next = [...detail.risks, { ...risk, id: makeId('risk'), createdAt: new Date().toISOString() }]
-        await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        if (reportSupabaseError('ثبت ریسک', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
       },
 
@@ -387,7 +421,8 @@ export const useStore = create<AppState>()(
         const detail = get().projectDetail
         if (!detail || detail.id !== projectId) return
         const next = detail.risks.map((r) => (r.id === riskId ? { ...r, ...data } : r))
-        await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره تغییرات ریسک', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
       },
 
@@ -395,12 +430,14 @@ export const useStore = create<AppState>()(
         const detail = get().projectDetail
         if (!detail || detail.id !== projectId) return
         const next = detail.risks.filter((r) => r.id !== riskId)
-        await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
+        if (reportSupabaseError('حذف ریسک', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
       },
 
       setReportConfig: async (projectId, config) => {
-        await supabase.from('projects').update({ report_config: config }).eq('id', projectId)
+        const { error } = await supabase.from('projects').update({ report_config: config }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره تنظیمات گزارش', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, reportConfig: config } } : {}))
       },
 

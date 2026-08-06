@@ -34,6 +34,8 @@ export function NewProjectModal({
         onCreated?.(id)
       }
       onClose()
+    } catch {
+      // error already surfaced via the storage-error banner
     } finally {
       setBusy(false)
     }
