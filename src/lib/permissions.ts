@@ -14,6 +14,15 @@ export function isReadOnly(role: UserRole | null | undefined): boolean {
   return role === 'owner'
 }
 
+/**
+ * The owner sits outside the contractor→consultant approve/reject cycle, but after a consultant
+ * approves an entry, the owner may audit it — confirm as-is, or correct it — on a case-by-case
+ * basis. A platform admin gets the same ability (isAdmin is checked separately by callers).
+ */
+export function canAudit(role: UserRole | null | undefined): boolean {
+  return role === 'owner'
+}
+
 /** Only the project owner or a platform admin manages members (invite / change role / remove). */
 export function canManageUsers(role: UserRole | null | undefined, isAdmin: boolean): boolean {
   return isAdmin || role === 'owner'

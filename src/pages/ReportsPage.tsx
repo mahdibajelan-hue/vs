@@ -6,6 +6,7 @@ import { SCurveChart } from '../components/Reports/SCurveChart'
 import { WeldsBySizeChart } from '../components/Reports/WeldsBySizeChart'
 import { LogsTable } from '../components/Reports/LogsTable'
 import { MilestoneTimeline } from '../components/Reports/MilestoneTimeline'
+import { ThreeWayComparisonChart } from '../components/Reports/ThreeWayComparisonChart'
 import { exportProjectToExcel } from '../lib/export'
 
 export function ReportsPage({ project }: { project: Project }) {
@@ -38,6 +39,13 @@ export function ReportsPage({ project }: { project: Project }) {
           <div className="flex-1 min-h-0">
             <WeldsBySizeChart data={weldsBySize} />
           </div>
+        </div>
+      </div>
+
+      <div className="glass-panel rounded-2xl p-4 h-72 flex flex-col">
+        <p className="mb-2 text-sm font-bold">مقایسه متراژ ثبت‌شده — پیمانکار، مشاور و کارفرما</p>
+        <div className="flex-1 min-h-0">
+          <ThreeWayComparisonChart project={project} />
         </div>
       </div>
 

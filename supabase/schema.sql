@@ -354,22 +354,54 @@ create table if not exists daily_logs (
   created_at timestamptz not null default now()
 );
 
+-- Upgrade path: three-way audit trail (contractor's original entry, consultant's approved
+-- snapshot, owner's own correction/confirmation) so reports can compare what each role recorded,
+-- even after length_done/weld_count are later corrected by a more senior role.
+alter table daily_logs add column if not exists contractor_length_done numeric;
+alter table daily_logs add column if not exists contractor_weld_count integer;
+alter table daily_logs add column if not exists consultant_length_done numeric;
+alter table daily_logs add column if not exists consultant_weld_count integer;
+alter table daily_logs add column if not exists owner_length_done numeric;
+alter table daily_logs add column if not exists owner_weld_count integer;
+alter table daily_logs add column if not exists owner_reviewed_at timestamptz;
+alter table daily_logs add column if not exists owner_reviewed_by uuid references profiles (id);
+alter table daily_logs add column if not exists owner_note text not null default '';
+-- Backfill existing rows so old data has a contractor snapshot too.
+update daily_logs set contractor_length_done = length_done where contractor_length_done is null;
+update daily_logs set contractor_weld_count = weld_count where contractor_weld_count is null;
+
 alter table lines enable row level security;
 alter table daily_logs enable row level security;
 
-do $$
-declare
-  t text;
-begin
-  foreach t in array array['lines', 'daily_logs']
-  loop
-    execute format('drop policy if exists "%1$s_select_member" on %1$s', t);
-    execute format('create policy "%1$s_select_member" on %1$s for select using (is_project_member(project_id))', t);
+drop policy if exists "lines_select_member" on lines;
+create policy "lines_select_member" on lines
+  for select using (is_project_member(project_id));
 
-    execute format('drop policy if exists "%1$s_write_editor" on %1$s', t);
-    execute format('create policy "%1$s_write_editor" on %1$s for all using (can_edit_project(project_id)) with check (can_edit_project(project_id))', t);
-  end loop;
-end $$;
+drop policy if exists "lines_write_editor" on lines;
+create policy "lines_write_editor" on lines
+  for all using (can_edit_project(project_id)) with check (can_edit_project(project_id));
+
+drop policy if exists "daily_logs_select_member" on daily_logs;
+create policy "daily_logs_select_member" on daily_logs
+  for select using (is_project_member(project_id));
+
+-- Contractor/consultant create and delete entries as before. Update is also open to the project
+-- owner (or a platform admin) — outside the approve/reject cycle, but able to correct a value on
+-- a case-by-case basis after consultant approval (see owner_* columns above).
+drop policy if exists "daily_logs_write_editor" on daily_logs;
+drop policy if exists "daily_logs_insert_editor" on daily_logs;
+create policy "daily_logs_insert_editor" on daily_logs
+  for insert with check (can_edit_project(project_id));
+
+drop policy if exists "daily_logs_update_editor_or_owner" on daily_logs;
+create policy "daily_logs_update_editor_or_owner" on daily_logs
+  for update
+  using (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user())
+  with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
+
+drop policy if exists "daily_logs_delete_editor" on daily_logs;
+create policy "daily_logs_delete_editor" on daily_logs
+  for delete using (can_edit_project(project_id));
 
 -- ============================================================================
 -- 9. Indexes

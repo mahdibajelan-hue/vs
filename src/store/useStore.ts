@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Project, ReportConfig, Risk, ThemeMode, UserRole } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Project, ReportConfig, Risk, ThemeMode, UserRole } from '../types'
 import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
 import { createSafeLocalStorage } from '../lib/safeStorage'
 import { supabase } from '../lib/supabaseClient'
+import { useAuthStore } from './useAuthStore'
 import { useMembersStore } from './useMembersStore'
 import { useSystemStore } from './useSystemStore'
 import { lineFromRow, lineToRow, logFromRow, logToRow, projectFromRow, projectSummaryFromRow, type ProjectSummary } from '../lib/supabaseData'
@@ -50,9 +51,11 @@ interface AppState {
   addFragmentsToLine: (projectId: string, lineId: string, elementIds: string[]) => Promise<void>
   removeFragmentsFromLines: (projectId: string, elementIds: string[]) => Promise<void>
 
-  addLog: (projectId: string, log: Omit<DailyLog, 'id' | 'createdAt'>) => Promise<void>
+  addLog: (projectId: string, log: NewDailyLogInput) => Promise<void>
   updateLog: (projectId: string, logId: string, data: Partial<DailyLog>) => Promise<void>
   deleteLog: (projectId: string, logId: string) => Promise<void>
+  /** Owner (or admin) audit outside the approve/reject cycle — confirms as-is or corrects the values. */
+  auditLogAsOwner: (projectId: string, logId: string, data: { lengthDone?: number; weldCount?: number; note?: string }) => Promise<void>
 
   setPlannedCurve: (projectId: string, curve: PlannedProgressPoint[]) => Promise<void>
 
@@ -340,18 +343,43 @@ export const useStore = create<AppState>()(
       },
 
       addLog: async (projectId, log) => {
-        const { data, error } = await supabase.from('daily_logs').insert(logToRow(projectId, log)).select().single()
+        const payload: Partial<DailyLog> = { ...log, contractorLengthDone: log.lengthDone, contractorWeldCount: log.weldCount }
+        const { data, error } = await supabase.from('daily_logs').insert(logToRow(projectId, payload)).select().single()
         if (reportSupabaseError('ثبت گزارش روزانه', error) || !data) return
         const newLog = logFromRow(data)
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, logs: [...s.projectDetail.logs, newLog] } } : {}))
       },
 
       updateLog: async (projectId, logId, data) => {
-        const { error } = await supabase.from('daily_logs').update(logToRow(projectId, data)).eq('id', logId)
+        const current = get().projectDetail?.logs.find((l) => l.id === logId)
+        let payload: Partial<DailyLog> = data
+        if (data.approvalStatus === 'approved' && current) {
+          // Freeze what the consultant approved, separate from whatever the owner may later correct.
+          payload = { ...data, consultantLengthDone: data.lengthDone ?? current.lengthDone, consultantWeldCount: data.weldCount ?? current.weldCount }
+        } else if (
+          data.approvalStatus === undefined &&
+          current?.approvalStatus === 'approved' &&
+          (data.lengthDone !== undefined || data.weldCount !== undefined || data.date !== undefined)
+        ) {
+          // Editing the values of an already-approved entry reopens it — the consultant (and, if
+          // they'd already audited it, the owner) needs to look at it again with the new numbers.
+          payload = {
+            ...data,
+            approvalStatus: 'pending',
+            reviewedBy: null,
+            reviewNote: '',
+            ownerReviewedAt: null,
+            ownerReviewedBy: null,
+            ownerLengthDone: null,
+            ownerWeldCount: null,
+            ownerNote: '',
+          }
+        }
+        const { error } = await supabase.from('daily_logs').update(logToRow(projectId, payload)).eq('id', logId)
         if (reportSupabaseError('ذخیره تغییرات گزارش', error)) return
         set((s) =>
           s.projectDetail?.id === projectId
-            ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.map((l) => (l.id === logId ? { ...l, ...data } : l)) } }
+            ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.map((l) => (l.id === logId ? { ...l, ...payload } : l)) } }
             : {},
         )
       },
@@ -362,6 +390,29 @@ export const useStore = create<AppState>()(
         set((s) =>
           s.projectDetail?.id === projectId
             ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.filter((l) => l.id !== logId) } }
+            : {},
+        )
+      },
+
+      auditLogAsOwner: async (projectId, logId, data) => {
+        const current = get().projectDetail?.logs.find((l) => l.id === logId)
+        if (!current) return
+        const lengthDone = data.lengthDone ?? current.lengthDone
+        const weldCount = data.weldCount ?? current.weldCount
+        const payload: Partial<DailyLog> = {
+          lengthDone,
+          weldCount,
+          ownerLengthDone: lengthDone,
+          ownerWeldCount: weldCount,
+          ownerReviewedAt: new Date().toISOString(),
+          ownerReviewedBy: useAuthStore.getState().profile?.id ?? null,
+          ownerNote: data.note ?? '',
+        }
+        const { error } = await supabase.from('daily_logs').update(logToRow(projectId, payload)).eq('id', logId)
+        if (reportSupabaseError('ثبت ممیزی کارفرما', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.map((l) => (l.id === logId ? { ...l, ...payload } : l)) } }
             : {},
         )
       },

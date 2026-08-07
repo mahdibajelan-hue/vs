@@ -1,4 +1,4 @@
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, PlannedProgressPoint, Risk } from '../types'
+import type { ActivityKind, ActivitySchedule, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Risk } from '../types'
 import { generateSampleSvg, SAMPLE_LINES } from './sampleSvg'
 import { makeId } from '../lib/id'
 import { MILESTONE_COLOR_PALETTE } from '../lib/milestones'
@@ -40,7 +40,7 @@ function sched(
 export function buildSeedProject(): {
   svgRaw: string
   lines: IsoLine[]
-  logs: Omit<DailyLog, 'id' | 'createdAt'>[]
+  logs: NewDailyLogInput[]
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
   milestones: Milestone[]
@@ -62,7 +62,7 @@ export function buildSeedProject(): {
   const byElementId = new Map(lines.map((l) => [l.svgElementId, l]))
   const idOf = (elementId: string) => byElementId.get(elementId)!.id
 
-  const rawLogs: Omit<DailyLog, 'id' | 'createdAt' | 'approvalStatus' | 'reviewedBy' | 'reviewNote'>[] = [
+  const rawLogs: Omit<NewDailyLogInput, 'approvalStatus' | 'reviewedBy' | 'reviewNote'>[] = [
     // L-1001-6-A1A (in progress ~60%)
     { lineId: idOf('L-1001-6-A1A'), date: daysAgo(24), lengthDone: 12, weldCount: 4, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'شروع اسپول‌های اولیه', delayReason: '' },
     { lineId: idOf('L-1001-6-A1A'), date: daysAgo(17), lengthDone: 10, weldCount: 3, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
@@ -102,7 +102,7 @@ export function buildSeedProject(): {
 
   // Most recent couple of entries are shown as still awaiting the consultant's review.
   const pendingIndexes = new Set([2, rawLogs.length - 1])
-  const logs: Omit<DailyLog, 'id' | 'createdAt'>[] = rawLogs.map((l, i) => ({
+  const logs: NewDailyLogInput[] = rawLogs.map((l, i) => ({
     ...l,
     approvalStatus: pendingIndexes.has(i) ? 'pending' : 'approved',
     reviewedBy: pendingIndexes.has(i) ? null : 'مشاور پروژه',

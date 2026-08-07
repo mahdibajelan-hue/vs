@@ -58,7 +58,35 @@ export interface DailyLog {
   reviewedBy: string | null
   reviewNote: string
   createdAt: string
+  /** Snapshot of lengthDone/weldCount as originally entered — frozen at creation, for the 3-way audit comparison. */
+  contractorLengthDone: number
+  contractorWeldCount: number
+  /** Snapshot taken the moment the consultant approves — null until then. */
+  consultantLengthDone: number | null
+  consultantWeldCount: number | null
+  /** Set only if the owner audits this entry — outside the approve/reject cycle. */
+  ownerLengthDone: number | null
+  ownerWeldCount: number | null
+  ownerReviewedAt: string | null
+  ownerReviewedBy: string | null
+  ownerNote: string
 }
+
+/** What a new daily log entry needs from a caller — the audit-trail fields are always computed by the store, never supplied by hand. */
+export type NewDailyLogInput = Omit<
+  DailyLog,
+  | 'id'
+  | 'createdAt'
+  | 'contractorLengthDone'
+  | 'contractorWeldCount'
+  | 'consultantLengthDone'
+  | 'consultantWeldCount'
+  | 'ownerLengthDone'
+  | 'ownerWeldCount'
+  | 'ownerReviewedAt'
+  | 'ownerReviewedBy'
+  | 'ownerNote'
+>
 
 export type UserRole = 'contractor' | 'consultant' | 'owner'
 

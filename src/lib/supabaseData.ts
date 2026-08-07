@@ -69,6 +69,15 @@ interface LogRow {
   reviewed_by: string | null
   review_note: string
   created_at: string
+  contractor_length_done: number | null
+  contractor_weld_count: number | null
+  consultant_length_done: number | null
+  consultant_weld_count: number | null
+  owner_length_done: number | null
+  owner_weld_count: number | null
+  owner_reviewed_at: string | null
+  owner_reviewed_by: string | null
+  owner_note: string
 }
 
 export function projectSummaryFromRow(r: Pick<ProjectRow, 'id' | 'name' | 'client' | 'location' | 'unit' | 'created_at'>): ProjectSummary {
@@ -140,6 +149,15 @@ export function logFromRow(r: LogRow): DailyLog {
     reviewedBy: r.reviewed_by,
     reviewNote: r.review_note,
     createdAt: r.created_at,
+    contractorLengthDone: Number(r.contractor_length_done ?? r.length_done),
+    contractorWeldCount: r.contractor_weld_count ?? r.weld_count,
+    consultantLengthDone: r.consultant_length_done == null ? null : Number(r.consultant_length_done),
+    consultantWeldCount: r.consultant_weld_count,
+    ownerLengthDone: r.owner_length_done == null ? null : Number(r.owner_length_done),
+    ownerWeldCount: r.owner_weld_count,
+    ownerReviewedAt: r.owner_reviewed_at,
+    ownerReviewedBy: r.owner_reviewed_by,
+    ownerNote: r.owner_note,
   }
 }
 
@@ -156,5 +174,14 @@ export function logToRow(projectId: string, l: Partial<DailyLog>) {
   if (l.approvalStatus !== undefined) row.approval_status = l.approvalStatus
   if (l.reviewedBy !== undefined) row.reviewed_by = l.reviewedBy
   if (l.reviewNote !== undefined) row.review_note = l.reviewNote
+  if (l.contractorLengthDone !== undefined) row.contractor_length_done = l.contractorLengthDone
+  if (l.contractorWeldCount !== undefined) row.contractor_weld_count = l.contractorWeldCount
+  if (l.consultantLengthDone !== undefined) row.consultant_length_done = l.consultantLengthDone
+  if (l.consultantWeldCount !== undefined) row.consultant_weld_count = l.consultantWeldCount
+  if (l.ownerLengthDone !== undefined) row.owner_length_done = l.ownerLengthDone
+  if (l.ownerWeldCount !== undefined) row.owner_weld_count = l.ownerWeldCount
+  if (l.ownerReviewedAt !== undefined) row.owner_reviewed_at = l.ownerReviewedAt
+  if (l.ownerReviewedBy !== undefined) row.owner_reviewed_by = l.ownerReviewedBy
+  if (l.ownerNote !== undefined) row.owner_note = l.ownerNote
   return row
 }

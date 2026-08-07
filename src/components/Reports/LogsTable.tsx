@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Trash2, Check, X } from 'lucide-react'
+import { Trash2, Check, X, Pencil, ShieldCheck } from 'lucide-react'
 import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
 import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
-import { canApprove, canEdit } from '../../lib/permissions'
+import { canApprove, canAudit, canEdit } from '../../lib/permissions'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import { formatJalali } from '../../lib/jalali'
+import { DailyLogForm } from '../IsoViewer/DailyLogForm'
+import { OwnerAuditModal } from './OwnerAuditModal'
 
 const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
   root: 'ریشه',
@@ -22,7 +24,9 @@ export function LogsTable({ project }: { project: Project }) {
   const deleteLog = useStore((s) => s.deleteLog)
   const updateLog = useStore((s) => s.updateLog)
   const role = useCurrentRole()
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const reviewerName = useAuthStore((s) => s.currentUser()?.fullName ?? '')
+  const canAuditLogs = canAudit(role) || isAdmin
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [contractor, setContractor] = useState('all')
@@ -30,6 +34,8 @@ export function LogsTable({ project }: { project: Project }) {
   const [approval, setApproval] = useState<ApprovalStatus | 'all'>('all')
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectNote, setRejectNote] = useState('')
+  const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
+  const [auditingLog, setAuditingLog] = useState<DailyLog | null>(null)
 
   const contractors = useMemo(() => [...new Set(project.lines.map((l) => l.contractor).filter(Boolean))], [project.lines])
 
@@ -107,6 +113,7 @@ export function LogsTable({ project }: { project: Project }) {
               <th className="p-2.5 text-right font-medium">پیمانکار</th>
               <th className="p-2.5 text-right font-medium">توضیحات</th>
               <th className="p-2.5 text-right font-medium">تایید</th>
+              <th className="p-2.5 text-right font-medium">ممیزی کارفرما</th>
               <th className="p-2.5" />
             </tr>
           </thead>
@@ -166,17 +173,47 @@ export function LogsTable({ project }: { project: Project }) {
                   )}
                 </td>
                 <td className="p-2.5">
-                  {canEdit(role) && (
-                    <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors">
-                      <Trash2 size={14} />
+                  {log.approvalStatus !== 'approved' ? (
+                    <span className="text-[11px] text-muted">پس از تایید مشاور</span>
+                  ) : log.ownerReviewedAt ? (
+                    <button
+                      onClick={() => canAuditLogs && setAuditingLog(log)}
+                      disabled={!canAuditLogs}
+                      className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-400 border border-green-500/30 disabled:cursor-default"
+                      title={log.ownerNote || 'بررسی‌شده توسط کارفرما'}
+                    >
+                      <ShieldCheck size={12} /> بررسی‌شده
                     </button>
+                  ) : canAuditLogs ? (
+                    <button
+                      onClick={() => setAuditingLog(log)}
+                      className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+                    >
+                      <ShieldCheck size={12} /> ممیزی
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-muted">—</span>
                   )}
+                </td>
+                <td className="p-2.5">
+                  <div className="flex items-center gap-2">
+                    {canEdit(role) && (
+                      <button onClick={() => setEditingLog(log)} className="text-muted hover:text-brand-400 transition-colors" title="ویرایش">
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {canEdit(role) && (
+                      <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors" title="حذف">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-xs text-muted">
+                <td colSpan={10} className="p-8 text-center text-xs text-muted">
                   رکوردی یافت نشد
                 </td>
               </tr>
@@ -184,6 +221,11 @@ export function LogsTable({ project }: { project: Project }) {
           </tbody>
         </table>
       </div>
+
+      {editingLog && (
+        <DailyLogForm projectId={project.id} lines={project.lines} initialLineId={null} editingLog={editingLog} onClose={() => setEditingLog(null)} />
+      )}
+      {auditingLog && <OwnerAuditModal projectId={project.id} log={auditingLog} onClose={() => setAuditingLog(null)} />}
     </div>
   )
 }
