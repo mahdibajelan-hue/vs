@@ -256,9 +256,12 @@ $$ language plpgsql security definer;
 -- ============================================================================
 -- 6. Policies — projects
 -- ============================================================================
+-- Admin can see every project — otherwise a project created solo by a contractor/consultant (no
+-- owner yet) is invisible even to admin, since members_insert_owner_or_admin already lets admin
+-- add members to it, but only once they can find/open it in the first place.
 drop policy if exists "projects_select_member" on projects;
 create policy "projects_select_member" on projects
-  for select using (is_project_member(id));
+  for select using (is_project_member(id) or is_admin_user());
 
 drop policy if exists "projects_insert_any_authenticated" on projects;
 create policy "projects_insert_any_authenticated" on projects
@@ -279,7 +282,7 @@ create policy "projects_delete_owner_role" on projects
 -- ============================================================================
 drop policy if exists "members_select_member" on project_members;
 create policy "members_select_member" on project_members
-  for select using (is_project_member(project_id));
+  for select using (is_project_member(project_id) or is_admin_user());
 
 -- Only a platform admin may grant the 'owner' role. The project owner (or an admin) may add
 -- contractor/consultant members. accept_pending_invites() inserting a row for the current user
@@ -308,6 +311,7 @@ create policy "invites_select_member_or_invitee" on project_invites
   for select using (
     is_project_member(project_id)
     or email = (select email from profiles where id = auth.uid())
+    or is_admin_user()
   );
 
 drop policy if exists "invites_insert_member" on project_invites;
@@ -338,6 +342,10 @@ create table if not exists lines (
   status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'testing', 'completed')),
   created_at timestamptz not null default now()
 );
+
+-- How many of total_welds came from placed fittings/valves (2 each) rather than pipe butt welds —
+-- fitting welds take much longer, so scheduling needs the breakdown, not just the total.
+alter table lines add column if not exists fitting_weld_count integer not null default 0;
 
 create table if not exists daily_logs (
   id uuid primary key default gen_random_uuid(),
@@ -382,7 +390,7 @@ alter table daily_logs enable row level security;
 
 drop policy if exists "lines_select_member" on lines;
 create policy "lines_select_member" on lines
-  for select using (is_project_member(project_id));
+  for select using (is_project_member(project_id) or is_admin_user());
 
 drop policy if exists "lines_write_editor" on lines;
 create policy "lines_write_editor" on lines
@@ -390,7 +398,7 @@ create policy "lines_write_editor" on lines
 
 drop policy if exists "daily_logs_select_member" on daily_logs;
 create policy "daily_logs_select_member" on daily_logs
-  for select using (is_project_member(project_id));
+  for select using (is_project_member(project_id) or is_admin_user());
 
 -- Contractor/consultant create entries as before. Owner/admin can also insert — not exposed in
 -- the normal entry form, but needed so they can restore a deleted row from its audit_log

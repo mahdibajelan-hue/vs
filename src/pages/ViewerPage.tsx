@@ -43,6 +43,7 @@ export function ViewerPage({ project }: { project: Project }) {
       contractor: '',
       plannedLength: 10,
       totalWelds: 1,
+      fittingWeldCount: 0,
       status: 'not_started' as const,
       createdAt: now,
     }))

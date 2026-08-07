@@ -20,6 +20,7 @@ function line(meta: (typeof SAMPLE_LINES)[number], status: IsoLine['status']): I
     contractor: meta.contractor,
     plannedLength: meta.plannedLength,
     totalWelds: meta.totalWelds,
+    fittingWeldCount: Math.round(meta.totalWelds * 0.25),
     status,
     createdAt: new Date().toISOString(),
   }

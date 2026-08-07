@@ -36,7 +36,9 @@ export interface SymbolDef {
   markup: string
 }
 
-const S = '#64748b'
+// currentColor lets each placed instance be tinted per-category (see CATEGORY_COLOR in
+// IsoCanvas.tsx) without duplicating every markup string per color.
+const S = 'currentColor'
 const SW = 1.6
 /** Elbows/hot-bends read as faint scribbles at the default weight — thickened to stand out against the line they sit on. */
 const BEND_SW = 2.6
@@ -320,6 +322,14 @@ export const SYMBOL_CATEGORY_LABEL: Record<SymbolCategory, string> = {
   joint: 'اتصال عایق',
   fitting: 'اتصالات',
   equipment: 'تجهیزات',
+}
+
+/** Symbol markup draws in currentColor — this is what sets it per category, in both the palette and the canvas. */
+export const SYMBOL_CATEGORY_COLOR: Record<SymbolCategory, string> = {
+  valve: '#3498db',
+  joint: '#a78bfa',
+  fitting: '#94a3b8',
+  equipment: '#f59e0b',
 }
 
 export const SYMBOL_LIST: SymbolDef[] = Object.values(SYMBOL_DEFS)

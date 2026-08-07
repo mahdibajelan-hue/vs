@@ -50,6 +50,7 @@ interface LineRow {
   contractor: string
   planned_length: number
   total_welds: number
+  fitting_weld_count: number
   status: string
   created_at: string
 }
@@ -115,6 +116,7 @@ export function lineFromRow(r: LineRow): IsoLine {
     contractor: r.contractor,
     plannedLength: Number(r.planned_length),
     totalWelds: r.total_welds,
+    fittingWeldCount: r.fitting_weld_count ?? 0,
     status: r.status as LineStatus,
     createdAt: r.created_at,
   }
@@ -130,6 +132,7 @@ export function lineToRow(projectId: string, l: Partial<IsoLine>) {
   if (l.contractor !== undefined) row.contractor = l.contractor
   if (l.plannedLength !== undefined) row.planned_length = l.plannedLength
   if (l.totalWelds !== undefined) row.total_welds = l.totalWelds
+  if (l.fittingWeldCount !== undefined) row.fitting_weld_count = l.fittingWeldCount
   if (l.status !== undefined) row.status = l.status
   return row
 }

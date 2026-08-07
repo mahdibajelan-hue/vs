@@ -208,7 +208,7 @@ function AuthScreen() {
         <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-lg font-extrabold tracking-tight text-brand-300">
           PipePulse<sup className="text-[10px] align-super">™</sup>
         </p>
-        <p className="text-[10px] text-muted">Developed &amp; Designed by Mahdi Bajelan</p>
+        <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>Developed &amp; Designed by Mahdi Bajelan</p>
       </div>
     </Shell>
   )

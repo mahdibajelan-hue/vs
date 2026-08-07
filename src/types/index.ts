@@ -26,6 +26,8 @@ export interface IsoLine {
   contractor: string
   plannedLength: number
   totalWelds: number
+  /** How many of totalWelds came from placed fittings/valves (2 each) rather than pipe butt welds — 0 if unknown (e.g. lines from an uploaded SVG). */
+  fittingWeldCount: number
   status: LineStatus
   createdAt: string
 }

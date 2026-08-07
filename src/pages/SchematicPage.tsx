@@ -180,6 +180,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
         contractor: '',
         plannedLength: Math.round(lengthMeters * 10) / 10,
         totalWelds: estimateWeldCount(lengthMeters, fittingCount),
+        fittingWeldCount: fittingCount * 2,
         status: 'not_started',
         createdAt: new Date().toISOString(),
       }

@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Wand2 } from 'lucide-react'
 import { Modal } from '../common/Modal'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import { ACTIVITY_KINDS, ACTIVITY_LABEL_FA, type ActivityKind, type ActivitySchedule, type IsoLine } from '../../types'
 import { useStore } from '../../store/useStore'
-import { computeActivityStatus, ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL_FA } from '../../lib/schedule'
+import { computeActivityStatus, ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL_FA, addDaysIso, todayIso } from '../../lib/schedule'
+import { estimateWeldingDurationDays } from '../../lib/weldEstimate'
 
 interface FormRow {
   plannedStart: string
@@ -90,6 +92,24 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
                   {ACTIVITY_STATUS_LABEL_FA[status]}
                 </span>
               </div>
+              {kind === 'welding' && line.totalWelds > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const start = row.plannedStart || todayIso()
+                    const days = estimateWeldingDurationDays(line.totalWelds, line.fittingWeldCount)
+                    updateRow(kind, { plannedStart: start, plannedEnd: addDaysIso(start, days) })
+                  }}
+                  className="mb-2.5 flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-brand-400/30 bg-brand-500/5 px-2.5 py-1.5 text-[11px] text-brand-300 hover:bg-brand-500/10 transition-colors"
+                  title="پایان برنامه را بر اساس این پیشنهاد پر می‌کند"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Wand2 size={12} />
+                    پیشنهاد مدت: {estimateWeldingDurationDays(line.totalWelds, line.fittingWeldCount)} روز — {line.fittingWeldCount} سرجوش اتصالات/شیرها زمان‌برتر از لوله محاسبه شده
+                  </span>
+                  <span className="shrink-0 underline">اعمال</span>
+                </button>
+              )}
               <div className="grid grid-cols-2 gap-2.5 mb-2.5">
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-secondary">شروع برنامه</span>

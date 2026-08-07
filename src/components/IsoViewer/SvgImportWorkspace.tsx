@@ -105,6 +105,7 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
       contractor: '',
       plannedLength: 0,
       totalWelds: 0,
+      fittingWeldCount: 0,
       status: selected.has(index) ? 'completed' : 'not_started',
       createdAt: now,
     }))
