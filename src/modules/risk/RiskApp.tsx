@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Loader2, ShieldAlert } from 'lucide-react'
+import { ArrowRight, LayoutDashboard, ListChecks, Loader2, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useRiskStore } from './store/useRiskStore'
 import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
 import { RiskRegisterPage } from './pages/RiskRegisterPage'
+import { DashboardPage } from './pages/DashboardPage'
+
+type Tab = 'dashboard' | 'register'
 
 export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -19,6 +22,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   const fetchMembers = useRiskMembersStore((s) => s.fetchForProject)
   const clearMembers = useRiskMembersStore((s) => s.clear)
   const [switching, setSwitching] = useState(false)
+  const [tab, setTab] = useState<Tab>('dashboard')
 
   useEffect(() => {
     fetchProjects()
@@ -28,6 +32,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   useEffect(() => {
     if (currentProjectId) fetchMembers(currentProjectId)
     else clearMembers()
+    setTab('dashboard')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId])
 
@@ -76,6 +81,26 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             </>
           )}
         </div>
+        {projectDetail && (
+          <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
+            <button
+              onClick={() => setTab('dashboard')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                tab === 'dashboard' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+              }`}
+            >
+              <LayoutDashboard size={13} /> داشبورد
+            </button>
+            <button
+              onClick={() => setTab('register')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                tab === 'register' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+              }`}
+            >
+              <ListChecks size={13} /> ثبت ریسک‌ها
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-3">
           {currentUser && <span className="hidden text-xs text-secondary sm:inline">{currentUser.fullName || currentUser.email}</span>}
           <button
@@ -98,6 +123,8 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
           ) : (
             <ProjectListPage />
           )
+        ) : tab === 'dashboard' ? (
+          <DashboardPage project={projectDetail} />
         ) : (
           <RiskRegisterPage project={projectDetail} onChangeProject={() => useRiskStore.setState({ currentProjectId: null, projectDetail: null })} />
         )}

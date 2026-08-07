@@ -16,6 +16,7 @@ import { useRiskCurrentRole, useRiskMembersStore } from '../store/useRiskMembers
 import { RiskFormModal } from '../components/RiskFormModal'
 import { RiskDetailModal } from '../components/RiskDetailModal'
 import { RmMembersModal } from '../components/RmMembersModal'
+import { KpiTile } from '../components/KpiTile'
 
 export function RiskRegisterPage({ project, onChangeProject }: { project: RmProjectDetail; onChangeProject: () => void }) {
   const role = useRiskCurrentRole()
@@ -206,17 +207,6 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
       {showNewRisk && <RiskFormModal projectId={project.id} onClose={() => setShowNewRisk(false)} />}
       {selectedRisk && <RiskDetailModal project={project} risk={selectedRisk} onClose={() => setSelectedRiskId(null)} />}
       {showMembers && <RmMembersModal projectName={project.name} onClose={() => setShowMembers(false)} />}
-    </div>
-  )
-}
-
-function KpiTile({ label, value, color }: { label: string; value: number | string; color: string }) {
-  return (
-    <div className="glass-panel rounded-2xl p-3">
-      <p className="num text-xl font-extrabold" style={{ color }}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] text-muted">{label}</p>
     </div>
   )
 }
