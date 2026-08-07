@@ -133,6 +133,12 @@ export interface Milestone {
   label: string
   percentComplete: number
   color: string
+  /** Consultant's confirmation that this milestone's value is correct. */
+  consultantApprovedAt?: string | null
+  consultantApprovedBy?: string | null
+  /** Owner's audit — outside the consultant approve cycle, confirms as-is or corrects the value. */
+  ownerReviewedAt?: string | null
+  ownerReviewedBy?: string | null
 }
 
 export type RiskStatus = 'open' | 'mitigating' | 'closed'

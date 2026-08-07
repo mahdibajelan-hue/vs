@@ -264,9 +264,11 @@ drop policy if exists "projects_insert_any_authenticated" on projects;
 create policy "projects_insert_any_authenticated" on projects
   for insert with check (auth.uid() is not null);
 
+-- Owner/admin also get update — needed so an owner can approve/audit a milestone (stored inside
+-- the milestones jsonb column on this same row); the UI only exposes that one narrow path to them.
 drop policy if exists "projects_update_editor" on projects;
 create policy "projects_update_editor" on projects
-  for update using (can_edit_project(id));
+  for update using (can_edit_project(id) or project_role(id) = 'owner' or is_admin_user());
 
 drop policy if exists "projects_delete_owner_role" on projects;
 create policy "projects_delete_owner_role" on projects

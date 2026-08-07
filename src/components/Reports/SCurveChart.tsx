@@ -1,5 +1,6 @@
 import { Area, AreaChart, CartesianGrid, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { SCurvePoint } from '../../lib/progress'
+import { formatJalali } from '../../lib/jalali'
 
 export function SCurveChart({ data }: { data: SCurvePoint[] }) {
   if (data.length === 0) {
@@ -15,9 +16,10 @@ export function SCurveChart({ data }: { data: SCurvePoint[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
-        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} />
+        <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} />
         <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} unit="%" />
         <Tooltip
+          labelFormatter={(label) => (typeof label === 'string' ? formatJalali(label) : label)}
           contentStyle={{
             background: 'var(--bg-panel-solid)',
             border: '1px solid var(--border-soft)',

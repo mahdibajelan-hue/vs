@@ -32,10 +32,19 @@ export function MilestoneEditModal({
   }
 
   const save = () => {
-    setMilestones(
-      projectId,
-      rows.filter((r) => r.label.trim()),
-    )
+    const original = new Map(milestones.map((m) => [m.id, m]))
+    const next = rows
+      .filter((r) => r.label.trim())
+      .map((r) => {
+        const orig = original.get(r.id)
+        const changed = orig && orig.percentComplete !== r.percentComplete
+        const wasReviewed = orig?.consultantApprovedAt || orig?.ownerReviewedAt
+        if (changed && wasReviewed) {
+          return { ...r, consultantApprovedAt: null, consultantApprovedBy: null, ownerReviewedAt: null, ownerReviewedBy: null }
+        }
+        return r
+      })
+    setMilestones(projectId, next)
     onClose()
   }
 

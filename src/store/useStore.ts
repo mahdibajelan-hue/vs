@@ -40,7 +40,8 @@ interface AppState {
   selectProject: (id: string) => Promise<void>
   updateProjectMeta: (id: string, data: Partial<Pick<Project, 'name' | 'client' | 'location' | 'unit'>>) => Promise<void>
 
-  setProjectSvg: (projectId: string, svgRaw: string, fileName: string, lines: IsoLine[]) => Promise<void>
+  /** Returns the newly-inserted lines (with real db ids) — match by svgElementId to relate other new records to them. */
+  setProjectSvg: (projectId: string, svgRaw: string, fileName: string, lines: IsoLine[]) => Promise<IsoLine[]>
   addLine: (projectId: string, line: Omit<IsoLine, 'id' | 'createdAt'>) => Promise<void>
   updateLine: (projectId: string, lineId: string, data: Partial<IsoLine>) => Promise<void>
   deleteLine: (projectId: string, lineId: string) => Promise<void>
@@ -70,6 +71,9 @@ interface AppState {
   addSchedules: (projectId: string, schedules: ActivitySchedule[]) => Promise<void>
 
   setMilestones: (projectId: string, milestones: Milestone[]) => Promise<void>
+  approveMilestoneAsConsultant: (projectId: string, milestoneId: string) => Promise<void>
+  /** Owner (or admin) audit outside the approve cycle — confirms as-is or corrects the percent. */
+  auditMilestoneAsOwner: (projectId: string, milestoneId: string, percentComplete?: number) => Promise<void>
 
   addRisk: (projectId: string, risk: Omit<Risk, 'id' | 'createdAt'>) => Promise<void>
   updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) => Promise<void>
@@ -211,13 +215,16 @@ export const useStore = create<AppState>()(
 
       setProjectSvg: async (projectId, svgRaw, fileName, lines) => {
         const { error: updateErr } = await supabase.from('projects').update({ svg_raw: svgRaw, svg_file_name: fileName }).eq('id', projectId)
-        if (reportSupabaseError('ذخیره نقشه SVG', updateErr)) return
+        if (reportSupabaseError('ذخیره نقشه SVG', updateErr)) return []
         const { error: deleteErr } = await supabase.from('lines').delete().eq('project_id', projectId)
-        if (reportSupabaseError('پاک‌سازی خطوط قبلی', deleteErr)) return
+        if (reportSupabaseError('پاک‌سازی خطوط قبلی', deleteErr)) return []
         let newLines: IsoLine[] = []
         if (lines.length) {
+          // lineToRow never carries the client-side placeholder id (it isn't a real uuid) — the
+          // db assigns real ids on insert. Callers that need to relate other new records (logs,
+          // schedules) to these lines must match on svgElementId against the returned rows below.
           const { data, error: insertErr } = await supabase.from('lines').insert(lines.map((l) => lineToRow(projectId, l))).select()
-          if (reportSupabaseError('ذخیره خطوط استخراج‌شده', insertErr)) return
+          if (reportSupabaseError('ذخیره خطوط استخراج‌شده', insertErr)) return []
           newLines = (data ?? []).map(lineFromRow)
         }
         set((s) =>
@@ -225,6 +232,7 @@ export const useStore = create<AppState>()(
             ? { projectDetail: { ...s.projectDetail, svgRaw, svgFileName: fileName, lines: newLines, logs: [] } }
             : {},
         )
+        return newLines
       },
 
       addLine: async (projectId, line) => {
@@ -461,8 +469,8 @@ export const useStore = create<AppState>()(
 
       addSchedules: async (projectId, schedules) => {
         const detail = get().projectDetail
-        if (!detail || detail.id !== projectId) return
-        const next = [...detail.schedules, ...schedules]
+        const existing = detail?.id === projectId ? detail.schedules : []
+        const next = [...existing, ...schedules]
         const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
         if (reportSupabaseError('ذخیره زمان‌بندی', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
@@ -472,6 +480,33 @@ export const useStore = create<AppState>()(
         const { error } = await supabase.from('projects').update({ milestones }).eq('id', projectId)
         if (reportSupabaseError('ذخیره مایلستون‌ها', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, milestones } } : {}))
+      },
+
+      approveMilestoneAsConsultant: async (projectId, milestoneId) => {
+        const detail = get().projectDetail
+        if (!detail || detail.id !== projectId) return
+        const next = detail.milestones.map((m) =>
+          m.id === milestoneId
+            ? { ...m, consultantApprovedAt: new Date().toISOString(), consultantApprovedBy: useAuthStore.getState().profile?.id ?? null }
+            : m,
+        )
+        await get().setMilestones(projectId, next)
+      },
+
+      auditMilestoneAsOwner: async (projectId, milestoneId, percentComplete) => {
+        const detail = get().projectDetail
+        if (!detail || detail.id !== projectId) return
+        const next = detail.milestones.map((m) =>
+          m.id === milestoneId
+            ? {
+                ...m,
+                percentComplete: percentComplete ?? m.percentComplete,
+                ownerReviewedAt: new Date().toISOString(),
+                ownerReviewedBy: useAuthStore.getState().profile?.id ?? null,
+              }
+            : m,
+        )
+        await get().setMilestones(projectId, next)
       },
 
       addRisk: async (projectId, risk) => {

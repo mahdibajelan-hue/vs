@@ -1,5 +1,6 @@
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import type { SCurvePoint } from '../../lib/progress'
+import { formatJalali } from '../../lib/jalali'
 
 export function ReportSCurveMini({ data }: { data: SCurvePoint[] }) {
   if (data.length === 0) return <p className="text-[10px] text-center py-6" style={{ color: '#94a3b8' }}>داده‌ای موجود نیست</p>
@@ -13,7 +14,7 @@ export function ReportSCurveMini({ data }: { data: SCurvePoint[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#94a3b8' }} tickLine={false} />
+        <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 8, fill: '#94a3b8' }} tickLine={false} />
         <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#94a3b8' }} tickLine={false} unit="%" />
         <Area type="monotone" dataKey="actualPercent" name="واقعی" stroke="#0ea5e9" fill="url(#reportActualFill)" strokeWidth={2} />
         <Line type="monotone" dataKey="plannedPercent" name="برنامه‌ای" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 3" dot={false} />

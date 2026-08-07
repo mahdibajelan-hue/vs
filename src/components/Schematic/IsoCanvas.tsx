@@ -222,6 +222,9 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
                     {s.mainSize || '—'}x{s.branchSize || '—'}
                   </text>
                 )}
+                <text x={px} y={py + 17} fontSize="8" textAnchor="middle" fill="#64748b" style={{ pointerEvents: 'none' }}>
+                  {SYMBOL_DEFS[s.type].shortLabel}
+                </text>
               </g>
             )
           })}

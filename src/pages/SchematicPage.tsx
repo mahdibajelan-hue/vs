@@ -36,6 +36,8 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
   const [lines, setLines] = useState<DraftLine[]>([])
   const [symbols, setSymbols] = useState<PlacedSymbol[]>([])
   const [draftPoints, setDraftPoints] = useState<Point[]>([])
+  /** End of the most recently drawn line/placed symbol — a fresh line auto-continues from here instead of floating disconnected. */
+  const [lastAnchor, setLastAnchor] = useState<Point | null>(null)
   const [hoverPreview, setHoverPreview] = useState<Point | null>(null)
   const [selection, setSelection] = useState<CanvasSelection | null>(null)
   const [showMetaModal, setShowMetaModal] = useState(false)
@@ -77,6 +79,11 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
 
     if (mode === 'draw') {
       setDraftPoints((pts) => {
+        if (pts.length === 0 && lastAnchor) {
+          // Continue from wherever the last line/symbol left off, instead of starting a
+          // disconnected floating segment — the click just aims the first bend from there.
+          return [lastAnchor, snapIsoPoint(lastAnchor, point)]
+        }
         const prev = pts[pts.length - 1]
         const snapped = prev ? snapIsoPoint(prev, point) : snapToGrid(point)
         return [...pts, snapped]
@@ -88,15 +95,18 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       const type = mode.slice('symbol:'.length) as SymbolType
       const near = nearestPointOnPolylines(point, lines, SNAP_THRESHOLD)
       const id = makeId('sym')
+      const px = near ? near.point.x : point.x
+      const py = near ? near.point.y : point.y
       const symbol: PlacedSymbol = {
         id,
         type,
-        x: near ? near.point.x : point.x,
-        y: near ? near.point.y : point.y,
+        x: px,
+        y: py,
         rotation: near ? near.angleDeg : 0,
         lineId: near?.lineId,
       }
       setSymbols((s) => [...s, symbol])
+      setLastAnchor({ x: px, y: py })
       if (type === 'fitting-tee') setPendingTeeId(id)
     }
   }
@@ -108,6 +118,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
 
   const confirmLineMeta = (svgElementId: string, size: string) => {
     setLines((ls) => [...ls, { id: makeId('dline'), svgElementId, size, points: draftPoints }])
+    setLastAnchor(draftPoints[draftPoints.length - 1] ?? null)
     setDraftPoints([])
     setShowMetaModal(false)
   }
@@ -120,6 +131,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       ...ls,
       { id: makeId('dline'), svgElementId: data.svgElementId, size: data.size, points: [startCanvas, endCanvas], realLengthMeters },
     ])
+    setLastAnchor(endCanvas)
     setShowCoordinateModal(false)
   }
 
@@ -200,6 +212,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             {mode === 'draw' && (
               <span className="text-brand-300">
                 حالت ترسیم — روی نقشه کلیک کنید تا نقطه اضافه شود، سپس «پایان خط» را بزنید
+                {lastAnchor && draftPoints.length === 0 && ' (خط جدید از انتهای خط قبلی ادامه می‌یابد)'}
               </span>
             )}
             {mode === 'select' && (
@@ -218,6 +231,15 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             >
               <HelpCircle size={13} /> راهنما
             </button>
+            {mode === 'draw' && draftPoints.length === 0 && lastAnchor && (
+              <button
+                onClick={() => setLastAnchor(null)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+                title="خط بعدی به‌جای ادامه از خط قبلی، مستقل و از نقطه دلخواه شروع می‌شود"
+              >
+                <XCircle size={13} /> شروع خط مجزا
+              </button>
+            )}
             {mode === 'draw' && draftPoints.length > 0 && (
               <>
                 <button

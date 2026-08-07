@@ -50,18 +50,11 @@ export function ReportsPage({ project }: { project: Project }) {
         />
       </div>
 
-      <div className="glass-panel rounded-2xl p-4 h-64 flex flex-col">
-        <p className="mb-2 text-sm font-bold">S-Curve برنامه زمان‌بندی — پیشرفت برنامه‌ای در برابر واقعی فعالیت‌ها</p>
-        <div className="flex-1 min-h-0">
-          <SCurveChart data={scheduleSCurve} />
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 gap-4">
         <div className="glass-panel rounded-2xl p-4 h-72 flex flex-col">
-          <p className="mb-2 text-sm font-bold">نمودار S-Curve — پیشرفت برنامه‌ای در برابر واقعی</p>
+          <p className="mb-2 text-sm font-bold">S-Curve برنامه زمان‌بندی — پیشرفت فعالیت‌های زمان‌بندی‌شده (جوشکاری/NDT/پوشش)</p>
           <div className="flex-1 min-h-0">
-            <SCurveChart data={sCurve} />
+            <SCurveChart data={scheduleSCurve} />
           </div>
         </div>
         <div className="glass-panel rounded-2xl p-4 h-72 flex flex-col">
@@ -69,6 +62,16 @@ export function ReportsPage({ project }: { project: Project }) {
           <div className="flex-1 min-h-0">
             <WeldsBySizeChart data={weldsBySize} />
           </div>
+        </div>
+      </div>
+
+      <div className="glass-panel rounded-2xl p-4 h-64 flex flex-col">
+        <p className="mb-0.5 text-sm font-bold">S-Curve پیشرفت متراژی — بر اساس کارکرد روزانه ثبت‌شده در برابر منحنی برنامه‌ریزی‌شده</p>
+        <p className="mb-2 text-[11px] text-muted">
+          معیار متفاوتی از نمودار بالا: این یکی طول لوله واقعاً جوش‌خورده (متر) را در برابر منحنی پایه پروژه می‌سنجد، نه پیشرفت فعالیت‌های زمان‌بندی.
+        </p>
+        <div className="flex-1 min-h-0">
+          <SCurveChart data={sCurve} />
         </div>
       </div>
     </div>

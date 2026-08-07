@@ -94,10 +94,21 @@ function App() {
         unit: 'واحد ۱۰۰',
         role: 'contractor',
       })
-      await setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
-      for (const log of seed.logs) await addLog(id, log)
+      const insertedLines = await setProjectSvg(id, seed.svgRaw, 'sample-isometric.svg', seed.lines)
+      // setProjectSvg doesn't (and can't) keep the seed's placeholder line ids — the db assigns
+      // real ones on insert. Every downstream record that references a line by id (logs,
+      // schedules) has to be remapped through the real ids, matched by svgElementId.
+      const realIdByElementId = new Map(insertedLines.map((l) => [l.svgElementId, l.id]))
+      const remapLineId = (lineId: string) => {
+        const original = seed.lines.find((l) => l.id === lineId)
+        return (original && realIdByElementId.get(original.svgElementId)) ?? lineId
+      }
+      for (const log of seed.logs) await addLog(id, { ...log, lineId: remapLineId(log.lineId) })
       await setPlannedCurve(id, seed.plannedCurve)
-      await addSchedules(id, seed.schedules)
+      await addSchedules(
+        id,
+        seed.schedules.map((s) => ({ ...s, lineId: remapLineId(s.lineId) })),
+      )
       await setMilestones(id, seed.milestones)
       for (const risk of seed.risks) await addRisk(id, risk)
       await selectProject(id)
