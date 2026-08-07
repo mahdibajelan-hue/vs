@@ -1,0 +1,36 @@
+name: Backup Data
+
+on:
+  schedule:
+    - cron: '0 2 * * 0' # every Sunday at 02:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/piping-isometric-tracker-x8y5i1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/backup-data.mjs
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          BACKUP_USER_EMAIL: ${{ secrets.BACKUP_USER_EMAIL }}
+          BACKUP_USER_PASSWORD: ${{ secrets.BACKUP_USER_PASSWORD }}
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./backups
+          publish_branch: data-backups
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
