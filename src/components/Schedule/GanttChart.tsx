@@ -159,7 +159,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
                   <div
                     key={t.iso}
                     className="absolute top-0 h-full border-r px-1.5 text-[10px] font-bold text-secondary flex items-center overflow-hidden"
-                    style={{ right: totalWidth - x(t.iso), width, borderColor: 'var(--border-soft)' }}
+                    style={{ right: x(t.iso), width, borderColor: 'var(--border-soft)' }}
                   >
                     {t.label}
                   </div>
@@ -171,7 +171,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
                 <div
                   key={d.iso}
                   className="absolute top-0 flex h-full items-center justify-center text-[9px] text-muted num"
-                  style={{ right: totalWidth - x(d.iso), width: DAY_WIDTH }}
+                  style={{ right: x(d.iso), width: DAY_WIDTH }}
                 >
                   {d.label}
                 </div>
@@ -190,7 +190,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
                           <div
                             className="absolute top-1/2 -translate-y-1/2 rounded-md border"
                             style={{
-                              right: totalWidth - x(a.plannedStart),
+                              right: x(a.plannedStart),
                               width: Math.max(2, x(a.plannedEnd) - x(a.plannedStart)),
                               height: 10,
                               borderColor: 'var(--border-soft)',
@@ -207,7 +207,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
                                 className="absolute top-1/2 -translate-y-1/2 rounded-md"
                                 title={`${ACTIVITY_LABEL_FA[kind]} — ${a.percentComplete}%`}
                                 style={{
-                                  right: totalWidth - x(range.start),
+                                  right: x(range.start),
                                   width: Math.max(3, x(range.end) - x(range.start)),
                                   height: 14,
                                   background: color,
@@ -226,12 +226,12 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
 
             <div
               className="absolute top-0 bottom-0 border-r border-dashed"
-              style={{ right: totalWidth - x(today), borderColor: '#38bdf8', opacity: 0.6 }}
+              style={{ right: x(today), borderColor: '#38bdf8', opacity: 0.6 }}
             />
             {summary.forecastEnd && summary.totalDelayDays > 0 && (
               <div
                 className="absolute top-0 bottom-0 border-r border-dashed"
-                style={{ right: totalWidth - x(summary.forecastEnd), borderColor: '#e74c3c', opacity: 0.6 }}
+                style={{ right: x(summary.forecastEnd), borderColor: '#e74c3c', opacity: 0.6 }}
               />
             )}
           </div>
