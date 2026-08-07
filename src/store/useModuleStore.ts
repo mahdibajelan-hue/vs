@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ModuleKey = 'pipepulse' | 'risk'
+export type ModuleKey = 'pipepulse' | 'risk' | 'issues'
 
 interface ModuleState {
   /** null = show the hub. Session-only (not persisted) so every fresh visit starts at the hub. */

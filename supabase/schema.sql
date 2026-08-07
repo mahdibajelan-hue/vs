@@ -804,3 +804,159 @@ create index if not exists idx_rm_risks_project on rm_risks (project_id);
 create index if not exists idx_rm_risk_assessments_risk on rm_risk_assessments (risk_id);
 create index if not exists idx_rm_risk_actions_risk on rm_risk_actions (risk_id);
 create index if not exists idx_rm_risk_history_risk on rm_risk_history (risk_id);
+
+-- ============================================================================
+-- 11. Issue Management module ("رصد") — a third product reached from the module hub,
+--     sharing auth/profiles with the products above. Each issue has an assigned pursuer
+--     (does the work) and approver (signs it off); status moves
+--     open -> in_progress -> pending_approval -> approved/rejected. Ported design/feature
+--     set from a self-hosted reference build, rebuilt on Supabase + RLS to fit this app.
+-- ============================================================================
+create table if not exists im_projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table im_projects enable row level security;
+
+create table if not exists im_project_members (
+  project_id uuid not null references im_projects (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  role text not null check (role in ('admin', 'pursuer', 'approver')),
+  created_at timestamptz not null default now(),
+  primary key (project_id, user_id)
+);
+
+alter table im_project_members enable row level security;
+
+create table if not exists im_issues (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references im_projects (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  pursuer_id uuid references profiles (id),
+  approver_id uuid references profiles (id),
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
+  deadline_days smallint not null default 3 check (deadline_days > 0),
+  deadline_date date generated always as (((created_at at time zone 'utc')::date) + deadline_days) stored,
+  action_date date,
+  status text not null default 'open' check (status in ('open', 'in_progress', 'pending_approval', 'approved', 'rejected')),
+  closed_at date,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table im_issues enable row level security;
+
+-- ----------------------------------------------------------------------------
+-- Helper functions
+-- ----------------------------------------------------------------------------
+create or replace function im_is_project_member(p_project_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from im_project_members
+    where project_id = p_project_id and user_id = auth.uid()
+  );
+$$ language sql security definer stable;
+
+create or replace function im_project_role(p_project_id uuid)
+returns text as $$
+  select role from im_project_members
+  where project_id = p_project_id and user_id = auth.uid()
+  limit 1;
+$$ language sql security definer stable;
+
+create or replace function im_can_manage(p_project_id uuid)
+returns boolean as $$
+  select im_project_role(p_project_id) = 'admin';
+$$ language sql security definer stable;
+
+-- Mirrors create_rm_project_with_manager — creates the project and the creator's own
+-- admin membership row atomically so RLS's SELECT policy doesn't hide the just-inserted row.
+create or replace function create_im_project_with_admin(
+  p_name text,
+  p_description text default ''
+)
+returns im_projects as $$
+declare
+  new_project im_projects;
+begin
+  insert into im_projects (name, description, created_by)
+  values (p_name, p_description, auth.uid())
+  returning * into new_project;
+
+  insert into im_project_members (project_id, user_id, role) values (new_project.id, auth.uid(), 'admin');
+
+  return new_project;
+end;
+$$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Policies
+-- ----------------------------------------------------------------------------
+drop policy if exists "im_projects_select_member" on im_projects;
+create policy "im_projects_select_member" on im_projects
+  for select using (im_is_project_member(id) or is_admin_user());
+
+drop policy if exists "im_projects_insert_any_authenticated" on im_projects;
+create policy "im_projects_insert_any_authenticated" on im_projects
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists "im_projects_update_manager" on im_projects;
+create policy "im_projects_update_manager" on im_projects
+  for update using (im_can_manage(id) or is_admin_user());
+
+drop policy if exists "im_projects_delete_manager" on im_projects;
+create policy "im_projects_delete_manager" on im_projects
+  for delete using (im_can_manage(id) or is_admin_user());
+
+drop policy if exists "im_members_select_member" on im_project_members;
+create policy "im_members_select_member" on im_project_members
+  for select using (im_is_project_member(project_id) or is_admin_user());
+
+drop policy if exists "im_members_insert_manager_or_admin" on im_project_members;
+create policy "im_members_insert_manager_or_admin" on im_project_members
+  for insert with check (
+    user_id = auth.uid()
+    or is_admin_user()
+    or im_can_manage(project_id)
+  );
+
+drop policy if exists "im_members_delete_manager" on im_project_members;
+create policy "im_members_delete_manager" on im_project_members
+  for delete using (im_can_manage(project_id) or is_admin_user());
+
+drop policy if exists "im_members_update_manager" on im_project_members;
+create policy "im_members_update_manager" on im_project_members
+  for update using (im_can_manage(project_id) or is_admin_user());
+
+drop policy if exists "im_issues_select_member" on im_issues;
+create policy "im_issues_select_member" on im_issues
+  for select using (im_is_project_member(project_id) or is_admin_user());
+
+drop policy if exists "im_issues_insert_member" on im_issues;
+create policy "im_issues_insert_member" on im_issues
+  for insert with check (im_is_project_member(project_id) or is_admin_user());
+
+-- Any project member may edit an issue (mirrors the reference app's un-gated "new issue"
+-- form); the assigned pursuer/approver additionally always keep write access to their own
+-- assignments even if their project role changes later.
+drop policy if exists "im_issues_update_member_or_assignee" on im_issues;
+create policy "im_issues_update_member_or_assignee" on im_issues
+  for update using (
+    im_is_project_member(project_id) or pursuer_id = auth.uid() or approver_id = auth.uid() or is_admin_user()
+  );
+
+drop policy if exists "im_issues_delete_manager" on im_issues;
+create policy "im_issues_delete_manager" on im_issues
+  for delete using (im_can_manage(project_id) or is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Indexes
+-- ----------------------------------------------------------------------------
+create index if not exists idx_im_project_members_user on im_project_members (user_id);
+create index if not exists idx_im_issues_project on im_issues (project_id);

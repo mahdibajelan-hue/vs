@@ -7,7 +7,7 @@ import type { ModuleKey } from '../../store/useModuleStore'
 const GOLD = '#c9a227'
 
 interface ModuleDef {
-  key: ModuleKey | 'issues'
+  key: ModuleKey
   title: string
   englishTag: string
   description: string
@@ -33,7 +33,7 @@ const MODULES: ModuleDef[] = [
     description: 'ثبت، پیگیری و حل مسائل و موانع اجرایی پروژه از بروز تا بسته‌شدن.',
     icon: AlertTriangle,
     accent: '#a78bfa',
-    status: 'soon',
+    status: 'active',
   },
   {
     key: 'pipepulse',
@@ -50,7 +50,7 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
   const [notice, setNotice] = useState<string | null>(null)
 
   const handleSelect = (m: ModuleDef) => {
-    if (m.status === 'active' && m.key !== 'issues') {
+    if (m.status === 'active') {
       onEnterModule(m.key)
       return
     }

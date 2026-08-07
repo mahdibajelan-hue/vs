@@ -17,6 +17,10 @@ const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> 
     subtitle:
       'یک سامانه کنترل ریسک برای پروژه‌های EPC — شناسایی، ارزیابی، برنامه پاسخ، پایش و گزارش‌دهی مدیریتی ریسک‌های پروژه.',
   },
+  issues: {
+    title: 'ورود به رصد',
+    subtitle: 'سامانه پیگیری مشکلات پروژه — ثبت، پیگیری تا مهلت و تایید نهایی هر مسئله، با گزارش تاخیر لحظه‌ای.',
+  },
 }
 
 export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {
