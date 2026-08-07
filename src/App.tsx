@@ -14,9 +14,7 @@ import { RisksPage } from './pages/RisksPage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
-import { useCurrentRole } from './store/useMembersStore'
 import { supabase } from './lib/supabaseClient'
-import { canEdit } from './lib/permissions'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
@@ -49,8 +47,6 @@ function App() {
   const addRisk = useStore((s) => s.addRisk)
   const selectProject = useStore((s) => s.selectProject)
   const isAuthed = useAuthStore((s) => s.isAuthed)
-  const role = useCurrentRole()
-  const editable = canEdit(role)
 
   const [page, setPage] = useState<Page>('viewer')
   const [showNewProject, setShowNewProject] = useState(false)
@@ -78,10 +74,6 @@ function App() {
         }
       })
   }, [isAuthed, fetchProjects, selectProject])
-
-  useEffect(() => {
-    if (page === 'schematic' && !editable) setPage('viewer')
-  }, [page, editable])
 
   const loadDemo = async () => {
     setDemoLoading(true)

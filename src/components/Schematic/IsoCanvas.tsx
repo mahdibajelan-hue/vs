@@ -3,10 +3,7 @@ import { Maximize, ZoomIn, ZoomOut } from 'lucide-react'
 import type { DraftLine, PlacedSymbol } from '../../types'
 import type { Point } from '../../lib/isoGeometry'
 import { buildPathD } from '../../lib/isoGeometry'
-import { SYMBOL_CATEGORY_COLOR, SYMBOL_DEFS } from '../../data/pipingSymbols'
-
-/** Placed symbols render this many times bigger than their (deliberately compact) palette icon. */
-const SYMBOL_SCALE = 5
+import { SYMBOL_CATEGORY_COLOR, SYMBOL_CATEGORY_SCALE, SYMBOL_DEFS } from '../../data/pipingSymbols'
 
 export interface CanvasSelection {
   kind: 'line' | 'symbol'
@@ -210,11 +207,13 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
             const px = isDragging ? drag.liveX : s.x
             const py = isDragging ? drag.liveY : s.y
             const def = SYMBOL_DEFS[s.type]
+            const scale = SYMBOL_CATEGORY_SCALE[def.category]
+            const color = SYMBOL_CATEGORY_COLOR[def.category]
             return (
               <g key={s.id} opacity={isDragging ? 0.75 : 1}>
                 <g
-                  transform={`translate(${px} ${py}) rotate(${s.rotation}) scale(${SYMBOL_SCALE})`}
-                  style={{ cursor: isDragging ? 'grabbing' : 'grab', color: SYMBOL_CATEGORY_COLOR[def.category] }}
+                  transform={`translate(${px} ${py}) rotate(${s.rotation}) scale(${scale})`}
+                  style={{ cursor: isDragging ? 'grabbing' : 'grab', color }}
                   onMouseDown={(e) => startSymbolDrag(e, s)}
                   dangerouslySetInnerHTML={{ __html: def.markup }}
                 />
@@ -222,7 +221,7 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
                   <circle
                     cx={px}
                     cy={py}
-                    r={16 * SYMBOL_SCALE * 0.6}
+                    r={16 * scale * 0.6}
                     fill="none"
                     stroke="#38bdf8"
                     strokeWidth={1.5}
@@ -231,11 +230,11 @@ export function IsoCanvas({ lines, symbols, draftPoints, selection, onCanvasClic
                   />
                 )}
                 {s.type === 'fitting-tee' && (s.mainSize || s.branchSize) && (
-                  <text x={px + 10} y={py - 12 * SYMBOL_SCALE * 0.55} fontSize="11" fill="#94a3b8" style={{ pointerEvents: 'none' }}>
+                  <text x={px + 10} y={py - 12 * scale * 0.55} fontSize="11" fill={color} style={{ pointerEvents: 'none' }}>
                     {s.mainSize || '—'}x{s.branchSize || '—'}
                   </text>
                 )}
-                <text x={px} y={py + 15 * SYMBOL_SCALE * 0.62} fontSize="10" textAnchor="middle" fill="#64748b" style={{ pointerEvents: 'none' }}>
+                <text x={px} y={py + 15 * scale * 0.62} fontSize="10" textAnchor="middle" fill={color} style={{ pointerEvents: 'none' }}>
                   {def.shortLabel}
                 </text>
               </g>

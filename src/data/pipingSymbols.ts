@@ -12,7 +12,8 @@ export type SymbolType =
   | 'fitting-elbow-30'
   | 'fitting-elbow-45'
   | 'fitting-elbow-90'
-  | 'fitting-hot-bend'
+  | 'fitting-hot-bend-3d'
+  | 'fitting-hot-bend-5d'
   | 'fitting-reducer'
   | 'fitting-flange'
   | 'fitting-cap'
@@ -188,13 +189,22 @@ export const SYMBOL_DEFS: Record<SymbolType, SymbolDef> = {
       <path d="M -13 0 L -5 0 A 5 5 0 0 1 0 -5 L 0 -13" fill="none" stroke="${S}" stroke-width="${BEND_SW}" stroke-linecap="round"/>
     `,
   },
-  'fitting-hot-bend': {
-    type: 'fitting-hot-bend',
-    label: 'هات بند شعاع بزرگ (Hot Bend 5D/7D)',
-    shortLabel: 'Hot Bend',
+  'fitting-hot-bend-3d': {
+    type: 'fitting-hot-bend-3d',
+    label: 'هات بند 3D (Hot Bend 3D — بازشدگی ۳۰ درجه)',
+    shortLabel: 'Hot Bend 3D',
     category: 'fitting',
     markup: `
-      <path d="M -13 5 Q -13 -13 5 -13" fill="none" stroke="${S}" stroke-width="${BEND_SW}" stroke-linecap="round"/>
+      <path d="M -19 0 L -7 0 Q -1 -1.5 6.5 -7.8" fill="none" stroke="${S}" stroke-width="${BEND_SW}" stroke-linecap="round"/>
+    `,
+  },
+  'fitting-hot-bend-5d': {
+    type: 'fitting-hot-bend-5d',
+    label: 'هات بند 5D (Hot Bend 5D — بازشدگی ۱۵ درجه، شعاع بزرگتر برای پیگرانی)',
+    shortLabel: 'Hot Bend 5D',
+    category: 'fitting',
+    markup: `
+      <path d="M -21 0 L -8 0 Q -2 -0.9 5.5 -3.6" fill="none" stroke="${S}" stroke-width="${BEND_SW}" stroke-linecap="round"/>
     `,
   },
   'fitting-reducer': {
@@ -322,6 +332,18 @@ export const SYMBOL_CATEGORY_LABEL: Record<SymbolCategory, string> = {
   joint: 'اتصال عایق',
   fitting: 'اتصالات',
   equipment: 'تجهیزات',
+}
+
+/**
+ * Placed-symbol scale on the canvas, relative to the base drawing scale — kept per-category since
+ * valves/fittings read fine small while equipment needs to stay large and legible, and the
+ * insulating joint (a thin in-line marker) needs to stay smaller still.
+ */
+export const SYMBOL_CATEGORY_SCALE: Record<SymbolCategory, number> = {
+  valve: 5 / 3,
+  joint: 5 / 2,
+  fitting: 5 / 3,
+  equipment: 5,
 }
 
 /** Symbol markup draws in currentColor — this is what sets it per category, in both the palette and the canvas. */

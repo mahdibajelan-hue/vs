@@ -392,9 +392,13 @@ drop policy if exists "lines_select_member" on lines;
 create policy "lines_select_member" on lines
   for select using (is_project_member(project_id) or is_admin_user());
 
+-- Owner may also draw/save the schematic and its extracted lines — it isn't part of the
+-- contractor->consultant daily-progress approval chain, so the owner isn't limited to read-only here.
 drop policy if exists "lines_write_editor" on lines;
 create policy "lines_write_editor" on lines
-  for all using (can_edit_project(project_id)) with check (can_edit_project(project_id));
+  for all
+  using (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user())
+  with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
 
 drop policy if exists "daily_logs_select_member" on daily_logs;
 create policy "daily_logs_select_member" on daily_logs

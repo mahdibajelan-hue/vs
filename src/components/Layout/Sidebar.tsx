@@ -42,7 +42,6 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
   const role = useCurrentRole()
   const editable = canEdit(role)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const nav = NAV.filter((n) => n.id !== 'schematic' || editable)
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
@@ -99,7 +98,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
       )}
 
       <nav className="px-3 space-y-1">
-        {nav.map(({ id, label, icon: Icon }) => (
+        {NAV.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => {
