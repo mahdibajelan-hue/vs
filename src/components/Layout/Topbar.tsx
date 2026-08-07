@@ -4,6 +4,7 @@ import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
 import { UserManagementModal } from '../Auth/UserManagementModal'
+import { ProfileModal } from '../Auth/ProfileModal'
 import { ROLE_LABEL_FA, type Project } from '../../types'
 
 export function Topbar({ project, title, onMenuClick }: { project: Project | null; title: string; onMenuClick: () => void }) {
@@ -13,6 +14,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
   const role = useCurrentRole()
   const signOut = useAuthStore((s) => s.signOut)
   const [showUsers, setShowUsers] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   return (
     <header className="no-print flex items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-3 sm:px-6 sm:py-3.5">
@@ -37,12 +39,15 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {currentUser && (
           <button
-            onClick={() => project && setShowUsers(true)}
-            disabled={!project}
-            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 disabled:opacity-50 transition-colors"
-            title="اعضای پروژه"
+            onClick={() => setShowProfile(true)}
+            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+            title="پروفایل من"
           >
-            <UserCircle2 size={14} />
+            {currentUser.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+            ) : (
+              <UserCircle2 size={14} />
+            )}
             {currentUser.fullName || currentUser.email}
             {role && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{ROLE_LABEL_FA[role]}</span>}
           </button>
@@ -71,6 +76,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
         </button>
       </div>
       {showUsers && project && <UserManagementModal onClose={() => setShowUsers(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </header>
   )
 }

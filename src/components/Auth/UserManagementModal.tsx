@@ -5,10 +5,11 @@ import { RolePicker } from './AuthGate'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useMembersStore } from '../../store/useMembersStore'
 import { ROLE_LABEL_FA, type UserRole } from '../../types'
-import { canManageUsers } from '../../lib/permissions'
+import { assignableRoles, canManageUsers } from '../../lib/permissions'
 
 export function UserManagementModal({ onClose }: { onClose: () => void }) {
   const myUserId = useAuthStore((s) => s.profile?.id)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const members = useMembersStore((s) => s.members)
   const invites = useMembersStore((s) => s.invites)
   const loading = useMembersStore((s) => s.loading)
@@ -17,7 +18,8 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
   const removeMember = useMembersStore((s) => s.removeMember)
   const changeRole = useMembersStore((s) => s.changeRole)
   const myRole = members.find((m) => m.userId === myUserId)?.role
-  const canManage = canManageUsers(myRole, members)
+  const canManage = canManageUsers(myRole, isAdmin)
+  const myAssignableRoles = assignableRoles(isAdmin)
 
   const [showForm, setShowForm] = useState(false)
   const [email, setEmail] = useState('')
@@ -51,7 +53,7 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
     <Modal title="اعضای پروژه" subtitle="افرادی که به این پروژه دعوت شده‌اند و به داده‌های آن دسترسی دارند" onClose={onClose} width="max-w-lg">
       {!canManage && (
         <p className="mb-3 rounded-xl bg-white/[0.03] p-3 text-xs text-muted">
-          فقط کارفرمای پروژه می‌تواند عضو جدید دعوت کند یا نقش اعضا را تغییر دهد.
+          فقط کارفرمای پروژه یا ادمین سامانه می‌تواند عضو جدید دعوت کند یا نقش اعضا را تغییر دهد.
         </p>
       )}
 
@@ -73,7 +75,7 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => changeRole(m.userId, e.target.value as UserRole)}
                     className="rounded-lg bg-black/20 border border-white/10 px-2 py-1 text-[11px] outline-none focus:border-brand-400"
                   >
-                    {(['contractor', 'consultant', 'owner'] as UserRole[]).map((r) => (
+                    {Array.from(new Set([...myAssignableRoles, m.role])).map((r) => (
                       <option key={r} value={r}>
                         {ROLE_LABEL_FA[r]}
                       </option>
@@ -142,7 +144,7 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
               dir="ltr"
             />
           </label>
-          <RolePicker value={role} onChange={setRole} />
+          <RolePicker value={role} onChange={setRole} roles={myAssignableRoles} />
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">

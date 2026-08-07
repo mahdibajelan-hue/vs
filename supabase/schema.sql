@@ -18,6 +18,18 @@ create table if not exists profiles (
   created_at timestamptz not null default now()
 );
 
+-- Upgrade path if an earlier version of this file already created the table without these columns.
+alter table profiles add column if not exists avatar_url text not null default '';
+alter table profiles add column if not exists position_title text not null default '';
+alter table profiles add column if not exists phone text not null default '';
+-- Platform-wide admin flag — separate from the per-project 'owner' role. Only an admin can grant
+-- the 'owner' role to someone (see project_members policies below). Nobody can set this on
+-- themselves (see trg_prevent_self_admin_escalation) — the first admin must be set by hand:
+--   update profiles set is_admin = true where email = 'you@example.com';
+alter table profiles add column if not exists is_admin boolean not null default false;
+-- Drives the forced "complete your profile" screen on first login.
+alter table profiles add column if not exists profile_completed boolean not null default false;
+
 alter table profiles enable row level security;
 
 drop policy if exists "profiles_select_authenticated" on profiles;
@@ -42,6 +54,54 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- profiles_update_own lets a user update their own row (needed so they can save their name/
+-- avatar/position), but with no column-level restriction that would also let them PATCH
+-- is_admin=true on themselves directly via the REST API. This trigger silently reverts any
+-- change to is_admin unless the actor already is an admin.
+create or replace function prevent_self_admin_escalation()
+returns trigger as $$
+begin
+  if new.is_admin is distinct from old.is_admin
+     and not coalesce((select is_admin from profiles where id = auth.uid()), false) then
+    new.is_admin := old.is_admin;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_prevent_self_admin_escalation on profiles;
+create trigger trg_prevent_self_admin_escalation
+  before update on profiles
+  for each row execute function prevent_self_admin_escalation();
+
+create or replace function is_admin_user()
+returns boolean as $$
+  select coalesce((select is_admin from profiles where id = auth.uid()), false);
+$$ language sql security definer stable;
+
+-- ============================================================================
+-- 2b. Avatar storage — public bucket, each user may only write inside their own folder
+-- ============================================================================
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "avatars_public_read" on storage.objects;
+create policy "avatars_public_read" on storage.objects
+  for select using (bucket_id = 'avatars');
+
+drop policy if exists "avatars_owner_write" on storage.objects;
+create policy "avatars_owner_write" on storage.objects
+  for insert with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatars_owner_update" on storage.objects;
+create policy "avatars_owner_update" on storage.objects
+  for update using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatars_owner_delete" on storage.objects;
+create policy "avatars_owner_delete" on storage.objects
+  for delete using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ============================================================================
 -- 3. Projects — core metadata plus JSONB blobs for data that's always read/
@@ -212,25 +272,27 @@ drop policy if exists "members_select_member" on project_members;
 create policy "members_select_member" on project_members
   for select using (is_project_member(project_id));
 
--- An existing 'owner' role member can always add people. As a bootstrap escape hatch — mirrors
--- canManageUsers() in permissions.ts — any existing member may also add people as long as no
--- 'owner' has joined the project yet (so a contractor/consultant who created the project solo
--- isn't permanently locked out of inviting anyone, including a future owner).
+-- Only a platform admin may grant the 'owner' role. The project owner (or an admin) may add
+-- contractor/consultant members. accept_pending_invites() inserting a row for the current user
+-- (accepting their own pending invite) is always allowed regardless of role.
 drop policy if exists "members_insert_owner_or_bootstrap" on project_members;
-create policy "members_insert_owner_or_bootstrap" on project_members
+drop policy if exists "members_insert_owner_or_admin" on project_members;
+create policy "members_insert_owner_or_admin" on project_members
   for insert with check (
-    project_role(project_id) = 'owner'
-    or not exists (select 1 from project_members where project_id = project_members.project_id and role = 'owner')
-    or user_id = auth.uid() -- accept_pending_invites() inserting for the current user
+    user_id = auth.uid()
+    or is_admin_user()
+    or (role in ('contractor', 'consultant') and project_role(project_id) = 'owner')
   );
 
 drop policy if exists "members_delete_owner" on project_members;
 create policy "members_delete_owner" on project_members
-  for delete using (project_role(project_id) = 'owner');
+  for delete using (project_role(project_id) = 'owner' or is_admin_user());
 
 drop policy if exists "members_update_owner" on project_members;
 create policy "members_update_owner" on project_members
-  for update using (project_role(project_id) = 'owner');
+  for update
+  using (project_role(project_id) = 'owner' or is_admin_user())
+  with check (role <> 'owner' or is_admin_user());
 
 drop policy if exists "invites_select_member_or_invitee" on project_invites;
 create policy "invites_select_member_or_invitee" on project_invites
@@ -241,11 +303,14 @@ create policy "invites_select_member_or_invitee" on project_invites
 
 drop policy if exists "invites_insert_member" on project_invites;
 create policy "invites_insert_member" on project_invites
-  for insert with check (is_project_member(project_id));
+  for insert with check (
+    is_admin_user()
+    or (role in ('contractor', 'consultant') and project_role(project_id) = 'owner')
+  );
 
 drop policy if exists "invites_delete_member" on project_invites;
 create policy "invites_delete_member" on project_invites
-  for delete using (is_project_member(project_id));
+  for delete using (is_project_member(project_id) and (project_role(project_id) = 'owner' or is_admin_user()));
 
 -- ============================================================================
 -- 8. Project-scoped data tables — high-frequency, genuinely row-level data

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useStore } from '../../store/useStore'
 import { RolePicker } from '../Auth/AuthGate'
+import { useAuthStore } from '../../store/useAuthStore'
+import { assignableRoles } from '../../lib/permissions'
 import type { UserRole } from '../../types'
 
 export function NewProjectModal({
@@ -16,6 +18,8 @@ export function NewProjectModal({
 }) {
   const createProject = useStore((s) => s.createProject)
   const updateProjectMeta = useStore((s) => s.updateProjectMeta)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const myAssignableRoles = assignableRoles(isAdmin)
   const [name, setName] = useState(project?.name ?? '')
   const [client, setClient] = useState(project?.client ?? '')
   const [location, setLocation] = useState(project?.location ?? '')
@@ -65,7 +69,7 @@ export function NewProjectModal({
         {!project && (
           <div>
             <p className="mb-1.5 text-xs text-secondary">نقش شما در این پروژه</p>
-            <RolePicker value={role} onChange={setRole} />
+            <RolePicker value={role} onChange={setRole} roles={myAssignableRoles} />
           </div>
         )}
         <div className="flex justify-end gap-2 pt-2">

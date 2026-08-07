@@ -6,6 +6,22 @@ export interface Profile {
   id: string
   email: string
   fullName: string
+  avatarUrl: string
+  positionTitle: string
+  phone: string
+  isAdmin: boolean
+  profileCompleted: boolean
+}
+
+interface ProfileRow {
+  id: string
+  email: string
+  full_name: string
+  avatar_url: string
+  position_title: string
+  phone: string
+  is_admin: boolean
+  profile_completed: boolean
 }
 
 interface AuthState {
@@ -13,27 +29,41 @@ interface AuthState {
   profile: Profile | null
   /** True until the initial getSession() call resolves — avoids flashing the login screen. */
   authLoading: boolean
+  /** True while the profiles row for a signed-in session is being fetched. */
+  profileLoading: boolean
   isAuthed: boolean
 
   currentUser: () => Profile | null
 
   signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>
   signOut: () => Promise<void>
+  updatePassword: (newPassword: string) => Promise<{ ok: boolean; error?: string }>
+  refreshProfile: () => Promise<void>
 }
 
-function profileFromSession(session: Session | null): Profile | null {
-  if (!session?.user) return null
+function profileFromRow(row: ProfileRow): Profile {
   return {
-    id: session.user.id,
-    email: session.user.email ?? '',
-    fullName: (session.user.user_metadata?.full_name as string | undefined) ?? '',
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    avatarUrl: row.avatar_url,
+    positionTitle: row.position_title,
+    phone: row.phone,
+    isAdmin: row.is_admin,
+    profileCompleted: row.profile_completed,
   }
+}
+
+async function loadProfile(userId: string) {
+  const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+  useAuthStore.setState({ profile: data ? profileFromRow(data as ProfileRow) : null, profileLoading: false })
 }
 
 export const useAuthStore = create<AuthState>()((_set, get) => ({
   session: null,
   profile: null,
   authLoading: true,
+  profileLoading: false,
   isAuthed: false,
 
   currentUser: () => get().profile,
@@ -47,6 +77,17 @@ export const useAuthStore = create<AuthState>()((_set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut()
   },
+
+  updatePassword: async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) return { ok: false, error: translateAuthError(error.message) }
+    return { ok: true }
+  },
+
+  refreshProfile: async () => {
+    const userId = get().session?.user.id
+    if (userId) await loadProfile(userId)
+  },
 }))
 
 function translateAuthError(message: string): string {
@@ -58,14 +99,20 @@ function translateAuthError(message: string): string {
 }
 
 supabase.auth.onAuthStateChange((_event, session) => {
-  useAuthStore.setState({ session, profile: profileFromSession(session), isAuthed: !!session, authLoading: false })
+  const prevUserId = useAuthStore.getState().session?.user.id
+  useAuthStore.setState({ session, isAuthed: !!session, authLoading: false })
+  if (session?.user && session.user.id !== prevUserId) {
+    useAuthStore.setState({ profileLoading: true })
+    loadProfile(session.user.id)
+  } else if (!session) {
+    useAuthStore.setState({ profile: null, profileLoading: false })
+  }
 })
 
 supabase.auth.getSession().then(({ data }) => {
-  useAuthStore.setState({
-    session: data.session,
-    profile: profileFromSession(data.session),
-    isAuthed: !!data.session,
-    authLoading: false,
-  })
+  useAuthStore.setState({ session: data.session, isAuthed: !!data.session, authLoading: false })
+  if (data.session?.user) {
+    useAuthStore.setState({ profileLoading: true })
+    loadProfile(data.session.user.id)
+  }
 })

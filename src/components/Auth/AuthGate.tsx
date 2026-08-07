@@ -3,12 +3,15 @@ import { Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
 import { LogoFull } from '../common/Logo'
+import { ProfileForm } from './ProfileForm'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const authLoading = useAuthStore((s) => s.authLoading)
   const isAuthed = useAuthStore((s) => s.isAuthed)
+  const profileLoading = useAuthStore((s) => s.profileLoading)
+  const profile = useAuthStore((s) => s.profile)
 
-  if (authLoading) {
+  if (authLoading || (isAuthed && profileLoading)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <Loader2 size={26} className="animate-spin text-brand-400" />
@@ -16,10 +19,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
   if (!isAuthed) return <AuthScreen />
+  if (profile && !profile.profileCompleted) {
+    return (
+      <Shell title="تکمیل مشخصات" subtitle="قبل از ادامه، لطفاً مشخصات خود را تکمیل کنید">
+        <ProfileForm mode="forced" />
+      </Shell>
+    )
+  }
   return <>{children}</>
 }
 
-function Shell({
+export function Shell({
   title,
   subtitle,
   children,
@@ -33,8 +43,8 @@ function Shell({
   panelClassName?: string
 }) {
   return (
-    <div className="flex h-screen w-screen items-center justify-center p-4">
-      <div className={`glass-panel w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-3xl p-8 ${panelClassName}`}>
+    <div className="flex h-screen w-screen items-center justify-center p-4 overflow-y-auto">
+      <div className={`glass-panel w-full ${wide ? 'max-w-lg' : 'max-w-sm'} rounded-3xl p-8 my-4 ${panelClassName}`}>
         <LogoFull width={180} className="mx-auto mb-4" />
         <h1 className="mb-1 text-center text-lg font-extrabold">{title}</h1>
         <p className="mb-6 text-center text-sm text-secondary leading-6">{subtitle}</p>
@@ -44,7 +54,7 @@ function Shell({
   )
 }
 
-function PasswordField({
+export function PasswordField({
   label,
   value,
   onChange,
@@ -80,8 +90,15 @@ function PasswordField({
   )
 }
 
-export function RolePicker({ value, onChange }: { value: UserRole; onChange: (r: UserRole) => void }) {
-  const roles: UserRole[] = ['contractor', 'consultant', 'owner']
+export function RolePicker({
+  value,
+  onChange,
+  roles = ['contractor', 'consultant', 'owner'],
+}: {
+  value: UserRole
+  onChange: (r: UserRole) => void
+  roles?: UserRole[]
+}) {
   return (
     <div className="space-y-1.5">
       {roles.map((r) => (
