@@ -17,8 +17,13 @@ export type SymbolType =
   | 'fitting-union'
   | 'fitting-blind'
   | 'fitting-support'
+  | 'equipment-ko-drum'
+  | 'equipment-flare-stack'
+  | 'equipment-pig-receiver'
+  | 'equipment-slug-catcher'
+  | 'equipment-blowdown'
 
-export type SymbolCategory = 'valve' | 'joint' | 'fitting'
+export type SymbolCategory = 'valve' | 'joint' | 'fitting' | 'equipment'
 
 export interface SymbolDef {
   type: SymbolType
@@ -202,12 +207,62 @@ export const SYMBOL_DEFS: Record<SymbolType, SymbolDef> = {
       <path d="M -4.5 8 L 4.5 8 L 0 13.5 Z" fill="none" stroke="${S}" stroke-width="${SW}"/>
     `,
   },
+  'equipment-ko-drum': {
+    type: 'equipment-ko-drum',
+    label: 'مخزن ناکاوت (K.O. Drum)',
+    category: 'equipment',
+    markup: `
+      <rect x="-4.5" y="-11" width="9" height="22" rx="4.5" fill="none" stroke="${S}" stroke-width="${SW}"/>
+      <line x1="-4.5" y1="-4" x2="-10.5" y2="-4" stroke="${S}" stroke-width="${SW}"/>
+      <line x1="4.5" y1="6" x2="10.5" y2="6" stroke="${S}" stroke-width="${SW}"/>
+    `,
+  },
+  'equipment-flare-stack': {
+    type: 'equipment-flare-stack',
+    label: 'دودکش فلر (Flare Stack)',
+    category: 'equipment',
+    markup: `
+      <line x1="0" y1="12" x2="0" y2="-2" stroke="${S}" stroke-width="${SW}"/>
+      <path d="M 0 -2 C -3 -5.5 -2 -9.5 0 -13 C 2 -9.5 3 -5.5 0 -2 Z" fill="${S}" stroke="none"/>
+    `,
+  },
+  'equipment-pig-receiver': {
+    type: 'equipment-pig-receiver',
+    label: 'پیگ ریسیور (Pig Receiver)',
+    category: 'equipment',
+    markup: `
+      <rect x="-10.5" y="-4" width="14" height="8" rx="4" fill="none" stroke="${S}" stroke-width="${SW}"/>
+      <circle cx="7.5" cy="0" r="4.2" fill="none" stroke="${S}" stroke-width="${SW}"/>
+    `,
+  },
+  'equipment-slug-catcher': {
+    type: 'equipment-slug-catcher',
+    label: 'اسلاگ کچر (Slug Catcher)',
+    category: 'equipment',
+    markup: `
+      <rect x="-11" y="-3.8" width="22" height="7.6" rx="3.8" fill="none" stroke="${S}" stroke-width="${SW}"/>
+      <line x1="-11" y1="-1.3" x2="11" y2="-1.3" stroke="${S}" stroke-width="1" stroke-dasharray="1.5 1.2"/>
+      <line x1="-11" y1="1.3" x2="11" y2="1.3" stroke="${S}" stroke-width="1" stroke-dasharray="1.5 1.2"/>
+    `,
+  },
+  'equipment-blowdown': {
+    type: 'equipment-blowdown',
+    label: 'بلودان (Blowdown)',
+    category: 'equipment',
+    markup: `
+      <path d="M -9 -6 L 0 0 L -9 6 Z" fill="none" stroke="${S}" stroke-width="${SW}"/>
+      <path d="M 9 -6 L 0 0 L 9 6 Z" fill="none" stroke="${S}" stroke-width="${SW}"/>
+      <line x1="0" y1="0" x2="0" y2="-9" stroke="${S}" stroke-width="${SW}"/>
+      <line x1="-2.6" y1="-9" x2="2.6" y2="-9" stroke="${S}" stroke-width="${SW}"/>
+    `,
+  },
 }
 
 export const SYMBOL_CATEGORY_LABEL: Record<SymbolCategory, string> = {
   valve: 'شیرآلات',
   joint: 'اتصال عایق',
   fitting: 'اتصالات',
+  equipment: 'تجهیزات',
 }
 
 export const SYMBOL_LIST: SymbolDef[] = Object.values(SYMBOL_DEFS)

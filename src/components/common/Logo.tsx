@@ -3,7 +3,7 @@ export function Logo({ size = 36, className = '' }: { size?: number; className?:
   return (
     <img
       src={`${import.meta.env.BASE_URL}logo-icon.png`}
-      alt="لوگوی سامانه پایش پیشرفت ایزومتریک لوله‌کشی"
+      alt="لوگوی PipePulse"
       width={size}
       height={size}
       className={`object-contain ${className}`}
@@ -17,7 +17,7 @@ export function LogoFull({ width = 220, className = '' }: { width?: number; clas
   return (
     <img
       src={`${import.meta.env.BASE_URL}logo-full.png`}
-      alt="IsoTrack — سامانه پایش پیشرفت ایزومتریک لوله‌کشی"
+      alt="PipePulse — Piping Progress Intelligence"
       width={width}
       className={`object-contain ${className}`}
       style={{ width, height: 'auto' }}

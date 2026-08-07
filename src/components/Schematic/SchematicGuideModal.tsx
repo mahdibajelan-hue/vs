@@ -3,7 +3,7 @@ import { Modal } from '../common/Modal'
 
 export function SchematicGuideModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal title="راهنمای سریع طراح نقشه شماتیک" subtitle="در چهار قدم ساده، نقشه خودتان را بسازید" onClose={onClose} width="max-w-xl">
+    <Modal title="راهنمای سریع طراحی نقشه شماتیک" subtitle="در چهار قدم ساده، نقشه خودتان را بسازید" onClose={onClose} width="max-w-xl">
       <div className="space-y-4">
         <Step
           icon={PenLine}

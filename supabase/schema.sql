@@ -1,4 +1,4 @@
--- IsoTrack — Supabase schema + Row Level Security policies
+-- PipePulse — Supabase schema + Row Level Security policies
 -- Run this once in the Supabase project's SQL editor (Dashboard → SQL Editor → New query → paste → Run).
 -- Safe to re-run, and safe to run even if you already ran an earlier version of this file —
 -- every statement is guarded with IF NOT EXISTS / OR REPLACE / DROP ... IF EXISTS.

@@ -191,7 +191,7 @@ export function OnePagerPage({ project }: { project: Project }) {
         )}
 
         <p className="text-[9px] text-center" style={{ color: '#94a3b8' }}>
-          تولید شده توسط سامانه پایش پیشرفت ایزومتریک لوله‌کشی — {new Date().toLocaleString('fa-IR')}
+          تولید شده توسط PipePulse — {new Date().toLocaleString('fa-IR')}
         </p>
       </div>
     </div>

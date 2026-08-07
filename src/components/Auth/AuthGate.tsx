@@ -160,7 +160,7 @@ function AuthScreen() {
   return (
     <Shell
       title="ورود به سامانه"
-      subtitle="سامانه پایش پیشرفت ایزومتریک لوله‌کشی — اطلاعات پروژه روی سرور ذخیره و بین اعضای دعوت‌شده به اشتراک گذاشته می‌شود"
+      subtitle="PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت، مدیریت ریسک و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی."
       panelClassName={exiting ? 'auth-card-exit' : ''}
     >
       <div className="space-y-3">
@@ -202,6 +202,13 @@ function AuthScreen() {
             </>
           )}
         </button>
+      </div>
+
+      <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
+        <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-lg font-extrabold tracking-tight text-brand-300">
+          PipePulse<sup className="text-[10px] align-super">™</sup>
+        </p>
+        <p className="text-[10px] text-muted">Developed &amp; Designed by Mahdi Bajelan</p>
       </div>
     </Shell>
   )

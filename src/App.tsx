@@ -27,7 +27,7 @@ const PAGE_TITLE: Record<Page, string> = {
   worklog: 'کارکرد روزانه',
   onepager: 'داشبورد مدیریتی تک‌صفحه‌ای',
   reports: 'گزارش‌های تحلیلی',
-  schematic: 'طراح نقشه شماتیک',
+  schematic: 'طراحی نقشه شماتیک',
   schedule: 'برنامه زمان‌بندی',
   risks: 'ریسک‌ها و مشکلات پروژه',
   about: 'درباره ما',
@@ -123,10 +123,12 @@ function App() {
         <div className="flex flex-1 items-center justify-center">
           <div className="glass-panel max-w-lg rounded-3xl p-10 text-center">
             <LogoFull width={190} className="mx-auto mb-4" />
-            <h1 className="mb-2 text-xl font-extrabold">سامانه پایش پیشرفت ایزومتریک لوله‌کشی</h1>
+            <h1 style={{ fontFamily: "'Montserrat', sans-serif" }} className="mb-2 text-xl font-extrabold tracking-tight">
+              PipePulse
+            </h1>
             <p className="mb-7 text-sm text-secondary leading-7">
-              مدیریت و پایش روزانه پیشرفت نقشه‌های ایزومتریک ایستگاه‌های گاز و پتروشیمی — آپلود SVG، ثبت کارکرد،
-              گزارش‌های بصری و خروجی حرفه‌ای.
+              پایش بصری، کنترل پیشرفت و پیش‌بینی عملکرد پروژه‌های پایپینگ — آپلود SVG، ثبت کارکرد، گزارش‌های بصری و
+              خروجی حرفه‌ای.
             </p>
             <p className="mb-4 text-xs text-muted leading-6">
               اگر همکارتان از قبل پروژه‌ای ساخته، از او بخواهید شما را با ایمیل‌تان به آن پروژه دعوت کند.

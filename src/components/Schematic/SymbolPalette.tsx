@@ -9,7 +9,7 @@ interface SymbolPaletteProps {
   onModeChange: (m: EditorMode) => void
 }
 
-const CATEGORIES: SymbolCategory[] = ['valve', 'joint', 'fitting']
+const CATEGORIES: SymbolCategory[] = ['valve', 'joint', 'fitting', 'equipment']
 
 export function SymbolPalette({ mode, onModeChange }: SymbolPaletteProps) {
   return (
