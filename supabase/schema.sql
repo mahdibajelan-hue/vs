@@ -369,6 +369,11 @@ alter table daily_logs add column if not exists owner_note text not null default
 -- Backfill existing rows so old data has a contractor snapshot too.
 update daily_logs set contractor_length_done = length_done where contractor_length_done is null;
 update daily_logs set contractor_weld_count = weld_count where contractor_weld_count is null;
+-- Rows already approved before this migration ran never went through the new approve() snapshot
+-- logic, so give them a consultant snapshot too — otherwise the 3-way comparison chart looks
+-- empty for all pre-existing data even after the migration runs.
+update daily_logs set consultant_length_done = length_done where approval_status = 'approved' and consultant_length_done is null;
+update daily_logs set consultant_weld_count = weld_count where approval_status = 'approved' and consultant_weld_count is null;
 
 alter table lines enable row level security;
 alter table daily_logs enable row level security;
