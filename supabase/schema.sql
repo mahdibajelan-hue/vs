@@ -385,13 +385,13 @@ drop policy if exists "daily_logs_select_member" on daily_logs;
 create policy "daily_logs_select_member" on daily_logs
   for select using (is_project_member(project_id));
 
--- Contractor/consultant create and delete entries as before. Update is also open to the project
--- owner (or a platform admin) — outside the approve/reject cycle, but able to correct a value on
--- a case-by-case basis after consultant approval (see owner_* columns above).
+-- Contractor/consultant create entries as before. Owner/admin can also insert — not exposed in
+-- the normal entry form, but needed so they can restore a deleted row from its audit_log
+-- snapshot (see restoreLogSnapshot in the client).
 drop policy if exists "daily_logs_write_editor" on daily_logs;
 drop policy if exists "daily_logs_insert_editor" on daily_logs;
 create policy "daily_logs_insert_editor" on daily_logs
-  for insert with check (can_edit_project(project_id));
+  for insert with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
 
 drop policy if exists "daily_logs_update_editor_or_owner" on daily_logs;
 create policy "daily_logs_update_editor_or_owner" on daily_logs
@@ -404,6 +404,61 @@ create policy "daily_logs_delete_editor" on daily_logs
   for delete using (can_edit_project(project_id));
 
 -- ============================================================================
+-- 8b. Audit log — full before/after snapshot of every insert/update/delete on
+--     daily_logs and lines, with who made the change. Lets an admin or owner see
+--     exactly which user changed or deleted a value, and restore it.
+-- ============================================================================
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  table_name text not null,
+  row_id uuid not null,
+  project_id uuid,
+  action text not null check (action in ('insert', 'update', 'delete')),
+  old_data jsonb,
+  new_data jsonb,
+  changed_by uuid references profiles (id),
+  changed_at timestamptz not null default now()
+);
+
+alter table audit_log enable row level security;
+
+-- Only the trigger (security definer, below) ever writes to this table — no INSERT/UPDATE/DELETE
+-- policy is granted to clients, so nobody can tamper with or erase their own history.
+drop policy if exists "audit_log_select_member_or_admin" on audit_log;
+create policy "audit_log_select_member_or_admin" on audit_log
+  for select using (is_admin_user() or (project_id is not null and project_role(project_id) = 'owner'));
+
+create or replace function log_audit_event()
+returns trigger as $$
+declare
+  v_project_id uuid;
+begin
+  v_project_id := coalesce(new.project_id, old.project_id);
+  insert into audit_log (table_name, row_id, project_id, action, old_data, new_data, changed_by)
+  values (
+    tg_table_name,
+    coalesce(new.id, old.id),
+    v_project_id,
+    lower(tg_op),
+    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end,
+    auth.uid()
+  );
+  return coalesce(new, old);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_audit_daily_logs on daily_logs;
+create trigger trg_audit_daily_logs
+  after insert or update or delete on daily_logs
+  for each row execute function log_audit_event();
+
+drop trigger if exists trg_audit_lines on lines;
+create trigger trg_audit_lines
+  after insert or update or delete on lines
+  for each row execute function log_audit_event();
+
+-- ============================================================================
 -- 9. Indexes
 -- ============================================================================
 create index if not exists idx_project_members_user on project_members (user_id);
@@ -411,3 +466,5 @@ create index if not exists idx_lines_project on lines (project_id);
 create index if not exists idx_daily_logs_project on daily_logs (project_id);
 create index if not exists idx_daily_logs_line on daily_logs (line_id);
 create index if not exists idx_project_invites_email on project_invites (email);
+create index if not exists idx_audit_log_row on audit_log (table_name, row_id);
+create index if not exists idx_audit_log_project on audit_log (project_id);

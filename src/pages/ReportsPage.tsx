@@ -5,6 +5,7 @@ import { computeSCurve, computeWeldsBySize } from '../lib/progress'
 import { SCurveChart } from '../components/Reports/SCurveChart'
 import { WeldsBySizeChart } from '../components/Reports/WeldsBySizeChart'
 import { LogsTable } from '../components/Reports/LogsTable'
+import { DeletedLogsPanel } from '../components/Reports/DeletedLogsPanel'
 import { MilestoneTimeline } from '../components/Reports/MilestoneTimeline'
 import { ThreeWayComparisonChart } from '../components/Reports/ThreeWayComparisonChart'
 import { exportProjectToExcel } from '../lib/export'
@@ -48,6 +49,8 @@ export function ReportsPage({ project }: { project: Project }) {
           <ThreeWayComparisonChart project={project} />
         </div>
       </div>
+
+      <DeletedLogsPanel project={project} />
 
       <div className="glass-panel rounded-2xl overflow-hidden" style={{ height: '480px' }}>
         <LogsTable project={project} />

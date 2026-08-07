@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Trash2, Check, X, Pencil, ShieldCheck } from 'lucide-react'
+import { Trash2, Check, X, Pencil, ShieldCheck, History } from 'lucide-react'
 import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
 import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
@@ -10,6 +10,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput'
 import { formatJalali } from '../../lib/jalali'
 import { DailyLogForm } from '../IsoViewer/DailyLogForm'
 import { OwnerAuditModal } from './OwnerAuditModal'
+import { LogHistoryModal } from './LogHistoryModal'
 
 const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
   root: 'ریشه',
@@ -36,6 +37,7 @@ export function LogsTable({ project }: { project: Project }) {
   const [rejectNote, setRejectNote] = useState('')
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null)
   const [auditingLog, setAuditingLog] = useState<DailyLog | null>(null)
+  const [historyLogId, setHistoryLogId] = useState<string | null>(null)
 
   const contractors = useMemo(() => [...new Set(project.lines.map((l) => l.contractor).filter(Boolean))], [project.lines])
 
@@ -207,6 +209,11 @@ export function LogsTable({ project }: { project: Project }) {
                         <Trash2 size={14} />
                       </button>
                     )}
+                    {canAuditLogs && (
+                      <button onClick={() => setHistoryLogId(log.id)} className="text-muted hover:text-brand-400 transition-colors" title="تاریخچه تغییرات">
+                        <History size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -226,6 +233,7 @@ export function LogsTable({ project }: { project: Project }) {
         <DailyLogForm projectId={project.id} lines={project.lines} initialLineId={null} editingLog={editingLog} onClose={() => setEditingLog(null)} />
       )}
       {auditingLog && <OwnerAuditModal projectId={project.id} log={auditingLog} onClose={() => setAuditingLog(null)} />}
+      {historyLogId && <LogHistoryModal projectId={project.id} logId={historyLogId} onClose={() => setHistoryLogId(null)} />}
     </div>
   )
 }

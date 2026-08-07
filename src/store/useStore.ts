@@ -56,6 +56,8 @@ interface AppState {
   deleteLog: (projectId: string, logId: string) => Promise<void>
   /** Owner (or admin) audit outside the approve/reject cycle — confirms as-is or corrects the values. */
   auditLogAsOwner: (projectId: string, logId: string, data: { lengthDone?: number; weldCount?: number; note?: string }) => Promise<void>
+  /** Re-applies a raw audit_log snapshot (already snake_case, straight from the DB row) — restores an edited or deleted entry. */
+  restoreLogSnapshot: (projectId: string, logId: string, snapshot: Record<string, unknown>) => Promise<void>
 
   setPlannedCurve: (projectId: string, curve: PlannedProgressPoint[]) => Promise<void>
 
@@ -415,6 +417,15 @@ export const useStore = create<AppState>()(
             ? { projectDetail: { ...s.projectDetail, logs: s.projectDetail.logs.map((l) => (l.id === logId ? { ...l, ...payload } : l)) } }
             : {},
         )
+      },
+
+      restoreLogSnapshot: async (projectId, logId, snapshot) => {
+        const { data: existing } = await supabase.from('daily_logs').select('id').eq('id', logId).maybeSingle()
+        const { error } = existing
+          ? await supabase.from('daily_logs').update(snapshot).eq('id', logId)
+          : await supabase.from('daily_logs').insert(snapshot)
+        if (reportSupabaseError('بازیابی سابقه', error)) return
+        if (get().currentProjectId === projectId) await get().selectProject(projectId)
       },
 
       setPlannedCurve: async (projectId, curve) => {
