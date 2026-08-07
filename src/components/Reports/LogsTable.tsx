@@ -26,7 +26,7 @@ export function LogsTable({ project }: { project: Project }) {
   const updateLog = useStore((s) => s.updateLog)
   const role = useCurrentRole()
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
-  const reviewerName = useAuthStore((s) => s.currentUser()?.fullName ?? '')
+  const reviewerId = useAuthStore((s) => s.currentUser()?.id ?? null)
   const canAuditLogs = canAudit(role) || isAdmin
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -57,10 +57,10 @@ export function LogsTable({ project }: { project: Project }) {
   }, [project.logs, project.lines, from, to, contractor, status, approval])
 
   const approve = (logId: string) => {
-    updateLog(project.id, logId, { approvalStatus: 'approved', reviewedBy: reviewerName, reviewNote: '' })
+    updateLog(project.id, logId, { approvalStatus: 'approved', reviewedBy: reviewerId, reviewNote: '' })
   }
   const confirmReject = (logId: string) => {
-    updateLog(project.id, logId, { approvalStatus: 'rejected', reviewedBy: reviewerName, reviewNote: rejectNote.trim() })
+    updateLog(project.id, logId, { approvalStatus: 'rejected', reviewedBy: reviewerId, reviewNote: rejectNote.trim() })
     setRejectingId(null)
     setRejectNote('')
   }
@@ -109,8 +109,9 @@ export function LogsTable({ project }: { project: Project }) {
             <tr className="text-xs text-secondary">
               <th className="p-2.5 text-right font-medium">تاریخ</th>
               <th className="p-2.5 text-right font-medium">خط</th>
-              <th className="p-2.5 text-right font-medium">متراژ</th>
-              <th className="p-2.5 text-right font-medium">سرجوش</th>
+              <th className="p-2.5 text-right font-medium">مقدار پیمانکار</th>
+              <th className="p-2.5 text-right font-medium">مقدار مشاور</th>
+              <th className="p-2.5 text-right font-medium">مقدار کارفرما</th>
               <th className="p-2.5 text-right font-medium">پاس/تست</th>
               <th className="p-2.5 text-right font-medium">پیمانکار</th>
               <th className="p-2.5 text-right font-medium">توضیحات</th>
@@ -120,12 +121,20 @@ export function LogsTable({ project }: { project: Project }) {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
-            {rows.map(({ log, line }) => (
+            {rows.map(({ log, line }) => {
+              const consultantVal =
+                log.consultantLengthDone != null ? { length: log.consultantLengthDone, weld: log.consultantWeldCount ?? 0 } : null
+              const ownerVal =
+                log.ownerLengthDone != null ? { length: log.ownerLengthDone, weld: log.ownerWeldCount ?? 0 } : consultantVal
+              return (
               <tr key={log.id} className="hover:bg-white/[0.03]">
                 <td className="p-2.5 num whitespace-nowrap">{formatJalali(log.date)}</td>
                 <td className="p-2.5 font-mono text-xs">{line?.svgElementId ?? '—'}</td>
-                <td className="p-2.5 num">{log.lengthDone}m</td>
-                <td className="p-2.5 num">{log.weldCount}</td>
+                <td className="p-2.5 num whitespace-nowrap">
+                  {log.contractorLengthDone}m / {log.contractorWeldCount}
+                </td>
+                <td className="p-2.5 num whitespace-nowrap">{consultantVal ? `${consultantVal.length}m / ${consultantVal.weld}` : '—'}</td>
+                <td className="p-2.5 num whitespace-nowrap">{ownerVal ? `${ownerVal.length}m / ${ownerVal.weld}` : '—'}</td>
                 <td className="p-2.5">{WELD_PASS_LABEL[log.weldPass]}</td>
                 <td className="p-2.5">{log.contractor}</td>
                 <td className="p-2.5 max-w-[220px] truncate text-secondary" title={log.notes || log.delayReason}>
@@ -217,10 +226,11 @@ export function LogsTable({ project }: { project: Project }) {
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-xs text-muted">
+                <td colSpan={11} className="p-8 text-center text-xs text-muted">
                   رکوردی یافت نشد
                 </td>
               </tr>

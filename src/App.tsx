@@ -7,6 +7,7 @@ import { NewProjectModal } from './components/Layout/NewProjectModal'
 import { ViewerPage } from './pages/ViewerPage'
 import { OnePagerPage } from './pages/OnePagerPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { WorkLogPage } from './pages/WorkLogPage'
 import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { RisksPage } from './pages/RisksPage'
@@ -19,10 +20,11 @@ import { canEdit } from './lib/permissions'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
-export type Page = 'viewer' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
+export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
+  worklog: 'کارکرد روزانه',
   onepager: 'داشبورد مدیریتی تک‌صفحه‌ای',
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراح نقشه شماتیک',
@@ -170,6 +172,7 @@ function App() {
             </div>
           )}
           {currentProject && page === 'viewer' && <ViewerPage project={currentProject} />}
+          {currentProject && page === 'worklog' && <WorkLogPage project={currentProject} />}
           {currentProject && page === 'onepager' && <OnePagerPage project={currentProject} />}
           {currentProject && page === 'reports' && <ReportsPage project={currentProject} />}
           {currentProject && page === 'schematic' && (

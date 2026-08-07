@@ -105,7 +105,8 @@ export function buildSeedProject(): {
   const logs: NewDailyLogInput[] = rawLogs.map((l, i) => ({
     ...l,
     approvalStatus: pendingIndexes.has(i) ? 'pending' : 'approved',
-    reviewedBy: pendingIndexes.has(i) ? null : 'مشاور پروژه',
+    // No real reviewer profile id exists at seed-generation time — reviewed_by is a uuid FK, not free text.
+    reviewedBy: null,
     reviewNote: '',
   }))
 

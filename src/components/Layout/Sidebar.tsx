@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, Download, Upload, ShieldAlert, Pencil, Trash2, X } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, ClipboardList, Download, Upload, ShieldAlert, Pencil, Trash2, X } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useCurrentRole } from '../../store/useMembersStore'
 import { canEdit } from '../../lib/permissions'
@@ -20,6 +20,7 @@ interface SidebarProps {
 
 const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'viewer', label: 'نقشه ایزومتریک', icon: Map },
+  { id: 'worklog', label: 'کارکرد روزانه', icon: ClipboardList },
   { id: 'schematic', label: 'طراح نقشه شماتیک', icon: PenTool },
   { id: 'schedule', label: 'برنامه زمان‌بندی', icon: CalendarRange },
   { id: 'risks', label: 'ریسک‌ها', icon: ShieldAlert },
