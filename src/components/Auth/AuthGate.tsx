@@ -110,14 +110,9 @@ type Status = 'idle' | 'submitting' | 'success' | 'error'
 
 function AuthScreen() {
   const signIn = useAuthStore((s) => s.signIn)
-  const signUp = useAuthStore((s) => s.signUp)
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [exiting, setExiting] = useState(false)
 
@@ -126,35 +121,11 @@ function AuthScreen() {
   const submit = async () => {
     if (busy) return
     setError('')
-    setInfo('')
     if (!email.trim() || !password) {
       setError('ایمیل و رمز عبور را وارد کنید')
       return
     }
-    if (mode === 'signup' && !fullName.trim()) {
-      setError('نام و نام خانوادگی را وارد کنید')
-      return
-    }
-    if (mode === 'signup' && password !== confirm) {
-      setError('رمز عبور و تکرار آن یکسان نیستند')
-      return
-    }
     setStatus('submitting')
-    if (mode === 'signup') {
-      const res = await signUp({ email: email.trim(), password, fullName: fullName.trim() })
-      if (!res.ok) {
-        setError(res.error ?? 'خطا در ثبت‌نام')
-        setStatus('error')
-        setTimeout(() => setStatus('idle'), 450)
-        return
-      }
-      setStatus('idle')
-      setInfo('ثبت‌نام انجام شد — اکنون وارد شوید. اگر تایید ایمیل فعال باشد، ابتدا ایمیل خود را تایید کنید.')
-      setMode('login')
-      setPassword('')
-      setConfirm('')
-      return
-    }
     const res = await signIn(email.trim(), password)
     if (!res.ok) {
       setError(res.error ?? 'ورود ناموفق بود')
@@ -171,18 +142,11 @@ function AuthScreen() {
 
   return (
     <Shell
-      title={mode === 'login' ? 'ورود به سامانه' : 'ایجاد حساب کاربری'}
+      title="ورود به سامانه"
       subtitle="سامانه پایش پیشرفت ایزومتریک لوله‌کشی — اطلاعات پروژه روی سرور ذخیره و بین اعضای دعوت‌شده به اشتراک گذاشته می‌شود"
-      wide={mode === 'signup'}
       panelClassName={exiting ? 'auth-card-exit' : ''}
     >
       <div className="space-y-3">
-        {mode === 'signup' && (
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نام و نام خانوادگی</span>
-            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" placeholder="مثلاً مهدی باجلان" disabled={busy} />
-          </label>
-        )}
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">ایمیل</span>
           <div className="relative">
@@ -200,12 +164,8 @@ function AuthScreen() {
             <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
           </div>
         </label>
-        <div className="relative">
-          <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
-        </div>
-        {mode === 'signup' && <PasswordField label="تکرار رمز عبور" value={confirm} onChange={setConfirm} />}
+        <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
         {error && <p className="text-xs text-red-400">{error}</p>}
-        {info && <p className="text-xs text-green-400">{info}</p>}
         <button
           onClick={submit}
           disabled={busy}
@@ -219,24 +179,11 @@ function AuthScreen() {
             </>
           ) : status === 'submitting' ? (
             'در حال بررسی...'
-          ) : mode === 'login' ? (
+          ) : (
             <>
               <KeyRound size={15} /> ورود
             </>
-          ) : (
-            'ایجاد حساب'
           )}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode((m) => (m === 'login' ? 'signup' : 'login'))
-            setError('')
-            setInfo('')
-          }}
-          className="w-full text-center text-xs text-secondary hover:text-brand-300 transition-colors"
-        >
-          {mode === 'login' ? 'حساب کاربری ندارید؟ ثبت‌نام کنید' : 'قبلاً ثبت‌نام کرده‌اید؟ وارد شوید'}
         </button>
       </div>
     </Shell>
