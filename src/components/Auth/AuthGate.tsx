@@ -2,11 +2,24 @@ import { useState, type ReactNode } from 'react'
 import { ArrowRight, Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
+import type { ModuleKey } from '../../store/useModuleStore'
 import { LogoFull } from '../common/Logo'
 import { ProfileForm } from './ProfileForm'
-import { ModuleHub } from './ModuleHub'
 
-export function AuthGate({ children }: { children: ReactNode }) {
+const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> = {
+  pipepulse: {
+    title: 'ورود به PipePulse',
+    subtitle:
+      'PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی.',
+  },
+  risk: {
+    title: 'ورود به مدیریت ریسک',
+    subtitle:
+      'یک سامانه کنترل ریسک برای پروژه‌های EPC — شناسایی، ارزیابی، برنامه پاسخ، پایش و گزارش‌دهی مدیریتی ریسک‌های پروژه.',
+  },
+}
+
+export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {
   const authLoading = useAuthStore((s) => s.authLoading)
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const profileLoading = useAuthStore((s) => s.profileLoading)
@@ -19,7 +32,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     )
   }
-  if (!isAuthed) return <AuthScreen />
+  if (!isAuthed) return <LoginPanel moduleKey={moduleKey} onBack={onBackToHub} />
   if (profile && !profile.profileCompleted) {
     return (
       <Shell title="تکمیل مشخصات" subtitle="قبل از ادامه، لطفاً مشخصات خود را تکمیل کنید">
@@ -126,13 +139,7 @@ export function RolePicker({
 
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
-function AuthScreen() {
-  const [view, setView] = useState<'hub' | 'login'>('hub')
-  if (view === 'hub') return <ModuleHub onEnterPipePulse={() => setView('login')} />
-  return <LoginPanel onBack={() => setView('hub')} />
-}
-
-function LoginPanel({ onBack }: { onBack: () => void }) {
+function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () => void }) {
   const signIn = useAuthStore((s) => s.signIn)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -141,6 +148,7 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
   const [exiting, setExiting] = useState(false)
 
   const busy = status === 'submitting' || status === 'success'
+  const copy = MODULE_LOGIN_COPY[moduleKey]
 
   const submit = async () => {
     if (busy) return
@@ -175,59 +183,59 @@ function LoginPanel({ onBack }: { onBack: () => void }) {
         </button>
       )}
       <Shell
-      title="ورود به سامانه"
-      subtitle="PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت، مدیریت ریسک و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی."
-      panelClassName={
-        exiting ? 'auth-card-exit' : status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''
-      }
-    >
-      <div className="space-y-3">
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">ایمیل</span>
-          <div className="relative">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-              disabled={busy}
-              className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
-              placeholder="person@example.com"
-              dir="ltr"
-              autoFocus
-            />
-            <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-          </div>
-        </label>
-        <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        <button
-          onClick={submit}
-          disabled={busy}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors duration-300 ${
-            status === 'success' ? 'bg-green-500' : 'bg-brand-500 hover:bg-brand-400'
-          }`}
-        >
-          {status === 'success' ? (
-            <>
-              <Check size={16} className="auth-success-check" /> ورود با موفقیت انجام شد
-            </>
-          ) : status === 'submitting' ? (
-            'در حال بررسی...'
-          ) : (
-            <>
-              <KeyRound size={15} /> ورود
-            </>
-          )}
-        </button>
-      </div>
+        title={copy.title}
+        subtitle={copy.subtitle}
+        panelClassName={exiting ? 'auth-card-exit' : status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''}
+      >
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">ایمیل</span>
+            <div className="relative">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+                disabled={busy}
+                className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
+                placeholder="person@example.com"
+                dir="ltr"
+                autoFocus
+              />
+              <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            </div>
+          </label>
+          <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button
+            onClick={submit}
+            disabled={busy}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors duration-300 ${
+              status === 'success' ? 'bg-green-500' : 'bg-brand-500 hover:bg-brand-400'
+            }`}
+          >
+            {status === 'success' ? (
+              <>
+                <Check size={16} className="auth-success-check" /> ورود با موفقیت انجام شد
+              </>
+            ) : status === 'submitting' ? (
+              'در حال بررسی...'
+            ) : (
+              <>
+                <KeyRound size={15} /> ورود
+              </>
+            )}
+          </button>
+        </div>
 
-      <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
-        <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-lg font-extrabold tracking-tight text-brand-300">
-          PipePulse<sup className="text-[10px] align-super">™</sup>
-        </p>
-        <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>Developed &amp; Designed by Mahdi Bajelan</p>
-      </div>
+        <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
+          <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-lg font-extrabold tracking-tight text-brand-300">
+            PipePulse<sup className="text-[10px] align-super">™</sup>
+          </p>
+          <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>
+            Developed &amp; Designed by Mahdi Bajelan
+          </p>
+        </div>
       </Shell>
     </>
   )

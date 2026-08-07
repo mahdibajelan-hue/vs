@@ -518,3 +518,289 @@ create index if not exists idx_daily_logs_line on daily_logs (line_id);
 create index if not exists idx_project_invites_email on project_invites (email);
 create index if not exists idx_audit_log_row on audit_log (table_name, row_id);
 create index if not exists idx_audit_log_project on audit_log (project_id);
+
+-- ============================================================================
+-- 10. Risk Management module — a separate product reached from the module hub,
+--     sharing auth/profiles with the piping tracker above but with its own project
+--     registry and full risk lifecycle (identify -> assess -> plan response ->
+--     monitor -> reassess -> escalate -> mitigate -> close). Phase 1: register,
+--     assessment history, actions. Dashboard/heatmap/trend analytics/reports/AI
+--     assistant are later phases built on top of this data model.
+-- ============================================================================
+create table if not exists rm_projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  client text not null default '',
+  project_manager_id uuid references profiles (id),
+  start_date date,
+  finish_date date,
+  status text not null default 'active' check (status in ('active', 'on_hold', 'closed')),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table rm_projects enable row level security;
+
+create table if not exists rm_project_members (
+  project_id uuid not null references rm_projects (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  role text not null check (role in ('project_manager', 'risk_manager', 'risk_owner', 'team_member', 'management')),
+  created_at timestamptz not null default now(),
+  primary key (project_id, user_id)
+);
+
+alter table rm_project_members enable row level security;
+
+-- Risk Master. initial_probability/impact are frozen at creation — the baseline every later
+-- review is compared against; current/residual state lives in rm_risk_assessments (a fresh row
+-- per review, never an overwrite) so the full history survives.
+create table if not exists rm_risks (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references rm_projects (id) on delete cascade,
+  code text not null,
+  title text not null,
+  description text not null default '',
+  category text not null default 'other' check (category in ('technical', 'schedule', 'cost', 'hse', 'procurement', 'quality', 'external', 'other')),
+  risk_type text not null default 'threat' check (risk_type in ('threat', 'opportunity')),
+  owner_id uuid references profiles (id),
+  identified_date date not null default current_date,
+  status text not null default 'open' check (status in ('open', 'monitoring', 'escalated', 'closed')),
+  response_strategy text not null default 'mitigate' check (response_strategy in ('avoid', 'mitigate', 'transfer', 'accept', 'exploit')),
+  project_phase text check (project_phase in ('engineering', 'procurement', 'construction', 'commissioning')),
+  time_to_impact_days integer,
+  initial_probability smallint not null check (initial_probability between 1 and 5),
+  initial_impact smallint not null check (initial_impact between 1 and 5),
+  initial_score smallint generated always as (initial_probability * initial_impact) stored,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table rm_risks enable row level security;
+
+-- Auto-assigns the next R-### code within its project — the client never computes/sends one.
+create or replace function rm_assign_risk_code()
+returns trigger as $$
+begin
+  if new.code is null or new.code = '' then
+    new.code := 'R-' || lpad((
+      select coalesce(max(split_part(code, '-', 2)::int), 0) + 1
+      from rm_risks where project_id = new.project_id
+    )::text, 3, '0');
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_rm_assign_risk_code on rm_risks;
+create trigger trg_rm_assign_risk_code
+  before insert on rm_risks
+  for each row execute function rm_assign_risk_code();
+
+create table if not exists rm_risk_assessments (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  review_date date not null default current_date,
+  current_probability smallint not null check (current_probability between 1 and 5),
+  current_impact smallint not null check (current_impact between 1 and 5),
+  current_score smallint generated always as (current_probability * current_impact) stored,
+  residual_probability smallint not null check (residual_probability between 1 and 5),
+  residual_impact smallint not null check (residual_impact between 1 and 5),
+  residual_score smallint generated always as (residual_probability * residual_impact) stored,
+  trend text not null default 'stable' check (trend in ('improving', 'stable', 'worsening')),
+  reviewer_comment text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table rm_risk_assessments enable row level security;
+
+create table if not exists rm_risk_actions (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  description text not null,
+  owner_id uuid references profiles (id),
+  due_date date,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed')),
+  completion_percentage smallint not null default 0 check (completion_percentage between 0 and 100),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table rm_risk_actions enable row level security;
+
+-- Comments + lightweight audit trail (one row per notable event: created, status change,
+-- assessment added, action added/completed, comment).
+create table if not exists rm_risk_history (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  user_id uuid references profiles (id),
+  activity text not null,
+  previous_value jsonb,
+  new_value jsonb,
+  comment text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table rm_risk_history enable row level security;
+
+-- ----------------------------------------------------------------------------
+-- Helper functions
+-- ----------------------------------------------------------------------------
+create or replace function rm_is_project_member(p_project_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from rm_project_members
+    where project_id = p_project_id and user_id = auth.uid()
+  );
+$$ language sql security definer stable;
+
+create or replace function rm_project_role(p_project_id uuid)
+returns text as $$
+  select role from rm_project_members
+  where project_id = p_project_id and user_id = auth.uid()
+  limit 1;
+$$ language sql security definer stable;
+
+-- Everyone except the read-only "management" (steering committee) role may register risks, log
+-- actions and comment.
+create or replace function rm_can_edit(p_project_id uuid)
+returns boolean as $$
+  select rm_project_role(p_project_id) in ('project_manager', 'risk_manager', 'risk_owner', 'team_member');
+$$ language sql security definer stable;
+
+-- Project Manager / Risk Manager (PMO) run formal reviews, approvals and escalation.
+create or replace function rm_can_manage(p_project_id uuid)
+returns boolean as $$
+  select rm_project_role(p_project_id) in ('project_manager', 'risk_manager');
+$$ language sql security definer stable;
+
+-- Mirrors create_project_with_owner — creates the project and the creator's first membership
+-- row atomically so RLS's SELECT policy doesn't hide the just-inserted row from its own RETURNING.
+create or replace function create_rm_project_with_manager(
+  p_name text,
+  p_role text,
+  p_client text default '',
+  p_start_date date default null,
+  p_finish_date date default null
+)
+returns rm_projects as $$
+declare
+  new_project rm_projects;
+begin
+  insert into rm_projects (name, client, start_date, finish_date, project_manager_id, created_by)
+  values (p_name, p_client, p_start_date, p_finish_date, case when p_role = 'project_manager' then auth.uid() else null end, auth.uid())
+  returning * into new_project;
+
+  insert into rm_project_members (project_id, user_id, role) values (new_project.id, auth.uid(), p_role);
+
+  return new_project;
+end;
+$$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Policies
+-- ----------------------------------------------------------------------------
+drop policy if exists "rm_projects_select_member" on rm_projects;
+create policy "rm_projects_select_member" on rm_projects
+  for select using (rm_is_project_member(id) or is_admin_user());
+
+drop policy if exists "rm_projects_insert_any_authenticated" on rm_projects;
+create policy "rm_projects_insert_any_authenticated" on rm_projects
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists "rm_projects_update_manager" on rm_projects;
+create policy "rm_projects_update_manager" on rm_projects
+  for update using (rm_can_manage(id) or is_admin_user());
+
+drop policy if exists "rm_projects_delete_manager" on rm_projects;
+create policy "rm_projects_delete_manager" on rm_projects
+  for delete using (rm_project_role(id) = 'project_manager' or is_admin_user());
+
+drop policy if exists "rm_members_select_member" on rm_project_members;
+create policy "rm_members_select_member" on rm_project_members
+  for select using (rm_is_project_member(project_id) or is_admin_user());
+
+drop policy if exists "rm_members_insert_manager_or_admin" on rm_project_members;
+create policy "rm_members_insert_manager_or_admin" on rm_project_members
+  for insert with check (
+    user_id = auth.uid()
+    or is_admin_user()
+    or rm_project_role(project_id) = 'project_manager'
+  );
+
+drop policy if exists "rm_members_delete_manager" on rm_project_members;
+create policy "rm_members_delete_manager" on rm_project_members
+  for delete using (rm_project_role(project_id) = 'project_manager' or is_admin_user());
+
+drop policy if exists "rm_members_update_manager" on rm_project_members;
+create policy "rm_members_update_manager" on rm_project_members
+  for update using (rm_project_role(project_id) = 'project_manager' or is_admin_user());
+
+drop policy if exists "rm_risks_select_member" on rm_risks;
+create policy "rm_risks_select_member" on rm_risks
+  for select using (rm_is_project_member(project_id) or is_admin_user());
+
+drop policy if exists "rm_risks_insert_editor" on rm_risks;
+create policy "rm_risks_insert_editor" on rm_risks
+  for insert with check (rm_can_edit(project_id) or is_admin_user());
+
+drop policy if exists "rm_risks_update_editor_or_owner" on rm_risks;
+create policy "rm_risks_update_editor_or_owner" on rm_risks
+  for update using (rm_can_edit(project_id) or owner_id = auth.uid() or is_admin_user());
+
+drop policy if exists "rm_risks_delete_manager" on rm_risks;
+create policy "rm_risks_delete_manager" on rm_risks
+  for delete using (rm_can_manage(project_id) or is_admin_user());
+
+-- Assessment history — read by any project member; only PM/Risk Manager add reviews (formal
+-- reassessment is their job, not ad-hoc team edits).
+drop policy if exists "rm_assessments_select_member" on rm_risk_assessments;
+create policy "rm_assessments_select_member" on rm_risk_assessments
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user()))
+  );
+
+drop policy if exists "rm_assessments_insert_manager" on rm_risk_assessments;
+create policy "rm_assessments_insert_manager" on rm_risk_assessments
+  for insert with check (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_can_manage(r.project_id) or is_admin_user()))
+  );
+
+drop policy if exists "rm_actions_select_member" on rm_risk_actions;
+create policy "rm_actions_select_member" on rm_risk_actions
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user()))
+  );
+
+drop policy if exists "rm_actions_write_editor" on rm_risk_actions;
+create policy "rm_actions_write_editor" on rm_risk_actions
+  for all
+  using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_can_edit(r.project_id) or r.owner_id = auth.uid() or is_admin_user()))
+  )
+  with check (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_can_edit(r.project_id) or r.owner_id = auth.uid() or is_admin_user()))
+  );
+
+drop policy if exists "rm_history_select_member" on rm_risk_history;
+create policy "rm_history_select_member" on rm_risk_history
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user()))
+  );
+
+drop policy if exists "rm_history_insert_member" on rm_risk_history;
+create policy "rm_history_insert_member" on rm_risk_history
+  for insert with check (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user()))
+  );
+
+-- ----------------------------------------------------------------------------
+-- Indexes
+-- ----------------------------------------------------------------------------
+create index if not exists idx_rm_project_members_user on rm_project_members (user_id);
+create index if not exists idx_rm_risks_project on rm_risks (project_id);
+create index if not exists idx_rm_risk_assessments_risk on rm_risk_assessments (risk_id);
+create index if not exists idx_rm_risk_actions_risk on rm_risk_actions (risk_id);
+create index if not exists idx_rm_risk_history_risk on rm_risk_history (risk_id);

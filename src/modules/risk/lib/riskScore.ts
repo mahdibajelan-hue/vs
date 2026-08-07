@@ -1,0 +1,65 @@
+import type { RmRisk, RmRiskAction, RmRiskAssessment } from '../types'
+
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export const RISK_LEVEL_LABEL_FA: Record<RiskLevel, string> = {
+  low: 'کم',
+  medium: 'متوسط',
+  high: 'زیاد',
+  critical: 'بحرانی',
+}
+
+export const RISK_LEVEL_COLOR: Record<RiskLevel, string> = {
+  low: '#2ecc71',
+  medium: '#f1c40f',
+  high: '#f97316',
+  critical: '#e74c3c',
+}
+
+export function riskScore(probability: number, impact: number): number {
+  return probability * impact
+}
+
+/** 1-5 Low, 6-10 Medium, 11-15 High, 16-25 Critical. */
+export function riskLevel(score: number): RiskLevel {
+  if (score >= 16) return 'critical'
+  if (score >= 11) return 'high'
+  if (score >= 6) return 'medium'
+  return 'low'
+}
+
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+export function isActionOverdue(action: RmRiskAction, today = todayIso()): boolean {
+  return action.status !== 'completed' && !!action.dueDate && action.dueDate < today
+}
+
+/** The latest review (by review_date, tie-broken by created_at) — the risk's current officially-reviewed state. */
+export function latestAssessment(assessments: RmRiskAssessment[]): RmRiskAssessment | null {
+  if (assessments.length === 0) return null
+  return [...assessments].sort((a, b) => {
+    if (a.reviewDate !== b.reviewDate) return a.reviewDate < b.reviewDate ? 1 : -1
+    return a.createdAt < b.createdAt ? 1 : -1
+  })[0]
+}
+
+/** Current probability/impact/score for display — the latest assessment if reviewed at least once, else the initial values. */
+export function currentState(risk: RmRisk, assessments: RmRiskAssessment[]): { probability: number; impact: number; score: number } {
+  const latest = latestAssessment(assessments)
+  if (latest) return { probability: latest.currentProbability, impact: latest.currentImpact, score: latest.currentScore }
+  return { probability: risk.initialProbability, impact: risk.initialImpact, score: risk.initialScore }
+}
+
+/**
+ * Management-attention trigger: score >= 16 (Critical), OR any open action is overdue, OR the
+ * risk's consequence is expected within 14 days — the fast-track project heuristic from the spec.
+ */
+export function isEscalationRequired(risk: RmRisk, assessments: RmRiskAssessment[], actions: RmRiskAction[], today = todayIso()): boolean {
+  const { score } = currentState(risk, assessments)
+  if (score >= 16) return true
+  if (actions.some((a) => isActionOverdue(a, today))) return true
+  if (risk.timeToImpactDays !== null && risk.timeToImpactDays <= 14) return true
+  return false
+}

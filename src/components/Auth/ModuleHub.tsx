@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { ShieldAlert, AlertTriangle, ArrowLeft, Sparkles, Clock3 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { LogoFull } from '../common/Logo'
+import type { ModuleKey } from '../../store/useModuleStore'
 
 const GOLD = '#c9a227'
 
 interface ModuleDef {
-  key: string
+  key: ModuleKey | 'issues'
   title: string
   englishTag: string
   description: string
@@ -20,10 +21,10 @@ const MODULES: ModuleDef[] = [
     key: 'risk',
     title: 'مدیریت ریسک',
     englishTag: 'Risk Management',
-    description: 'شناسایی، ارزیابی و پایش ریسک‌های پروژه در یک نگاه — نقشه حرارتی، اولویت‌بندی و برنامه کنترل.',
+    description: 'شناسایی، ارزیابی، پاسخ، پایش و تحلیل روند ریسک‌های پروژه — یک سامانه کنترل ریسک برای پروژه‌های EPC.',
     icon: ShieldAlert,
     accent: '#e74c3c',
-    status: 'soon',
+    status: 'active',
   },
   {
     key: 'issues',
@@ -45,12 +46,12 @@ const MODULES: ModuleDef[] = [
   },
 ]
 
-export function ModuleHub({ onEnterPipePulse }: { onEnterPipePulse: () => void }) {
+export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const [notice, setNotice] = useState<string | null>(null)
 
   const handleSelect = (m: ModuleDef) => {
-    if (m.status === 'active') {
-      onEnterPipePulse()
+    if (m.status === 'active' && m.key !== 'issues') {
+      onEnterModule(m.key)
       return
     }
     setNotice(`ماژول «${m.title}» به‌زودی راه‌اندازی می‌شود`)
