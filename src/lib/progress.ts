@@ -19,7 +19,7 @@ export function computeLineProgress(line: IsoLine, logs: DailyLog[]): LineProgre
   const lineLogs = logs.filter((l) => l.lineId === line.id && isCountedLog(l))
   const lengthDone = round1(lineLogs.reduce((sum, l) => sum + (l.lengthDone || 0), 0))
   const weldsDone = lineLogs.reduce((sum, l) => sum + (l.weldCount || 0), 0)
-  const hasHydrotest = lineLogs.some((l) => l.weldPass === 'hydrotest')
+  const hasHydrotest = lineLogs.some((l) => l.activity === 'hydrotest')
   const percentByLength = line.plannedLength > 0 ? (lengthDone / line.plannedLength) * 100 : 0
   const percentByWeld = line.totalWelds > 0 ? (weldsDone / line.totalWelds) * 100 : 0
   const percent = Math.min(

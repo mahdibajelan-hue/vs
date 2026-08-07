@@ -392,6 +392,27 @@ update daily_logs set contractor_weld_count = weld_count where contractor_weld_c
 update daily_logs set consultant_length_done = length_done where approval_status = 'approved' and consultant_length_done is null;
 update daily_logs set consultant_weld_count = weld_count where approval_status = 'approved' and consultant_weld_count is null;
 
+-- Repurpose weld_pass (root/hot/fill/cap/ndt/hydrotest — weld-pass granularity) as the broader
+-- per-log "activity" tag matching the Schedule module's four activities (welding/ndt/coating/
+-- hydrotest) — individual pass detail wasn't used for scheduling, so root/hot/fill/cap collapse
+-- into 'welding'. This also lets the Schedule module auto-compute every activity's actual
+-- progress from daily logs tagged with that same activity, not just welding.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'daily_logs' and column_name = 'activity') then
+    if exists (select 1 from information_schema.columns where table_name = 'daily_logs' and column_name = 'weld_pass') then
+      alter table daily_logs rename column weld_pass to activity;
+    else
+      alter table daily_logs add column activity text not null default 'welding';
+    end if;
+  end if;
+end $$;
+update daily_logs set activity = 'welding' where activity in ('root', 'hot', 'fill', 'cap');
+alter table daily_logs drop constraint if exists daily_logs_weld_pass_check;
+alter table daily_logs drop constraint if exists daily_logs_activity_check;
+alter table daily_logs add constraint daily_logs_activity_check check (activity in ('welding', 'ndt', 'coating', 'hydrotest'));
+alter table daily_logs alter column activity set default 'welding';
+
 alter table lines enable row level security;
 alter table daily_logs enable row level security;
 

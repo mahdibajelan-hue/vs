@@ -43,7 +43,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
   const currentUser = useAuthStore((s) => s.currentUser())
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const role = useCurrentRole()
-  const editable = canEdit(role)
+  const editable = canEdit(role, isAdmin)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nav = isAdmin ? [...NAV, ADMIN_NAV] : NAV
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null)

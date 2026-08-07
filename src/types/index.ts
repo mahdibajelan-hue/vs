@@ -52,7 +52,8 @@ export interface DailyLog {
   date: string
   lengthDone: number
   weldCount: number
-  weldPass: 'root' | 'hot' | 'fill' | 'cap' | 'ndt' | 'hydrotest'
+  /** Which schedule activity this entry's work counts toward — feeds directly into the Schedule module's auto-computed actual progress. */
+  activity: ActivityKind
   contractor: string
   notes: string
   delayReason: string

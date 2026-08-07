@@ -1,6 +1,6 @@
-import type { ActivitySchedule, Project } from '../types'
+import type { ActivityKind, ActivitySchedule, Project } from '../types'
 import type { SCurvePoint } from './progress'
-import { computeLineProgress, isCountedLog } from './progress'
+import { isCountedLog } from './progress'
 
 function toDate(iso: string): Date {
   return new Date(`${iso}T00:00:00`)
@@ -21,23 +21,39 @@ export function todayIso(): string {
 }
 
 /**
- * The welding activity's "actual" progress is derived automatically from daily-log entries
- * (which is where field work is actually recorded) instead of being entered by hand in the
- * Schedule module — connecting cumulative daily performance to the plan. Other activities (NDT,
- * coating, hydrotest) have no operational data source yet, so their stored actual values pass
- * through unchanged.
+ * Welding/NDT progress is measured in weld count (against the line's totalWelds); coating/
+ * hydrotest progress is measured in length (against the line's plannedLength) — pipe gets coated
+ * and hydrotested along its length, not per weld.
+ */
+const ACTIVITY_METRIC: Record<ActivityKind, 'welds' | 'length'> = {
+  welding: 'welds',
+  ndt: 'welds',
+  coating: 'length',
+  hydrotest: 'length',
+}
+
+/**
+ * Every activity's "actual" progress is derived automatically from daily-log entries tagged with
+ * that same activity (which is where field work is actually recorded) instead of being entered by
+ * hand in the Schedule module — connecting cumulative daily performance to the plan.
  */
 export function withComputedActuals(project: Project): ActivitySchedule[] {
   return project.schedules.map((s) => {
-    if (s.activity !== 'welding') return s
     const line = project.lines.find((l) => l.id === s.lineId)
     if (!line) return { ...s, actualStart: null, actualEnd: null, percentComplete: 0 }
-    const lineLogDates = project.logs.filter((l) => l.lineId === line.id && isCountedLog(l)).map((l) => l.date)
-    if (lineLogDates.length === 0) return { ...s, actualStart: null, actualEnd: null, percentComplete: 0 }
-    const progress = computeLineProgress(line, project.logs)
-    const percentComplete = line.totalWelds > 0 ? Math.min(100, Math.round((progress.weldsDone / line.totalWelds) * 100)) : 0
-    const first = lineLogDates.reduce((a, b) => (b < a ? b : a))
-    const last = lineLogDates.reduce((a, b) => (b > a ? b : a))
+    const activityLogs = project.logs.filter((l) => l.lineId === line.id && l.activity === s.activity && isCountedLog(l))
+    if (activityLogs.length === 0) return { ...s, actualStart: null, actualEnd: null, percentComplete: 0 }
+    const dates = activityLogs.map((l) => l.date)
+    const first = dates.reduce((a, b) => (b < a ? b : a))
+    const last = dates.reduce((a, b) => (b > a ? b : a))
+    let percentComplete: number
+    if (ACTIVITY_METRIC[s.activity] === 'welds') {
+      const weldsDone = activityLogs.reduce((sum, l) => sum + (l.weldCount || 0), 0)
+      percentComplete = line.totalWelds > 0 ? Math.min(100, Math.round((weldsDone / line.totalWelds) * 100)) : 0
+    } else {
+      const lengthDone = activityLogs.reduce((sum, l) => sum + (l.lengthDone || 0), 0)
+      percentComplete = line.plannedLength > 0 ? Math.min(100, Math.round((lengthDone / line.plannedLength) * 100)) : 0
+    }
     return { ...s, actualStart: first, actualEnd: percentComplete >= 100 ? last : null, percentComplete }
   })
 }

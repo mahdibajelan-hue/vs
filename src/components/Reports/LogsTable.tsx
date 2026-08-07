@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Trash2, Check, X, Pencil, ShieldCheck, History } from 'lucide-react'
 import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
-import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA } from '../../types'
+import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA, ACTIVITY_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
@@ -11,15 +11,6 @@ import { formatJalali } from '../../lib/jalali'
 import { DailyLogForm } from '../IsoViewer/DailyLogForm'
 import { OwnerAuditModal } from './OwnerAuditModal'
 import { LogHistoryModal } from './LogHistoryModal'
-
-const WELD_PASS_LABEL: Record<DailyLog['weldPass'], string> = {
-  root: 'ریشه',
-  hot: 'داغ',
-  fill: 'پرکننده',
-  cap: 'نهایی',
-  ndt: 'NDT',
-  hydrotest: 'هیدروتست',
-}
 
 export function LogsTable({ project }: { project: Project }) {
   const deleteLog = useStore((s) => s.deleteLog)
@@ -112,7 +103,7 @@ export function LogsTable({ project }: { project: Project }) {
               <th className="p-2.5 text-right font-medium">مقدار پیمانکار</th>
               <th className="p-2.5 text-right font-medium">مقدار مشاور</th>
               <th className="p-2.5 text-right font-medium">مقدار کارفرما</th>
-              <th className="p-2.5 text-right font-medium">پاس/تست</th>
+              <th className="p-2.5 text-right font-medium">فعالیت</th>
               <th className="p-2.5 text-right font-medium">پیمانکار</th>
               <th className="p-2.5 text-right font-medium">توضیحات</th>
               <th className="p-2.5 text-right font-medium">تایید</th>
@@ -135,7 +126,7 @@ export function LogsTable({ project }: { project: Project }) {
                 </td>
                 <td className="p-2.5 num whitespace-nowrap">{consultantVal ? `${consultantVal.length}m / ${consultantVal.weld}` : '—'}</td>
                 <td className="p-2.5 num whitespace-nowrap">{ownerVal ? `${ownerVal.length}m / ${ownerVal.weld}` : '—'}</td>
-                <td className="p-2.5">{WELD_PASS_LABEL[log.weldPass]}</td>
+                <td className="p-2.5">{ACTIVITY_LABEL_FA[log.activity]}</td>
                 <td className="p-2.5">{log.contractor}</td>
                 <td className="p-2.5 max-w-[220px] truncate text-secondary" title={log.notes || log.delayReason}>
                   {log.delayReason ? <span className="text-amber-400">{log.delayReason}</span> : log.notes}
@@ -208,12 +199,12 @@ export function LogsTable({ project }: { project: Project }) {
                 </td>
                 <td className="p-2.5">
                   <div className="flex items-center gap-2">
-                    {canEdit(role) && (
+                    {canEdit(role, isAdmin) && (
                       <button onClick={() => setEditingLog(log)} className="text-muted hover:text-brand-400 transition-colors" title="ویرایش">
                         <Pencil size={14} />
                       </button>
                     )}
-                    {canEdit(role) && (
+                    {canEdit(role, isAdmin) && (
                       <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors" title="حذف">
                         <Trash2 size={14} />
                       </button>

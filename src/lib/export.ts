@@ -1,5 +1,5 @@
 import type { Project } from '../types'
-import { STATUS_COLOR, STATUS_LABEL_FA, APPROVAL_LABEL_FA } from '../types'
+import { STATUS_COLOR, STATUS_LABEL_FA, APPROVAL_LABEL_FA, ACTIVITY_LABEL_FA } from '../types'
 import { computeAllProgress } from './progress'
 import { serializeColoredSvg } from './svg'
 
@@ -84,7 +84,7 @@ export async function exportProjectToExcel(project: Project, filename: string) {
         'شناسه خط': line?.svgElementId ?? '-',
         'متراژ (m)': log.lengthDone,
         'تعداد سرجوش': log.weldCount,
-        'پاس/تست': log.weldPass,
+        'فعالیت': ACTIVITY_LABEL_FA[log.activity],
         'پیمانکار': log.contractor,
         'توضیحات': log.notes,
         'علت تاخیر': log.delayReason,

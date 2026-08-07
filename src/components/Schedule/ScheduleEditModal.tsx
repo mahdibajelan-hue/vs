@@ -5,9 +5,18 @@ import { JalaliDateInput } from '../common/JalaliDateInput'
 import { ACTIVITY_KINDS, ACTIVITY_LABEL_FA, type ActivityKind, type ActivitySchedule, type IsoLine } from '../../types'
 import { useStore } from '../../store/useStore'
 import { useCurrentRole } from '../../store/useMembersStore'
+import { useAuthStore } from '../../store/useAuthStore'
 import { computeActivityStatus, ACTIVITY_STATUS_COLOR, ACTIVITY_STATUS_LABEL_FA, addDaysIso, todayIso } from '../../lib/schedule'
 import { formatJalali } from '../../lib/jalali'
 import { estimateWeldingDurationDays } from '../../lib/weldEstimate'
+
+/** Welding/NDT actuals are measured in welds, coating/hydrotest in length — see ACTIVITY_METRIC in lib/schedule.ts. */
+const ACTUAL_UNIT_LABEL: Record<ActivityKind, string> = {
+  welding: 'کارکرد واقعی (از کارکرد روزانه — سرجوش)',
+  ndt: 'کارکرد واقعی (از کارکرد روزانه — سرجوش تست‌شده)',
+  coating: 'کارکرد واقعی (از کارکرد روزانه — متراژ پوشش‌شده)',
+  hydrotest: 'کارکرد واقعی (از کارکرد روزانه — متراژ تست‌شده)',
+}
 
 interface FormRow {
   plannedStart: string
@@ -30,7 +39,8 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
   const upsertSchedule = useStore((s) => s.upsertSchedule)
   const approveScheduleRowAsConsultant = useStore((s) => s.approveScheduleRowAsConsultant)
   const role = useCurrentRole()
-  const isContractor = role === 'contractor'
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const canEnterPlan = role === 'contractor' || role === 'owner' || isAdmin
   const isConsultant = role === 'consultant'
 
   const [rows, setRows] = useState<Record<ActivityKind, FormRow>>(() => {
@@ -58,7 +68,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
   return (
     <Modal
       title="برنامه زمان‌بندی خط"
-      subtitle={`${line.svgElementId} — تاریخ‌ها بر اساس تقویم شمسی${isContractor ? '' : ' — فقط نمایش'}`}
+      subtitle={`${line.svgElementId} — تاریخ‌ها بر اساس تقویم شمسی${canEnterPlan ? '' : ' — فقط نمایش'}`}
       onClose={onClose}
       width="max-w-2xl"
     >
@@ -104,16 +114,14 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
                 </div>
               </div>
 
-              {kind === 'welding' && line.totalWelds > 0 && (
-                <div className="mb-2.5 flex items-center gap-1.5 rounded-lg border border-dashed border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-secondary">
-                  <Gauge size={12} className="shrink-0 text-brand-400" />
-                  کارکرد واقعی (از کارکرد روزانه): {previewSchedule.percentComplete}%
-                  {previewSchedule.actualStart && ` — از ${formatJalali(previewSchedule.actualStart)}`}
-                  {previewSchedule.actualEnd && ` تا ${formatJalali(previewSchedule.actualEnd)}`}
-                </div>
-              )}
+              <div className="mb-2.5 flex items-center gap-1.5 rounded-lg border border-dashed border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-secondary">
+                <Gauge size={12} className="shrink-0 text-brand-400" />
+                {ACTUAL_UNIT_LABEL[kind]}: {previewSchedule.percentComplete}%
+                {previewSchedule.actualStart && ` — از ${formatJalali(previewSchedule.actualStart)}`}
+                {previewSchedule.actualEnd && ` تا ${formatJalali(previewSchedule.actualEnd)}`}
+              </div>
 
-              {isContractor && kind === 'welding' && line.totalWelds > 0 && (
+              {canEnterPlan && kind === 'welding' && line.totalWelds > 0 && (
                 <button
                   type="button"
                   onClick={() => {
@@ -132,7 +140,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
                 </button>
               )}
 
-              {isContractor ? (
+              {canEnterPlan ? (
                 <div className="grid grid-cols-2 gap-2.5">
                   <label className="block">
                     <span className="mb-1 block text-[11px] text-secondary">شروع برنامه</span>
@@ -168,7 +176,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
           )
         })}
 
-        {isContractor && (
+        {canEnterPlan && (
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
               انصراف
@@ -178,7 +186,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
             </button>
           </div>
         )}
-        {!isContractor && (
+        {!canEnterPlan && (
           <div className="flex justify-end pt-1">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
               بستن

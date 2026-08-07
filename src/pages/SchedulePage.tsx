@@ -16,7 +16,7 @@ export function SchedulePage({ project }: { project: Project }) {
   const [editingLine, setEditingLine] = useState<IsoLine | null>(null)
   const role = useCurrentRole()
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
-  const editable = canEdit(role)
+  const editable = canEdit(role, isAdmin)
   const canApproveOverall = canAudit(role) || isAdmin
   const approveScheduleAsOwner = useStore((s) => s.approveScheduleAsOwner)
 
@@ -41,11 +41,11 @@ export function SchedulePage({ project }: { project: Project }) {
           <div className="flex items-center gap-2.5">
             <ShieldCheck size={18} className={project.scheduleApprovedAt ? 'text-green-400' : 'text-muted'} />
             <div>
-              <p className="text-sm font-bold">تایید کلیت برنامه زمان‌بندی</p>
+              <p className="text-sm font-bold">تایید نهایی کارفرما بر کلیت برنامه زمان‌بندی</p>
               <p className="text-[11px] text-muted">
                 {project.scheduleApprovedAt
                   ? `تایید شده در ${formatJalali(project.scheduleApprovedAt.slice(0, 10))} — با هر ویرایش جدید در برنامه، این تاییدیه باطل می‌شود`
-                  : 'پس از تایید ردیف‌ها توسط مشاور، کارفرما می‌تواند کلیت برنامه را تایید کند'}
+                  : 'مراحل قبلی: پیمانکار برنامه را وارد می‌کند، مشاور هر ردیف را تایید می‌کند. این دکمه فقط برای کارفرما (یا ادمین) است.'}
               </p>
             </div>
           </div>

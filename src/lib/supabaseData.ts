@@ -1,4 +1,5 @@
 import type {
+  ActivityKind,
   ActivitySchedule,
   ApprovalStatus,
   DailyLog,
@@ -66,7 +67,7 @@ interface LogRow {
   date: string
   length_done: number
   weld_count: number
-  weld_pass: string
+  activity: string
   contractor: string
   notes: string
   delay_reason: string
@@ -151,7 +152,7 @@ export function logFromRow(r: LogRow): DailyLog {
     date: r.date,
     lengthDone: Number(r.length_done),
     weldCount: r.weld_count,
-    weldPass: r.weld_pass as DailyLog['weldPass'],
+    activity: r.activity as ActivityKind,
     contractor: r.contractor,
     notes: r.notes,
     delayReason: r.delay_reason,
@@ -177,7 +178,7 @@ export function logToRow(projectId: string, l: Partial<DailyLog>) {
   if (l.date !== undefined) row.date = l.date
   if (l.lengthDone !== undefined) row.length_done = l.lengthDone
   if (l.weldCount !== undefined) row.weld_count = l.weldCount
-  if (l.weldPass !== undefined) row.weld_pass = l.weldPass
+  if (l.activity !== undefined) row.activity = l.activity
   if (l.contractor !== undefined) row.contractor = l.contractor
   if (l.notes !== undefined) row.notes = l.notes
   if (l.delayReason !== undefined) row.delay_reason = l.delayReason

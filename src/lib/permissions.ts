@@ -1,8 +1,12 @@
 import type { UserRole } from '../types'
 
-/** Contractor and consultant can enter/edit data; owner is read-only. */
-export function canEdit(role: UserRole | null | undefined): boolean {
-  return role === 'contractor' || role === 'consultant'
+/**
+ * Contractor and consultant can enter/edit data day-to-day; the owner and a platform admin can
+ * also enter/edit anything without restriction (same level as the contractor) — they simply don't
+ * have to, since their real job is approving/auditing (see canApprove/canAudit below).
+ */
+export function canEdit(role: UserRole | null | undefined, isAdmin = false): boolean {
+  return isAdmin || role === 'contractor' || role === 'consultant' || role === 'owner'
 }
 
 /** Only the consultant validates (approves/rejects) submitted data. */

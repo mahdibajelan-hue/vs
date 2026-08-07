@@ -25,7 +25,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
     <div className="glass-panel rounded-2xl p-5">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm font-bold">مراحل کلی پروژه (Milestones)</p>
-        {canEdit(role) && (
+        {canEdit(role, isAdmin) && (
           <button
             onClick={() => setShowEdit(true)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"

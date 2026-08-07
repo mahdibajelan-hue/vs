@@ -11,6 +11,7 @@ import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
 import { Legend } from '../components/common/Legend'
 import { useStore } from '../store/useStore'
 import { useCurrentRole } from '../store/useMembersStore'
+import { useAuthStore } from '../store/useAuthStore'
 import { canEdit } from '../lib/permissions'
 import { makeId } from '../lib/id'
 import { exportColoredSvg } from '../lib/export'
@@ -20,7 +21,8 @@ import { pickGroupLabel } from '../lib/lineMerge'
 export function ViewerPage({ project }: { project: Project }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
   const role = useCurrentRole()
-  const editable = canEdit(role)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const editable = canEdit(role, isAdmin)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [showLinesTable, setShowLinesTable] = useState(false)

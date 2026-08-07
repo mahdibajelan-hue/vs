@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import type { DailyLog, IsoLine } from '../../types'
+import { ACTIVITY_KINDS, ACTIVITY_LABEL_FA, type ActivityKind } from '../../types'
 import { useStore } from '../../store/useStore'
 
 interface DailyLogFormProps {
@@ -12,15 +13,6 @@ interface DailyLogFormProps {
   onClose: () => void
 }
 
-const WELD_PASS_OPTIONS: { value: DailyLog['weldPass']; label: string }[] = [
-  { value: 'root', label: 'پاس ریشه (Root)' },
-  { value: 'hot', label: 'پاس داغ (Hot)' },
-  { value: 'fill', label: 'پاس پر کننده (Fill)' },
-  { value: 'cap', label: 'پاس نهایی (Cap)' },
-  { value: 'ndt', label: 'تست غیرمخرب (NDT)' },
-  { value: 'hydrotest', label: 'تست هیدرواستاتیک' },
-]
-
 export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onClose }: DailyLogFormProps) {
   const addLog = useStore((s) => s.addLog)
   const updateLog = useStore((s) => s.updateLog)
@@ -29,7 +21,7 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
   const [date, setDate] = useState(editingLog?.date ?? new Date().toISOString().slice(0, 10))
   const [lengthDone, setLengthDone] = useState(editingLog?.lengthDone ?? 0)
   const [weldCount, setWeldCount] = useState(editingLog?.weldCount ?? 0)
-  const [weldPass, setWeldPass] = useState<DailyLog['weldPass']>(editingLog?.weldPass ?? 'root')
+  const [activity, setActivity] = useState<ActivityKind>(editingLog?.activity ?? 'welding')
   const [contractor, setContractor] = useState(
     editingLog?.contractor ?? lines.find((l) => l.id === (initialLineId ?? lines[0]?.id))?.contractor ?? '',
   )
@@ -41,14 +33,14 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
   const submit = () => {
     if (!lineId) return
     if (editingLog) {
-      updateLog(projectId, editingLog.id, { lineId, date, lengthDone, weldCount, weldPass, contractor, notes, delayReason })
+      updateLog(projectId, editingLog.id, { lineId, date, lengthDone, weldCount, activity, contractor, notes, delayReason })
     } else {
       addLog(projectId, {
         lineId,
         date,
         lengthDone,
         weldCount,
-        weldPass,
+        activity,
         contractor,
         notes,
         delayReason,
@@ -116,11 +108,11 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
           </Field>
         </div>
 
-        <Field label="وضعیت پاس جوشکاری / تست">
-          <select value={weldPass} onChange={(e) => setWeldPass(e.target.value as DailyLog['weldPass'])} className="input">
-            {WELD_PASS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+        <Field label="فعالیت — آخرین وضعیت اقدام">
+          <select value={activity} onChange={(e) => setActivity(e.target.value as ActivityKind)} className="input">
+            {ACTIVITY_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {ACTIVITY_LABEL_FA[kind]}
               </option>
             ))}
           </select>

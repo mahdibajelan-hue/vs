@@ -7,11 +7,13 @@ import { RiskHeatMap } from '../components/Risks/RiskHeatMap'
 import { RiskEditModal } from '../components/Risks/RiskEditModal'
 import { KpiCard } from '../components/Dashboard/KpiCard'
 import { useCurrentRole } from '../store/useMembersStore'
+import { useAuthStore } from '../store/useAuthStore'
 import { canEdit } from '../lib/permissions'
 
 export function RisksPage({ project }: { project: Project }) {
   const role = useCurrentRole()
-  const editable = canEdit(role)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const editable = canEdit(role, isAdmin)
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [activeCell, setActiveCell] = useState<{ probability: number; impact: number } | null>(null)

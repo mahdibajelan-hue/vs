@@ -65,40 +65,40 @@ export function buildSeedProject(): {
 
   const rawLogs: Omit<NewDailyLogInput, 'approvalStatus' | 'reviewedBy' | 'reviewNote'>[] = [
     // L-1001-6-A1A (in progress ~60%)
-    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(24), lengthDone: 12, weldCount: 4, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'شروع اسپول‌های اولیه', delayReason: '' },
-    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(17), lengthDone: 10, weldCount: 3, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(9), lengthDone: 8, weldCount: 3, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: 'عدم تامین شیرآلات ۶ اینچ' },
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(24), lengthDone: 12, weldCount: 4, activity: 'welding', contractor: 'پیمانکار الف', notes: 'شروع اسپول‌های اولیه', delayReason: '' },
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(17), lengthDone: 10, weldCount: 3, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1001-6-A1A'), date: daysAgo(9), lengthDone: 8, weldCount: 3, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: 'عدم تامین شیرآلات ۶ اینچ' },
 
     // L-1002-4-B2B (in progress, slow ~35%)
-    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(20), lengthDone: 6, weldCount: 2, weldPass: 'root', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(6), lengthDone: 4, weldCount: 1, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: 'تاخیر در تامین نیروی جوشکار' },
+    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(20), lengthDone: 6, weldCount: 2, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1002-4-B2B'), date: daysAgo(6), lengthDone: 4, weldCount: 1, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: 'تاخیر در تامین نیروی جوشکار' },
 
     // L-1003-8-A1A (testing - full length/weld + hydrotest log)
-    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(28), lengthDone: 20, weldCount: 7, weldPass: 'root', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
-    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(22), lengthDone: 18, weldCount: 6, weldPass: 'fill', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
-    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(15), lengthDone: 17, weldCount: 5, weldPass: 'cap', contractor: 'پیمانکار ب', notes: 'اتمام جوشکاری', delayReason: '' },
-    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(4), lengthDone: 0, weldCount: 0, weldPass: 'hydrotest', contractor: 'پیمانکار ب', notes: 'تست هیدرواستاتیک در حال انجام', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(28), lengthDone: 20, weldCount: 7, activity: 'welding', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(22), lengthDone: 18, weldCount: 6, activity: 'welding', contractor: 'پیمانکار ب', notes: '', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(15), lengthDone: 17, weldCount: 5, activity: 'welding', contractor: 'پیمانکار ب', notes: 'اتمام جوشکاری', delayReason: '' },
+    { lineId: idOf('L-1003-8-A1A'), date: daysAgo(4), lengthDone: 0, weldCount: 0, activity: 'hydrotest', contractor: 'پیمانکار ب', notes: 'تست هیدرواستاتیک در حال انجام', delayReason: '' },
 
     // L-1005-10-A1A (in progress ~55%)
-    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(26), lengthDone: 14, weldCount: 5, weldPass: 'root', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(18), lengthDone: 12, weldCount: 4, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(10), lengthDone: 9, weldCount: 3, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(3), lengthDone: 0, weldCount: 0, weldPass: 'ndt', contractor: 'پیمانکار الف', notes: 'رادیوگرافی جوش‌های اصلی', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(26), lengthDone: 14, weldCount: 5, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(18), lengthDone: 12, weldCount: 4, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(10), lengthDone: 9, weldCount: 3, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1005-10-A1A'), date: daysAgo(3), lengthDone: 0, weldCount: 0, activity: 'ndt', contractor: 'پیمانکار الف', notes: 'رادیوگرافی جوش‌های اصلی', delayReason: '' },
 
     // L-1006-3-B2B (completed 100%)
-    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(29), lengthDone: 10, weldCount: 3, weldPass: 'root', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
-    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(25), lengthDone: 6, weldCount: 2, weldPass: 'fill', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
-    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(21), lengthDone: 5, weldCount: 2, weldPass: 'cap', contractor: 'پیمانکار ج', notes: 'تکمیل و تست شد', delayReason: '' },
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(29), lengthDone: 10, weldCount: 3, activity: 'welding', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(25), lengthDone: 6, weldCount: 2, activity: 'welding', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1006-3-B2B'), date: daysAgo(21), lengthDone: 5, weldCount: 2, activity: 'welding', contractor: 'پیمانکار ج', notes: 'تکمیل و تست شد', delayReason: '' },
 
     // L-1007-12-A1A (completed main line 100%)
-    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(30), lengthDone: 20, weldCount: 7, weldPass: 'root', contractor: 'پیمانکار الف', notes: 'خط اصلی - شروع', delayReason: '' },
-    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(24), lengthDone: 18, weldCount: 6, weldPass: 'fill', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(19), lengthDone: 17, weldCount: 6, weldPass: 'cap', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
-    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(12), lengthDone: 16, weldCount: 5, weldPass: 'hydrotest', contractor: 'پیمانکار الف', notes: 'تست هیدرواستاتیک با موفقیت انجام شد', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(30), lengthDone: 20, weldCount: 7, activity: 'welding', contractor: 'پیمانکار الف', notes: 'خط اصلی - شروع', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(24), lengthDone: 18, weldCount: 6, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(19), lengthDone: 17, weldCount: 6, activity: 'welding', contractor: 'پیمانکار الف', notes: '', delayReason: '' },
+    { lineId: idOf('L-1007-12-A1A'), date: daysAgo(12), lengthDone: 16, weldCount: 5, activity: 'hydrotest', contractor: 'پیمانکار الف', notes: 'تست هیدرواستاتیک با موفقیت انجام شد', delayReason: '' },
 
     // L-1008-4-C1C (in progress ~30%)
-    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(14), lengthDone: 6, weldCount: 2, weldPass: 'root', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
-    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(5), lengthDone: 4, weldCount: 1, weldPass: 'fill', contractor: 'پیمانکار ج', notes: '', delayReason: 'باران و توقف کار' },
+    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(14), lengthDone: 6, weldCount: 2, activity: 'welding', contractor: 'پیمانکار ج', notes: '', delayReason: '' },
+    { lineId: idOf('L-1008-4-C1C'), date: daysAgo(5), lengthDone: 4, weldCount: 1, activity: 'welding', contractor: 'پیمانکار ج', notes: '', delayReason: 'باران و توقف کار' },
   ]
 
   // Most recent couple of entries are shown as still awaiting the consultant's review.
