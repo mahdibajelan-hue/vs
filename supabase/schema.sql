@@ -407,9 +407,12 @@ begin
     end if;
   end if;
 end $$;
-update daily_logs set activity = 'welding' where activity in ('root', 'hot', 'fill', 'cap');
+-- Drop the old check (still enforcing the 6-value pass list, just renamed onto the 'activity'
+-- column by the rename above) BEFORE backfilling — otherwise the backfill's own 'welding' value
+-- would itself violate the not-yet-replaced old constraint and abort the whole migration.
 alter table daily_logs drop constraint if exists daily_logs_weld_pass_check;
 alter table daily_logs drop constraint if exists daily_logs_activity_check;
+update daily_logs set activity = 'welding' where activity in ('root', 'hot', 'fill', 'cap');
 alter table daily_logs add constraint daily_logs_activity_check check (activity in ('welding', 'ndt', 'coating', 'hydrotest'));
 alter table daily_logs alter column activity set default 'welding';
 
