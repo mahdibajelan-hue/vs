@@ -59,10 +59,17 @@ create trigger on_auth_user_created
 -- avatar/position), but with no column-level restriction that would also let them PATCH
 -- is_admin=true on themselves directly via the REST API. This trigger silently reverts any
 -- change to is_admin unless the actor already is an admin.
+--
+-- auth.uid() is only non-null inside a request made through the app (an authenticated PostgREST
+-- call carrying a user JWT). A statement run directly in the Supabase SQL Editor — the only way
+-- to bootstrap the very first admin — has no such JWT, so auth.uid() is null there. We only
+-- enforce the block when auth.uid() is present (i.e. the app's own REST API), so SQL Editor
+-- changes always go through untouched.
 create or replace function prevent_self_admin_escalation()
 returns trigger as $$
 begin
   if new.is_admin is distinct from old.is_admin
+     and auth.uid() is not null
      and not coalesce((select is_admin from profiles where id = auth.uid()), false) then
     new.is_admin := old.is_admin;
   end if;
