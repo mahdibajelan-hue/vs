@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
+import { ArrowRight, Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
 import { LogoFull } from '../common/Logo'
 import { ProfileForm } from './ProfileForm'
+import { ModuleHub } from './ModuleHub'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const authLoading = useAuthStore((s) => s.authLoading)
@@ -126,6 +127,12 @@ export function RolePicker({
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
 function AuthScreen() {
+  const [view, setView] = useState<'hub' | 'login'>('hub')
+  if (view === 'hub') return <ModuleHub onEnterPipePulse={() => setView('login')} />
+  return <LoginPanel onBack={() => setView('hub')} />
+}
+
+function LoginPanel({ onBack }: { onBack: () => void }) {
   const signIn = useAuthStore((s) => s.signIn)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -158,7 +165,16 @@ function AuthScreen() {
     status === 'success' ? '!border-green-400/70 !bg-green-500/10 !text-green-200' : status === 'error' ? 'auth-shake !border-red-400/70' : ''
 
   return (
-    <Shell
+    <>
+      {!exiting && (
+        <button
+          onClick={onBack}
+          className="fixed top-5 right-5 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs text-secondary backdrop-blur-md hover:bg-white/10 hover:text-current transition-colors"
+        >
+          <ArrowRight size={14} /> بازگشت به ماژول‌ها
+        </button>
+      )}
+      <Shell
       title="ورود به سامانه"
       subtitle="PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت، مدیریت ریسک و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی."
       panelClassName={
@@ -212,6 +228,7 @@ function AuthScreen() {
         </p>
         <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>Developed &amp; Designed by Mahdi Bajelan</p>
       </div>
-    </Shell>
+      </Shell>
+    </>
   )
 }
