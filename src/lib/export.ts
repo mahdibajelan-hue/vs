@@ -16,7 +16,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export async function exportElementToPdf(el: HTMLElement, filename: string) {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import('html2canvas'),
+    import('html2canvas-pro'),
     import('jspdf'),
   ])
   const canvas = await html2canvas(el, {

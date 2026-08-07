@@ -9,7 +9,7 @@ import {
   type RmRiskStatus,
   type RmTrend,
 } from '../types'
-import { currentState, latestAssessment, riskLevel, todayIso, type RiskLevel } from './riskScore'
+import { currentState, isActionOverdue, latestAssessment, riskLevel, todayIso, type RiskLevel } from './riskScore'
 
 export interface ExposureKpi {
   initial: number
@@ -122,4 +122,31 @@ export function computeTimeToImpactRisks(risks: RmRisk[], withinDays = 14): Time
     .filter((r) => r.status !== 'closed' && r.timeToImpactDays !== null && r.timeToImpactDays <= withinDays)
     .map((risk) => ({ risk, daysLeft: risk.timeToImpactDays as number }))
     .sort((a, b) => a.daysLeft - b.daysLeft)
+}
+
+export interface ManagementAttentionRisk {
+  risk: RmRisk
+  score: number
+  reasons: string[]
+}
+
+/**
+ * The consolidated "management attention required" list for the Executive Risk Report — every
+ * active risk tripping the escalation rule, with which specific reason(s) triggered it.
+ */
+export function computeManagementAttentionRisks(risks: RmRisk[], assessments: RmRiskAssessment[], actions: RmRiskAction[], today = todayIso()): ManagementAttentionRisk[] {
+  return risks
+    .filter((r) => r.status !== 'closed')
+    .map((risk) => {
+      const riskAssessments = assessments.filter((a) => a.riskId === risk.id)
+      const riskActions = actions.filter((a) => a.riskId === risk.id)
+      const state = currentState(risk, riskAssessments)
+      const reasons: string[] = []
+      if (state.score >= 16) reasons.push('امتیاز بحرانی')
+      if (riskActions.some((a) => isActionOverdue(a, today))) reasons.push('اقدام عقب‌افتاده')
+      if (risk.timeToImpactDays !== null && risk.timeToImpactDays <= 14) reasons.push('زمان تا وقوع کمتر از ۱۴ روز')
+      return { risk, score: state.score, reasons }
+    })
+    .filter((r) => r.reasons.length > 0)
+    .sort((a, b) => b.score - a.score)
 }

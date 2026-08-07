@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, ShieldAlert, TrendingDown, TrendingUp, Minus, AlertTriangle, Users } from 'lucide-react'
+import { FileSpreadsheet, Plus, Search, ShieldAlert, TrendingDown, TrendingUp, Minus, AlertTriangle, Users } from 'lucide-react'
 import type { RmProjectDetail } from '../store/useRiskStore'
+import { exportRiskProjectToExcel } from '../lib/riskExport'
 import {
   RM_CATEGORIES,
   RM_CATEGORY_LABEL_FA,
@@ -20,7 +21,8 @@ import { KpiTile } from '../components/KpiTile'
 
 export function RiskRegisterPage({ project, onChangeProject }: { project: RmProjectDetail; onChangeProject: () => void }) {
   const role = useRiskCurrentRole()
-  const memberCount = useRiskMembersStore((s) => s.members.length)
+  const members = useRiskMembersStore((s) => s.members)
+  const memberCount = members.length
   const [showNewRisk, setShowNewRisk] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
@@ -82,6 +84,12 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
             {project.client && <p className="text-[11px] text-muted">کارفرما: {project.client}</p>}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportRiskProjectToExcel(project, members, `${project.name}-ثبت-ریسک.xlsx`)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5 transition-colors"
+            >
+              <FileSpreadsheet size={13} /> خروجی اکسل
+            </button>
             {rmCanManage(role) && (
               <button
                 onClick={() => setShowMembers(true)}

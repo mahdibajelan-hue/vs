@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Clock3, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { AlertOctagon, Clock3, FileDown, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { RmProjectDetail } from '../store/useRiskStore'
 import { useRiskMembersStore } from '../store/useRiskMembersStore'
 import { RM_PROJECT_PHASES, RM_PROJECT_PHASE_LABEL_FA, type RmProjectPhase } from '../types'
@@ -8,11 +8,13 @@ import {
   computeCategoryDistribution,
   computeExposureKpi,
   computeExposureTimeline,
+  computeManagementAttentionRisks,
   computePhaseDistribution,
   computeStatusCounts,
   computeTimeToImpactRisks,
   computeTopRisks,
 } from '../lib/riskAnalytics'
+import { exportElementToPdf } from '../../../lib/export'
 import { KpiTile } from '../components/KpiTile'
 import { RiskHeatMap } from '../components/RiskHeatMap'
 import { TopRisksTable } from '../components/TopRisksTable'
@@ -24,6 +26,7 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
   const [phaseFilter, setPhaseFilter] = useState<RmProjectPhase | 'all'>('all')
   const [activeCell, setActiveCell] = useState<{ probability: number; impact: number } | null>(null)
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null)
+  const reportRef = useRef<HTMLDivElement>(null)
 
   const risks = useMemo(
     () => (phaseFilter === 'all' ? project.risks : project.risks.filter((r) => r.projectPhase === phaseFilter)),
@@ -56,6 +59,11 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
   }, [activeCell, active, assessments])
 
   const selectedRisk = selectedRiskId ? project.risks.find((r) => r.id === selectedRiskId) ?? null : null
+  const attentionRisks = useMemo(() => computeManagementAttentionRisks(risks, assessments, actions), [risks, assessments, actions])
+
+  const handleExportPdf = () => {
+    if (reportRef.current) exportElementToPdf(reportRef.current, `${project.name}-گزارش-اجرایی-ریسک.pdf`)
+  }
 
   return (
     <div className="h-full overflow-y-auto p-4">
@@ -65,16 +73,25 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
             <p className="text-base font-bold">داشبورد مدیریتی — {project.name}</p>
             <p className="text-[11px] text-muted">دید یکپارچه از وضعیت ریسک‌های پروژه برای تصمیم‌گیری مدیریتی</p>
           </div>
-          <select value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value as RmProjectPhase | 'all')} className="input !w-auto">
-            <option value="all">همه فازهای پروژه</option>
-            {RM_PROJECT_PHASES.map((p) => (
-              <option key={p} value={p}>
-                {RM_PROJECT_PHASE_LABEL_FA[p]}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value as RmProjectPhase | 'all')} className="input !w-auto">
+              <option value="all">همه فازهای پروژه</option>
+              {RM_PROJECT_PHASES.map((p) => (
+                <option key={p} value={p}>
+                  {RM_PROJECT_PHASE_LABEL_FA[p]}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleExportPdf}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5 transition-colors"
+            >
+              <FileDown size={13} /> گزارش اجرایی (PDF)
+            </button>
+          </div>
         </div>
 
+        <div ref={reportRef} className="space-y-4">
         {timeToImpact.length > 0 && (
           <div className="flex items-start gap-2.5 rounded-2xl border border-red-400/40 bg-red-500/10 p-3.5 text-xs text-red-200">
             <Clock3 size={16} className="mt-0.5 shrink-0 text-red-400" />
@@ -129,6 +146,37 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
           </div>
         </div>
 
+        {attentionRisks.length > 0 && (
+          <div className="glass-panel rounded-2xl border border-red-400/30 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <AlertOctagon size={16} className="text-red-400" />
+              <p className="text-sm font-bold">ریسک‌های نیازمند توجه مدیریت ({attentionRisks.length})</p>
+            </div>
+            <div className="space-y-1.5">
+              {attentionRisks.map(({ risk, score, reasons }) => (
+                <button
+                  key={risk.id}
+                  onClick={() => setSelectedRiskId(risk.id)}
+                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-right text-xs hover:bg-white/5 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="num text-muted">{risk.code}</span>
+                    <span className="font-medium">{risk.title}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    {reasons.map((reason) => (
+                      <span key={reason} className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] text-red-300">
+                        {reason}
+                      </span>
+                    ))}
+                    <span className="num font-bold text-red-400">{score}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <RiskHeatMap risks={risks} assessments={assessments} activeCell={activeCell} onCellClick={(p, i) => setActiveCell(activeCell?.probability === p && activeCell?.impact === i ? null : { probability: p, impact: i })} />
 
         {activeCell && (
@@ -178,6 +226,7 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
           <ChartCard title="وضعیت ریسک‌ها">
             <StatusDistributionChart data={statusCounts} />
           </ChartCard>
+        </div>
         </div>
       </div>
 
