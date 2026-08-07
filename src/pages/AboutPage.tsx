@@ -37,36 +37,36 @@ export function AboutPage() {
 
           <div className="mt-7 flex flex-col items-center gap-1.5 border-t pt-6" style={{ borderColor: 'var(--border-soft)' }}>
             <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-3xl font-extrabold tracking-tight text-brand-300">
-              PipePulse<sup className="text-sm align-super" style={{ color: GOLD }}>™</sup>
+              PipePulse<sup className="text-sm align-super" style={{ color: 'var(--color-brand-400)' }}>™</sup>
             </p>
-            <p style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: '0.22em', color: GOLD }} className="text-[11px] font-bold">
+            <p style={{ fontFamily: "'Montserrat', sans-serif", letterSpacing: '0.22em', color: 'var(--color-brand-400)' }} className="text-[11px] font-bold">
               PIPING PROGRESS INTELLIGENCE
             </p>
             <p className="mt-3 text-xs text-muted">by</p>
             <img
               src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
               alt="Mahdi Bajelan"
-              className="h-14 w-auto"
+              className="h-28 w-auto"
               onError={(e) => {
                 // Falls back to a styled text signature until signature-mahdi.png is uploaded to public/.
                 e.currentTarget.style.display = 'none'
                 e.currentTarget.nextElementSibling?.classList.remove('hidden')
               }}
             />
-            <p style={{ fontFamily: "'Dancing Script', cursive" }} className="hidden text-2xl leading-none text-brand-300">
+            <p style={{ fontFamily: "'Dancing Script', cursive" }} className="hidden text-4xl leading-none text-brand-300">
               Mahdi Bajelan
             </p>
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-6">
-          <p className="mb-4 text-sm font-bold flex items-center gap-2">
-            <Sparkles size={16} className="text-brand-400" /> امکانات کلیدی
+        <div className="glass-panel rounded-2xl p-4">
+          <p className="mb-2.5 text-xs font-bold flex items-center gap-1.5">
+            <Sparkles size={13} className="text-brand-400" /> امکانات کلیدی
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {FEATURES.map(({ icon: Icon, text }, i) => (
-              <div key={i} className="flex items-start gap-2.5 rounded-xl bg-white/[0.03] p-3 text-sm">
-                <Icon size={16} className="shrink-0 mt-0.5" style={{ color: i % 2 ? GOLD : 'var(--color-brand-400)' }} />
+              <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-2 text-xs">
+                <Icon size={13} className="shrink-0 mt-0.5" style={{ color: i % 2 ? GOLD : 'var(--color-brand-400)' }} />
                 <span className="text-secondary">{text}</span>
               </div>
             ))}

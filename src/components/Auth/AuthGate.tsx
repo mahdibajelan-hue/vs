@@ -161,7 +161,9 @@ function AuthScreen() {
     <Shell
       title="ورود به سامانه"
       subtitle="PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت، مدیریت ریسک و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی."
-      panelClassName={exiting ? 'auth-card-exit' : ''}
+      panelClassName={
+        exiting ? 'auth-card-exit' : status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''
+      }
     >
       <div className="space-y-3">
         <label className="block">
@@ -192,7 +194,7 @@ function AuthScreen() {
         >
           {status === 'success' ? (
             <>
-              <Check size={16} className="auth-success-check" /> ورود موفق
+              <Check size={16} className="auth-success-check" /> ورود با موفقیت انجام شد
             </>
           ) : status === 'submitting' ? (
             'در حال بررسی...'

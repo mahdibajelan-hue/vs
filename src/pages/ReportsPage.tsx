@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { FileSpreadsheet, CalendarClock, Gauge, TrendingDown, AlarmClockOff } from 'lucide-react'
 import type { Project } from '../types'
-import { computeSCurve, computeWeldsBySize } from '../lib/progress'
+import { computeWeldsBySize } from '../lib/progress'
 import { computeProjectSchedule, computeScheduleSCurve } from '../lib/schedule'
 import { SCurveChart } from '../components/Reports/SCurveChart'
 import { WeldsBySizeChart } from '../components/Reports/WeldsBySizeChart'
@@ -11,7 +11,6 @@ import { CountdownWidget } from '../components/Schedule/CountdownWidget'
 import { exportProjectToExcel } from '../lib/export'
 
 export function ReportsPage({ project }: { project: Project }) {
-  const sCurve = useMemo(() => computeSCurve(project), [project])
   const weldsBySize = useMemo(() => computeWeldsBySize(project), [project])
   const summary = useMemo(() => computeProjectSchedule(project), [project])
   const scheduleSCurve = useMemo(() => computeScheduleSCurve(project), [project])
@@ -62,16 +61,6 @@ export function ReportsPage({ project }: { project: Project }) {
           <div className="flex-1 min-h-0">
             <WeldsBySizeChart data={weldsBySize} />
           </div>
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-4 h-64 flex flex-col">
-        <p className="mb-0.5 text-sm font-bold">S-Curve پیشرفت متراژی — بر اساس کارکرد روزانه ثبت‌شده در برابر منحنی برنامه‌ریزی‌شده</p>
-        <p className="mb-2 text-[11px] text-muted">
-          معیار متفاوتی از نمودار بالا: این یکی طول لوله واقعاً جوش‌خورده (متر) را در برابر منحنی پایه پروژه می‌سنجد، نه پیشرفت فعالیت‌های زمان‌بندی.
-        </p>
-        <div className="flex-1 min-h-0">
-          <SCurveChart data={sCurve} />
         </div>
       </div>
     </div>

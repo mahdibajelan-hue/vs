@@ -47,7 +47,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
                 }}
               />
             )}
-            <div className="flex flex-col items-center gap-1.5 px-1" style={{ minWidth: 106 }}>
+            <div className="flex shrink-0 flex-col items-center gap-1.5 px-1" style={{ width: 106 }}>
               <div
                 className="relative h-16 w-16 rounded-full shrink-0"
                 style={{
