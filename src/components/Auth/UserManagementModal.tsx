@@ -7,7 +7,7 @@ import { useMembersStore } from '../../store/useMembersStore'
 import { ROLE_LABEL_FA, type UserRole } from '../../types'
 import { assignableRoles, canManageUsers } from '../../lib/permissions'
 
-export function UserManagementModal({ onClose }: { onClose: () => void }) {
+export function UserManagementModal({ projectName, onClose }: { projectName: string; onClose: () => void }) {
   const myUserId = useAuthStore((s) => s.profile?.id)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const members = useMembersStore((s) => s.members)
@@ -50,7 +50,7 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="اعضای پروژه" subtitle="افرادی که به این پروژه دعوت شده‌اند و به داده‌های آن دسترسی دارند" onClose={onClose} width="max-w-lg">
+    <Modal title={`اعضای پروژه «${projectName}»`} subtitle="افرادی که به همین پروژه دعوت شده‌اند و به داده‌های آن دسترسی دارند" onClose={onClose} width="max-w-lg">
       {!canManage && (
         <p className="mb-3 rounded-xl bg-white/[0.03] p-3 text-xs text-muted">
           فقط کارفرمای پروژه یا ادمین سامانه می‌تواند عضو جدید دعوت کند یا نقش اعضا را تغییر دهد.
@@ -133,6 +133,9 @@ export function UserManagementModal({ onClose }: { onClose: () => void }) {
         </button>
       ) : (
         <div className="space-y-3 rounded-xl border border-white/10 p-3">
+          <p className="rounded-lg bg-brand-500/10 px-2.5 py-1.5 text-[11px] text-brand-300">
+            این دعوت فقط برای پروژه «{projectName}» است.
+          </p>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">ایمیل</span>
             <input

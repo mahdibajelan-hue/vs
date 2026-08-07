@@ -75,7 +75,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
           <LogOut size={16} />
         </button>
       </div>
-      {showUsers && project && <UserManagementModal onClose={() => setShowUsers(false)} />}
+      {showUsers && project && <UserManagementModal projectName={project.name} onClose={() => setShowUsers(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </header>
   )
