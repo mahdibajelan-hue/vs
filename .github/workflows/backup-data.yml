@@ -2,7 +2,7 @@ name: Backup Data
 
 on:
   schedule:
-    - cron: '0 2 * * 0' # every Sunday at 02:00 UTC
+    - cron: '0 2 * * 1,5' # every Monday and Friday at 02:00 UTC
   workflow_dispatch: {}
 
 permissions:
