@@ -8,7 +8,7 @@ import { extractSegmentEndpoints, computeMergeGroups, defaultMergeTolerance, pic
 
 interface SvgImportWorkspaceProps {
   onClose: () => void
-  onConfirm: (svgRaw: string, fileName: string, groups: string[][]) => void
+  onConfirm: (svgRaw: string, fileName: string, groups: string[][]) => void | Promise<void>
 }
 
 const EMPTY_PROGRESS = new Map<string, LineProgress>()
@@ -29,6 +29,7 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
   const [svgRoot, setSvgRoot] = useState<SVGSVGElement | null>(null)
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   const handleFile = useCallback((file: File) => {
     setError(null)
@@ -128,11 +129,19 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
         <div className="flex items-center gap-2">
           {svgRaw && (
             <button
-              onClick={() => onConfirm(svgRaw, fileName, [...selected].map((i) => groups[i]))}
-              disabled={selected.size === 0}
+              onClick={async () => {
+                if (confirming) return
+                setConfirming(true)
+                try {
+                  await onConfirm(svgRaw, fileName, [...selected].map((i) => groups[i]))
+                } finally {
+                  setConfirming(false)
+                }
+              }}
+              disabled={selected.size === 0 || confirming}
               className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              تایید و وارد کردن {selected.size} خط ({selectedMemberCount} قطعه)
+              {confirming ? 'در حال وارد کردن...' : `تایید و وارد کردن ${selected.size} خط (${selectedMemberCount} قطعه)`}
             </button>
           )}
           <button onClick={onClose} className="rounded-lg p-2 text-secondary hover:bg-white/10 hover:text-current transition-colors" title="بستن">

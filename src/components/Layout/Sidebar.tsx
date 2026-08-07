@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, ClipboardList, Download, Upload, ShieldAlert, Pencil, Trash2, X, UserCircle2 } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, ClipboardList, Download, Upload, ShieldAlert, Pencil, Trash2, X, UserCircle2, Users } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
@@ -31,6 +31,8 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
+const ADMIN_NAV: { id: Page; label: string; icon: typeof Map } = { id: 'adminUsers', label: 'مدیریت کاربران', icon: Users }
+
 export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobileClose }: SidebarProps) {
   const projects = useStore((s) => s.projects)
   const currentProjectId = useStore((s) => s.currentProjectId)
@@ -39,9 +41,11 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
   const importProject = useStore((s) => s.importProject)
   const deleteProject = useStore((s) => s.deleteProject)
   const currentUser = useAuthStore((s) => s.currentUser())
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const role = useCurrentRole()
   const editable = canEdit(role)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const nav = isAdmin ? [...NAV, ADMIN_NAV] : NAV
   const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
@@ -98,7 +102,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
       )}
 
       <nav className="px-3 space-y-1">
-        {NAV.map(({ id, label, icon: Icon }) => (
+        {nav.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => {

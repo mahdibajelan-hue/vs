@@ -5,6 +5,7 @@ import type {
   IsoLine,
   LineStatus,
   Milestone,
+  PlacedEquipmentItem,
   PlannedProgressPoint,
   Project,
   ReportConfig,
@@ -31,10 +32,13 @@ interface ProjectRow {
   svg_raw: string | null
   svg_file_name: string | null
   schedules: ActivitySchedule[]
+  equipment: PlacedEquipmentItem[] | null
   milestones: Milestone[]
   risks: Risk[]
   report_config: ReportConfig
   planned_curve: PlannedProgressPoint[]
+  schedule_owner_approved_at: string | null
+  schedule_owner_approved_by: string | null
   created_by: string | null
   created_at: string
 }
@@ -98,9 +102,12 @@ export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]):
     logs: logs.map(logFromRow),
     plannedCurve: r.planned_curve ?? [],
     schedules: r.schedules ?? [],
+    equipment: r.equipment ?? [],
     milestones: r.milestones?.length ? r.milestones : createDefaultMilestones(),
     risks: r.risks ?? [],
     reportConfig: r.report_config?.template ? r.report_config : defaultReportConfig(),
+    scheduleApprovedAt: r.schedule_owner_approved_at ?? null,
+    scheduleApprovedBy: r.schedule_owner_approved_by ?? null,
     createdAt: r.created_at,
   }
 }

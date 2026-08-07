@@ -1,5 +1,6 @@
 import type { ActivitySchedule, Project } from '../types'
 import type { SCurvePoint } from './progress'
+import { computeLineProgress, isCountedLog } from './progress'
 
 function toDate(iso: string): Date {
   return new Date(`${iso}T00:00:00`)
@@ -17,6 +18,28 @@ export function addDaysIso(iso: string, days: number): string {
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/**
+ * The welding activity's "actual" progress is derived automatically from daily-log entries
+ * (which is where field work is actually recorded) instead of being entered by hand in the
+ * Schedule module — connecting cumulative daily performance to the plan. Other activities (NDT,
+ * coating, hydrotest) have no operational data source yet, so their stored actual values pass
+ * through unchanged.
+ */
+export function withComputedActuals(project: Project): ActivitySchedule[] {
+  return project.schedules.map((s) => {
+    if (s.activity !== 'welding') return s
+    const line = project.lines.find((l) => l.id === s.lineId)
+    if (!line) return { ...s, actualStart: null, actualEnd: null, percentComplete: 0 }
+    const lineLogDates = project.logs.filter((l) => l.lineId === line.id && isCountedLog(l)).map((l) => l.date)
+    if (lineLogDates.length === 0) return { ...s, actualStart: null, actualEnd: null, percentComplete: 0 }
+    const progress = computeLineProgress(line, project.logs)
+    const percentComplete = line.totalWelds > 0 ? Math.min(100, Math.round((progress.weldsDone / line.totalWelds) * 100)) : 0
+    const first = lineLogDates.reduce((a, b) => (b < a ? b : a))
+    const last = lineLogDates.reduce((a, b) => (b > a ? b : a))
+    return { ...s, actualStart: first, actualEnd: percentComplete >= 100 ? last : null, percentComplete }
+  })
 }
 
 export type ActivityStatus = 'not_configured' | 'not_started' | 'in_progress' | 'completed' | 'delayed'
@@ -83,7 +106,7 @@ export interface ProjectScheduleSummary {
  * delay. A simple, transparent heuristic — not a full CPM engine.
  */
 export function computeProjectSchedule(project: Project, today = todayIso()): ProjectScheduleSummary {
-  const valid = project.schedules.filter((a) => a.plannedStart && a.plannedEnd)
+  const valid = withComputedActuals(project).filter((a) => a.plannedStart && a.plannedEnd)
   if (valid.length === 0) {
     return {
       plannedProjectEnd: null,
@@ -152,7 +175,7 @@ function activityActualPercentAt(a: ActivitySchedule, date: string, today: strin
  * history of daily actuals.
  */
 export function computeScheduleSCurve(project: Project, today = todayIso()): SCurvePoint[] {
-  const valid = project.schedules.filter((a) => a.plannedStart && a.plannedEnd)
+  const valid = withComputedActuals(project).filter((a) => a.plannedStart && a.plannedEnd)
   if (valid.length === 0) return []
 
   const dateSet = new Set<string>([today])

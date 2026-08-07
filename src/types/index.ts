@@ -109,14 +109,15 @@ export interface PlannedProgressPoint {
   plannedPercent: number
 }
 
-export type ActivityKind = 'welding' | 'ndt' | 'coating'
+export type ActivityKind = 'welding' | 'ndt' | 'coating' | 'hydrotest'
 
-export const ACTIVITY_KINDS: ActivityKind[] = ['welding', 'ndt', 'coating']
+export const ACTIVITY_KINDS: ActivityKind[] = ['welding', 'ndt', 'coating', 'hydrotest']
 
 export const ACTIVITY_LABEL_FA: Record<ActivityKind, string> = {
   welding: 'جوشکاری',
   ndt: 'تست NDT',
   coating: 'پوشش',
+  hydrotest: 'تست هیدرواستاتیک',
 }
 
 export interface ActivitySchedule {
@@ -128,6 +129,9 @@ export interface ActivitySchedule {
   actualStart: string | null
   actualEnd: string | null
   percentComplete: number
+  /** Consultant's per-row confirmation that this planned schedule is correct — reset whenever the contractor edits the plan. */
+  consultantApprovedAt?: string | null
+  consultantApprovedBy?: string | null
 }
 
 export interface Milestone {
@@ -206,6 +210,17 @@ export interface ReportConfig {
   sections: ReportSections
 }
 
+/** A valve/fitting/equipment symbol placed in the schematic tool, kept as a project-level record so it can be listed (e.g. next to the line list in Schedule) after the drawing is saved. */
+export interface PlacedEquipmentItem {
+  id: string
+  /** Real (DB-assigned) line id it's attached to, if any. */
+  lineId: string | null
+  type: import('../data/pipingSymbols').SymbolType
+  category: import('../data/pipingSymbols').SymbolCategory
+  label: string
+  createdAt: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -218,9 +233,13 @@ export interface Project {
   logs: DailyLog[]
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
+  equipment: PlacedEquipmentItem[]
   milestones: Milestone[]
   risks: Risk[]
   reportConfig: ReportConfig
+  /** Owner's sign-off on the whole schedule (all lines/activities) — outside the per-row consultant approve cycle. */
+  scheduleApprovedAt: string | null
+  scheduleApprovedBy: string | null
   createdAt: string
 }
 

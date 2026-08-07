@@ -12,13 +12,14 @@ import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { RisksPage } from './pages/RisksPage'
 import { AboutPage } from './pages/AboutPage'
+import { AdminUsersPage } from './pages/AdminUsersPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
 import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
-export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about'
+export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about' | 'adminUsers'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
@@ -29,6 +30,7 @@ const PAGE_TITLE: Record<Page, string> = {
   schedule: 'برنامه زمان‌بندی',
   risks: 'ریسک‌ها و مشکلات پروژه',
   about: 'درباره ما',
+  adminUsers: 'مدیریت کاربران',
 }
 
 function App() {
@@ -47,6 +49,7 @@ function App() {
   const addRisk = useStore((s) => s.addRisk)
   const selectProject = useStore((s) => s.selectProject)
   const isAuthed = useAuthStore((s) => s.isAuthed)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
 
   const [page, setPage] = useState<Page>('viewer')
   const [showNewProject, setShowNewProject] = useState(false)
@@ -119,7 +122,7 @@ function App() {
     )
   }
 
-  if (projects.length === 0 || !currentProjectId) {
+  if (!isAdmin && (projects.length === 0 || !currentProjectId)) {
     return (
       <div className="flex h-screen w-screen flex-col">
         <StorageErrorBanner />
@@ -171,7 +174,7 @@ function App() {
         <Topbar project={currentProject} title={PAGE_TITLE[page]} onMenuClick={() => setMobileSidebarOpen(true)} />
         <StorageErrorBanner />
         <main className="flex-1 min-h-0">
-          {!currentProject && (
+          {!currentProject && page !== 'adminUsers' && (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={24} className="animate-spin text-brand-400" />
             </div>
@@ -186,6 +189,7 @@ function App() {
           {currentProject && page === 'schedule' && <SchedulePage project={currentProject} />}
           {currentProject && page === 'risks' && <RisksPage project={currentProject} />}
           {currentProject && page === 'about' && <AboutPage />}
+          {page === 'adminUsers' && <AdminUsersPage />}
         </main>
       </div>
       {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Save, Trash2, RotateCcw, RotateCw, Delete, CornerDownLeft, XCircle, Ruler, Pencil, HelpCircle, FlipHorizontal } from 'lucide-react'
-import type { DraftLine, IsoLine, PlacedSymbol, Project } from '../types'
+import type { DraftLine, IsoLine, PlacedEquipmentItem, PlacedSymbol, Project } from '../types'
 import type { Point } from '../lib/isoGeometry'
 import {
   snapIsoPoint,
@@ -31,6 +31,7 @@ const SNAP_THRESHOLD = 25
 
 export function SchematicPage({ project, onSaved }: { project: Project; onSaved: () => void }) {
   const setProjectSvg = useStore((s) => s.setProjectSvg)
+  const setEquipment = useStore((s) => s.setEquipment)
 
   const [mode, setMode] = useState<EditorMode>('draw')
   const [lines, setLines] = useState<DraftLine[]>([])
@@ -44,6 +45,7 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
   const [showCoordinateModal, setShowCoordinateModal] = useState(false)
   const [pendingTeeId, setPendingTeeId] = useState<string | null>(null)
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem(GUIDE_SEEN_KEY))
 
   const closeGuide = () => {
@@ -166,6 +168,8 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
   }
 
   const doSave = async () => {
+    if (saving) return
+    setSaving(true)
     const svgRaw = buildSchematicSvg(lines, symbols, CANVAS_WIDTH, CANVAS_HEIGHT)
     const newIsoLines: IsoLine[] = lines.map((l) => {
       const lengthMeters = l.realLengthMeters ?? polylineLength(l.points) / PIXELS_PER_METER
@@ -185,9 +189,24 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
         createdAt: new Date().toISOString(),
       }
     })
-    await setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
-    setShowOverwriteConfirm(false)
-    onSaved()
+    try {
+      const insertedLines = await setProjectSvg(project.id, svgRaw, 'schematic-drawing.svg', newIsoLines)
+      // setProjectSvg assigns fresh db ids — resolve each placed symbol's draft lineId back to a
+      // real one via the shared svgElementId, the same remap App.tsx's demo loader uses.
+      const realIdByElementId = new Map(insertedLines.map((l) => [l.svgElementId, l.id]))
+      const now = new Date().toISOString()
+      const newEquipment: PlacedEquipmentItem[] = symbols.map((s) => {
+        const def = SYMBOL_DEFS[s.type]
+        const draftLine = s.lineId ? lines.find((l) => l.id === s.lineId) : undefined
+        const realLineId = draftLine ? (realIdByElementId.get(draftLine.svgElementId) ?? null) : null
+        return { id: makeId('equip'), lineId: realLineId, type: s.type, category: def.category, label: def.shortLabel, createdAt: now }
+      })
+      await setEquipment(project.id, newEquipment)
+      setShowOverwriteConfirm(false)
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSaveClick = () => {
@@ -266,10 +285,10 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             </button>
             <button
               onClick={handleSaveClick}
-              disabled={lines.length === 0}
+              disabled={lines.length === 0 || saving}
               className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
             >
-              <Save size={14} /> ذخیره در پروژه
+              <Save size={14} /> {saving ? 'در حال ذخیره...' : 'ذخیره در پروژه'}
             </button>
           </div>
         </div>
@@ -385,8 +404,12 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
             <button onClick={() => setShowOverwriteConfirm(false)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
               انصراف
             </button>
-            <button onClick={doSave} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 transition-colors">
-              جایگزین کن و ذخیره کن
+            <button
+              onClick={doSave}
+              disabled={saving}
+              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-40 transition-colors"
+            >
+              {saving ? 'در حال ذخیره...' : 'جایگزین کن و ذخیره کن'}
             </button>
           </div>
         </Modal>

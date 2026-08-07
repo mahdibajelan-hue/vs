@@ -139,6 +139,13 @@ alter table projects add column if not exists milestones jsonb not null default 
 alter table projects add column if not exists risks jsonb not null default '[]'::jsonb;
 alter table projects add column if not exists report_config jsonb not null default '{}'::jsonb;
 alter table projects add column if not exists planned_curve jsonb not null default '[]'::jsonb;
+-- Valves/fittings/equipment placed in the schematic tool, kept as a flat list so they can be
+-- listed (e.g. next to the line list in Schedule) after the drawing is saved.
+alter table projects add column if not exists equipment jsonb not null default '[]'::jsonb;
+-- Owner's sign-off on the whole schedule (all lines/activities) — separate columns rather than
+-- part of the schedules array since it's a single whole-plan flag, not a per-row field.
+alter table projects add column if not exists schedule_owner_approved_at timestamptz;
+alter table projects add column if not exists schedule_owner_approved_by uuid references profiles (id);
 
 -- Superseded by the JSONB columns above — drop if an earlier version of this file created them.
 drop table if exists activity_schedules cascade;

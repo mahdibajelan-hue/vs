@@ -69,6 +69,12 @@ interface AppState {
     data: Partial<Omit<ActivitySchedule, 'id' | 'lineId' | 'activity'>>,
   ) => Promise<void>
   addSchedules: (projectId: string, schedules: ActivitySchedule[]) => Promise<void>
+  /** Consultant confirms one line's activity plan is correct. */
+  approveScheduleRowAsConsultant: (projectId: string, lineId: string, activity: ActivityKind) => Promise<void>
+  /** Owner signs off on the whole project schedule (all lines/activities) — outside the per-row consultant approve cycle. */
+  approveScheduleAsOwner: (projectId: string) => Promise<void>
+
+  setEquipment: (projectId: string, equipment: Project['equipment']) => Promise<void>
 
   setMilestones: (projectId: string, milestones: Milestone[]) => Promise<void>
   approveMilestoneAsConsultant: (projectId: string, milestoneId: string) => Promise<void>
@@ -446,8 +452,15 @@ export const useStore = create<AppState>()(
         const detail = get().projectDetail
         if (!detail || detail.id !== projectId) return
         const existing = detail.schedules.find((a) => a.lineId === lineId && a.activity === activity)
+        // Editing the plan invalidates a stale consultant approval on this row, and the owner's
+        // whole-plan sign-off (it was signed off on the previous version of the plan).
+        const planChanged =
+          !!existing &&
+          ((data.plannedStart !== undefined && data.plannedStart !== existing.plannedStart) ||
+            (data.plannedEnd !== undefined && data.plannedEnd !== existing.plannedEnd))
+        const invalidateRow = planChanged ? { consultantApprovedAt: null, consultantApprovedBy: null } : {}
         const next = existing
-          ? detail.schedules.map((a) => (a.id === existing.id ? { ...a, ...data } : a))
+          ? detail.schedules.map((a) => (a.id === existing.id ? { ...a, ...data, ...invalidateRow } : a))
           : [
               ...detail.schedules,
               {
@@ -459,12 +472,25 @@ export const useStore = create<AppState>()(
                 actualStart: null,
                 actualEnd: null,
                 percentComplete: 0,
+                consultantApprovedAt: null,
+                consultantApprovedBy: null,
                 ...data,
               } as ActivitySchedule,
             ]
-        const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        const invalidateOverall = planChanged && detail.scheduleApprovedAt ? { schedule_owner_approved_at: null, schedule_owner_approved_by: null } : {}
+        const { error } = await supabase.from('projects').update({ schedules: next, ...invalidateOverall }).eq('id', projectId)
         if (reportSupabaseError('ذخیره زمان‌بندی', error)) return
-        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? {
+                projectDetail: {
+                  ...s.projectDetail,
+                  schedules: next,
+                  ...(planChanged ? { scheduleApprovedAt: null, scheduleApprovedBy: null } : {}),
+                },
+              }
+            : {},
+        )
       },
 
       addSchedules: async (projectId, schedules) => {
@@ -474,6 +500,40 @@ export const useStore = create<AppState>()(
         const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
         if (reportSupabaseError('ذخیره زمان‌بندی', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
+      },
+
+      approveScheduleRowAsConsultant: async (projectId, lineId, activity) => {
+        const detail = get().projectDetail
+        if (!detail || detail.id !== projectId) return
+        const next = detail.schedules.map((a) =>
+          a.lineId === lineId && a.activity === activity
+            ? { ...a, consultantApprovedAt: new Date().toISOString(), consultantApprovedBy: useAuthStore.getState().profile?.id ?? null }
+            : a,
+        )
+        const { error } = await supabase.from('projects').update({ schedules: next }).eq('id', projectId)
+        if (reportSupabaseError('تایید ردیف برنامه', error)) return
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, schedules: next } } : {}))
+      },
+
+      approveScheduleAsOwner: async (projectId) => {
+        const approvedAt = new Date().toISOString()
+        const approvedBy = useAuthStore.getState().profile?.id ?? null
+        const { error } = await supabase
+          .from('projects')
+          .update({ schedule_owner_approved_at: approvedAt, schedule_owner_approved_by: approvedBy })
+          .eq('id', projectId)
+        if (reportSupabaseError('تایید کلی برنامه زمان‌بندی', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? { projectDetail: { ...s.projectDetail, scheduleApprovedAt: approvedAt, scheduleApprovedBy: approvedBy } }
+            : {},
+        )
+      },
+
+      setEquipment: async (projectId, equipment) => {
+        const { error } = await supabase.from('projects').update({ equipment }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره فهرست تجهیزات', error)) return
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, equipment } } : {}))
       },
 
       setMilestones: async (projectId, milestones) => {

@@ -21,7 +21,7 @@ export function parseProjectJson(text: string): Project | null {
     for (const key of REQUIRED_KEYS) {
       if (!(key in data)) return null
     }
-    return data as Project
+    return { equipment: [], scheduleApprovedAt: null, scheduleApprovedBy: null, ...data } as Project
   } catch {
     return null
   }
