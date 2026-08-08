@@ -21,6 +21,10 @@ const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> 
     title: 'ورود به رصد',
     subtitle: 'سامانه پیگیری مشکلات پروژه — ثبت، پیگیری تا مهلت و تایید نهایی هر مسئله، با گزارش تاخیر لحظه‌ای.',
   },
+  admin: {
+    title: 'ورود به مدیریت کاربران',
+    subtitle: 'مدیریت کاربران و دسترسی آن‌ها در هر سه ماژول — PipePulse، مدیریت ریسک و مدیریت مسائل — از یک صفحه.',
+  },
 }
 
 export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {

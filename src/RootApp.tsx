@@ -4,6 +4,7 @@ import { AuthGate } from './components/Auth/AuthGate'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
 import { IssuesApp } from './modules/issues/IssuesApp'
+import { UnifiedAdminPage } from './pages/UnifiedAdminPage'
 
 export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
@@ -14,7 +15,15 @@ export function RootApp() {
 
   return (
     <AuthGate moduleKey={activeModule} onBackToHub={exitToHub}>
-      {activeModule === 'pipepulse' ? <App /> : activeModule === 'risk' ? <RiskApp onExitToHub={exitToHub} /> : <IssuesApp onExitToHub={exitToHub} />}
+      {activeModule === 'pipepulse' ? (
+        <App />
+      ) : activeModule === 'risk' ? (
+        <RiskApp onExitToHub={exitToHub} />
+      ) : activeModule === 'issues' ? (
+        <IssuesApp onExitToHub={exitToHub} />
+      ) : (
+        <UnifiedAdminPage onExitToHub={exitToHub} />
+      )}
     </AuthGate>
   )
 }

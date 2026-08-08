@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ShieldAlert, AlertTriangle, ArrowLeft, Sparkles, Clock3 } from 'lucide-react'
+import { ShieldAlert, AlertTriangle, ArrowLeft, Sparkles, Clock3, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { LogoFull } from '../common/Logo'
 import type { ModuleKey } from '../../store/useModuleStore'
@@ -80,6 +80,14 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
             <ModuleCard key={m.key} module={m} index={i} onSelect={() => handleSelect(m)} />
           ))}
         </div>
+
+        <button
+          onClick={() => onEnterModule('admin')}
+          className="hub-fade-in mt-6 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-secondary hover:bg-white/[0.07] hover:text-current transition-colors"
+          style={{ animationDelay: '460ms' }}
+        >
+          <Users size={13} /> مدیریت کاربران — همه ماژول‌ها
+        </button>
 
         <div
           className="hub-fade-in mt-10 flex flex-col items-center gap-0.5"
