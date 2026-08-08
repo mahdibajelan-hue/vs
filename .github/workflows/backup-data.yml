@@ -1,1 +1,23 @@
-IyBESVNBQkxFRCDigJQgU0VDVVJJVFkgSU5DSURFTlQgMjAyNi0wOC0wOC4KIwojIFRoaXMgd29ya2Zsb3cgcHVibGlzaGVkIGZ1bGwgcHJvamVjdC1kYXRhIHNuYXBzaG90cyAocmVhbCBjbGllbnQgbmFtZXMsIHByb2plY3QgZGV0YWlscykgdG8KIyB0aGUgYGRhdGEtYmFja3Vwc2AgYnJhbmNoIG9mIHRoaXMgUFVCTElDIHJlcG9zaXRvcnksIHdvcmxkLXJlYWRhYmxlIHRvIGFueW9uZS4gRG8gbm90CiMgcmUtZW5hYmxlIHVudGlsIHRoZSBwdWJsaXNoIHRhcmdldCBpcyBhIHByaXZhdGUgZGVzdGluYXRpb24gKGEgcHJpdmF0ZSBjb21wYW5pb24gcmVwbywgYQojIHByaXZhdGUgU3VwYWJhc2UgU3RvcmFnZSBidWNrZXQsIFMzIHdpdGggcmVzdHJpY3RlZCBhY2Nlc3MsIGV0Yy4pIOKAlCBuZXZlciBhIGJyYW5jaCBvZiB0aGlzCiMgcmVwbywgc2luY2UgdGhpcyByZXBvIGlzIHB1YmxpYy4gU2VlIHRoZSBpbmNpZGVudCBub3RlcyBmb3IgcmVxdWlyZWQgY2xlYW51cCBzdGVwcwojIChkZWxldGUgdGhlIGBkYXRhLWJhY2t1cHNgIGJyYW5jaDsgaXQgY2Fubm90IGJlIGRvbmUgZnJvbSB0aGlzIHdvcmtmbG93KS4KbmFtZTogQmFja3VwIERhdGEKCm9uOgogIHdvcmtmbG93X2Rpc3BhdGNoOiB7fQoKcGVybWlzc2lvbnM6CiAgY29udGVudHM6IHJlYWQKCmpvYnM6CiAgYmFja3VwOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgc3RlcHM6CiAgICAgIC0gcnVuOiB8CiAgICAgICAgICBlY2hvICI6OmVycm9yOjpCYWNrdXAgd29ya2Zsb3cgaXMgZGlzYWJsZWQgYWZ0ZXIgYSBwdWJsaWMgZGF0YS1leHBvc3VyZSBpbmNpZGVudC4gU2VlIHRoZSBjb21tZW50IGF0IHRoZSB0b3Agb2YgdGhpcyBmaWxlIGJlZm9yZSByZS1lbmFibGluZy4iCiAgICAgICAgICBleGl0IDEK
+# DISABLED — SECURITY INCIDENT 2026-08-08.
+#
+# This workflow published full project-data snapshots (real client names, project details) to
+# the `data-backups` branch of this PUBLIC repository, world-readable to anyone. Do not
+# re-enable until the publish target is a private destination (a private companion repo, a
+# private Supabase Storage bucket, S3 with restricted access, etc.) — never a branch of this
+# repo, since this repo is public. See the incident notes for required cleanup steps
+# (delete the `data-backups` branch; it cannot be done from this workflow).
+name: Backup Data
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::Backup workflow is disabled after a public data-exposure incident. See the comment at the top of this file before re-enabling."
+          exit 1
