@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
@@ -54,7 +54,31 @@ export function AuthGate({ children, moduleKey, onBackToHub }: { children: React
       </Shell>
     )
   }
+  // مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد —
+  // کاربران دیگر همین‌جا رد و از سیستم خارج می‌شوند، نه فقط با یک پیام داخل صفحه.
+  if (moduleKey === 'admin' && profile && !profile.isAdmin) {
+    return <AdminOnlyBlock onBack={onBackToHub} />
+  }
   return <>{children}</>
+}
+
+function AdminOnlyBlock({ onBack }: { onBack: () => void }) {
+  const signOut = useAuthStore((s) => s.signOut)
+
+  useEffect(() => {
+    signOut()
+  }, [signOut])
+
+  return (
+    <Shell title="دسترسی محدود" subtitle="ورود به «مدیریت کاربران» فقط برای ادمین سامانه امکان‌پذیر است. در حال خروج خودکار از این حساب...">
+      <button
+        onClick={onBack}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-2.5 text-sm text-secondary hover:bg-white/5 transition-colors"
+      >
+        <ArrowRight size={15} /> بازگشت به ماژول‌ها
+      </button>
+    </Shell>
+  )
 }
 
 export function Shell({

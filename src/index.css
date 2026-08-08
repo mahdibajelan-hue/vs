@@ -338,47 +338,41 @@ body {
   box-shadow: 0 0 8px rgba(201, 162, 39, 0.7);
 }
 
-.hub-carousel {
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scroll-behavior: smooth;
-  padding: 10px 4px 30px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-}
-.hub-carousel::-webkit-scrollbar {
-  height: 8px;
-}
-.hub-carousel::-webkit-scrollbar-thumb {
-  background: var(--border-soft);
-  border-radius: 999px;
+.hub-stage {
+  position: relative;
+  height: 540px;
+  perspective: 1600px;
+  perspective-origin: 50% 42%;
+  touch-action: pan-y;
 }
 
 .hub-card-v2 {
-  position: relative;
-  scroll-snap-align: center;
-  flex: 0 0 auto;
-  width: 270px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 276px;
+  height: 392px;
   cursor: pointer;
-  transform: translateY(0) scale(1);
+  background: rgba(11, 17, 30, 0.86);
+  box-shadow: 0 18px 40px -18px rgba(2, 6, 23, 0.55);
   transition:
-    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 320ms ease,
     border-color 320ms ease,
     opacity 320ms ease,
     filter 320ms ease;
+  will-change: transform;
+}
+:root[data-theme="light"] .hub-card-v2 {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.28);
 }
 .hub-card-v2.is-active {
-  transform: translateY(-8px) scale(1.045);
-  filter: brightness(1.08);
-  box-shadow: 0 24px 48px -16px rgba(2, 6, 23, 0.45);
+  filter: brightness(1.06);
+  box-shadow: 0 34px 64px -20px rgba(2, 6, 23, 0.65);
 }
 .hub-card-v2.is-dimmed {
-  transform: scale(0.955);
-  opacity: 0.6;
-  filter: saturate(0.65);
+  filter: saturate(0.7);
 }
 .hub-card-v2:focus-visible {
   outline: 2px solid var(--card-accent, #38bdf8);

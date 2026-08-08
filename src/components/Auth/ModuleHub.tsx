@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react'
 import { ShieldAlert, AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Sparkles, Clock3, Users, BarChart3 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
@@ -69,14 +69,28 @@ const MODULES: ModuleDef[] = [
   },
 ]
 
+// Rest position: the middle card of the row sits frontmost, the rest fan out along
+// the arc on either side — matches with no pointer interaction yet.
+const DEFAULT_CENTER = (MODULES.length - 1) / 2
+
 export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const [notice, setNotice] = useState<string | null>(null)
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [pointerT, setPointerT] = useState<number | null>(null)
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([])
   const noticeTimer = useRef<number | undefined>(undefined)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const rafRef = useRef<number | undefined>(undefined)
+  // Cards start invisible and fade in via the transition already declared on .hub-card-v2 —
+  // deferred a frame so the browser paints the opacity:0 state before it transitions.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
-  const activeIndex = hoverIndex ?? focusIndex
+  const effectiveCenter = pointerT ?? focusIndex ?? DEFAULT_CENTER
+  const activeIndex = Math.max(0, Math.min(MODULES.length - 1, Math.round(effectiveCenter)))
 
   const handleSelect = (m: ModuleDef) => {
     if (m.status === 'active') {
@@ -88,16 +102,35 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
     noticeTimer.current = window.setTimeout(() => setNotice(null), 2600)
   }
 
+  // Coverflow center follows the pointer's horizontal position across the stage —
+  // rAF-throttled since pointermove fires far more often than a frame needs it.
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const stage = stageRef.current
+    if (!stage) return
+    const clientX = e.clientX
+    if (rafRef.current !== undefined) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = undefined
+      const rect = stage.getBoundingClientRect()
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      // Index 0 renders rightmost on screen (RTL arc, see ARC_RADIUS_X sign below), so a
+      // left-to-right pointer ratio must map to a right-to-left index for the card nearest
+      // the cursor to be the one that comes to the front.
+      setPointerT((1 - ratio) * (MODULES.length - 1))
+    })
+  }, [])
+
+  const handlePointerLeave = useCallback(() => setPointerT(null), [])
+
   const focusCard = (index: number) => {
     const clamped = Math.max(0, Math.min(MODULES.length - 1, index))
     cardRefs.current[clamped]?.focus()
-    cardRefs.current[clamped]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   }
 
   // Document is dir="rtl": the first card sits visually rightmost, so ArrowRight steps
   // toward the previous index (further right) and ArrowLeft steps toward the next one.
-  const handleCarouselKeyDown = (e: React.KeyboardEvent) => {
-    const current = focusIndex ?? 0
+  const handleStageKeyDown = (e: React.KeyboardEvent) => {
+    const current = focusIndex ?? activeIndex
     if (e.key === 'ArrowRight') {
       e.preventDefault()
       focusCard(current - 1)
@@ -143,27 +176,29 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
         <div className="relative w-full">
           <button
             aria-label="ماژول قبلی"
-            onClick={() => focusCard((focusIndex ?? 0) - 1)}
-            className="hub-arrow-btn absolute right-0 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border p-2 sm:flex"
+            onClick={() => focusCard((focusIndex ?? activeIndex) - 1)}
+            className="hub-arrow-btn absolute right-0 top-1/2 z-30 hidden -translate-y-1/2 items-center justify-center rounded-full border p-2 sm:flex"
             style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)' }}
           >
             <ChevronRight size={18} />
           </button>
           <button
             aria-label="ماژول بعدی"
-            onClick={() => focusCard((focusIndex ?? 0) + 1)}
-            className="hub-arrow-btn absolute left-0 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-center rounded-full border p-2 sm:flex"
+            onClick={() => focusCard((focusIndex ?? activeIndex) + 1)}
+            className="hub-arrow-btn absolute left-0 top-1/2 z-30 hidden -translate-y-1/2 items-center justify-center rounded-full border p-2 sm:flex"
             style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)' }}
           >
             <ChevronLeft size={18} />
           </button>
 
           <div
-            className="hub-carousel px-1 sm:px-12"
+            ref={stageRef}
+            className="hub-stage"
             role="listbox"
             aria-label="ماژول‌های پلتفرم"
-            onKeyDown={handleCarouselKeyDown}
-            onMouseLeave={() => setHoverIndex(null)}
+            onKeyDown={handleStageKeyDown}
+            onPointerMove={handlePointerMove}
+            onPointerLeave={handlePointerLeave}
           >
             {MODULES.map((m, i) => (
               <ModuleCard
@@ -172,11 +207,10 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
                   cardRefs.current[i] = el
                 }}
                 module={m}
-                index={i}
-                isActive={activeIndex === i}
-                isDimmed={activeIndex !== null && activeIndex !== i}
+                offset={i - effectiveCenter}
+                isActive={i === activeIndex}
+                mounted={mounted}
                 onSelect={() => handleSelect(m)}
-                onMouseEnter={() => setHoverIndex(i)}
                 onFocus={() => setFocusIndex(i)}
                 onBlur={() => setFocusIndex(null)}
               />
@@ -203,22 +237,36 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
 
 interface ModuleCardProps {
   module: ModuleDef
-  index: number
+  /** Distance (in card-widths) from the coverflow's current center; 0 = frontmost. */
+  offset: number
   isActive: boolean
-  isDimmed: boolean
+  mounted: boolean
   onSelect: () => void
-  onMouseEnter: () => void
   onFocus: () => void
   onBlur: () => void
 }
 
 const PARTICLE_OFFSETS = [18, 42, 66, 86]
 
+// Coverflow arc geometry — tuned so the front card reads clearly larger/closer while
+// staying legible, and the two flanking cards remain fully visible on a 6xl-wide stage.
+const ANGLE_STEP_DEG = 24
+const ARC_RADIUS_X = 232
+const ARC_DEPTH = 210
+const TILT_PER_STEP_DEG = 9
+
 function ModuleCardImpl(
-  { module: m, index, isActive, isDimmed, onSelect, onMouseEnter, onFocus, onBlur }: ModuleCardProps,
+  { module: m, offset, isActive, mounted, onSelect, onFocus, onBlur }: ModuleCardProps,
   ref: React.Ref<HTMLButtonElement>,
 ) {
   const Icon = m.icon
+  const angleRad = (offset * ANGLE_STEP_DEG * Math.PI) / 180
+  const translateX = -Math.sin(angleRad) * ARC_RADIUS_X
+  const translateZ = (Math.cos(angleRad) - 1) * ARC_DEPTH
+  const rotateY = offset * TILT_PER_STEP_DEG
+  const scale = Math.max(0.66, 1.1 - Math.abs(offset) * 0.16)
+  const cardOpacity = Math.max(0.4, 1 - Math.abs(offset) * 0.22)
+  const zIndex = Math.round(200 - Math.abs(offset) * 10)
 
   return (
     <button
@@ -227,14 +275,14 @@ function ModuleCardImpl(
       aria-selected={isActive}
       tabIndex={0}
       onClick={onSelect}
-      onMouseEnter={onMouseEnter}
       onFocus={onFocus}
       onBlur={onBlur}
-      className={`hub-fade-in hub-card-v2 ${isActive ? 'is-active' : ''} ${isDimmed ? 'is-dimmed' : ''} group overflow-hidden rounded-3xl border text-right`}
+      className={`hub-card-v2 ${isActive ? 'is-active' : 'is-dimmed'} group overflow-hidden rounded-3xl border text-right`}
       style={{
-        animationDelay: `${120 + index * 90}ms`,
+        transform: `translate(-50%, -50%) translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${mounted ? scale : scale * 0.9})`,
+        opacity: mounted ? cardOpacity : 0,
+        zIndex,
         borderColor: isActive ? `${m.accent}55` : 'var(--border-soft)',
-        background: 'var(--bg-panel)',
         backdropFilter: 'blur(18px) saturate(140%)',
         WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         // @ts-expect-error -- custom property consumed by .hub-card-v2:focus-visible
@@ -258,14 +306,14 @@ function ModuleCardImpl(
 
       {/* Separate element for the idle "breathing" animation — keeping it off the outer
           button avoids the CSS `animation` shorthand here clobbering the button's own
-          `hub-fade-in` entrance animation (both would otherwise target the same property). */}
-      <div className="hub-card-breathe flex h-full flex-col items-start p-6">
-        <div className="mb-4 flex w-full items-center justify-between">
+          entrance-fade animation (both would otherwise target the same property). */}
+      <div className="hub-card-breathe flex h-full flex-col items-start p-7">
+        <div className="mb-5 flex w-full items-center justify-between">
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110"
             style={{ background: `${m.accent}1a`, borderColor: `${m.accent}44` }}
           >
-            <Icon size={22} style={{ color: m.accent }} />
+            <Icon size={26} style={{ color: m.accent }} />
           </div>
           {m.status === 'active' ? (
             <span className="flex items-center gap-1 rounded-full border border-green-400/40 bg-green-500/10 px-2.5 py-1 text-[10px] font-bold text-green-300">
@@ -278,13 +326,13 @@ function ModuleCardImpl(
           )}
         </div>
 
-        <p style={{ fontFamily: m.key === 'pipepulse' ? "'Montserrat', sans-serif" : undefined }} className="text-base font-extrabold">
+        <p style={{ fontFamily: m.key === 'pipepulse' ? "'Montserrat', sans-serif" : undefined }} className="text-lg font-extrabold">
           {m.title}
         </p>
         <p className="mt-0.5 text-[10px] font-medium tracking-wide text-muted" dir="ltr">
           {m.englishTag}
         </p>
-        <p className="mt-2 text-xs leading-6 text-secondary">{m.teaser}</p>
+        <p className="mt-2.5 text-xs leading-6 text-secondary">{m.teaser}</p>
 
         <div className="hub-desc-reveal w-full">
           <div>
@@ -292,7 +340,7 @@ function ModuleCardImpl(
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-1.5 text-xs font-bold transition-all duration-300 group-hover:gap-2.5" style={{ color: m.accent }}>
+        <div className="mt-auto flex items-center gap-1.5 pt-4 text-xs font-bold transition-all duration-300 group-hover:gap-2.5" style={{ color: m.accent }}>
           {m.status === 'active' ? 'ورود به ماژول' : 'مشاهده جزئیات'}
           <ArrowLeft size={14} className="transition-transform duration-300 group-hover:-translate-x-0.5" />
         </div>
