@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Mail, RefreshCw, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react'
+import { Mail, RefreshCw, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuthStore } from '../store/useAuthStore'
 import { ROLE_LABEL_FA, type UserRole } from '../types'
@@ -49,7 +49,7 @@ const PRODUCT_ACCENT: Record<ProductKey, string> = { pipepulse: '#0ea5e9', risk:
  * role there — reached directly from the hub (not from inside any single module) so an admin
  * never has to enter a product just to manage who has access to it.
  */
-export function UnifiedAdminPage({ onExitToHub }: { onExitToHub: () => void }) {
+export function UnifiedAdminPage() {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const myUserId = useAuthStore((s) => s.profile?.id)
 
@@ -184,40 +184,18 @@ export function UnifiedAdminPage({ onExitToHub }: { onExitToHub: () => void }) {
     await load()
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 p-8" style={{ background: 'var(--bg-app)' }}>
-        <p className="text-sm text-muted">این بخش فقط برای ادمین سامانه در دسترس است.</p>
-        <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 transition-colors">
-          <ArrowRight size={13} /> بازگشت به ماژول‌ها
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
-      <header className="flex shrink-0 items-center justify-between glass-panel !rounded-none border-t-0 border-x-0 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <Users size={18} className="text-brand-400" />
+    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="mx-auto max-w-4xl space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-extrabold">مدیریت کاربران — همه ماژول‌ها</p>
-            <p className="text-[10px] text-muted">فهرست همه اعضا و نقش آن‌ها در هر پروژه، در PipePulse، مدیریت ریسک و مدیریت مسائل</p>
+            <p className="text-sm font-extrabold">فهرست کاربران و دسترسی‌ها</p>
+            <p className="text-[10px] text-muted">همه اعضا و نقش آن‌ها در هر پروژه، در PipePulse، مدیریت ریسک و مدیریت مسائل</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} disabled={loading} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="بروزرسانی">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 transition-colors">
-            <ArrowRight size={13} /> بازگشت به ماژول‌ها
-          </button>
-        </div>
-      </header>
-
-      <main className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="mx-auto max-w-4xl space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center gap-2">
+            <button onClick={load} disabled={loading} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="بروزرسانی">
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            </button>
             <button
               onClick={() => setShowInviteForm((v) => !v)}
               className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-medium text-white hover:bg-brand-400 transition-colors"
@@ -402,7 +380,7 @@ export function UnifiedAdminPage({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

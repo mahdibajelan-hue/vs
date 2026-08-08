@@ -960,3 +960,237 @@ create policy "im_issues_delete_manager" on im_issues
 -- ----------------------------------------------------------------------------
 create index if not exists idx_im_project_members_user on im_project_members (user_id);
 create index if not exists idx_im_issues_project on im_issues (project_id);
+
+-- ============================================================================
+-- 12. RASTA Master Data — Organization / Portfolio / Program / Project hierarchy
+--     shared by every module ("Project Name is for humans. Project ID is for the
+--     system."). This is Phase 1-6 of the Master Data & Access Architecture:
+--     centralized reference data, purely additive — nothing above is touched, and
+--     Risk/Issue/PipePulse keep their own project registries for now. Migrating
+--     them onto master_projects.id (via a project_mapping/alias layer) and the
+--     full Role/Permission/Scope model are later phases, deferred.
+--
+--     Access model for this phase: master data is shared reference data readable
+--     by any authenticated user (so every module can look up names/hierarchy),
+--     writable only by is_admin_user() — the same admin flag already gating
+--     UnifiedAdminPage. A dedicated RBAC model (roles/permissions/project scope)
+--     is Phase 8+ of the plan and intentionally not built yet.
+-- ============================================================================
+
+create table if not exists organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  short_name text not null default '',
+  org_type text not null default 'other' check (org_type in ('employer', 'consultant', 'contractor', 'partner', 'internal', 'other')),
+  description text not null default '',
+  contact_name text not null default '',
+  contact_email text not null default '',
+  contact_phone text not null default '',
+  is_active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table organizations enable row level security;
+
+drop policy if exists "organizations_select_authenticated" on organizations;
+create policy "organizations_select_authenticated" on organizations
+  for select using (auth.uid() is not null);
+
+drop policy if exists "organizations_write_admin" on organizations;
+create policy "organizations_write_admin" on organizations
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists portfolios (
+  id uuid primary key default gen_random_uuid(),
+  code text not null default '',
+  name text not null,
+  description text not null default '',
+  owner_id uuid references profiles (id),
+  organization_id uuid references organizations (id) on delete set null,
+  status text not null default 'active' check (status in ('active', 'on_hold', 'closed')),
+  start_date date,
+  end_date date,
+  strategic_objectives text not null default '',
+  is_active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table portfolios enable row level security;
+
+drop policy if exists "portfolios_select_authenticated" on portfolios;
+create policy "portfolios_select_authenticated" on portfolios
+  for select using (auth.uid() is not null);
+
+drop policy if exists "portfolios_write_admin" on portfolios;
+create policy "portfolios_write_admin" on portfolios
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists programs (
+  id uuid primary key default gen_random_uuid(),
+  code text not null default '',
+  name text not null,
+  description text not null default '',
+  portfolio_id uuid references portfolios (id) on delete set null,
+  program_manager_id uuid references profiles (id),
+  sponsor_id uuid references profiles (id),
+  status text not null default 'active' check (status in ('active', 'on_hold', 'closed')),
+  start_date date,
+  planned_finish date,
+  strategic_objectives text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table programs enable row level security;
+
+drop policy if exists "programs_select_authenticated" on programs;
+create policy "programs_select_authenticated" on programs
+  for select using (auth.uid() is not null);
+
+drop policy if exists "programs_write_admin" on programs;
+create policy "programs_write_admin" on programs
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- Sequential, immutable, RASTA-generated identifier (PRJ-000001, ...) — "Project Name is for
+-- humans, Project ID is for the system." Distinct from project_code (an org-defined identifier
+-- admins may edit) and from id (the uuid actually used for every foreign key).
+create sequence if not exists master_projects_seq;
+
+create table if not exists master_projects (
+  id uuid primary key default gen_random_uuid(),
+  project_id_code text not null unique,
+  project_code text not null default '',
+  official_name text not null,
+  short_name text not null default '',
+  description text not null default '',
+  project_type text not null default '',
+  project_category text not null default '',
+  portfolio_id uuid references portfolios (id) on delete set null,
+  program_id uuid references programs (id) on delete set null,
+  status text not null default 'idea' check (status in (
+    'idea', 'proposed', 'approved', 'planning', 'executing', 'on_hold', 'completed', 'closed', 'archived', 'cancelled'
+  )),
+
+  -- Contract
+  contract_number text not null default '',
+  contract_type text not null default '',
+  contract_value numeric,
+  currency text not null default 'IRR',
+  contract_start_date date,
+  contractual_completion_date date,
+  revised_completion_date date,
+  employer_org_id uuid references organizations (id) on delete set null,
+  consultant_org_id uuid references organizations (id) on delete set null,
+  contractor_org_id uuid references organizations (id) on delete set null,
+  partner_org_id uuid references organizations (id) on delete set null,
+
+  -- Management — reference real users, not free text (spec section 9).
+  sponsor_id uuid references profiles (id),
+  project_manager_id uuid references profiles (id),
+  project_director_id uuid references profiles (id),
+  program_manager_id uuid references profiles (id),
+  portfolio_manager_id uuid references profiles (id),
+  pmo_owner_id uuid references profiles (id),
+
+  -- Schedule — baseline/actual/forecast triad (spec section 10).
+  planned_start_date date,
+  planned_finish_date date,
+  actual_start_date date,
+  actual_finish_date date,
+  forecast_finish_date date,
+  baseline_version text not null default 'Baseline 0',
+  schedule_status text not null default 'on_track' check (schedule_status in ('on_track', 'at_risk', 'delayed', 'ahead', 'unknown')),
+
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function assign_master_project_id_code()
+returns trigger as $$
+begin
+  if new.project_id_code is null or new.project_id_code = '' then
+    new.project_id_code := 'PRJ-' || lpad(nextval('master_projects_seq')::text, 6, '0');
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_assign_master_project_id_code on master_projects;
+create trigger trg_assign_master_project_id_code
+  before insert on master_projects
+  for each row execute function assign_master_project_id_code();
+
+-- Users must not be allowed to change ProjectID after creation (spec section 6) — enforced here,
+-- not just by omitting an editor in the UI, so it holds even against a direct API call.
+create or replace function prevent_project_id_code_change()
+returns trigger as $$
+begin
+  if new.project_id_code is distinct from old.project_id_code then
+    new.project_id_code := old.project_id_code;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_prevent_project_id_code_change on master_projects;
+create trigger trg_prevent_project_id_code_change
+  before update on master_projects
+  for each row execute function prevent_project_id_code_change();
+
+alter table master_projects enable row level security;
+
+drop policy if exists "master_projects_select_authenticated" on master_projects;
+create policy "master_projects_select_authenticated" on master_projects
+  for select using (auth.uid() is not null);
+
+drop policy if exists "master_projects_write_admin" on master_projects;
+create policy "master_projects_write_admin" on master_projects
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists project_phases (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  name text not null,
+  code text not null default '',
+  sequence smallint not null default 0,
+  planned_start date,
+  planned_finish date,
+  actual_start date,
+  actual_finish date,
+  forecast_finish date,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'on_hold')),
+  progress smallint not null default 0 check (progress between 0 and 100),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table project_phases enable row level security;
+
+drop policy if exists "project_phases_select_authenticated" on project_phases;
+create policy "project_phases_select_authenticated" on project_phases
+  for select using (auth.uid() is not null);
+
+drop policy if exists "project_phases_write_admin" on project_phases;
+create policy "project_phases_write_admin" on project_phases
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Indexes
+-- ----------------------------------------------------------------------------
+create index if not exists idx_portfolios_organization on portfolios (organization_id);
+create index if not exists idx_programs_portfolio on programs (portfolio_id);
+create index if not exists idx_master_projects_portfolio on master_projects (portfolio_id);
+create index if not exists idx_master_projects_program on master_projects (program_id);
+create index if not exists idx_master_projects_status on master_projects (status);
+create index if not exists idx_project_phases_project on project_phases (project_id);

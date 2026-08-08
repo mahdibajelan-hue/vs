@@ -4,7 +4,7 @@ import { AuthGate } from './components/Auth/AuthGate'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
 import { IssuesApp } from './modules/issues/IssuesApp'
-import { UnifiedAdminPage } from './pages/UnifiedAdminPage'
+import { AdminApp } from './pages/AdminApp'
 
 export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
@@ -22,7 +22,7 @@ export function RootApp() {
       ) : activeModule === 'issues' ? (
         <IssuesApp onExitToHub={exitToHub} />
       ) : (
-        <UnifiedAdminPage onExitToHub={exitToHub} />
+        <AdminApp onExitToHub={exitToHub} />
       )}
     </AuthGate>
   )
