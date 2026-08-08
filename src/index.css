@@ -353,7 +353,7 @@ body {
   width: 276px;
   height: 392px;
   cursor: pointer;
-  background: rgba(11, 17, 30, 0.86);
+  background: #0b111e;
   box-shadow: 0 18px 40px -18px rgba(2, 6, 23, 0.55);
   transition:
     transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -364,7 +364,7 @@ body {
   will-change: transform;
 }
 :root[data-theme="light"] .hub-card-v2 {
-  background: rgba(255, 255, 255, 0.92);
+  background: #ffffff;
   box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.28);
 }
 .hub-card-v2.is-active {

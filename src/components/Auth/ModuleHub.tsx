@@ -81,6 +81,11 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
   const noticeTimer = useRef<number | undefined>(undefined)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const rafRef = useRef<number | undefined>(undefined)
+  // While non-zero, real pointermove events are ignored — covers the window right after a
+  // button/keyboard navigation where the mouse is still physically settling near/over the
+  // stage (e.g. traveling to an arrow button at the stage's edge) and would otherwise fire
+  // a late pointermove that silently drags the coverflow back to the cursor's position.
+  const suppressPointerUntilRef = useRef(0)
   // Cards start invisible and fade in via the transition already declared on .hub-card-v2 —
   // deferred a frame so the browser paints the opacity:0 state before it transitions.
   const [mounted, setMounted] = useState(false)
@@ -105,6 +110,7 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
   // Coverflow center follows the pointer's horizontal position across the stage —
   // rAF-throttled since pointermove fires far more often than a frame needs it.
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (performance.now() < suppressPointerUntilRef.current) return
     const stage = stageRef.current
     if (!stage) return
     const clientX = e.clientX
@@ -124,6 +130,12 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
 
   const focusCard = (index: number) => {
     const clamped = Math.max(0, Math.min(MODULES.length - 1, index))
+    if (rafRef.current !== undefined) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = undefined
+    }
+    suppressPointerUntilRef.current = performance.now() + 400
+    setPointerT(null)
     cardRefs.current[clamped]?.focus()
   }
 
@@ -171,6 +183,9 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
             className="mt-6 h-auto w-28 opacity-85 sm:w-32"
             draggable={false}
           />
+          <p dir="ltr" className="mt-1.5 text-[11px] font-medium tracking-wide" style={{ color: GOLD }}>
+            Design &amp; Development by Mahdi Bajelan
+          </p>
         </div>
 
         <div className="relative w-full">
@@ -212,7 +227,6 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
                 mounted={mounted}
                 onSelect={() => handleSelect(m)}
                 onFocus={() => setFocusIndex(i)}
-                onBlur={() => setFocusIndex(null)}
               />
             ))}
           </div>
@@ -243,20 +257,20 @@ interface ModuleCardProps {
   mounted: boolean
   onSelect: () => void
   onFocus: () => void
-  onBlur: () => void
 }
 
 const PARTICLE_OFFSETS = [18, 42, 66, 86]
 
-// Coverflow arc geometry — tuned so the front card reads clearly larger/closer while
-// staying legible, and the two flanking cards remain fully visible on a 6xl-wide stage.
-const ANGLE_STEP_DEG = 24
-const ARC_RADIUS_X = 232
-const ARC_DEPTH = 210
-const TILT_PER_STEP_DEG = 9
+// Coverflow arc geometry — tuned so the front card reads clearly larger/closer, the
+// flanking cards have visible breathing room instead of stacking on top of each other,
+// and all five stay fully visible on a 6xl-wide stage.
+const ANGLE_STEP_DEG = 27
+const ARC_RADIUS_X = 340
+const ARC_DEPTH = 240
+const TILT_PER_STEP_DEG = 10
 
 function ModuleCardImpl(
-  { module: m, offset, isActive, mounted, onSelect, onFocus, onBlur }: ModuleCardProps,
+  { module: m, offset, isActive, mounted, onSelect, onFocus }: ModuleCardProps,
   ref: React.Ref<HTMLButtonElement>,
 ) {
   const Icon = m.icon
@@ -276,15 +290,12 @@ function ModuleCardImpl(
       tabIndex={0}
       onClick={onSelect}
       onFocus={onFocus}
-      onBlur={onBlur}
       className={`hub-card-v2 ${isActive ? 'is-active' : 'is-dimmed'} group overflow-hidden rounded-3xl border text-right`}
       style={{
         transform: `translate(-50%, -50%) translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${mounted ? scale : scale * 0.9})`,
         opacity: mounted ? cardOpacity : 0,
         zIndex,
         borderColor: isActive ? `${m.accent}55` : 'var(--border-soft)',
-        backdropFilter: 'blur(18px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         // @ts-expect-error -- custom property consumed by .hub-card-v2:focus-visible
         '--card-accent': m.accent,
       }}
