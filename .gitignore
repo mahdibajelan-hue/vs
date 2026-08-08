@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Never commit real credentials — only .env.example (a template with empty values) is tracked.
+.env
+.env.*
+!.env.example
+
+# Local output of scripts/backup-data.mjs — must never be committed to a branch of this public repo.
+backups/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

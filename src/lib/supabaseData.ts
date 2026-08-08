@@ -13,6 +13,7 @@ import type {
 } from '../types'
 import { defaultReportConfig } from './reportConfig'
 import { createDefaultMilestones } from './milestones'
+import { sanitizeSvg } from './sanitizeSvg'
 
 export interface ProjectSummary {
   id: string
@@ -95,7 +96,7 @@ export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]):
     client: r.client,
     location: r.location,
     unit: r.unit,
-    svgRaw: r.svg_raw,
+    svgRaw: r.svg_raw ? sanitizeSvg(r.svg_raw) : r.svg_raw,
     svgFileName: r.svg_file_name,
     lines: lines.map(lineFromRow),
     logs: logs.map(logFromRow),

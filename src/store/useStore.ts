@@ -5,6 +5,7 @@ import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
 import { createSafeLocalStorage } from '../lib/safeStorage'
+import { sanitizeSvg } from '../lib/sanitizeSvg'
 import { supabase } from '../lib/supabaseClient'
 import { useAuthStore } from './useAuthStore'
 import { useMembersStore } from './useMembersStore'
@@ -158,7 +159,7 @@ export const useStore = create<AppState>()(
           p_client: project.client,
           p_location: project.location,
           p_unit: project.unit,
-          p_svg_raw: project.svgRaw,
+          p_svg_raw: project.svgRaw ? sanitizeSvg(project.svgRaw) : project.svgRaw,
           p_svg_file_name: project.svgFileName,
           p_schedules: [],
           p_milestones: project.milestones?.length ? project.milestones : createDefaultMilestones(),
@@ -216,6 +217,7 @@ export const useStore = create<AppState>()(
       },
 
       setProjectSvg: async (projectId, svgRaw, fileName, lines) => {
+        svgRaw = sanitizeSvg(svgRaw)
         const { error: updateErr } = await supabase.from('projects').update({ svg_raw: svgRaw, svg_file_name: fileName }).eq('id', projectId)
         if (reportSupabaseError('ذخیره نقشه SVG', updateErr)) return []
         const { error: deleteErr } = await supabase.from('lines').delete().eq('project_id', projectId)

@@ -1,36 +1,23 @@
+# DISABLED — SECURITY INCIDENT 2026-08-08.
+#
+# This workflow published full project-data snapshots (real client names, project details) to
+# the `data-backups` branch of this PUBLIC repository, world-readable to anyone. Do not
+# re-enable until the publish target is a private destination (a private companion repo, a
+# private Supabase Storage bucket, S3 with restricted access, etc.) — never a branch of this
+# repo, since this repo is public. See the incident notes for required cleanup steps
+# (delete the `data-backups` branch; it cannot be done from this workflow).
 name: Backup Data
 
 on:
-  schedule:
-    - cron: '0 2 * * 1,5' # every Monday and Friday at 02:00 UTC
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: claude/piping-isometric-tracker-x8y5i1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: node scripts/backup-data.mjs
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          BACKUP_USER_EMAIL: ${{ secrets.BACKUP_USER_EMAIL }}
-          BACKUP_USER_PASSWORD: ${{ secrets.BACKUP_USER_PASSWORD }}
-      - uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./backups
-          publish_branch: data-backups
-          keep_files: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
+      - run: |
+          echo "::error::Backup workflow is disabled after a public data-exposure incident. See the comment at the top of this file before re-enabling."
+          exit 1

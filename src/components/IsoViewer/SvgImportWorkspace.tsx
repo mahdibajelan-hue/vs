@@ -5,6 +5,7 @@ import type { LineProgress } from '../../lib/progress'
 import { IsoViewport } from './IsoViewport'
 import { parseSvgCandidates, isLikelyLineId, type SvgCandidate } from '../../lib/svg'
 import { extractSegmentEndpoints, computeMergeGroups, defaultMergeTolerance, pickGroupLabel } from '../../lib/lineMerge'
+import { sanitizeSvg } from '../../lib/sanitizeSvg'
 
 interface SvgImportWorkspaceProps {
   onClose: () => void
@@ -35,7 +36,7 @@ export function SvgImportWorkspace({ onClose, onConfirm }: SvgImportWorkspacePro
     setError(null)
     const reader = new FileReader()
     reader.onload = () => {
-      const text = String(reader.result ?? '')
+      const text = sanitizeSvg(String(reader.result ?? ''))
       try {
         const found = parseSvgCandidates(text)
         setSvgRaw(text)
