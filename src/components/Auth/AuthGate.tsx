@@ -25,6 +25,12 @@ const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> 
     title: 'ورود به مدیریت کاربران',
     subtitle: 'مدیریت کاربران و دسترسی آن‌ها در هر سه ماژول — PipePulse، مدیریت ریسک و مدیریت مسائل — از یک صفحه.',
   },
+  // Unreachable today — its hub card is status: 'soon' and never calls onEnterModule — kept
+  // here only so MODULE_LOGIN_COPY stays a total Record<ModuleKey, ...>.
+  reporting: {
+    title: 'ورود به گزارش‌گیری هوشمند',
+    subtitle: 'این ماژول به‌زودی راه‌اندازی می‌شود.',
+  },
 }
 
 export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {
@@ -237,8 +243,8 @@ function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () =>
         </div>
 
         <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
-          <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-lg font-extrabold tracking-tight text-brand-300">
-            PipePulse<sup className="text-[10px] align-super">™</sup>
+          <p className="rasta-wordmark text-lg" style={{ fontWeight: 800 }}>
+            RASTA
           </p>
           <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>
             Developed &amp; Designed by Mahdi Bajelan
