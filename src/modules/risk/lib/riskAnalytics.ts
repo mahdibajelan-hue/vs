@@ -71,6 +71,17 @@ export function computeStatusCounts(risks: RmRisk[]): Record<RmRiskStatus, numbe
   return counts
 }
 
+/** Current-level breakdown of active (non-closed) risks — feeds the dashboard's level donut. */
+export function computeLevelDistribution(risks: RmRisk[], assessments: RmRiskAssessment[]): Record<RiskLevel, number> {
+  const counts: Record<RiskLevel, number> = { low: 0, medium: 0, high: 0, critical: 0 }
+  for (const r of risks) {
+    if (r.status === 'closed') continue
+    const state = currentState(r, assessments.filter((a) => a.riskId === r.id))
+    counts[riskLevel(state.score)]++
+  }
+  return counts
+}
+
 export function computeCategoryDistribution(risks: RmRisk[]): { category: RmRiskCategory; count: number }[] {
   const map = new Map<RmRiskCategory, number>()
   for (const r of risks) map.set(r.category, (map.get(r.category) ?? 0) + 1)

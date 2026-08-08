@@ -1,4 +1,4 @@
-import type { ActivityKind, ActivitySchedule, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Risk } from '../types'
+import type { ActivityKind, ActivitySchedule, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint } from '../types'
 import { generateSampleSvg, SAMPLE_LINES } from './sampleSvg'
 import { makeId } from '../lib/id'
 import { MILESTONE_COLOR_PALETTE } from '../lib/milestones'
@@ -45,7 +45,6 @@ export function buildSeedProject(): {
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
   milestones: Milestone[]
-  risks: Omit<Risk, 'id' | 'createdAt'>[]
 } {
   const svgRaw = generateSampleSvg()
 
@@ -171,68 +170,5 @@ export function buildSeedProject(): {
     color: MILESTONE_COLOR_PALETTE[i % MILESTONE_COLOR_PALETTE.length],
   }))
 
-  const risks: Omit<Risk, 'id' | 'createdAt'>[] = [
-    {
-      title: 'تاخیر در تامین شیرآلات ۶ اینچ',
-      description: 'تامین شیرآلات کلاس ۶۰۰ برای خطوط اصلی با تاخیر مواجه شده و می‌تواند جوشکاری نهایی را متوقف کند.',
-      category: 'procurement',
-      probability: 4,
-      impact: 4,
-      status: 'mitigating',
-      mitigationPlan: 'پیگیری روزانه با فروشنده و بررسی تامین‌کننده جایگزین داخلی',
-      owner: 'پیمانکار الف',
-    },
-    {
-      title: 'کمبود نیروی جوشکار مجرب',
-      description: 'تعداد جوشکاران واجد صلاحیت برای جوش‌های کلاس بالا کافی نیست.',
-      category: 'schedule',
-      probability: 3,
-      impact: 4,
-      status: 'open',
-      mitigationPlan: 'جذب نیروی جوشکار از پیمانکاران محلی و برگزاری تست WPS اضافه',
-      owner: 'پیمانکار ج',
-    },
-    {
-      title: 'ریسک HSE در ارتفاع حین نصب خطوط بالای ۱۰ اینچ',
-      description: 'نصب خطوط بزرگ در ارتفاع بالای ۳ متر بدون داربست استاندارد.',
-      category: 'safety',
-      probability: 2,
-      impact: 5,
-      status: 'mitigating',
-      mitigationPlan: 'نصب داربست استاندارد و بازرسی HSE قبل از شروع هر شیفت',
-      owner: 'واحد HSE',
-    },
-    {
-      title: 'نتایج نامنطبق رادیوگرافی',
-      description: 'درصد ردی جوش‌های رادیوگرافی‌شده در دو هفته اخیر بالاتر از حد مجاز بوده است.',
-      category: 'quality',
-      probability: 3,
-      impact: 3,
-      status: 'open',
-      mitigationPlan: 'بازآموزی جوشکاران و بازرسی افزایشی قبل از رادیوگرافی',
-      owner: 'مشاور پروژه',
-    },
-    {
-      title: 'نوسان نرخ ارز بر قیمت اقلام وارداتی',
-      description: 'افزایش نرخ ارز می‌تواند هزینه خرید اقلام باقی‌مانده را افزایش دهد.',
-      category: 'financial',
-      probability: 3,
-      impact: 2,
-      status: 'open',
-      mitigationPlan: 'قفل قیمت با تامین‌کننده و خرید زودتر از موعد اقلام حساس',
-      owner: 'کارفرما',
-    },
-    {
-      title: 'تداخل مسیر خطوط جدید با تجهیزات موجود',
-      description: 'در بخشی از واحد ۱۰۰ تداخل فیزیکی بین مسیر پیشنهادی و تجهیزات موجود شناسایی شده است.',
-      category: 'technical',
-      probability: 2,
-      impact: 3,
-      status: 'closed',
-      mitigationPlan: 'اصلاح مسیر ایزومتریک با هماهنگی تیم طراحی — انجام و تایید شد',
-      owner: 'مشاور پروژه',
-    },
-  ]
-
-  return { svgRaw, lines, logs, plannedCurve, schedules, milestones, risks }
+  return { svgRaw, lines, logs, plannedCurve, schedules, milestones }
 }

@@ -10,7 +10,6 @@ import type {
   PlannedProgressPoint,
   Project,
   ReportConfig,
-  Risk,
 } from '../types'
 import { defaultReportConfig } from './reportConfig'
 import { createDefaultMilestones } from './milestones'
@@ -35,7 +34,6 @@ interface ProjectRow {
   schedules: ActivitySchedule[]
   equipment: PlacedEquipmentItem[] | null
   milestones: Milestone[]
-  risks: Risk[]
   report_config: ReportConfig
   planned_curve: PlannedProgressPoint[]
   schedule_owner_approved_at: string | null
@@ -105,7 +103,6 @@ export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]):
     schedules: r.schedules ?? [],
     equipment: r.equipment ?? [],
     milestones: r.milestones?.length ? r.milestones : createDefaultMilestones(),
-    risks: r.risks ?? [],
     reportConfig: r.report_config?.template ? r.report_config : defaultReportConfig(),
     scheduleApprovedAt: r.schedule_owner_approved_at ?? null,
     scheduleApprovedBy: r.schedule_owner_approved_by ?? null,

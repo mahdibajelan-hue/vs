@@ -14,7 +14,14 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-export async function exportElementToPdf(el: HTMLElement, filename: string) {
+/**
+ * Renders `el` to a PDF. Orientation defaults to whatever matches the captured content's own
+ * aspect ratio (a tall stacked dashboard gets portrait pages, a wide one-pager gets landscape)
+ * instead of always forcing landscape, which squished tall reports into a sliver in the middle
+ * of a wide page. Content taller than one page is split across multiple pages rather than
+ * shrunk to fit, so nothing becomes illegibly small.
+ */
+export async function exportElementToPdf(el: HTMLElement, filename: string, options?: { orientation?: 'portrait' | 'landscape' }) {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import('html2canvas-pro'),
     import('jspdf'),
@@ -25,15 +32,24 @@ export async function exportElementToPdf(el: HTMLElement, filename: string) {
     useCORS: true,
   })
   const imgData = canvas.toDataURL('image/png')
-  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const orientation = options?.orientation ?? (canvas.height > canvas.width ? 'portrait' : 'landscape')
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
-  const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height)
-  const w = canvas.width * ratio
-  const h = canvas.height * ratio
-  const x = (pageWidth - w) / 2
-  const y = (pageHeight - h) / 2
-  pdf.addImage(imgData, 'PNG', x, y, w, h)
+
+  const imgWidth = pageWidth
+  const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+  let heightLeft = imgHeight
+  let position = 0
+  pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+  heightLeft -= pageHeight
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight
+    pdf.addPage()
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+  }
   pdf.save(filename)
 }
 

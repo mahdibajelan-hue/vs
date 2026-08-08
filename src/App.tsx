@@ -10,7 +10,6 @@ import { ReportsPage } from './pages/ReportsPage'
 import { WorkLogPage } from './pages/WorkLogPage'
 import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
-import { RisksPage } from './pages/RisksPage'
 import { AboutPage } from './pages/AboutPage'
 import { AdminUsersPage } from './pages/AdminUsersPage'
 import { buildSeedProject } from './data/seed'
@@ -19,7 +18,7 @@ import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
-export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'risks' | 'about' | 'adminUsers'
+export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'about' | 'adminUsers'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
@@ -28,7 +27,6 @@ const PAGE_TITLE: Record<Page, string> = {
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراحی نقشه شماتیک',
   schedule: 'برنامه زمان‌بندی',
-  risks: 'ریسک‌ها و مشکلات پروژه',
   about: 'درباره ما',
   adminUsers: 'مدیریت کاربران',
 }
@@ -46,7 +44,6 @@ function App() {
   const setPlannedCurve = useStore((s) => s.setPlannedCurve)
   const addSchedules = useStore((s) => s.addSchedules)
   const setMilestones = useStore((s) => s.setMilestones)
-  const addRisk = useStore((s) => s.addRisk)
   const selectProject = useStore((s) => s.selectProject)
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
@@ -105,7 +102,6 @@ function App() {
         seed.schedules.map((s) => ({ ...s, lineId: remapLineId(s.lineId) })),
       )
       await setMilestones(id, seed.milestones)
-      for (const risk of seed.risks) await addRisk(id, risk)
       await selectProject(id)
     } catch {
       // error already surfaced via the storage-error banner
@@ -187,7 +183,6 @@ function App() {
             <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />
           )}
           {currentProject && page === 'schedule' && <SchedulePage project={currentProject} />}
-          {currentProject && page === 'risks' && <RisksPage project={currentProject} />}
           {currentProject && page === 'about' && <AboutPage />}
           {page === 'adminUsers' && <AdminUsersPage />}
         </main>

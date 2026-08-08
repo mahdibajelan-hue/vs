@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Project, ReportConfig, Risk, ThemeMode, UserRole } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Project, ReportConfig, ThemeMode, UserRole } from '../types'
 import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
@@ -81,9 +81,6 @@ interface AppState {
   /** Owner (or admin) audit outside the approve cycle — confirms as-is or corrects the percent. */
   auditMilestoneAsOwner: (projectId: string, milestoneId: string, percentComplete?: number) => Promise<void>
 
-  addRisk: (projectId: string, risk: Omit<Risk, 'id' | 'createdAt'>) => Promise<void>
-  updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) => Promise<void>
-  deleteRisk: (projectId: string, riskId: string) => Promise<void>
 
   setReportConfig: (projectId: string, config: ReportConfig) => Promise<void>
 
@@ -165,7 +162,6 @@ export const useStore = create<AppState>()(
           p_svg_file_name: project.svgFileName,
           p_schedules: [],
           p_milestones: project.milestones?.length ? project.milestones : createDefaultMilestones(),
-          p_risks: project.risks ?? [],
           p_report_config: project.reportConfig ?? defaultReportConfig(),
           p_planned_curve: project.plannedCurve ?? [],
         })
@@ -567,33 +563,6 @@ export const useStore = create<AppState>()(
             : m,
         )
         await get().setMilestones(projectId, next)
-      },
-
-      addRisk: async (projectId, risk) => {
-        const detail = get().projectDetail
-        if (!detail || detail.id !== projectId) return
-        const next = [...detail.risks, { ...risk, id: makeId('risk'), createdAt: new Date().toISOString() }]
-        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
-        if (reportSupabaseError('ثبت ریسک', error)) return
-        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
-      },
-
-      updateRisk: async (projectId, riskId, data) => {
-        const detail = get().projectDetail
-        if (!detail || detail.id !== projectId) return
-        const next = detail.risks.map((r) => (r.id === riskId ? { ...r, ...data } : r))
-        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
-        if (reportSupabaseError('ذخیره تغییرات ریسک', error)) return
-        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
-      },
-
-      deleteRisk: async (projectId, riskId) => {
-        const detail = get().projectDetail
-        if (!detail || detail.id !== projectId) return
-        const next = detail.risks.filter((r) => r.id !== riskId)
-        const { error } = await supabase.from('projects').update({ risks: next }).eq('id', projectId)
-        if (reportSupabaseError('حذف ریسک', error)) return
-        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, risks: next } } : {}))
       },
 
       setReportConfig: async (projectId, config) => {

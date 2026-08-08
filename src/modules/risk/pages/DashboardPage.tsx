@@ -3,11 +3,12 @@ import { AlertOctagon, Clock3, FileDown, TrendingDown, TrendingUp, X } from 'luc
 import type { RmProjectDetail } from '../store/useRiskStore'
 import { useRiskMembersStore } from '../store/useRiskMembersStore'
 import { RM_PROJECT_PHASES, RM_PROJECT_PHASE_LABEL_FA, type RmProjectPhase } from '../types'
-import { currentState, RISK_LEVEL_COLOR } from '../lib/riskScore'
+import { currentState } from '../lib/riskScore'
 import {
   computeCategoryDistribution,
   computeExposureKpi,
   computeExposureTimeline,
+  computeLevelDistribution,
   computeManagementAttentionRisks,
   computePhaseDistribution,
   computeStatusCounts,
@@ -19,6 +20,7 @@ import { KpiTile } from '../components/KpiTile'
 import { RiskHeatMap } from '../components/RiskHeatMap'
 import { TopRisksTable } from '../components/TopRisksTable'
 import { CategoryDistributionChart, CriticalTrendChart, ExposureTrendChart, PhaseDistributionChart, StatusDistributionChart } from '../components/RiskTrendCharts'
+import { ClosureRateGauge, RiskLevelDonut } from '../components/RiskKpiCharts'
 import { RiskDetailModal } from '../components/RiskDetailModal'
 
 export function DashboardPage({ project }: { project: RmProjectDetail }) {
@@ -38,6 +40,7 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
 
   const exposure = useMemo(() => computeExposureKpi(risks, assessments), [risks, assessments])
   const statusCounts = useMemo(() => computeStatusCounts(risks), [risks])
+  const levelDist = useMemo(() => computeLevelDistribution(risks, assessments), [risks, assessments])
   const timeline = useMemo(() => computeExposureTimeline(risks, assessments), [risks, assessments])
   const categoryDist = useMemo(() => computeCategoryDistribution(risks), [risks])
   const phaseDist = useMemo(() => computePhaseDistribution(risks), [risks])
@@ -47,8 +50,6 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
 
   const active = risks.filter((r) => r.status !== 'closed')
   const closureRate = risks.length > 0 ? Math.round((risks.filter((r) => r.status === 'closed').length / risks.length) * 100) : 0
-  const criticalCount = topRisks.filter((r) => r.level === 'critical').length
-  const highCount = topRisks.filter((r) => r.level === 'high').length
 
   const cellRisks = useMemo(() => {
     if (!activeCell) return []
@@ -108,32 +109,44 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KpiTile label="ریسک‌های فعال" value={active.length} color="#3498db" />
-          <KpiTile label="بحرانی" value={criticalCount} color={RISK_LEVEL_COLOR.critical} />
-          <KpiTile label="زیاد" value={highCount} color={RISK_LEVEL_COLOR.high} />
           <KpiTile label="اقدامات عقب‌افتاده" value={overdueActions} color="#e74c3c" />
           <KpiTile label="بسته‌شده" value={statusCounts.closed} color="#2ecc71" />
-          <KpiTile label="نرخ بسته‌شدن" value={`${closureRate}%`} color="#94a3b8" />
+          <KpiTile label="کل ثبت‌شده" value={risks.length} color="#94a3b8" />
         </div>
 
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-sm font-bold">مواجهه ریسک پروژه (Risk Exposure)</p>
-          <div className="flex items-center gap-4">
-            <div className="text-center">
-              <p className="text-[10px] text-muted">اولیه</p>
-              <p className="num text-2xl font-extrabold text-secondary">{exposure.initial}</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="glass-panel rounded-2xl p-4 h-60 flex flex-col">
+            <p className="mb-1 text-sm font-bold">توزیع سطح ریسک</p>
+            <div className="flex-1 min-h-0">
+              <RiskLevelDonut counts={levelDist} />
             </div>
-            <span className="text-2xl text-muted">←</span>
-            <div className="text-center">
-              <p className="text-[10px] text-muted">فعلی</p>
-              <p className="num text-2xl font-extrabold" style={{ color: exposure.current <= exposure.initial ? '#2ecc71' : '#e74c3c' }}>
-                {exposure.current}
-              </p>
+          </div>
+          <div className="glass-panel rounded-2xl p-4 h-60 flex flex-col">
+            <p className="mb-1 text-sm font-bold">نرخ بسته‌شدن ریسک‌ها</p>
+            <div className="flex-1 min-h-0">
+              <ClosureRateGauge percent={closureRate} />
+            </div>
+          </div>
+          <div className="glass-panel rounded-2xl p-4 h-60 flex flex-col justify-center">
+            <p className="mb-3 text-sm font-bold">مواجهه ریسک پروژه (Risk Exposure)</p>
+            <div className="flex items-center gap-3">
+              <div className="text-center">
+                <p className="text-[10px] text-muted">اولیه</p>
+                <p className="num text-2xl font-extrabold text-secondary">{exposure.initial}</p>
+              </div>
+              <span className="text-xl text-muted">←</span>
+              <div className="text-center">
+                <p className="text-[10px] text-muted">فعلی</p>
+                <p className="num text-2xl font-extrabold" style={{ color: exposure.current <= exposure.initial ? '#2ecc71' : '#e74c3c' }}>
+                  {exposure.current}
+                </p>
+              </div>
             </div>
             {exposure.initial > 0 && (
               <span
-                className="mr-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold"
+                className="mt-3 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
                 style={{
                   background: exposure.improvementPercent >= 0 ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.12)',
                   color: exposure.improvementPercent >= 0 ? '#2ecc71' : '#e74c3c',

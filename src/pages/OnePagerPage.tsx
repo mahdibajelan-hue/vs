@@ -14,7 +14,6 @@ import { ReportConfigModal } from '../components/Dashboard/ReportConfigModal'
 import { ReportMilestonesMini } from '../components/Dashboard/ReportMilestonesMini'
 import { ReportSCurveMini } from '../components/Dashboard/ReportSCurveMini'
 import { ReportWeldsMini } from '../components/Dashboard/ReportWeldsMini'
-import { ReportRiskHeatMini } from '../components/Dashboard/ReportRiskHeatMini'
 import { Logo } from '../components/common/Logo'
 
 export function OnePagerPage({ project }: { project: Project }) {
@@ -65,7 +64,7 @@ export function OnePagerPage({ project }: { project: Project }) {
             </button>
           )}
           <button
-            onClick={() => sheetRef.current && exportElementToPdf(sheetRef.current, `${project.name}-executive-summary.pdf`)}
+            onClick={() => sheetRef.current && exportElementToPdf(sheetRef.current, `${project.name}-executive-summary.pdf`, { orientation: 'landscape' })}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 transition-colors"
           >
             <FileDown size={15} /> دانلود PDF
@@ -182,12 +181,6 @@ export function OnePagerPage({ project }: { project: Project }) {
               </ReportSection>
             )}
           </div>
-        )}
-
-        {sections.riskHeatmap && project.risks.length > 0 && (
-          <ReportSection title="نقشه حرارتی ریسک‌ها">
-            <ReportRiskHeatMini risks={project.risks} />
-          </ReportSection>
         )}
 
         <p className="text-[9px] text-center" style={{ color: '#94a3b8' }}>

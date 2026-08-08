@@ -17,7 +17,6 @@ export function templateConfig(template: ReportTemplate): ReportConfig {
         milestones: true,
         scheduleSCurve: true,
         weldsChart: true,
-        riskHeatmap: true,
       },
     }
   }
@@ -31,7 +30,6 @@ export function templateConfig(template: ReportTemplate): ReportConfig {
       milestones: false,
       scheduleSCurve: false,
       weldsChart: false,
-      riskHeatmap: false,
     },
   }
 }
