@@ -1,40 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, BadgeCheck, Check, Eye, EyeOff, HeartHandshake, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Check, Eye, EyeOff, HeartHandshake, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
-import type { ModuleKey } from '../../store/useModuleStore'
 import { LogoFull } from '../common/Logo'
-import { ProfileForm } from './ProfileForm'
 
-const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; titleEn: string; subtitle: string }> = {
-  pipepulse: {
-    title: 'ورود به PipePulse',
-    titleEn: 'PipePulse Login',
-    subtitle:
-      'PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی.',
-  },
-  risk: {
-    title: 'ورود به مدیریت ریسک',
-    titleEn: 'Risk Management Login',
-    subtitle:
-      'یک سامانه کنترل ریسک برای پروژه‌های EPC — شناسایی، ارزیابی، برنامه پاسخ، پایش و گزارش‌دهی مدیریتی ریسک‌های پروژه.',
-  },
-  issues: {
-    title: 'ورود به رصد',
-    titleEn: 'Issue Management Login',
-    subtitle: 'سامانه پیگیری مشکلات پروژه — ثبت، پیگیری تا مهلت و تایید نهایی هر مسئله، با گزارش تاخیر لحظه‌ای.',
-  },
-  admin: {
-    title: 'ورود به مدیریت کاربران',
-    titleEn: 'User & Access Management Login',
-    subtitle: 'مدیریت کاربران و دسترسی آن‌ها در هر سه ماژول — PipePulse، مدیریت ریسک و مدیریت مسائل — از یک صفحه.',
-  },
-  reporting: {
-    title: 'ورود به گزارش‌گیری هوشمند',
-    titleEn: 'Intelligent Reporting Login',
-    subtitle:
-      'مرکز هوشمندی و تصمیم پروژه — تجمیع زنده داده از ریسک، مسائل و PipePulse در گزارش‌های روزانه تا مدیریتی، با هشدار زودهنگام و مرکز تصمیم.',
-  },
+const LOGIN_COPY = {
+  title: 'ورود به سامانه RASTA',
+  titleEn: 'RASTA Login',
+  subtitle:
+    'پلتفرم یکپارچه مدیریت و کنترل پروژه‌های EPC — PipePulse، مدیریت ریسک، مدیریت مسائل و گزارش‌گیری هوشمند، همه از یک حساب کاربری.',
 }
 
 const ABOUT_CARDS = [
@@ -64,36 +38,10 @@ const ABOUT_CARDS = [
   },
 ]
 
-export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {
-  const authLoading = useAuthStore((s) => s.authLoading)
-  const isAuthed = useAuthStore((s) => s.isAuthed)
-  const profileLoading = useAuthStore((s) => s.profileLoading)
-  const profile = useAuthStore((s) => s.profile)
-
-  if (authLoading || (isAuthed && profileLoading)) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <Loader2 size={26} className="animate-spin text-brand-400" />
-      </div>
-    )
-  }
-  if (!isAuthed) return <LoginPanel moduleKey={moduleKey} onBack={onBackToHub} />
-  if (profile && !profile.profileCompleted) {
-    return (
-      <Shell title="تکمیل مشخصات" subtitle="قبل از ادامه، لطفاً مشخصات خود را تکمیل کنید">
-        <ProfileForm mode="forced" />
-      </Shell>
-    )
-  }
-  // مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد —
-  // کاربران دیگر همین‌جا رد و از سیستم خارج می‌شوند، نه فقط با یک پیام داخل صفحه.
-  if (moduleKey === 'admin' && profile && !profile.isAdmin) {
-    return <AdminOnlyBlock onBack={onBackToHub} />
-  }
-  return <>{children}</>
-}
-
-function AdminOnlyBlock({ onBack }: { onBack: () => void }) {
+// مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد — کاربران
+// دیگر همین‌جا رد و از سیستم خارج می‌شوند، نه فقط با یک پیام داخل صفحه. RootApp نمایشش می‌دهد
+// وقتی activeModule === 'admin' و کاربر جاری ادمین نیست.
+export function AdminOnlyBlock({ onBack }: { onBack: () => void }) {
   const signOut = useAuthStore((s) => s.signOut)
 
   useEffect(() => {
@@ -208,7 +156,7 @@ export function RolePicker({
 
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
-function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () => void }) {
+export function LoginScreen() {
   const signIn = useAuthStore((s) => s.signIn)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -217,7 +165,7 @@ function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () =>
   const [exiting, setExiting] = useState(false)
 
   const busy = status === 'submitting' || status === 'success'
-  const copy = MODULE_LOGIN_COPY[moduleKey]
+  const copy = LOGIN_COPY
 
   const submit = async () => {
     if (busy) return
@@ -243,15 +191,6 @@ function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () =>
 
   return (
     <div className={`auth-split-shell ${exiting ? 'auth-card-exit' : ''}`}>
-      {!exiting && (
-        <button
-          onClick={onBack}
-          className="fixed top-5 right-5 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs text-secondary backdrop-blur-md hover:bg-white/10 hover:text-current transition-colors"
-        >
-          <ArrowRight size={14} /> بازگشت به ماژول‌ها
-        </button>
-      )}
-
       <div className="auth-form-panel">
         <div className={`glass-panel w-full max-w-sm rounded-3xl p-8 ${status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''}`}>
           <LogoFull width={170} className="mx-auto mb-4" />
