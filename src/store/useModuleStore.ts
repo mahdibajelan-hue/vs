@@ -1,7 +1,5 @@
 import { create } from 'zustand'
 
-// 'reporting' is reserved for the future Intelligent Reporting module — not yet routable
-// (its hub card stays status: 'soon' until RootApp gains a real branch for it).
 export type ModuleKey = 'pipepulse' | 'risk' | 'issues' | 'admin' | 'reporting'
 
 interface ModuleState {

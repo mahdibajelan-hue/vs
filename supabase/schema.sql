@@ -1461,3 +1461,225 @@ create index if not exists idx_rasta_project_role_assignments_project on rasta_p
 create index if not exists idx_rasta_project_role_assignments_user on rasta_project_role_assignments (user_id);
 create index if not exists idx_rasta_project_mappings_master on rasta_project_mappings (master_project_id);
 create index if not exists idx_rasta_project_mappings_source on rasta_project_mappings (source_module, source_project_id);
+
+-- ============================================================================
+-- 14. RASTA Reporting & Management Intelligence — consumes Risk/Issue/PipePulse
+--     data (via rasta_project_mappings above) without duplicating it. Only this
+--     module's own entities live here: saved Report Profiles (which widgets, in
+--     which order), immutable Report Snapshots (a point-in-time payload once a
+--     report is generated — never re-queries source data after that), and the
+--     Decision Center (rasta_decisions/rasta_actions).
+--
+--     Unlike Master Data/Access Control (admin-write, section 12-13), these are
+--     operational entities any authenticated user works with day to day — insert
+--     is open to any authenticated user, matching im_issues' pattern; update/
+--     delete is restricted to the row's creator/owner or an admin.
+-- ============================================================================
+
+create table if not exists rasta_report_profiles (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  report_type text not null check (report_type in ('daily', 'weekly', 'monthly', 'management')),
+  description text not null default '',
+  widget_ids text[] not null default '{}',
+  is_system boolean not null default false,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table rasta_report_profiles enable row level security;
+
+drop policy if exists "rasta_report_profiles_select_authenticated" on rasta_report_profiles;
+create policy "rasta_report_profiles_select_authenticated" on rasta_report_profiles
+  for select using (auth.uid() is not null);
+
+drop policy if exists "rasta_report_profiles_insert_authenticated" on rasta_report_profiles;
+create policy "rasta_report_profiles_insert_authenticated" on rasta_report_profiles
+  for insert with check (auth.uid() is not null and (is_system = false or is_admin_user()));
+
+drop policy if exists "rasta_report_profiles_update_owner_or_admin" on rasta_report_profiles;
+create policy "rasta_report_profiles_update_owner_or_admin" on rasta_report_profiles
+  for update using (created_by = auth.uid() or is_admin_user());
+
+drop policy if exists "rasta_report_profiles_delete_owner_or_admin" on rasta_report_profiles;
+create policy "rasta_report_profiles_delete_owner_or_admin" on rasta_report_profiles
+  for delete using ((created_by = auth.uid() and is_system = false) or is_admin_user());
+
+-- Sequential, human-readable report number (RPT-000001, ...), same pattern as
+-- master_projects.project_id_code — system-generated, immutable.
+create sequence if not exists rasta_report_snapshots_seq;
+
+create table if not exists rasta_report_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  report_type text not null check (report_type in ('daily', 'weekly', 'monthly', 'management')),
+  profile_id uuid references rasta_report_profiles (id) on delete set null,
+  report_number text not null unique,
+  revision int not null default 0,
+  status text not null default 'draft' check (status in ('draft', 'under_review', 'approved', 'issued', 'revised', 'archived')),
+  period_start date,
+  period_end date,
+  -- Full computed widget output at generation time — the immutable part. Later changes to
+  -- the underlying Risk/Issue/PipePulse data must never alter an already-issued report.
+  payload jsonb not null,
+  widget_ids text[] not null default '{}',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  reviewed_by uuid references profiles (id),
+  reviewed_at timestamptz,
+  approved_by uuid references profiles (id),
+  approved_at timestamptz,
+  issued_at timestamptz
+);
+
+create or replace function assign_report_number()
+returns trigger as $$
+begin
+  if new.report_number is null or new.report_number = '' then
+    new.report_number := 'RPT-' || lpad(nextval('rasta_report_snapshots_seq')::text, 6, '0');
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_assign_report_number on rasta_report_snapshots;
+create trigger trg_assign_report_number
+  before insert on rasta_report_snapshots
+  for each row execute function assign_report_number();
+
+-- Guards the "immutable snapshot" promise (spec section 16-17): once generated, the payload
+-- and its identifying fields can never change — only the review/approve/issue workflow fields
+-- (status + the reviewed_by/approved_by/*_at columns) may still be updated on the same row.
+create or replace function prevent_report_snapshot_payload_tamper()
+returns trigger as $$
+begin
+  if new.payload is distinct from old.payload
+     or new.widget_ids is distinct from old.widget_ids
+     or new.report_number is distinct from old.report_number
+     or new.master_project_id is distinct from old.master_project_id
+     or new.report_type is distinct from old.report_type
+     or new.period_start is distinct from old.period_start
+     or new.period_end is distinct from old.period_end
+     or new.revision is distinct from old.revision then
+    new.payload := old.payload;
+    new.widget_ids := old.widget_ids;
+    new.report_number := old.report_number;
+    new.master_project_id := old.master_project_id;
+    new.report_type := old.report_type;
+    new.period_start := old.period_start;
+    new.period_end := old.period_end;
+    new.revision := old.revision;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_prevent_report_snapshot_payload_tamper on rasta_report_snapshots;
+create trigger trg_prevent_report_snapshot_payload_tamper
+  before update on rasta_report_snapshots
+  for each row execute function prevent_report_snapshot_payload_tamper();
+
+alter table rasta_report_snapshots enable row level security;
+
+drop policy if exists "rasta_report_snapshots_select_authenticated" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_select_authenticated" on rasta_report_snapshots
+  for select using (auth.uid() is not null);
+
+drop policy if exists "rasta_report_snapshots_insert_authenticated" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_insert_authenticated" on rasta_report_snapshots
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists "rasta_report_snapshots_update_owner_or_admin" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_update_owner_or_admin" on rasta_report_snapshots
+  for update using (created_by = auth.uid() or is_admin_user());
+
+drop policy if exists "rasta_report_snapshots_delete_admin" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_delete_admin" on rasta_report_snapshots
+  for delete using (is_admin_user());
+
+create table if not exists rasta_decisions (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  reason text not null default '',
+  required_by date,
+  impact text not null default '',
+  recommended_action text not null default '',
+  decision_owner_id uuid references profiles (id),
+  status text not null default 'pending' check (status in ('pending', 'in_review', 'approved', 'rejected', 'deferred')),
+  final_decision text not null default '',
+  decided_at timestamptz,
+  related_risk_id uuid references rm_risks (id) on delete set null,
+  related_issue_id uuid references im_issues (id) on delete set null,
+  related_milestone_label text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table rasta_decisions enable row level security;
+
+drop policy if exists "rasta_decisions_select_authenticated" on rasta_decisions;
+create policy "rasta_decisions_select_authenticated" on rasta_decisions
+  for select using (auth.uid() is not null);
+
+drop policy if exists "rasta_decisions_insert_authenticated" on rasta_decisions;
+create policy "rasta_decisions_insert_authenticated" on rasta_decisions
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists "rasta_decisions_update_owner_or_admin" on rasta_decisions;
+create policy "rasta_decisions_update_owner_or_admin" on rasta_decisions
+  for update using (created_by = auth.uid() or decision_owner_id = auth.uid() or is_admin_user());
+
+drop policy if exists "rasta_decisions_delete_owner_or_admin" on rasta_decisions;
+create policy "rasta_decisions_delete_owner_or_admin" on rasta_decisions
+  for delete using (created_by = auth.uid() or is_admin_user());
+
+create table if not exists rasta_actions (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  title text not null,
+  owner_id uuid references profiles (id),
+  due_date date,
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'cancelled')),
+  source text not null default 'management_report' check (source in ('risk', 'issue', 'decision', 'management_report')),
+  source_decision_id uuid references rasta_decisions (id) on delete set null,
+  related_risk_id uuid references rm_risks (id) on delete set null,
+  related_issue_id uuid references im_issues (id) on delete set null,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table rasta_actions enable row level security;
+
+drop policy if exists "rasta_actions_select_authenticated" on rasta_actions;
+create policy "rasta_actions_select_authenticated" on rasta_actions
+  for select using (auth.uid() is not null);
+
+drop policy if exists "rasta_actions_insert_authenticated" on rasta_actions;
+create policy "rasta_actions_insert_authenticated" on rasta_actions
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists "rasta_actions_update_owner_or_admin" on rasta_actions;
+create policy "rasta_actions_update_owner_or_admin" on rasta_actions
+  for update using (created_by = auth.uid() or owner_id = auth.uid() or is_admin_user());
+
+drop policy if exists "rasta_actions_delete_owner_or_admin" on rasta_actions;
+create policy "rasta_actions_delete_owner_or_admin" on rasta_actions
+  for delete using (created_by = auth.uid() or is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Indexes
+-- ----------------------------------------------------------------------------
+create index if not exists idx_rasta_report_snapshots_project on rasta_report_snapshots (master_project_id);
+create index if not exists idx_rasta_report_snapshots_type on rasta_report_snapshots (report_type);
+create index if not exists idx_rasta_report_snapshots_status on rasta_report_snapshots (status);
+create index if not exists idx_rasta_decisions_project on rasta_decisions (master_project_id);
+create index if not exists idx_rasta_decisions_status on rasta_decisions (status);
+create index if not exists idx_rasta_actions_project on rasta_actions (master_project_id);
+create index if not exists idx_rasta_actions_status on rasta_actions (status);
+create index if not exists idx_rasta_actions_decision on rasta_actions (source_decision_id);

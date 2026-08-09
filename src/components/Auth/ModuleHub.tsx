@@ -52,10 +52,10 @@ const MODULES: ModuleDef[] = [
     title: 'گزارش‌گیری هوشمند',
     englishTag: 'Intelligent Reporting',
     teaser: 'گزارش‌های یکپارچه از همه ماژول‌ها',
-    description: 'تجمیع داده از ریسک، مسائل، PipePulse و کاربران در گزارش‌های روزانه، هفتگی و مدیریتی — به‌زودی.',
+    description: 'تجمیع داده از ریسک، مسائل و PipePulse در گزارش‌های روزانه، هفتگی، ماهانه و مدیریتی — با هشدار زودهنگام و مرکز تصمیم.',
     icon: BarChart3,
     accent: '#2dd4bf',
-    status: 'soon',
+    status: 'active',
   },
   {
     key: 'admin',

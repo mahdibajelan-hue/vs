@@ -25,11 +25,10 @@ const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> 
     title: 'ورود به مدیریت کاربران',
     subtitle: 'مدیریت کاربران و دسترسی آن‌ها در هر سه ماژول — PipePulse، مدیریت ریسک و مدیریت مسائل — از یک صفحه.',
   },
-  // Unreachable today — its hub card is status: 'soon' and never calls onEnterModule — kept
-  // here only so MODULE_LOGIN_COPY stays a total Record<ModuleKey, ...>.
   reporting: {
     title: 'ورود به گزارش‌گیری هوشمند',
-    subtitle: 'این ماژول به‌زودی راه‌اندازی می‌شود.',
+    subtitle:
+      'مرکز هوشمندی و تصمیم پروژه — تجمیع زنده داده از ریسک، مسائل و PipePulse در گزارش‌های روزانه تا مدیریتی، با هشدار زودهنگام و مرکز تصمیم.',
   },
 }
 

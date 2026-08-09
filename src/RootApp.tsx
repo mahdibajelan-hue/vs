@@ -5,6 +5,7 @@ import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
 import { IssuesApp } from './modules/issues/IssuesApp'
 import { AdminApp } from './pages/AdminApp'
+import { ReportingApp } from './modules/reporting/ReportingApp'
 
 export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
@@ -21,6 +22,8 @@ export function RootApp() {
         <RiskApp onExitToHub={exitToHub} />
       ) : activeModule === 'issues' ? (
         <IssuesApp onExitToHub={exitToHub} />
+      ) : activeModule === 'reporting' ? (
+        <ReportingApp onExitToHub={exitToHub} />
       ) : (
         <AdminApp onExitToHub={exitToHub} />
       )}
