@@ -1194,3 +1194,270 @@ create index if not exists idx_master_projects_portfolio on master_projects (por
 create index if not exists idx_master_projects_program on master_projects (program_id);
 create index if not exists idx_master_projects_status on master_projects (status);
 create index if not exists idx_project_phases_project on project_phases (project_id);
+
+-- ============================================================================
+-- 13. RASTA Access Control (Phases 8-10 of the Master Data & Access
+--     Architecture) — a real, centralized Role/Permission/Scope model that
+--     admins can define and assign. This is deliberately built as a PARALLEL,
+--     additive layer: nothing below alters is_admin_user() or any existing
+--     policy on projects/rm_projects/im_projects/lines/daily_logs/rm_risks/
+--     im_issues/etc. Those tables keep working exactly as they do today.
+--
+--     Rewiring those policies to consult this model instead of (or alongside)
+--     the current admin-flag/per-project-role checks is real, separate,
+--     higher-risk work — it changes who can already do what in three live
+--     products — and isn't done here. What IS real: the data model, the
+--     is_admin_user()-gated management UI, and rasta_has_permission() /
+--     rasta_project_scope_ok() helper functions, ready for that later wiring.
+-- ============================================================================
+
+create table if not exists rasta_modules (
+  key text primary key,
+  label_fa text not null,
+  is_active boolean not null default true
+);
+
+insert into rasta_modules (key, label_fa) values
+  ('risk', 'مدیریت ریسک'),
+  ('issues', 'مدیریت مسائل'),
+  ('pipepulse', 'PipePulse'),
+  ('reporting', 'گزارش‌گیری هوشمند'),
+  ('admin', 'مدیریت کاربران')
+on conflict (key) do nothing;
+
+alter table rasta_modules enable row level security;
+drop policy if exists "rasta_modules_select_authenticated" on rasta_modules;
+create policy "rasta_modules_select_authenticated" on rasta_modules for select using (auth.uid() is not null);
+drop policy if exists "rasta_modules_write_admin" on rasta_modules;
+create policy "rasta_modules_write_admin" on rasta_modules for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists rasta_roles (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  description text not null default '',
+  is_system boolean not null default false,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table rasta_roles enable row level security;
+drop policy if exists "rasta_roles_select_authenticated" on rasta_roles;
+create policy "rasta_roles_select_authenticated" on rasta_roles for select using (auth.uid() is not null);
+drop policy if exists "rasta_roles_write_admin" on rasta_roles;
+create policy "rasta_roles_write_admin" on rasta_roles for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists rasta_permissions (
+  id uuid primary key default gen_random_uuid(),
+  module_key text not null references rasta_modules (key) on delete cascade,
+  action text not null check (action in ('view', 'create', 'edit', 'delete', 'submit', 'review', 'approve', 'reject', 'export', 'configure')),
+  unique (module_key, action)
+);
+
+-- Seed the full action set (spec section 20) for every module — admins turn individual
+-- ones on per role rather than the app having to guess which actions exist.
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+on conflict (module_key, action) do nothing;
+
+alter table rasta_permissions enable row level security;
+drop policy if exists "rasta_permissions_select_authenticated" on rasta_permissions;
+create policy "rasta_permissions_select_authenticated" on rasta_permissions for select using (auth.uid() is not null);
+drop policy if exists "rasta_permissions_write_admin" on rasta_permissions;
+create policy "rasta_permissions_write_admin" on rasta_permissions for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists rasta_role_permissions (
+  role_id uuid not null references rasta_roles (id) on delete cascade,
+  permission_id uuid not null references rasta_permissions (id) on delete cascade,
+  primary key (role_id, permission_id)
+);
+
+alter table rasta_role_permissions enable row level security;
+drop policy if exists "rasta_role_permissions_select_authenticated" on rasta_role_permissions;
+create policy "rasta_role_permissions_select_authenticated" on rasta_role_permissions for select using (auth.uid() is not null);
+drop policy if exists "rasta_role_permissions_write_admin" on rasta_role_permissions;
+create policy "rasta_role_permissions_write_admin" on rasta_role_permissions for all using (is_admin_user()) with check (is_admin_user());
+
+-- A user may hold several roles at once (spec: "A user can have multiple roles").
+create table if not exists rasta_user_roles (
+  user_id uuid not null references profiles (id) on delete cascade,
+  role_id uuid not null references rasta_roles (id) on delete cascade,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  primary key (user_id, role_id)
+);
+
+alter table rasta_user_roles enable row level security;
+drop policy if exists "rasta_user_roles_select_self_or_admin" on rasta_user_roles;
+create policy "rasta_user_roles_select_self_or_admin" on rasta_user_roles
+  for select using (is_admin_user() or user_id = auth.uid());
+drop policy if exists "rasta_user_roles_write_admin" on rasta_user_roles;
+create policy "rasta_user_roles_write_admin" on rasta_user_roles for all using (is_admin_user()) with check (is_admin_user());
+
+-- Project Data Scope (spec section 19) — what slice of the hierarchy a user's roles apply to.
+-- scope_level='all' ignores the id columns; otherwise exactly the matching id column is set.
+create table if not exists rasta_user_project_scope (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles (id) on delete cascade,
+  scope_level text not null check (scope_level in ('all', 'portfolio', 'program', 'project', 'phase')),
+  portfolio_id uuid references portfolios (id) on delete cascade,
+  program_id uuid references programs (id) on delete cascade,
+  project_id uuid references master_projects (id) on delete cascade,
+  phase_id uuid references project_phases (id) on delete cascade,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table rasta_user_project_scope enable row level security;
+drop policy if exists "rasta_user_project_scope_select_self_or_admin" on rasta_user_project_scope;
+create policy "rasta_user_project_scope_select_self_or_admin" on rasta_user_project_scope
+  for select using (is_admin_user() or user_id = auth.uid());
+drop policy if exists "rasta_user_project_scope_write_admin" on rasta_user_project_scope;
+create policy "rasta_user_project_scope_write_admin" on rasta_user_project_scope for all using (is_admin_user()) with check (is_admin_user());
+
+-- Project Role Assignment (spec section 22) — who's on a given project's team and in what
+-- capacity. Distinct from rasta_roles/permissions above: this is descriptive team-roster
+-- data (Project Manager, Consultant, Contractor PM, ...), not an access grant.
+create table if not exists rasta_project_roles (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  is_system boolean not null default false
+);
+
+insert into rasta_project_roles (name, is_system) values
+  ('مدیر پروژه', true),
+  ('مدیر ارشد پروژه', true),
+  ('مدیر کنترل پروژه', true),
+  ('مدیر ریسک', true),
+  ('مدیر مسائل', true),
+  ('نماینده PMO', true),
+  ('مشاور', true),
+  ('پیمانکار', true),
+  ('بازرس کارفرما', true)
+on conflict (name) do nothing;
+
+alter table rasta_project_roles enable row level security;
+drop policy if exists "rasta_project_roles_select_authenticated" on rasta_project_roles;
+create policy "rasta_project_roles_select_authenticated" on rasta_project_roles for select using (auth.uid() is not null);
+drop policy if exists "rasta_project_roles_write_admin" on rasta_project_roles;
+create policy "rasta_project_roles_write_admin" on rasta_project_roles for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists rasta_project_role_assignments (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  project_role_id uuid not null references rasta_project_roles (id),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  unique (project_id, user_id, project_role_id)
+);
+
+alter table rasta_project_role_assignments enable row level security;
+drop policy if exists "rasta_project_role_assignments_select_authenticated" on rasta_project_role_assignments;
+create policy "rasta_project_role_assignments_select_authenticated" on rasta_project_role_assignments
+  for select using (auth.uid() is not null);
+drop policy if exists "rasta_project_role_assignments_write_admin" on rasta_project_role_assignments;
+create policy "rasta_project_role_assignments_write_admin" on rasta_project_role_assignments
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- Project Mapping & Alias (spec sections 28-31) — links a source-module project (Risk/Issue/
+-- PipePulse's own registry) to its authoritative master_projects row. Never auto-merges;
+-- status starts 'suggested' for anything the matcher proposes and only becomes 'confirmed'
+-- once an admin says so (see rasta_project_mapping_status_change_by below).
+create table if not exists rasta_project_mappings (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  source_module text not null check (source_module in ('risk', 'issues', 'pipepulse')),
+  source_project_id uuid not null,
+  alias_name text not null default '',
+  status text not null default 'confirmed' check (status in ('suggested', 'confirmed', 'rejected', 'pending_review')),
+  match_confidence smallint check (match_confidence between 0 and 100),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  unique (source_module, source_project_id)
+);
+
+alter table rasta_project_mappings enable row level security;
+drop policy if exists "rasta_project_mappings_select_admin" on rasta_project_mappings;
+create policy "rasta_project_mappings_select_admin" on rasta_project_mappings for select using (is_admin_user());
+drop policy if exists "rasta_project_mappings_write_admin" on rasta_project_mappings;
+create policy "rasta_project_mappings_write_admin" on rasta_project_mappings for all using (is_admin_user()) with check (is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Helper functions — not yet consulted by any existing table's RLS (see the
+-- section-13 header comment), but ready for that follow-up: given a user,
+-- module and action, would their roles grant it, and does a project fall
+-- inside one of their assigned scopes.
+-- ----------------------------------------------------------------------------
+create or replace function rasta_has_permission(p_user_id uuid, p_module_key text, p_action text)
+returns boolean as $$
+  select exists (
+    select 1
+    from rasta_user_roles ur
+    join rasta_role_permissions rp on rp.role_id = ur.role_id
+    join rasta_permissions p on p.id = rp.permission_id
+    where ur.user_id = p_user_id and p.module_key = p_module_key and p.action = p_action
+  );
+$$ language sql security definer stable;
+
+create or replace function rasta_project_scope_ok(p_user_id uuid, p_project_id uuid)
+returns boolean as $$
+  select exists (
+    select 1
+    from rasta_user_project_scope s
+    left join master_projects mp on mp.id = p_project_id
+    where s.user_id = p_user_id
+      and (
+        s.scope_level = 'all'
+        or (s.scope_level = 'portfolio' and s.portfolio_id = mp.portfolio_id)
+        or (s.scope_level = 'program' and s.program_id = mp.program_id)
+        or (s.scope_level = 'project' and s.project_id = p_project_id)
+      )
+  );
+$$ language sql security definer stable;
+
+-- Silently ignore a user attempting to hand-edit these audit columns — decided_by/decided_at
+-- are only ever set by rasta_decide_project_mapping() below, mirroring how project_id_code's
+-- immutability on master_projects is enforced with a trigger rather than by UI omission alone.
+create or replace function prevent_project_mapping_decision_tamper()
+returns trigger as $$
+begin
+  if new.decided_by is distinct from old.decided_by or new.decided_at is distinct from old.decided_at then
+    new.decided_by := old.decided_by;
+    new.decided_at := old.decided_at;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_prevent_project_mapping_decision_tamper on rasta_project_mappings;
+create trigger trg_prevent_project_mapping_decision_tamper
+  before update on rasta_project_mappings
+  for each row execute function prevent_project_mapping_decision_tamper();
+
+create or replace function rasta_decide_project_mapping(p_mapping_id uuid, p_status text)
+returns void as $$
+begin
+  if p_status not in ('confirmed', 'rejected') then
+    raise exception 'invalid status for a mapping decision: %', p_status;
+  end if;
+  update rasta_project_mappings
+  set status = p_status, decided_by = auth.uid(), decided_at = now()
+  where id = p_mapping_id;
+end;
+$$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Indexes
+-- ----------------------------------------------------------------------------
+create index if not exists idx_rasta_permissions_module on rasta_permissions (module_key);
+create index if not exists idx_rasta_role_permissions_role on rasta_role_permissions (role_id);
+create index if not exists idx_rasta_user_roles_user on rasta_user_roles (user_id);
+create index if not exists idx_rasta_user_project_scope_user on rasta_user_project_scope (user_id);
+create index if not exists idx_rasta_project_role_assignments_project on rasta_project_role_assignments (project_id);
+create index if not exists idx_rasta_project_role_assignments_user on rasta_project_role_assignments (user_id);
+create index if not exists idx_rasta_project_mappings_master on rasta_project_mappings (master_project_id);
+create index if not exists idx_rasta_project_mappings_source on rasta_project_mappings (source_module, source_project_id);

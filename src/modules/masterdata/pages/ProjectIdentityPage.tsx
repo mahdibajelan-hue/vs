@@ -12,9 +12,13 @@ import {
   Save,
   Trash2,
   Users,
+  Users2,
   X,
 } from 'lucide-react'
+import { supabase } from '../../../lib/supabaseClient'
 import { useMasterDataStore } from '../store/useMasterDataStore'
+import { useAccessStore } from '../store/useAccessStore'
+import { MAPPING_SOURCE_MODULE_LABEL_FA } from '../rbacTypes'
 import {
   PHASE_STATUS_LABEL_FA,
   PHASE_STATUSES,
@@ -28,6 +32,12 @@ import {
   type ProjectLifecycleStatus,
   type ScheduleStatus,
 } from '../types'
+
+const CONNECTED_MODULE_TABLE: Record<'risk' | 'issues' | 'pipepulse', string> = {
+  risk: 'rm_risks',
+  issues: 'im_issues',
+  pipepulse: 'lines',
+}
 
 const TONE_CLASS: Record<'neutral' | 'green' | 'amber' | 'red', string> = {
   neutral: 'border-white/15 bg-white/[0.04] text-muted',
@@ -87,16 +97,64 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
   const createPhase = useMasterDataStore((s) => s.createPhase)
   const deletePhase = useMasterDataStore((s) => s.deletePhase)
 
+  const accessLoaded = useAccessStore((s) => s.loaded)
+  const fetchAccessAll = useAccessStore((s) => s.fetchAll)
+  const projectRoles = useAccessStore((s) => s.projectRoles)
+  const projectRoleAssignments = useAccessStore((s) => s.projectRoleAssignments)
+  const assignProjectRole = useAccessStore((s) => s.assignProjectRole)
+  const removeProjectRoleAssignment = useAccessStore((s) => s.removeProjectRoleAssignment)
+  const projectMappings = useAccessStore((s) => s.projectMappings)
+
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState(() => (project ? editableFormFromProject(project) : null))
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showNewPhase, setShowNewPhase] = useState(false)
+  const [moduleCounts, setModuleCounts] = useState<Record<'risk' | 'issues' | 'pipepulse', number | null>>({ risk: null, issues: null, pipepulse: null })
 
   useEffect(() => {
     fetchPhases(projectId)
+    if (!accessLoaded) fetchAccessAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  const myMappingsKey = projectMappings
+    .filter((m) => m.masterProjectId === projectId)
+    .map((m) => `${m.sourceModule}:${m.sourceProjectId}`)
+    .join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    const myMappings = projectMappings.filter((m) => m.masterProjectId === projectId)
+    if (myMappings.length === 0) {
+      setModuleCounts({ risk: null, issues: null, pipepulse: null })
+      return
+    }
+    async function loadCounts() {
+      const next: Record<'risk' | 'issues' | 'pipepulse', number | null> = { risk: null, issues: null, pipepulse: null }
+      // Each query is caught individually — one module's count failing (e.g. a transient
+      // network error) must not blank out the other two, which may have succeeded fine.
+      await Promise.all(
+        myMappings.map(async (m) => {
+          try {
+            const { count } = await supabase
+              .from(CONNECTED_MODULE_TABLE[m.sourceModule])
+              .select('id', { count: 'exact', head: true })
+              .eq('project_id', m.sourceProjectId)
+            next[m.sourceModule] = count ?? 0
+          } catch {
+            next[m.sourceModule] = null
+          }
+        }),
+      )
+      if (!cancelled) setModuleCounts(next)
+    }
+    loadCounts()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, myMappingsKey])
 
   if (!project) {
     return (
@@ -332,17 +390,31 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
               )}
             </SectionCard>
 
+            <ProjectTeamSection
+              projectId={project.id}
+              users={users}
+              projectRoles={projectRoles}
+              assignments={projectRoleAssignments.filter((a) => a.projectId === project.id)}
+              onAssign={assignProjectRole}
+              onRemove={removeProjectRoleAssignment}
+            />
+
             <SectionCard icon={Plug} title="ماژول‌های متصل">
               <p className="mb-3 text-[11px] text-muted leading-5">
-                اتصال ماژول‌های ریسک، مسائل و PipePulse به این پروژه مرکزی (از طریق نگاشت پروژه) در فاز بعدی معماری داده پایه انجام می‌شود — فعلاً هر ماژول رجیستری پروژه مستقل خود را دارد.
+                از طریق «نگاشت پروژه‌ها» در داده‌های پایه، این پروژه مرکزی می‌تواند به پروژه معادل خودش در هر ماژول وصل شود. عددهای زیر واقعی و از همان ماژول خوانده می‌شوند.
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {(['مدیریت ریسک', 'مدیریت مسائل', 'PipePulse'] as const).map((label) => (
-                  <div key={label} className="rounded-xl border border-dashed border-white/10 px-3 py-2.5 text-center">
-                    <p className="text-xs text-secondary">{label}</p>
-                    <p className="mt-1 text-[10px] text-muted">به‌زودی</p>
-                  </div>
-                ))}
+                {(['risk', 'issues', 'pipepulse'] as const).map((key) => {
+                  const count = moduleCounts[key]
+                  return (
+                    <div key={key} className="rounded-xl border border-dashed border-white/10 px-3 py-2.5 text-center">
+                      <p className="text-xs text-secondary">{MAPPING_SOURCE_MODULE_LABEL_FA[key]}</p>
+                      <p className="mt-1 text-sm font-bold num">
+                        {count == null ? 'نگاشت‌نشده' : key === 'pipepulse' ? `${count} خط` : count}
+                      </p>
+                    </div>
+                  )
+                })}
               </div>
             </SectionCard>
           </>
@@ -392,6 +464,98 @@ function Field({ label, value, num, dir }: { label: string; value: string; num?:
         {value}
       </p>
     </div>
+  )
+}
+
+function ProjectTeamSection({
+  projectId,
+  users,
+  projectRoles,
+  assignments,
+  onAssign,
+  onRemove,
+}: {
+  projectId: string
+  users: { id: string; email: string; fullName: string }[]
+  projectRoles: { id: string; name: string }[]
+  assignments: { id: string; userId: string; projectRoleId: string }[]
+  onAssign: (projectId: string, userId: string, projectRoleId: string) => Promise<void>
+  onRemove: (id: string) => Promise<void>
+}) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [userId, setUserId] = useState('')
+  const [roleId, setRoleId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const userName = (id: string) => users.find((u) => u.id === id)?.fullName || users.find((u) => u.id === id)?.email || '—'
+  const roleName = (id: string) => projectRoles.find((r) => r.id === id)?.name ?? '—'
+
+  return (
+    <SectionCard
+      icon={Users2}
+      title="اعضای پروژه"
+      action={
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1 rounded-lg border border-dashed border-white/15 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+        >
+          <Plus size={12} /> افزودن عضو
+        </button>
+      }
+    >
+      {assignments.length === 0 && !showAdd ? (
+        <p className="text-xs text-muted">هنوز عضوی برای این پروژه تعریف نشده است.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {assignments.map((a) => (
+            <span key={a.id} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs">
+              {userName(a.userId)} <span className="text-[10px] text-muted">— {roleName(a.projectRoleId)}</span>
+              <button onClick={() => onRemove(a.id)} className="text-muted hover:text-red-400 transition-colors">
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-brand-400/30 bg-brand-500/5 px-2.5 py-2">
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="rounded-md bg-black/20 border border-white/10 px-2 py-1 text-[11px] outline-none">
+            <option value="">کاربر...</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName || u.email}
+              </option>
+            ))}
+          </select>
+          <select value={roleId} onChange={(e) => setRoleId(e.target.value)} className="rounded-md bg-black/20 border border-white/10 px-2 py-1 text-[11px] outline-none">
+            <option value="">نقش پروژه...</option>
+            {projectRoles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              if (!userId || !roleId) return
+              setBusy(true)
+              await onAssign(projectId, userId, roleId)
+              setBusy(false)
+              setShowAdd(false)
+              setUserId('')
+              setRoleId('')
+            }}
+            disabled={!userId || !roleId || busy}
+            className="text-[11px] font-medium text-brand-300 hover:underline disabled:opacity-40"
+          >
+            افزودن
+          </button>
+          <button onClick={() => setShowAdd(false)} className="text-muted hover:text-current transition-colors">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+    </SectionCard>
   )
 }
 
