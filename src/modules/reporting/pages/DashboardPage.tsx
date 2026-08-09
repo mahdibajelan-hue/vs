@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, type ReportType } from '../types'
-import { useReportingStore } from '../store/useReportingStore'
+import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { useProjectIntelligence } from '../lib/useProjectIntelligence'
 import { DEFAULT_PROFILE_WIDGETS } from '../lib/widgetRegistry'
 import { WidgetGrid } from '../components/WidgetGrid'
@@ -10,8 +10,8 @@ import type { WidgetComputeContext } from '../lib/widgetTypes'
 export function DashboardPage({ masterProjectId }: { masterProjectId: string }) {
   const [reportType, setReportType] = useState<ReportType>('management')
   const { bundle, previousBundle, loading } = useProjectIntelligence(masterProjectId)
-  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? [])
-  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? [])
+  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? EMPTY_ARRAY)
+  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? EMPTY_ARRAY)
 
   if (loading || !bundle) {
     return (

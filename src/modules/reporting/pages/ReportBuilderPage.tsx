@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, FileOutput, Loader2, Save } from 'lucide-react'
 import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, WIDGET_CATEGORY_LABEL_FA, type ReportType, type WidgetCategory } from '../types'
-import { useReportingStore } from '../store/useReportingStore'
+import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { useProjectIntelligence } from '../lib/useProjectIntelligence'
 import { DEFAULT_PROFILE_WIDGETS, WIDGET_REGISTRY, computeReportPayload, widgetsByCategory } from '../lib/widgetRegistry'
 import { WidgetGrid } from '../components/WidgetGrid'
@@ -21,8 +21,8 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
   const [generatedNumber, setGeneratedNumber] = useState<string | null>(null)
 
   const { bundle, previousBundle, loading } = useProjectIntelligence(masterProjectId)
-  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? [])
-  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? [])
+  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? EMPTY_ARRAY)
+  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const profiles = useReportingStore((s) => s.profiles)
   const createProfile = useReportingStore((s) => s.createProfile)
   const createSnapshot = useReportingStore((s) => s.createSnapshot)

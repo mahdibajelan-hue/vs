@@ -13,6 +13,16 @@ import {
   reportSnapshotFromRow,
 } from '../lib/reportingData'
 
+/**
+ * A stable, shared reference for "no rows yet" selector fallbacks — e.g.
+ * `s.decisionsByProject[id] ?? EMPTY_ARRAY`. Using a fresh `[]` literal there instead would
+ * return a new array identity on every single call, and React's `useSyncExternalStore` (which
+ * Zustand's hook is built on) treats that as "the snapshot keeps changing" and throws
+ * "Maximum update depth exceeded" (React error #185) once a project has no rows for a given
+ * map key — exactly the state before that project's data has loaded, or if it errors out.
+ */
+export const EMPTY_ARRAY: never[] = []
+
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)

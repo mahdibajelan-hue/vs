@@ -10,7 +10,7 @@ import {
   type RastaActionPriority,
   type RastaActionStatus,
 } from '../types'
-import { useReportingStore } from '../store/useReportingStore'
+import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { formatJalali } from '../../../lib/jalali'
 import { ToneBadge } from '../components/ui'
 
@@ -34,7 +34,7 @@ export function DecisionCenterPage({ masterProjectId }: { masterProjectId: strin
 }
 
 function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
-  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? [])
+  const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const createDecision = useReportingStore((s) => s.createDecision)
   const setDecisionStatus = useReportingStore((s) => s.setDecisionStatus)
   const [form, setForm] = useState({ title: '', description: '', reason: '', impact: '', recommendedAction: '', requiredBy: '' })
@@ -111,7 +111,7 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
 }
 
 function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
-  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? [])
+  const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const createAction = useReportingStore((s) => s.createAction)
   const setActionStatus = useReportingStore((s) => s.setActionStatus)
   const [form, setForm] = useState<{ title: string; dueDate: string; priority: RastaActionPriority }>({ title: '', dueDate: '', priority: 'medium' })

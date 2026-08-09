@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, Search } from 'lucide-react'
 import { REPORT_STATUSES, REPORT_STATUS_LABEL_FA, REPORT_TYPES, REPORT_TYPE_LABEL_FA, type ReportStatus, type ReportType } from '../types'
-import { useReportingStore } from '../store/useReportingStore'
+import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { WidgetGrid } from '../components/WidgetGrid'
 import { exportReportToExcel } from '../lib/reportExport'
 import { exportElementToPdf } from '../../../lib/export'
@@ -22,7 +22,7 @@ const NEXT_STATUS_LABEL_FA: Partial<Record<ReportStatus, string>> = {
 }
 
 export function ReportCenterPage({ masterProjectId }: { masterProjectId: string }) {
-  const snapshots = useReportingStore((s) => s.snapshotsByProject[masterProjectId] ?? [])
+  const snapshots = useReportingStore((s) => s.snapshotsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const setSnapshotStatus = useReportingStore((s) => s.setSnapshotStatus)
   const [typeFilter, setTypeFilter] = useState<ReportType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ReportStatus | 'all'>('all')
