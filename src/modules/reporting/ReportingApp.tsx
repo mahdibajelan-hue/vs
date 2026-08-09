@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, BarChart3, ClipboardList, LayoutDashboard, Loader2, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useReportingStore } from './store/useReportingStore'
+import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { DashboardPage } from './pages/DashboardPage'
 import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
@@ -19,6 +20,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
 export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
+  const masterDataLoading = useMasterDataStore((s) => s.loading)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const profilesLoaded = useReportingStore((s) => s.profilesLoaded)
   const fetchProfiles = useReportingStore((s) => s.fetchProfiles)
@@ -41,7 +43,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
     if (projectId) fetchProjectData(projectId)
   }, [projectId, fetchProjectData])
 
-  if (!masterDataLoaded) {
+  if (masterDataLoading && !masterDataLoaded) {
     return (
       <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}>
         <Loader2 size={24} className="animate-spin text-teal-400" />
@@ -96,6 +98,8 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           <ArrowRight size={13} /> بازگشت به ماژول‌ها
         </button>
       </header>
+
+      <StorageErrorBanner />
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {!projectId ? (
