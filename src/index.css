@@ -464,6 +464,132 @@ body {
   }
 }
 
+/* ===== Split login screen (intro/about panel + form panel) ===== */
+
+.auth-split-shell {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+.auth-intro-panel {
+  position: relative;
+  flex: 1.15 1 0%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem 3.5rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+.auth-intro-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(56, 189, 248, 0.16), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(201, 162, 39, 0.12), transparent 45%),
+    radial-gradient(circle at 60% 40%, rgba(167, 139, 250, 0.1), transparent 50%);
+  z-index: -1;
+}
+.auth-intro-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at 30% 30%, black, transparent 75%);
+  z-index: -1;
+}
+
+.auth-about-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease;
+}
+.auth-about-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.auth-form-panel {
+  position: relative;
+  flex: 1 1 0%;
+  min-width: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bg-panel-solid);
+  border-inline-start: 1px solid var(--border-soft);
+}
+
+.eyebrow-en {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .auth-split-shell {
+    flex-direction: column;
+  }
+  .auth-intro-panel {
+    padding: 2.5rem 1.5rem;
+  }
+  .auth-form-panel {
+    min-width: 0;
+    border-inline-start: none;
+    border-top: 1px solid var(--border-soft);
+  }
+}
+
+/* ===== Module hub — card-grid dashboard layout ===== */
+
+.hub-grid-topbar {
+  position: relative;
+  z-index: 10;
+}
+
+.hub-grid-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), border-color 260ms ease, box-shadow 260ms ease;
+}
+.hub-grid-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 48px -20px rgba(2, 6, 23, 0.55);
+}
+.hub-grid-card:focus-visible {
+  outline: 2px solid var(--card-accent, #38bdf8);
+  outline-offset: 3px;
+}
+
+.hub-grid-card-glow {
+  position: absolute;
+  inset: -40% -30% auto -30%;
+  height: 160%;
+  border-radius: 999px;
+  opacity: 0.16;
+  filter: blur(46px);
+  pointer-events: none;
+  transition: opacity 260ms ease;
+}
+.hub-grid-card:hover .hub-grid-card-glow {
+  opacity: 0.3;
+}
+
 .onepager-map svg {
   width: 100%;
   height: 100%;

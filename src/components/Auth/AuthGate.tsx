@@ -1,36 +1,68 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, Eye, EyeOff, KeyRound, Mail, Loader2 } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Check, Eye, EyeOff, HeartHandshake, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { LogoFull } from '../common/Logo'
 import { ProfileForm } from './ProfileForm'
 
-const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; subtitle: string }> = {
+const MODULE_LOGIN_COPY: Record<ModuleKey, { title: string; titleEn: string; subtitle: string }> = {
   pipepulse: {
     title: 'ورود به PipePulse',
+    titleEn: 'PipePulse Login',
     subtitle:
       'PipePulse یک پلتفرم هوشمند برای پایش بصری، کنترل پیشرفت و پیش‌بینی عملکرد پروژه‌های پایپینگ است؛ از برنامه‌ریزی هر Line تا اجرای واقعی و گزارش‌دهی مدیریتی.',
   },
   risk: {
     title: 'ورود به مدیریت ریسک',
+    titleEn: 'Risk Management Login',
     subtitle:
       'یک سامانه کنترل ریسک برای پروژه‌های EPC — شناسایی، ارزیابی، برنامه پاسخ، پایش و گزارش‌دهی مدیریتی ریسک‌های پروژه.',
   },
   issues: {
     title: 'ورود به رصد',
+    titleEn: 'Issue Management Login',
     subtitle: 'سامانه پیگیری مشکلات پروژه — ثبت، پیگیری تا مهلت و تایید نهایی هر مسئله، با گزارش تاخیر لحظه‌ای.',
   },
   admin: {
     title: 'ورود به مدیریت کاربران',
+    titleEn: 'User & Access Management Login',
     subtitle: 'مدیریت کاربران و دسترسی آن‌ها در هر سه ماژول — PipePulse، مدیریت ریسک و مدیریت مسائل — از یک صفحه.',
   },
   reporting: {
     title: 'ورود به گزارش‌گیری هوشمند',
+    titleEn: 'Intelligent Reporting Login',
     subtitle:
       'مرکز هوشمندی و تصمیم پروژه — تجمیع زنده داده از ریسک، مسائل و PipePulse در گزارش‌های روزانه تا مدیریتی، با هشدار زودهنگام و مرکز تصمیم.',
   },
 }
+
+const ABOUT_CARDS = [
+  {
+    icon: Sparkles,
+    title: 'درباره سامانه',
+    titleEn: 'About RASTA',
+    text: 'پلتفرم یکپارچه مدیریت و کنترل پروژه‌های EPC — از پایش اجرا تا ریسک، مسائل و تصمیم مدیریتی، در یک سامانه واحد.',
+  },
+  {
+    icon: HeartHandshake,
+    title: 'خدمات و پشتیبانی',
+    titleEn: 'Support',
+    text: 'پشتیبانی مستقیم توسعه‌دهنده برای رفع مشکلات، آموزش استفاده و توسعه قابلیت‌های جدید بر اساس نیاز پروژه.',
+  },
+  {
+    icon: RefreshCw,
+    title: 'به‌روزرسانی مستمر',
+    titleEn: 'Continuous Updates',
+    text: 'توسعه فعال و افزوده‌شدن پیوسته ماژول‌ها و قابلیت‌های تازه بر اساس بازخورد کاربران واقعی پروژه.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'طراحی و توسعه',
+    titleEn: 'Design & Development',
+    text: 'طراحی، معماری و توسعه توسط مهدی باجلان — اختصاصی برای نیازهای کنترل پروژه‌های زیرساختی و انرژی.',
+  },
+]
 
 export function AuthGate({ children, moduleKey, onBackToHub }: { children: ReactNode; moduleKey: ModuleKey; onBackToHub: () => void }) {
   const authLoading = useAuthStore((s) => s.authLoading)
@@ -111,7 +143,7 @@ export function PasswordField({
   onChange,
   placeholder,
 }: {
-  label: string
+  label: ReactNode
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -210,7 +242,7 @@ function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () =>
     status === 'success' ? '!border-green-400/70 !bg-green-500/10 !text-green-200' : status === 'error' ? 'auth-shake !border-red-400/70' : ''
 
   return (
-    <>
+    <div className={`auth-split-shell ${exiting ? 'auth-card-exit' : ''}`}>
       {!exiting && (
         <button
           onClick={onBack}
@@ -219,61 +251,133 @@ function LoginPanel({ moduleKey, onBack }: { moduleKey: ModuleKey; onBack: () =>
           <ArrowRight size={14} /> بازگشت به ماژول‌ها
         </button>
       )}
-      <Shell
-        title={copy.title}
-        subtitle={copy.subtitle}
-        panelClassName={exiting ? 'auth-card-exit' : status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''}
-      >
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">ایمیل</span>
-            <div className="relative">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submit()}
-                disabled={busy}
-                className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
-                placeholder="person@example.com"
-                dir="ltr"
-                autoFocus
-              />
-              <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+
+      <div className="auth-form-panel">
+        <div className={`glass-panel w-full max-w-sm rounded-3xl p-8 ${status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''}`}>
+          <LogoFull width={170} className="mx-auto mb-4" />
+          <div className="mb-1 flex items-center justify-center gap-1.5">
+            <BadgeCheck size={14} className="text-brand-400" />
+            <h1 className="text-center text-lg font-extrabold">{copy.title}</h1>
+          </div>
+          <p className="eyebrow-en mb-3 text-center" dir="ltr">
+            {copy.titleEn}
+          </p>
+          <p className="mb-6 text-center text-sm text-secondary leading-6">{copy.subtitle}</p>
+
+          <div className="space-y-3">
+            <label className="block">
+              <span className="mb-1 flex items-baseline gap-1.5 text-xs text-secondary">
+                ایمیل <span className="eyebrow-en" dir="ltr">/ Email</span>
+              </span>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submit()}
+                  disabled={busy}
+                  className={`input pl-9 transition-all duration-300 ${fieldStateClass}`}
+                  placeholder="person@example.com"
+                  dir="ltr"
+                  autoFocus
+                />
+                <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+              </div>
+            </label>
+            <PasswordField
+              label={
+                <span className="flex items-baseline gap-1.5">
+                  رمز عبور <span className="eyebrow-en" dir="ltr">/ Password</span>
+                </span>
+              }
+              value={password}
+              onChange={setPassword}
+              placeholder="حداقل ۶ کاراکتر"
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <button
+              onClick={submit}
+              disabled={busy}
+              className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors duration-300 ${
+                status === 'success' ? 'bg-green-500' : 'bg-brand-500 hover:bg-brand-400'
+              }`}
+            >
+              {status === 'success' ? (
+                <>
+                  <Check size={16} className="auth-success-check" /> ورود با موفقیت انجام شد
+                </>
+              ) : status === 'submitting' ? (
+                'در حال بررسی...'
+              ) : (
+                <>
+                  <KeyRound size={15} /> ورود <span className="eyebrow-en" dir="ltr">/ Sign In</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
+            <p className="rasta-wordmark text-lg" style={{ fontWeight: 800 }}>
+              RASTA
+            </p>
+            <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>
+              Developed &amp; Designed by Mahdi Bajelan
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <AuthIntroPanel />
+    </div>
+  )
+}
+
+function AuthIntroPanel() {
+  return (
+    <div className="auth-intro-panel">
+      <div className="hub-blob hub-blob-a" style={{ background: '#0ea5e9' }} />
+      <div className="hub-blob hub-blob-b" style={{ background: '#c9a227' }} />
+
+      <div className="relative z-10 mx-auto w-full max-w-lg">
+        <p className="eyebrow-en" style={{ color: '#c9a227' }}>
+          Integrated Project Management Platform
+        </p>
+        <h2 className="rasta-wordmark mt-1.5 text-4xl">RASTA</h2>
+        <p className="mt-3 text-lg font-extrabold leading-8">پلتفرم یکپارچه مدیریت و کنترل پروژه‌های EPC</p>
+        <p className="mt-2.5 text-sm leading-7 text-secondary">
+          از پایش بصری پیشرفت اجرا (PipePulse) تا مدیریت ریسک، پیگیری مسائل اجرایی و گزارش‌گیری هوشمند مدیریتی — همه در یک پلتفرم واحد و متصل به هم، طراحی‌شده برای پروژه‌های زیرساختی و انرژی.
+        </p>
+
+        <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {ABOUT_CARDS.map(({ icon: Icon, title, titleEn, text }) => (
+            <div key={titleEn} className="auth-about-card">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-400/30 bg-brand-500/10">
+                  <Icon size={15} className="text-brand-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">{title}</p>
+                  <p className="eyebrow-en" dir="ltr">
+                    {titleEn}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[11px] leading-5 text-secondary">{text}</p>
             </div>
-          </label>
-          <PasswordField label="رمز عبور" value={password} onChange={setPassword} placeholder="حداقل ۶ کاراکتر" />
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <button
-            onClick={submit}
-            disabled={busy}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-colors duration-300 ${
-              status === 'success' ? 'bg-green-500' : 'bg-brand-500 hover:bg-brand-400'
-            }`}
-          >
-            {status === 'success' ? (
-              <>
-                <Check size={16} className="auth-success-check" /> ورود با موفقیت انجام شد
-              </>
-            ) : status === 'submitting' ? (
-              'در حال بررسی...'
-            ) : (
-              <>
-                <KeyRound size={15} /> ورود
-              </>
-            )}
-          </button>
+          ))}
         </div>
 
-        <div className="mt-6 flex flex-col items-center gap-0.5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
-          <p className="rasta-wordmark text-lg" style={{ fontWeight: 800 }}>
-            RASTA
-          </p>
-          <p className="text-[10px] font-bold" style={{ color: '#c9a227' }}>
-            Developed &amp; Designed by Mahdi Bajelan
+        <div className="mt-7 flex items-center gap-2">
+          <div className="rasta-brokenline">
+            <span className="rasta-brokenline-seg" />
+            <span className="rasta-brokenline-dot" />
+            <span className="rasta-brokenline-seg is-reverse" />
+          </div>
+          <p dir="ltr" className="text-xs font-medium tracking-wide text-secondary">
+            From Data to Insight. From Insight to Action.
           </p>
         </div>
-      </Shell>
-    </>
+      </div>
+    </div>
   )
 }
