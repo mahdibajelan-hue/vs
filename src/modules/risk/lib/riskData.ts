@@ -1,5 +1,7 @@
 import type {
   RmActionStatus,
+  RmEscalationLevel,
+  RmEscalationStatus,
   RmProject,
   RmProjectPhase,
   RmProjectStatus,
@@ -11,6 +13,7 @@ import type {
   RmRiskHistoryEntry,
   RmRiskStatus,
   RmRiskType,
+  RmStrategyDetails,
   RmTrend,
 } from '../types'
 
@@ -52,11 +55,20 @@ export interface RmRiskRow {
   identified_date: string
   status: string
   response_strategy: string
+  strategy_details: RmStrategyDetails | null
   project_phase: string | null
   time_to_impact_days: number | null
   initial_probability: number
   initial_impact: number
   initial_score: number
+  escalation_level: string | null
+  escalated_to: string | null
+  escalation_reason: string | null
+  escalation_date: string | null
+  required_decision: string | null
+  escalation_decision: string | null
+  escalation_decision_date: string | null
+  escalation_status: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -75,11 +87,20 @@ export function rmRiskFromRow(r: RmRiskRow): RmRisk {
     identifiedDate: r.identified_date,
     status: r.status as RmRiskStatus,
     responseStrategy: r.response_strategy as RmResponseStrategy,
+    strategyDetails: r.strategy_details || {},
     projectPhase: r.project_phase as RmProjectPhase | null,
     timeToImpactDays: r.time_to_impact_days,
     initialProbability: r.initial_probability,
     initialImpact: r.initial_impact,
     initialScore: r.initial_score,
+    escalationLevel: (r.escalation_level as RmEscalationLevel | null) || null,
+    escalatedTo: r.escalated_to || '',
+    escalationReason: r.escalation_reason || '',
+    escalationDate: r.escalation_date,
+    requiredDecision: r.required_decision || '',
+    escalationDecision: r.escalation_decision || '',
+    escalationDecisionDate: r.escalation_decision_date,
+    escalationStatus: (r.escalation_status as RmEscalationStatus) || 'none',
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -96,10 +117,19 @@ export function rmRiskToRow(projectId: string, r: Partial<RmRisk>) {
   if (r.identifiedDate !== undefined) row.identified_date = r.identifiedDate
   if (r.status !== undefined) row.status = r.status
   if (r.responseStrategy !== undefined) row.response_strategy = r.responseStrategy
+  if (r.strategyDetails !== undefined) row.strategy_details = r.strategyDetails
   if (r.projectPhase !== undefined) row.project_phase = r.projectPhase
   if (r.timeToImpactDays !== undefined) row.time_to_impact_days = r.timeToImpactDays
   if (r.initialProbability !== undefined) row.initial_probability = r.initialProbability
   if (r.initialImpact !== undefined) row.initial_impact = r.initialImpact
+  if (r.escalationLevel !== undefined) row.escalation_level = r.escalationLevel
+  if (r.escalatedTo !== undefined) row.escalated_to = r.escalatedTo
+  if (r.escalationReason !== undefined) row.escalation_reason = r.escalationReason
+  if (r.escalationDate !== undefined) row.escalation_date = r.escalationDate
+  if (r.requiredDecision !== undefined) row.required_decision = r.requiredDecision
+  if (r.escalationDecision !== undefined) row.escalation_decision = r.escalationDecision
+  if (r.escalationDecisionDate !== undefined) row.escalation_decision_date = r.escalationDecisionDate
+  if (r.escalationStatus !== undefined) row.escalation_status = r.escalationStatus
   return row
 }
 
@@ -115,6 +145,7 @@ export interface RmRiskAssessmentRow {
   residual_score: number
   trend: string
   reviewer_comment: string
+  response_strategy: string | null
   created_by: string | null
   created_at: string
 }
@@ -132,6 +163,7 @@ export function rmAssessmentFromRow(r: RmRiskAssessmentRow): RmRiskAssessment {
     residualScore: r.residual_score,
     trend: r.trend as RmTrend,
     reviewerComment: r.reviewer_comment,
+    responseStrategy: (r.response_strategy as RmResponseStrategy | null) || null,
     createdBy: r.created_by,
     createdAt: r.created_at,
   }

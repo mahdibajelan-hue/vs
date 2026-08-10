@@ -565,7 +565,7 @@ create table if not exists rm_risks (
   owner_id uuid references profiles (id),
   identified_date date not null default current_date,
   status text not null default 'open' check (status in ('open', 'monitoring', 'escalated', 'closed')),
-  response_strategy text not null default 'mitigate' check (response_strategy in ('avoid', 'mitigate', 'transfer', 'accept', 'exploit')),
+  response_strategy text not null default 'mitigate' check (response_strategy in ('avoid', 'mitigate', 'transfer', 'accept', 'escalate', 'exploit', 'enhance', 'share')),
   project_phase text check (project_phase in ('engineering', 'procurement', 'construction', 'commissioning')),
   time_to_impact_days integer,
   initial_probability smallint not null check (initial_probability between 1 and 5),
@@ -575,6 +575,31 @@ create table if not exists rm_risks (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Upgrade path: original 5-value list ('avoid','mitigate','transfer','accept','exploit') didn't
+-- distinguish Threat vs Opportunity strategies — 'exploit' was being offered to Threats too, and
+-- there was no 'escalate' (shared by both) or 'enhance'/'share' (Opportunity-only). Widen the
+-- live constraint to the full 8-value set; the client now filters which ones it offers based on
+-- risk_type.
+alter table rm_risks drop constraint if exists rm_risks_response_strategy_check;
+alter table rm_risks add constraint rm_risks_response_strategy_check
+  check (response_strategy in ('avoid', 'mitigate', 'transfer', 'accept', 'escalate', 'exploit', 'enhance', 'share'));
+
+-- Strategy-specific context fields (spec's "dynamic response strategy form") — shape depends on
+-- risk_type + response_strategy, kept as a flexible key/value bag rather than dozens of nullable
+-- columns since only one strategy's fields are ever populated for a given risk at a time.
+alter table rm_risks add column if not exists strategy_details jsonb not null default '{}'::jsonb;
+
+-- Escalation Management (spec: "escalation is NOT simply a Risk Status" — an organizational
+-- routing mechanism that can apply to a risk regardless of its chosen response strategy).
+alter table rm_risks add column if not exists escalation_level text check (escalation_level in ('project_team', 'project_manager', 'management'));
+alter table rm_risks add column if not exists escalated_to text not null default '';
+alter table rm_risks add column if not exists escalation_reason text not null default '';
+alter table rm_risks add column if not exists escalation_date date;
+alter table rm_risks add column if not exists required_decision text not null default '';
+alter table rm_risks add column if not exists escalation_decision text not null default '';
+alter table rm_risks add column if not exists escalation_decision_date date;
+alter table rm_risks add column if not exists escalation_status text not null default 'none' check (escalation_status in ('none', 'recommended', 'escalated', 'decided'));
 
 alter table rm_risks enable row level security;
 
@@ -612,6 +637,12 @@ create table if not exists rm_risk_assessments (
   created_by uuid references profiles (id),
   created_at timestamptz not null default now()
 );
+
+-- Snapshot of the risk's response strategy at the moment of this review — the spec's review
+-- record must show "Current Response Strategy" as it stood then, not whatever it's been changed
+-- to since. Lifecycle stage isn't stored the same way; it's cheap to recompute from a risk's own
+-- current fields, so the client derives it instead of freezing it per review.
+alter table rm_risk_assessments add column if not exists response_strategy text;
 
 alter table rm_risk_assessments enable row level security;
 

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { RmProject, RmProjectPhase, RmProjectStatus, RmRisk, RmRiskAction, RmRiskAssessment, RmRiskHistoryEntry, RmUserRole } from '../types'
+import type { RmProject, RmProjectPhase, RmProjectStatus, RmRisk, RmRiskAction, RmRiskAssessment, RmRiskHistoryEntry, RmStrategyDetails, RmUserRole } from '../types'
 import {
   rmActionFromRow,
   rmActionToRow,
@@ -54,6 +54,7 @@ interface RiskStoreState {
       probability: number
       impact: number
       responseStrategy: RmRisk['responseStrategy']
+      strategyDetails: RmStrategyDetails
       projectPhase: RmProjectPhase | null
       timeToImpactDays: number | null
       mitigationAction: string
@@ -71,6 +72,7 @@ interface RiskStoreState {
       residualImpact: number
       trend: RmRiskAssessment['trend']
       reviewerComment: string
+      responseStrategy: RmRiskAssessment['responseStrategy']
     },
   ) => Promise<void>
 
@@ -160,6 +162,7 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
       riskType: data.riskType,
       ownerId: data.ownerId,
       responseStrategy: data.responseStrategy,
+      strategyDetails: data.strategyDetails,
       projectPhase: data.projectPhase,
       timeToImpactDays: data.timeToImpactDays,
       initialProbability: data.probability,
@@ -244,6 +247,7 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
         residual_impact: data.residualImpact,
         trend: data.trend,
         reviewer_comment: data.reviewerComment,
+        response_strategy: data.responseStrategy,
         created_by: useAuthStore.getState().profile?.id ?? null,
       })
       .select()

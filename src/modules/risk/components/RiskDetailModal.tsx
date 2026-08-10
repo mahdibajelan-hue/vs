@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, ChevronDown, MessageSquare, Plus, ShieldAlert, Trash2 } from 'lucide-react'
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Check, ChevronDown, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { formatJalali } from '../../../lib/jalali'
@@ -8,6 +9,9 @@ import { useRiskStore, type RmProjectDetail } from '../store/useRiskStore'
 import { useRiskCurrentRole, useRiskMembersStore } from '../store/useRiskMembersStore'
 import {
   RM_CATEGORY_LABEL_FA,
+  RM_ESCALATION_LEVELS,
+  RM_ESCALATION_LEVEL_LABEL_FA,
+  RM_ESCALATION_STATUS_LABEL_FA,
   RM_PROJECT_PHASE_LABEL_FA,
   RM_RESPONSE_STRATEGY_LABEL_FA,
   RM_RISK_STATUSES,
@@ -21,11 +25,24 @@ import {
   rmCanEdit,
   rmCanManage,
   type RmActionStatus,
+  type RmEscalationLevel,
   type RmRisk,
   type RmRiskStatus,
   type RmTrend,
 } from '../types'
-import { currentState, isActionOverdue, isEscalationRequired, riskLevel, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
+import { STRATEGY_FIELDS } from '../lib/strategyFields'
+import {
+  currentState,
+  isActionOverdue,
+  isEscalationRequired,
+  lifecycleStage,
+  riskLevel,
+  todayIso,
+  RISK_LEVEL_COLOR,
+  RISK_LEVEL_LABEL_FA,
+  RM_LIFECYCLE_STAGE_COLOR,
+  RM_LIFECYCLE_STAGE_LABEL_FA,
+} from '../lib/riskScore'
 
 export function RiskDetailModal({ project, risk, onClose }: { project: RmProjectDetail; risk: RmRisk; onClose: () => void }) {
   const role = useRiskCurrentRole()
@@ -42,8 +59,14 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
   const level = riskLevel(state.score)
   const escalation = isEscalationRequired(risk, assessments, actions)
   const initialLevel = riskLevel(risk.initialScore)
+  const stage = lifecycleStage(risk, assessments)
+  const strategyFieldDefs = STRATEGY_FIELDS[risk.responseStrategy]
+  const filledStrategyDetails = strategyFieldDefs.filter((f) => (risk.strategyDetails[f.key] ?? '').trim() !== '')
 
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [assessmentFormDirty, setAssessmentFormDirty] = useState(false)
+  const [actionFormDirty, setActionFormDirty] = useState(false)
+  const [escalationFormDirty, setEscalationFormDirty] = useState(false)
 
   return (
     <Modal
@@ -51,6 +74,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
       subtitle={escalation ? 'نیازمند توجه مدیریت' : undefined}
       onClose={onClose}
       width="max-w-3xl"
+      isDirty={assessmentFormDirty || actionFormDirty || escalationFormDirty}
     >
       <div className="space-y-4">
         {escalation && (
@@ -59,6 +83,13 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
             این ریسک نیازمند توجه مدیریت است — امتیاز بحرانی، اقدام عقب‌افتاده یا زمان تا وقوع پیامد کمتر از ۱۴ روز.
           </div>
         )}
+
+        <span
+          className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
+          style={{ background: `${RM_LIFECYCLE_STAGE_COLOR[stage]}1f`, color: RM_LIFECYCLE_STAGE_COLOR[stage] }}
+        >
+          {RM_LIFECYCLE_STAGE_LABEL_FA[stage]}
+        </span>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <InfoTile label="دسته‌بندی" value={RM_CATEGORY_LABEL_FA[risk.category]} />
@@ -95,6 +126,22 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
 
         {risk.description && <p className="rounded-xl bg-white/[0.03] p-3 text-xs leading-6 text-secondary">{risk.description}</p>}
 
+        {filledStrategyDetails.length > 0 && (
+          <div className="rounded-xl border border-white/10 p-3">
+            <p className="mb-2 text-xs font-bold">جزئیات استراتژی پاسخ — {RM_RESPONSE_STRATEGY_LABEL_FA[risk.responseStrategy]}</p>
+            <div className="grid grid-cols-2 gap-3">
+              {filledStrategyDetails.map((f) => (
+                <div key={f.key}>
+                  <span className="mb-1 block text-[11px] text-secondary">{f.label}</span>
+                  <p className="text-xs font-medium leading-5">
+                    {f.type === 'select' ? f.options?.find((o) => o.value === risk.strategyDetails[f.key])?.label ?? risk.strategyDetails[f.key] : f.type === 'date' ? formatJalali(risk.strategyDetails[f.key]) : risk.strategyDetails[f.key]}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Score journey */}
         <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3">
           <ScorePill label="امتیاز اولیه" score={risk.initialScore} level={initialLevel} />
@@ -107,8 +154,10 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           )}
         </div>
 
-        <AssessmentSection riskId={risk.id} assessments={assessments} canManage={canManage} />
-        <ActionsSection riskId={risk.id} actions={actions} canEdit={canEdit} ownerId={risk.ownerId} />
+        <EscalationSection risk={risk} canManage={canManage} escalationRequired={escalation} onDirtyChange={setEscalationFormDirty} />
+
+        <AssessmentSection risk={risk} assessments={assessments} canManage={canManage} onDirtyChange={setAssessmentFormDirty} />
+        <ActionsSection riskId={risk.id} actions={actions} canEdit={canEdit} ownerId={risk.ownerId} onDirtyChange={setActionFormDirty} />
         <HistorySection riskId={risk.id} history={history} canEdit={canEdit} />
 
         {canManage && (
@@ -165,13 +214,15 @@ function ScorePill({ label, score, level, highlight }: { label: string; score: n
 }
 
 function AssessmentSection({
-  riskId,
+  risk,
   assessments,
   canManage,
+  onDirtyChange,
 }: {
-  riskId: string
+  risk: RmRisk
   assessments: RmProjectDetail['assessments']
   canManage: boolean
+  onDirtyChange: (dirty: boolean) => void
 }) {
   const addAssessment = useRiskStore((s) => s.addAssessment)
   const [showForm, setShowForm] = useState(false)
@@ -184,25 +235,49 @@ function AssessmentSection({
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const closeForm = () => {
+    setShowForm(false)
+    onDirtyChange(false)
+  }
+
   const submit = async () => {
     setBusy(true)
     try {
-      await addAssessment(riskId, { currentProbability, currentImpact, residualProbability, residualImpact, trend, reviewerComment: comment.trim() })
+      await addAssessment(risk.id, {
+        currentProbability,
+        currentImpact,
+        residualProbability,
+        residualImpact,
+        trend,
+        reviewerComment: comment.trim(),
+        responseStrategy: risk.responseStrategy,
+      })
       setShowForm(false)
       setComment('')
+      onDirtyChange(false)
     } finally {
       setBusy(false)
     }
   }
 
   const visible = showAll ? assessments : assessments.slice(0, 2)
+  const chronological = [...assessments].sort((a, b) => (a.reviewDate < b.reviewDate ? -1 : 1))
+  const chartData = chronological.map((a) => ({ date: a.reviewDate, score: a.currentScore, residual: a.residualScore }))
 
   return (
     <div className="rounded-xl border border-white/10 p-3">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-bold">تاریخچه بازبینی ریسک</p>
         {canManage && (
-          <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-[11px] text-red-300 hover:underline">
+          <button
+            onClick={() => {
+              setShowForm((v) => {
+                onDirtyChange(!v)
+                return !v
+              })
+            }}
+            className="flex items-center gap-1 text-[11px] text-red-300 hover:underline"
+          >
             <Plus size={12} /> بازبینی جدید
           </button>
         )}
@@ -240,8 +315,9 @@ function AssessmentSection({
             <span className="mb-1 block text-[10px] text-secondary">نظر بازبین</span>
             <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} className="input resize-none text-xs" />
           </label>
+          <p className="text-[10px] text-muted">استراتژی پاسخ فعلی ریسک («{RM_RESPONSE_STRATEGY_LABEL_FA[risk.responseStrategy]}») به‌صورت خودکار در این بازبینی ثبت می‌شود.</p>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="text-xs text-secondary hover:underline">
+            <button onClick={closeForm} className="text-xs text-secondary hover:underline">
               انصراف
             </button>
             <button onClick={submit} disabled={busy} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400 disabled:opacity-50">
@@ -254,25 +330,288 @@ function AssessmentSection({
       {assessments.length === 0 ? (
         <p className="text-[11px] text-muted">هنوز بازبینی‌ای ثبت نشده است</p>
       ) : (
+        <>
+          {chartData.length >= 2 && (
+            <div className="mb-3 h-24 rounded-lg bg-white/[0.02] p-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                  <YAxis hide domain={[0, 25]} />
+                  <Tooltip
+                    labelFormatter={(l) => (typeof l === 'string' ? formatJalali(l) : l)}
+                    contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
+                  />
+                  <Line type="monotone" dataKey="score" name="امتیاز فعلی" stroke="#e74c3c" strokeWidth={2} dot={{ r: 2.5 }} />
+                  <Line type="monotone" dataKey="residual" name="امتیاز باقیمانده" stroke="#2ecc71" strokeWidth={2} dot={{ r: 2.5 }} strokeDasharray="4 3" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div className="space-y-2">
+            {visible.map((a) => {
+              const lv = riskLevel(a.currentScore)
+              const residualLv = riskLevel(a.residualScore)
+              return (
+                <div key={a.id} className="rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="num shrink-0 text-muted">{formatJalali(a.reviewDate)}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-[9px] text-muted">فعلی</span>
+                      <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[lv] }}>
+                        {a.currentScore}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-[9px] text-muted">باقیمانده</span>
+                      <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[residualLv] }}>
+                        {a.residualScore}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full px-1.5 py-0.5" style={{ background: `${RM_TREND_COLOR[a.trend]}22`, color: RM_TREND_COLOR[a.trend] }}>
+                      {RM_TREND_LABEL_FA[a.trend]}
+                    </span>
+                    {a.responseStrategy && (
+                      <span className="shrink-0 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] text-secondary">{RM_RESPONSE_STRATEGY_LABEL_FA[a.responseStrategy]}</span>
+                    )}
+                  </div>
+                  {a.reviewerComment && <p className="mt-1.5 text-secondary">{a.reviewerComment}</p>}
+                </div>
+              )
+            })}
+            {assessments.length > 2 && !showAll && (
+              <button onClick={() => setShowAll(true)} className="flex items-center gap-1 text-[10px] text-muted hover:text-secondary">
+                <ChevronDown size={11} /> نمایش {assessments.length - 2} مورد دیگر
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function EscalationSection({
+  risk,
+  canManage,
+  escalationRequired,
+  onDirtyChange,
+}: {
+  risk: RmRisk
+  canManage: boolean
+  escalationRequired: boolean
+  onDirtyChange: (dirty: boolean) => void
+}) {
+  const updateRisk = useRiskStore((s) => s.updateRisk)
+  const [editing, setEditing] = useState(false)
+  const [level, setLevel] = useState<RmEscalationLevel>(risk.escalationLevel ?? 'project_manager')
+  const [escalatedTo, setEscalatedTo] = useState(risk.escalatedTo)
+  const [reason, setReason] = useState(risk.escalationReason)
+  const [date, setDate] = useState(risk.escalationDate ?? todayIso())
+  const [requiredDecision, setRequiredDecision] = useState(risk.requiredDecision)
+  const [decision, setDecision] = useState(risk.escalationDecision)
+  const [decisionDate, setDecisionDate] = useState(risk.escalationDecisionDate ?? todayIso())
+  const [busy, setBusy] = useState(false)
+
+  const openEditor = () => {
+    setLevel(risk.escalationLevel ?? 'project_manager')
+    setEscalatedTo(risk.escalatedTo)
+    setReason(risk.escalationReason)
+    setDate(risk.escalationDate ?? todayIso())
+    setRequiredDecision(risk.requiredDecision)
+    setEditing(true)
+    onDirtyChange(true)
+  }
+
+  const closeEditor = () => {
+    setEditing(false)
+    onDirtyChange(false)
+  }
+
+  const recommend = async () => {
+    setBusy(true)
+    try {
+      await updateRisk(risk.id, { escalationStatus: 'recommended' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitEscalation = async () => {
+    setBusy(true)
+    try {
+      await updateRisk(risk.id, {
+        escalationStatus: 'escalated',
+        escalationLevel: level,
+        escalatedTo: escalatedTo.trim(),
+        escalationReason: reason.trim(),
+        escalationDate: date,
+        requiredDecision: requiredDecision.trim(),
+      })
+      closeEditor()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitDecision = async () => {
+    setBusy(true)
+    try {
+      await updateRisk(risk.id, { escalationStatus: 'decided', escalationDecision: decision.trim(), escalationDecisionDate: decisionDate })
+      onDirtyChange(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const cancelEscalation = async () => {
+    setBusy(true)
+    try {
+      await updateRisk(risk.id, {
+        escalationStatus: 'none',
+        escalationLevel: null,
+        escalatedTo: '',
+        escalationReason: '',
+        escalationDate: null,
+        requiredDecision: '',
+        escalationDecision: '',
+        escalationDecisionDate: null,
+      })
+      closeEditor()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const statusColor =
+    risk.escalationStatus === 'decided' ? '#2ecc71' : risk.escalationStatus === 'escalated' ? '#e74c3c' : risk.escalationStatus === 'recommended' ? '#f97316' : '#94a3b8'
+
+  return (
+    <div className="rounded-xl border border-white/10 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-xs font-bold">
+          <TriangleAlert size={13} /> مدیریت تشدید (Escalation)
+        </p>
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: `${statusColor}22`, color: statusColor }}>
+          {RM_ESCALATION_STATUS_LABEL_FA[risk.escalationStatus]}
+        </span>
+      </div>
+
+      {canManage && risk.escalationStatus === 'none' && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.02] p-2.5">
+          <p className="text-[11px] text-secondary">
+            {escalationRequired ? 'این ریسک بر اساس معیارهای توجه مدیریت، پیشنهاد تشدید دارد.' : 'در صورت نیاز، این ریسک را برای تصمیم‌گیری سطح بالاتر تشدید کنید.'}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            {escalationRequired && (
+              <button onClick={recommend} disabled={busy} className="rounded-lg bg-orange-500/20 px-2.5 py-1.5 text-[11px] font-medium text-orange-300 hover:bg-orange-500/30">
+                پیشنهاد تشدید
+              </button>
+            )}
+            <button onClick={openEditor} className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-red-400">
+              ثبت تشدید
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canManage && risk.escalationStatus === 'recommended' && !editing && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.02] p-2.5">
+          <p className="text-[11px] text-secondary">تشدید این ریسک پیشنهاد شده است — جزئیات را تکمیل کنید.</p>
+          <button onClick={openEditor} className="shrink-0 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-red-400">
+            تکمیل تشدید
+          </button>
+        </div>
+      )}
+
+      {editing && (risk.escalationStatus === 'none' || risk.escalationStatus === 'recommended') && (
+        <div className="space-y-2.5 rounded-lg bg-white/[0.03] p-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[10px] text-secondary">سطح تشدید</span>
+              <select value={level} onChange={(e) => setLevel(e.target.value as RmEscalationLevel)} className="input !h-auto !py-1.5 text-xs">
+                {RM_ESCALATION_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {RM_ESCALATION_LEVEL_LABEL_FA[l]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] text-secondary">تشدید به (فرد/جایگاه)</span>
+              <input value={escalatedTo} onChange={(e) => setEscalatedTo(e.target.value)} className="input text-xs" placeholder="مثلاً مدیر پروژه، کمیته راهبری..." />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-[10px] text-secondary">دلیل تشدید</span>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="input resize-none text-xs" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[10px] text-secondary">تاریخ تشدید</span>
+              <JalaliDateInput value={date} onChange={setDate} />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-[10px] text-secondary">تصمیم یا پشتیبانی موردنیاز</span>
+            <textarea value={requiredDecision} onChange={(e) => setRequiredDecision(e.target.value)} rows={2} className="input resize-none text-xs" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button onClick={closeEditor} className="text-xs text-secondary hover:underline">
+              انصراف
+            </button>
+            <button onClick={submitEscalation} disabled={busy} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400 disabled:opacity-50">
+              ثبت تشدید
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(risk.escalationStatus === 'escalated' || risk.escalationStatus === 'decided') && (
         <div className="space-y-2">
-          {visible.map((a) => {
-            const lv = riskLevel(a.currentScore)
-            return (
-              <div key={a.id} className="flex items-center gap-3 rounded-lg bg-white/[0.02] px-3 py-2 text-[11px]">
-                <span className="num shrink-0 text-muted">{formatJalali(a.reviewDate)}</span>
-                <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[lv] }}>
-                  {a.currentScore}
-                </span>
-                <span className="shrink-0 rounded-full px-1.5 py-0.5" style={{ background: `${RM_TREND_COLOR[a.trend]}22`, color: RM_TREND_COLOR[a.trend] }}>
-                  {RM_TREND_LABEL_FA[a.trend]}
-                </span>
-                <span className="truncate text-secondary">{a.reviewerComment}</span>
+          <div className="grid grid-cols-2 gap-3 rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
+            <InfoTile label="سطح تشدید" value={risk.escalationLevel ? RM_ESCALATION_LEVEL_LABEL_FA[risk.escalationLevel] : '—'} />
+            <InfoTile label="تشدید به" value={risk.escalatedTo || '—'} />
+            <InfoTile label="تاریخ تشدید" value={risk.escalationDate ? formatJalali(risk.escalationDate) : '—'} />
+            <InfoTile label="تصمیم موردنیاز" value={risk.requiredDecision || '—'} />
+          </div>
+          {risk.escalationReason && <p className="rounded-lg bg-white/[0.02] p-2.5 text-[11px] leading-5 text-secondary">{risk.escalationReason}</p>}
+
+          {risk.escalationStatus === 'escalated' && canManage && (
+            <div className="space-y-2 rounded-lg bg-white/[0.03] p-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] text-secondary">تصمیم نهایی</span>
+                <textarea
+                  value={decision}
+                  onChange={(e) => {
+                    setDecision(e.target.value)
+                    onDirtyChange(true)
+                  }}
+                  rows={2}
+                  className="input resize-none text-xs"
+                />
+              </label>
+              <label className="block w-1/2">
+                <span className="mb-1 block text-[10px] text-secondary">تاریخ تصمیم</span>
+                <JalaliDateInput value={decisionDate} onChange={setDecisionDate} />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button onClick={submitDecision} disabled={busy || !decision.trim()} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-50">
+                  ثبت تصمیم
+                </button>
               </div>
-            )
-          })}
-          {assessments.length > 2 && !showAll && (
-            <button onClick={() => setShowAll(true)} className="flex items-center gap-1 text-[10px] text-muted hover:text-secondary">
-              <ChevronDown size={11} /> نمایش {assessments.length - 2} مورد دیگر
+            </div>
+          )}
+
+          {risk.escalationStatus === 'decided' && (
+            <div className="rounded-lg bg-green-500/10 p-2.5 text-[11px]">
+              <span className="mb-1 block text-[10px] text-secondary">تصمیم نهایی — {risk.escalationDecisionDate ? formatJalali(risk.escalationDecisionDate) : ''}</span>
+              <p className="leading-5">{risk.escalationDecision}</p>
+            </div>
+          )}
+
+          {canManage && (
+            <button onClick={cancelEscalation} className="text-[10px] text-muted hover:text-red-400">
+              لغو و بازنشانی تشدید
             </button>
           )}
         </div>
@@ -293,7 +632,19 @@ function NumberSlider({ label, value, onChange }: { label: string; value: number
   )
 }
 
-function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string; actions: RmProjectDetail['actions']; canEdit: boolean; ownerId: string | null }) {
+function ActionsSection({
+  riskId,
+  actions,
+  canEdit,
+  ownerId,
+  onDirtyChange,
+}: {
+  riskId: string
+  actions: RmProjectDetail['actions']
+  canEdit: boolean
+  ownerId: string | null
+  onDirtyChange: (dirty: boolean) => void
+}) {
   const addAction = useRiskStore((s) => s.addAction)
   const updateAction = useRiskStore((s) => s.updateAction)
   const deleteAction = useRiskStore((s) => s.deleteAction)
@@ -307,6 +658,11 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
   const [actionOwnerId, setActionOwnerId] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const closeForm = () => {
+    setShowForm(false)
+    onDirtyChange(false)
+  }
+
   const submit = async () => {
     if (!description.trim()) return
     setBusy(true)
@@ -315,6 +671,7 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
       setShowForm(false)
       setDescription('')
       setDueDate('')
+      onDirtyChange(false)
     } finally {
       setBusy(false)
     }
@@ -325,7 +682,15 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-bold">اقدامات کنترلی</p>
         {canEditActions && (
-          <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-[11px] text-red-300 hover:underline">
+          <button
+            onClick={() => {
+              setShowForm((v) => {
+                onDirtyChange(!v)
+                return !v
+              })
+            }}
+            className="flex items-center gap-1 text-[11px] text-red-300 hover:underline"
+          >
             <Plus size={12} /> اقدام جدید
           </button>
         )}
@@ -333,7 +698,15 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
 
       {showForm && (
         <div className="mb-3 space-y-2 rounded-lg bg-white/[0.03] p-3">
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className="input text-xs" placeholder="شرح اقدام" />
+          <input
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              onDirtyChange(true)
+            }}
+            className="input text-xs"
+            placeholder="شرح اقدام"
+          />
           <div className="grid grid-cols-2 gap-2">
             <select value={actionOwnerId} onChange={(e) => setActionOwnerId(e.target.value)} className="input !h-auto !py-1.5 text-xs">
               <option value="">مالک اقدام</option>
@@ -346,7 +719,7 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
             <JalaliDateInput value={dueDate} onChange={setDueDate} />
           </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="text-xs text-secondary hover:underline">
+            <button onClick={closeForm} className="text-xs text-secondary hover:underline">
               انصراف
             </button>
             <button onClick={submit} disabled={busy} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400 disabled:opacity-50">
@@ -390,14 +763,22 @@ function ActionsSection({ riskId, actions, canEdit, ownerId }: { riskId: string;
                   <Check size={13} className="shrink-0 text-green-400" />
                 ) : (
                   canEditActions && (
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={a.completionPercentage}
-                      onChange={(e) => updateAction(a.id, { completionPercentage: Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)) })}
-                      className="num w-12 shrink-0 rounded-md bg-black/20 border border-white/10 px-1 py-1 text-[10px] outline-none"
-                    />
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={a.completionPercentage}
+                        onChange={(e) => {
+                          const completionPercentage = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0))
+                          // درصد وارد‌شده وضعیت اقدام را هم به‌طور خودکار هماهنگ می‌کند: ۱۰۰٪ = تکمیل‌شده، ۰٪ = شروع‌نشده، بین این دو = در حال انجام.
+                          const status: RmActionStatus = completionPercentage === 100 ? 'completed' : completionPercentage === 0 ? 'not_started' : 'in_progress'
+                          updateAction(a.id, { completionPercentage, status })
+                        }}
+                        className="num w-11 rounded-md bg-black/20 border border-white/10 px-1 py-1 text-[10px] outline-none"
+                      />
+                      <span className="text-[10px] text-muted">%</span>
+                    </span>
                   )
                 )}
                 {canEditActions && (

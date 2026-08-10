@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
-import { AlertOctagon, Clock3, FileDown, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AlertOctagon, AlarmClockOff, Clock3, FileDown, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { RmProjectDetail } from '../store/useRiskStore'
 import { useRiskMembersStore } from '../store/useRiskMembersStore'
 import { RM_PROJECT_PHASES, RM_PROJECT_PHASE_LABEL_FA, type RmProjectPhase } from '../types'
-import { currentState } from '../lib/riskScore'
+import { formatJalali } from '../../../lib/jalali'
+import { currentState, isActionOverdue, todayIso } from '../lib/riskScore'
 import {
   computeCategoryDistribution,
   computeExposureKpi,
@@ -46,7 +47,19 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
   const phaseDist = useMemo(() => computePhaseDistribution(risks), [risks])
   const topRisks = useMemo(() => computeTopRisks(risks, assessments, actions), [risks, assessments, actions])
   const timeToImpact = useMemo(() => computeTimeToImpactRisks(risks), [risks])
-  const overdueActions = useMemo(() => actions.filter((a) => a.status !== 'completed' && a.dueDate && a.dueDate < new Date().toISOString().slice(0, 10)).length, [actions])
+  const overdueActionRows = useMemo(() => {
+    const today = todayIso()
+    return actions
+      .filter((a) => isActionOverdue(a, today))
+      .map((a) => {
+        const risk = risks.find((r) => r.id === a.riskId) ?? null
+        const owner = members.find((m) => m.userId === a.ownerId)
+        const daysOverdue = a.dueDate ? Math.round((new Date(today).getTime() - new Date(a.dueDate).getTime()) / 86400000) : 0
+        return { action: a, risk, ownerName: owner?.fullName || owner?.email || 'تعیین‌نشده', daysOverdue }
+      })
+      .sort((a, b) => b.daysOverdue - a.daysOverdue)
+  }, [actions, risks, members])
+  const overdueActions = overdueActionRows.length
 
   const active = risks.filter((r) => r.status !== 'closed')
   const closureRate = risks.length > 0 ? Math.round((risks.filter((r) => r.status === 'closed').length / risks.length) * 100) : 0
@@ -183,6 +196,35 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
                       </span>
                     ))}
                     <span className="num font-bold text-red-400">{score}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {overdueActionRows.length > 0 && (
+          <div className="glass-panel rounded-2xl border border-orange-400/30 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <AlarmClockOff size={16} className="text-orange-400" />
+              <p className="text-sm font-bold">اقدامات عقب‌افتاده ({overdueActionRows.length})</p>
+            </div>
+            <div className="space-y-1.5">
+              {overdueActionRows.map(({ action, risk, ownerName, daysOverdue }) => (
+                <button
+                  key={action.id}
+                  onClick={() => risk && setSelectedRiskId(risk.id)}
+                  disabled={!risk}
+                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-right text-xs hover:bg-white/5 transition-colors disabled:opacity-60"
+                >
+                  <span className="flex items-center gap-2">
+                    {risk && <span className="num text-muted">{risk.code}</span>}
+                    <span className="font-medium">{action.description}</span>
+                    <span className="text-[10px] text-muted">— مسئول: {ownerName}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="num text-[10px] text-muted">{action.dueDate ? formatJalali(action.dueDate) : ''}</span>
+                    <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] text-orange-300">{daysOverdue} روز تاخیر</span>
                   </span>
                 </button>
               ))}

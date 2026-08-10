@@ -1,5 +1,32 @@
 import type { RmRisk, RmRiskAction, RmRiskAssessment } from '../types'
 
+export type RmLifecycleStage = 'identified' | 'monitoring' | 'escalating' | 'closed'
+
+export const RM_LIFECYCLE_STAGE_LABEL_FA: Record<RmLifecycleStage, string> = {
+  identified: 'شناسایی‌شده — در انتظار اولین بازبینی',
+  monitoring: 'تحت پایش — بازبینی‌شده',
+  escalating: 'در فرآیند تشدید',
+  closed: 'بسته‌شده',
+}
+
+export const RM_LIFECYCLE_STAGE_COLOR: Record<RmLifecycleStage, string> = {
+  identified: '#94a3b8',
+  monitoring: '#3b82f6',
+  escalating: '#f97316',
+  closed: '#2ecc71',
+}
+
+/**
+ * Computed, non-persisted lifecycle badge — distinct from `status` (spec #2/#42): status is a
+ * manually-set field, this reflects the risk's actual review/escalation progress at a glance.
+ */
+export function lifecycleStage(risk: RmRisk, assessments: RmRiskAssessment[]): RmLifecycleStage {
+  if (risk.status === 'closed') return 'closed'
+  if (risk.escalationStatus === 'escalated' || risk.escalationStatus === 'decided') return 'escalating'
+  if (assessments.length > 0) return 'monitoring'
+  return 'identified'
+}
+
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export const RISK_LEVEL_LABEL_FA: Record<RiskLevel, string> = {

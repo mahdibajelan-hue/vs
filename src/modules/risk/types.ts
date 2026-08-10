@@ -88,16 +88,39 @@ export const RM_RISK_STATUS_COLOR: Record<RmRiskStatus, string> = {
   closed: '#2ecc71',
 }
 
-export type RmResponseStrategy = 'avoid' | 'mitigate' | 'transfer' | 'accept' | 'exploit'
+export type RmResponseStrategy = 'avoid' | 'mitigate' | 'transfer' | 'accept' | 'escalate' | 'exploit' | 'enhance' | 'share'
 
-export const RM_RESPONSE_STRATEGIES: RmResponseStrategy[] = ['avoid', 'mitigate', 'transfer', 'accept', 'exploit']
+export const RM_RESPONSE_STRATEGIES: RmResponseStrategy[] = ['avoid', 'mitigate', 'transfer', 'accept', 'escalate', 'exploit', 'enhance', 'share']
+
+/** Threat strategies (spec #4) — 'accept' and 'escalate' are shared with Opportunity. */
+export const RM_THREAT_STRATEGIES: RmResponseStrategy[] = ['avoid', 'mitigate', 'transfer', 'accept', 'escalate']
+/** Opportunity strategies (spec #5). */
+export const RM_OPPORTUNITY_STRATEGIES: RmResponseStrategy[] = ['exploit', 'enhance', 'share', 'accept', 'escalate']
+
+export function strategiesForRiskType(riskType: RmRiskType): RmResponseStrategy[] {
+  return riskType === 'threat' ? RM_THREAT_STRATEGIES : RM_OPPORTUNITY_STRATEGIES
+}
 
 export const RM_RESPONSE_STRATEGY_LABEL_FA: Record<RmResponseStrategy, string> = {
-  avoid: 'اجتناب',
-  mitigate: 'کاهش',
-  transfer: 'انتقال',
-  accept: 'پذیرش',
-  exploit: 'بهره‌برداری (فرصت)',
+  avoid: 'اجتناب (Avoid)',
+  mitigate: 'کاهش (Mitigate)',
+  transfer: 'انتقال (Transfer)',
+  accept: 'پذیرش (Accept)',
+  escalate: 'تشدید (Escalate)',
+  exploit: 'بهره‌برداری (Exploit)',
+  enhance: 'تقویت (Enhance)',
+  share: 'اشتراک‌گذاری (Share)',
+}
+
+export const RM_RESPONSE_STRATEGY_DESCRIPTION_FA: Record<RmResponseStrategy, string> = {
+  avoid: 'حذف تهدید با تغییر برنامه، محدوده، مسیر، طراحی یا روش اجرا',
+  mitigate: 'کاهش احتمال و/یا شدت پیامد',
+  transfer: 'انتقال مالکیت یا اثر مالی به شخص ثالث (بیمه، قرارداد، ضمانت‌نامه، پیمانکاری فرعی)',
+  accept: 'پذیرش آگاهانه ریسک بدون اقدام پیشگیرانه، با برنامه اقتضایی اختیاری',
+  escalate: 'ارجاع ریسک به سطح بالاتر سازمانی، خارج از اختیار یا کنترل سطح فعلی پروژه',
+  exploit: 'اقدام برای تضمین وقوع فرصت',
+  enhance: 'افزایش احتمال و/یا پیامد مثبت',
+  share: 'تخصیص مالکیت فرصت به یک شریک یا شخص ثالث که بهتر می‌تواند از آن بهره‌برداری کند',
 }
 
 export type RmProjectPhase = 'engineering' | 'procurement' | 'construction' | 'commissioning'
@@ -125,6 +148,37 @@ export const RM_TREND_COLOR: Record<RmTrend, string> = {
   worsening: '#e74c3c',
 }
 
+/** Three-tier organizational routing for Escalation Management (spec #15) — not simply a status. */
+export type RmEscalationLevel = 'project_team' | 'project_manager' | 'management'
+
+export const RM_ESCALATION_LEVELS: RmEscalationLevel[] = ['project_team', 'project_manager', 'management']
+
+export const RM_ESCALATION_LEVEL_LABEL_FA: Record<RmEscalationLevel, string> = {
+  project_team: 'تیم پروژه',
+  project_manager: 'مدیر پروژه',
+  management: 'مدیریت / کمیته راهبری',
+}
+
+export const RM_ESCALATION_LEVEL_COLOR: Record<RmEscalationLevel, string> = {
+  project_team: '#2ecc71',
+  project_manager: '#f97316',
+  management: '#e74c3c',
+}
+
+export type RmEscalationStatus = 'none' | 'recommended' | 'escalated' | 'decided'
+
+export const RM_ESCALATION_STATUSES: RmEscalationStatus[] = ['none', 'recommended', 'escalated', 'decided']
+
+export const RM_ESCALATION_STATUS_LABEL_FA: Record<RmEscalationStatus, string> = {
+  none: 'بدون تشدید',
+  recommended: 'پیشنهاد تشدید',
+  escalated: 'تشدیدشده',
+  decided: 'تصمیم‌گیری‌شده',
+}
+
+/** Flexible key/value bag — shape depends on riskType + responseStrategy (spec #6). See lib/strategyFields.ts. */
+export type RmStrategyDetails = Record<string, string>
+
 export interface RmRisk {
   id: string
   projectId: string
@@ -137,11 +191,23 @@ export interface RmRisk {
   identifiedDate: string
   status: RmRiskStatus
   responseStrategy: RmResponseStrategy
+  strategyDetails: RmStrategyDetails
   projectPhase: RmProjectPhase | null
   timeToImpactDays: number | null
   initialProbability: number
   initialImpact: number
   initialScore: number
+
+  // Escalation Management (spec #15-16) — independent of responseStrategy/status.
+  escalationLevel: RmEscalationLevel | null
+  escalatedTo: string
+  escalationReason: string
+  escalationDate: string | null
+  requiredDecision: string
+  escalationDecision: string
+  escalationDecisionDate: string | null
+  escalationStatus: RmEscalationStatus
+
   createdBy: string | null
   createdAt: string
   updatedAt: string
@@ -159,6 +225,8 @@ export interface RmRiskAssessment {
   residualScore: number
   trend: RmTrend
   reviewerComment: string
+  /** Snapshot of the risk's response strategy at review time (spec #11). */
+  responseStrategy: RmResponseStrategy | null
   createdBy: string | null
   createdAt: string
 }

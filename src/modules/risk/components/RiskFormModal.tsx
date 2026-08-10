@@ -8,14 +8,17 @@ import {
   RM_CATEGORY_LABEL_FA,
   RM_PROJECT_PHASES,
   RM_PROJECT_PHASE_LABEL_FA,
-  RM_RESPONSE_STRATEGIES,
   RM_RESPONSE_STRATEGY_LABEL_FA,
+  RM_RESPONSE_STRATEGY_DESCRIPTION_FA,
   RM_RISK_TYPE_LABEL_FA,
+  strategiesForRiskType,
   type RmProjectPhase,
   type RmResponseStrategy,
   type RmRiskCategory,
   type RmRiskType,
+  type RmStrategyDetails,
 } from '../types'
+import { STRATEGY_FIELDS } from '../lib/strategyFields'
 import { riskLevel, riskScore, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 
 export function RiskFormModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
@@ -30,6 +33,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
   const [probability, setProbability] = useState(3)
   const [impact, setImpact] = useState(3)
   const [responseStrategy, setResponseStrategy] = useState<RmResponseStrategy>('mitigate')
+  const [strategyDetails, setStrategyDetails] = useState<RmStrategyDetails>({})
   const [projectPhase, setProjectPhase] = useState<RmProjectPhase | ''>('')
   const [timeToImpactDays, setTimeToImpactDays] = useState('')
   const [identifiedDate, setIdentifiedDate] = useState(new Date().toISOString().slice(0, 10))
@@ -39,6 +43,29 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
 
   const score = riskScore(probability, impact)
   const level = riskLevel(score)
+  const strategyOptions = strategiesForRiskType(riskType)
+  const strategyFields = STRATEGY_FIELDS[responseStrategy]
+  const isDirty =
+    title.trim() !== '' ||
+    description.trim() !== '' ||
+    mitigationAction.trim() !== '' ||
+    ownerId !== '' ||
+    timeToImpactDays !== '' ||
+    Object.values(strategyDetails).some((v) => v.trim() !== '')
+
+  const changeRiskType = (t: RmRiskType) => {
+    setRiskType(t)
+    const options = strategiesForRiskType(t)
+    if (!options.includes(responseStrategy)) {
+      setResponseStrategy(options[0])
+      setStrategyDetails({})
+    }
+  }
+
+  const changeStrategy = (s: RmResponseStrategy) => {
+    setResponseStrategy(s)
+    setStrategyDetails({})
+  }
 
   const submit = async () => {
     if (!title.trim()) {
@@ -56,6 +83,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
         probability,
         impact,
         responseStrategy,
+        strategyDetails,
         projectPhase: projectPhase || null,
         timeToImpactDays: timeToImpactDays ? parseInt(timeToImpactDays, 10) : null,
         mitigationAction: mitigationAction.trim(),
@@ -67,7 +95,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
   }
 
   return (
-    <Modal title="ثبت ریسک جدید" subtitle="اطلاعات را وارد کنید — امتیاز و سطح ریسک به‌صورت خودکار محاسبه می‌شود" onClose={onClose} width="max-w-2xl">
+    <Modal title="ثبت ریسک جدید" subtitle="اطلاعات را وارد کنید — امتیاز و سطح ریسک به‌صورت خودکار محاسبه می‌شود" onClose={onClose} width="max-w-2xl" isDirty={isDirty}>
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">عنوان ریسک</span>
@@ -91,7 +119,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">نوع</span>
-            <select value={riskType} onChange={(e) => setRiskType(e.target.value as RmRiskType)} className="input">
+            <select value={riskType} onChange={(e) => changeRiskType(e.target.value as RmRiskType)} className="input">
               {(['threat', 'opportunity'] as RmRiskType[]).map((t) => (
                 <option key={t} value={t}>
                   {RM_RISK_TYPE_LABEL_FA[t]}
@@ -151,9 +179,9 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">استراتژی پاسخ</span>
-            <select value={responseStrategy} onChange={(e) => setResponseStrategy(e.target.value as RmResponseStrategy)} className="input">
-              {RM_RESPONSE_STRATEGIES.map((r) => (
+            <span className="mb-1 block text-xs text-secondary">استراتژی پاسخ — بر اساس نوع «{RM_RISK_TYPE_LABEL_FA[riskType]}»</span>
+            <select value={responseStrategy} onChange={(e) => changeStrategy(e.target.value as RmResponseStrategy)} className="input">
+              {strategyOptions.map((r) => (
                 <option key={r} value={r}>
                   {RM_RESPONSE_STRATEGY_LABEL_FA[r]}
                 </option>
@@ -173,6 +201,48 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           </label>
         </div>
 
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+          <p className="mb-2 text-[11px] leading-5 text-secondary">{RM_RESPONSE_STRATEGY_DESCRIPTION_FA[responseStrategy]}</p>
+          <div className="space-y-2.5">
+            {strategyFields.map((f) => (
+              <label key={f.key} className="block">
+                <span className="mb-1 block text-[11px] text-secondary">{f.label}</span>
+                {f.type === 'textarea' ? (
+                  <textarea
+                    value={strategyDetails[f.key] ?? ''}
+                    onChange={(e) => setStrategyDetails((d) => ({ ...d, [f.key]: e.target.value }))}
+                    rows={2}
+                    className="input resize-none text-xs"
+                    placeholder={f.placeholder}
+                  />
+                ) : f.type === 'select' ? (
+                  <select
+                    value={strategyDetails[f.key] ?? ''}
+                    onChange={(e) => setStrategyDetails((d) => ({ ...d, [f.key]: e.target.value }))}
+                    className="input !h-auto !py-1.5 text-xs"
+                  >
+                    <option value="">تعیین‌نشده</option>
+                    {f.options?.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : f.type === 'date' ? (
+                  <JalaliDateInput value={strategyDetails[f.key] ?? ''} onChange={(v) => setStrategyDetails((d) => ({ ...d, [f.key]: v }))} />
+                ) : (
+                  <input
+                    value={strategyDetails[f.key] ?? ''}
+                    onChange={(e) => setStrategyDetails((d) => ({ ...d, [f.key]: e.target.value }))}
+                    className="input text-xs"
+                    placeholder={f.placeholder}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">زمان تا وقوع پیامد (روز) — برای پروژه‌های Fast-track</span>
           <input
@@ -186,13 +256,13 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">اقدام کنترلی اولیه (اختیاری)</span>
+          <span className="mb-1 block text-xs text-secondary">اولین اقدام پاسخ (اختیاری) — یک فعالیت مشخص، نه توضیح استراتژی</span>
           <textarea
             value={mitigationAction}
             onChange={(e) => setMitigationAction(e.target.value)}
             rows={2}
             className="input resize-none"
-            placeholder="اولین اقدام برنامه‌ریزی‌شده برای این ریسک..."
+            placeholder="مثلاً «تسریع تولید فروشنده» یا «تایید تامین‌کننده جایگزین»..."
           />
         </label>
 
