@@ -4,6 +4,16 @@ import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { RmProject, RmProjectPhase, RmProjectStatus, RmRisk, RmRiskAction, RmRiskAssessment, RmRiskHistoryEntry, RmStrategyDetails, RmUserRole } from '../types'
 import {
+  RM_CATEGORY_LABEL_FA,
+  RM_ESCALATION_LEVEL_LABEL_FA,
+  RM_ESCALATION_STATUS_LABEL_FA,
+  RM_PROJECT_PHASE_LABEL_FA,
+  RM_RESPONSE_STRATEGY_LABEL_FA,
+  RM_RISK_STATUS_LABEL_FA,
+  RM_RISK_TYPE_LABEL_FA,
+  RM_ACTION_STATUS_LABEL_FA,
+} from '../types'
+import {
   rmActionFromRow,
   rmActionToRow,
   rmAssessmentFromRow,
@@ -22,6 +32,100 @@ function reportError(action: string, error: { message: string } | null): boolean
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
   return true
+}
+
+const RISK_FIELD_LABEL_FA: Partial<Record<keyof RmRisk, string>> = {
+  title: 'عنوان',
+  description: 'توضیحات',
+  category: 'دسته‌بندی',
+  riskType: 'نوع',
+  ownerId: 'مالک ریسک',
+  identifiedDate: 'تاریخ شناسایی',
+  status: 'وضعیت',
+  responseStrategy: 'استراتژی پاسخ',
+  strategyDetails: 'جزئیات استراتژی پاسخ',
+  projectPhase: 'فاز پروژه',
+  timeToImpactDays: 'زمان تا وقوع (روز)',
+  escalationLevel: 'سطح ارجاع',
+  escalatedTo: 'ارجاع به',
+  escalationReason: 'دلیل ارجاع',
+  escalationDate: 'تاریخ ارجاع',
+  requiredDecision: 'تصمیم موردنیاز',
+  escalationDecision: 'تصمیم نهایی',
+  escalationDecisionDate: 'تاریخ تصمیم',
+  escalationStatus: 'وضعیت ارجاع',
+}
+
+const RISK_FIELD_ENUM_LABEL_FA: Partial<Record<keyof RmRisk, Record<string, string>>> = {
+  category: RM_CATEGORY_LABEL_FA,
+  riskType: RM_RISK_TYPE_LABEL_FA,
+  status: RM_RISK_STATUS_LABEL_FA,
+  responseStrategy: RM_RESPONSE_STRATEGY_LABEL_FA,
+  projectPhase: RM_PROJECT_PHASE_LABEL_FA,
+  escalationLevel: RM_ESCALATION_LEVEL_LABEL_FA,
+  escalationStatus: RM_ESCALATION_STATUS_LABEL_FA,
+}
+
+function formatFieldValue<T extends Record<string, unknown>>(enumMap: Partial<Record<keyof T, Record<string, string>>>, key: keyof T, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—'
+  const labels = enumMap[key]
+  if (labels && typeof value === 'string' && labels[value]) return labels[value]
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+/** Field-level audit trail (spec §35) — one rm_risk_history row per changed field, human-readable in the existing comment log. */
+function buildRiskFieldChangeRows(riskId: string, userId: string | null, before: RmRisk, after: Partial<RmRisk>) {
+  const rows: Record<string, unknown>[] = []
+  for (const key of Object.keys(after) as (keyof RmRisk)[]) {
+    const label = RISK_FIELD_LABEL_FA[key]
+    if (!label) continue
+    const prev = before[key]
+    const next = after[key]
+    const changed = key === 'strategyDetails' ? JSON.stringify(prev ?? {}) !== JSON.stringify(next ?? {}) : prev !== next
+    if (!changed) continue
+    rows.push({
+      risk_id: riskId,
+      user_id: userId,
+      activity: 'field_changed',
+      previous_value: prev ?? null,
+      new_value: next ?? null,
+      comment: `${label}: «${formatFieldValue(RISK_FIELD_ENUM_LABEL_FA, key, prev)}» → «${formatFieldValue(RISK_FIELD_ENUM_LABEL_FA, key, next)}»`,
+    })
+  }
+  return rows
+}
+
+const ACTION_FIELD_LABEL_FA: Partial<Record<keyof RmRiskAction, string>> = {
+  description: 'شرح اقدام',
+  ownerId: 'مسئول اقدام',
+  dueDate: 'سررسید',
+  status: 'وضعیت اقدام',
+  completionPercentage: 'درصد پیشرفت',
+}
+
+const ACTION_FIELD_ENUM_LABEL_FA: Partial<Record<keyof RmRiskAction, Record<string, string>>> = {
+  status: RM_ACTION_STATUS_LABEL_FA,
+}
+
+function buildActionFieldChangeRows(riskId: string, userId: string | null, before: RmRiskAction, after: Partial<RmRiskAction>) {
+  const rows: Record<string, unknown>[] = []
+  for (const key of Object.keys(after) as (keyof RmRiskAction)[]) {
+    const label = ACTION_FIELD_LABEL_FA[key]
+    if (!label) continue
+    const prev = before[key]
+    const next = after[key]
+    if (prev === next) continue
+    rows.push({
+      risk_id: riskId,
+      user_id: userId,
+      activity: 'action_field_changed',
+      previous_value: prev ?? null,
+      new_value: next ?? null,
+      comment: `اقدام «${before.description}» — ${label}: «${formatFieldValue(ACTION_FIELD_ENUM_LABEL_FA, key, prev)}» → «${formatFieldValue(ACTION_FIELD_ENUM_LABEL_FA, key, next)}»`,
+    })
+  }
+  return rows
 }
 
 export interface RmProjectDetail extends RmProject {
@@ -207,14 +311,31 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
   updateRisk: async (riskId, data) => {
     const detail = get().projectDetail
     if (!detail) return
+    const before = detail.risks.find((r) => r.id === riskId)
     const row = rmRiskToRow(detail.id, data)
     delete row.project_id
     row.updated_at = new Date().toISOString()
     const { error } = await supabase.from('rm_risks').update(row).eq('id', riskId)
     if (reportError('ویرایش ریسک', error)) return
+
+    let newHistoryEntries: RmRiskHistoryEntry[] = []
+    if (before) {
+      const changeRows = buildRiskFieldChangeRows(riskId, useAuthStore.getState().profile?.id ?? null, before, data)
+      if (changeRows.length > 0) {
+        const { data: inserted } = await supabase.from('rm_risk_history').insert(changeRows).select()
+        newHistoryEntries = ((inserted ?? []) as RmRiskHistoryRow[]).map(rmHistoryFromRow)
+      }
+    }
+
     set((s) =>
       s.projectDetail
-        ? { projectDetail: { ...s.projectDetail, risks: s.projectDetail.risks.map((r) => (r.id === riskId ? { ...r, ...data } : r)) } }
+        ? {
+            projectDetail: {
+              ...s.projectDetail,
+              risks: s.projectDetail.risks.map((r) => (r.id === riskId ? { ...r, ...data } : r)),
+              history: [...newHistoryEntries, ...s.projectDetail.history],
+            },
+          }
         : {},
     )
   },
@@ -279,14 +400,32 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
   },
 
   updateAction: async (actionId, data) => {
+    const detail = get().projectDetail
+    const before = detail?.actions.find((a) => a.id === actionId)
     const row = rmActionToRow('', data)
     delete row.risk_id
     row.updated_at = new Date().toISOString()
     const { error } = await supabase.from('rm_risk_actions').update(row).eq('id', actionId)
     if (reportError('ویرایش اقدام', error)) return
+
+    let newHistoryEntries: RmRiskHistoryEntry[] = []
+    if (before) {
+      const changeRows = buildActionFieldChangeRows(before.riskId, useAuthStore.getState().profile?.id ?? null, before, data)
+      if (changeRows.length > 0) {
+        const { data: inserted } = await supabase.from('rm_risk_history').insert(changeRows).select()
+        newHistoryEntries = ((inserted ?? []) as RmRiskHistoryRow[]).map(rmHistoryFromRow)
+      }
+    }
+
     set((s) =>
       s.projectDetail
-        ? { projectDetail: { ...s.projectDetail, actions: s.projectDetail.actions.map((a) => (a.id === actionId ? { ...a, ...data } : a)) } }
+        ? {
+            projectDetail: {
+              ...s.projectDetail,
+              actions: s.projectDetail.actions.map((a) => (a.id === actionId ? { ...a, ...data } : a)),
+              history: [...newHistoryEntries, ...s.projectDetail.history],
+            },
+          }
         : {},
     )
   },

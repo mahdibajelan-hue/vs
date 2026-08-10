@@ -31,6 +31,7 @@ import {
   type RmTrend,
 } from '../types'
 import { STRATEGY_FIELDS } from '../lib/strategyFields'
+import { riskInsightBullets } from '../lib/riskIntelligence'
 import {
   currentState,
   isActionOverdue,
@@ -160,7 +161,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
 
         <EscalationSection risk={risk} canManage={canManage} escalationRequired={escalation} onDirtyChange={setEscalationFormDirty} />
 
-        <AssessmentSection risk={risk} assessments={assessments} canManage={canManage} onDirtyChange={setAssessmentFormDirty} />
+        <AssessmentSection risk={risk} assessments={assessments} actions={actions} canManage={canManage} onDirtyChange={setAssessmentFormDirty} />
         <ActionsSection riskId={risk.id} actions={actions} canEdit={canEdit} ownerId={risk.ownerId} onDirtyChange={setActionFormDirty} />
         <HistorySection riskId={risk.id} history={history} canEdit={canEdit} />
 
@@ -234,11 +235,13 @@ function ScoreSparkline({ data }: { data: { date: string; score: number; residua
 function AssessmentSection({
   risk,
   assessments,
+  actions,
   canManage,
   onDirtyChange,
 }: {
   risk: RmRisk
   assessments: RmProjectDetail['assessments']
+  actions: RmProjectDetail['actions']
   canManage: boolean
   onDirtyChange: (dirty: boolean) => void
 }) {
@@ -280,6 +283,7 @@ function AssessmentSection({
     }
   }
 
+  const assistantBullets = riskInsightBullets(risk, assessments, actions)
   const visible = showAll ? assessments : assessments.slice(0, 2)
 
   return (
@@ -303,6 +307,16 @@ function AssessmentSection({
 
       {showForm && (
         <div className="mb-3 space-y-2.5 rounded-lg bg-white/[0.03] p-3">
+          {assistantBullets.length > 0 && (
+            <div className="rounded-lg border border-blue-400/20 bg-blue-500/5 p-2.5">
+              <p className="mb-1 text-[10px] font-bold text-blue-300">دستیار بازبینی — قبل از ثبت این‌ها را بررسی کنید</p>
+              <ul className="space-y-0.5 text-[10px] leading-5 text-secondary">
+                {assistantBullets.map((b, i) => (
+                  <li key={i}>• {b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <label className="block w-1/2">
             <span className="mb-1 block text-[10px] text-secondary">تاریخ بازبینی</span>
             <JalaliDateInput value={reviewDate} onChange={setReviewDate} />
@@ -841,7 +855,19 @@ function HistorySection({ riskId, history, canEdit }: { riskId: string; history:
           {history.map((h) => (
             <div key={h.id} className="rounded-lg bg-white/[0.02] px-3 py-2 text-[11px]">
               <div className="flex items-center justify-between text-[10px] text-muted">
-                <span>{h.activity === 'comment' ? 'نظر' : h.activity === 'assessment_added' ? 'بازبینی' : h.activity === 'risk_created' ? 'ایجاد ریسک' : h.activity}</span>
+                <span>
+                  {h.activity === 'comment'
+                    ? 'نظر'
+                    : h.activity === 'assessment_added'
+                      ? 'بازبینی'
+                      : h.activity === 'risk_created'
+                        ? 'ایجاد ریسک'
+                        : h.activity === 'field_changed'
+                          ? 'ویرایش ریسک'
+                          : h.activity === 'action_field_changed'
+                            ? 'ویرایش اقدام'
+                            : h.activity}
+                </span>
                 <span className="num">{formatJalali(h.createdAt.slice(0, 10))}</span>
               </div>
               {h.comment && <p className="mt-0.5 text-secondary">{h.comment}</p>}

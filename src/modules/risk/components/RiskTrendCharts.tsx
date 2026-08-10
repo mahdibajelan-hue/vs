@@ -102,3 +102,18 @@ export function StatusDistributionChart({ data }: { data: Record<RmRiskStatus, n
     </ResponsiveContainer>
   )
 }
+
+export function WeeklyIdentificationChart({ data }: { data: { weekStart: string; count: number }[] }) {
+  if (data.length < 2) return <EmptyState />
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 10, right: 16, left: -16, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
+        <XAxis dataKey="weekStart" tickFormatter={formatJalali} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} />
+        <Tooltip labelFormatter={(l) => (typeof l === 'string' ? formatJalali(l) : l)} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(148,163,184,0.06)' }} />
+        <Bar dataKey="count" name="ریسک شناسایی‌شده" fill="#e74c3c" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}

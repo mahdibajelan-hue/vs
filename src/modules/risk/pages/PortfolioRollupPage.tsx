@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronLeft, Folders, Layers, Loader2, Milestone } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Copy, Folders, Layers, Loader2, Milestone, TrendingUp } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { RM_CATEGORY_LABEL_FA } from '../types'
+import { detectCrossProjectDuplicates, detectPortfolioPatterns } from '../lib/riskIntelligence'
 import {
   buildPortfolioTree,
   fetchRiskBundlesForProjects,
@@ -9,6 +11,7 @@ import {
   type PortfolioRollup,
   type ProgramRollup,
   type ProjectRiskSummary,
+  type RiskBundle,
   type RollupTotals,
 } from '../lib/portfolioRollup'
 
@@ -22,6 +25,7 @@ export function PortfolioRollupPage({ onOpenProject }: { onOpenProject: (rmProje
 
   const [riskLoading, setRiskLoading] = useState(true)
   const [projectSummaries, setProjectSummaries] = useState<ProjectRiskSummary[]>([])
+  const [bundles, setBundles] = useState<Map<string, RiskBundle>>(new Map())
 
   useEffect(() => {
     if (!masterDataLoaded && !masterDataLoading) fetchMasterData()
@@ -38,13 +42,14 @@ export function PortfolioRollupPage({ onOpenProject }: { onOpenProject: (rmProje
     ;(async () => {
       const mappings = await fetchRiskProjectMappings()
       const rmProjectIds = masterProjects.map((mp) => mappings.get(mp.id)).filter((id): id is string => !!id)
-      const bundles = await fetchRiskBundlesForProjects(rmProjectIds)
+      const riskBundles = await fetchRiskBundlesForProjects(rmProjectIds)
       const summaries = masterProjects.map((mp) => {
         const rmProjectId = mappings.get(mp.id) ?? null
-        return summarizeProjectRisk(mp, rmProjectId, rmProjectId ? bundles.get(rmProjectId) : undefined)
+        return summarizeProjectRisk(mp, rmProjectId, rmProjectId ? riskBundles.get(rmProjectId) : undefined)
       })
       if (!cancelled) {
         setProjectSummaries(summaries)
+        setBundles(riskBundles)
         setRiskLoading(false)
       }
     })()
@@ -82,7 +87,7 @@ export function PortfolioRollupPage({ onOpenProject }: { onOpenProject: (rmProje
         ) : (
           <div className="space-y-3">
             {tree.map((rollup) => (
-              <PortfolioCard key={rollup.portfolio.id} rollup={rollup} onOpenProject={onOpenProject} />
+              <PortfolioCard key={rollup.portfolio.id} rollup={rollup} bundles={bundles} onOpenProject={onOpenProject} />
             ))}
           </div>
         )}
@@ -114,8 +119,19 @@ function Badge({ label, value, color }: { label: string; value: string | number;
   )
 }
 
-function PortfolioCard({ rollup, onOpenProject }: { rollup: PortfolioRollup; onOpenProject: (rmProjectId: string) => void }) {
+function PortfolioCard({ rollup, bundles, onOpenProject }: { rollup: PortfolioRollup; bundles: Map<string, RiskBundle>; onOpenProject: (rmProjectId: string) => void }) {
   const [open, setOpen] = useState(false)
+  const allProjects = useMemo(() => [...rollup.programs.flatMap((p) => p.projects), ...rollup.directProjects], [rollup])
+  const groups = useMemo(
+    () =>
+      allProjects
+        .filter((p) => p.rmProjectId !== null)
+        .map((p) => ({ projectName: p.projectName, risks: bundles.get(p.rmProjectId as string)?.risks ?? [], assessments: bundles.get(p.rmProjectId as string)?.assessments ?? [] })),
+    [allProjects, bundles],
+  )
+  const patterns = useMemo(() => (open ? detectPortfolioPatterns(groups) : []), [open, groups])
+  const duplicates = useMemo(() => (open ? detectCrossProjectDuplicates(groups) : []), [open, groups])
+
   return (
     <div className="glass-panel rounded-2xl p-4">
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-right">
@@ -145,6 +161,37 @@ function PortfolioCard({ rollup, onOpenProject }: { rollup: PortfolioRollup; onO
             </div>
           )}
           {rollup.programs.length === 0 && rollup.directProjects.length === 0 && <p className="text-[11px] text-muted">پروژه‌ای در این پورتفولیو تعریف نشده است</p>}
+
+          {patterns.length > 0 && (
+            <div className="rounded-xl bg-white/[0.02] p-3">
+              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
+                <TrendingUp size={12} className="text-orange-400" /> الگوهای تکرارشونده در این پورتفولیو
+              </p>
+              <div className="space-y-1">
+                {patterns.map((p) => (
+                  <p key={p.category} className="text-[11px] text-secondary">
+                    دسته «{RM_CATEGORY_LABEL_FA[p.category]}» در {p.projectCount} از {p.totalProjects} پروژه ریسک فعال دارد
+                    {p.criticalHighCount > 0 && ` — ${p.criticalHighCount} مورد بحرانی/زیاد`}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {duplicates.length > 0 && (
+            <div className="rounded-xl bg-white/[0.02] p-3">
+              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
+                <Copy size={12} className="text-orange-400" /> ریسک‌های مشابه بین پروژه‌های این پورتفولیو
+              </p>
+              <div className="space-y-1">
+                {duplicates.map((d, i) => (
+                  <p key={i} className="text-[11px] text-secondary">
+                    «{d.riskA.title}» ({d.projectNameA}) ↔ «{d.riskB.title}» ({d.projectNameB}) — {Math.round(d.similarity * 100)}٪ شباهت
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

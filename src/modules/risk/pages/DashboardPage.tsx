@@ -6,6 +6,7 @@ import { RM_PROJECT_PHASES, RM_PROJECT_PHASE_LABEL_FA, type RmProjectPhase } fro
 import { formatJalali } from '../../../lib/jalali'
 import { currentState, isActionOverdue, todayIso, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 import {
+  computeAvgTimeToClose,
   computeCategoryDistribution,
   computeCriticalHighAttention,
   computeExposureKpi,
@@ -16,14 +17,16 @@ import {
   computeResponseCompletion,
   computeRiskMaturityIndex,
   computeStatusCounts,
-  computeTimeToImpactRisks,
+  computeTimeToImpactBuckets,
   computeTopRisks,
+  computeWeeklyIdentificationRate,
+  type TimeToImpactRisk,
 } from '../lib/riskAnalytics'
 import { exportElementToPdf } from '../../../lib/export'
 import { KpiTile } from '../components/KpiTile'
 import { RiskHeatMap } from '../components/RiskHeatMap'
 import { TopRisksTable } from '../components/TopRisksTable'
-import { CategoryDistributionChart, CriticalTrendChart, ExposureTrendChart, PhaseDistributionChart, StatusDistributionChart } from '../components/RiskTrendCharts'
+import { CategoryDistributionChart, CriticalTrendChart, ExposureTrendChart, PhaseDistributionChart, StatusDistributionChart, WeeklyIdentificationChart } from '../components/RiskTrendCharts'
 import { ClosureRateGauge, RiskLevelDonut } from '../components/RiskKpiCharts'
 import { RiskDetailModal } from '../components/RiskDetailModal'
 
@@ -49,7 +52,9 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
   const categoryDist = useMemo(() => computeCategoryDistribution(risks), [risks])
   const phaseDist = useMemo(() => computePhaseDistribution(risks), [risks])
   const topRisks = useMemo(() => computeTopRisks(risks, assessments, actions), [risks, assessments, actions])
-  const timeToImpact = useMemo(() => computeTimeToImpactRisks(risks), [risks])
+  const timeToImpactBuckets = useMemo(() => computeTimeToImpactBuckets(risks), [risks])
+  const avgTimeToClose = useMemo(() => computeAvgTimeToClose(risks), [risks])
+  const weeklyIdentification = useMemo(() => computeWeeklyIdentificationRate(risks), [risks])
   const overdueActionRows = useMemo(() => {
     const today = todayIso()
     return actions
@@ -112,18 +117,16 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
         </div>
 
         <div ref={reportRef} className="space-y-4">
-        {timeToImpact.length > 0 && (
-          <div className="flex items-start gap-2.5 rounded-2xl border border-red-400/40 bg-red-500/10 p-3.5 text-xs text-red-200">
-            <Clock3 size={16} className="mt-0.5 shrink-0 text-red-400" />
-            <div>
-              <p className="font-bold">{timeToImpact.length} ریسک ظرف ۱۴ روز آینده اثر خود را بر پروژه خواهند گذاشت</p>
-              <p className="mt-1 leading-6 text-red-300/90">
-                {timeToImpact
-                  .slice(0, 4)
-                  .map((t) => `${t.risk.title} (${t.daysLeft} روز)`)
-                  .join(' — ')}
-                {timeToImpact.length > 4 && ` و ${timeToImpact.length - 4} مورد دیگر`}
-              </p>
+        {(timeToImpactBuckets.critical.length > 0 || timeToImpactBuckets.high.length > 0 || timeToImpactBuckets.watch.length > 0) && (
+          <div className="rounded-2xl border border-red-400/40 bg-red-500/10 p-3.5">
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold text-red-200">
+              <Clock3 size={16} className="text-red-400" />
+              زمان تا وقوع پیامد — دسته‌بندی‌شده
+            </div>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <TimeToImpactBucketCol label="بحرانی (۰ تا ۷ روز)" color="#e74c3c" items={timeToImpactBuckets.critical} onSelect={setSelectedRiskId} />
+              <TimeToImpactBucketCol label="زیاد (۸ تا ۱۴ روز)" color="#f97316" items={timeToImpactBuckets.high} onSelect={setSelectedRiskId} />
+              <TimeToImpactBucketCol label="مراقبت (۱۵ تا ۳۰ روز)" color="#f1c40f" items={timeToImpactBuckets.watch} onSelect={setSelectedRiskId} />
             </div>
           </div>
         )}
@@ -152,6 +155,12 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
             color="#06b6d4"
             tooltip="میانگین درصد پیشرفت همه اقدامات کنترلی ثبت‌شده در پروژه"
             status={responseCompletion >= 70 ? 'good' : responseCompletion >= 40 ? 'warn' : 'bad'}
+          />
+          <KpiTile
+            label="میانگین زمان بسته‌شدن"
+            value={avgTimeToClose !== null ? `${avgTimeToClose} روز` : '—'}
+            color="#94a3b8"
+            tooltip="میانگین فاصله زمانی بین شناسایی و بسته‌شدن ریسک، برای ریسک‌های بسته‌شده"
           />
         </div>
 
@@ -334,6 +343,9 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
           <ChartCard title="وضعیت ریسک‌ها">
             <StatusDistributionChart data={statusCounts} />
           </ChartCard>
+          <ChartCard title="نرخ شناسایی ریسک هفتگی">
+            <WeeklyIdentificationChart data={weeklyIdentification} />
+          </ChartCard>
         </div>
         </div>
       </div>
@@ -348,6 +360,29 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <div className="glass-panel rounded-2xl p-4 h-64 flex flex-col">
       <p className="mb-2 text-sm font-bold">{title}</p>
       <div className="flex-1 min-h-0">{children}</div>
+    </div>
+  )
+}
+
+function TimeToImpactBucketCol({ label, color, items, onSelect }: { label: string; color: string; items: TimeToImpactRisk[]; onSelect: (id: string) => void }) {
+  return (
+    <div className="rounded-xl bg-white/[0.03] p-2.5">
+      <p className="mb-1.5 flex items-center justify-between text-[11px] font-bold" style={{ color }}>
+        {label}
+        <span className="num">{items.length}</span>
+      </p>
+      {items.length === 0 ? (
+        <p className="text-[10px] text-muted">موردی نیست</p>
+      ) : (
+        <div className="space-y-1">
+          {items.map(({ risk, daysLeft }) => (
+            <button key={risk.id} onClick={() => onSelect(risk.id)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-right text-[10px] hover:bg-white/5 transition-colors">
+              <span className="truncate">{risk.title}</span>
+              <span className="num shrink-0 text-muted">{daysLeft} روز</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

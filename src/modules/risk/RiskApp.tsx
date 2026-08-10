@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
+import { ArrowRight, Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useRiskStore } from './store/useRiskStore'
@@ -8,8 +8,9 @@ import { ProjectListPage } from './pages/ProjectListPage'
 import { RiskRegisterPage } from './pages/RiskRegisterPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
+import { RiskIntelligencePage } from './pages/RiskIntelligencePage'
 
-type Tab = 'dashboard' | 'register' | 'portfolio'
+type Tab = 'dashboard' | 'register' | 'portfolio' | 'intelligence'
 
 export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -101,6 +102,14 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
               >
                 <ListChecks size={13} /> ثبت ریسک‌ها
               </button>
+              <button
+                onClick={() => setTab('intelligence')}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  tab === 'intelligence' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
+              >
+                <Brain size={13} /> هوش ریسک
+              </button>
             </>
           )}
           <button
@@ -143,6 +152,8 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
           )
         ) : tab === 'dashboard' ? (
           <DashboardPage project={projectDetail} />
+        ) : tab === 'intelligence' ? (
+          <RiskIntelligencePage project={projectDetail} />
         ) : (
           <RiskRegisterPage project={projectDetail} onChangeProject={() => useRiskStore.setState({ currentProjectId: null, projectDetail: null })} />
         )}

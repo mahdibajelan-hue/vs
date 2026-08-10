@@ -257,3 +257,49 @@ export function computeResponseCompletion(actions: RmRiskAction[]): number {
   if (actions.length === 0) return 0
   return Math.round(actions.reduce((sum, a) => sum + a.completionPercentage, 0) / actions.length)
 }
+
+export interface TimeToImpactBuckets {
+  critical: TimeToImpactRisk[]
+  high: TimeToImpactRisk[]
+  watch: TimeToImpactRisk[]
+}
+
+/** Replaces the single "within 14 days" banner with three severity bands: 0-7 / 8-14 / 15-30 days. */
+export function computeTimeToImpactBuckets(risks: RmRisk[]): TimeToImpactBuckets {
+  const all = risks
+    .filter((r) => r.status !== 'closed' && r.timeToImpactDays !== null && r.timeToImpactDays <= 30)
+    .map((risk) => ({ risk, daysLeft: risk.timeToImpactDays as number }))
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+  return {
+    critical: all.filter((x) => x.daysLeft <= 7),
+    high: all.filter((x) => x.daysLeft > 7 && x.daysLeft <= 14),
+    watch: all.filter((x) => x.daysLeft > 14 && x.daysLeft <= 30),
+  }
+}
+
+/** Average days from identification to closure, across every closed risk — null if none are closed yet. */
+export function computeAvgTimeToClose(risks: RmRisk[]): number | null {
+  const closed = risks.filter((r) => r.status === 'closed')
+  if (closed.length === 0) return null
+  const totalDays = closed.reduce((sum, r) => sum + Math.round((Date.parse(r.updatedAt.slice(0, 10)) - Date.parse(r.identifiedDate)) / 86400000), 0)
+  return Math.round(totalDays / closed.length)
+}
+
+export interface WeeklyIdentificationPoint {
+  weekStart: string
+  count: number
+}
+
+/** New risks identified per ISO week — surfaces whether risk identification is accelerating or slowing. */
+export function computeWeeklyIdentificationRate(risks: RmRisk[]): WeeklyIdentificationPoint[] {
+  const byWeek = new Map<string, number>()
+  for (const r of risks) {
+    const d = new Date(r.identifiedDate)
+    const day = d.getUTCDay()
+    const monday = new Date(d)
+    monday.setUTCDate(d.getUTCDate() - ((day + 6) % 7))
+    const key = monday.toISOString().slice(0, 10)
+    byWeek.set(key, (byWeek.get(key) ?? 0) + 1)
+  }
+  return [...byWeek.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([weekStart, count]) => ({ weekStart, count }))
+}
