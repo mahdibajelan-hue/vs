@@ -11,7 +11,7 @@ export const RM_ROLE_LABEL_FA: Record<RmUserRole, string> = {
 }
 
 export const RM_ROLE_DESCRIPTION_FA: Record<RmUserRole, string> = {
-  project_manager: 'دسترسی کامل به ریسک‌های پروژه، تایید، تشدید و گزارش‌ها',
+  project_manager: 'دسترسی کامل به ریسک‌های پروژه، تایید، ارجاع به مقام بالاتر و گزارش‌ها',
   risk_manager: 'مدیریت ریسک‌ها، انجام بازبینی‌ها، پایش روند و تهیه گزارش',
   risk_owner: 'مشاهده ریسک‌های واگذارشده و به‌روزرسانی اقدامات کنترلی',
   team_member: 'ثبت ریسک، ارائه به‌روزرسانی و نظر',
@@ -77,7 +77,7 @@ export const RM_RISK_STATUSES: RmRiskStatus[] = ['open', 'monitoring', 'escalate
 export const RM_RISK_STATUS_LABEL_FA: Record<RmRiskStatus, string> = {
   open: 'باز',
   monitoring: 'در حال پایش',
-  escalated: 'تشدیدشده',
+  escalated: 'ارجاع‌شده به مقام بالاتر',
   closed: 'بسته‌شده',
 }
 
@@ -106,7 +106,7 @@ export const RM_RESPONSE_STRATEGY_LABEL_FA: Record<RmResponseStrategy, string> =
   mitigate: 'کاهش (Mitigate)',
   transfer: 'انتقال (Transfer)',
   accept: 'پذیرش (Accept)',
-  escalate: 'تشدید (Escalate)',
+  escalate: 'ارجاع به مقام بالاتر (Escalate)',
   exploit: 'بهره‌برداری (Exploit)',
   enhance: 'تقویت (Enhance)',
   share: 'اشتراک‌گذاری (Share)',
@@ -170,9 +170,9 @@ export type RmEscalationStatus = 'none' | 'recommended' | 'escalated' | 'decided
 export const RM_ESCALATION_STATUSES: RmEscalationStatus[] = ['none', 'recommended', 'escalated', 'decided']
 
 export const RM_ESCALATION_STATUS_LABEL_FA: Record<RmEscalationStatus, string> = {
-  none: 'بدون تشدید',
-  recommended: 'پیشنهاد تشدید',
-  escalated: 'تشدیدشده',
+  none: 'بدون ارجاع',
+  recommended: 'پیشنهاد ارجاع',
+  escalated: 'ارجاع‌شده به مقام بالاتر',
   decided: 'تصمیم‌گیری‌شده',
 }
 

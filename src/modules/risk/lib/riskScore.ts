@@ -5,7 +5,7 @@ export type RmLifecycleStage = 'identified' | 'monitoring' | 'escalating' | 'clo
 export const RM_LIFECYCLE_STAGE_LABEL_FA: Record<RmLifecycleStage, string> = {
   identified: 'شناسایی‌شده — در انتظار اولین بازبینی',
   monitoring: 'تحت پایش — بازبینی‌شده',
-  escalating: 'در فرآیند تشدید',
+  escalating: 'در فرآیند ارجاع به مقام بالاتر',
   closed: 'بسته‌شده',
 }
 

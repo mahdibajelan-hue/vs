@@ -85,10 +85,11 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => exportRiskProjectToExcel(project, members, `${project.name}-ثبت-ریسک.xlsx`)}
+              onClick={() => exportRiskProjectToExcel(project, members, `${project.name}-گزارش-ریسک.xlsx`)}
+              title="شامل سه گزارش: ثبت ریسک، پیگیری اقدامات، گزارش هفتگی"
               className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5 transition-colors"
             >
-              <FileSpreadsheet size={13} /> خروجی اکسل
+              <FileSpreadsheet size={13} /> خروجی اکسل (ثبت ریسک، پیگیری اقدامات، گزارش هفتگی)
             </button>
             {rmCanManage(role) && (
               <button

@@ -1412,8 +1412,12 @@ create table if not exists rasta_project_mappings (
 );
 
 alter table rasta_project_mappings enable row level security;
+-- Was admin-only; widened to any authenticated user (read-only linkage metadata, no sensitive
+-- data) so per-module three-level Portfolio/Program/Project rollups (e.g. Risk Management) can
+-- resolve their own project's master_project_id without needing admin access.
 drop policy if exists "rasta_project_mappings_select_admin" on rasta_project_mappings;
-create policy "rasta_project_mappings_select_admin" on rasta_project_mappings for select using (is_admin_user());
+drop policy if exists "rasta_project_mappings_select_authenticated" on rasta_project_mappings;
+create policy "rasta_project_mappings_select_authenticated" on rasta_project_mappings for select using (auth.uid() is not null);
 drop policy if exists "rasta_project_mappings_write_admin" on rasta_project_mappings;
 create policy "rasta_project_mappings_write_admin" on rasta_project_mappings for all using (is_admin_user()) with check (is_admin_user());
 

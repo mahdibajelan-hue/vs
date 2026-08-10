@@ -57,18 +57,18 @@ export const STRATEGY_FIELDS: Record<RmResponseStrategy, StrategyFieldDef[]> = {
     { key: 'targetResidualScore', label: 'امتیاز هدف باقیمانده پس از کاهش', type: 'text' },
   ],
   escalate: [
-    { key: 'escalationReason', label: 'دلیل تشدید', type: 'textarea' },
+    { key: 'escalationReason', label: 'دلیل ارجاع به مقام بالاتر', type: 'textarea' },
     {
       key: 'escalationLevel',
-      label: 'سطح تشدید',
+      label: 'سطح ارجاع',
       type: 'select',
       options: [
         { value: 'project_manager', label: 'مدیر پروژه' },
         { value: 'management', label: 'مدیریت / کمیته راهبری' },
       ],
     },
-    { key: 'escalatedTo', label: 'تشدید به (فرد/جایگاه مشخص)', type: 'text' },
-    { key: 'escalationDate', label: 'تاریخ تشدید', type: 'date' },
+    { key: 'escalatedTo', label: 'ارجاع به (فرد/جایگاه مشخص)', type: 'text' },
+    { key: 'escalationDate', label: 'تاریخ ارجاع', type: 'date' },
     { key: 'requiredDecision', label: 'تصمیم یا پشتیبانی موردنیاز', type: 'textarea' },
   ],
   exploit: [

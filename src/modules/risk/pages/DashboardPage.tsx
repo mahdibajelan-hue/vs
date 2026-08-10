@@ -4,14 +4,17 @@ import type { RmProjectDetail } from '../store/useRiskStore'
 import { useRiskMembersStore } from '../store/useRiskMembersStore'
 import { RM_PROJECT_PHASES, RM_PROJECT_PHASE_LABEL_FA, type RmProjectPhase } from '../types'
 import { formatJalali } from '../../../lib/jalali'
-import { currentState, isActionOverdue, todayIso } from '../lib/riskScore'
+import { currentState, isActionOverdue, todayIso, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 import {
   computeCategoryDistribution,
+  computeCriticalHighAttention,
   computeExposureKpi,
   computeExposureTimeline,
   computeLevelDistribution,
   computeManagementAttentionRisks,
   computePhaseDistribution,
+  computeResponseCompletion,
+  computeRiskMaturityIndex,
   computeStatusCounts,
   computeTimeToImpactRisks,
   computeTopRisks,
@@ -60,6 +63,9 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
       .sort((a, b) => b.daysOverdue - a.daysOverdue)
   }, [actions, risks, members])
   const overdueActions = overdueActionRows.length
+  const criticalHighAttention = useMemo(() => computeCriticalHighAttention(risks, assessments, actions), [risks, assessments, actions])
+  const maturity = useMemo(() => computeRiskMaturityIndex(risks, assessments, actions), [risks, assessments, actions])
+  const responseCompletion = useMemo(() => computeResponseCompletion(actions), [actions])
 
   const active = risks.filter((r) => r.status !== 'closed')
   const closureRate = risks.length > 0 ? Math.round((risks.filter((r) => r.status === 'closed').length / risks.length) * 100) : 0
@@ -122,11 +128,31 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KpiTile label="ریسک‌های فعال" value={active.length} color="#3498db" />
-          <KpiTile label="اقدامات عقب‌افتاده" value={overdueActions} color="#e74c3c" />
-          <KpiTile label="بسته‌شده" value={statusCounts.closed} color="#2ecc71" />
-          <KpiTile label="کل ثبت‌شده" value={risks.length} color="#94a3b8" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <KpiTile label="ریسک‌های فعال" value={active.length} color="#3498db" tooltip="تعداد ریسک‌های باز/در حال پایش/ارجاع‌شده — بسته‌شده‌ها حذف شده‌اند" />
+          <KpiTile
+            label="اقدامات عقب‌افتاده"
+            value={overdueActions}
+            color="#e74c3c"
+            tooltip="اقدامات کنترلی با سررسید گذشته که هنوز تکمیل نشده‌اند — هرچه کمتر بهتر"
+            status={overdueActions === 0 ? 'good' : overdueActions <= 2 ? 'warn' : 'bad'}
+          />
+          <KpiTile label="بسته‌شده" value={statusCounts.closed} color="#2ecc71" tooltip="ریسک‌های بسته‌شده از کل تاریخچه پروژه" />
+          <KpiTile label="کل ثبت‌شده" value={risks.length} color="#94a3b8" tooltip="کل ریسک‌های ثبت‌شده در پروژه (فعال + بسته‌شده)" />
+          <KpiTile
+            label="شاخص بلوغ مدیریت ریسک"
+            value={`${maturity.overall}%`}
+            color="#a855f7"
+            tooltip={`پوشش بازبینی: ${maturity.reviewCoverage}% — پوشش اقدام: ${maturity.actionCoverage}% — به‌موقع بودن: ${maturity.onTimeRate}% — تکمیل جزئیات استراتژی: ${maturity.strategyDetailCoverage}%`}
+            status={maturity.overall >= 70 ? 'good' : maturity.overall >= 40 ? 'warn' : 'bad'}
+          />
+          <KpiTile
+            label="تکمیل اقدامات پاسخ"
+            value={`${responseCompletion}%`}
+            color="#06b6d4"
+            tooltip="میانگین درصد پیشرفت همه اقدامات کنترلی ثبت‌شده در پروژه"
+            status={responseCompletion >= 70 ? 'good' : responseCompletion >= 40 ? 'warn' : 'bad'}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -197,6 +223,33 @@ export function DashboardPage({ project }: { project: RmProjectDetail }) {
                     ))}
                     <span className="num font-bold text-red-400">{score}</span>
                   </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {criticalHighAttention.length > 0 && (
+          <div className="glass-panel rounded-2xl p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <AlertOctagon size={16} className="text-red-400" />
+              <p className="text-sm font-bold">توصیه‌های مدیریتی برای ریسک‌های بحرانی و زیاد ({criticalHighAttention.length})</p>
+            </div>
+            <div className="space-y-2">
+              {criticalHighAttention.map(({ risk, score, level, recommendation }) => (
+                <button
+                  key={risk.id}
+                  onClick={() => setSelectedRiskId(risk.id)}
+                  className="flex w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-right text-xs hover:bg-white/5 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="num text-muted">{risk.code}</span>
+                    <span className="font-medium">{risk.title}</span>
+                    <span className="num shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[level]}22`, color: RISK_LEVEL_COLOR[level] }}>
+                      {score} — {RISK_LEVEL_LABEL_FA[level]}
+                    </span>
+                  </span>
+                  <span className="text-[11px] leading-5 text-secondary">{recommendation}</span>
                 </button>
               ))}
             </div>

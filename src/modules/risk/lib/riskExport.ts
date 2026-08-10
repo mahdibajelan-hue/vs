@@ -11,6 +11,7 @@ import {
   type RmRiskAction,
 } from '../types'
 import { currentState, isActionOverdue, latestAssessment, riskLevel, RISK_LEVEL_LABEL_FA, todayIso } from './riskScore'
+import { computeCriticalHighAttention } from './riskAnalytics'
 
 function memberName(members: RmProjectMember[], userId: string | null): string {
   if (!userId) return '-'
@@ -30,6 +31,7 @@ export async function exportRiskProjectToExcel(project: RmProjectDetail, members
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
   // 1. Full Risk Register
+  const attentionByRiskId = new Map(computeCriticalHighAttention(project.risks, project.assessments, project.actions, today).map((a) => [a.risk.id, a.recommendation]))
   const registerRows = [...project.risks]
     .sort((a, b) => b.initialScore - a.initialScore)
     .map((risk) => {
@@ -55,6 +57,7 @@ export async function exportRiskProjectToExcel(project: RmProjectDetail, members
         'وضعیت': RM_RISK_STATUS_LABEL_FA[risk.status],
         'تاریخ شناسایی': risk.identifiedDate,
         'زمان تا وقوع (روز)': risk.timeToImpactDays ?? '-',
+        'توصیه مدیریتی (بحرانی/زیاد)': attentionByRiskId.get(risk.id) ?? '-',
       }
     })
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(registerRows), 'ثبت ریسک')
@@ -92,7 +95,7 @@ export async function exportRiskProjectToExcel(project: RmProjectDetail, members
   pushSection('ریسک‌های بسته‌شده (۷ روز اخیر)')
   for (const r of closedRisks) weeklyRows.push({ 'دسته': '', 'کد ریسک': r.code, 'عنوان / شرح': r.title, 'جزئیات': '' })
 
-  pushSection('ریسک‌های تشدیدشده')
+  pushSection('ریسک‌های ارجاع‌شده به مقام بالاتر')
   for (const r of escalatedRisks) weeklyRows.push({ 'دسته': '', 'کد ریسک': r.code, 'عنوان / شرح': r.title, 'جزئیات': '' })
 
   pushSection('اقدامات عقب‌افتاده')

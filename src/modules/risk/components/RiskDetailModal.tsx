@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Line, LineChart, ResponsiveContainer } from 'recharts'
 import { Check, ChevronDown, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
@@ -51,9 +51,12 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
   const updateRisk = useRiskStore((s) => s.updateRisk)
   const deleteRisk = useRiskStore((s) => s.deleteRisk)
 
-  const assessments = project.assessments.filter((a) => a.riskId === risk.id).sort((a, b) => (a.reviewDate < b.reviewDate ? 1 : -1))
+  const assessments = project.assessments
+    .filter((a) => a.riskId === risk.id)
+    .sort((a, b) => (a.reviewDate !== b.reviewDate ? (a.reviewDate < b.reviewDate ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1))
   const actions = project.actions.filter((a) => a.riskId === risk.id)
   const history = project.history.filter((h) => h.riskId === risk.id)
+  const scoreChartData = [...assessments].reverse().map((a) => ({ date: a.reviewDate, score: a.currentScore, residual: a.residualScore }))
 
   const state = currentState(risk, assessments)
   const level = riskLevel(state.score)
@@ -147,6 +150,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           <ScorePill label="امتیاز اولیه" score={risk.initialScore} level={initialLevel} />
           <span className="text-muted">←</span>
           <ScorePill label="امتیاز فعلی" score={state.score} level={level} highlight />
+          {scoreChartData.length >= 2 && <ScoreSparkline data={scoreChartData} />}
           {risk.initialScore !== state.score && (
             <span className="mr-auto text-xs font-bold" style={{ color: state.score < risk.initialScore ? '#2ecc71' : '#e74c3c' }}>
               {state.score < risk.initialScore ? '↓' : '↑'} {Math.abs(Math.round(((risk.initialScore - state.score) / risk.initialScore) * 100))}%
@@ -213,6 +217,20 @@ function ScorePill({ label, score, level, highlight }: { label: string; score: n
   )
 }
 
+function ScoreSparkline({ data }: { data: { date: string; score: number; residual: number }[] }) {
+  return (
+    <div className="flex h-10 w-20 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+          <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.5} dot={false} strokeDasharray="3 2" isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+      <span className="text-[8px] text-muted">روند امتیاز</span>
+    </div>
+  )
+}
+
 function AssessmentSection({
   risk,
   assessments,
@@ -227,6 +245,7 @@ function AssessmentSection({
   const addAssessment = useRiskStore((s) => s.addAssessment)
   const [showForm, setShowForm] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  const [reviewDate, setReviewDate] = useState(todayIso())
   const [currentProbability, setCurrentProbability] = useState(3)
   const [currentImpact, setCurrentImpact] = useState(3)
   const [residualProbability, setResidualProbability] = useState(2)
@@ -244,6 +263,7 @@ function AssessmentSection({
     setBusy(true)
     try {
       await addAssessment(risk.id, {
+        reviewDate,
         currentProbability,
         currentImpact,
         residualProbability,
@@ -261,8 +281,6 @@ function AssessmentSection({
   }
 
   const visible = showAll ? assessments : assessments.slice(0, 2)
-  const chronological = [...assessments].sort((a, b) => (a.reviewDate < b.reviewDate ? -1 : 1))
-  const chartData = chronological.map((a) => ({ date: a.reviewDate, score: a.currentScore, residual: a.residualScore }))
 
   return (
     <div className="rounded-xl border border-white/10 p-3">
@@ -285,6 +303,10 @@ function AssessmentSection({
 
       {showForm && (
         <div className="mb-3 space-y-2.5 rounded-lg bg-white/[0.03] p-3">
+          <label className="block w-1/2">
+            <span className="mb-1 block text-[10px] text-secondary">تاریخ بازبینی</span>
+            <JalaliDateInput value={reviewDate} onChange={setReviewDate} />
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="mb-1 text-[10px] text-secondary">وضعیت فعلی</p>
@@ -331,22 +353,6 @@ function AssessmentSection({
         <p className="text-[11px] text-muted">هنوز بازبینی‌ای ثبت نشده است</p>
       ) : (
         <>
-          {chartData.length >= 2 && (
-            <div className="mb-3 h-24 rounded-lg bg-white/[0.02] p-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <YAxis hide domain={[0, 25]} />
-                  <Tooltip
-                    labelFormatter={(l) => (typeof l === 'string' ? formatJalali(l) : l)}
-                    contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
-                  />
-                  <Line type="monotone" dataKey="score" name="امتیاز فعلی" stroke="#e74c3c" strokeWidth={2} dot={{ r: 2.5 }} />
-                  <Line type="monotone" dataKey="residual" name="امتیاز باقیمانده" stroke="#2ecc71" strokeWidth={2} dot={{ r: 2.5 }} strokeDasharray="4 3" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
           <div className="space-y-2">
             {visible.map((a) => {
               const lv = riskLevel(a.currentScore)
@@ -489,7 +495,7 @@ function EscalationSection({
     <div className="rounded-xl border border-white/10 p-3">
       <div className="mb-2 flex items-center justify-between">
         <p className="flex items-center gap-1.5 text-xs font-bold">
-          <TriangleAlert size={13} /> مدیریت تشدید (Escalation)
+          <TriangleAlert size={13} /> مدیریت ارجاع به مقام بالاتر (Escalation)
         </p>
         <span className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: `${statusColor}22`, color: statusColor }}>
           {RM_ESCALATION_STATUS_LABEL_FA[risk.escalationStatus]}
@@ -499,16 +505,16 @@ function EscalationSection({
       {canManage && risk.escalationStatus === 'none' && (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.02] p-2.5">
           <p className="text-[11px] text-secondary">
-            {escalationRequired ? 'این ریسک بر اساس معیارهای توجه مدیریت، پیشنهاد تشدید دارد.' : 'در صورت نیاز، این ریسک را برای تصمیم‌گیری سطح بالاتر تشدید کنید.'}
+            {escalationRequired ? 'این ریسک بر اساس معیارهای توجه مدیریت، پیشنهاد ارجاع به مقام بالاتر دارد.' : 'در صورت نیاز، این ریسک را برای تصمیم‌گیری سطح بالاتر ارجاع دهید.'}
           </p>
           <div className="flex shrink-0 gap-2">
             {escalationRequired && (
               <button onClick={recommend} disabled={busy} className="rounded-lg bg-orange-500/20 px-2.5 py-1.5 text-[11px] font-medium text-orange-300 hover:bg-orange-500/30">
-                پیشنهاد تشدید
+                پیشنهاد ارجاع
               </button>
             )}
             <button onClick={openEditor} className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-red-400">
-              ثبت تشدید
+              ثبت ارجاع
             </button>
           </div>
         </div>
@@ -516,9 +522,9 @@ function EscalationSection({
 
       {canManage && risk.escalationStatus === 'recommended' && !editing && (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.02] p-2.5">
-          <p className="text-[11px] text-secondary">تشدید این ریسک پیشنهاد شده است — جزئیات را تکمیل کنید.</p>
+          <p className="text-[11px] text-secondary">ارجاع این ریسک به مقام بالاتر پیشنهاد شده است — جزئیات را تکمیل کنید.</p>
           <button onClick={openEditor} className="shrink-0 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-red-400">
-            تکمیل تشدید
+            تکمیل ارجاع
           </button>
         </div>
       )}
@@ -527,7 +533,7 @@ function EscalationSection({
         <div className="space-y-2.5 rounded-lg bg-white/[0.03] p-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1 block text-[10px] text-secondary">سطح تشدید</span>
+              <span className="mb-1 block text-[10px] text-secondary">سطح ارجاع</span>
               <select value={level} onChange={(e) => setLevel(e.target.value as RmEscalationLevel)} className="input !h-auto !py-1.5 text-xs">
                 {RM_ESCALATION_LEVELS.map((l) => (
                   <option key={l} value={l}>
@@ -537,17 +543,17 @@ function EscalationSection({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] text-secondary">تشدید به (فرد/جایگاه)</span>
+              <span className="mb-1 block text-[10px] text-secondary">ارجاع به (فرد/جایگاه)</span>
               <input value={escalatedTo} onChange={(e) => setEscalatedTo(e.target.value)} className="input text-xs" placeholder="مثلاً مدیر پروژه، کمیته راهبری..." />
             </label>
           </div>
           <label className="block">
-            <span className="mb-1 block text-[10px] text-secondary">دلیل تشدید</span>
+            <span className="mb-1 block text-[10px] text-secondary">دلیل ارجاع به مقام بالاتر</span>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="input resize-none text-xs" />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1 block text-[10px] text-secondary">تاریخ تشدید</span>
+              <span className="mb-1 block text-[10px] text-secondary">تاریخ ارجاع</span>
               <JalaliDateInput value={date} onChange={setDate} />
             </label>
           </div>
@@ -560,7 +566,7 @@ function EscalationSection({
               انصراف
             </button>
             <button onClick={submitEscalation} disabled={busy} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400 disabled:opacity-50">
-              ثبت تشدید
+              ثبت ارجاع
             </button>
           </div>
         </div>
@@ -569,9 +575,9 @@ function EscalationSection({
       {(risk.escalationStatus === 'escalated' || risk.escalationStatus === 'decided') && (
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-3 rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
-            <InfoTile label="سطح تشدید" value={risk.escalationLevel ? RM_ESCALATION_LEVEL_LABEL_FA[risk.escalationLevel] : '—'} />
-            <InfoTile label="تشدید به" value={risk.escalatedTo || '—'} />
-            <InfoTile label="تاریخ تشدید" value={risk.escalationDate ? formatJalali(risk.escalationDate) : '—'} />
+            <InfoTile label="سطح ارجاع" value={risk.escalationLevel ? RM_ESCALATION_LEVEL_LABEL_FA[risk.escalationLevel] : '—'} />
+            <InfoTile label="ارجاع به" value={risk.escalatedTo || '—'} />
+            <InfoTile label="تاریخ ارجاع" value={risk.escalationDate ? formatJalali(risk.escalationDate) : '—'} />
             <InfoTile label="تصمیم موردنیاز" value={risk.requiredDecision || '—'} />
           </div>
           {risk.escalationReason && <p className="rounded-lg bg-white/[0.02] p-2.5 text-[11px] leading-5 text-secondary">{risk.escalationReason}</p>}
@@ -611,7 +617,7 @@ function EscalationSection({
 
           {canManage && (
             <button onClick={cancelEscalation} className="text-[10px] text-muted hover:text-red-400">
-              لغو و بازنشانی تشدید
+              لغو و بازنشانی ارجاع
             </button>
           )}
         </div>

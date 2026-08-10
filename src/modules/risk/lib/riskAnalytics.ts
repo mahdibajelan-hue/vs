@@ -1,6 +1,7 @@
 import {
   RM_CATEGORIES,
   RM_PROJECT_PHASES,
+  RM_RESPONSE_STRATEGY_LABEL_FA,
   type RmProjectPhase,
   type RmRisk,
   type RmRiskAction,
@@ -9,7 +10,7 @@ import {
   type RmRiskStatus,
   type RmTrend,
 } from '../types'
-import { currentState, isActionOverdue, latestAssessment, riskLevel, todayIso, type RiskLevel } from './riskScore'
+import { currentState, isActionOverdue, isEscalationRequired, latestAssessment, riskLevel, todayIso, type RiskLevel } from './riskScore'
 
 export interface ExposureKpi {
   initial: number
@@ -160,4 +161,99 @@ export function computeManagementAttentionRisks(risks: RmRisk[], assessments: Rm
     })
     .filter((r) => r.reasons.length > 0)
     .sort((a, b) => b.score - a.score)
+}
+
+export interface RiskAttentionRecommendation {
+  risk: RmRisk
+  score: number
+  level: RiskLevel
+  recommendation: string
+}
+
+/**
+ * Rule-based (non-AI) "Recommended Management Attention" text for every active Critical/High
+ * risk — a fixed priority order (overdue actions > no control actions defined > escalation
+ * pending > never formally reviewed > strategy-specific default) picks the single most urgent
+ * next step so the list stays a short, actionable read rather than a dump of everything wrong.
+ */
+export function computeCriticalHighAttention(risks: RmRisk[], assessments: RmRiskAssessment[], actions: RmRiskAction[], today = todayIso()): RiskAttentionRecommendation[] {
+  return risks
+    .filter((r) => r.status !== 'closed')
+    .map((risk) => {
+      const riskAssessments = assessments.filter((a) => a.riskId === risk.id)
+      const riskActions = actions.filter((a) => a.riskId === risk.id)
+      const state = currentState(risk, riskAssessments)
+      const level = riskLevel(state.score)
+      return { risk, score: state.score, level, riskAssessments, riskActions }
+    })
+    .filter((x) => x.level === 'critical' || x.level === 'high')
+    .map(({ risk, score, level, riskAssessments, riskActions }) => ({
+      risk,
+      score,
+      level,
+      recommendation: recommendManagementAttention(risk, riskAssessments, riskActions, today),
+    }))
+    .sort((a, b) => b.score - a.score)
+}
+
+function recommendManagementAttention(risk: RmRisk, riskAssessments: RmRiskAssessment[], riskActions: RmRiskAction[], today: string): string {
+  const overdue = riskActions.filter((a) => isActionOverdue(a, today))
+
+  if (overdue.length > 0) {
+    return `پیگیری فوری ${overdue.length} اقدام کنترلی عقب‌افتاده و تعیین مسئول یا سررسید جدید`
+  }
+  if (riskActions.length === 0) {
+    return 'تعریف حداقل یک اقدام کنترلی مشخص با مسئول و سررسید — این ریسک هنوز اقدامی ندارد'
+  }
+  if (risk.escalationStatus === 'recommended') {
+    return 'تکمیل و ثبت جزئیات ارجاع پیشنهادشده به مقام بالاتر بدون تاخیر'
+  }
+  if (risk.escalationStatus === 'none' && isEscalationRequired(risk, riskAssessments, riskActions, today)) {
+    return risk.timeToImpactDays !== null && risk.timeToImpactDays <= 14
+      ? `ارجاع فوری به مقام بالاتر — کمتر از ${risk.timeToImpactDays} روز تا وقوع پیامد`
+      : 'ثبت رسمی ارجاع این ریسک به مقام بالاتر برای تصمیم‌گیری فوری'
+  }
+  if (riskAssessments.length === 0) {
+    return 'برنامه‌ریزی برای بازبینی رسمی اولیه این ریسک در اسرع وقت'
+  }
+  return `تسریع اجرای استراتژی «${RM_RESPONSE_STRATEGY_LABEL_FA[risk.responseStrategy]}» تا رسیدن امتیاز به سطح قابل قبول`
+}
+
+export interface RiskMaturityBreakdown {
+  reviewCoverage: number
+  actionCoverage: number
+  onTimeRate: number
+  strategyDetailCoverage: number
+  overall: number
+}
+
+/**
+ * A composite 0-100 "process maturity" score for the project's risk management practice — how
+ * consistently risks get reviewed, get control actions, stay on schedule, and have a concrete
+ * (not just labeled) response plan. Not a data field; recomputed live from current risk data.
+ */
+export function computeRiskMaturityIndex(risks: RmRisk[], assessments: RmRiskAssessment[], actions: RmRiskAction[]): RiskMaturityBreakdown {
+  const active = risks.filter((r) => r.status !== 'closed')
+  const total = active.length
+  if (total === 0) return { reviewCoverage: 0, actionCoverage: 0, onTimeRate: 100, strategyDetailCoverage: 0, overall: 0 }
+
+  const reviewedCount = active.filter((r) => assessments.some((a) => a.riskId === r.id)).length
+  const withActionCount = active.filter((r) => actions.some((a) => a.riskId === r.id)).length
+  const withStrategyDetails = active.filter((r) => Object.values(r.strategyDetails).some((v) => v.trim() !== '')).length
+  const openActions = actions.filter((a) => a.status !== 'completed')
+  const overdueOpen = openActions.filter((a) => isActionOverdue(a)).length
+
+  const reviewCoverage = Math.round((reviewedCount / total) * 100)
+  const actionCoverage = Math.round((withActionCount / total) * 100)
+  const strategyDetailCoverage = Math.round((withStrategyDetails / total) * 100)
+  const onTimeRate = openActions.length > 0 ? Math.round(((openActions.length - overdueOpen) / openActions.length) * 100) : 100
+  const overall = Math.round(reviewCoverage * 0.3 + actionCoverage * 0.25 + onTimeRate * 0.25 + strategyDetailCoverage * 0.2)
+
+  return { reviewCoverage, actionCoverage, onTimeRate, strategyDetailCoverage, overall }
+}
+
+/** Average completion percentage across all control/response actions — "how much of the planned response is actually done". */
+export function computeResponseCompletion(actions: RmRiskAction[]): number {
+  if (actions.length === 0) return 0
+  return Math.round(actions.reduce((sum, a) => sum + a.completionPercentage, 0) / actions.length)
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, LayoutDashboard, ListChecks, Loader2, ShieldAlert } from 'lucide-react'
+import { ArrowRight, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useRiskStore } from './store/useRiskStore'
@@ -7,8 +7,9 @@ import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
 import { RiskRegisterPage } from './pages/RiskRegisterPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 
-type Tab = 'dashboard' | 'register'
+type Tab = 'dashboard' | 'register' | 'portfolio'
 
 export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -81,26 +82,36 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             </>
           )}
         </div>
-        {projectDetail && (
-          <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
-            <button
-              onClick={() => setTab('dashboard')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === 'dashboard' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
-              }`}
-            >
-              <LayoutDashboard size={13} /> داشبورد
-            </button>
-            <button
-              onClick={() => setTab('register')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === 'register' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
-              }`}
-            >
-              <ListChecks size={13} /> ثبت ریسک‌ها
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
+          {projectDetail && (
+            <>
+              <button
+                onClick={() => setTab('dashboard')}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  tab === 'dashboard' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
+              >
+                <LayoutDashboard size={13} /> داشبورد
+              </button>
+              <button
+                onClick={() => setTab('register')}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  tab === 'register' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
+              >
+                <ListChecks size={13} /> ثبت ریسک‌ها
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => setTab('portfolio')}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === 'portfolio' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+            }`}
+          >
+            <Network size={13} /> تحلیل سه‌سطحی
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           {currentUser && <span className="hidden text-xs text-secondary sm:inline">{currentUser.fullName || currentUser.email}</span>}
           <button
@@ -115,7 +126,14 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
       <StorageErrorBanner />
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        {!currentProjectId || !projectDetail ? (
+        {tab === 'portfolio' ? (
+          <PortfolioRollupPage
+            onOpenProject={async (rmProjectId) => {
+              await selectProject(rmProjectId)
+              setTab('dashboard')
+            }}
+          />
+        ) : !currentProjectId || !projectDetail ? (
           loadingDetail ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={22} className="animate-spin text-red-400" />

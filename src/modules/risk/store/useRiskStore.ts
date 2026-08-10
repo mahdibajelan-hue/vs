@@ -66,6 +66,7 @@ interface RiskStoreState {
   addAssessment: (
     riskId: string,
     data: {
+      reviewDate: string
       currentProbability: number
       currentImpact: number
       residualProbability: number
@@ -95,7 +96,7 @@ async function fetchProjectDetail(id: string): Promise<RmProjectDetail | null> {
   let history: RmRiskHistoryEntry[] = []
   if (riskIds.length > 0) {
     const [{ data: aRows }, { data: acRows }, { data: hRows }] = await Promise.all([
-      supabase.from('rm_risk_assessments').select('*').in('risk_id', riskIds).order('review_date'),
+      supabase.from('rm_risk_assessments').select('*').in('risk_id', riskIds).order('review_date').order('created_at'),
       supabase.from('rm_risk_actions').select('*').in('risk_id', riskIds).order('created_at'),
       supabase.from('rm_risk_history').select('*').in('risk_id', riskIds).order('created_at', { ascending: false }),
     ])
@@ -241,6 +242,7 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
       .from('rm_risk_assessments')
       .insert({
         risk_id: riskId,
+        review_date: data.reviewDate,
         current_probability: data.currentProbability,
         current_impact: data.currentImpact,
         residual_probability: data.residualProbability,
