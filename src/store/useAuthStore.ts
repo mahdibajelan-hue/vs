@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { useModuleStore } from './useModuleStore'
 
 export interface Profile {
   id: string
@@ -55,8 +56,13 @@ function profileFromRow(row: ProfileRow): Profile {
 }
 
 async function loadProfile(userId: string) {
-  const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-  useAuthStore.setState({ profile: data ? profileFromRow(data as ProfileRow) : null, profileLoading: false })
+  try {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    useAuthStore.setState({ profile: data ? profileFromRow(data as ProfileRow) : null, profileLoading: false })
+  } catch {
+    // Never leave profileLoading stuck true — that would hang RootApp's loading spinner forever.
+    useAuthStore.setState({ profileLoading: false })
+  }
 }
 
 export const useAuthStore = create<AuthState>()((_set, get) => ({
@@ -102,17 +108,28 @@ supabase.auth.onAuthStateChange((_event, session) => {
   const prevUserId = useAuthStore.getState().session?.user.id
   useAuthStore.setState({ session, isAuthed: !!session, authLoading: false })
   if (session?.user && session.user.id !== prevUserId) {
+    // A new sign-in (or a different user than before) must never inherit whichever module the
+    // previous session happened to be sitting in — always land back on the hub.
+    useModuleStore.getState().exitToHub()
     useAuthStore.setState({ profileLoading: true })
     loadProfile(session.user.id)
   } else if (!session) {
+    useModuleStore.getState().exitToHub()
     useAuthStore.setState({ profile: null, profileLoading: false })
   }
 })
 
-supabase.auth.getSession().then(({ data }) => {
-  useAuthStore.setState({ session: data.session, isAuthed: !!data.session, authLoading: false })
-  if (data.session?.user) {
-    useAuthStore.setState({ profileLoading: true })
-    loadProfile(data.session.user.id)
-  }
-})
+supabase.auth
+  .getSession()
+  .then(({ data }) => {
+    useAuthStore.setState({ session: data.session, isAuthed: !!data.session, authLoading: false })
+    if (data.session?.user) {
+      useAuthStore.setState({ profileLoading: true })
+      loadProfile(data.session.user.id)
+    }
+  })
+  .catch(() => {
+    // If the initial session check itself fails (network hiccup, etc.), don't leave the app
+    // stuck on the loading spinner forever — fall back to the login screen.
+    useAuthStore.setState({ authLoading: false })
+  })

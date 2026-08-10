@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Clock3, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
+import { SignOutButton } from './SignOutButton'
 
 const GOLD = '#c9a227'
 
@@ -106,15 +107,18 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
           </div>
         </div>
 
-        <div className="hidden flex-col items-end gap-1 sm:flex">
-          <p className="text-xs font-bold tracking-[0.25em]" style={{ color: GOLD }}>
-            PLATFORM SUITE
-          </p>
-          <div className="rasta-brokenline">
-            <span className="rasta-brokenline-seg" />
-            <span className="rasta-brokenline-dot" />
-            <span className="rasta-brokenline-seg is-reverse" />
+        <div className="flex items-center gap-4">
+          <div className="hidden flex-col items-end gap-1 sm:flex">
+            <p className="text-xs font-bold tracking-[0.25em]" style={{ color: GOLD }}>
+              PLATFORM SUITE
+            </p>
+            <div className="rasta-brokenline">
+              <span className="rasta-brokenline-seg" />
+              <span className="rasta-brokenline-dot" />
+              <span className="rasta-brokenline-seg is-reverse" />
+            </div>
           </div>
+          <SignOutButton />
         </div>
       </header>
 

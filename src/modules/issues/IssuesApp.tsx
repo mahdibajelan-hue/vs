@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, ArrowRight, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Plus, Users } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { SignOutButton } from '../../components/Auth/SignOutButton'
 import { useIssuesStore } from './store/useIssuesStore'
 import { useIssuesMembersStore } from './store/useIssuesMembersStore'
 import { DashboardPage } from './pages/DashboardPage'
@@ -80,6 +81,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
             <button className="im-btn im-btn-ghost im-btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={onExitToHub}>
               <ArrowRight size={13} /> بازگشت به ماژول‌ها
             </button>
+            <SignOutButton className="im-btn im-btn-ghost im-btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 6, color: '#f87171' }} />
           </div>
         </aside>
 

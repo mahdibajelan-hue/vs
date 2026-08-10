@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Line, LineChart, ResponsiveContainer } from 'recharts'
-import { Check, ChevronDown, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
+import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Check, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { formatJalali } from '../../../lib/jalali'
@@ -220,11 +220,13 @@ function ScorePill({ label, score, level, highlight }: { label: string; score: n
 
 function ScoreSparkline({ data }: { data: { date: string; score: number; residual: number }[] }) {
   return (
-    <div className="flex h-10 w-20 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
+    <div className="flex h-16 w-40 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-          <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.5} dot={false} strokeDasharray="3 2" isAnimationActive={false} />
+        <LineChart data={data} margin={{ top: 2, right: 4, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 7, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} height={14} />
+          <YAxis domain={[0, 25]} tick={{ fontSize: 7, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} width={22} />
+          <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.5} dot={{ r: 1.5 }} isAnimationActive={false} />
+          <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.5} dot={{ r: 1.5 }} strokeDasharray="3 2" isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
       <span className="text-[8px] text-muted">روند امتیاز</span>
@@ -247,7 +249,6 @@ function AssessmentSection({
 }) {
   const addAssessment = useRiskStore((s) => s.addAssessment)
   const [showForm, setShowForm] = useState(false)
-  const [showAll, setShowAll] = useState(false)
   const [reviewDate, setReviewDate] = useState(todayIso())
   const [currentProbability, setCurrentProbability] = useState(3)
   const [currentImpact, setCurrentImpact] = useState(3)
@@ -284,7 +285,6 @@ function AssessmentSection({
   }
 
   const assistantBullets = riskInsightBullets(risk, assessments, actions)
-  const visible = showAll ? assessments : assessments.slice(0, 2)
 
   return (
     <div className="rounded-xl border border-white/10 p-3">
@@ -368,7 +368,7 @@ function AssessmentSection({
       ) : (
         <>
           <div className="space-y-2">
-            {visible.map((a) => {
+            {assessments.map((a) => {
               const lv = riskLevel(a.currentScore)
               const residualLv = riskLevel(a.residualScore)
               return (
@@ -398,11 +398,6 @@ function AssessmentSection({
                 </div>
               )
             })}
-            {assessments.length > 2 && !showAll && (
-              <button onClick={() => setShowAll(true)} className="flex items-center gap-1 text-[10px] text-muted hover:text-secondary">
-                <ChevronDown size={11} /> نمایش {assessments.length - 2} مورد دیگر
-              </button>
-            )}
           </div>
         </>
       )}

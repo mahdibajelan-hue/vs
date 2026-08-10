@@ -3,6 +3,7 @@ import { ArrowRight, BarChart3, ClipboardList, LayoutDashboard, Loader2, Wand2 }
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { SignOutButton } from '../../components/Auth/SignOutButton'
 import { DashboardPage } from './pages/DashboardPage'
 import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
@@ -97,6 +98,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
         <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-secondary hover:bg-white/5">
           <ArrowRight size={13} /> بازگشت به ماژول‌ها
         </button>
+        <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10" />
       </header>
 
       <StorageErrorBanner />

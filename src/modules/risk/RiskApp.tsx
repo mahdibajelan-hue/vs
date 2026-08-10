@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { SignOutButton } from '../../components/Auth/SignOutButton'
 import { useRiskStore } from './store/useRiskStore'
 import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
@@ -129,6 +130,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
           >
             <ArrowRight size={13} /> بازگشت به ماژول‌ها
           </button>
+          <SignOutButton className="flex items-center gap-1.5 rounded-lg border border-red-400/25 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors" />
         </div>
       </header>
 
