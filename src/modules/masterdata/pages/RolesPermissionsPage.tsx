@@ -87,7 +87,7 @@ function RolesSection() {
 
       {showNew && (
         <div className="glass-panel rounded-2xl p-4 space-y-2.5">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="نام نقش" className="input" autoFocus />
             <input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="توضیح کوتاه" className="input" />
           </div>

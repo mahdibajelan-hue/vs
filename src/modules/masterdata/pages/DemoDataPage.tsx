@@ -101,7 +101,7 @@ export function DemoDataPage() {
           {result && (
             <div className="mt-3 rounded-xl bg-green-500/10 p-3 text-[11px] text-green-300">
               <p className="mb-1.5 font-bold">داده نمایشی با موفقیت بازتولید شد:</p>
-              <div className="grid grid-cols-3 gap-2 num">
+              <div className="grid grid-cols-2 gap-2 num sm:grid-cols-3">
                 <span>{result.portfolios} پورتفولیو</span>
                 <span>{result.programs} طرح</span>
                 <span>{result.projects} پروژه</span>

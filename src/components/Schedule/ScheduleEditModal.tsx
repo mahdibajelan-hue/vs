@@ -141,7 +141,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
               )}
 
               {canEnterPlan ? (
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <label className="block">
                     <span className="mb-1 block text-[11px] text-secondary">شروع برنامه</span>
                     <JalaliDateInput value={row.plannedStart} onChange={(v) => updateRow(kind, { plannedStart: v })} />
@@ -152,7 +152,7 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
                   </label>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2.5 text-xs">
+                <div className="grid grid-cols-1 gap-2.5 text-xs sm:grid-cols-2">
                   <div>
                     <span className="mb-1 block text-[11px] text-secondary">شروع برنامه</span>
                     <p className="num">{row.plannedStart ? formatJalali(row.plannedStart) : '—'}</p>

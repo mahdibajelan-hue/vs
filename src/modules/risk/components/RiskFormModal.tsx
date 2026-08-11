@@ -106,7 +106,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="input resize-none" placeholder="شرح کامل ریسک و پیامدهای احتمالی..." />
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">دسته‌بندی</span>
             <select value={category} onChange={(e) => setCategory(e.target.value as RmRiskCategory)} className="input">
@@ -129,7 +129,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">مالک ریسک</span>
             <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="input">
@@ -148,7 +148,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
         </div>
 
         <div className="rounded-xl border border-white/10 p-3">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 flex items-center justify-between text-[11px] text-secondary">
                 <span>احتمال وقوع</span>
@@ -177,7 +177,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">استراتژی پاسخ — بر اساس نوع «{RM_RISK_TYPE_LABEL_FA[riskType]}»</span>
             <select value={responseStrategy} onChange={(e) => changeStrategy(e.target.value as RmResponseStrategy)} className="input">

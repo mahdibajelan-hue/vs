@@ -13,7 +13,7 @@ export function TeeMetaModal({ onClose, onConfirm }: TeeMetaModalProps) {
   return (
     <Modal title="مشخصات سه‌راهی" subtitle="سایز خط اصلی و سایز خروجی/انشعاب را وارد کنید" onClose={onClose}>
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">سایز خط اصلی</span>
             <input autoFocus value={mainSize} onChange={(e) => setMainSize(e.target.value)} className="input" placeholder='مثلاً 6"' />

@@ -129,7 +129,7 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
             </div>
           )}
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] text-muted">شروع دوره</span>
               <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="w-full rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-xs" />

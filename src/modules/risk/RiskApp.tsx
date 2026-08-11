@@ -52,21 +52,21 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
-      <header className="no-print flex shrink-0 items-center justify-between glass-panel !rounded-none border-t-0 border-x-0 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10">
+      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-y-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10">
             <ShieldAlert size={18} className="text-red-400" />
           </div>
-          <div className="leading-tight">
-            <p className="text-sm font-extrabold">مدیریت ریسک</p>
-            <p className="text-[10px] text-muted" dir="ltr">
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-extrabold">مدیریت ریسک</p>
+            <p className="hidden text-[10px] text-muted sm:block" dir="ltr">
               Risk Management
             </p>
           </div>
           {projectDetail && (
             <>
-              <span className="mx-2 h-5 w-px bg-white/10" />
-              <div className="relative">
+              <span className="mx-1 hidden h-5 w-px bg-white/10 sm:mx-2 sm:block" />
+              <div className="relative min-w-0">
                 <select
                   value={projectDetail.id}
                   disabled={switching}
@@ -75,7 +75,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
                     await selectProject(e.target.value)
                     setSwitching(false)
                   }}
-                  className="rounded-lg bg-black/20 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-red-400 max-w-[14rem]"
+                  className="w-32 rounded-lg bg-black/20 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-red-400 sm:max-w-[14rem] sm:w-auto"
                 >
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -87,7 +87,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             </>
           )}
         </div>
-        <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
+        <div className="order-3 hidden w-full items-center gap-1 rounded-lg bg-white/[0.04] p-1 sm:order-none sm:flex sm:w-auto">
           {projectDetail && (
             <>
               <button
@@ -125,15 +125,15 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             <Network size={13} /> تحلیل سه‌سطحی
           </button>
         </div>
-        <div className="flex items-center gap-3">
-          {currentUser && <span className="hidden text-xs text-secondary sm:inline">{currentUser.fullName || currentUser.email}</span>}
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+          {currentUser && <span className="hidden text-xs text-secondary lg:inline">{currentUser.fullName || currentUser.email}</span>}
           <button
             onClick={onExitToHub}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
           >
-            <ArrowRight size={13} /> بازگشت به ماژول‌ها
+            <ArrowRight size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
           </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-lg border border-red-400/25 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors" />
+          <SignOutButton className="flex items-center gap-1.5 rounded-lg border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors sm:px-3" />
         </div>
       </header>
 
@@ -145,7 +145,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
       )}
 
-      <main className="min-h-0 flex-1 overflow-hidden">
+      <main className="min-h-0 flex-1 overflow-hidden pb-14 sm:pb-0">
         {tab === 'portfolio' ? (
           <PortfolioRollupPage
             onOpenProject={async (rmProjectId) => {
@@ -169,6 +169,25 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
           <RiskRegisterPage project={projectDetail} onChangeProject={() => useRiskStore.setState({ currentProjectId: null, projectDetail: null })} />
         )}
       </main>
+
+      <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t bg-[var(--bg-panel-solid)] py-1.5 sm:hidden" style={{ borderColor: 'var(--border-soft)' }}>
+        {projectDetail && (
+          <>
+            <button onClick={() => setTab('dashboard')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'dashboard' ? 'text-red-400' : 'text-muted'}`}>
+              <LayoutDashboard size={17} /> داشبورد
+            </button>
+            <button onClick={() => setTab('register')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'register' ? 'text-red-400' : 'text-muted'}`}>
+              <ListChecks size={17} /> ثبت ریسک‌ها
+            </button>
+            <button onClick={() => setTab('intelligence')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'intelligence' ? 'text-red-400' : 'text-muted'}`}>
+              <Brain size={17} /> هوش ریسک
+            </button>
+          </>
+        )}
+        <button onClick={() => setTab('portfolio')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'portfolio' ? 'text-red-400' : 'text-muted'}`}>
+          <Network size={17} /> سه‌سطحی
+        </button>
+      </nav>
     </div>
   )
 }

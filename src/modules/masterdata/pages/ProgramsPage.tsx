@@ -168,7 +168,7 @@ function ProgramModal({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="col-span-1 block">
             <span className="mb-1 block text-xs text-secondary">کد</span>
             <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className="input" dir="ltr" />
@@ -193,7 +193,7 @@ function ProgramModal({
             ))}
           </select>
         </label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">مدیر طرح</span>
             <select value={form.programManagerId} onChange={(e) => setForm((f) => ({ ...f, programManagerId: e.target.value }))} className="input">
@@ -217,7 +217,7 @@ function ProgramModal({
             </select>
           </label>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">وضعیت</span>
             <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as PortfolioProgramStatus }))} className="input">

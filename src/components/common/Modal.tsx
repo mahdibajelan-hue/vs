@@ -40,9 +40,11 @@ export function Modal({ title, subtitle, onClose, children, width = 'max-w-lg', 
   }, [isDirty, onClose])
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`glass-panel relative w-full ${width} rounded-2xl p-5 max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-start justify-between mb-4">
+    // Mobile (<sm): full-screen sheet, no backdrop padding/rounding — a form-heavy modal has no
+    // room to spare inside a centered card on a small phone. sm+: unchanged centered dialog.
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
+      <div className={`glass-panel relative h-full w-full overflow-y-auto rounded-none p-4 ${width} sm:h-auto sm:max-h-[90vh] sm:rounded-2xl sm:p-5`}>
+        <div className="sticky -top-4 z-10 -mx-4 mb-4 flex items-start justify-between bg-[var(--bg-panel-solid)] px-4 pt-4 pb-3 sm:static sm:mx-0 sm:mb-4 sm:bg-transparent sm:p-0">
           <div>
             <h2 className="text-lg font-bold">{title}</h2>
             {subtitle && <p className="text-sm text-secondary mt-0.5">{subtitle}</p>}

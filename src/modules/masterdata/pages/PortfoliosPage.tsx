@@ -166,7 +166,7 @@ function PortfolioModal({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="col-span-1 block">
             <span className="mb-1 block text-xs text-secondary">کد</span>
             <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className="input" dir="ltr" />
@@ -180,7 +180,7 @@ function PortfolioModal({
           <span className="mb-1 block text-xs text-secondary">توضیحات</span>
           <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="input" rows={2} />
         </label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">سازمان</span>
             <select value={form.organizationId} onChange={(e) => setForm((f) => ({ ...f, organizationId: e.target.value }))} className="input">
@@ -204,7 +204,7 @@ function PortfolioModal({
             </select>
           </label>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">وضعیت</span>
             <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as PortfolioProgramStatus }))} className="input">

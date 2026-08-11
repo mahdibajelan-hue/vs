@@ -57,7 +57,7 @@ export function LineMetaModal({
           <input value={size} onChange={(e) => setSize(e.target.value)} className="input" placeholder='مثلاً 6"' />
         </label>
         {collectLengthWelds && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-xs text-secondary">طول برنامه (متر)</span>
               <input

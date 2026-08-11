@@ -56,7 +56,7 @@ export function NewProjectModal({
           <span className="mb-1 block text-xs text-secondary">کارفرما</span>
           <input value={client} onChange={(e) => setClient(e.target.value)} className="input" placeholder="شرکت ملی گاز ایران" />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">موقعیت</span>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className="input" placeholder="پارس جنوبی" />

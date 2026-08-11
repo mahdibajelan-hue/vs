@@ -58,7 +58,7 @@ export function ProjectListPage() {
 
         {showForm && (
           <div className="glass-panel rounded-2xl p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-xs text-secondary">نام پروژه</span>
                 <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="مثلاً واحد تقویت فشار گاز" />
@@ -68,7 +68,7 @@ export function ProjectListPage() {
                 <input value={client} onChange={(e) => setClient(e.target.value)} className="input" placeholder="نام کارفرما" />
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-xs text-secondary">تاریخ شروع</span>
                 <JalaliDateInput value={startDate} onChange={setStartDate} />

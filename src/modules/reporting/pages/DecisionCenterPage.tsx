@@ -135,7 +135,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
       {open && (
         <div className="glass-panel space-y-2 rounded-2xl p-4">
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="عنوان اقدام" className="input" />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] text-muted">مهلت</span>
               <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="input" />

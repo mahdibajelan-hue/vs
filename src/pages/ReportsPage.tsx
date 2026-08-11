@@ -49,7 +49,7 @@ export function ReportsPage({ project }: { project: Project }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="glass-panel rounded-2xl p-4 h-72 flex flex-col">
           <p className="mb-2 text-sm font-bold">S-Curve برنامه زمان‌بندی — پیشرفت فعالیت‌های زمان‌بندی‌شده (جوشکاری/NDT/پوشش)</p>
           <div className="flex-1 min-h-0">

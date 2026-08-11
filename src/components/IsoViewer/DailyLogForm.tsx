@@ -77,7 +77,7 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
           </select>
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="تاریخ (شمسی)">
             <JalaliDateInput value={date} onChange={setDate} />
           </Field>
@@ -86,7 +86,7 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="متراژ کارشده (متر)">
             <input
               type="number"

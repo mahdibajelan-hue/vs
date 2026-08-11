@@ -37,7 +37,7 @@ export function CoordinateLineModal({ onClose, onConfirm }: CoordinateLineModalP
       width="max-w-lg"
     >
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">شناسه خط *</span>
             <input

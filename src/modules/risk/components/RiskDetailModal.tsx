@@ -154,7 +154,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
         {filledStrategyDetails.length > 0 && (
           <div className="rounded-xl border border-white/10 p-3">
             <p className="mb-2 text-xs font-bold">جزئیات استراتژی پاسخ — {RM_RESPONSE_STRATEGY_LABEL_FA[risk.responseStrategy]}</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {filledStrategyDetails.map((f) => (
                 <div key={f.key}>
                   <span className="mb-1 block text-[11px] text-secondary">{f.label}</span>
@@ -397,7 +397,7 @@ function AssessmentSection({
             <span className="mb-1 block text-[10px] text-secondary">تاریخ بازبینی</span>
             <JalaliDateInput value={reviewDate} onChange={setReviewDate} />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <p className="mb-1 text-[10px] text-secondary">وضعیت فعلی</p>
               <div className="flex gap-2">
@@ -619,7 +619,7 @@ function EscalationSection({
 
       {editing && (risk.escalationStatus === 'none' || risk.escalationStatus === 'recommended') && (
         <div className="space-y-2.5 rounded-lg bg-white/[0.03] p-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] text-secondary">سطح ارجاع</span>
               <select value={level} onChange={(e) => setLevel(e.target.value as RmEscalationLevel)} className="input !h-auto !py-1.5 text-xs">
@@ -639,7 +639,7 @@ function EscalationSection({
             <span className="mb-1 block text-[10px] text-secondary">دلیل ارجاع به مقام بالاتر</span>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="input resize-none text-xs" />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] text-secondary">تاریخ ارجاع</span>
               <JalaliDateInput value={date} onChange={setDate} />
@@ -662,7 +662,7 @@ function EscalationSection({
 
       {(risk.escalationStatus === 'escalated' || risk.escalationStatus === 'decided') && (
         <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-3 rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
             <InfoTile label="سطح ارجاع" value={risk.escalationLevel ? RM_ESCALATION_LEVEL_LABEL_FA[risk.escalationLevel] : '—'} />
             <InfoTile label="ارجاع به" value={risk.escalatedTo || '—'} />
             <InfoTile label="تاریخ ارجاع" value={risk.escalationDate ? formatJalali(risk.escalationDate) : '—'} />
@@ -801,7 +801,7 @@ function ActionsSection({
             className="input text-xs"
             placeholder="شرح اقدام"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <select value={actionOwnerId} onChange={(e) => setActionOwnerId(e.target.value)} className="input !h-auto !py-1.5 text-xs">
               <option value="">مالک اقدام</option>
               {members.map((m) => (

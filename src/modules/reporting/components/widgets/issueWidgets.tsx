@@ -48,7 +48,7 @@ export const issueClosureWidget: WidgetDefinition<IssueMetrics | null> = {
   Render: ({ data }) => {
     if (data === null) return <UnmappedNotice moduleLabel="مدیریت مسائل" />
     return (
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
         <div>
           <p className="text-lg font-extrabold" style={{ color: data.onTimeRate >= 70 ? '#2ecc71' : data.onTimeRate >= 40 ? '#f1c40f' : '#e74c3c' }}>
             {data.onTimeRate}%

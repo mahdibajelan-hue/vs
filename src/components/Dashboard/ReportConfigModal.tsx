@@ -25,7 +25,7 @@ export function ReportConfigModal({ projectId, config, onClose }: { projectId: s
   return (
     <Modal title="تنظیمات گزارش مدیریتی" subtitle="قالب گزارش و آیتم‌هایی که در خروجی نمایش داده می‌شوند را انتخاب کنید" onClose={onClose} width="max-w-lg">
       <p className="mb-2 text-xs font-bold text-secondary">قالب گزارش</p>
-      <div className="grid grid-cols-2 gap-2.5 mb-4">
+      <div className="mb-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {TEMPLATES.map((t) => (
           <button
             key={t.id}

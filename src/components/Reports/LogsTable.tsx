@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Trash2, Check, X, Pencil, ShieldCheck, History } from 'lucide-react'
+import { ResponsiveTable, type ResponsiveTableColumn } from '../common/ResponsiveTable'
 import type { ApprovalStatus, DailyLog, LineStatus, Project } from '../../types'
 import { APPROVAL_COLOR, APPROVAL_LABEL_FA, STATUS_LABEL_FA, ACTIVITY_LABEL_FA } from '../../types'
 import { useStore } from '../../store/useStore'
@@ -56,6 +57,133 @@ export function LogsTable({ project }: { project: Project }) {
     setRejectNote('')
   }
 
+  const columns: ResponsiveTableColumn<(typeof rows)[number]>[] = [
+    { key: 'date', label: 'تاریخ', primary: true, render: ({ log }) => <span className="num whitespace-nowrap">{formatJalali(log.date)}</span> },
+    { key: 'line', label: 'خط', primary: true, render: ({ line }) => <span className="font-mono text-xs">{line?.svgElementId ?? '—'}</span> },
+    {
+      key: 'contractorVal',
+      label: 'مقدار پیمانکار',
+      render: ({ log }) => (
+        <span className="num whitespace-nowrap">
+          {log.contractorLengthDone}m / {log.contractorWeldCount}
+        </span>
+      ),
+    },
+    {
+      key: 'consultantVal',
+      label: 'مقدار مشاور',
+      render: ({ log }) => {
+        const v = log.consultantLengthDone != null ? { length: log.consultantLengthDone, weld: log.consultantWeldCount ?? 0 } : null
+        return <span className="num whitespace-nowrap">{v ? `${v.length}m / ${v.weld}` : '—'}</span>
+      },
+    },
+    {
+      key: 'ownerVal',
+      label: 'مقدار کارفرما',
+      render: ({ log }) => {
+        const consultantVal = log.consultantLengthDone != null ? { length: log.consultantLengthDone, weld: log.consultantWeldCount ?? 0 } : null
+        const v = log.ownerLengthDone != null ? { length: log.ownerLengthDone, weld: log.ownerWeldCount ?? 0 } : consultantVal
+        return <span className="num whitespace-nowrap">{v ? `${v.length}m / ${v.weld}` : '—'}</span>
+      },
+    },
+    { key: 'activity', label: 'فعالیت', render: ({ log }) => ACTIVITY_LABEL_FA[log.activity] },
+    { key: 'contractor', label: 'پیمانکار', render: ({ log }) => log.contractor },
+    {
+      key: 'notes',
+      label: 'توضیحات',
+      className: 'max-w-[220px] truncate text-secondary',
+      render: ({ log }) => <span title={log.notes || log.delayReason}>{log.delayReason ? <span className="text-amber-400">{log.delayReason}</span> : log.notes}</span>,
+    },
+    {
+      key: 'approval',
+      label: 'تایید',
+      render: ({ log }) =>
+        rejectingId === log.id ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              placeholder="علت رد"
+              className="w-28 rounded-md bg-black/20 border border-white/10 px-2 py-1 text-xs outline-none focus:border-brand-400"
+            />
+            <button onClick={() => confirmReject(log.id)} className="text-red-400 hover:underline text-xs">
+              ثبت
+            </button>
+            <button onClick={() => setRejectingId(null)} className="text-muted hover:underline text-xs">
+              لغو
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap"
+              style={{ background: `${APPROVAL_COLOR[log.approvalStatus]}22`, color: 'var(--text-primary)', border: `1px solid ${APPROVAL_COLOR[log.approvalStatus]}66` }}
+              title={log.reviewNote || undefined}
+            >
+              {APPROVAL_LABEL_FA[log.approvalStatus]}
+            </span>
+            {canApprove(role) && log.approvalStatus !== 'approved' && (
+              <button onClick={() => approve(log.id)} className="text-green-400 hover:text-green-300" title="تایید">
+                <Check size={14} />
+              </button>
+            )}
+            {canApprove(role) && log.approvalStatus !== 'rejected' && (
+              <button onClick={() => setRejectingId(log.id)} className="text-red-400 hover:text-red-300" title="رد">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        ),
+    },
+    {
+      key: 'audit',
+      label: 'ممیزی کارفرما',
+      render: ({ log }) =>
+        log.approvalStatus !== 'approved' ? (
+          <span className="text-[11px] text-muted">پس از تایید مشاور</span>
+        ) : log.ownerReviewedAt ? (
+          <button
+            onClick={() => canAuditLogs && setAuditingLog(log)}
+            disabled={!canAuditLogs}
+            className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-400 border border-green-500/30 disabled:cursor-default"
+            title={log.ownerNote || 'بررسی‌شده توسط کارفرما'}
+          >
+            <ShieldCheck size={12} /> بررسی‌شده
+          </button>
+        ) : canAuditLogs ? (
+          <button onClick={() => setAuditingLog(log)} className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5 transition-colors">
+            <ShieldCheck size={12} /> ممیزی
+          </button>
+        ) : (
+          <span className="text-[11px] text-muted">—</span>
+        ),
+    },
+    {
+      key: 'actions',
+      label: 'عملیات',
+      render: ({ log }) => (
+        <div className="flex items-center gap-2">
+          {canEdit(role, isAdmin) && (
+            <button onClick={() => setEditingLog(log)} className="text-muted hover:text-brand-400 transition-colors" title="ویرایش">
+              <Pencil size={14} />
+            </button>
+          )}
+          {canEdit(role, isAdmin) && (
+            <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors" title="حذف">
+              <Trash2 size={14} />
+            </button>
+          )}
+          {canAuditLogs && (
+            <button onClick={() => setHistoryLogId(log.id)} className="text-muted hover:text-brand-400 transition-colors" title="تاریخچه تغییرات">
+              <History size={14} />
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b" style={{ borderColor: 'var(--border-soft)' }}>
@@ -95,139 +223,7 @@ export function LogsTable({ project }: { project: Project }) {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-[var(--bg-panel-solid)]">
-            <tr className="text-xs text-secondary">
-              <th className="p-2.5 text-right font-medium">تاریخ</th>
-              <th className="p-2.5 text-right font-medium">خط</th>
-              <th className="p-2.5 text-right font-medium">مقدار پیمانکار</th>
-              <th className="p-2.5 text-right font-medium">مقدار مشاور</th>
-              <th className="p-2.5 text-right font-medium">مقدار کارفرما</th>
-              <th className="p-2.5 text-right font-medium">فعالیت</th>
-              <th className="p-2.5 text-right font-medium">پیمانکار</th>
-              <th className="p-2.5 text-right font-medium">توضیحات</th>
-              <th className="p-2.5 text-right font-medium">تایید</th>
-              <th className="p-2.5 text-right font-medium">ممیزی کارفرما</th>
-              <th className="p-2.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
-            {rows.map(({ log, line }) => {
-              const consultantVal =
-                log.consultantLengthDone != null ? { length: log.consultantLengthDone, weld: log.consultantWeldCount ?? 0 } : null
-              const ownerVal =
-                log.ownerLengthDone != null ? { length: log.ownerLengthDone, weld: log.ownerWeldCount ?? 0 } : consultantVal
-              return (
-              <tr key={log.id} className="hover:bg-white/[0.03]">
-                <td className="p-2.5 num whitespace-nowrap">{formatJalali(log.date)}</td>
-                <td className="p-2.5 font-mono text-xs">{line?.svgElementId ?? '—'}</td>
-                <td className="p-2.5 num whitespace-nowrap">
-                  {log.contractorLengthDone}m / {log.contractorWeldCount}
-                </td>
-                <td className="p-2.5 num whitespace-nowrap">{consultantVal ? `${consultantVal.length}m / ${consultantVal.weld}` : '—'}</td>
-                <td className="p-2.5 num whitespace-nowrap">{ownerVal ? `${ownerVal.length}m / ${ownerVal.weld}` : '—'}</td>
-                <td className="p-2.5">{ACTIVITY_LABEL_FA[log.activity]}</td>
-                <td className="p-2.5">{log.contractor}</td>
-                <td className="p-2.5 max-w-[220px] truncate text-secondary" title={log.notes || log.delayReason}>
-                  {log.delayReason ? <span className="text-amber-400">{log.delayReason}</span> : log.notes}
-                </td>
-                <td className="p-2.5">
-                  {rejectingId === log.id ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        autoFocus
-                        value={rejectNote}
-                        onChange={(e) => setRejectNote(e.target.value)}
-                        placeholder="علت رد"
-                        className="w-28 rounded-md bg-black/20 border border-white/10 px-2 py-1 text-xs outline-none focus:border-brand-400"
-                      />
-                      <button onClick={() => confirmReject(log.id)} className="text-red-400 hover:underline text-xs">
-                        ثبت
-                      </button>
-                      <button onClick={() => setRejectingId(null)} className="text-muted hover:underline text-xs">
-                        لغو
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap"
-                        style={{
-                          background: `${APPROVAL_COLOR[log.approvalStatus]}22`,
-                          color: 'var(--text-primary)',
-                          border: `1px solid ${APPROVAL_COLOR[log.approvalStatus]}66`,
-                        }}
-                        title={log.reviewNote || undefined}
-                      >
-                        {APPROVAL_LABEL_FA[log.approvalStatus]}
-                      </span>
-                      {canApprove(role) && log.approvalStatus !== 'approved' && (
-                        <button onClick={() => approve(log.id)} className="text-green-400 hover:text-green-300" title="تایید">
-                          <Check size={14} />
-                        </button>
-                      )}
-                      {canApprove(role) && log.approvalStatus !== 'rejected' && (
-                        <button onClick={() => setRejectingId(log.id)} className="text-red-400 hover:text-red-300" title="رد">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </td>
-                <td className="p-2.5">
-                  {log.approvalStatus !== 'approved' ? (
-                    <span className="text-[11px] text-muted">پس از تایید مشاور</span>
-                  ) : log.ownerReviewedAt ? (
-                    <button
-                      onClick={() => canAuditLogs && setAuditingLog(log)}
-                      disabled={!canAuditLogs}
-                      className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-400 border border-green-500/30 disabled:cursor-default"
-                      title={log.ownerNote || 'بررسی‌شده توسط کارفرما'}
-                    >
-                      <ShieldCheck size={12} /> بررسی‌شده
-                    </button>
-                  ) : canAuditLogs ? (
-                    <button
-                      onClick={() => setAuditingLog(log)}
-                      className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
-                    >
-                      <ShieldCheck size={12} /> ممیزی
-                    </button>
-                  ) : (
-                    <span className="text-[11px] text-muted">—</span>
-                  )}
-                </td>
-                <td className="p-2.5">
-                  <div className="flex items-center gap-2">
-                    {canEdit(role, isAdmin) && (
-                      <button onClick={() => setEditingLog(log)} className="text-muted hover:text-brand-400 transition-colors" title="ویرایش">
-                        <Pencil size={14} />
-                      </button>
-                    )}
-                    {canEdit(role, isAdmin) && (
-                      <button onClick={() => deleteLog(project.id, log.id)} className="text-muted hover:text-red-400 transition-colors" title="حذف">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    {canAuditLogs && (
-                      <button onClick={() => setHistoryLogId(log.id)} className="text-muted hover:text-brand-400 transition-colors" title="تاریخچه تغییرات">
-                        <History size={14} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              )
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={11} className="p-8 text-center text-xs text-muted">
-                  رکوردی یافت نشد
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <ResponsiveTable columns={columns} rows={rows} rowKey={({ log }) => log.id} emptyText="رکوردی یافت نشد" />
       </div>
 
       {editingLog && (

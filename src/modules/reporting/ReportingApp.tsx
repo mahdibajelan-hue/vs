@@ -56,22 +56,22 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
-      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-500/10">
+      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-500/10">
             <BarChart3 size={18} className="text-teal-400" />
           </div>
-          <div className="leading-tight">
+          <div className="hidden leading-tight sm:block">
             <p className="text-sm font-extrabold">گزارش‌گیری هوشمند</p>
             <p className="text-[10px] text-muted" dir="ltr">
               Intelligent Reporting
             </p>
           </div>
-          <span className="mx-1 h-5 w-px bg-white/10" />
+          <span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
           <select
             value={projectId ?? ''}
             onChange={(e) => setProjectId(e.target.value || null)}
-            className="rounded-lg bg-black/20 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-brand-400"
+            className="w-36 rounded-lg bg-black/20 border border-white/10 px-2.5 py-1.5 text-xs outline-none focus:border-brand-400 sm:w-auto"
           >
             <option value="">پروژه‌ای انتخاب کنید</option>
             {projects.map((p) => (
@@ -82,7 +82,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           </select>
         </div>
 
-        <nav className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+        <nav className="order-3 hidden w-full items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 lg:order-none lg:flex lg:w-auto">
           {NAV.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -97,15 +97,17 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-secondary hover:bg-white/5">
-          <ArrowRight size={13} /> بازگشت به ماژول‌ها
-        </button>
-        <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10" />
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
+            <ArrowRight size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
+          </button>
+          <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
+        </div>
       </header>
 
       <StorageErrorBanner />
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
         {tab === 'portfolio' ? (
           <PortfolioReportPage />
         ) : !projectId ? (
@@ -122,6 +124,19 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           <DecisionCenterPage masterProjectId={projectId} />
         )}
       </div>
+
+      <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex items-center justify-around overflow-x-auto border-t bg-[var(--bg-panel-solid)] py-1.5 lg:hidden" style={{ borderColor: 'var(--border-soft)' }}>
+        {NAV.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-[9px] shrink-0 ${tab === id ? 'text-teal-400' : 'text-muted'}`}
+          >
+            <Icon size={16} />
+            <span className="max-w-[4.2rem] truncate">{label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

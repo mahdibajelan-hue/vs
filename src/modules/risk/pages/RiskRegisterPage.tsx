@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { FileSpreadsheet, Plus, Search, ShieldAlert, TrendingDown, TrendingUp, Minus, AlertTriangle, Users } from 'lucide-react'
+import { FileSpreadsheet, Plus, Search, TrendingDown, TrendingUp, Minus, AlertTriangle, Users } from 'lucide-react'
 import type { RmProjectDetail } from '../store/useRiskStore'
 import { exportRiskProjectToExcel } from '../lib/riskExport'
+import { ResponsiveTable, type ResponsiveTableColumn } from '../../../components/common/ResponsiveTable'
 import {
   RM_CATEGORIES,
   RM_CATEGORY_LABEL_FA,
@@ -71,6 +72,67 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
   }, [enriched, statusFilter, categoryFilter, query])
 
   const selectedRisk = selectedRiskId ? project.risks.find((r) => r.id === selectedRiskId) ?? null : null
+
+  const columns: ResponsiveTableColumn<(typeof filtered)[number]>[] = [
+    { key: 'code', label: 'کد', render: (e) => <span className="num text-xs text-muted">{e.risk.code}</span> },
+    {
+      key: 'title',
+      label: 'عنوان ریسک',
+      primary: true,
+      className: 'max-w-[16rem]',
+      render: (e) => (
+        <span className="flex items-center gap-1.5">
+          {e.escalation && (
+            <span title="نیازمند توجه مدیریت">
+              <AlertTriangle size={13} className="shrink-0 text-red-400" />
+            </span>
+          )}
+          <span className="truncate font-medium">{e.risk.title}</span>
+        </span>
+      ),
+    },
+    { key: 'category', label: 'دسته', render: (e) => <span className="text-xs text-secondary">{RM_CATEGORY_LABEL_FA[e.risk.category]}</span> },
+    {
+      key: 'score',
+      label: 'امتیاز',
+      primary: true,
+      render: (e) => (
+        <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[e.level] }}>
+          {e.score}
+        </span>
+      ),
+    },
+    {
+      key: 'level',
+      label: 'سطح',
+      render: (e) => (
+        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[e.level]}22`, color: RISK_LEVEL_COLOR[e.level] }}>
+          {RISK_LEVEL_LABEL_FA[e.level]}
+        </span>
+      ),
+    },
+    {
+      key: 'trend',
+      label: 'روند',
+      render: (e) =>
+        e.trend === 'improving' ? (
+          <TrendingDown size={15} className="text-green-400" />
+        ) : e.trend === 'worsening' ? (
+          <TrendingUp size={15} className="text-red-400" />
+        ) : (
+          <Minus size={15} className="text-muted" />
+        ),
+    },
+    {
+      key: 'status',
+      label: 'وضعیت',
+      render: (e) => (
+        <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: `${RM_RISK_STATUS_COLOR[e.risk.status]}22`, color: RM_RISK_STATUS_COLOR[e.risk.status] }}>
+          {RM_RISK_STATUS_LABEL_FA[e.risk.status]}
+        </span>
+      ),
+    },
+  ]
 
   return (
     <div className="h-full overflow-y-auto p-4">
@@ -145,71 +207,13 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
         </div>
 
         <div className="glass-panel rounded-2xl overflow-hidden">
-          {filtered.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">ریسکی با این فیلترها یافت نشد</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-white/[0.03]">
-                  <tr className="text-xs text-secondary">
-                    <th className="p-2.5 text-right font-medium">کد</th>
-                    <th className="p-2.5 text-right font-medium">عنوان ریسک</th>
-                    <th className="p-2.5 text-right font-medium">دسته</th>
-                    <th className="p-2.5 text-right font-medium">امتیاز</th>
-                    <th className="p-2.5 text-right font-medium">سطح</th>
-                    <th className="p-2.5 text-right font-medium">روند</th>
-                    <th className="p-2.5 text-right font-medium">وضعیت</th>
-                    <th className="p-2.5" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
-                  {filtered.map(({ risk, score, level, trend, escalation }) => (
-                    <tr key={risk.id} onClick={() => setSelectedRiskId(risk.id)} className="cursor-pointer hover:bg-white/[0.03] transition-colors">
-                      <td className="p-2.5 num text-xs text-muted">{risk.code}</td>
-                      <td className="p-2.5 max-w-[16rem]">
-                        <span className="flex items-center gap-1.5">
-                          {escalation && (
-                            <span title="نیازمند توجه مدیریت">
-                              <AlertTriangle size={13} className="shrink-0 text-red-400" />
-                            </span>
-                          )}
-                          <span className="truncate font-medium">{risk.title}</span>
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-xs text-secondary">{RM_CATEGORY_LABEL_FA[risk.category]}</td>
-                      <td className="p-2.5 num font-bold" style={{ color: RISK_LEVEL_COLOR[level] }}>
-                        {score}
-                      </td>
-                      <td className="p-2.5">
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                          style={{ background: `${RISK_LEVEL_COLOR[level]}22`, color: RISK_LEVEL_COLOR[level] }}
-                        >
-                          {RISK_LEVEL_LABEL_FA[level]}
-                        </span>
-                      </td>
-                      <td className="p-2.5">
-                        {trend === 'improving' && <TrendingDown size={15} className="text-green-400" />}
-                        {trend === 'worsening' && <TrendingUp size={15} className="text-red-400" />}
-                        {(trend === 'stable' || !trend) && <Minus size={15} className="text-muted" />}
-                      </td>
-                      <td className="p-2.5">
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px]"
-                          style={{ background: `${RM_RISK_STATUS_COLOR[risk.status]}22`, color: RM_RISK_STATUS_COLOR[risk.status] }}
-                        >
-                          {RM_RISK_STATUS_LABEL_FA[risk.status]}
-                        </span>
-                      </td>
-                      <td className="p-2.5 text-muted">
-                        <ShieldAlert size={14} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <ResponsiveTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(e) => e.risk.id}
+            onRowClick={(e) => setSelectedRiskId(e.risk.id)}
+            emptyText="ریسکی با این فیلترها یافت نشد"
+          />
         </div>
       </div>
 

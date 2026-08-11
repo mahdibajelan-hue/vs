@@ -403,7 +403,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
               <p className="mb-3 text-[11px] text-muted leading-5">
                 از طریق «نگاشت پروژه‌ها» در داده‌های پایه، این پروژه مرکزی می‌تواند به پروژه معادل خودش در هر ماژول وصل شود. عددهای زیر واقعی و از همان ماژول خوانده می‌شوند.
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {(['risk', 'issues', 'pipepulse'] as const).map((key) => {
                   const count = moduleCounts[key]
                   return (
@@ -582,7 +582,7 @@ function EditForm({
   return (
     <div className="space-y-4">
       <SectionCard icon={FileText} title="اطلاعات پایه">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">نام رسمی پروژه</span>
             <input value={form.officialName} onChange={(e) => set('officialName', e.target.value)} className="input" />

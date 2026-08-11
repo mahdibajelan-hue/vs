@@ -26,7 +26,7 @@ export function OwnerAuditModal({ projectId, log, onClose }: { projectId: string
           مقادیر تایید‌شده توسط مشاور: {log.consultantLengthDone ?? log.lengthDone}m متراژ، {log.consultantWeldCount ?? log.weldCount} سرجوش. اگر این مقادیر را
           درست می‌دانید همین‌طور «تایید بدون تغییر» را بزنید، در غیر این صورت اصلاح کنید.
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">متراژ کارشده (متر)</span>
             <input
