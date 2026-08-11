@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Modal } from '../common/Modal'
-import type { IsoLine } from '../../types'
+import type { DailyLog, IsoLine } from '../../types'
 import { useStore } from '../../store/useStore'
 
 interface LinesTableModalProps {
   projectId: string
   lines: IsoLine[]
+  logs: DailyLog[]
   onClose: () => void
 }
 
-export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalProps) {
+export function LinesTableModal({ projectId, lines, logs, onClose }: LinesTableModalProps) {
   const updateLine = useStore((s) => s.updateLine)
   const deleteLine = useStore((s) => s.deleteLine)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -25,6 +26,17 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
   }, [lines, query])
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))
+
+  const logCountByLine = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const log of logs) map.set(log.lineId, (map.get(log.lineId) ?? 0) + 1)
+    return map
+  }, [logs])
+
+  const selectedLogCount = useMemo(
+    () => [...selectedIds].reduce((sum, id) => sum + (logCountByLine.get(id) ?? 0), 0),
+    [selectedIds, logCountByLine],
+  )
 
   const toggleAll = () => {
     setSelectedIds((prev) => {
@@ -71,7 +83,10 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
         {selectedIds.size > 0 &&
           (confirmBulkDelete ? (
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-red-400">حذف {selectedIds.size} خط قطعی است؟</span>
+              <span className="text-xs text-red-400">
+                حذف {selectedIds.size} خط قطعی است؟
+                {selectedLogCount > 0 && ` این کار ${selectedLogCount} کارکرد روزانه‌ی ثبت‌شده روی این خطوط را هم برای همیشه حذف می‌کند.`}
+              </span>
               <button onClick={bulkDelete} className="text-xs text-red-400 hover:underline">
                 تایید حذف
               </button>
@@ -133,7 +148,10 @@ export function LinesTableModal({ projectId, lines, onClose }: LinesTableModalPr
                 <NumberCell value={line.totalWelds} onChange={(v) => updateLine(projectId, line.id, { totalWelds: v })} />
                 <td className="p-1.5">
                   {confirmDeleteId === line.id ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      {(logCountByLine.get(line.id) ?? 0) > 0 && (
+                        <span className="text-[10px] text-red-400">{logCountByLine.get(line.id)} کارکرد حذف می‌شود</span>
+                      )}
                       <button onClick={() => deleteLine(projectId, line.id)} className="text-xs text-red-400 hover:underline">
                         تایید حذف
                       </button>

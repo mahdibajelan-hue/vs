@@ -14,6 +14,7 @@ import {
   strategiesForRiskType,
   type RmProjectPhase,
   type RmResponseStrategy,
+  type RmRisk,
   type RmRiskCategory,
   type RmRiskType,
   type RmStrategyDetails,
@@ -21,22 +22,31 @@ import {
 import { STRATEGY_FIELDS } from '../lib/strategyFields'
 import { riskLevel, riskScore, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 
-export function RiskFormModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+/**
+ * Also used to edit an existing risk's core fields (title/description/category/owner/phase/
+ * response strategy) — previously write-once after creation. initialProbability/initialImpact
+ * are intentionally NOT editable here: they're the frozen baseline every later review is scored
+ * against (see schema.sql's rm_risks comment), and correcting them belongs in a formal review,
+ * not a quiet edit.
+ */
+export function RiskFormModal({ projectId, risk, onClose }: { projectId: string; risk?: RmRisk; onClose: () => void }) {
   const addRisk = useRiskStore((s) => s.addRisk)
+  const updateRisk = useRiskStore((s) => s.updateRisk)
   const members = useRiskMembersStore((s) => s.members)
+  const isEdit = Boolean(risk)
 
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState<RmRiskCategory>('technical')
-  const [riskType, setRiskType] = useState<RmRiskType>('threat')
-  const [ownerId, setOwnerId] = useState('')
+  const [title, setTitle] = useState(risk?.title ?? '')
+  const [description, setDescription] = useState(risk?.description ?? '')
+  const [category, setCategory] = useState<RmRiskCategory>(risk?.category ?? 'technical')
+  const [riskType, setRiskType] = useState<RmRiskType>(risk?.riskType ?? 'threat')
+  const [ownerId, setOwnerId] = useState(risk?.ownerId ?? '')
   const [probability, setProbability] = useState(3)
   const [impact, setImpact] = useState(3)
-  const [responseStrategy, setResponseStrategy] = useState<RmResponseStrategy>('mitigate')
-  const [strategyDetails, setStrategyDetails] = useState<RmStrategyDetails>({})
-  const [projectPhase, setProjectPhase] = useState<RmProjectPhase | ''>('')
-  const [timeToImpactDays, setTimeToImpactDays] = useState('')
-  const [identifiedDate, setIdentifiedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [responseStrategy, setResponseStrategy] = useState<RmResponseStrategy>(risk?.responseStrategy ?? 'mitigate')
+  const [strategyDetails, setStrategyDetails] = useState<RmStrategyDetails>(risk?.strategyDetails ?? {})
+  const [projectPhase, setProjectPhase] = useState<RmProjectPhase | ''>(risk?.projectPhase ?? '')
+  const [timeToImpactDays, setTimeToImpactDays] = useState(risk?.timeToImpactDays != null ? String(risk.timeToImpactDays) : '')
+  const [identifiedDate, setIdentifiedDate] = useState(risk?.identifiedDate ?? new Date().toISOString().slice(0, 10))
   const [mitigationAction, setMitigationAction] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -74,20 +84,36 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
     }
     setBusy(true)
     try {
-      await addRisk(projectId, {
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        riskType,
-        ownerId: ownerId || null,
-        probability,
-        impact,
-        responseStrategy,
-        strategyDetails,
-        projectPhase: projectPhase || null,
-        timeToImpactDays: timeToImpactDays ? parseInt(timeToImpactDays, 10) : null,
-        mitigationAction: mitigationAction.trim(),
-      })
+      if (isEdit && risk) {
+        await updateRisk(risk.id, {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          riskType,
+          ownerId: ownerId || null,
+          responseStrategy,
+          strategyDetails,
+          projectPhase: projectPhase || null,
+          timeToImpactDays: timeToImpactDays ? parseInt(timeToImpactDays, 10) : null,
+          identifiedDate,
+        })
+      } else {
+        await addRisk(projectId, {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          riskType,
+          ownerId: ownerId || null,
+          probability,
+          impact,
+          responseStrategy,
+          strategyDetails,
+          projectPhase: projectPhase || null,
+          timeToImpactDays: timeToImpactDays ? parseInt(timeToImpactDays, 10) : null,
+          identifiedDate,
+          mitigationAction: mitigationAction.trim(),
+        })
+      }
       onClose()
     } finally {
       setBusy(false)
@@ -95,7 +121,13 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
   }
 
   return (
-    <Modal title="ثبت ریسک جدید" subtitle="اطلاعات را وارد کنید — امتیاز و سطح ریسک به‌صورت خودکار محاسبه می‌شود" onClose={onClose} width="max-w-2xl" isDirty={isDirty}>
+    <Modal
+      title={isEdit ? 'ویرایش ریسک' : 'ثبت ریسک جدید'}
+      subtitle={isEdit ? 'اطلاعات پایه ریسک را اصلاح کنید — امتیاز اولیه از طریق بازبینی رسمی تغییر می‌کند' : 'اطلاعات را وارد کنید — امتیاز و سطح ریسک به‌صورت خودکار محاسبه می‌شود'}
+      onClose={onClose}
+      width="max-w-2xl"
+      isDirty={isDirty}
+    >
       <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">عنوان ریسک</span>
@@ -147,35 +179,41 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           </label>
         </div>
 
-        <div className="rounded-xl border border-white/10 p-3">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 flex items-center justify-between text-[11px] text-secondary">
-                <span>احتمال وقوع</span>
-                <span className="num">{probability} / 5</span>
+        {isEdit ? (
+          <p className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-[11px] leading-5 text-secondary">
+            امتیاز اولیه (احتمال × شدت: {risk?.initialProbability} × {risk?.initialImpact} = {risk?.initialScore}) پس از ثبت قابل ویرایش نیست — این عدد مبنای مقایسه تمام بازبینی‌های بعدی است. برای ثبت وضعیت جدید ریسک، از «بازبینی» در جزئیات ریسک استفاده کنید.
+          </p>
+        ) : (
+          <div className="rounded-xl border border-white/10 p-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-[11px] text-secondary">
+                  <span>احتمال وقوع</span>
+                  <span className="num">{probability} / 5</span>
+                </span>
+                <input type="range" min={1} max={5} value={probability} onChange={(e) => setProbability(parseInt(e.target.value, 10))} className="w-full accent-red-500" />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-[11px] text-secondary">
+                  <span>شدت پیامد</span>
+                  <span className="num">{impact} / 5</span>
+                </span>
+                <input type="range" min={1} max={5} value={impact} onChange={(e) => setImpact(parseInt(e.target.value, 10))} className="w-full accent-red-500" />
+              </label>
+            </div>
+            <div className="mt-3 flex items-center justify-between rounded-lg px-3 py-2" style={{ background: `${RISK_LEVEL_COLOR[level]}15` }}>
+              <span className="text-xs text-secondary">امتیاز ریسک (احتمال × شدت)</span>
+              <span className="flex items-center gap-2">
+                <span className="num text-lg font-extrabold" style={{ color: RISK_LEVEL_COLOR[level] }}>
+                  {score}
+                </span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[level]}22`, color: RISK_LEVEL_COLOR[level] }}>
+                  {RISK_LEVEL_LABEL_FA[level]}
+                </span>
               </span>
-              <input type="range" min={1} max={5} value={probability} onChange={(e) => setProbability(parseInt(e.target.value, 10))} className="w-full accent-red-500" />
-            </label>
-            <label className="block">
-              <span className="mb-1 flex items-center justify-between text-[11px] text-secondary">
-                <span>شدت پیامد</span>
-                <span className="num">{impact} / 5</span>
-              </span>
-              <input type="range" min={1} max={5} value={impact} onChange={(e) => setImpact(parseInt(e.target.value, 10))} className="w-full accent-red-500" />
-            </label>
+            </div>
           </div>
-          <div className="mt-3 flex items-center justify-between rounded-lg px-3 py-2" style={{ background: `${RISK_LEVEL_COLOR[level]}15` }}>
-            <span className="text-xs text-secondary">امتیاز ریسک (احتمال × شدت)</span>
-            <span className="flex items-center gap-2">
-              <span className="num text-lg font-extrabold" style={{ color: RISK_LEVEL_COLOR[level] }}>
-                {score}
-              </span>
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[level]}22`, color: RISK_LEVEL_COLOR[level] }}>
-                {RISK_LEVEL_LABEL_FA[level]}
-              </span>
-            </span>
-          </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
@@ -255,16 +293,18 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
           />
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">اولین اقدام پاسخ (اختیاری) — یک فعالیت مشخص، نه توضیح استراتژی</span>
-          <textarea
-            value={mitigationAction}
-            onChange={(e) => setMitigationAction(e.target.value)}
-            rows={2}
-            className="input resize-none"
-            placeholder="مثلاً «تسریع تولید فروشنده» یا «تایید تامین‌کننده جایگزین»..."
-          />
-        </label>
+        {!isEdit && (
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">اولین اقدام پاسخ (اختیاری) — یک فعالیت مشخص، نه توضیح استراتژی</span>
+            <textarea
+              value={mitigationAction}
+              onChange={(e) => setMitigationAction(e.target.value)}
+              rows={2}
+              className="input resize-none"
+              placeholder="مثلاً «تسریع تولید فروشنده» یا «تایید تامین‌کننده جایگزین»..."
+            />
+          </label>
+        )}
 
         {error && <p className="text-xs text-red-400">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
@@ -272,7 +312,7 @@ export function RiskFormModal({ projectId, onClose }: { projectId: string; onClo
             انصراف
           </button>
           <button onClick={submit} disabled={busy} className="rounded-lg bg-red-500 px-5 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50 transition-colors">
-            {busy ? 'در حال ثبت...' : 'ثبت ریسک'}
+            {busy ? 'در حال ذخیره...' : isEdit ? 'ذخیره تغییرات' : 'ثبت ریسک'}
           </button>
         </div>
       </div>

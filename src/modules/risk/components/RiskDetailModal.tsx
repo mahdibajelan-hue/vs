@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Check, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
+import { Check, MessageSquare, Pencil, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
+import { RiskFormModal } from './RiskFormModal'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -92,6 +93,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
   const [assessmentFormDirty, setAssessmentFormDirty] = useState(false)
   const [actionFormDirty, setActionFormDirty] = useState(false)
   const [escalationFormDirty, setEscalationFormDirty] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
 
   return (
     <Modal
@@ -109,12 +111,23 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           </div>
         )}
 
-        <span
-          className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
-          style={{ background: `${RM_LIFECYCLE_STAGE_COLOR[stage]}1f`, color: RM_LIFECYCLE_STAGE_COLOR[stage] }}
-        >
-          {RM_LIFECYCLE_STAGE_LABEL_FA[stage]}
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
+            style={{ background: `${RM_LIFECYCLE_STAGE_COLOR[stage]}1f`, color: RM_LIFECYCLE_STAGE_COLOR[stage] }}
+          >
+            {RM_LIFECYCLE_STAGE_LABEL_FA[stage]}
+          </span>
+          {canEdit && (
+            <button
+              onClick={() => setShowEditForm(true)}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+            >
+              <Pencil size={12} /> ویرایش اطلاعات پایه
+            </button>
+          )}
+        </div>
+        {showEditForm && <RiskFormModal projectId={project.id} risk={risk} onClose={() => setShowEditForm(false)} />}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <InfoTile label="دسته‌بندی" value={RM_CATEGORY_LABEL_FA[risk.category]} />
@@ -533,7 +546,11 @@ function EscalationSection({
   const submitEscalation = async () => {
     setBusy(true)
     try {
+      // status must move to 'escalated' alongside escalationStatus — the weekly export report and
+      // the register's status filter both key off risk.status, not escalationStatus, so a risk
+      // escalated only via the fields above would otherwise be invisible in its own escalation report.
       await updateRisk(risk.id, {
+        status: 'escalated',
         escalationStatus: 'escalated',
         escalationLevel: level,
         escalatedTo: escalatedTo.trim(),
@@ -561,6 +578,9 @@ function EscalationSection({
     setBusy(true)
     try {
       await updateRisk(risk.id, {
+        // Only revert status if this escalation flow was the one that set it — a risk someone
+        // separately moved to 'closed'/'monitoring' after escalating must not be silently reopened.
+        ...(risk.status === 'escalated' ? { status: 'open' as const } : {}),
         escalationStatus: 'none',
         escalationLevel: null,
         escalatedTo: '',

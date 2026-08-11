@@ -11,6 +11,7 @@ import { useStore } from '../store/useStore'
 import { canEdit, canAudit } from '../lib/permissions'
 import { SYMBOL_CATEGORY_COLOR, SYMBOL_CATEGORY_LABEL, type SymbolCategory } from '../data/pipingSymbols'
 import { formatJalali } from '../lib/jalali'
+import { BaselineHistoryPanel } from '../components/Schedule/BaselineHistoryPanel'
 
 export function SchedulePage({ project }: { project: Project }) {
   const [editingLine, setEditingLine] = useState<IsoLine | null>(null)
@@ -36,6 +37,7 @@ export function SchedulePage({ project }: { project: Project }) {
 
   return (
     <div className="h-full overflow-y-auto p-4">
+      <BaselineHistoryPanel projectId={project.id} />
       {canApproveOverall && (
         <div className="mb-4 glass-panel rounded-2xl p-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">

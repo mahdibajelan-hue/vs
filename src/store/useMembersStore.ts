@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabaseClient'
+import { friendlyErrorMessage } from '../lib/friendlyError'
 import { useAuthStore } from './useAuthStore'
 import type { UserRole } from '../types'
 
@@ -76,12 +77,12 @@ export const useMembersStore = create<MembersState>()((set, get) => ({
     const invitedBy = useAuthStore.getState().profile?.id ?? null
     if (existingProfile) {
       const { error } = await supabase.from('project_members').insert({ project_id: projectId, user_id: existingProfile.id, role })
-      if (error) return { ok: false, error: 'خطا در افزودن عضو — ' + error.message }
+      if (error) return { ok: false, error: 'خطا در افزودن عضو — ' + friendlyErrorMessage(error) }
     } else {
       const { error } = await supabase
         .from('project_invites')
         .upsert({ project_id: projectId, email: trimmedEmail, role, invited_by: invitedBy }, { onConflict: 'project_id,email' })
-      if (error) return { ok: false, error: 'خطا در ارسال دعوت — ' + error.message }
+      if (error) return { ok: false, error: 'خطا در ارسال دعوت — ' + friendlyErrorMessage(error) }
     }
     await get().fetchForProject(projectId)
     return { ok: true }
@@ -97,7 +98,7 @@ export const useMembersStore = create<MembersState>()((set, get) => ({
     const projectId = get().projectId
     if (!projectId) return { ok: false, error: 'پروژه‌ای انتخاب نشده' }
     const { error } = await supabase.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط کارفرما می‌تواند عضو حذف کند' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },
@@ -106,7 +107,7 @@ export const useMembersStore = create<MembersState>()((set, get) => ({
     const projectId = get().projectId
     if (!projectId) return { ok: false, error: 'پروژه‌ای انتخاب نشده' }
     const { error } = await supabase.from('project_members').update({ role }).eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط کارفرما می‌تواند نقش را تغییر دهد' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },

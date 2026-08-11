@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
   MappingSourceModule,
@@ -25,7 +26,7 @@ import {
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
   return true
 }
 

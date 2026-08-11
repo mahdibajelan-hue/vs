@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { RmUserRole } from '../types'
 
@@ -72,7 +73,7 @@ export const useRiskMembersStore = create<RiskMembersState>()((set, get) => ({
     const projectId = get().projectId
     if (!projectId) return { ok: false, error: 'پروژه‌ای انتخاب نشده' }
     const { error } = await supabase.from('rm_project_members').delete().eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط مدیر پروژه می‌تواند عضو حذف کند' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },
@@ -81,7 +82,7 @@ export const useRiskMembersStore = create<RiskMembersState>()((set, get) => ({
     const projectId = get().projectId
     if (!projectId) return { ok: false, error: 'پروژه‌ای انتخاب نشده' }
     const { error } = await supabase.from('rm_project_members').update({ role }).eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط مدیر پروژه می‌تواند نقش را تغییر دهد' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },

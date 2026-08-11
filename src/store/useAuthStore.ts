@@ -101,7 +101,10 @@ function translateAuthError(message: string): string {
   if (message.includes('User already registered')) return 'این ایمیل قبلاً ثبت‌نام کرده است'
   if (message.includes('Password should be at least')) return 'رمز عبور باید حداقل ۶ کاراکتر باشد'
   if (message.includes('Unable to validate email')) return 'ایمیل وارد شده معتبر نیست'
-  return message
+  if (/failed to fetch|networkerror|network request failed|load failed/i.test(message)) {
+    return 'ارتباط با سرور برقرار نشد — اتصال اینترنت خود را بررسی و دوباره تلاش کنید'
+  }
+  return 'خطایی در ورود رخ داد — لطفاً دوباره تلاش کنید'
 }
 
 supabase.auth.onAuthStateChange((_event, session) => {

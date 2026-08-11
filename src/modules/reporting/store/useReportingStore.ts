@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type { Decision, DecisionStatus, RastaAction, RastaActionStatus, ReportPayload, ReportProfile, ReportSnapshot, ReportStatus, ReportType } from '../types'
@@ -25,7 +26,7 @@ export const EMPTY_ARRAY: never[] = []
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
   return true
 }
 

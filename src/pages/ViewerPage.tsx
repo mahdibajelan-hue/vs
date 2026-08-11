@@ -9,6 +9,7 @@ import { MapFixWorkspace } from '../components/IsoViewer/MapFixWorkspace'
 import { LinesTableModal } from '../components/IsoViewer/LinesTableModal'
 import { DailyLogForm } from '../components/IsoViewer/DailyLogForm'
 import { Legend } from '../components/common/Legend'
+import { Modal } from '../components/common/Modal'
 import { useStore } from '../store/useStore'
 import { useCurrentRole } from '../store/useMembersStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -28,12 +29,13 @@ export function ViewerPage({ project }: { project: Project }) {
   const [showLinesTable, setShowLinesTable] = useState(false)
   const [logLineId, setLogLineId] = useState<string | null>(null)
   const [showFixWorkspace, setShowFixWorkspace] = useState(false)
+  const [pendingUpload, setPendingUpload] = useState<{ svgRaw: string; fileName: string; groups: string[][] } | null>(null)
 
   const progressMap = useMemo(() => computeAllProgress(project), [project])
   const selectedLine = project.lines.find((l) => l.id === selectedLineId) ?? null
   const selectedProgress = selectedLineId ? progressMap.get(selectedLineId) : null
 
-  const handleConfirmUpload = async (svgRaw: string, fileName: string, groups: string[][]) => {
+  const applyUpload = async (svgRaw: string, fileName: string, groups: string[][]) => {
     const now = new Date().toISOString()
     const newLines = groups.map((group) => ({
       id: makeId('line'),
@@ -51,7 +53,19 @@ export function ViewerPage({ project }: { project: Project }) {
     }))
     await setProjectSvg(project.id, svgRaw, fileName, newLines)
     setShowUpload(false)
+    setPendingUpload(null)
     setShowLinesTable(true)
+  }
+
+  // Re-uploading over an existing map hard-deletes every current line, which cascades to every
+  // daily log ever entered against those lines. Gate it behind an accurate, count-specific
+  // confirmation instead of applying it the instant a file is parsed.
+  const handleConfirmUpload = async (svgRaw: string, fileName: string, groups: string[][]) => {
+    if (project.svgRaw && (project.lines.length > 0 || project.logs.length > 0)) {
+      setPendingUpload({ svgRaw, fileName, groups })
+      return
+    }
+    await applyUpload(svgRaw, fileName, groups)
   }
 
   if (!project.svgRaw) {
@@ -177,9 +191,35 @@ export function ViewerPage({ project }: { project: Project }) {
       </div>
 
       {showUpload && <SvgImportWorkspace onClose={() => setShowUpload(false)} onConfirm={handleConfirmUpload} />}
+      {pendingUpload && (
+        <Modal title="جایگزینی نقشه پروژه" subtitle="این پروژه از قبل نقشه و خطوط دارد" onClose={() => setPendingUpload(null)}>
+          <p className="text-sm text-secondary leading-7">
+            با تایید این آپلود، {project.lines.length} خط فعلی این پروژه برای همیشه حذف می‌شوند.{' '}
+            {project.logs.length > 0 ? (
+              <b className="text-red-400">
+                این کار {project.logs.length} کارکرد روزانه‌ی ثبت‌شده روی این خطوط را برای همیشه از پایگاه داده حذف می‌کند — نه فقط از نمایش نقشه. این عملیات غیرقابل بازگشت است.
+              </b>
+            ) : (
+              'این پروژه هنوز کارکرد روزانه‌ای ثبت‌نشده، بنابراین این آپلود داده‌ای را حذف نمی‌کند.'
+            )}{' '}
+            ادامه می‌دهید؟
+          </p>
+          <div className="flex justify-end gap-2 pt-4">
+            <button onClick={() => setPendingUpload(null)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+              انصراف
+            </button>
+            <button
+              onClick={() => applyUpload(pendingUpload.svgRaw, pendingUpload.fileName, pendingUpload.groups)}
+              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 transition-colors"
+            >
+              حذف نقشه فعلی و جایگزینی
+            </button>
+          </div>
+        </Modal>
+      )}
       {showFixWorkspace && <MapFixWorkspace project={project} onClose={() => setShowFixWorkspace(false)} />}
       {showLinesTable && (
-        <LinesTableModal projectId={project.id} lines={project.lines} onClose={() => setShowLinesTable(false)} />
+        <LinesTableModal projectId={project.id} lines={project.lines} logs={project.logs} onClose={() => setShowLinesTable(false)} />
       )}
       {logLineId && (
         <DailyLogForm projectId={project.id} lines={project.lines} initialLineId={logLineId} onClose={() => setLogLineId(null)} />

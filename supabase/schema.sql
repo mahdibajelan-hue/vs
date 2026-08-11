@@ -1793,3 +1793,454 @@ create index if not exists idx_rasta_decisions_status on rasta_decisions (status
 create index if not exists idx_rasta_actions_project on rasta_actions (master_project_id);
 create index if not exists idx_rasta_actions_status on rasta_actions (status);
 create index if not exists idx_rasta_actions_decision on rasta_actions (source_decision_id);
+
+-- ============================================================================
+-- 17. Phase 1 audit remediation — critical security & data-integrity fixes
+--     from the 2026-08-11 independent audit. Every change below is additive/
+--     corrective to existing tables — nothing here introduces new modules.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 17a. Self-role-insertion — the same RLS hole existed independently in three
+--      modules: an INSERT policy meant to let a user accept their own pending
+--      invite was written as `user_id = auth.uid()` with no further condition,
+--      letting anyone insert themselves into ANY project as ANY role. The two
+--      legitimate self-insert paths (initial project creation via
+--      create_project_with_owner/create_rm_project_with_manager/
+--      create_im_project_with_admin, and accepting an invite via
+--      accept_pending_invites()) are all `security definer` and already bypass
+--      RLS entirely — no client code path ever relies on this branch, so it is
+--      removed outright rather than merely narrowed.
+-- ----------------------------------------------------------------------------
+drop policy if exists "members_insert_owner_or_admin" on project_members;
+create policy "members_insert_owner_or_admin" on project_members
+  for insert with check (
+    is_admin_user()
+    or (role in ('contractor', 'consultant') and project_role(project_id) = 'owner')
+  );
+
+drop policy if exists "rm_members_insert_manager_or_admin" on rm_project_members;
+create policy "rm_members_insert_manager_or_admin" on rm_project_members
+  for insert with check (
+    is_admin_user()
+    or rm_project_role(project_id) = 'project_manager'
+  );
+
+drop policy if exists "im_members_insert_manager_or_admin" on im_project_members;
+create policy "im_members_insert_manager_or_admin" on im_project_members
+  for insert with check (
+    is_admin_user()
+    or im_can_manage(project_id)
+  );
+
+-- ----------------------------------------------------------------------------
+-- 17b. rasta_decide_project_mapping() had no caller check at all — any
+--      authenticated user could confirm/reject any cross-module project
+--      mapping, which then feeds read-access grants (rasta_scope_ok_for_source)
+--      and every portfolio/program rollup. The client already only calls this
+--      from an admin-only page, but that was the only gate.
+-- ----------------------------------------------------------------------------
+create or replace function rasta_decide_project_mapping(p_mapping_id uuid, p_status text)
+returns void as $$
+begin
+  if not is_admin_user() then
+    raise exception 'only an admin may decide a project mapping';
+  end if;
+  if p_status not in ('confirmed', 'rejected') then
+    raise exception 'invalid status for a mapping decision: %', p_status;
+  end if;
+  update rasta_project_mappings
+  set status = p_status, decided_by = auth.uid(), decided_at = now()
+  where id = p_mapping_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- ----------------------------------------------------------------------------
+-- 17c. Reporting module — SELECT/INSERT on rasta_report_snapshots/
+--      rasta_decisions/rasta_actions were simply `auth.uid() is not null`,
+--      meaning any authenticated user could read every project's report
+--      snapshots (which embed full risk/issue payloads) and forge decisions/
+--      actions against a project they have no relationship to. Scope both to
+--      the same access model already used for portfolio/program-scoped reads
+--      elsewhere in this file: project membership in a confirmed mapped
+--      source project, an explicit rasta_user_project_scope grant, or admin.
+-- ----------------------------------------------------------------------------
+create or replace function rasta_user_can_access_master_project(p_master_project_id uuid)
+returns boolean as $$
+  select
+    is_admin_user()
+    or rasta_project_scope_ok(auth.uid(), p_master_project_id)
+    or exists (
+      select 1 from rasta_project_mappings m
+      where m.master_project_id = p_master_project_id
+        and m.status = 'confirmed'
+        and (
+          (m.source_module = 'risk' and rm_is_project_member(m.source_project_id))
+          or (m.source_module = 'issues' and im_is_project_member(m.source_project_id))
+          or (m.source_module = 'pipepulse' and is_project_member(m.source_project_id))
+        )
+    );
+$$ language sql security definer stable set search_path = public;
+
+drop policy if exists "rasta_report_snapshots_select_authenticated" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_select_scoped" on rasta_report_snapshots
+  for select using (rasta_user_can_access_master_project(master_project_id));
+
+drop policy if exists "rasta_report_snapshots_insert_authenticated" on rasta_report_snapshots;
+create policy "rasta_report_snapshots_insert_scoped" on rasta_report_snapshots
+  for insert with check (rasta_user_can_access_master_project(master_project_id));
+
+drop policy if exists "rasta_decisions_select_authenticated" on rasta_decisions;
+create policy "rasta_decisions_select_scoped" on rasta_decisions
+  for select using (rasta_user_can_access_master_project(master_project_id));
+
+drop policy if exists "rasta_decisions_insert_authenticated" on rasta_decisions;
+create policy "rasta_decisions_insert_scoped" on rasta_decisions
+  for insert with check (rasta_user_can_access_master_project(master_project_id));
+
+drop policy if exists "rasta_actions_select_authenticated" on rasta_actions;
+create policy "rasta_actions_select_scoped" on rasta_actions
+  for select using (rasta_user_can_access_master_project(master_project_id));
+
+drop policy if exists "rasta_actions_insert_authenticated" on rasta_actions;
+create policy "rasta_actions_insert_scoped" on rasta_actions
+  for insert with check (rasta_user_can_access_master_project(master_project_id));
+
+-- ----------------------------------------------------------------------------
+-- 17d. PipePulse's contractor -> consultant -> owner approval chain was
+--      enforced only by which buttons the UI happened to render — the RLS
+--      policies let any project member PATCH approval_status/reviewed_by
+--      directly. Add server-side role checks plus a created_by column so a
+--      log's own entrant can be identified and blocked from approving it.
+-- ----------------------------------------------------------------------------
+alter table daily_logs add column if not exists created_by uuid references profiles (id);
+alter table daily_logs alter column created_by set default auth.uid();
+
+alter table lines add column if not exists created_by uuid references profiles (id);
+alter table lines alter column created_by set default auth.uid();
+
+create or replace function enforce_daily_log_approval_transition()
+returns trigger as $$
+declare
+  v_role text;
+begin
+  if new.approval_status is distinct from old.approval_status
+     or new.reviewed_by is distinct from old.reviewed_by
+     or new.owner_reviewed_at is distinct from old.owner_reviewed_at
+     or new.owner_reviewed_by is distinct from old.owner_reviewed_by then
+
+    v_role := project_role(new.project_id);
+
+    if new.approval_status = 'approved' and old.approval_status is distinct from new.approval_status then
+      if not (v_role in ('consultant', 'owner') or is_admin_user()) then
+        raise exception 'only a consultant or owner may approve a daily log';
+      end if;
+      if new.created_by is not null and new.created_by = auth.uid() and not is_admin_user() then
+        raise exception 'the log''s own entrant cannot approve it';
+      end if;
+    end if;
+
+    if new.reviewed_by is not null and new.reviewed_by is distinct from old.reviewed_by
+       and new.reviewed_by <> auth.uid() and not is_admin_user() then
+      raise exception 'reviewed_by must be the acting user';
+    end if;
+
+    if new.owner_reviewed_at is not null and new.owner_reviewed_at is distinct from old.owner_reviewed_at then
+      if not (v_role = 'owner' or is_admin_user()) then
+        raise exception 'only the owner may record an owner audit';
+      end if;
+      if new.owner_reviewed_by is distinct from auth.uid() and not is_admin_user() then
+        raise exception 'owner_reviewed_by must be the acting user';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_daily_log_approval on daily_logs;
+create trigger trg_enforce_daily_log_approval
+  before update on daily_logs
+  for each row execute function enforce_daily_log_approval_transition();
+
+-- The owner's whole-plan schedule sign-off (schedule_owner_approved_at/by) was writable by
+-- any editor via the general projects UPDATE policy. Per-activity consultant approval and
+-- milestone approval live inside the schedules/milestones JSONB arrays and are not covered
+-- here — validating forged values inside a JSONB array generically is a larger, separate
+-- effort (tracked as a Strategic follow-up, not a mechanical Phase 1 fix).
+create or replace function enforce_schedule_owner_approval()
+returns trigger as $$
+begin
+  if new.schedule_owner_approved_at is distinct from old.schedule_owner_approved_at
+     or new.schedule_owner_approved_by is distinct from old.schedule_owner_approved_by then
+    if new.schedule_owner_approved_at is not null then
+      if project_role(new.id) <> 'owner' and not is_admin_user() then
+        raise exception 'only the project owner may approve the whole schedule';
+      end if;
+      if new.schedule_owner_approved_by is distinct from auth.uid() and not is_admin_user() then
+        raise exception 'schedule_owner_approved_by must be the acting user';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_schedule_owner_approval on projects;
+create trigger trg_enforce_schedule_owner_approval
+  before update on projects
+  for each row execute function enforce_schedule_owner_approval();
+
+-- ----------------------------------------------------------------------------
+-- 17e. Report snapshots: the creator (or admin) could review/approve/issue
+--      their own report — no separation of duties. Whoever the row says
+--      reviewed/approved it must be the acting user (no forging someone
+--      else's sign-off either), and it cannot be the report's own author.
+-- ----------------------------------------------------------------------------
+create or replace function prevent_report_snapshot_self_approval()
+returns trigger as $$
+begin
+  if new.reviewed_by is distinct from old.reviewed_by and new.reviewed_by is not null then
+    if new.reviewed_by <> auth.uid() and not is_admin_user() then
+      raise exception 'reviewed_by must be the acting user';
+    end if;
+    if new.reviewed_by = new.created_by and not is_admin_user() then
+      raise exception 'the report author cannot review their own report';
+    end if;
+  end if;
+  if new.approved_by is distinct from old.approved_by and new.approved_by is not null then
+    if new.approved_by <> auth.uid() and not is_admin_user() then
+      raise exception 'approved_by must be the acting user';
+    end if;
+    if new.approved_by = new.created_by and not is_admin_user() then
+      raise exception 'the report author cannot approve their own report';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_prevent_report_snapshot_self_approval on rasta_report_snapshots;
+create trigger trg_prevent_report_snapshot_self_approval
+  before update on rasta_report_snapshots
+  for each row execute function prevent_report_snapshot_self_approval();
+
+-- rasta_decisions: no decided_by column existed at all, and the only client call site never
+-- sent final_decision, so every approved/rejected decision had a blank rationale. Add the
+-- column and require a non-empty rationale to finalize; auto-fill decided_by/decided_at from
+-- the acting user rather than trusting the client to send them.
+alter table rasta_decisions add column if not exists decided_by uuid references profiles (id);
+
+create or replace function enforce_decision_finalization()
+returns trigger as $$
+begin
+  if new.status in ('approved', 'rejected') and old.status is distinct from new.status then
+    if trim(coalesce(new.final_decision, '')) = '' then
+      raise exception 'a final decision rationale is required to approve or reject';
+    end if;
+    new.decided_by := auth.uid();
+    new.decided_at := now();
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_decision_finalization on rasta_decisions;
+create trigger trg_enforce_decision_finalization
+  before update on rasta_decisions
+  for each row execute function enforce_decision_finalization();
+
+-- ----------------------------------------------------------------------------
+-- 17f. profiles.email was user-writable (via the generic self-update policy)
+--      with no unique constraint, and accept_pending_invites() matched on
+--      that mutable mirror instead of the JWT-verified auth.email() — a user
+--      could edit their own email to a pending invitee's address and claim
+--      that invite's role, including 'owner'.
+-- ----------------------------------------------------------------------------
+create or replace function accept_pending_invites()
+returns void as $$
+begin
+  insert into project_members (project_id, user_id, role)
+  select pi.project_id, auth.uid(), pi.role
+  from project_invites pi
+  where lower(pi.email) = lower(auth.email()) and pi.accepted_at is null
+  on conflict (project_id, user_id) do nothing;
+
+  update project_invites
+  set accepted_at = now()
+  where accepted_at is null
+    and lower(email) = lower(auth.email());
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create or replace function prevent_email_change()
+returns trigger as $$
+begin
+  if new.email is distinct from old.email and auth.uid() is not null and not is_admin_user() then
+    new.email := old.email;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_prevent_email_change on profiles;
+create trigger trg_prevent_email_change
+  before update on profiles
+  for each row execute function prevent_email_change();
+
+-- Case-insensitive uniqueness. Guarded so re-running this file never aborts the whole
+-- migration if a production database already has duplicate emails — it just skips the
+-- index and tells you so, rather than failing every statement after it.
+do $$
+begin
+  if not exists (select 1 from pg_indexes where indexname = 'idx_profiles_email_unique') then
+    begin
+      execute 'create unique index idx_profiles_email_unique on profiles (lower(email)) where email <> ''''';
+    exception when unique_violation then
+      raise notice 'Skipped unique index on profiles.email — duplicate emails exist. Resolve duplicates, then run: create unique index idx_profiles_email_unique on profiles (lower(email)) where email <> ''''';
+    end;
+  end if;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- 17g. Issues: the pursuer/approver segregation the module is named for was
+--      UI-only — any project member, including the pursuer themselves, could
+--      move an issue to approved/rejected via a direct PATCH.
+-- ----------------------------------------------------------------------------
+create or replace function enforce_issue_approval_transition()
+returns trigger as $$
+begin
+  if new.status is distinct from old.status and new.status in ('approved', 'rejected') then
+    if not (
+      new.approver_id = auth.uid()
+      or im_can_manage(new.project_id)
+      or is_admin_user()
+    ) then
+      raise exception 'only the assigned approver or a project admin may approve or reject an issue';
+    end if;
+    if new.pursuer_id = auth.uid() and new.approver_id is distinct from auth.uid() and not is_admin_user() then
+      raise exception 'the assigned pursuer cannot approve their own issue';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_issue_approval on im_issues;
+create trigger trg_enforce_issue_approval
+  before update on im_issues
+  for each row execute function enforce_issue_approval_transition();
+
+-- ----------------------------------------------------------------------------
+-- 17h. Schedule baseline — plannedStart/plannedEnd lived only in the live-
+--      edited `schedules` JSONB array with no frozen snapshot, so editing the
+--      plan silently erased whatever it used to say and zeroed the reported
+--      delay. Capture an immutable snapshot every time the owner signs off
+--      the whole plan (schedule_owner_approved_at newly set) — a real,
+--      queryable baseline history, without redesigning schedules into a
+--      relational table.
+-- ----------------------------------------------------------------------------
+create table if not exists schedule_baselines (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects (id) on delete cascade,
+  baseline_version text not null default 'Baseline 0',
+  schedules jsonb not null,
+  captured_by uuid references profiles (id),
+  captured_at timestamptz not null default now()
+);
+
+alter table schedule_baselines enable row level security;
+
+-- No INSERT/UPDATE/DELETE policy for clients — only the security definer trigger below ever
+-- writes here, so a captured baseline can never be edited or backdated after the fact.
+drop policy if exists "schedule_baselines_select_member" on schedule_baselines;
+create policy "schedule_baselines_select_member" on schedule_baselines
+  for select using (is_project_member(project_id) or is_admin_user() or rasta_scope_ok_for_source('pipepulse', project_id));
+
+create or replace function capture_schedule_baseline()
+returns trigger as $$
+begin
+  if new.schedule_owner_approved_at is not null
+     and new.schedule_owner_approved_at is distinct from old.schedule_owner_approved_at then
+    insert into schedule_baselines (project_id, baseline_version, schedules, captured_by)
+    values (
+      new.id,
+      'Baseline ' || (select count(*) from schedule_baselines where project_id = new.id),
+      new.schedules,
+      new.schedule_owner_approved_by
+    );
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_capture_schedule_baseline on projects;
+create trigger trg_capture_schedule_baseline
+  after update on projects
+  for each row execute function capture_schedule_baseline();
+
+create index if not exists idx_schedule_baselines_project on schedule_baselines (project_id);
+
+-- ----------------------------------------------------------------------------
+-- 17i. created_by was never populated for risks/actions — no client insert
+--      path sent it, and the column had no default, so every row ended up
+--      NULL. Defaulting at the column level fixes it for every future insert
+--      regardless of which client (or a future direct API caller) omits it.
+-- ----------------------------------------------------------------------------
+alter table rm_risks alter column created_by set default auth.uid();
+alter table rm_risk_actions alter column created_by set default auth.uid();
+alter table rm_risk_assessments alter column created_by set default auth.uid();
+alter table rm_risk_history alter column user_id set default auth.uid();
+alter table rm_projects alter column created_by set default auth.uid();
+alter table im_issues alter column created_by set default auth.uid();
+alter table im_projects alter column created_by set default auth.uid();
+alter table projects alter column created_by set default auth.uid();
+alter table organizations alter column created_by set default auth.uid();
+alter table portfolios alter column created_by set default auth.uid();
+alter table programs alter column created_by set default auth.uid();
+alter table master_projects alter column created_by set default auth.uid();
+alter table project_phases alter column created_by set default auth.uid();
+alter table rasta_report_profiles alter column created_by set default auth.uid();
+alter table rasta_report_snapshots alter column created_by set default auth.uid();
+alter table rasta_decisions alter column created_by set default auth.uid();
+alter table rasta_actions alter column created_by set default auth.uid();
+
+-- ----------------------------------------------------------------------------
+-- 17j. updated_at existed on eleven tables with zero triggers anywhere in the
+--      schema — every value was either frozen at insert time or, for the four
+--      tables that also declare updated_by, entirely dead. One generic
+--      trigger function per shape, applied everywhere the column exists.
+-- ----------------------------------------------------------------------------
+create or replace function set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create or replace function set_updated_at_and_by()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['rm_risks', 'rm_risk_actions', 'im_issues', 'project_phases', 'rasta_report_profiles', 'rasta_decisions', 'rasta_actions']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
+  end loop;
+
+  foreach t in array array['organizations', 'portfolios', 'programs', 'master_projects']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;

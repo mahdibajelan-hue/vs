@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ImIssue, ImIssuePriority, ImIssueStatus, ImProject } from '../types'
@@ -8,7 +9,7 @@ import { todayIso } from '../lib/issueRing'
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
   return true
 }
 
@@ -23,6 +24,10 @@ interface IssuesState {
   createIssue: (
     projectId: string,
     data: { title: string; description: string; pursuerId: string | null; approverId: string | null; priority: ImIssuePriority; deadlineDays: number },
+  ) => Promise<void>
+  updateIssue: (
+    issueId: string,
+    data: { title: string; description: string; priority: ImIssuePriority; pursuerId: string | null; approverId: string | null },
   ) => Promise<void>
   setIssueStatus: (issueId: string, status: ImIssueStatus) => Promise<void>
   setActionDate: (issueId: string, iso: string) => Promise<void>
@@ -88,6 +93,22 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
     const { data: inserted, error } = await supabase.from('im_issues').insert(row).select().single()
     if (reportError('ثبت مشکل', error) || !inserted) return
     set((s) => ({ issues: [imIssueFromRow(inserted as ImIssueRow), ...s.issues] }))
+  },
+
+  // Previously title/description/priority/assignment were write-once at creation — an issue
+  // could not be corrected afterward. rowless fields (project, dates) are left untouched here.
+  updateIssue: async (issueId, data) => {
+    const row = imIssueToRow('', {
+      title: data.title,
+      description: data.description,
+      priority: data.priority,
+      pursuerId: data.pursuerId,
+      approverId: data.approverId,
+    })
+    delete row.project_id
+    const { error } = await supabase.from('im_issues').update({ ...row, updated_at: new Date().toISOString() }).eq('id', issueId)
+    if (reportError('ویرایش مشکل', error)) return
+    set((s) => ({ issues: s.issues.map((i) => (i.id === issueId ? { ...i, ...data } : i)) }))
   },
 
   setIssueStatus: async (issueId, status) => {

@@ -7,6 +7,7 @@ import { defaultReportConfig } from '../lib/reportConfig'
 import { createSafeLocalStorage } from '../lib/safeStorage'
 import { sanitizeSvg } from '../lib/sanitizeSvg'
 import { supabase } from '../lib/supabaseClient'
+import { friendlyErrorMessage } from '../lib/friendlyError'
 import { useAuthStore } from './useAuthStore'
 import { useMembersStore } from './useMembersStore'
 import { useSystemStore } from './useSystemStore'
@@ -19,7 +20,7 @@ import { lineFromRow, lineToRow, logFromRow, logToRow, projectFromRow, projectSu
  */
 function reportSupabaseError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
   return true
 }
 

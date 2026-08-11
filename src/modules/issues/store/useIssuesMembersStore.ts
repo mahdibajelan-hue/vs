@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ImUserRole } from '../types'
 
@@ -60,21 +61,21 @@ export const useIssuesMembersStore = create<IssuesMembersState>()((set, get) => 
       return { ok: false, error: 'کاربری با این ایمیل در سامانه یافت نشد — ابتدا باید یک‌بار وارد سامانه شده باشد' }
     }
     const { error } = await supabase.from('im_project_members').insert({ project_id: projectId, user_id: existingProfile.id, role })
-    if (error) return { ok: false, error: 'خطا در افزودن عضو — ' + error.message }
+    if (error) return { ok: false, error: 'خطا در افزودن عضو — ' + friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },
 
   removeMember: async (projectId, userId) => {
     const { error } = await supabase.from('im_project_members').delete().eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط مدیر سیستم می‌تواند عضو حذف کند' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },
 
   changeRole: async (projectId, userId, role) => {
     const { error } = await supabase.from('im_project_members').update({ role }).eq('project_id', projectId).eq('user_id', userId)
-    if (error) return { ok: false, error: 'فقط مدیر سیستم می‌تواند نقش را تغییر دهد' }
+    if (error) return { ok: false, error: friendlyErrorMessage(error) }
     await get().fetchForProject(projectId)
     return { ok: true }
   },

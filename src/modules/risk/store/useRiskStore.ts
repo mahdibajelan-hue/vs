@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { RmProject, RmProjectPhase, RmProjectStatus, RmRisk, RmRiskAction, RmRiskAssessment, RmRiskHistoryEntry, RmStrategyDetails, RmUserRole } from '../types'
@@ -30,7 +31,7 @@ import {
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
   return true
 }
 
@@ -161,6 +162,7 @@ interface RiskStoreState {
       strategyDetails: RmStrategyDetails
       projectPhase: RmProjectPhase | null
       timeToImpactDays: number | null
+      identifiedDate: string
       mitigationAction: string
     },
   ) => Promise<void>
@@ -270,6 +272,7 @@ export const useRiskStore = create<RiskStoreState>()((set, get) => ({
       strategyDetails: data.strategyDetails,
       projectPhase: data.projectPhase,
       timeToImpactDays: data.timeToImpactDays,
+      identifiedDate: data.identifiedDate,
       initialProbability: data.probability,
       initialImpact: data.impact,
     })

@@ -398,7 +398,15 @@ export function SchematicPage({ project, onSaved }: { project: Project; onSaved:
       {showOverwriteConfirm && (
         <Modal title="جایگزینی نقشه پروژه" subtitle="این پروژه از قبل یک نقشه دارد" onClose={() => setShowOverwriteConfirm(false)}>
           <p className="text-sm text-secondary leading-7">
-            با ذخیره این نقشه شماتیک، نقشه فعلی پروژه و لیست خطوط آن جایگزین می‌شود. کارکردهای روزانه‌ی ثبت‌شده قبلی که به خطوط قدیمی مرتبط بودند دیگر روی نقشه نمایش داده نمی‌شوند. طول و تعداد سرجوش هر خط به‌صورت تخمینی محاسبه شده و در «مدیریت خطوط» قابل ویرایش است. ادامه می‌دهید؟
+            با ذخیره این نقشه شماتیک، نقشه فعلی پروژه و لیست {project.lines.length} خط آن به‌طور کامل حذف می‌شود.{' '}
+            {project.logs.length > 0 ? (
+              <b className="text-red-400">
+                این کار {project.logs.length} کارکرد روزانه‌ی ثبت‌شده روی این خطوط را برای همیشه از پایگاه داده حذف می‌کند — نه فقط از نمایش نقشه. این عملیات غیرقابل بازگشت است.
+              </b>
+            ) : (
+              'این پروژه هنوز کارکرد روزانه‌ای ثبت‌نشده، بنابراین جایگزینی نقشه داده‌ای را حذف نمی‌کند.'
+            )}{' '}
+            طول و تعداد سرجوش هر خط جدید به‌صورت تخمینی محاسبه شده و در «مدیریت خطوط» قابل ویرایش است. ادامه می‌دهید؟
           </p>
           <div className="flex justify-end gap-2 pt-4">
             <button onClick={() => setShowOverwriteConfirm(false)} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">

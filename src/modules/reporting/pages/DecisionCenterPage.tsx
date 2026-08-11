@@ -40,6 +40,17 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
   const [form, setForm] = useState({ title: '', description: '', reason: '', impact: '', recommendedAction: '', requiredBy: '' })
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
+  // approved/rejected require a rationale (enforced server-side too — see schema.sql section 17e)
+  // so those two verdicts open an inline prompt instead of firing immediately like in_review/deferred.
+  const [finalizing, setFinalizing] = useState<{ id: string; status: 'approved' | 'rejected' } | null>(null)
+  const [rationale, setRationale] = useState('')
+
+  const submitFinal = async () => {
+    if (!finalizing || !rationale.trim()) return
+    await setDecisionStatus(finalizing.id, masterProjectId, finalizing.status, rationale.trim())
+    setFinalizing(null)
+    setRationale('')
+  }
 
   const submit = async () => {
     if (!form.title.trim()) return
@@ -88,19 +99,63 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
               {d.recommendedAction && <p className="mt-1.5 text-[11px] text-secondary">پیشنهاد: {d.recommendedAction}</p>}
               {d.requiredBy && <p className="mt-1 text-[10px] text-muted">مهلت: {formatJalali(d.requiredBy)}</p>}
               {d.status === 'pending' || d.status === 'in_review' ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(['in_review', 'approved', 'rejected', 'deferred'] as DecisionStatus[]).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setDecisionStatus(d.id, masterProjectId, st)}
-                      className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
-                    >
-                      {DECISION_STATUS_LABEL_FA[st]}
-                    </button>
-                  ))}
-                </div>
+                finalizing?.id === d.id ? (
+                  <div className="mt-2 space-y-1.5">
+                    <textarea
+                      value={rationale}
+                      onChange={(e) => setRationale(e.target.value)}
+                      placeholder={finalizing.status === 'approved' ? 'دلیل تایید این تصمیم را بنویسید' : 'دلیل رد این تصمیم را بنویسید'}
+                      className="input"
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={submitFinal}
+                        disabled={!rationale.trim()}
+                        className="rounded-full bg-teal-500 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+                      >
+                        ثبت {DECISION_STATUS_LABEL_FA[finalizing.status]}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setFinalizing(null)
+                          setRationale('')
+                        }}
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                      >
+                        انصراف
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(['in_review', 'deferred'] as DecisionStatus[]).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setDecisionStatus(d.id, masterProjectId, st)}
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                      >
+                        {DECISION_STATUS_LABEL_FA[st]}
+                      </button>
+                    ))}
+                    {(['approved', 'rejected'] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setFinalizing({ id: d.id, status: st })}
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                      >
+                        {DECISION_STATUS_LABEL_FA[st]}
+                      </button>
+                    ))}
+                  </div>
+                )
               ) : (
-                <p className="mt-2 text-[10px] text-muted">نتیجه نهایی: {DECISION_STATUS_LABEL_FA[d.status]}{d.decidedAt ? ` — ${formatJalali(d.decidedAt.slice(0, 10))}` : ''}</p>
+                <p className="mt-2 text-[10px] text-muted">
+                  نتیجه نهایی: {DECISION_STATUS_LABEL_FA[d.status]}
+                  {d.decidedAt ? ` — ${formatJalali(d.decidedAt.slice(0, 10))}` : ''}
+                  {d.finalDecision ? ` — ${d.finalDecision}` : ''}
+                </p>
               )}
             </div>
           ))}
