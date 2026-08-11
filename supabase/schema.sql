@@ -1707,6 +1707,81 @@ drop policy if exists "rasta_actions_delete_owner_or_admin" on rasta_actions;
 create policy "rasta_actions_delete_owner_or_admin" on rasta_actions
   for delete using (created_by = auth.uid() or is_admin_user());
 
+-- ============================================================================
+-- 16. Portfolio/Program-scoped read access — wires rasta_user_project_scope (section 13,
+--     previously modeled in the schema and the Roles & Permissions UI but never consumed by any
+--     module's own RLS) into the actual per-module SELECT policies. Every change below is
+--     strictly additive ("... or rasta_scope_ok_for_source(...)" appended to the policy's
+--     existing condition) — a user's current membership-based access never narrows. This only
+--     grants portfolio/program-scoped users read access to the projects/records under their
+--     assigned scope; a user with a 'project'-level scope row only matches that one project, so
+--     this does not give project-scoped users access to sibling projects (spec: "A Project-level
+--     user must NOT automatically gain access to other Projects"). Write access is untouched —
+--     scope grants visibility, not edit rights; a scoped-only user with no module membership row
+--     sees a read-only view because rmCanEdit/imCanManage/canEdit still key off membership.
+-- ============================================================================
+
+create or replace function rasta_scope_ok_for_source(p_source_module text, p_source_project_id uuid)
+returns boolean as $$
+  select exists (
+    select 1
+    from rasta_project_mappings m
+    where m.source_module = p_source_module
+      and m.source_project_id = p_source_project_id
+      and m.status = 'confirmed'
+      and rasta_project_scope_ok(auth.uid(), m.master_project_id)
+  );
+$$ language sql security definer stable;
+
+-- PipePulse
+drop policy if exists "projects_select_member" on projects;
+create policy "projects_select_member" on projects
+  for select using (is_project_member(id) or is_admin_user() or rasta_scope_ok_for_source('pipepulse', id));
+
+drop policy if exists "lines_select_member" on lines;
+create policy "lines_select_member" on lines
+  for select using (is_project_member(project_id) or is_admin_user() or rasta_scope_ok_for_source('pipepulse', project_id));
+
+drop policy if exists "daily_logs_select_member" on daily_logs;
+create policy "daily_logs_select_member" on daily_logs
+  for select using (is_project_member(project_id) or is_admin_user() or rasta_scope_ok_for_source('pipepulse', project_id));
+
+-- Risk Management
+drop policy if exists "rm_projects_select_member" on rm_projects;
+create policy "rm_projects_select_member" on rm_projects
+  for select using (rm_is_project_member(id) or is_admin_user() or rasta_scope_ok_for_source('risk', id));
+
+drop policy if exists "rm_risks_select_member" on rm_risks;
+create policy "rm_risks_select_member" on rm_risks
+  for select using (rm_is_project_member(project_id) or is_admin_user() or rasta_scope_ok_for_source('risk', project_id));
+
+drop policy if exists "rm_assessments_select_member" on rm_risk_assessments;
+create policy "rm_assessments_select_member" on rm_risk_assessments
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user() or rasta_scope_ok_for_source('risk', r.project_id)))
+  );
+
+drop policy if exists "rm_actions_select_member" on rm_risk_actions;
+create policy "rm_actions_select_member" on rm_risk_actions
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user() or rasta_scope_ok_for_source('risk', r.project_id)))
+  );
+
+drop policy if exists "rm_history_select_member" on rm_risk_history;
+create policy "rm_history_select_member" on rm_risk_history
+  for select using (
+    exists (select 1 from rm_risks r where r.id = risk_id and (rm_is_project_member(r.project_id) or is_admin_user() or rasta_scope_ok_for_source('risk', r.project_id)))
+  );
+
+-- Issue Management
+drop policy if exists "im_projects_select_member" on im_projects;
+create policy "im_projects_select_member" on im_projects
+  for select using (im_is_project_member(id) or is_admin_user() or rasta_scope_ok_for_source('issues', id));
+
+drop policy if exists "im_issues_select_member" on im_issues;
+create policy "im_issues_select_member" on im_issues
+  for select using (im_is_project_member(project_id) or is_admin_user() or rasta_scope_ok_for_source('issues', project_id));
+
 -- ----------------------------------------------------------------------------
 -- Indexes
 -- ----------------------------------------------------------------------------
