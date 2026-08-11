@@ -10,6 +10,7 @@ import { ReportsPage } from './pages/ReportsPage'
 import { WorkLogPage } from './pages/WorkLogPage'
 import { SchematicPage } from './pages/SchematicPage'
 import { SchedulePage } from './pages/SchedulePage'
+import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
@@ -17,7 +18,7 @@ import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
-export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'about'
+export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'portfolio' | 'about'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
@@ -26,6 +27,7 @@ const PAGE_TITLE: Record<Page, string> = {
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراحی نقشه شماتیک',
   schedule: 'برنامه زمان‌بندی',
+  portfolio: 'تحلیل سه‌سطحی پورتفولیو/طرح/پروژه',
   about: 'درباره ما',
 }
 
@@ -168,20 +170,29 @@ function App() {
         <Topbar project={currentProject} title={PAGE_TITLE[page]} onMenuClick={() => setMobileSidebarOpen(true)} />
         <StorageErrorBanner />
         <main className="flex-1 min-h-0">
-          {!currentProject && (
+          {page === 'portfolio' ? (
+            <PortfolioRollupPage
+              onOpenProject={(pipepulseProjectId) => {
+                selectProject(pipepulseProjectId)
+                setPage('viewer')
+              }}
+            />
+          ) : page === 'about' ? (
+            <AboutPage />
+          ) : !currentProject ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={24} className="animate-spin text-brand-400" />
             </div>
+          ) : (
+            <>
+              {page === 'viewer' && <ViewerPage project={currentProject} />}
+              {page === 'worklog' && <WorkLogPage project={currentProject} />}
+              {page === 'onepager' && <OnePagerPage project={currentProject} />}
+              {page === 'reports' && <ReportsPage project={currentProject} />}
+              {page === 'schematic' && <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />}
+              {page === 'schedule' && <SchedulePage project={currentProject} />}
+            </>
           )}
-          {currentProject && page === 'viewer' && <ViewerPage project={currentProject} />}
-          {currentProject && page === 'worklog' && <WorkLogPage project={currentProject} />}
-          {currentProject && page === 'onepager' && <OnePagerPage project={currentProject} />}
-          {currentProject && page === 'reports' && <ReportsPage project={currentProject} />}
-          {currentProject && page === 'schematic' && (
-            <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />
-          )}
-          {currentProject && page === 'schedule' && <SchedulePage project={currentProject} />}
-          {currentProject && page === 'about' && <AboutPage />}
         </main>
       </div>
       {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}

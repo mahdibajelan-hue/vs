@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, ArrowRight, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Plus, Users } from 'lucide-react'
+import { AlertCircle, ArrowRight, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus, Users } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { SignOutButton } from '../../components/Auth/SignOutButton'
@@ -9,19 +9,21 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { IssuesPage } from './pages/IssuesPage'
 import { ReportPage } from './pages/ReportPage'
+import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 import { UsersPage } from './pages/UsersPage'
 import { AboutPage } from './pages/AboutPage'
 import { NewIssueModal } from './components/NewIssueModal'
 import { IssueDetailModal } from './components/IssueDetailModal'
 import './issues.css'
 
-type Tab = 'dashboard' | 'projects' | 'issues' | 'report' | 'users' | 'about'
+type Tab = 'dashboard' | 'projects' | 'issues' | 'report' | 'portfolio' | 'users' | 'about'
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
   { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
   { id: 'issues', label: 'مشکلات', icon: AlertCircle },
   { id: 'report', label: 'گزارش تاخیر', icon: BarChart3 },
+  { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network },
   { id: 'users', label: 'کاربران', icon: Users },
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
@@ -105,6 +107,8 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
             <IssuesPage onSelectIssue={setSelectedIssueId} onNewIssue={() => openNewIssue()} />
           ) : tab === 'report' ? (
             <ReportPage onSelectIssue={setSelectedIssueId} />
+          ) : tab === 'portfolio' ? (
+            <PortfolioRollupPage onSelectIssue={setSelectedIssueId} />
           ) : tab === 'users' ? (
             <UsersPage />
           ) : (
