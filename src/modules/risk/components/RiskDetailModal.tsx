@@ -151,12 +151,14 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           <ScorePill label="امتیاز اولیه" score={risk.initialScore} level={initialLevel} />
           <span className="text-muted">←</span>
           <ScorePill label="امتیاز فعلی" score={state.score} level={level} highlight />
-          {scoreChartData.length >= 2 && <ScoreSparkline data={scoreChartData} />}
-          {risk.initialScore !== state.score && (
-            <span className="mr-auto text-xs font-bold" style={{ color: state.score < risk.initialScore ? '#2ecc71' : '#e74c3c' }}>
-              {state.score < risk.initialScore ? '↓' : '↑'} {Math.abs(Math.round(((risk.initialScore - state.score) / risk.initialScore) * 100))}%
-            </span>
-          )}
+          <div className="mr-auto flex items-center gap-2">
+            {risk.initialScore !== state.score && (
+              <span className="text-xs font-bold" style={{ color: state.score < risk.initialScore ? '#2ecc71' : '#e74c3c' }}>
+                {state.score < risk.initialScore ? '↓' : '↑'} {Math.abs(Math.round(((risk.initialScore - state.score) / risk.initialScore) * 100))}%
+              </span>
+            )}
+            {scoreChartData.length >= 2 && <ScoreSparkline data={scoreChartData} />}
+          </div>
         </div>
 
         <EscalationSection risk={risk} canManage={canManage} escalationRequired={escalation} onDirtyChange={setEscalationFormDirty} />
@@ -220,16 +222,16 @@ function ScorePill({ label, score, level, highlight }: { label: string; score: n
 
 function ScoreSparkline({ data }: { data: { date: string; score: number; residual: number }[] }) {
   return (
-    <div className="flex h-16 w-40 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
+    <div className="flex h-11 w-24 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, right: 4, left: 0, bottom: 0 }}>
-          <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 7, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} height={14} />
-          <YAxis domain={[0, 25]} tick={{ fontSize: 7, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} width={22} />
-          <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.5} dot={{ r: 1.5 }} isAnimationActive={false} />
-          <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.5} dot={{ r: 1.5 }} strokeDasharray="3 2" isAnimationActive={false} />
+        <LineChart data={data} margin={{ top: 2, right: 2, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 6, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} height={10} interval="preserveStartEnd" />
+          <YAxis domain={[0, 25]} tick={{ fontSize: 6, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} width={16} tickCount={2} />
+          <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.25} dot={{ r: 1 }} isAnimationActive={false} />
+          <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.25} dot={{ r: 1 }} strokeDasharray="3 2" isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
-      <span className="text-[8px] text-muted">روند امتیاز</span>
+      <span className="text-[7px] text-muted">روند امتیاز</span>
     </div>
   )
 }
@@ -258,6 +260,27 @@ function AssessmentSection({
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Every field here used to keep whatever value the PREVIOUS review left it at (only `comment`
+  // was reset after submit), since the form component never unmounts between reviews. Two
+  // reviews submitted without touching every field would end up with identical scores/dates,
+  // which looked like the newer review had "overwritten" the older one instead of being a
+  // distinct entry. Resetting on every open (not just once at mount) fixes that.
+  const resetFields = () => {
+    setReviewDate(todayIso())
+    setCurrentProbability(3)
+    setCurrentImpact(3)
+    setResidualProbability(2)
+    setResidualImpact(2)
+    setTrend('stable')
+    setComment('')
+  }
+
+  const openForm = () => {
+    resetFields()
+    setShowForm(true)
+    onDirtyChange(true)
+  }
+
   const closeForm = () => {
     setShowForm(false)
     onDirtyChange(false)
@@ -277,7 +300,7 @@ function AssessmentSection({
         responseStrategy: risk.responseStrategy,
       })
       setShowForm(false)
-      setComment('')
+      resetFields()
       onDirtyChange(false)
     } finally {
       setBusy(false)
@@ -292,12 +315,7 @@ function AssessmentSection({
         <p className="text-xs font-bold">تاریخچه بازبینی ریسک</p>
         {canManage && (
           <button
-            onClick={() => {
-              setShowForm((v) => {
-                onDirtyChange(!v)
-                return !v
-              })
-            }}
+            onClick={() => (showForm ? closeForm() : openForm())}
             className="flex items-center gap-1 text-[11px] text-red-300 hover:underline"
           >
             <Plus size={12} /> بازبینی جدید

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronLeft, Copy, Folders, Layers, Loader2, Milestone, TrendingUp } from 'lucide-react'
+import { AlertOctagon, ChevronDown, ChevronLeft, Copy, Folders, Layers, ListChecks, Loader2, Milestone, TrendingUp } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
-import { RM_CATEGORY_LABEL_FA } from '../types'
+import { RM_CATEGORY_LABEL_FA, type RmRiskAction, type RmRiskAssessment } from '../types'
+import type { RmRisk } from '../types'
 import { detectCrossProjectDuplicates, detectPortfolioPatterns } from '../lib/riskIntelligence'
+import { computeCriticalHighAttention } from '../lib/riskAnalytics'
+import { currentState, riskLevel, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 import {
   buildPortfolioTree,
   fetchRiskBundlesForProjects,
@@ -14,6 +17,22 @@ import {
   type RiskBundle,
   type RollupTotals,
 } from '../lib/portfolioRollup'
+
+interface RiskGroup {
+  projectName: string
+  risks: RmRisk[]
+  assessments: RmRiskAssessment[]
+  actions: RmRiskAction[]
+}
+
+function buildGroups(summaries: ProjectRiskSummary[], bundles: Map<string, RiskBundle>): RiskGroup[] {
+  return summaries
+    .filter((s) => s.rmProjectId !== null)
+    .map((s) => {
+      const bundle = bundles.get(s.rmProjectId as string)
+      return { projectName: s.projectName, risks: bundle?.risks ?? [], assessments: bundle?.assessments ?? [], actions: bundle?.actions ?? [] }
+    })
+}
 
 export function PortfolioRollupPage({ onOpenProject }: { onOpenProject: (rmProjectId: string) => void }) {
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
@@ -122,13 +141,7 @@ function Badge({ label, value, color }: { label: string; value: string | number;
 function PortfolioCard({ rollup, bundles, onOpenProject }: { rollup: PortfolioRollup; bundles: Map<string, RiskBundle>; onOpenProject: (rmProjectId: string) => void }) {
   const [open, setOpen] = useState(false)
   const allProjects = useMemo(() => [...rollup.programs.flatMap((p) => p.projects), ...rollup.directProjects], [rollup])
-  const groups = useMemo(
-    () =>
-      allProjects
-        .filter((p) => p.rmProjectId !== null)
-        .map((p) => ({ projectName: p.projectName, risks: bundles.get(p.rmProjectId as string)?.risks ?? [], assessments: bundles.get(p.rmProjectId as string)?.assessments ?? [] })),
-    [allProjects, bundles],
-  )
+  const groups = useMemo(() => buildGroups(allProjects, bundles), [allProjects, bundles])
   const patterns = useMemo(() => (open ? detectPortfolioPatterns(groups) : []), [open, groups])
   const duplicates = useMemo(() => (open ? detectCrossProjectDuplicates(groups) : []), [open, groups])
 
@@ -148,7 +161,7 @@ function PortfolioCard({ rollup, bundles, onOpenProject }: { rollup: PortfolioRo
       {open && (
         <div className="mt-3 space-y-2 border-t pr-6 pt-3" style={{ borderColor: 'var(--border-soft)' }}>
           {rollup.programs.map((pr) => (
-            <ProgramRow key={pr.program.id} rollup={pr} onOpenProject={onOpenProject} />
+            <ProgramRow key={pr.program.id} rollup={pr} bundles={bundles} onOpenProject={onOpenProject} />
           ))}
           {rollup.directProjects.length > 0 && (
             <div className="space-y-1.5">
@@ -192,14 +205,88 @@ function PortfolioCard({ rollup, bundles, onOpenProject }: { rollup: PortfolioRo
               </div>
             </div>
           )}
+
+          <RiskAggregateDetail label="این پورتفولیو" groups={groups} />
         </div>
       )}
     </div>
   )
 }
 
-function ProgramRow({ rollup, onOpenProject }: { rollup: ProgramRollup; onOpenProject: (rmProjectId: string) => void }) {
+/** All risks + recommended management actions aggregated across a set of projects (a program's own projects, or a whole portfolio's). */
+function RiskAggregateDetail({ label, groups }: { label: string; groups: RiskGroup[] }) {
+  const allRisks = useMemo(() => groups.flatMap((g) => g.risks), [groups])
+  const allAssessments = useMemo(() => groups.flatMap((g) => g.assessments), [groups])
+  const allActions = useMemo(() => groups.flatMap((g) => g.actions), [groups])
+  const riskProjectName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const g of groups) for (const r of g.risks) map.set(r.id, g.projectName)
+    return map
+  }, [groups])
+
+  const riskRows = useMemo(
+    () =>
+      allRisks
+        .filter((r) => r.status !== 'closed')
+        .map((r) => ({ risk: r, score: currentState(r, allAssessments.filter((a) => a.riskId === r.id)).score }))
+        .sort((a, b) => b.score - a.score),
+    [allRisks, allAssessments],
+  )
+  const attention = useMemo(() => computeCriticalHighAttention(allRisks, allAssessments, allActions), [allRisks, allAssessments, allActions])
+
+  if (riskRows.length === 0) return null
+
+  return (
+    <>
+      <div className="rounded-xl bg-white/[0.02] p-3">
+        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
+          <ListChecks size={12} className="text-blue-400" /> همه ریسک‌های {label} ({riskRows.length})
+        </p>
+        <div className="space-y-1">
+          {riskRows.map(({ risk, score }) => {
+            const lv = riskLevel(score)
+            return (
+              <div key={risk.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px]">
+                <span className="flex items-center gap-2">
+                  <span className="num text-muted">{risk.code}</span>
+                  <span className="font-medium">{risk.title}</span>
+                  <span className="text-[10px] text-muted">({riskProjectName.get(risk.id)})</span>
+                </span>
+                <span className="num rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[lv]}22`, color: RISK_LEVEL_COLOR[lv] }}>
+                  {score} — {RISK_LEVEL_LABEL_FA[lv]}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {attention.length > 0 && (
+        <div className="rounded-xl bg-white/[0.02] p-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
+            <AlertOctagon size={12} className="text-red-400" /> اقدامات مدیریتی پیشنهادی برای {label} ({attention.length})
+          </p>
+          <div className="space-y-1.5">
+            {attention.map(({ risk, recommendation }) => (
+              <div key={risk.id} className="rounded-lg px-2 py-1.5 text-[11px]">
+                <span className="flex items-center gap-2">
+                  <span className="num text-muted">{risk.code}</span>
+                  <span className="font-medium">{risk.title}</span>
+                  <span className="text-[10px] text-muted">({riskProjectName.get(risk.id)})</span>
+                </span>
+                <p className="mt-0.5 text-[10px] leading-5 text-secondary">{recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function ProgramRow({ rollup, bundles, onOpenProject }: { rollup: ProgramRollup; bundles: Map<string, RiskBundle>; onOpenProject: (rmProjectId: string) => void }) {
   const [open, setOpen] = useState(false)
+  const groups = useMemo(() => buildGroups(rollup.projects, bundles), [rollup.projects, bundles])
   return (
     <div className="rounded-xl bg-white/[0.02] p-3">
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 text-right">
@@ -216,6 +303,7 @@ function ProgramRow({ rollup, onOpenProject }: { rollup: ProgramRollup; onOpenPr
       {open && (
         <div className="mt-2 space-y-1.5 pr-5">
           {rollup.projects.length === 0 ? <p className="text-[11px] text-muted">پروژه‌ای در این طرح تعریف نشده است</p> : rollup.projects.map((p) => <ProjectRow key={p.masterProjectId} summary={p} onOpenProject={onOpenProject} />)}
+          <RiskAggregateDetail label="این طرح" groups={groups} />
         </div>
       )}
     </div>
