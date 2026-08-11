@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Check, MessageSquare, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
@@ -33,6 +33,7 @@ import {
 import { STRATEGY_FIELDS } from '../lib/strategyFields'
 import { riskInsightBullets } from '../lib/riskIntelligence'
 import {
+  assignReviewNumbers,
   currentState,
   isActionOverdue,
   isEscalationRequired,
@@ -57,12 +58,32 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
     .sort((a, b) => (a.reviewDate !== b.reviewDate ? (a.reviewDate < b.reviewDate ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1))
   const actions = project.actions.filter((a) => a.riskId === risk.id)
   const history = project.history.filter((h) => h.riskId === risk.id)
-  const scoreChartData = [...assessments].reverse().map((a) => ({ date: a.reviewDate, score: a.currentScore, residual: a.residualScore }))
+  const reviewNumbers = assignReviewNumbers(assessments)
+  const scoreChartData = [
+    {
+      date: risk.identifiedDate,
+      reviewLabel: 'ارزیابی اولیه',
+      score: risk.initialScore,
+      residual: risk.initialScore,
+      probability: risk.initialProbability,
+      impact: risk.initialImpact,
+    },
+    ...[...assessments].reverse().map((a) => ({
+      date: a.reviewDate,
+      reviewLabel: `بازبینی #${reviewNumbers.get(a.id)}`,
+      score: a.currentScore,
+      residual: a.residualScore,
+      probability: a.currentProbability,
+      impact: a.currentImpact,
+    })),
+  ]
 
   const state = currentState(risk, assessments)
   const level = riskLevel(state.score)
   const escalation = isEscalationRequired(risk, assessments, actions)
   const initialLevel = riskLevel(risk.initialScore)
+  const latestResidualScore = assessments.length > 0 ? assessments[0].residualScore : null
+  const residualLevel = latestResidualScore !== null ? riskLevel(latestResidualScore) : null
   const stage = lifecycleStage(risk, assessments)
   const strategyFieldDefs = STRATEGY_FIELDS[risk.responseStrategy]
   const filledStrategyDetails = strategyFieldDefs.filter((f) => (risk.strategyDetails[f.key] ?? '').trim() !== '')
@@ -147,17 +168,23 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
         )}
 
         {/* Score journey */}
-        <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 p-3">
           <ScorePill label="امتیاز اولیه" score={risk.initialScore} level={initialLevel} />
           <span className="text-muted">←</span>
           <ScorePill label="امتیاز فعلی" score={state.score} level={level} highlight />
+          {latestResidualScore !== null && residualLevel && (
+            <>
+              <span className="text-muted">←</span>
+              <ScorePill label="هدف باقیمانده" score={latestResidualScore} level={residualLevel} />
+            </>
+          )}
           <div className="mr-auto flex items-center gap-2">
             {risk.initialScore !== state.score && (
               <span className="text-xs font-bold" style={{ color: state.score < risk.initialScore ? '#2ecc71' : '#e74c3c' }}>
                 {state.score < risk.initialScore ? '↓' : '↑'} {Math.abs(Math.round(((risk.initialScore - state.score) / risk.initialScore) * 100))}%
               </span>
             )}
-            {scoreChartData.length >= 2 && <ScoreSparkline data={scoreChartData} />}
+            {assessments.length >= 1 && <ScoreSparkline data={scoreChartData} />}
           </div>
         </div>
 
@@ -220,13 +247,43 @@ function ScorePill({ label, score, level, highlight }: { label: string; score: n
   )
 }
 
-function ScoreSparkline({ data }: { data: { date: string; score: number; residual: number }[] }) {
+interface ScorePoint {
+  date: string
+  reviewLabel: string
+  score: number
+  residual: number
+  probability: number
+  impact: number
+}
+
+function SparklineTooltip({ active, payload }: { active?: boolean; payload?: { payload: ScorePoint }[] }) {
+  if (!active || !payload || payload.length === 0) return null
+  const p = payload[0].payload
   return (
-    <div className="flex h-11 w-24 flex-col items-center" title="روند امتیاز ریسک در طول بازبینی‌ها">
+    <div className="rounded-lg border border-white/10 bg-[#0f1115] px-2.5 py-1.5 text-[10px] leading-5 shadow-lg">
+      <p className="font-bold text-secondary">{p.reviewLabel}</p>
+      <p className="num text-muted">{formatJalali(p.date)}</p>
+      <p>
+        امتیاز فعلی: <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[riskLevel(p.score)] }}>{p.score}</span>
+      </p>
+      <p>
+        امتیاز باقیمانده: <span className="num font-bold" style={{ color: RISK_LEVEL_COLOR[riskLevel(p.residual)] }}>{p.residual}</span>
+      </p>
+      <p className="num text-muted">
+        احتمال {p.probability} × شدت {p.impact}
+      </p>
+    </div>
+  )
+}
+
+function ScoreSparkline({ data }: { data: ScorePoint[] }) {
+  return (
+    <div className="flex h-11 w-24 flex-col items-center">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 2, right: 2, left: 0, bottom: 0 }}>
           <XAxis dataKey="date" tickFormatter={formatJalali} tick={{ fontSize: 6, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} height={10} interval="preserveStartEnd" />
           <YAxis domain={[0, 25]} tick={{ fontSize: 6, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border-soft)' }} width={16} tickCount={2} />
+          <Tooltip content={<SparklineTooltip />} />
           <Line type="monotone" dataKey="score" stroke="#e74c3c" strokeWidth={1.25} dot={{ r: 1 }} isAnimationActive={false} />
           <Line type="monotone" dataKey="residual" stroke="#2ecc71" strokeWidth={1.25} dot={{ r: 1 }} strokeDasharray="3 2" isAnimationActive={false} />
         </LineChart>
@@ -308,6 +365,7 @@ function AssessmentSection({
   }
 
   const assistantBullets = riskInsightBullets(risk, assessments, actions)
+  const reviewNumbers = assignReviewNumbers(assessments)
 
   return (
     <div className="rounded-xl border border-white/10 p-3">
@@ -392,6 +450,9 @@ function AssessmentSection({
               return (
                 <div key={a.id} className="rounded-lg bg-white/[0.02] p-2.5 text-[11px]">
                   <div className="flex flex-wrap items-center gap-2">
+                    <span className="shrink-0 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
+                      بازبینی #{reviewNumbers.get(a.id)}
+                    </span>
                     <span className="num shrink-0 text-muted">{formatJalali(a.reviewDate)}</span>
                     <span className="flex items-center gap-1">
                       <span className="text-[9px] text-muted">فعلی</span>

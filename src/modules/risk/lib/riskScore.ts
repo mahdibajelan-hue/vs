@@ -90,3 +90,19 @@ export function isEscalationRequired(risk: RmRisk, assessments: RmRiskAssessment
   if (risk.timeToImpactDays !== null && risk.timeToImpactDays <= 14) return true
   return false
 }
+
+/**
+ * Immutable review numbering (#1, #2, ...) derived from each review's persisted review_date +
+ * created_at position in chronological order — never from the current UI array's index, so
+ * a review's number can't shift just because the display is sorted newest-first or a new review
+ * gets added later. "Initial Assessment" (the risk's own frozen initial values) is implicitly
+ * position 0, before #1.
+ */
+export function assignReviewNumbers(assessments: RmRiskAssessment[]): Map<string, number> {
+  const chronological = [...assessments].sort((a, b) =>
+    a.reviewDate !== b.reviewDate ? (a.reviewDate < b.reviewDate ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
+  )
+  const map = new Map<string, number>()
+  chronological.forEach((a, i) => map.set(a.id, i + 1))
+  return map
+}

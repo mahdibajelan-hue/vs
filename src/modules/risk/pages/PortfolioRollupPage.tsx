@@ -115,22 +115,39 @@ export function PortfolioRollupPage({ onOpenProject }: { onOpenProject: (rmProje
   )
 }
 
+type KpiStatus = 'good' | 'warn' | 'bad'
+
+const STATUS_COLOR: Record<KpiStatus, string> = {
+  good: '#2ecc71',
+  warn: '#f97316',
+  bad: '#e74c3c',
+}
+
+/**
+ * Direction-aware thresholds mirroring DashboardPage's project-level KPI coloring (spec #29):
+ * "بحرانی/زیاد" is lower-is-better (fewer critical/high risks is good), "میانگین بلوغ" is
+ * higher-is-better (more review/action coverage is good) — each metric gets its own rule rather
+ * than a single blanket direction.
+ */
 function TotalsRow({ totals }: { totals: RollupTotals }) {
+  const criticalHighStatus: KpiStatus = totals.criticalHighCount === 0 ? 'good' : totals.criticalHighCount <= 2 ? 'warn' : 'bad'
+  const maturityStatus: KpiStatus = totals.avgMaturity >= 70 ? 'good' : totals.avgMaturity >= 40 ? 'warn' : 'bad'
   return (
     <div className="flex flex-wrap items-center gap-3 text-[11px]">
       <Badge label="پروژه متصل" value={`${totals.mappedProjectCount}/${totals.projectCount}`} color="#94a3b8" />
       <Badge label="ریسک فعال" value={totals.activeRisks} color="#3498db" />
-      <Badge label="بحرانی/زیاد" value={totals.criticalHighCount} color="#e74c3c" />
+      <Badge label="بحرانی/زیاد" value={totals.criticalHighCount} color="#e74c3c" status={criticalHighStatus} />
       <Badge label="مواجهه فعلی" value={totals.exposureCurrent} color="#f97316" />
-      <Badge label="میانگین بلوغ" value={`${totals.avgMaturity}%`} color="#a855f7" />
+      <Badge label="میانگین بلوغ" value={`${totals.avgMaturity}%`} color="#a855f7" status={maturityStatus} />
     </div>
   )
 }
 
-function Badge({ label, value, color }: { label: string; value: string | number; color: string }) {
+function Badge({ label, value, color, status }: { label: string; value: string | number; color: string; status?: KpiStatus }) {
+  const displayColor = status ? STATUS_COLOR[status] : color
   return (
-    <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: `${color}18` }}>
-      <span className="num font-bold" style={{ color }}>
+    <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1" style={{ background: `${displayColor}18` }}>
+      <span className="num font-bold" style={{ color: displayColor }}>
         {value}
       </span>
       <span className="text-muted">{label}</span>

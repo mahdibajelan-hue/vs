@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2, Briefcase, FolderTree, FolderKanban, Loader2, ShieldCheck, Link2, ClipboardCheck } from 'lucide-react'
+import { Building2, Briefcase, FolderTree, FolderKanban, Loader2, ShieldCheck, Link2, ClipboardCheck, Database } from 'lucide-react'
 import { useMasterDataStore } from './store/useMasterDataStore'
 import { OrganizationsPage } from './pages/OrganizationsPage'
 import { PortfoliosPage } from './pages/PortfoliosPage'
@@ -9,9 +9,10 @@ import { ProjectIdentityPage } from './pages/ProjectIdentityPage'
 import { RolesPermissionsPage } from './pages/RolesPermissionsPage'
 import { ProjectMappingPage } from './pages/ProjectMappingPage'
 import { DataIntegrityPage } from './pages/DataIntegrityPage'
+import { DemoDataPage } from './pages/DemoDataPage'
 import { ContextSwitcher } from './components/ContextSwitcher'
 
-type Tab = 'organizations' | 'portfolios' | 'programs' | 'projects' | 'access' | 'mapping' | 'integrity'
+type Tab = 'organizations' | 'portfolios' | 'programs' | 'projects' | 'access' | 'mapping' | 'integrity' | 'demo'
 
 const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: 'organizations', label: 'سازمان‌ها', icon: Building2 },
@@ -21,6 +22,7 @@ const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
   { id: 'access', label: 'نقش‌ها و دسترسی‌ها', icon: ShieldCheck },
   { id: 'mapping', label: 'نگاشت پروژه‌ها', icon: Link2 },
   { id: 'integrity', label: 'یکپارچگی داده', icon: ClipboardCheck },
+  { id: 'demo', label: 'داده‌های نمایشی', icon: Database },
 ]
 
 /**
@@ -84,8 +86,10 @@ export function MasterDataApp() {
             <RolesPermissionsPage />
           ) : tab === 'mapping' ? (
             <ProjectMappingPage />
-          ) : (
+          ) : tab === 'integrity' ? (
             <DataIntegrityPage />
+          ) : (
+            <DemoDataPage />
           )}
         </div>
       </div>
