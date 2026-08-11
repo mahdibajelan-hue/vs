@@ -3,6 +3,8 @@ import { ArrowRight, Brain, LayoutDashboard, ListChecks, Loader2, Network, Shiel
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { LevelBreadcrumb } from '../masterdata/components/LevelBreadcrumb'
+import { useHierarchyPath } from '../masterdata/lib/useHierarchyPath'
 import { useRiskStore } from './store/useRiskStore'
 import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
@@ -26,6 +28,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
   const clearMembers = useRiskMembersStore((s) => s.clear)
   const [switching, setSwitching] = useState(false)
   const [tab, setTab] = useState<Tab>('dashboard')
+  const hierarchyPath = useHierarchyPath('risk', projectDetail?.id ?? null)
 
   useEffect(() => {
     fetchProjects()
@@ -135,6 +138,12 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
       </header>
 
       <StorageErrorBanner />
+
+      {projectDetail && tab !== 'portfolio' && hierarchyPath && (
+        <div className="no-print border-b px-4 py-1.5" style={{ borderColor: 'var(--border-soft)' }}>
+          <LevelBreadcrumb path={hierarchyPath} className="text-muted" />
+        </div>
+      )}
 
       <main className="min-h-0 flex-1 overflow-hidden">
         {tab === 'portfolio' ? (

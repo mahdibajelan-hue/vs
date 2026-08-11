@@ -7,6 +7,8 @@ import { useCurrentRole } from '../../store/useMembersStore'
 import { UserManagementModal } from '../Auth/UserManagementModal'
 import { ProfileModal } from '../Auth/ProfileModal'
 import { ROLE_LABEL_FA, type Project } from '../../types'
+import { LevelBreadcrumb } from '../../modules/masterdata/components/LevelBreadcrumb'
+import { useHierarchyPath } from '../../modules/masterdata/lib/useHierarchyPath'
 
 export function Topbar({ project, title, onMenuClick }: { project: Project | null; title: string; onMenuClick: () => void }) {
   const theme = useStore((s) => s.theme)
@@ -17,6 +19,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const [showUsers, setShowUsers] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const hierarchyPath = useHierarchyPath('pipepulse', project?.id ?? null)
 
   return (
     <header className="no-print flex items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-3 sm:px-6 sm:py-3.5">
@@ -36,6 +39,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
               </span>
             </div>
           )}
+          {hierarchyPath && <LevelBreadcrumb path={hierarchyPath} className="mt-1 hidden lg:flex" />}
         </div>
       </div>
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">

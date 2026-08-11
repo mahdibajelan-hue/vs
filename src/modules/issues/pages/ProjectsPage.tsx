@@ -7,6 +7,8 @@ import { isIssueOverdue } from '../lib/issueRing'
 import { IssueCard } from '../components/IssueCard'
 import { NewProjectModal } from '../components/NewProjectModal'
 import { MembersModal } from '../components/MembersModal'
+import { LevelBreadcrumb } from '../../masterdata/components/LevelBreadcrumb'
+import { useHierarchyPath } from '../../masterdata/lib/useHierarchyPath'
 
 export function ProjectsPage({
   activeProjectId,
@@ -112,6 +114,7 @@ function ProjectDetail({
   const allIssues = useIssuesStore((s) => s.issues)
   const members = useIssuesMembersStore((s) => s.membersByProject[projectId] ?? EMPTY_MEMBERS)
   const role = useIssuesCurrentRole(projectId)
+  const hierarchyPath = useHierarchyPath('issues', projectId)
 
   const pIssuesSorted = useMemo(
     () => allIssues.filter((i) => i.projectId === projectId).sort((a, b) => a.deadlineDate.localeCompare(b.deadlineDate)),
@@ -129,6 +132,7 @@ function ProjectDetail({
           </button>
           <div className="im-page-title">{project.name}</div>
           <div className="im-page-sub">{project.description || 'بدون توضیحات'}</div>
+          {hierarchyPath && <LevelBreadcrumb path={hierarchyPath} className="mt-1.5" style={{ color: 'var(--im-muted)' }} />}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {imCanManage(role) && (
