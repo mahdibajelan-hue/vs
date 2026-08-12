@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Banknote, FileText, Home, LayoutDashboard, LineChart, Loader2, Receipt } from 'lucide-react'
+import { Banknote, Calculator, ClipboardList, FileText, Home, LayoutDashboard, LineChart, Loader2, Receipt } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
@@ -7,18 +7,22 @@ import { SignOutButton } from '../../components/Auth/SignOutButton'
 import { BudgetPage } from './pages/BudgetPage'
 import { ContractsPage } from './pages/ContractsPage'
 import { PaymentCertificatesPage } from './pages/PaymentCertificatesPage'
+import { CostManagementPage } from './pages/CostManagementPage'
+import { FinancialReportsPage } from './pages/FinancialReportsPage'
 import { FinancialDashboardPage } from './pages/FinancialDashboardPage'
 import { CashFlowForecastPage } from './pages/CashFlowForecastPage'
 
 export const FINANCE_ACCENT = '#10b981'
 
-type Tab = 'dashboard' | 'budget' | 'contracts' | 'certificates' | 'cashflow'
+type Tab = 'dashboard' | 'budget' | 'contracts' | 'certificates' | 'cost' | 'reports' | 'cashflow'
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'داشبورد مالی', icon: LayoutDashboard },
   { id: 'budget', label: 'بودجه', icon: Banknote },
   { id: 'contracts', label: 'قرارداد', icon: FileText },
   { id: 'certificates', label: 'صورت‌وضعیت', icon: Receipt },
+  { id: 'cost', label: 'مدیریت هزینه', icon: Calculator },
+  { id: 'reports', label: 'گزارش‌های مالی', icon: ClipboardList },
   { id: 'cashflow', label: 'جریان نقدی و پیش‌بینی', icon: LineChart },
 ]
 
@@ -69,7 +73,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             </p>
           </div>
           <span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
-          {tab !== 'cashflow' && (
+          {tab !== 'cashflow' && tab !== 'dashboard' && (
             <select
               value={projectId ?? ''}
               onChange={(e) => setProjectId(e.target.value || null)}
@@ -112,18 +116,22 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
         {tab === 'cashflow' ? (
           <CashFlowForecastPage />
+        ) : tab === 'dashboard' ? (
+          <FinancialDashboardPage />
         ) : !projectId ? (
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}
           </div>
-        ) : tab === 'dashboard' ? (
-          <FinancialDashboardPage masterProjectId={projectId} />
         ) : tab === 'budget' ? (
           <BudgetPage masterProjectId={projectId} />
         ) : tab === 'contracts' ? (
           <ContractsPage masterProjectId={projectId} />
-        ) : (
+        ) : tab === 'certificates' ? (
           <PaymentCertificatesPage masterProjectId={projectId} />
+        ) : tab === 'cost' ? (
+          <CostManagementPage masterProjectId={projectId} />
+        ) : (
+          <FinancialReportsPage masterProjectId={projectId} />
         )}
       </div>
 

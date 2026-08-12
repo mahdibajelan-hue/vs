@@ -1,10 +1,10 @@
 import { useId, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
-import { Banknote, Briefcase, Building2, Calculator, FolderKanban, Scale, Target, TrendingDown, Wallet } from 'lucide-react'
+import { Banknote, Briefcase, Building2, Calculator, CalendarClock, FolderKanban, Landmark, Scale, Target, TrendingDown, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
-import { aggregateFinancialSummaries, computeCashFlowSeries, computeProjectFinancialSummary, cumulativeCashFlow, type ProjectFinancialSummary } from '../lib/financeCalc'
-import { FinanceKpiTile, fmtCurrency } from '../components/FinanceKpiTile'
+import { aggregateFinancialSummaries, computeCashFlowSeries, computeProjectFinancialSummary, cumulativeCashFlow, ensureForwardMonths, todayIso, type CashFlowPoint, type ProjectFinancialSummary } from '../lib/financeCalc'
+import { FinanceKpiTile, fmtCurrency, fmtMonthJalali } from '../components/FinanceKpiTile'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { RankedBarChart, type ChartDatum } from '../../masterdata/components/RollupCharts'
 import type { MasterProject } from '../../masterdata/types'
@@ -48,7 +48,8 @@ export function CashFlowForecastPage() {
     const contractIds = new Set(scopedContracts.map((c) => c.id))
     const scopedAmendments = amendments.filter((a) => contractIds.has(a.contractId))
     const scopedCertificates = certificates.filter((c) => contractIds.has(c.contractId))
-    return computeCashFlowSeries(scopedContracts, scopedAmendments, scopedCertificates)
+    // Spec: "minimum 12-month forecast" at every level — pad forward months with zero activity rather than truncating the chart/report.
+    return ensureForwardMonths(computeCashFlowSeries(scopedContracts, scopedAmendments, scopedCertificates))
   }
 
   const scopeCurrency = (projectIds: string[]) => {
@@ -162,6 +163,7 @@ function PortfolioScope({
         <p className="text-[11px] text-muted">{scopedProjects.length} پروژه در این محدوده</p>
       </div>
       <ScopeKpis summary={summary} currency={currency} />
+      <FundingRequirementPanel cashFlow={cashFlow} currency={currency} showManagementNote />
       <CashFlowSection cashFlow={cashFlow} currency={currency} />
       {breakdown.length > 0 && (
         <RankedBarChart title="هزینه متعهدشده به تفکیک برنامه" icon={<Briefcase size={12} style={{ color: FINANCE_ACCENT }} />} data={breakdown} unit={currency} formatValue={(n) => fmtCurrency(n)} />
@@ -220,6 +222,7 @@ function ProgramScope({
         <p className="text-[11px] text-muted">{scopedProjects.length} پروژه در این محدوده</p>
       </div>
       <ScopeKpis summary={summary} currency={currency} />
+      <FundingRequirementPanel cashFlow={cashFlow} currency={currency} />
       <CashFlowSection cashFlow={cashFlow} currency={currency} />
       {breakdown.length > 0 && (
         <RankedBarChart title="هزینه متعهدشده به تفکیک پروژه" icon={<FolderKanban size={12} style={{ color: FINANCE_ACCENT }} />} data={breakdown} unit={currency} formatValue={(n) => fmtCurrency(n)} />
@@ -265,7 +268,64 @@ function ProjectScope({
         </div>
       </div>
       <ScopeKpis summary={summary} currency={currency} />
+      <FundingRequirementPanel cashFlow={cashFlow} currency={currency} />
       <CashFlowSection cashFlow={cashFlow} currency={currency} />
+    </div>
+  )
+}
+
+/**
+ * Funding Requirement (spec item 12): this module forecasts expected monthly certificate and
+ * expected monthly payment as a single "remaining commitment spread to completion" figure (see
+ * computeCashFlowSeries's forecast field) rather than two independently modeled numbers — so both
+ * are read off the same monthly forecast bucket here. `showManagementNote` renders the explicit
+ * plain-language portfolio-level summary the spec calls for ("how much certificate/cash does the
+ * whole company need this month, and over the next 12 months").
+ */
+export function FundingRequirementPanel({ cashFlow, currency, showManagementNote }: { cashFlow: CashFlowPoint[]; currency: string; showManagementNote?: boolean }) {
+  const nowMonth = todayIso().slice(0, 7)
+  const forwardPoints = cashFlow.filter((p) => p.month >= nowMonth).slice(0, 12)
+  const thisMonth = forwardPoints[0]?.forecast ?? 0
+  const next12Total = forwardPoints.reduce((sum, p) => sum + p.forecast, 0)
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+        <Landmark size={12} style={{ color: FINANCE_ACCENT }} /> نیاز مالی و پیش‌بینی تامین بودجه (Funding Requirement)
+      </p>
+      <p className="mb-3 text-[10px] leading-5 text-muted">
+        برآورد ماهانه صورت‌وضعیت و پرداخت مورد انتظار، بر مبنای تعهد باقیمانده قراردادها تا تاریخ تکمیل برنامه‌ریزی‌شده هر قرارداد.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FinanceKpiTile
+          icon={CalendarClock}
+          label="نیاز مالی برآوردی ماه جاری"
+          value={fmtCurrency(thisMonth, currency)}
+          color="#f59e0b"
+          tooltip="مبلغ برآوردی صورت‌وضعیت/پرداخت مورد انتظار در ماه جاری، بر مبنای تعهد باقیمانده قراردادهای فعال این محدوده."
+        />
+        <FinanceKpiTile
+          icon={Landmark}
+          label="نیاز مالی کل ۱۲ ماه آینده"
+          value={fmtCurrency(next12Total, currency)}
+          color="#f59e0b"
+          tooltip="مجموع نیاز مالی برآوردی این محدوده برای ۱۲ ماه پیش رو — پاسخ به «تا یک سال آینده چقدر منبع مالی لازم است»."
+          emphasize
+        />
+      </div>
+      {showManagementNote && (
+        <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.02] p-2.5 text-[10.5px] leading-6 text-secondary">
+          گزارش مدیریتی: بر اساس تعهدات باقیمانده قراردادهای این پورتفولیو، برآورد می‌شود در ماه جاری حدود{' '}
+          <span className="num font-bold" style={{ color: FINANCE_ACCENT }}>
+            {fmtCurrency(thisMonth, currency)}
+          </span>{' '}
+          صورت‌وضعیت/پرداخت مورد نیاز باشد و برای تامین مالی ۱۲ ماه پیش رو مجموعا حدود{' '}
+          <span className="num font-bold" style={{ color: FINANCE_ACCENT }}>
+            {fmtCurrency(next12Total, currency)}
+          </span>{' '}
+          منبع مالی باید در نظر گرفته شود.
+        </p>
+      )}
     </div>
   )
 }
@@ -303,7 +363,7 @@ function ScopeKpis({ summary, currency }: { summary: ProjectFinancialSummary; cu
   )
 }
 
-function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<typeof computeCashFlowSeries>; currency: string }) {
+export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<typeof computeCashFlowSeries>; currency: string }) {
   const cumulative = cumulativeCashFlow(cashFlow)
   const gid = useId()
   if (cashFlow.length === 0) {
@@ -337,16 +397,17 @@ function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<typeof c
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--border-soft)" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} tickFormatter={fmtMonthJalali} />
                   <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} width={30} tickFormatter={(v: number) => fmtCurrency(v)} />
                   <RTooltip
                     contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
                     labelStyle={{ color: 'var(--text-secondary)' }}
+                    labelFormatter={(label) => fmtMonthJalali(String(label))}
                     formatter={(value, name) => [fmtCurrency(Number(value), currency), String(name)]}
                   />
                   <Area type="monotone" dataKey="planned" name="برنامه" stroke="#38bdf8" strokeWidth={1.5} fill={`url(#${gid}-${title}-planned)`} />
                   <Area type="monotone" dataKey="actual" name="واقعی" stroke="#2ecc71" strokeWidth={2} fill={`url(#${gid}-${title}-actual)`} />
-                  <Area type="monotone" dataKey="forecast" name="پیش‌بینی" stroke="#f59e0b" strokeWidth={1.5} fill={`url(#${gid}-${title}-forecast)`} />
+                  <Area type="monotone" dataKey="forecast" name="پیش‌بینی (نیاز مالی)" stroke="#f59e0b" strokeWidth={1.5} fill={`url(#${gid}-${title}-forecast)`} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

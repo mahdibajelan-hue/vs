@@ -1,11 +1,23 @@
 import { useState } from 'react'
-import { Plus, Receipt, Trash2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, Link2, Plus, Receipt, Trash2, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
-import { paymentAgingDays } from '../lib/financeCalc'
-import { fmtCurrency } from '../components/FinanceKpiTile'
+import { averagePaymentDelayDays, certificateGrossTotal, certificateOutstanding, certificatePaidTotal, paymentAgingDays, realizedPaymentDelayDays } from '../lib/financeCalc'
+import { fmtCurrency, fmtDate, FinanceKpiTile } from '../components/FinanceKpiTile'
 import { FINANCE_ACCENT } from '../FinanceApp'
-import { FIN_CERTIFICATE_STATUS_COLOR, FIN_CERTIFICATE_STATUS_LABEL_FA, FIN_CERTIFICATE_STATUSES, type FinPaymentCertificate, type FinCertificateStatus } from '../types'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import {
+  FIN_CERTIFICATE_STATUS_COLOR,
+  FIN_CERTIFICATE_STATUS_LABEL_FA,
+  FIN_CERTIFICATE_STATUSES,
+  FIN_CERTIFICATE_TYPE_LABEL_FA,
+  FIN_CERTIFICATE_TYPES,
+  type FinCertificateStatus,
+  type FinCertificateType,
+  type FinPaymentCertificate,
+} from '../types'
+
+const CERT_TYPE_COLOR: Record<FinCertificateType, string> = { work: '#38bdf8', adjustment: '#a78bfa' }
 
 export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
@@ -22,7 +34,17 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
   if (!project) return <div className="flex h-40 items-center justify-center text-xs text-muted">پروژه یافت نشد</div>
 
   const activeContract = contracts.find((c) => c.id === (contractId ?? contracts[0]?.id))
-  const list = activeContract ? certificates.filter((c) => c.contractId === activeContract.id) : []
+  const list = activeContract
+    ? certificates.filter((c) => c.contractId === activeContract.id).sort((a, b) => (a.certificateDate < b.certificateDate ? 1 : -1))
+    : []
+  const workCertificates = list.filter((c) => c.certificateType === 'work')
+  const certByNumber = (id: string | null) => (id ? list.find((c) => c.id === id) : null)
+
+  const grossTotal = list.reduce((s, c) => s + certificateGrossTotal(c), 0)
+  const certifiedTotal = list.reduce((s, c) => s + (c.certifiedAmount ?? 0), 0)
+  const paidTotal = list.reduce((s, c) => s + certificatePaidTotal(c), 0)
+  const outstandingTotal = list.reduce((s, c) => s + certificateOutstanding(c), 0)
+  const avgDelay = averagePaymentDelayDays(list)
 
   return (
     <div className="space-y-4">
@@ -55,6 +77,49 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
         )}
       </div>
 
+      {activeContract && list.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <FinanceKpiTile
+            icon={Receipt}
+            label="جمع ناخالص (شامل ارزی)"
+            value={fmtCurrency(grossTotal, activeContract.currency)}
+            color="#38bdf8"
+            tooltip="مجموع مبلغ ناخالص همه صورت‌وضعیت‌های این قرارداد پیش از هرگونه کسورات، به‌علاوه معادل ریالی سهم ارزی. هرچه بالاتر، حجم کارکرد گزارش‌شده بیشتر است."
+          />
+          <FinanceKpiTile
+            icon={CheckCircle2}
+            label="جمع تاییدشده"
+            value={fmtCurrency(certifiedTotal, activeContract.currency)}
+            color="#a78bfa"
+            tooltip="مجموع مبالغی که توسط کارفرما/مشاور تایید نهایی شده‌اند. فاصله زیاد بین این مقدار و «جمع ناخالص» نشانه صورت‌وضعیت‌های معطل‌مانده در فرآیند تایید است."
+          />
+          <FinanceKpiTile
+            icon={Wallet}
+            label="جمع پرداخت‌شده (شامل ارزی)"
+            value={fmtCurrency(paidTotal, activeContract.currency)}
+            color="#2ecc71"
+            tooltip="مجموع مبالغ واقعا پرداخت‌شده به پیمانکار برای این قرارداد، به‌علاوه معادل ریالی سهم ارزی پرداختی."
+          />
+          <FinanceKpiTile
+            icon={AlertCircle}
+            label="مانده پرداخت‌نشده"
+            value={fmtCurrency(outstandingTotal, activeContract.currency)}
+            color={outstandingTotal > 0 ? '#f59e0b' : '#2ecc71'}
+            status={outstandingTotal > 0 ? 'warn' : 'good'}
+            tooltip="تفاوت بین مبلغ تاییدشده (یا قابل پرداخت، اگر هنوز تایید نشده) و مبلغ پرداخت‌شده. این عدد بدهی جاری کارفرما به پیمانکار برای این قرارداد است."
+            emphasize
+          />
+          <FinanceKpiTile
+            icon={Clock}
+            label="میانگین تاخیر پرداخت (روز)"
+            value={avgDelay != null ? avgDelay.toLocaleString('fa-IR') : '—'}
+            color={avgDelay != null && avgDelay > 30 ? '#e74c3c' : '#38bdf8'}
+            status={avgDelay != null && avgDelay > 30 ? 'bad' : undefined}
+            tooltip="میانگین فاصله زمانی بین تاریخ تایید (یا ارسال) و تاریخ پرداخت واقعی، فقط برای صورت‌وضعیت‌های پرداخت‌شده. عدد بالا یعنی روند پرداخت کند شده است."
+          />
+        </div>
+      )}
+
       {contracts.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">ابتدا برای این پروژه یک قرارداد ثبت کنید.</div>
       ) : list.length === 0 ? (
@@ -63,26 +128,46 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
         <div className="space-y-3">
           {list.map((cert) => {
             const aging = paymentAgingDays(cert)
+            const realizedDelay = realizedPaymentDelayDays(cert)
             const tone = FIN_CERTIFICATE_STATUS_COLOR[cert.status]
+            const related = certByNumber(cert.relatedCertificateId)
             return (
               <div key={cert.id} className="glass-panel rounded-2xl p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Receipt size={14} style={{ color: FINANCE_ACCENT }} />
                       <p className="text-sm font-bold">صورت‌وضعیت {cert.certificateNumber || '—'}</p>
+                      <span
+                        className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                        style={{ borderColor: `${CERT_TYPE_COLOR[cert.certificateType]}55`, color: CERT_TYPE_COLOR[cert.certificateType] }}
+                      >
+                        {FIN_CERTIFICATE_TYPE_LABEL_FA[cert.certificateType]}
+                      </span>
                       <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: `${tone}55`, color: tone }}>
                         {FIN_CERTIFICATE_STATUS_LABEL_FA[cert.status]}
                       </span>
                       {aging != null && (
                         <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: aging > 30 ? '#e74c3c55' : '#f1c40f55', color: aging > 30 ? '#e74c3c' : '#f1c40f' }}>
-                          {aging} روز معطلی پرداخت
+                          {aging.toLocaleString('fa-IR')} روز معطلی پرداخت
+                        </span>
+                      )}
+                      {realizedDelay != null && (
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-medium text-secondary">
+                          تاخیر واقعی پرداخت: {realizedDelay.toLocaleString('fa-IR')} روز
                         </span>
                       )}
                     </div>
                     <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                      {cert.certificateDate}
+                      {fmtDate(cert.certificateDate)}
                     </p>
+                    {cert.certificateType === 'adjustment' && (
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-secondary">
+                        <Link2 size={11} />
+                        تعدیل صورت‌وضعیت کارکرد {related ? `شماره ${related.certificateNumber || '—'}` : 'نامشخص'}
+                        {cert.adjustmentFactor != null && <span className="num"> — ضریب تعدیل: {cert.adjustmentFactor.toLocaleString('fa-IR')}</span>}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setEditing(cert)} className="text-xs text-secondary hover:underline">
@@ -103,10 +188,26 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                     value={cert.certifiedAmount != null ? fmtCurrency(cert.certifiedAmount, activeContract?.currency) : 'در انتظار تایید'}
                   />
                   <MiniField label="مبلغ پرداخت‌شده" value={fmtCurrency(cert.paidAmount, activeContract?.currency)} />
-                  <MiniField label="تاریخ ارسال" value={cert.submittedDate ?? '—'} />
-                  <MiniField label="تاریخ تایید" value={cert.certifiedDate ?? '—'} />
-                  <MiniField label="تاریخ پرداخت" value={cert.paidDate ?? '—'} />
+                  <MiniField label="تاریخ ارسال" value={fmtDate(cert.submittedDate)} />
+                  <MiniField label="تاریخ تایید" value={fmtDate(cert.certifiedDate)} />
+                  <MiniField label="تاریخ پرداخت" value={fmtDate(cert.paidDate)} />
                 </div>
+                {(cert.grossFx.fcAmount > 0 || cert.paidFx.fcAmount > 0) && (
+                  <div className="mt-2 space-y-0.5" dir="ltr">
+                    {cert.grossFx.fcAmount > 0 && (
+                      <p className="num text-[10.5px] text-muted">
+                        سهم ارزی ناخالص: {cert.grossFx.fcAmount.toLocaleString('fa-IR')} {cert.grossFx.fcCurrency} × {cert.grossFx.exchangeRate.toLocaleString('fa-IR')} ={' '}
+                        {fmtCurrency(cert.grossFx.fcRialEquivalent, activeContract?.currency)}
+                      </p>
+                    )}
+                    {cert.paidFx.fcAmount > 0 && (
+                      <p className="num text-[10.5px] text-muted">
+                        سهم ارزی پرداختی: {cert.paidFx.fcAmount.toLocaleString('fa-IR')} {cert.paidFx.fcCurrency} × {cert.paidFx.exchangeRate.toLocaleString('fa-IR')} ={' '}
+                        {fmtCurrency(cert.paidFx.fcRialEquivalent, activeContract?.currency)}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -117,6 +218,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
         <CertificateModal
           title="صورت‌وضعیت جدید"
           currency={activeContract.currency}
+          workCertificates={workCertificates}
           onClose={() => setShowNew(false)}
           onSave={async (data) => {
             await createCertificate(activeContract.id, data)
@@ -129,6 +231,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
           title="ویرایش صورت‌وضعیت"
           currency={activeContract?.currency}
           initial={editing}
+          workCertificates={workCertificates.filter((c) => c.id !== editing.id)}
           onClose={() => setEditing(null)}
           onSave={async (data) => {
             await updateCertificate(editing.id, data)
@@ -155,24 +258,34 @@ function CertificateModal({
   title,
   currency,
   initial,
+  workCertificates,
   onClose,
   onSave,
 }: {
   title: string
   currency?: string
   initial?: FinPaymentCertificate
+  workCertificates: FinPaymentCertificate[]
   onClose: () => void
   onSave: (data: Partial<FinPaymentCertificate>) => Promise<void>
 }) {
   const [certificateNumber, setCertificateNumber] = useState(initial?.certificateNumber ?? '')
   const [certificateDate, setCertificateDate] = useState(initial?.certificateDate ?? new Date().toISOString().slice(0, 10))
+  const [certificateType, setCertificateType] = useState<FinCertificateType>(initial?.certificateType ?? 'work')
+  const [relatedCertificateId, setRelatedCertificateId] = useState(initial?.relatedCertificateId ?? '')
+  const [adjustmentFactor, setAdjustmentFactor] = useState(initial?.adjustmentFactor != null ? String(initial.adjustmentFactor) : '')
   const [grossAmount, setGrossAmount] = useState(initial?.grossAmount != null ? String(initial.grossAmount) : '')
+  const [fcAmount, setFcAmount] = useState(initial?.grossFx.fcAmount != null ? String(initial.grossFx.fcAmount) : '0')
+  const [fcCurrency, setFcCurrency] = useState(initial?.grossFx.fcCurrency ?? 'EUR')
+  const [exchangeRate, setExchangeRate] = useState(initial?.grossFx.exchangeRate != null ? String(initial.grossFx.exchangeRate) : '0')
   const [adjustments, setAdjustments] = useState(initial?.adjustments != null ? String(initial.adjustments) : '0')
   const [deductions, setDeductions] = useState(initial?.deductions != null ? String(initial.deductions) : '0')
   const [retentionAmount, setRetentionAmount] = useState(initial?.retentionAmount != null ? String(initial.retentionAmount) : '0')
   const [advanceRecoveryAmount, setAdvanceRecoveryAmount] = useState(initial?.advanceRecoveryAmount != null ? String(initial.advanceRecoveryAmount) : '0')
   const [certifiedAmount, setCertifiedAmount] = useState(initial?.certifiedAmount != null ? String(initial.certifiedAmount) : '')
   const [paidAmount, setPaidAmount] = useState(initial?.paidAmount != null ? String(initial.paidAmount) : '0')
+  const [paidFcAmount, setPaidFcAmount] = useState(initial?.paidFx.fcAmount != null ? String(initial.paidFx.fcAmount) : '0')
+  const [paidExchangeRate, setPaidExchangeRate] = useState(initial?.paidFx.exchangeRate != null ? String(initial.paidFx.exchangeRate) : '0')
   const [status, setStatus] = useState<FinCertificateStatus>(initial?.status ?? 'draft')
   const [submittedDate, setSubmittedDate] = useState(initial?.submittedDate ?? '')
   const [certifiedDate, setCertifiedDate] = useState(initial?.certifiedDate ?? '')
@@ -192,13 +305,18 @@ function CertificateModal({
     await onSave({
       certificateNumber,
       certificateDate,
+      certificateType,
+      relatedCertificateId: certificateType === 'adjustment' ? relatedCertificateId || null : null,
+      adjustmentFactor: certificateType === 'adjustment' && adjustmentFactor !== '' ? Number(adjustmentFactor) : null,
       grossAmount: grossAmount === '' ? 0 : Number(grossAmount),
+      grossFx: { fcAmount: Number(fcAmount) || 0, fcCurrency, exchangeRate: Number(exchangeRate) || 0, fcRialEquivalent: 0 },
       adjustments: Number(adjustments) || 0,
       deductions: Number(deductions) || 0,
       retentionAmount: Number(retentionAmount) || 0,
       advanceRecoveryAmount: Number(advanceRecoveryAmount) || 0,
       certifiedAmount: certifiedAmount === '' ? null : Number(certifiedAmount),
       paidAmount: Number(paidAmount) || 0,
+      paidFx: { fcAmount: Number(paidFcAmount) || 0, fcCurrency, exchangeRate: Number(paidExchangeRate) || 0, fcRialEquivalent: 0 },
       status,
       submittedDate: submittedDate || null,
       certifiedDate: certifiedDate || null,
@@ -219,11 +337,51 @@ function CertificateModal({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ صورت‌وضعیت</span>
-            <input type="date" value={certificateDate} onChange={(e) => setCertificateDate(e.target.value)} className="input num" />
+            <JalaliDateInput value={certificateDate} onChange={setCertificateDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ ناخالص (Gross)</span>
+            <span className="mb-1 block text-xs text-secondary">نوع صورت‌وضعیت</span>
+            <select value={certificateType} onChange={(e) => setCertificateType(e.target.value as FinCertificateType)} className="input">
+              {FIN_CERTIFICATE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {FIN_CERTIFICATE_TYPE_LABEL_FA[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {certificateType === 'adjustment' && (
+            <label className="block">
+              <span className="mb-1 block text-xs text-secondary">صورت‌وضعیت کارکرد مرتبط</span>
+              <select value={relatedCertificateId} onChange={(e) => setRelatedCertificateId(e.target.value)} className="input">
+                <option value="">—</option>
+                {workCertificates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.certificateNumber || 'بدون شماره'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {certificateType === 'adjustment' && (
+            <label className="block">
+              <span className="mb-1 block text-xs text-secondary">ضریب تعدیل</span>
+              <input type="number" step="0.0001" value={adjustmentFactor} onChange={(e) => setAdjustmentFactor(e.target.value)} className="input num" />
+            </label>
+          )}
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">مبلغ ناخالص ریالی (Gross)</span>
             <input type="number" value={grossAmount} onChange={(e) => setGrossAmount(e.target.value)} className="input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">مبلغ ناخالص ارزی</span>
+            <div className="flex gap-1.5">
+              <input type="number" value={fcAmount} onChange={(e) => setFcAmount(e.target.value)} className="input num" />
+              <input value={fcCurrency} onChange={(e) => setFcCurrency(e.target.value)} className="input w-20" dir="ltr" />
+            </div>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">نرخ تبدیل (ناخالص)</span>
+            <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="input num" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تعدیلات (Adjustments)</span>
@@ -250,8 +408,16 @@ function CertificateModal({
             <input type="number" value={certifiedAmount} onChange={(e) => setCertifiedAmount(e.target.value)} className="input num" placeholder="در انتظار تایید" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ پرداخت‌شده</span>
+            <span className="mb-1 block text-xs text-secondary">مبلغ پرداخت‌شده ریالی</span>
             <input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">مبلغ پرداخت‌شده ارزی</span>
+            <input type="number" value={paidFcAmount} onChange={(e) => setPaidFcAmount(e.target.value)} className="input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">نرخ تبدیل (پرداختی)</span>
+            <input type="number" value={paidExchangeRate} onChange={(e) => setPaidExchangeRate(e.target.value)} className="input num" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">وضعیت</span>
@@ -265,15 +431,15 @@ function CertificateModal({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ ارسال</span>
-            <input type="date" value={submittedDate} onChange={(e) => setSubmittedDate(e.target.value)} className="input num" />
+            <JalaliDateInput value={submittedDate} onChange={setSubmittedDate} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ تایید</span>
-            <input type="date" value={certifiedDate} onChange={(e) => setCertifiedDate(e.target.value)} className="input num" />
+            <JalaliDateInput value={certifiedDate} onChange={setCertifiedDate} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ پرداخت</span>
-            <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className="input num" />
+            <JalaliDateInput value={paidDate} onChange={setPaidDate} />
           </label>
         </div>
         <label className="block">

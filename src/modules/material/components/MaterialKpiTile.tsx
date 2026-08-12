@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { formatJalali } from '../../../lib/jalali'
 
 const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#2ecc71', warn: '#f1c40f', bad: '#e74c3c' }
 
@@ -58,6 +59,12 @@ export function fmtQty(n: number, unit = ''): string {
 export function fmtWeight(kg: number): string {
   if (Math.abs(kg) >= 1000) return `${(kg / 1000).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} تن`
   return `${kg.toLocaleString('fa-IR', { maximumFractionDigits: 1 })} کیلوگرم`
+}
+
+/** Every date in this module is displayed as Jalali (شمسی) — mirrors the Finance module's helper. */
+export function fmtDate(iso: string | null): string {
+  if (!iso) return '—'
+  return formatJalali(iso) || '—'
 }
 
 /** Compact currency formatting (میلیون/میلیارد/هزار میلیارد) — mirrors the Finance module's helper. */

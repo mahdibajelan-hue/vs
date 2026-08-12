@@ -5,6 +5,7 @@ import { useMaterialStore } from '../store/useMaterialStore'
 import { manufacturingDelayDays } from '../lib/materialCalc'
 import { fmtQty } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { MANUFACTURING_STATUS_COLOR, MANUFACTURING_STATUS_LABEL_FA, MANUFACTURING_STATUSES, type Manufacturing, type ManufacturingStatus, type PoLine } from '../types'
 
 export function ManufacturingPage({ masterProjectId }: { masterProjectId: string }) {
@@ -133,15 +134,15 @@ function ManufacturingModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ برنامه‌ریزی آماده‌سازی</span>
-          <input type="date" value={plannedReadyDate} onChange={(e) => setPlannedReadyDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={plannedReadyDate} onChange={setPlannedReadyDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ واقعی آماده‌سازی</span>
-          <input type="date" value={actualReadyDate} onChange={(e) => setActualReadyDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={actualReadyDate} onChange={setActualReadyDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ تست کارخانه‌ای (FAT)</span>
-          <input type="date" value={fatDate} onChange={(e) => setFatDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={fatDate} onChange={setFatDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">یادداشت</span>

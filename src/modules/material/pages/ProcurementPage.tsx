@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { FileText, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useMaterialStore } from '../store/useMaterialStore'
-import { fmtQty, fmtValue } from '../components/MaterialKpiTile'
+import { fmtDate, fmtQty, fmtValue } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
   PO_STATUS_COLOR,
   PO_STATUS_LABEL_FA,
@@ -109,7 +110,7 @@ export function ProcurementPage({ masterProjectId }: { masterProjectId: string }
                           </span>
                         </div>
                         <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                          {r.mrDate}
+                          {fmtDate(r.mrDate)}
                         </p>
                         {r.supplierOrgId && <p className="mt-1 text-xs text-secondary">تامین‌کننده: {orgName(r.supplierOrgId)}</p>}
                       </div>
@@ -188,7 +189,7 @@ export function ProcurementPage({ masterProjectId }: { masterProjectId: string }
                           </span>
                         </div>
                         <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                          {po.poDate}
+                          {fmtDate(po.poDate)}
                         </p>
                         <p className="mt-1 text-xs text-secondary">تامین‌کننده: {orgName(po.supplierOrgId)}</p>
                       </div>
@@ -356,7 +357,7 @@ function RequestModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ</span>
-          <input type="date" value={mrDate} onChange={(e) => setMrDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={mrDate} onChange={setMrDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">وضعیت</span>
@@ -480,7 +481,7 @@ function PoModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ</span>
-          <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={poDate} onChange={setPoDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">درخواست خرید مرتبط</span>
@@ -588,7 +589,7 @@ function AddPoLineModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ تحویل برنامه‌ریزی‌شده</span>
-          <input type="date" value={plannedDeliveryDate} onChange={(e) => setPlannedDeliveryDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={plannedDeliveryDate} onChange={setPlannedDeliveryDate} />
         </label>
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">

@@ -5,6 +5,7 @@ import { useMaterialStore } from '../store/useMaterialStore'
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../../components/common/ResponsiveTable'
 import { fmtQty, fmtValue, fmtWeight } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { COMMODITY_TYPE_LABEL_FA, COMMODITY_TYPES, MTO_REVISION_STATUS_LABEL_FA, MTO_REVISION_STATUSES, type CommodityType, type Material, type MtoRevisionStatus } from '../types'
 
 const COMMODITY_TONE: Record<CommodityType, string> = {
@@ -250,7 +251,7 @@ function NewRevisionModal({ onClose, onSave }: { onClose: () => void; onSave: (d
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ</span>
-          <input type="date" value={revisionDate} onChange={(e) => setRevisionDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={revisionDate} onChange={setRevisionDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">وضعیت</span>

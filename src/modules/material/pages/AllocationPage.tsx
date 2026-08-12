@@ -5,6 +5,7 @@ import { useMaterialStore } from '../store/useMaterialStore'
 import { computeMaterialStatus } from '../lib/materialCalc'
 import { fmtQty } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { ALLOCATION_STATUS_LABEL_FA, type Allocation } from '../types'
 
 const ALLOCATION_STATUS_TONE: Record<Allocation['status'], string> = { allocated: '#38bdf8', consumed: '#2ecc71', returned: '#64748b' }
@@ -222,7 +223,7 @@ function AllocationModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ تخصیص</span>
-          <input type="date" value={allocationDate} onChange={(e) => setAllocationDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={allocationDate} onChange={setAllocationDate} />
         </label>
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">

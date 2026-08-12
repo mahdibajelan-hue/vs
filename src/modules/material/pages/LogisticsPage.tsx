@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { FileOutput, Plus, Trash2, Truck } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useMaterialStore } from '../store/useMaterialStore'
-import { fmtQty } from '../components/MaterialKpiTile'
+import { fmtDate, fmtQty } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { SHIPMENT_STATUS_COLOR, SHIPMENT_STATUS_LABEL_FA, SHIPMENT_STATUSES, type ReleaseNote, type Shipment, type ShipmentStatus } from '../types'
 
 type SubTab = 'releases' | 'shipments'
@@ -89,7 +90,7 @@ export function LogisticsPage({ masterProjectId }: { masterProjectId: string }) 
                           <p className="text-sm font-bold">{r.releaseNumber || 'حواله بدون شماره'}</p>
                         </div>
                         <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                          {r.releaseDate}
+                          {fmtDate(r.releaseDate)}
                         </p>
                         {r.poId && <p className="mt-1 text-xs text-secondary">PO: {orders.find((o) => o.id === r.poId)?.poNumber ?? '—'}</p>}
                       </div>
@@ -152,7 +153,7 @@ export function LogisticsPage({ masterProjectId }: { masterProjectId: string }) 
                           </span>
                         </div>
                         <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                          {sh.shipmentDate} {sh.carrier ? `· ${sh.carrier}` : ''}
+                          {fmtDate(sh.shipmentDate)} {sh.carrier ? `· ${sh.carrier}` : ''}
                         </p>
                         {(sh.origin || sh.destination) && (
                           <p className="mt-1 text-xs text-secondary">
@@ -295,7 +296,7 @@ function ReleaseModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ</span>
-          <input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={releaseDate} onChange={setReleaseDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">سفارش خرید مرتبط</span>
@@ -408,7 +409,7 @@ function ShipmentModal({ initial, onClose, onSave }: { initial?: Shipment; onClo
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ ارسال</span>
-            <input type="date" value={shipmentDate} onChange={(e) => setShipmentDate(e.target.value)} className="input num" />
+            <JalaliDateInput value={shipmentDate} onChange={setShipmentDate} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">حمل‌کننده</span>
@@ -438,11 +439,11 @@ function ShipmentModal({ initial, onClose, onSave }: { initial?: Shipment; onClo
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">ETA</span>
-            <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className="input num" />
+            <JalaliDateInput value={eta} onChange={setEta} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">ATA (تاریخ واقعی رسیدن)</span>
-            <input type="date" value={ata} onChange={(e) => setAta(e.target.value)} className="input num" />
+            <JalaliDateInput value={ata} onChange={setAta} />
           </label>
         </div>
         <div className="flex justify-end gap-2 pt-1">

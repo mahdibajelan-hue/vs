@@ -2,8 +2,10 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
-import type { FinBudget, FinBudgetChange, FinContract, FinContractAmendment, FinPaymentCertificate } from '../types'
+import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate } from '../types'
 import {
+  finAnnualBudgetFromRow,
+  finAnnualBudgetToRow,
   finBudgetChangeFromRow,
   finBudgetChangeToRow,
   finBudgetFromRow,
@@ -12,6 +14,8 @@ import {
   finContractAmendmentToRow,
   finContractFromRow,
   finContractToRow,
+  finGuaranteeFromRow,
+  finGuaranteeToRow,
   finPaymentCertificateFromRow,
   finPaymentCertificateToRow,
 } from '../lib/financeData'
@@ -30,9 +34,11 @@ function reportError(action: string, error: { message: string } | null): boolean
 interface FinanceState {
   budgets: FinBudget[]
   budgetChanges: FinBudgetChange[]
+  annualBudgets: FinAnnualBudget[]
   contracts: FinContract[]
   amendments: FinContractAmendment[]
   certificates: FinPaymentCertificate[]
+  guarantees: FinGuarantee[]
   loading: boolean
   loaded: boolean
 
@@ -41,6 +47,9 @@ interface FinanceState {
   upsertBudget: (masterProjectId: string, data: Partial<FinBudget>) => Promise<void>
   addBudgetChange: (masterProjectId: string, data: Partial<FinBudgetChange>) => Promise<void>
   deleteBudgetChange: (id: string) => Promise<void>
+
+  upsertAnnualBudget: (masterProjectId: string, jalaliYear: number, data: Partial<FinAnnualBudget>) => Promise<void>
+  deleteAnnualBudget: (id: string) => Promise<void>
 
   createContract: (masterProjectId: string, data: Partial<FinContract>) => Promise<string | null>
   updateContract: (id: string, data: Partial<FinContract>) => Promise<void>
@@ -52,46 +61,56 @@ interface FinanceState {
   createCertificate: (contractId: string, data: Partial<FinPaymentCertificate>) => Promise<void>
   updateCertificate: (id: string, data: Partial<FinPaymentCertificate>) => Promise<void>
   deleteCertificate: (id: string) => Promise<void>
+
+  createGuarantee: (contractId: string, data: Partial<FinGuarantee>) => Promise<void>
+  updateGuarantee: (id: string, data: Partial<FinGuarantee>) => Promise<void>
+  deleteGuarantee: (id: string) => Promise<void>
 }
 
 export const useFinanceStore = create<FinanceState>()((set, get) => ({
   budgets: [],
   budgetChanges: [],
+  annualBudgets: [],
   contracts: [],
   amendments: [],
   certificates: [],
+  guarantees: [],
   loading: false,
   loaded: false,
 
   fetchAll: async () => {
     set({ loading: true })
-    const [{ data: budgets, error: e1 }, { data: changes, error: e2 }, { data: contracts, error: e3 }] = await Promise.all([
+    const [{ data: budgets, error: e1 }, { data: changes, error: e2 }, { data: contracts, error: e3 }, { data: annualBudgets, error: e7 }] = await Promise.all([
       supabase.from('fin_budgets').select('*'),
       supabase.from('fin_budget_changes').select('*').order('change_date'),
       supabase.from('fin_contracts').select('*').order('created_at', { ascending: false }),
+      supabase.from('fin_annual_budgets').select('*').order('jalali_year'),
     ])
-    if (reportError('بارگذاری داده‌های مالی', e1 ?? e2 ?? e3)) {
+    if (reportError('بارگذاری داده‌های مالی', e1 ?? e2 ?? e3 ?? e7)) {
       set({ loading: false })
       return
     }
     const contractIds = ((contracts ?? []) as { id: string }[]).map((c) => c.id)
-    const [{ data: amendments, error: e4 }, { data: certificates, error: e5 }] =
+    const [{ data: amendments, error: e4 }, { data: certificates, error: e5 }, { data: guarantees, error: e6 }] =
       contractIds.length > 0
         ? await Promise.all([
             supabase.from('fin_contract_amendments').select('*').in('contract_id', contractIds).order('amendment_date'),
             supabase.from('fin_payment_certificates').select('*').in('contract_id', contractIds).order('certificate_date'),
+            supabase.from('fin_guarantees').select('*').in('contract_id', contractIds).order('expiry_date'),
           ])
-        : [{ data: [], error: null }, { data: [], error: null }]
-    if (reportError('بارگذاری داده‌های مالی', e4 ?? e5)) {
+        : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
+    if (reportError('بارگذاری داده‌های مالی', e4 ?? e5 ?? e6)) {
       set({ loading: false })
       return
     }
     set({
       budgets: (budgets ?? []).map(finBudgetFromRow),
       budgetChanges: (changes ?? []).map(finBudgetChangeFromRow),
+      annualBudgets: (annualBudgets ?? []).map(finAnnualBudgetFromRow),
       contracts: (contracts ?? []).map(finContractFromRow),
       amendments: (amendments ?? []).map(finContractAmendmentFromRow),
       certificates: (certificates ?? []).map(finPaymentCertificateFromRow),
+      guarantees: (guarantees ?? []).map(finGuaranteeFromRow),
       loading: false,
       loaded: true,
     })
@@ -114,6 +133,20 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const { error } = await supabase.from('fin_budget_changes').delete().eq('id', id)
     if (reportError('حذف تغییر بودجه', error)) return
     set((s) => ({ budgetChanges: s.budgetChanges.filter((c) => c.id !== id) }))
+  },
+
+  upsertAnnualBudget: async (masterProjectId, jalaliYear, data) => {
+    const existing = get().annualBudgets.find((a) => a.masterProjectId === masterProjectId && a.jalaliYear === jalaliYear)
+    const { error } = existing
+      ? await supabase.from('fin_annual_budgets').update(finAnnualBudgetToRow(null, data)).eq('id', existing.id)
+      : await supabase.from('fin_annual_budgets').insert(finAnnualBudgetToRow(masterProjectId, { ...data, jalaliYear }))
+    if (reportError('ثبت بودجه سالانه', error)) return
+    await get().fetchAll()
+  },
+  deleteAnnualBudget: async (id) => {
+    const { error } = await supabase.from('fin_annual_budgets').delete().eq('id', id)
+    if (reportError('حذف بودجه سالانه', error)) return
+    set((s) => ({ annualBudgets: s.annualBudgets.filter((a) => a.id !== id) }))
   },
 
   createContract: async (masterProjectId, data) => {
@@ -158,5 +191,21 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const { error } = await supabase.from('fin_payment_certificates').delete().eq('id', id)
     if (reportError('حذف صورت‌وضعیت', error)) return
     set((s) => ({ certificates: s.certificates.filter((c) => c.id !== id) }))
+  },
+
+  createGuarantee: async (contractId, data) => {
+    const { error } = await supabase.from('fin_guarantees').insert(finGuaranteeToRow(contractId, data))
+    if (reportError('ثبت ضمانت‌نامه', error)) return
+    await get().fetchAll()
+  },
+  updateGuarantee: async (id, data) => {
+    const { error } = await supabase.from('fin_guarantees').update(finGuaranteeToRow(null, data)).eq('id', id)
+    if (reportError('ویرایش ضمانت‌نامه', error)) return
+    await get().fetchAll()
+  },
+  deleteGuarantee: async (id) => {
+    const { error } = await supabase.from('fin_guarantees').delete().eq('id', id)
+    if (reportError('حذف ضمانت‌نامه', error)) return
+    set((s) => ({ guarantees: s.guarantees.filter((g) => g.id !== id) }))
   },
 }))

@@ -4,8 +4,9 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useMaterialStore } from '../store/useMaterialStore'
 import { computeMaterialStatus } from '../lib/materialCalc'
 import { ResponsiveTable, type ResponsiveTableColumn } from '../../../components/common/ResponsiveTable'
-import { fmtQty } from '../components/MaterialKpiTile'
+import { fmtDate, fmtQty } from '../components/MaterialKpiTile'
 import { MATERIAL_ACCENT } from '../MaterialApp'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { WAREHOUSE_LINE_CONDITION_LABEL_FA, type WarehouseLineCondition } from '../types'
 
 export function WarehousePage({ masterProjectId }: { masterProjectId: string }) {
@@ -130,7 +131,7 @@ export function WarehousePage({ masterProjectId }: { masterProjectId: string }) 
                           <p className="text-sm font-bold">{r.receiptNumber || 'رسید بدون شماره'}</p>
                         </div>
                         <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
-                          {r.receiptDate} {r.warehouseLocation ? `· ${r.warehouseLocation}` : ''}
+                          {fmtDate(r.receiptDate)} {r.warehouseLocation ? `· ${r.warehouseLocation}` : ''}
                         </p>
                         {r.shipmentId && <p className="mt-1 text-xs text-secondary">محموله: {shipments.find((sh) => sh.id === r.shipmentId)?.shipmentNumber ?? '—'}</p>}
                       </div>
@@ -232,7 +233,7 @@ function ReceiptModal({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">تاریخ</span>
-          <input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} className="input num" />
+          <JalaliDateInput value={receiptDate} onChange={setReceiptDate} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-secondary">محموله مرتبط</span>

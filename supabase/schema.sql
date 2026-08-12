@@ -2832,4 +2832,125 @@ create index if not exists idx_mtl_warehouse_receipts_project on mtl_warehouse_r
 create index if not exists idx_mtl_warehouse_lines_receipt on mtl_warehouse_lines (receipt_id);
 create index if not exists idx_mtl_warehouse_lines_material on mtl_warehouse_lines (material_id);
 create index if not exists idx_mtl_allocations_project on mtl_allocations (master_project_id);
+
+-- ============================================================================
+-- 21. Financial Management extensions — additive only, no parallel structure:
+--     everything below either adds columns to the existing fin_contracts /
+--     fin_payment_certificates / fin_budgets tables (section 19) or adds a new
+--     table that hangs off them the same way section 19's tables hang off
+--     master_projects.
+--
+--     Multi-currency: per spec, "every amount is three independent values"
+--     (rial amount, foreign-currency amount, FC rial-equivalent). Applied to
+--     Contract Value, Certificate Gross Amount and Paid Amount, and Approved
+--     Budget — the four amounts the spec explicitly names (Contract, Payment
+--     Certificate, Payment, Budget). Deliberately NOT applied to
+--     adjustments/deductions/retention/advance-recovery: those are computed as
+--     percentages of the certificate's rial gross_amount exactly as before
+--     (payable_amount's generated-column formula is unchanged), and each
+--     certificate's FC gross/paid rial-equivalents are added on top in the
+--     calc layer — i.e. the FC portion is tracked and totalled for visibility
+--     but is not run back through the rial deduction formula. This mirrors
+--     common EPC practice where a contract's foreign-currency portion (e.g.
+--     TPI/consultant fees or imported-equipment payments) is paid net of the
+--     domestic retention/tax scheme.
+--
+--     Multi-contract: fin_contracts already supports many rows per
+--     master_project_id (no uniqueness constraint) — the only change needed is
+--     a contract_role so the UI can group/filter Main EPC vs Supervision
+--     Consultant vs MC vs TPI vs Other, all still independently managed
+--     contracts of the same project.
+--
+--     Work vs Adjustment certificates: certificate_type distinguishes the two;
+--     related_certificate_id is a self-referencing FK so an Adjustment
+--     Certificate points back at the Work Certificate it adjusts (e.g.
+--     Adjustment No.11 -> Work No.11), with its own adjustment_factor —
+--     related but independent rows, not a merged concept.
+-- ============================================================================
+
+alter table fin_contracts add column if not exists contract_role text not null default 'main_epc' check (contract_role in ('main_epc', 'supervision_consultant', 'mc', 'tpi', 'other'));
+alter table fin_contracts add column if not exists contract_value_fc numeric not null default 0;
+alter table fin_contracts add column if not exists fc_currency text not null default 'EUR';
+alter table fin_contracts add column if not exists exchange_rate numeric not null default 0;
+alter table fin_contracts add column if not exists contract_value_fc_rial_equivalent numeric generated always as (contract_value_fc * exchange_rate) stored;
+
+alter table fin_payment_certificates add column if not exists certificate_type text not null default 'work' check (certificate_type in ('work', 'adjustment'));
+alter table fin_payment_certificates add column if not exists related_certificate_id uuid references fin_payment_certificates (id) on delete set null;
+alter table fin_payment_certificates add column if not exists adjustment_factor numeric;
+alter table fin_payment_certificates add column if not exists gross_amount_fc numeric not null default 0;
+alter table fin_payment_certificates add column if not exists fc_currency text not null default 'EUR';
+alter table fin_payment_certificates add column if not exists exchange_rate numeric not null default 0;
+alter table fin_payment_certificates add column if not exists gross_amount_fc_rial_equivalent numeric generated always as (gross_amount_fc * exchange_rate) stored;
+alter table fin_payment_certificates add column if not exists paid_amount_fc numeric not null default 0;
+alter table fin_payment_certificates add column if not exists paid_exchange_rate numeric not null default 0;
+alter table fin_payment_certificates add column if not exists paid_amount_fc_rial_equivalent numeric generated always as (paid_amount_fc * paid_exchange_rate) stored;
+
+alter table fin_budgets add column if not exists approved_budget_fc numeric not null default 0;
+alter table fin_budgets add column if not exists fc_currency text not null default 'EUR';
+alter table fin_budgets add column if not exists exchange_rate numeric not null default 0;
+alter table fin_budgets add column if not exists approved_budget_fc_rial_equivalent numeric generated always as (approved_budget_fc * exchange_rate) stored;
+
+create table if not exists fin_guarantees (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  guarantee_type text not null default 'bank_guarantee' check (guarantee_type in ('bank_guarantee', 'promissory_note', 'other')),
+  number text not null default '',
+  amount numeric not null default 0,
+  currency text not null default 'IRR',
+  issue_date date,
+  expiry_date date,
+  status text not null default 'active' check (status in ('active', 'released', 'expired', 'claimed')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_guarantees enable row level security;
+
+drop policy if exists "fin_guarantees_select_authenticated" on fin_guarantees;
+create policy "fin_guarantees_select_authenticated" on fin_guarantees for select using (auth.uid() is not null);
+drop policy if exists "fin_guarantees_write_admin" on fin_guarantees;
+create policy "fin_guarantees_write_admin" on fin_guarantees for all using (is_admin_user()) with check (is_admin_user());
+
+-- Annual Budget — a project's yearly budget breakdown, deliberately separate from
+-- fin_budgets.approved_budget (the Total Project Budget) so the two are never confused;
+-- current-year absorption reads off this table, total project financial capacity reads off
+-- fin_budgets. "year" is a Jalali year (e.g. 1403) since the whole module reports in Jalali.
+create table if not exists fin_annual_budgets (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  jalali_year integer not null,
+  budget_amount numeric not null default 0,
+  currency text not null default 'IRR',
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  unique (master_project_id, jalali_year)
+);
+
+alter table fin_annual_budgets enable row level security;
+
+drop policy if exists "fin_annual_budgets_select_authenticated" on fin_annual_budgets;
+create policy "fin_annual_budgets_select_authenticated" on fin_annual_budgets for select using (auth.uid() is not null);
+drop policy if exists "fin_annual_budgets_write_admin" on fin_annual_budgets;
+create policy "fin_annual_budgets_write_admin" on fin_annual_budgets for all using (is_admin_user()) with check (is_admin_user());
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['fin_guarantees', 'fin_annual_budgets']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by_fin()', t);
+  end loop;
+end $$;
+
+create index if not exists idx_fin_guarantees_contract on fin_guarantees (contract_id);
+create index if not exists idx_fin_annual_budgets_project on fin_annual_budgets (master_project_id);
+create index if not exists idx_fin_payment_certificates_related on fin_payment_certificates (related_certificate_id);
 create index if not exists idx_mtl_allocations_material on mtl_allocations (material_id);
