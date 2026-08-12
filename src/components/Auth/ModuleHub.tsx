@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { SignOutButton } from './SignOutButton'
@@ -76,6 +76,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['کنترل بودجه، تعهدات قراردادی و صورت‌وضعیت‌ها', 'پیش‌بینی جریان نقدی از پروژه تا پورتفولیو'],
     icon: Banknote,
     accent: '#10b981',
+    status: 'active',
+  },
+  {
+    key: 'material',
+    title: 'مدیریت تامین کالا',
+    englishTag: 'Material Supply Management',
+    teaser: 'ردیابی کالا از MTO تا انبار و تخصیص',
+    bullets: ['زنجیره کامل تامین: MTO، خرید، ساخت، حمل و انبار', 'کسری و آمادگی اجرا برای هر بسته کاری'],
+    icon: Package,
+    accent: '#f59e0b',
     status: 'active',
   },
   {

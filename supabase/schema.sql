@@ -2457,3 +2457,379 @@ create index if not exists idx_fin_budget_changes_project on fin_budget_changes 
 create index if not exists idx_fin_contracts_project on fin_contracts (master_project_id);
 create index if not exists idx_fin_contract_amendments_contract on fin_contract_amendments (contract_id);
 create index if not exists idx_fin_payment_certificates_contract on fin_payment_certificates (contract_id);
+
+-- ============================================================================
+-- 20. Material Supply & Inventory Management module ("مدیریت تامین کالا") — a fifth
+--     product reached from the hub, owner-side material lifecycle tracking across
+--     the full EPC chain:
+--       Project -> MTO -> Material -> Engineering Mapping -> Procurement ->
+--       Manufacturing -> Release -> Shipment -> Warehouse -> Allocation -> Construction
+--
+--     mtl_materials is the CENTRAL entity (not the purchase order), carrying its
+--     Technical identity (spec/size/rating), Financial identity (unit weight/price,
+--     generated total weight/value) and Engineering/Location identity (facility/
+--     area/system/P&ID/tag) on one row simultaneously, per spec. Every downstream
+--     stage (procurement/manufacturing/release/shipment/warehouse/allocation) is a
+--     transaction table referencing mtl_materials by quantity — status-chain
+--     quantities (ordered/manufactured/released/shipped/received/allocated/consumed)
+--     are deliberately NOT stored as columns on mtl_materials; they are always
+--     summed client-side from these transaction tables, so there is exactly one
+--     place each number can be entered (mirrors the Financial module's "derive,
+--     don't duplicate" rule).
+--
+--     MTO revisions are tracked (mtl_mto_revisions) so a material's mto_quantity
+--     stays traceable to the revision that set it, per the "MTO revisions
+--     traceable" requirement. Facility/Area/System/P&ID/Tag are kept as plain text
+--     columns on mtl_materials rather than a new normalized master-data hierarchy —
+--     deliberately, to avoid inventing parallel master data beyond what this
+--     module's own spec calls for; drill-down is done by grouping/filtering on
+--     these columns.
+-- ============================================================================
+
+create table if not exists mtl_mto_revisions (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  revision_number text not null default 'Rev.0',
+  revision_date date not null default current_date,
+  status text not null default 'issued' check (status in ('draft', 'issued', 'superseded')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table mtl_mto_revisions enable row level security;
+
+drop policy if exists "mtl_mto_revisions_select_authenticated" on mtl_mto_revisions;
+create policy "mtl_mto_revisions_select_authenticated" on mtl_mto_revisions for select using (auth.uid() is not null);
+drop policy if exists "mtl_mto_revisions_write_admin" on mtl_mto_revisions;
+create policy "mtl_mto_revisions_write_admin" on mtl_mto_revisions for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_materials (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  mto_revision_id uuid references mtl_mto_revisions (id) on delete set null,
+  line_no text not null default '',
+  material_code text not null default '',
+  description text not null default '',
+  commodity_type text not null default 'other' check (
+    commodity_type in ('pipe', 'fitting', 'valve', 'flange', 'gasket', 'bolt_nut', 'instrument', 'equipment', 'support', 'other')
+  ),
+  spec text not null default '',
+  size text not null default '',
+  rating text not null default '',
+  unit text not null default 'EA',
+  -- Engineering / location identity — drill-down path Facility -> Area -> System -> P&ID -> Tag.
+  facility text not null default '',
+  area text not null default '',
+  system_name text not null default '',
+  pid_number text not null default '',
+  pid_revision text not null default '',
+  tag_number text not null default '',
+  -- Technical + financial identity, carried on the material itself per spec.
+  mto_quantity numeric not null default 0,
+  unit_weight_kg numeric not null default 0,
+  unit_price numeric not null default 0,
+  currency text not null default 'IRR',
+  total_weight_kg numeric generated always as (mto_quantity * unit_weight_kg) stored,
+  total_value numeric generated always as (mto_quantity * unit_price) stored,
+  -- Manual override; the real shortage/readiness computation is client-side (see
+  -- materialCalc.ts) but a manual flag lets a planner flag a material as blocking
+  -- construction ahead of the numbers catching up.
+  is_construction_blocking boolean not null default false,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_materials enable row level security;
+
+drop policy if exists "mtl_materials_select_authenticated" on mtl_materials;
+create policy "mtl_materials_select_authenticated" on mtl_materials for select using (auth.uid() is not null);
+drop policy if exists "mtl_materials_write_admin" on mtl_materials;
+create policy "mtl_materials_write_admin" on mtl_materials for all using (is_admin_user()) with check (is_admin_user());
+
+-- Procurement: MR -> RFQ -> Evaluation -> Award, tracked as one status-progressing
+-- request row (not four separate tables) since these are process states of the
+-- same request, not independent facts.
+create table if not exists mtl_procurement_requests (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  mr_number text not null default '',
+  mr_date date not null default current_date,
+  status text not null default 'draft' check (
+    status in ('draft', 'mr_issued', 'rfq_sent', 'under_evaluation', 'awarded', 'cancelled')
+  ),
+  supplier_org_id uuid references organizations (id) on delete set null,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_procurement_requests enable row level security;
+
+drop policy if exists "mtl_procurement_requests_select_authenticated" on mtl_procurement_requests;
+create policy "mtl_procurement_requests_select_authenticated" on mtl_procurement_requests for select using (auth.uid() is not null);
+drop policy if exists "mtl_procurement_requests_write_admin" on mtl_procurement_requests;
+create policy "mtl_procurement_requests_write_admin" on mtl_procurement_requests for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_procurement_lines (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references mtl_procurement_requests (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  quantity_requested numeric not null default 0
+);
+
+alter table mtl_procurement_lines enable row level security;
+
+drop policy if exists "mtl_procurement_lines_select_authenticated" on mtl_procurement_lines;
+create policy "mtl_procurement_lines_select_authenticated" on mtl_procurement_lines for select using (auth.uid() is not null);
+drop policy if exists "mtl_procurement_lines_write_admin" on mtl_procurement_lines;
+create policy "mtl_procurement_lines_write_admin" on mtl_procurement_lines for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_purchase_orders (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  request_id uuid references mtl_procurement_requests (id) on delete set null,
+  po_number text not null default '',
+  po_date date not null default current_date,
+  supplier_org_id uuid references organizations (id) on delete set null,
+  currency text not null default 'IRR',
+  status text not null default 'issued' check (status in ('draft', 'issued', 'active', 'completed', 'cancelled')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_purchase_orders enable row level security;
+
+drop policy if exists "mtl_purchase_orders_select_authenticated" on mtl_purchase_orders;
+create policy "mtl_purchase_orders_select_authenticated" on mtl_purchase_orders for select using (auth.uid() is not null);
+drop policy if exists "mtl_purchase_orders_write_admin" on mtl_purchase_orders;
+create policy "mtl_purchase_orders_write_admin" on mtl_purchase_orders for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_po_lines (
+  id uuid primary key default gen_random_uuid(),
+  po_id uuid not null references mtl_purchase_orders (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  quantity_ordered numeric not null default 0,
+  unit_price numeric not null default 0,
+  planned_delivery_date date
+);
+
+alter table mtl_po_lines enable row level security;
+
+drop policy if exists "mtl_po_lines_select_authenticated" on mtl_po_lines;
+create policy "mtl_po_lines_select_authenticated" on mtl_po_lines for select using (auth.uid() is not null);
+drop policy if exists "mtl_po_lines_write_admin" on mtl_po_lines;
+create policy "mtl_po_lines_write_admin" on mtl_po_lines for all using (is_admin_user()) with check (is_admin_user());
+
+-- Manufacturing & inspection tracked per PO line (one manufacturing record per ordered
+-- item), so FAT/long-lead/delay all read off the same PO commitment they belong to.
+create table if not exists mtl_manufacturing (
+  id uuid primary key default gen_random_uuid(),
+  po_line_id uuid not null references mtl_po_lines (id) on delete cascade unique,
+  status text not null default 'not_started' check (
+    status in ('not_started', 'in_progress', 'fat_scheduled', 'fat_passed', 'fat_failed', 'ready_for_shipment')
+  ),
+  is_long_lead boolean not null default false,
+  planned_ready_date date,
+  actual_ready_date date,
+  fat_date date,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_manufacturing enable row level security;
+
+drop policy if exists "mtl_manufacturing_select_authenticated" on mtl_manufacturing;
+create policy "mtl_manufacturing_select_authenticated" on mtl_manufacturing for select using (auth.uid() is not null);
+drop policy if exists "mtl_manufacturing_write_admin" on mtl_manufacturing;
+create policy "mtl_manufacturing_write_admin" on mtl_manufacturing for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_release_notes (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  release_number text not null default '',
+  release_date date not null default current_date,
+  po_id uuid references mtl_purchase_orders (id) on delete set null,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table mtl_release_notes enable row level security;
+
+drop policy if exists "mtl_release_notes_select_authenticated" on mtl_release_notes;
+create policy "mtl_release_notes_select_authenticated" on mtl_release_notes for select using (auth.uid() is not null);
+drop policy if exists "mtl_release_notes_write_admin" on mtl_release_notes;
+create policy "mtl_release_notes_write_admin" on mtl_release_notes for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_release_lines (
+  id uuid primary key default gen_random_uuid(),
+  release_id uuid not null references mtl_release_notes (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  quantity_released numeric not null default 0
+);
+
+alter table mtl_release_lines enable row level security;
+
+drop policy if exists "mtl_release_lines_select_authenticated" on mtl_release_lines;
+create policy "mtl_release_lines_select_authenticated" on mtl_release_lines for select using (auth.uid() is not null);
+drop policy if exists "mtl_release_lines_write_admin" on mtl_release_lines;
+create policy "mtl_release_lines_write_admin" on mtl_release_lines for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_shipments (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  shipment_number text not null default '',
+  shipment_date date not null default current_date,
+  carrier text not null default '',
+  tracking_ref text not null default '',
+  origin text not null default '',
+  destination text not null default '',
+  status text not null default 'planned' check (status in ('planned', 'in_transit', 'customs', 'delivered')),
+  eta date,
+  ata date,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_shipments enable row level security;
+
+drop policy if exists "mtl_shipments_select_authenticated" on mtl_shipments;
+create policy "mtl_shipments_select_authenticated" on mtl_shipments for select using (auth.uid() is not null);
+drop policy if exists "mtl_shipments_write_admin" on mtl_shipments;
+create policy "mtl_shipments_write_admin" on mtl_shipments for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_shipment_lines (
+  id uuid primary key default gen_random_uuid(),
+  shipment_id uuid not null references mtl_shipments (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  quantity_shipped numeric not null default 0
+);
+
+alter table mtl_shipment_lines enable row level security;
+
+drop policy if exists "mtl_shipment_lines_select_authenticated" on mtl_shipment_lines;
+create policy "mtl_shipment_lines_select_authenticated" on mtl_shipment_lines for select using (auth.uid() is not null);
+drop policy if exists "mtl_shipment_lines_write_admin" on mtl_shipment_lines;
+create policy "mtl_shipment_lines_write_admin" on mtl_shipment_lines for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_warehouse_receipts (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  receipt_number text not null default '',
+  receipt_date date not null default current_date,
+  shipment_id uuid references mtl_shipments (id) on delete set null,
+  warehouse_location text not null default '',
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table mtl_warehouse_receipts enable row level security;
+
+drop policy if exists "mtl_warehouse_receipts_select_authenticated" on mtl_warehouse_receipts;
+create policy "mtl_warehouse_receipts_select_authenticated" on mtl_warehouse_receipts for select using (auth.uid() is not null);
+drop policy if exists "mtl_warehouse_receipts_write_admin" on mtl_warehouse_receipts;
+create policy "mtl_warehouse_receipts_write_admin" on mtl_warehouse_receipts for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists mtl_warehouse_lines (
+  id uuid primary key default gen_random_uuid(),
+  receipt_id uuid not null references mtl_warehouse_receipts (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  quantity_received numeric not null default 0,
+  condition text not null default 'ok' check (condition in ('ok', 'damaged', 'shortage'))
+);
+
+alter table mtl_warehouse_lines enable row level security;
+
+drop policy if exists "mtl_warehouse_lines_select_authenticated" on mtl_warehouse_lines;
+create policy "mtl_warehouse_lines_select_authenticated" on mtl_warehouse_lines for select using (auth.uid() is not null);
+drop policy if exists "mtl_warehouse_lines_write_admin" on mtl_warehouse_lines;
+create policy "mtl_warehouse_lines_write_admin" on mtl_warehouse_lines for all using (is_admin_user()) with check (is_admin_user());
+
+-- Allocation to a construction work package. quantity_consumed is a running total
+-- updated by the "record consumption" action (not a separate ledger table) — the
+-- spec asks for available/reserved/allocated/consumed/remaining visibility, not a
+-- full consumption transaction history.
+create table if not exists mtl_allocations (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  material_id uuid not null references mtl_materials (id) on delete cascade,
+  work_package_code text not null default '',
+  work_package_name text not null default '',
+  quantity_allocated numeric not null default 0,
+  quantity_consumed numeric not null default 0,
+  allocation_date date not null default current_date,
+  status text not null default 'allocated' check (status in ('allocated', 'consumed', 'returned')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table mtl_allocations enable row level security;
+
+drop policy if exists "mtl_allocations_select_authenticated" on mtl_allocations;
+create policy "mtl_allocations_select_authenticated" on mtl_allocations for select using (auth.uid() is not null);
+drop policy if exists "mtl_allocations_write_admin" on mtl_allocations;
+create policy "mtl_allocations_write_admin" on mtl_allocations for all using (is_admin_user()) with check (is_admin_user());
+
+create or replace function set_updated_at_and_by_mtl()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'mtl_materials', 'mtl_procurement_requests', 'mtl_purchase_orders', 'mtl_manufacturing',
+    'mtl_shipments', 'mtl_allocations'
+  ]
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by_mtl()', t);
+  end loop;
+end $$;
+
+create index if not exists idx_mtl_mto_revisions_project on mtl_mto_revisions (master_project_id);
+create index if not exists idx_mtl_materials_project on mtl_materials (master_project_id);
+create index if not exists idx_mtl_materials_revision on mtl_materials (mto_revision_id);
+create index if not exists idx_mtl_procurement_requests_project on mtl_procurement_requests (master_project_id);
+create index if not exists idx_mtl_procurement_lines_request on mtl_procurement_lines (request_id);
+create index if not exists idx_mtl_procurement_lines_material on mtl_procurement_lines (material_id);
+create index if not exists idx_mtl_purchase_orders_project on mtl_purchase_orders (master_project_id);
+create index if not exists idx_mtl_po_lines_po on mtl_po_lines (po_id);
+create index if not exists idx_mtl_po_lines_material on mtl_po_lines (material_id);
+create index if not exists idx_mtl_manufacturing_po_line on mtl_manufacturing (po_line_id);
+create index if not exists idx_mtl_release_notes_project on mtl_release_notes (master_project_id);
+create index if not exists idx_mtl_release_lines_release on mtl_release_lines (release_id);
+create index if not exists idx_mtl_release_lines_material on mtl_release_lines (material_id);
+create index if not exists idx_mtl_shipments_project on mtl_shipments (master_project_id);
+create index if not exists idx_mtl_shipment_lines_shipment on mtl_shipment_lines (shipment_id);
+create index if not exists idx_mtl_shipment_lines_material on mtl_shipment_lines (material_id);
+create index if not exists idx_mtl_warehouse_receipts_project on mtl_warehouse_receipts (master_project_id);
+create index if not exists idx_mtl_warehouse_lines_receipt on mtl_warehouse_lines (receipt_id);
+create index if not exists idx_mtl_warehouse_lines_material on mtl_warehouse_lines (material_id);
+create index if not exists idx_mtl_allocations_project on mtl_allocations (master_project_id);
+create index if not exists idx_mtl_allocations_material on mtl_allocations (material_id);
