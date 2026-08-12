@@ -5,9 +5,10 @@ import { wipeAllDemoData, seedDemoData, type DemoSeedCounts } from '../lib/demoS
 
 /**
  * Admin-only, demo/test-environment tool (spec §31): wipes every Portfolio/Program/Project and
- * Risk-module record and regenerates a coherent, reproducible sample dataset in their place —
- * run entirely through the app's own authenticated Supabase client. Deliberately not exposed
- * anywhere outside this admin page; this is a destructive action and must stay opt-in.
+ * every connected module's data (Risk, Issue Management, PipePulse, Reporting) and regenerates a
+ * coherent, reproducible sample dataset in their place — run entirely through the app's own
+ * authenticated Supabase client. Deliberately not exposed anywhere outside this admin page; this
+ * is a destructive action and must stay opt-in.
  */
 export function DemoDataPage() {
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
@@ -45,7 +46,7 @@ export function DemoDataPage() {
             <Database size={15} className="text-red-400" /> داده‌های نمایشی (Demo Data)
           </p>
           <p className="text-[11px] text-muted">
-            تولید یک مجموعه داده منسجم و قابل‌تکرار برای آزمایش داشبوردها — ۳ پورتفولیو، ۶ طرح، ۱۰ پروژه، و حدود ۱۰۰ ریسک با تاریخچه بازبینی، اقدامات و ارجاع.
+            تولید یک مجموعه داده منسجم و قابل‌تکرار برای آزمایش تمام ماژول‌ها — ۴ پورتفولیو، ۸ طرح و ۱۶ پروژه پایه، به‌همراه داده کامل ریسک، مدیریت مسائل، PipePulse (خطوط، گزارش کارکرد روزانه، برنامه زمان‌بندی) و گزارش‌گیری (تصمیمات، اقدامات، نقش‌های پروژه) برای هر پروژه — به‌گونه‌ای که گزارش‌های تجمیعی سطح پرتفولیو/طرح (مثلاً ریسک‌های یک پرتفولیو) از همه ماژول‌ها قابل استخراج باشد.
           </p>
         </div>
 
@@ -53,8 +54,8 @@ export function DemoDataPage() {
           <div className="mb-3 flex items-start gap-2.5 text-xs text-red-300">
             <AlertTriangle size={15} className="mt-0.5 shrink-0" />
             <p className="leading-6">
-              این عملیات <b>تمام</b> داده‌های موجود پورتفولیو، طرح، پروژه و ریسک (شامل پروژه‌های واقعی ثبت‌شده) را برای همیشه حذف کرده و با داده نمایشی جایگزین می‌کند. این عملیات
-              غیرقابل‌بازگشت است و فقط باید در محیط آزمایشی/دمو استفاده شود.
+              این عملیات <b>تمام</b> داده‌های موجود پورتفولیو، طرح، پروژه، سازمان‌ها و هر چهار ماژول متصل (ریسک، مدیریت مسائل، PipePulse و گزارش‌گیری) — شامل پروژه‌های واقعی ثبت‌شده — را برای
+              همیشه حذف کرده و با داده نمایشی جایگزین می‌کند. این عملیات غیرقابل‌بازگشت است و فقط باید در محیط آزمایشی/دمو استفاده شود.
             </p>
           </div>
 
@@ -102,12 +103,20 @@ export function DemoDataPage() {
             <div className="mt-3 rounded-xl bg-green-500/10 p-3 text-[11px] text-green-300">
               <p className="mb-1.5 font-bold">داده نمایشی با موفقیت بازتولید شد:</p>
               <div className="grid grid-cols-2 gap-2 num sm:grid-cols-3">
+                <span>{result.organizations} سازمان</span>
                 <span>{result.portfolios} پورتفولیو</span>
                 <span>{result.programs} طرح</span>
                 <span>{result.projects} پروژه</span>
+                <span>{result.phases} فاز پروژه</span>
                 <span>{result.risks} ریسک</span>
-                <span>{result.reviews} بازبینی</span>
-                <span>{result.actions} اقدام</span>
+                <span>{result.reviews} بازبینی ریسک</span>
+                <span>{result.riskActions} اقدام ریسک</span>
+                <span>{result.issues} مسئله</span>
+                <span>{result.pipepulseLines} خط PipePulse</span>
+                <span>{result.dailyLogs} گزارش روزانه</span>
+                <span>{result.decisions} تصمیم</span>
+                <span>{result.actions} اقدام مدیریتی</span>
+                <span>{result.roleAssignments} نقش تخصیص‌یافته</span>
               </div>
             </div>
           )}
