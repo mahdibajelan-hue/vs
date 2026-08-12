@@ -77,6 +77,7 @@ export function BreakdownDonut({
   onSliceClick,
   theme = DEFAULT_THEME,
   height = 200,
+  formatTotal,
 }: {
   title: string
   icon?: ReactNode
@@ -86,6 +87,8 @@ export function BreakdownDonut({
   onSliceClick?: (key: string) => void
   theme?: ChartTheme
   height?: number
+  /** Formats the center total label — defaults to the raw count, but currency-valued donuts (e.g. Finance) need their own formatting. */
+  formatTotal?: (n: number) => string
 }) {
   const total = data.reduce((sum, d) => sum + d.value, 0)
   const nonZero = data.filter((d) => d.value > 0)
@@ -143,7 +146,7 @@ export function BreakdownDonut({
             })}
           </svg>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <p className="num text-xl font-extrabold">{total}</p>
+            <p className="num text-xl font-extrabold">{formatTotal ? formatTotal(total) : total}</p>
             <p className="text-[9px]" style={{ color: theme.textMuted }}>
               مجموع
             </p>
@@ -185,6 +188,7 @@ export function RankedBarChart({
   theme = DEFAULT_THEME,
   maxItems = 8,
   barColor,
+  formatValue,
 }: {
   title: string
   icon?: ReactNode
@@ -195,6 +199,8 @@ export function RankedBarChart({
   theme?: ChartTheme
   maxItems?: number
   barColor?: string
+  /** Formats bar-end labels and tooltip values — defaults to the raw number, but currency-valued charts (e.g. Finance) need their own formatting. */
+  formatValue?: (n: number) => string
 }) {
   // See the matching comment on BreakdownDonut's chartId — Bar accepts the same id prop and
   // needs the same protection when multiple charts are mounted together.
@@ -229,8 +235,18 @@ export function RankedBarChart({
               axisLine={false}
               tickFormatter={(v: string) => (v.length > 16 ? v.slice(0, 15) + '…' : v)}
             />
-            <Tooltip cursor={{ fill: theme.border }} contentStyle={tooltipStyle(theme)} formatter={(value) => [`${value}${unit ? ' ' + unit : ''}`, '']} />
-            <Bar id={chartId} dataKey="value" radius={[0, 4, 4, 0]} barSize={18} label={{ position: 'right', fontSize: 10.5, fill: theme.textSecondary }}>
+            <Tooltip
+              cursor={{ fill: theme.border }}
+              contentStyle={tooltipStyle(theme)}
+              formatter={(value) => [`${formatValue ? formatValue(Number(value)) : value}${unit ? ' ' + unit : ''}`, '']}
+            />
+            <Bar
+              id={chartId}
+              dataKey="value"
+              radius={[0, 4, 4, 0]}
+              barSize={18}
+              label={{ position: 'right', fontSize: 10.5, fill: theme.textSecondary, formatter: formatValue ? (v: string | number | boolean | null | undefined) => formatValue(Number(v)) : undefined }}
+            >
               {sorted.map((d) => {
                 const isActive = activeKey === d.key
                 const isDimmed = !!activeKey && !isActive

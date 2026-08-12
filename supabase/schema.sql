@@ -2289,3 +2289,171 @@ create policy "master_project_dependencies_write_admin" on master_project_depend
 
 create index if not exists idx_master_project_dependencies_project on master_project_dependencies (project_id);
 create index if not exists idx_master_project_dependencies_depends_on on master_project_dependencies (depends_on_project_id);
+
+-- ============================================================================
+-- 19. Financial Management module ("مدیریت مالی") — a fourth product reached from
+--     the hub, owner-side budget/contract/payment control. Deliberately NOT
+--     accounting: no general ledger, no P&L, no contractor internal cost. Attaches
+--     directly to master_projects (no separate project registry / mapping layer
+--     like Risk-Issues-PipePulse have, since there's nothing module-specific to
+--     alias — a project's financial identity IS the master_projects row).
+--
+--     Four independent concepts, deliberately kept separate per spec rather than
+--     collapsed into one table, with the relationships between them expressed as
+--     foreign keys rather than duplicated numbers:
+--       Budget (internal approved funding ceiling)
+--         -> Contract/Commitment (what's legally committed to a contractor)
+--           -> Payment Certificate (what's been certified as executed)
+--             -> Payment (what's actually been paid, tracked on the certificate)
+--     Cash Flow & Forecast is a read-side rollup computed from these four, not a
+--     fifth independent data source — see the "avoid unnecessary manual entry"
+--     requirement: every number it shows is derivable from what's below.
+-- ============================================================================
+
+create table if not exists fin_budgets (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade unique,
+  approved_budget numeric not null default 0,
+  currency text not null default 'IRR',
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_budgets enable row level security;
+
+drop policy if exists "fin_budgets_select_authenticated" on fin_budgets;
+create policy "fin_budgets_select_authenticated" on fin_budgets for select using (auth.uid() is not null);
+drop policy if exists "fin_budgets_write_admin" on fin_budgets;
+create policy "fin_budgets_write_admin" on fin_budgets for all using (is_admin_user()) with check (is_admin_user());
+
+-- Current Budget = approved_budget + sum(fin_budget_changes.amount) — a running log rather than
+-- an overwritten single field, so "what changed and why" survives (spec: "Budget Changes").
+create table if not exists fin_budget_changes (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  change_date date not null default current_date,
+  amount numeric not null,
+  reason text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table fin_budget_changes enable row level security;
+
+drop policy if exists "fin_budget_changes_select_authenticated" on fin_budget_changes;
+create policy "fin_budget_changes_select_authenticated" on fin_budget_changes for select using (auth.uid() is not null);
+drop policy if exists "fin_budget_changes_write_admin" on fin_budget_changes;
+create policy "fin_budget_changes_write_admin" on fin_budget_changes for all using (is_admin_user()) with check (is_admin_user());
+
+-- Contract / Commitment. Current Contract Value = contract_value + sum(fin_contract_amendments.amount).
+-- Financial Commitment (fed up into Budget's "Actual/Committed Cost") = sum of every active
+-- contract's current contract value for the project.
+create table if not exists fin_contracts (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  contract_number text not null default '',
+  title text not null default '',
+  contractor_org_id uuid references organizations (id) on delete set null,
+  contract_value numeric not null default 0,
+  currency text not null default 'IRR',
+  advance_payment_percent numeric not null default 0,
+  retention_percent numeric not null default 0,
+  performance_guarantee_percent numeric not null default 0,
+  start_date date,
+  planned_completion_date date,
+  status text not null default 'active' check (status in ('draft', 'active', 'completed', 'terminated')),
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_contracts enable row level security;
+
+drop policy if exists "fin_contracts_select_authenticated" on fin_contracts;
+create policy "fin_contracts_select_authenticated" on fin_contracts for select using (auth.uid() is not null);
+drop policy if exists "fin_contracts_write_admin" on fin_contracts;
+create policy "fin_contracts_write_admin" on fin_contracts for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists fin_contract_amendments (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  amendment_number text not null default '',
+  amendment_date date not null default current_date,
+  amount numeric not null,
+  reason text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table fin_contract_amendments enable row level security;
+
+drop policy if exists "fin_contract_amendments_select_authenticated" on fin_contract_amendments;
+create policy "fin_contract_amendments_select_authenticated" on fin_contract_amendments for select using (auth.uid() is not null);
+drop policy if exists "fin_contract_amendments_write_admin" on fin_contract_amendments;
+create policy "fin_contract_amendments_write_admin" on fin_contract_amendments for all using (is_admin_user()) with check (is_admin_user());
+
+-- Payment Certificate (صورت‌وضعیت). payable_amount is a generated column (never hand-entered,
+-- always derivable from the certificate's own fields); certified_amount/paid_amount are the two
+-- numbers a real approval/payment workflow actually sets, kept nullable/zero until that happens
+-- so "not yet certified" and "certified as zero" stay distinguishable. Payment Aging is computed
+-- client-side from submitted_date/certified_date against today — not stored, since "aging" is
+-- inherently a function of the current date, not a fact about the row.
+create table if not exists fin_payment_certificates (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  certificate_number text not null default '',
+  certificate_date date not null default current_date,
+  gross_amount numeric not null default 0,
+  adjustments numeric not null default 0,
+  deductions numeric not null default 0,
+  retention_amount numeric not null default 0,
+  advance_recovery_amount numeric not null default 0,
+  payable_amount numeric generated always as (gross_amount + adjustments - deductions - retention_amount - advance_recovery_amount) stored,
+  certified_amount numeric,
+  paid_amount numeric not null default 0,
+  status text not null default 'draft' check (status in ('draft', 'submitted', 'under_review', 'certified', 'rejected', 'paid', 'partially_paid')),
+  submitted_date date,
+  certified_date date,
+  paid_date date,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_payment_certificates enable row level security;
+
+drop policy if exists "fin_payment_certificates_select_authenticated" on fin_payment_certificates;
+create policy "fin_payment_certificates_select_authenticated" on fin_payment_certificates for select using (auth.uid() is not null);
+drop policy if exists "fin_payment_certificates_write_admin" on fin_payment_certificates;
+create policy "fin_payment_certificates_write_admin" on fin_payment_certificates for all using (is_admin_user()) with check (is_admin_user());
+
+create or replace function set_updated_at_and_by_fin()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['fin_budgets', 'fin_contracts', 'fin_payment_certificates']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by_fin()', t);
+  end loop;
+end $$;
+
+create index if not exists idx_fin_budget_changes_project on fin_budget_changes (master_project_id);
+create index if not exists idx_fin_contracts_project on fin_contracts (master_project_id);
+create index if not exists idx_fin_contract_amendments_contract on fin_contract_amendments (contract_id);
+create index if not exists idx_fin_payment_certificates_contract on fin_payment_certificates (contract_id);

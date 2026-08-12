@@ -10,6 +10,7 @@ import { IssuesApp } from './modules/issues/IssuesApp'
 import { AdminApp } from './pages/AdminApp'
 import { ReportingApp } from './modules/reporting/ReportingApp'
 import { ExecutiveApp } from './modules/executive/ExecutiveApp'
+import { FinanceApp } from './modules/finance/FinanceApp'
 
 /**
  * Top-level flow: authenticate once (single shared account across every module), THEN show the
@@ -61,6 +62,8 @@ export function RootApp() {
     <ReportingApp onExitToHub={exitToHub} />
   ) : activeModule === 'executive' ? (
     <ExecutiveApp onExitToHub={exitToHub} />
+  ) : activeModule === 'finance' ? (
+    <FinanceApp onExitToHub={exitToHub} />
   ) : (
     <AdminApp onExitToHub={exitToHub} />
   )
