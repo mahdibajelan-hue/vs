@@ -84,8 +84,17 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
     noticeTimer.current = window.setTimeout(() => setNotice(null), 2600)
   }
 
+  // overflow-x: hidden forces the browser's USED value for overflow-y to `auto` — even when
+  // overflow-y is explicitly set to `visible` — per the CSS Overflow spec's "used value"
+  // computation (only exempt if the other axis is `clip`, not `hidden`). That silently turned
+  // this div into its OWN nested scroll container (confirmed: its scrollHeight exceeded its
+  // clientHeight independently of the page), competing with the page's normal body scroll — two
+  // scrollable ancestors fighting over the same swipe is exactly what made mobile scrolling feel
+  // stuck and need several tries. overflow-x-clip clips the decorative blobs the same as hidden
+  // did, but is explicitly exempt from that auto-computation, so this div never becomes a scroll
+  // container — only body/html scroll, one unambiguous container.
   return (
-    <div className="relative min-h-screen w-screen overflow-x-hidden" style={{ background: 'var(--bg-app)' }}>
+    <div className="relative min-h-screen w-screen overflow-x-clip" style={{ background: 'var(--bg-app)' }}>
       <div className="hub-blob hub-blob-a" style={{ background: '#0ea5e9' }} />
       <div className="hub-blob hub-blob-b" style={{ background: '#a78bfa' }} />
       <div className="hub-blob hub-blob-c" style={{ background: '#e74c3c' }} />
