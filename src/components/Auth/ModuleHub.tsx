@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Clock3, Crown, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Briefcase, CheckCircle2, Clock3, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { SignOutButton } from './SignOutButton'
@@ -60,12 +60,12 @@ const MODULES: ModuleDef[] = [
   },
   {
     key: 'executive',
-    title: 'داشبورد اجرایی پورتفولیو',
-    englishTag: 'Portfolio Executive Dashboard',
+    title: 'مدیریت سبد پروژه‌ها',
+    englishTag: 'Portfolio Management',
     teaser: 'کنترل استراتژیک، مالی و ریسک کل سبد پروژه‌ها',
     bullets: ['وضعیت کلی سلامت پورتفولیو برای مدیران ارشد', 'ابزار تصمیم‌گیری اجرایی، نه جمع ساده KPIهای پروژه'],
-    icon: Crown,
-    accent: '#f59e0b',
+    icon: Briefcase,
+    accent: '#6366f1',
     status: 'active',
   },
   {

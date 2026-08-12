@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useId, useMemo, useState } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
@@ -7,7 +7,6 @@ import {
   CalendarClock,
   ChevronLeft,
   ClipboardList,
-  Crown,
   Flag,
   Gauge,
   Gift,
@@ -25,9 +24,12 @@ import {
   Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { RiskHeatMap } from '../../risk/components/RiskHeatMap'
-import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../../masterdata/components/RollupCharts'
+import { computeExposureTimeline } from '../../risk/lib/riskAnalytics'
+import type { RmRisk, RmRiskAssessment } from '../../risk/types'
+import { ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../../masterdata/components/RollupCharts'
 import { PORTFOLIO_PROGRAM_STATUS_LABEL_FA } from '../../masterdata/types'
 import {
   aggregatePortfolioTotals,
@@ -42,6 +44,10 @@ import {
 } from '../lib/portfolioDashboard'
 import type { MasterProject, Portfolio, ProjectDependency } from '../../masterdata/types'
 
+// Module identity — distinct from every KPI category color below and from every other hub module's accent.
+const MODULE_ACCENT = '#6366f1'
+
+// Status colors carry ONE meaning across the whole page: green/amber/red = good/watch/critical. Never reused decoratively.
 const HEALTH_COLOR: Record<HealthTier, string> = { healthy: '#2ecc71', watch: '#f1c40f', critical: '#e74c3c' }
 const HEALTH_LABEL_FA: Record<HealthTier, string> = { healthy: 'سالم', watch: 'نیازمند توجه', critical: 'بحرانی' }
 const SCHEDULE_BUCKET_COLOR: Record<ScheduleBucket, string> = { on_time: '#2ecc71', late_30: '#f1c40f', late_30_90: '#f97316', late_over_90: '#e74c3c', unknown: '#64748b' }
@@ -53,6 +59,9 @@ const SCHEDULE_BUCKET_LABEL_FA: Record<ScheduleBucket, string> = {
   unknown: 'بدون پیش‌بینی ثبت‌شده',
 }
 const IMPORTANCE_LABEL_FA: Record<StrategicImportance, string> = { high: 'بالا', medium: 'متوسط', low: 'پایین' }
+
+// KPI icon colors are purely a wayfinding grouping (3 families), never a status signal — status lives only in the small dot.
+const CAT = { strategic: '#a78bfa', risk: '#f97316', people: '#2dd4bf' }
 
 /** A distinct visual identity per portfolio (icon chip + glow), independent of health color — mirrors the module hub's own card identity system so a portfolio "feels" like a place, not just a filter. */
 const PORTFOLIO_ACCENTS = ['#38bdf8', '#a78bfa', '#2dd4bf', '#f59e0b', '#f472b6', '#22c55e', '#818cf8', '#fb923c']
@@ -68,21 +77,12 @@ function fmtCurrency(n: number, currency = ''): string {
   return `${sign}${Math.round(abs).toLocaleString('fa-IR')}${suffix}`
 }
 
-/** Same compact scaling as fmtCurrency but returns {value, unit} separately for chart bars, whose numeric label can't carry inline text. */
-function compactCurrencyParts(n: number, currency: string): { value: number; unit: string } {
-  const abs = Math.abs(n)
-  if (abs >= 1e12) return { value: Math.round((n / 1e12) * 10) / 10, unit: `هزار میلیارد ${currency}` }
-  if (abs >= 1e9) return { value: Math.round((n / 1e9) * 10) / 10, unit: `میلیارد ${currency}` }
-  if (abs >= 1e6) return { value: Math.round((n / 1e6) * 10) / 10, unit: `میلیون ${currency}` }
-  return { value: Math.round(n), unit: currency }
-}
-
 function healthTone(score: number): HealthTier {
   return score >= 70 ? 'healthy' : score >= 40 ? 'watch' : 'critical'
 }
 
 /**
- * Portfolio Executive Dashboard — deliberately independent from the per-project PipePulse
+ * Portfolio Management Dashboard — deliberately independent from the per-project PipePulse
  * dashboard (spec: no Project Progress/S-Curve/SPI-CPI/WBS here). Every KPI/widget is computed
  * from real rows already in the system (see lib/portfolioDashboard.ts for the exact formula and
  * which numbers are honest proxies vs. directly real) — nothing here is invented to fill a slot.
@@ -143,7 +143,7 @@ export function PortfolioDashboardPage() {
   const currency = scopedSummaries.find((s) => s.project.currency)?.project.currency ?? 'ریال'
 
   if (loading && !raw) {
-    return <div className="flex h-40 items-center justify-center text-xs text-muted">در حال بارگذاری داشبورد اجرایی پورتفولیو...</div>
+    return <div className="flex h-40 items-center justify-center text-xs text-muted">در حال بارگذاری داشبورد مدیریت سبد پروژه‌ها...</div>
   }
 
   if (projects.length === 0) {
@@ -178,21 +178,30 @@ export function PortfolioDashboardPage() {
         onProject={drillToProject}
       />
 
-      <KpiRow totals={totals} currency={currency} />
+      <KpiStrip totals={totals} currency={currency} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <PriorityLeaderboardWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
+        <TopCriticalProjectsWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <RiskHeatMap risks={scopedRisks} assessments={scopedAssessments} activeCell={null} onCellClick={() => {}} />
+        <ImportanceHealthMatrixWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <RiskExposureTrendWidget risks={scopedRisks} assessments={scopedAssessments} />
+        <CostExposureBulletWidget totals={totals} currency={currency} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <HealthDistributionWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
         <StrategicAlignmentWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
-        <CostExposureWidget totals={totals} currency={currency} />
         <ScheduleExposureWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
       </div>
 
-      <RiskHeatMap risks={scopedRisks} assessments={scopedAssessments} activeCell={null} onCellClick={() => {}} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ImportanceHealthMatrixWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
-        <TopCriticalProjectsWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
-        <PriorityRankingWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ResourceCapacityWidget summaries={scopedSummaries} onDrillProject={drillToProject} />
         <ExecutiveDecisionsWidget summaries={scopedSummaries} projectName={projectName} onDrillProject={drillToProject} />
         <DependencyWidget dependencies={dependencies} summaries={scopedSummaries} allProjects={projects} onDrillProject={drillToProject} />
@@ -238,17 +247,19 @@ function ScopeHero({
       ? { title: program.name, eyebrow: 'طرح', Icon: Layers, code: program.code }
       : portfolio
         ? { title: portfolio.name, eyebrow: 'پورتفولیو', Icon: Briefcase, code: portfolio.code }
-        : { title: 'کل سبد پروژه‌های سازمان', eyebrow: 'نمای کلی', Icon: Crown, code: '' }
+        : { title: 'کل سبد پروژه‌های سازمان', eyebrow: 'نمای کلی', Icon: Briefcase, code: '' }
 
   return (
     <div className="glass-panel overflow-hidden rounded-2xl">
       <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10">
-              <Icon size={17} className="text-amber-400" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: `${MODULE_ACCENT}55`, background: `${MODULE_ACCENT}1a` }}>
+              <Icon size={17} style={{ color: MODULE_ACCENT }} />
             </div>
-            <span className="text-[11px] font-bold tracking-wide text-amber-300">{eyebrow.toUpperCase() === eyebrow ? eyebrow : eyebrow}</span>
+            <span className="text-[11px] font-bold tracking-wide" style={{ color: MODULE_ACCENT }}>
+              {eyebrow}
+            </span>
             {code && (
               <span className="num text-[11px] text-muted" dir="ltr">
                 {code}
@@ -257,21 +268,26 @@ function ScopeHero({
           </div>
           <h1 className="mt-2 truncate text-2xl font-extrabold leading-tight sm:text-[2rem]">{title}</h1>
           <p className="mt-1 text-xs text-secondary" dir="ltr">
-            Portfolio Executive Dashboard
+            Portfolio Management Dashboard
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs">
-            <button onClick={onRoot} className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!portfolio ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}>
-              کل پورتفولیو
+            <button
+              onClick={onRoot}
+              className="rounded-full px-2.5 py-1 font-medium transition-colors"
+              style={!portfolio ? { background: `${MODULE_ACCENT}2a`, color: MODULE_ACCENT } : undefined}
+            >
+              <span className={portfolio ? 'text-secondary hover:text-current' : ''}>کل پورتفولیو</span>
             </button>
             {portfolio && (
               <>
                 <ChevronLeft size={12} className="opacity-40" />
                 <button
                   onClick={() => onPortfolio(portfolio.id)}
-                  className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!program ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}
+                  className="rounded-full px-2.5 py-1 font-medium transition-colors"
+                  style={!program ? { background: `${MODULE_ACCENT}2a`, color: MODULE_ACCENT } : undefined}
                 >
-                  {portfolio.name}
+                  <span className={program ? 'text-secondary hover:text-current' : ''}>{portfolio.name}</span>
                 </button>
               </>
             )}
@@ -280,16 +296,19 @@ function ScopeHero({
                 <ChevronLeft size={12} className="opacity-40" />
                 <button
                   onClick={() => onProgram(program.id)}
-                  className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!project ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}
+                  className="rounded-full px-2.5 py-1 font-medium transition-colors"
+                  style={!project ? { background: `${MODULE_ACCENT}2a`, color: MODULE_ACCENT } : undefined}
                 >
-                  {program.name}
+                  <span className={project ? 'text-secondary hover:text-current' : ''}>{program.name}</span>
                 </button>
               </>
             )}
             {project && (
               <>
                 <ChevronLeft size={12} className="opacity-40" />
-                <span className="rounded-full bg-amber-500/20 px-2.5 py-1 font-medium text-amber-300">{project.officialName}</span>
+                <span className="rounded-full px-2.5 py-1 font-medium" style={{ background: `${MODULE_ACCENT}2a`, color: MODULE_ACCENT }}>
+                  {project.officialName}
+                </span>
               </>
             )}
           </div>
@@ -401,10 +420,10 @@ function LevelPicker({
   if (!scopePortfolioId) {
     return (
       <div>
-        <p className="mb-2.5 flex items-center gap-1.5 px-1 text-xs font-bold text-secondary">
-          <Briefcase size={13} className="text-amber-400" /> پورتفولیوهای سازمان — برای مشاهده کنترل استراتژیک هر یک کلیک کنید
+        <p className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-bold text-secondary">
+          <Briefcase size={12} style={{ color: MODULE_ACCENT }} /> پورتفولیوهای سازمان — برای مشاهده کنترل استراتژیک هر یک کلیک کنید
         </p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {portfolios.map((pf, i) => {
             const portfolioPrograms = programs.filter((pg) => pg.portfolioId === pf.id)
             const projectIds = projects.filter((p) => p.portfolioId === pf.id).map((p) => p.id)
@@ -469,7 +488,7 @@ function LevelPicker({
   )
 }
 
-/** The single largest, most decorated card type on the whole dashboard — each portfolio gets its own identity (accent color + glow), mirroring the module hub's own card language, since this is the entry point into the executive's world. */
+/** Each portfolio gets its own identity (accent color + glow), mirroring the module hub's own card language — but kept narrow (5-up on desktop) so it reads as an entry point, not the dominant element on the page. */
 function PortfolioIdentityCard({
   portfolio,
   accent,
@@ -489,7 +508,7 @@ function PortfolioIdentityCard({
   return (
     <button
       onClick={onSelect}
-      className="hub-grid-card glass-panel group flex min-h-[220px] flex-col rounded-[1.25rem] border p-6 text-right"
+      className="hub-grid-card glass-panel group flex flex-col rounded-2xl border p-3.5 text-right"
       style={{
         borderColor: 'var(--border-soft)',
         // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
@@ -498,75 +517,63 @@ function PortfolioIdentityCard({
     >
       <div className="hub-grid-card-glow" style={{ background: accent }} />
 
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110"
-            style={{ background: `${accent}1a`, borderColor: `${accent}44` }}
-          >
-            <Briefcase size={26} style={{ color: accent }} />
+      <div className="relative z-10 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-transform duration-300 group-hover:scale-110" style={{ background: `${accent}1a`, borderColor: `${accent}44` }}>
+            <Briefcase size={16} style={{ color: accent }} />
           </div>
           <div className="min-w-0">
-            <p className="text-lg font-extrabold leading-tight">{portfolio.name}</p>
+            <p className="truncate text-sm font-extrabold leading-tight">{portfolio.name}</p>
             {portfolio.code && (
-              <p className="num text-[11px] text-muted" dir="ltr">
+              <p className="num text-[9.5px] text-muted" dir="ltr">
                 {portfolio.code}
               </p>
             )}
           </div>
         </div>
         {avgHealth != null && (
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ boxShadow: `0 0 16px -4px ${healthColor}88` }}>
-            <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90">
-              <circle cx={22} cy={22} r={18} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth={4} />
-              <circle
-                cx={22}
-                cy={22}
-                r={18}
-                fill="none"
-                stroke={healthColor}
-                strokeWidth={4}
-                strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 18}
-                strokeDashoffset={2 * Math.PI * 18 * (1 - avgHealth / 100)}
-              />
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+            <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
+              <circle cx={18} cy={18} r={14} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth={3.5} />
+              <circle cx={18} cy={18} r={14} fill="none" stroke={healthColor} strokeWidth={3.5} strokeLinecap="round" strokeDasharray={2 * Math.PI * 14} strokeDashoffset={2 * Math.PI * 14 * (1 - avgHealth / 100)} />
             </svg>
-            <span className="num absolute text-[10px] font-extrabold">{avgHealth}</span>
+            <span className="num absolute text-[9px] font-extrabold">{avgHealth}</span>
           </div>
         )}
       </div>
 
-      {portfolio.description && <p className="relative z-10 mt-3 line-clamp-2 text-xs leading-5 text-secondary">{portfolio.description}</p>}
+      {portfolio.description && <p className="relative z-10 mt-2 line-clamp-1 text-[10.5px] leading-4 text-secondary">{portfolio.description}</p>}
 
-      <div className="relative z-10 mt-auto flex items-center gap-3 pt-4 text-[11px] text-muted">
+      <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5 text-[9.5px] text-muted">
         <span className="flex items-center gap-1">
-          <Layers size={12} /> <span className="num">{programCount}</span> طرح
+          <Layers size={10} /> <span className="num">{programCount}</span>
         </span>
         <span className="flex items-center gap-1">
-          <Briefcase size={12} /> <span className="num">{projectCount}</span> پروژه
+          <Briefcase size={10} /> <span className="num">{projectCount}</span>
         </span>
-        <span className="rounded-full border border-white/10 px-2 py-0.5">{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[portfolio.status]}</span>
+        <span className="rounded-full border border-white/10 px-1.5 py-0.5">{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[portfolio.status]}</span>
       </div>
 
-      <div className="relative z-10 mt-3 flex items-center gap-1.5 text-xs font-bold transition-all duration-300 group-hover:gap-2.5" style={{ color: accent }}>
+      <div className="relative z-10 mt-2 flex items-center gap-1 text-[10.5px] font-bold transition-all duration-300 group-hover:gap-1.5" style={{ color: accent }}>
         مشاهده کنترل استراتژیک
-        <ChevronLeft size={14} className="rotate-180 transition-transform duration-300 group-hover:translate-x-0.5" />
+        <ChevronLeft size={12} className="rotate-180 transition-transform duration-300 group-hover:translate-x-0.5" />
       </div>
     </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// KPI row
+// KPI strip — small chips, packed tightly; color communicates category only, the dot communicates status
 // ---------------------------------------------------------------------------
 
-function ExecutiveKpiTile({
+const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#2ecc71', warn: '#f1c40f', bad: '#e74c3c' }
+
+function KpiChip({
   icon: Icon,
   label,
   value,
   color,
   status,
-  trend,
   tooltip,
 }: {
   icon: LucideIcon
@@ -574,38 +581,23 @@ function ExecutiveKpiTile({
   value: number | string
   color: string
   status?: 'good' | 'warn' | 'bad'
-  trend?: { label: string; isGood: boolean }
   tooltip?: string
 }) {
-  const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#2ecc71', warn: '#f1c40f', bad: '#e74c3c' }
   return (
-    <div className="glass-panel group relative flex flex-col gap-2.5 rounded-2xl p-4 transition-transform hover:-translate-y-0.5">
-      <div className="flex items-start justify-between">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: `${color}1a` }}>
-          <Icon size={16} style={{ color }} />
-        </div>
-        <div className="flex items-center gap-1">
-          {status && <span className="h-2 w-2 rounded-full" style={{ background: STATUS_DOT[status] }} />}
-          {tooltip && (
-            <button type="button" tabIndex={0} className="text-muted outline-none hover:text-secondary focus-visible:text-secondary" aria-label={`توضیح ${label}`}>
-              <Info size={12} />
-            </button>
-          )}
-        </div>
+    <div className="glass-panel group relative flex items-center gap-2 rounded-xl px-2.5 py-2">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: `${color}1a` }}>
+        <Icon size={13} style={{ color }} />
       </div>
-      <div>
-        <p className="num text-xl font-extrabold leading-tight" style={{ color }}>
-          {value}
-        </p>
-        <p className="mt-1 text-[11px] font-medium leading-4 text-secondary">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="num truncate text-sm font-extrabold leading-none">{value}</p>
+        <p className="mt-1 truncate text-[9px] leading-none text-muted">{label}</p>
       </div>
-      {trend && (
-        <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: trend.isGood ? '#2ecc71' : '#e74c3c' }}>
-          {trend.label}
-        </span>
-      )}
+      {status && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[status] }} />}
       {tooltip && (
-        <div className="pointer-events-none absolute bottom-full right-2 z-20 mb-2 w-56 max-w-[80vw] rounded-lg border border-white/10 bg-[var(--bg-panel-solid)] p-2.5 text-[10px] leading-5 text-secondary opacity-0 shadow-2xl transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="pointer-events-none absolute bottom-full right-2 z-20 mb-2 w-52 max-w-[80vw] rounded-lg border border-white/10 bg-[var(--bg-panel-solid)] p-2.5 text-[10px] leading-5 text-secondary opacity-0 shadow-2xl transition-opacity duration-150 group-hover:opacity-100">
+          <span className="mb-0.5 flex items-center gap-1 font-bold text-primary">
+            <Info size={10} /> {label}
+          </span>
           {tooltip}
         </div>
       )}
@@ -613,216 +605,152 @@ function ExecutiveKpiTile({
   )
 }
 
-function KpiRow({ totals, currency }: { totals: ReturnType<typeof aggregatePortfolioTotals>; currency: string }) {
+function KpiStrip({ totals, currency }: { totals: ReturnType<typeof aggregatePortfolioTotals>; currency: string }) {
   const scheduleKnown = totals.projectCount - totals.scheduleBuckets.unknown
   const scheduleLatePercent = scheduleKnown > 0 ? Math.round(((totals.scheduleBuckets.late_30 + totals.scheduleBuckets.late_30_90 + totals.scheduleBuckets.late_over_90) / scheduleKnown) * 100) : null
   const alignmentPercent = totals.alignedKnownCount > 0 ? Math.round((totals.alignedCount / totals.alignedKnownCount) * 100) : null
   const changeExposurePercent = totals.projectCount > 0 ? Math.round((totals.changeExposureCount / totals.projectCount) * 100) : 0
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      <ExecutiveKpiTile
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+      <KpiChip
         icon={Target}
         label="همراستایی استراتژیک"
         value={alignmentPercent == null ? '—' : `${alignmentPercent}٪`}
-        color="#38bdf8"
-        tooltip="سهم پروژه‌های زیرمجموعه طرح/پورتفولیویی که اهداف استراتژیک برای آن‌ها ثبت شده — به‌عنوان شاخص جایگزین، چون امتیاز عددی همراستایی در سامانه ثبت نمی‌شود."
+        color={CAT.strategic}
+        tooltip="سهم پروژه‌های زیرمجموعه طرح/پورتفولیویی که اهداف استراتژیک برای آن‌ها ثبت شده."
       />
-      <ExecutiveKpiTile icon={Wallet} label="بودجه مصوب کل (BAC)" value={fmtCurrency(totals.bacSum, currency)} color="#a78bfa" tooltip="مجموع مبلغ قرارداد پروژه‌های این محدوده." />
-      <ExecutiveKpiTile
+      <KpiChip icon={Wallet} label="بودجه مصوب کل (BAC)" value={fmtCurrency(totals.bacSum, currency)} color={CAT.strategic} tooltip="مجموع مبلغ قرارداد پروژه‌های این محدوده." />
+      <KpiChip
         icon={TrendingUp}
-        label="پیش‌بینی هزینه در تکمیل (EAC)"
+        label="پیش‌بینی هزینه (EAC)"
         value={totals.eacCoverageCount > 0 ? fmtCurrency(totals.eacSum, currency) : 'ثبت نشده'}
-        color="#f59e0b"
-        tooltip={`فقط پروژه‌هایی که EAC برایشان ثبت شده (${totals.eacCoverageCount} از ${totals.projectCount}) — از صفحه شناسنامه پروژه قابل ثبت است.`}
+        color={CAT.strategic}
+        tooltip={`فقط پروژه‌هایی که EAC برایشان ثبت شده (${totals.eacCoverageCount} از ${totals.projectCount}).`}
       />
-      <ExecutiveKpiTile
+      <KpiChip
         icon={Scale}
-        label={totals.eacCoverageCount === 0 ? 'مواجهه هزینه‌ای (VAC)' : totals.costExposureSum >= 0 ? 'مواجهه هزینه‌ای (VAC) — صرفه‌جویی' : 'مواجهه هزینه‌ای (VAC) — مازاد هزینه'}
+        label="مواجهه هزینه‌ای (VAC)"
         value={totals.eacCoverageCount > 0 ? fmtCurrency(Math.abs(totals.costExposureSum), currency) : 'ثبت نشده'}
-        color={totals.costExposureSum >= 0 ? '#2ecc71' : '#e74c3c'}
+        color={CAT.strategic}
         status={totals.eacCoverageCount === 0 ? undefined : totals.costExposureSum >= 0 ? 'good' : 'bad'}
-        tooltip="BAC منهای EAC، فقط روی پروژه‌های دارای هر دو مقدار. مقدار منفی یعنی هزینه پیش‌بینی‌شده از بودجه مصوب فراتر رفته است."
+        tooltip="BAC منهای EAC. مقدار منفی یعنی هزینه پیش‌بینی‌شده از بودجه مصوب فراتر رفته است."
       />
-      <ExecutiveKpiTile
+      <KpiChip
         icon={CalendarClock}
         label="مواجهه زمان‌بندی"
-        value={scheduleLatePercent == null ? '—' : `${scheduleLatePercent}٪ تاخیر`}
-        color="#f97316"
+        value={scheduleLatePercent == null ? '—' : `${scheduleLatePercent}٪`}
+        color={CAT.risk}
         status={scheduleLatePercent == null ? undefined : scheduleLatePercent <= 15 ? 'good' : scheduleLatePercent <= 40 ? 'warn' : 'bad'}
         tooltip="سهم پروژه‌هایی که پیش‌بینی پایان آن‌ها از تاریخ برنامه‌ریزی‌شده عقب‌تر است."
       />
-      <ExecutiveKpiTile icon={AlertTriangle} label="پروژه‌های بحرانی" value={totals.criticalProjectCount} color="#e74c3c" status={totals.criticalProjectCount === 0 ? 'good' : 'bad'} tooltip="پروژه‌هایی با شاخص سلامت زیر ۴۰." />
-      <ExecutiveKpiTile
-        icon={ShieldAlert}
-        label="پروژه‌های پرریسک"
-        value={totals.highRiskProjectCount}
-        color="#f97316"
-        status={totals.highRiskProjectCount === 0 ? 'good' : 'warn'}
-        tooltip="پروژه‌های دارای حداقل یک ریسک فعال با سطح زیاد یا بحرانی."
-      />
-      <ExecutiveKpiTile
-        icon={Flag}
-        label="نقاط عطف معوق"
-        value={totals.overdueMilestoneCount}
-        color="#e74c3c"
-        status={totals.overdueMilestoneCount === 0 ? 'good' : 'bad'}
-        tooltip="فازهای پروژه (Master Data) با تاریخ پایان برنامه‌ریزی‌شده گذشته که هنوز تکمیل نشده‌اند."
-      />
-      <ExecutiveKpiTile
+      <KpiChip icon={AlertTriangle} label="پروژه‌های بحرانی" value={totals.criticalProjectCount} color={CAT.risk} status={totals.criticalProjectCount === 0 ? 'good' : 'bad'} tooltip="پروژه‌هایی با شاخص سلامت زیر ۴۰." />
+      <KpiChip icon={ShieldAlert} label="پروژه‌های پرریسک" value={totals.highRiskProjectCount} color={CAT.risk} status={totals.highRiskProjectCount === 0 ? 'good' : 'warn'} tooltip="پروژه‌های دارای حداقل یک ریسک فعال با سطح زیاد یا بحرانی." />
+      <KpiChip icon={Flag} label="نقاط عطف معوق" value={totals.overdueMilestoneCount} color={CAT.risk} status={totals.overdueMilestoneCount === 0 ? 'good' : 'bad'} tooltip="فازهای پروژه با تاریخ پایان برنامه‌ریزی‌شده گذشته که هنوز تکمیل نشده‌اند." />
+      <KpiChip icon={AlertCircle} label="مسائل بحرانی باز" value={totals.openCriticalIssueCount} color={CAT.risk} status={totals.openCriticalIssueCount === 0 ? 'good' : 'bad'} tooltip="مسائل با اولویت بحرانی که هنوز باز/در حال اقدام/منتظر تایید هستند." />
+      <KpiChip
         icon={Users}
         label="پوشش منابع کلیدی"
         value={totals.avgRoleCoverage == null ? '—' : `${Math.round(totals.avgRoleCoverage * 100)}٪`}
-        color="#38bdf8"
-        tooltip="سهم نقش‌های کلیدی تعریف‌شده که برای هر پروژه فردی مشخص شده — شاخص جایگزین برای ظرفیت منابع، چون ساعت/نفرساعت واقعی در سامانه ثبت نمی‌شود."
+        color={CAT.people}
+        tooltip="سهم نقش‌های کلیدی تعریف‌شده که برای هر پروژه فردی مشخص شده."
       />
-      <ExecutiveKpiTile icon={Gift} label="تحقق منافع (Benefits)" value="ثبت نشده" color="#64748b" tooltip="هیچ داده یا معیار جایگزینی برای تحقق منافع در سامانه وجود ندارد — به‌جای فرضی‌سازی، این شاخص خالی نمایش داده می‌شود." />
-      <ExecutiveKpiTile
-        icon={AlertCircle}
-        label="مسائل بحرانی باز"
-        value={totals.openCriticalIssueCount}
-        color="#e74c3c"
-        status={totals.openCriticalIssueCount === 0 ? 'good' : 'bad'}
-        tooltip="مسائل با اولویت بحرانی که هنوز باز/در حال اقدام/منتظر تایید هستند."
-      />
-      <ExecutiveKpiTile
+      <KpiChip icon={Gift} label="تحقق منافع" value="ثبت نشده" color="#64748b" tooltip="هیچ داده یا معیار جایگزینی برای تحقق منافع در سامانه وجود ندارد." />
+      <KpiChip
         icon={ClipboardList}
-        label="تصمیمات معوق مدیریتی"
+        label="تصمیمات معوق"
         value={totals.pendingDecisionCount}
-        color="#f1c40f"
+        color={CAT.people}
         status={totals.overduePendingDecisionCount === 0 ? 'good' : 'bad'}
-        trend={totals.overduePendingDecisionCount > 0 ? { label: `${totals.overduePendingDecisionCount} مورد از مهلت گذشته`, isGood: false } : undefined}
-        tooltip="تصمیمات با وضعیت در انتظار/در حال بررسی."
+        tooltip={`تصمیمات در انتظار/در حال بررسی${totals.overduePendingDecisionCount > 0 ? ` — ${totals.overduePendingDecisionCount} مورد از مهلت گذشته` : ''}.`}
       />
-      <ExecutiveKpiTile
+      <KpiChip
         icon={RefreshCw}
         label="مواجهه تغییرات"
         value={`${changeExposurePercent}٪`}
-        color="#8b5cf6"
+        color={CAT.people}
         status={changeExposurePercent <= 20 ? 'good' : changeExposurePercent <= 50 ? 'warn' : 'bad'}
-        tooltip="سهم پروژه‌هایی که تاریخ تکمیل بازنگری شده یا نسخه خط مبنا تغییر کرده — نشانه واقعی تغییرات اعمال‌شده."
+        tooltip="سهم پروژه‌هایی که تاریخ تکمیل بازنگری شده یا نسخه خط مبنا تغییر کرده."
       />
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Widgets 1-4
+// Priority leaderboard — brought up near the top since it's the widget that answers
+// "which projects need a management decision first," combining financial/risk/urgency/alignment signals.
 // ---------------------------------------------------------------------------
 
-function HealthDistributionWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
-  const { activeKey, setActiveKey, clear } = useDrillKey()
-  const counts: Record<HealthTier, number> = { healthy: 0, watch: 0, critical: 0 }
-  for (const s of summaries) counts[s.health]++
-  const data: ChartDatum[] = (['healthy', 'watch', 'critical'] as HealthTier[]).map((h) => ({ key: h, label: HEALTH_LABEL_FA[h], value: counts[h], color: HEALTH_COLOR[h] }))
-  const filtered = activeKey ? summaries.filter((s) => s.health === activeKey) : []
+const RANK_COLOR = ['#eab308', '#94a3b8', '#b45309']
 
-  return (
-    <div className="glass-panel rounded-2xl p-4">
-      <BreakdownDonut title="۱. توزیع سلامت پورتفولیو" icon={<Gauge size={12} className="text-teal-400" />} data={data} unit="پروژه" activeKey={activeKey} onSliceClick={setActiveKey} />
-      {activeKey && (
-        <div className="mt-3">
-          <ChartDrillPanel title={`پروژه‌های ${HEALTH_LABEL_FA[activeKey as HealthTier]}`} count={filtered.length} onClose={clear}>
-            {filtered.map((s) => (
-              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
-                {s.project.officialName}
-              </button>
-            ))}
-          </ChartDrillPanel>
-        </div>
-      )}
-    </div>
-  )
+function riskScoreOf(level: 'low' | 'medium' | 'high' | 'critical' | null): number {
+  if (level === 'critical') return 95
+  if (level === 'high') return 65
+  if (level === 'medium') return 30
+  if (level === 'low') return 10
+  return 0
 }
 
-function StrategicAlignmentWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
-  const { activeKey, setActiveKey, clear } = useDrillKey()
-  const aligned = summaries.filter((s) => s.strategicallyAligned === true).length
-  const notAligned = summaries.filter((s) => s.strategicallyAligned === false).length
-  const unknown = summaries.filter((s) => s.strategicallyAligned === null).length
-  const data: ChartDatum[] = [
-    { key: 'aligned', label: 'همراستا', value: aligned, color: '#2ecc71' },
-    { key: 'not', label: 'ناهمراستا', value: notAligned, color: '#e74c3c' },
-    { key: 'unknown', label: 'نامشخص (بدون طرح/پورتفولیو مشخص)', value: unknown, color: '#64748b' },
-  ]
-  const filtered = activeKey === 'aligned' ? summaries.filter((s) => s.strategicallyAligned === true) : activeKey === 'not' ? summaries.filter((s) => s.strategicallyAligned === false) : []
+function PriorityLeaderboardWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
+  const withBac = summaries.filter((s) => s.bac != null)
+  const maxBac = Math.max(1, ...withBac.map((s) => s.bac as number))
+  const priorityOf = (s: ProjectDashboardSummary) => {
+    const financial = s.bac != null ? (s.bac / maxBac) * 100 : 40
+    const risk = 100 - riskScoreOf(s.highestActiveRiskLevel)
+    const urgency = Math.max(0, 100 - (s.daysLate != null ? Math.min(100, s.daysLate) : 40))
+    const strategic = s.strategicallyAligned === true ? 100 : s.strategicallyAligned === false ? 30 : 50
+    return Math.round((financial + risk + urgency + strategic) / 4)
+  }
+  const ranked = summaries
+    .map((s) => ({ s, score: priorityOf(s) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <BreakdownDonut title="۲. همراستایی استراتژیک" icon={<Target size={12} className="text-teal-400" />} data={data} unit="پروژه" activeKey={activeKey} onSliceClick={setActiveKey} />
-      <p className="mt-2 text-[10px] leading-5 text-muted">
-        هر پروژه همراستا شمرده می‌شود اگر طرح یا پورتفولیوی آن دارای متن «اهداف استراتژیک» ثبت‌شده باشد — چون امتیاز عددی همراستایی هنوز در سامانه وجود ندارد.
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+        <Award size={12} style={{ color: CAT.strategic }} /> اولویت‌بندی پورتفولیو — نیازمند تصمیم مدیریت
       </p>
-      {activeKey && filtered.length > 0 && (
-        <div className="mt-3">
-          <ChartDrillPanel title="پروژه‌ها" count={filtered.length} onClose={clear}>
-            {filtered.map((s) => (
-              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
-                {s.project.officialName}
-              </button>
-            ))}
-          </ChartDrillPanel>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CostExposureWidget({ totals, currency }: { totals: ReturnType<typeof aggregatePortfolioTotals>; currency: string }) {
-  const scale = Math.max(totals.bacSum, totals.eacSum, Math.abs(totals.costExposureSum), 1)
-  const unit = compactCurrencyParts(scale, currency).unit
-  const divisor = scale / compactCurrencyParts(scale, currency).value || 1
-  const data: ChartDatum[] = [
-    { key: 'bac', label: 'بودجه مصوب (BAC)', value: Math.round((totals.bacSum / divisor) * 10) / 10, color: '#a78bfa' },
-    { key: 'eac', label: 'پیش‌بینی هزینه (EAC)', value: Math.round((totals.eacSum / divisor) * 10) / 10, color: '#f59e0b' },
-    { key: 'exposure', label: 'مواجهه هزینه‌ای (VAC)', value: Math.round((Math.abs(totals.costExposureSum) / divisor) * 10) / 10, color: totals.costExposureSum >= 0 ? '#2ecc71' : '#e74c3c' },
-  ]
-  return (
-    <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۳. مواجهه هزینه‌ای — BAC در برابر EAC" icon={<Wallet size={12} className="text-teal-400" />} data={data} unit={unit} />
-      {totals.eacCoverageCount === 0 ? (
-        <p className="mt-2 text-[10px] text-muted">هنوز هیچ پروژه‌ای پیش‌بینی هزینه در تکمیل (EAC) ثبت نکرده — این نمودار تا ثبت اولین مقدار خالی می‌ماند.</p>
+      <p className="mb-3 text-[10px] leading-5 text-muted">ترکیب مساوی ارزش مالی، ریسک، فوریت زمان‌بندی و همراستایی استراتژیک — بدون شاخص «منافع» به دلیل نبود داده واقعی.</p>
+      {ranked.length === 0 ? (
+        <div className="flex h-24 items-center justify-center text-[11px] text-muted">داده‌ای برای نمایش نیست</div>
       ) : (
-        <p className="mt-2 text-[10px] text-muted">
-          بر مبنای {totals.eacCoverageCount} از {totals.projectCount} پروژه که EAC برایشان ثبت شده است.
-        </p>
+        <div className="space-y-1">
+          {ranked.map(({ s, score }, i) => (
+            <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-right transition-colors hover:bg-white/5">
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold"
+                style={i < 3 ? { background: `${RANK_COLOR[i]}2a`, color: RANK_COLOR[i] } : { background: 'rgba(148,163,184,0.12)', color: 'var(--text-muted)' }}
+              >
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs font-medium">{s.project.officialName}</span>
+              <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-white/10 sm:w-24">
+                <span className="block h-full rounded-full" style={{ width: `${score}%`, background: CAT.strategic }} />
+              </span>
+              <span className="num w-6 shrink-0 text-left text-[11px] font-bold">{score}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
 }
 
-function ScheduleExposureWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
-  const { activeKey, setActiveKey, clear } = useDrillKey()
-  const counts: Record<ScheduleBucket, number> = { on_time: 0, late_30: 0, late_30_90: 0, late_over_90: 0, unknown: 0 }
-  for (const s of summaries) counts[s.scheduleBucket]++
-  const data: ChartDatum[] = (['on_time', 'late_30', 'late_30_90', 'late_over_90', 'unknown'] as ScheduleBucket[]).map((b) => ({
-    key: b,
-    label: SCHEDULE_BUCKET_LABEL_FA[b],
-    value: counts[b],
-    color: SCHEDULE_BUCKET_COLOR[b],
-  }))
-  const filtered = activeKey ? summaries.filter((s) => s.scheduleBucket === activeKey) : []
+function TopCriticalProjectsWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
+  const data: ChartDatum[] = summaries
+    .filter((s) => s.health !== 'healthy')
+    .map((s) => ({ key: s.masterProjectId, label: s.project.officialName, value: 100 - s.healthScore, color: HEALTH_COLOR[s.health] }))
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <BreakdownDonut title="۴. مواجهه زمان‌بندی" icon={<CalendarClock size={12} className="text-teal-400" />} data={data} unit="پروژه" activeKey={activeKey} onSliceClick={setActiveKey} />
-      {activeKey && (
-        <div className="mt-3">
-          <ChartDrillPanel title={SCHEDULE_BUCKET_LABEL_FA[activeKey as ScheduleBucket]} count={filtered.length} onClose={clear}>
-            {filtered.map((s) => (
-              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
-                {s.project.officialName} {s.daysLate != null && s.daysLate > 0 && <span className="num text-muted">— {s.daysLate} روز تاخیر</span>}
-              </button>
-            ))}
-          </ChartDrillPanel>
-        </div>
-      )}
+      <RankedBarChart title="پروژه‌های بحرانی برتر — نیازمند توجه مدیریت" icon={<AlertTriangle size={12} style={{ color: CAT.risk }} />} data={data} unit="شاخص عدم سلامت" onBarClick={onDrillProject} />
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Widgets 6-11 (5 is the RiskHeatMap rendered inline in the page body)
+// Risk heat map (existing shared component) + Strategic Importance x Health matrix
 // ---------------------------------------------------------------------------
 
 function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
@@ -839,10 +767,10 @@ function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries
   return (
     <div className="glass-panel rounded-2xl p-4">
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
-        <ShieldAlert size={12} className="text-teal-400" /> ۶. ماتریس اهمیت استراتژیک × سلامت پروژه
+        <ShieldAlert size={12} style={{ color: CAT.risk }} /> ماتریس اهمیت استراتژیک × سلامت پروژه
       </p>
       <p className="mb-3 text-[10px] leading-5 text-muted">
-        اهمیت استراتژیک بر مبنای رتبه مبلغ قرارداد (BAC) در میان پروژه‌های این محدوده تخمین زده می‌شود — هر ردیف یک سطح اهمیت و هر ستون یک وضعیت سلامت را نشان می‌دهد؛ عدد داخل هر خانه، تعداد پروژه‌های آن ترکیب است.
+        اهمیت استراتژیک بر مبنای رتبه مبلغ قرارداد (BAC) تخمین زده می‌شود — هر ردیف یک سطح اهمیت و هر ستون یک وضعیت سلامت را نشان می‌دهد؛ عدد داخل هر خانه، تعداد پروژه‌های آن ترکیب است.
       </p>
 
       <div className="mb-2 flex items-center justify-end gap-3 text-[10px]">
@@ -922,59 +850,293 @@ function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries
   )
 }
 
-function TopCriticalProjectsWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
-  const data: ChartDatum[] = summaries
-    .filter((s) => s.health !== 'healthy')
-    .map((s) => ({ key: s.masterProjectId, label: s.project.officialName, value: 100 - s.healthScore, color: HEALTH_COLOR[s.health] }))
+// ---------------------------------------------------------------------------
+// Risk exposure trend — the one genuine time-series in this dashboard, built from real
+// risk identification/review dates (riskAnalytics.computeExposureTimeline) — never fabricated.
+// ---------------------------------------------------------------------------
+
+function RiskExposureTrendWidget({ risks, assessments }: { risks: RmRisk[]; assessments: RmRiskAssessment[] }) {
+  const gradientId = useId()
+  const points = useMemo(() => computeExposureTimeline(risks, assessments), [risks, assessments])
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۷. پروژه‌های بحرانی برتر — نیازمند توجه مدیریت" icon={<AlertTriangle size={12} className="text-teal-400" />} data={data} unit="شاخص عدم سلامت" onBarClick={onDrillProject} />
-    </div>
-  )
-}
-
-function PriorityRankingWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
-  const withBac = summaries.filter((s) => s.bac != null)
-  const maxBac = Math.max(1, ...withBac.map((s) => s.bac as number))
-  const priorityOf = (s: ProjectDashboardSummary) => {
-    const financial = s.bac != null ? (s.bac / maxBac) * 100 : 40
-    const risk = 100 - riskScoreOf(s.highestActiveRiskLevel)
-    const urgency = Math.max(0, 100 - (s.daysLate != null ? Math.min(100, s.daysLate) : 40))
-    const strategic = s.strategicallyAligned === true ? 100 : s.strategicallyAligned === false ? 30 : 50
-    return Math.round((financial + risk + urgency + strategic) / 4)
-  }
-  const data: ChartDatum[] = [...summaries]
-    .map((s) => ({ key: s.masterProjectId, label: s.project.officialName, value: priorityOf(s), color: '#38bdf8' }))
-    .sort((a, b) => b.value - a.value)
-
-  return (
-    <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۸. اولویت‌بندی پورتفولیو" icon={<Award size={12} className="text-teal-400" />} data={data} unit="امتیاز" onBarClick={onDrillProject} />
-      <p className="mt-2 text-[10px] leading-5 text-muted">
-        ترکیب مساوی ارزش مالی (سهم از بودجه)، ریسک، فوریت زمان‌بندی و همراستایی استراتژیک — شاخص «منافع (Benefit)» به دلیل نبود داده واقعی در این ترکیب لحاظ نشده است.
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+        <TrendingUp size={12} style={{ color: CAT.risk }} /> روند مواجهه ریسک پورتفولیو
       </p>
+      <p className="mb-2 text-[10px] leading-5 text-muted">مجموع امتیاز ریسک‌های فعال در هر تاریخ شناسایی یا بازبینی واقعی — تنها نمودار روند این داشبورد که از سابقه واقعی داده ساخته می‌شود.</p>
+      {points.length < 2 ? (
+        <div className="flex h-40 items-center justify-center text-center text-[11px] text-muted">داده تاریخی کافی برای رسم روند ثبت نشده (نیاز به حداقل دو رویداد شناسایی/بازبینی ریسک)</div>
+      ) : (
+        <div style={{ height: 180 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CAT.risk} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={CAT.risk} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border-soft)" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} width={30} />
+              <RTooltip
+                contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
+                labelStyle={{ color: 'var(--text-secondary)' }}
+                formatter={(value) => [value, 'مجموع امتیاز ریسک']}
+              />
+              <Area type="monotone" dataKey="totalExposure" stroke={CAT.risk} strokeWidth={2} fill={`url(#${gradientId})`} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
 
-function riskScoreOf(level: 'low' | 'medium' | 'high' | 'critical' | null): number {
-  if (level === 'critical') return 95
-  if (level === 'high') return 65
-  if (level === 'medium') return 30
-  if (level === 'low') return 10
-  return 0
+// ---------------------------------------------------------------------------
+// Cost exposure — bullet-style comparison bar (EAC bar against a BAC target marker)
+// ---------------------------------------------------------------------------
+
+function CostExposureBulletWidget({ totals, currency }: { totals: ReturnType<typeof aggregatePortfolioTotals>; currency: string }) {
+  const max = Math.max(totals.bacSum, totals.eacSum, 1) * 1.08
+  const bacPct = Math.min(100, (totals.bacSum / max) * 100)
+  const eacPct = Math.min(100, (totals.eacSum / max) * 100)
+  const over = totals.eacSum > totals.bacSum
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+        <Wallet size={12} style={{ color: CAT.strategic }} /> مواجهه هزینه‌ای — EAC در برابر خط هدف BAC
+      </p>
+      {totals.eacCoverageCount === 0 ? (
+        <div className="flex h-20 items-center justify-center text-center text-[11px] text-muted">هنوز هیچ پروژه‌ای پیش‌بینی هزینه در تکمیل (EAC) ثبت نکرده.</div>
+      ) : (
+        <>
+          <div className="relative mt-4 h-6 w-full rounded-lg" style={{ background: 'rgba(148,163,184,0.12)' }}>
+            <div className="absolute inset-y-0 rounded-lg" style={{ right: 0, width: `${eacPct}%`, background: over ? '#e74c3c' : CAT.strategic, opacity: 0.85 }} />
+            <div className="absolute inset-y-[-4px] w-[2.5px] rounded-full bg-white" style={{ right: `${bacPct}%` }} title="خط هدف BAC" />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: over ? '#e74c3c' : CAT.strategic }} /> EAC: <span className="num font-bold">{fmtCurrency(totals.eacSum, currency)}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-0.5 bg-white" /> BAC (خط هدف): <span className="num font-bold">{fmtCurrency(totals.bacSum, currency)}</span>
+            </span>
+          </div>
+          <p className="mt-2 text-[10px] leading-5 text-muted">
+            {over ? 'میله از خط هدف عبور کرده — هزینه پیش‌بینی‌شده از بودجه مصوب بیشتر است.' : 'میله هنوز به خط هدف نرسیده — هزینه پیش‌بینی‌شده در محدوده بودجه مصوب است.'} بر مبنای {totals.eacCoverageCount} از{' '}
+            {totals.projectCount} پروژه دارای EAC.
+          </p>
+        </>
+      )}
+    </div>
+  )
 }
+
+// ---------------------------------------------------------------------------
+// Distribution widgets — donut kept for Health, stacked segment bars for the other two
+// (visually distinct from both the donut and the ranked bar charts used elsewhere)
+// ---------------------------------------------------------------------------
+
+function HealthDistributionWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
+  const { activeKey, setActiveKey, clear } = useDrillKey()
+  const counts: Record<HealthTier, number> = { healthy: 0, watch: 0, critical: 0 }
+  for (const s of summaries) counts[s.health]++
+  const total = summaries.length
+  const radius = 40
+  const stroke = 15
+  const circumference = 2 * Math.PI * radius
+  let cumulative = 0
+  const segments = (['healthy', 'watch', 'critical'] as HealthTier[])
+    .filter((h) => counts[h] > 0)
+    .map((h) => {
+      const len = (counts[h] / total) * circumference
+      const gap = 3
+      const visibleLen = Math.max(0, len - gap)
+      const offset = -(cumulative + gap / 2)
+      cumulative += len
+      return { h, visibleLen, offset }
+    })
+  const filtered = activeKey ? summaries.filter((s) => s.health === activeKey) : []
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold">
+        <Gauge size={12} style={{ color: CAT.risk }} /> توزیع سلامت پورتفولیو
+      </p>
+      {total === 0 ? (
+        <div className="flex h-40 items-center justify-center text-[11px] text-muted">داده‌ای برای نمایش نیست</div>
+      ) : (
+        <div className="flex flex-col items-center gap-3">
+          <div className="relative h-32 w-32">
+            <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+              {segments.map((s) => {
+                const isActive = activeKey === s.h
+                const isDimmed = !!activeKey && !isActive
+                return (
+                  <circle
+                    key={s.h}
+                    cx={50}
+                    cy={50}
+                    r={radius}
+                    fill="none"
+                    stroke={HEALTH_COLOR[s.h]}
+                    strokeWidth={isActive ? stroke + 3 : stroke}
+                    strokeDasharray={`${s.visibleLen} ${circumference - s.visibleLen}`}
+                    strokeDashoffset={s.offset}
+                    opacity={isDimmed ? 0.3 : 1}
+                    onClick={() => setActiveKey(isActive ? '' : s.h)}
+                    style={{ cursor: 'pointer', transition: 'stroke-width 120ms, opacity 120ms' }}
+                  />
+                )
+              })}
+            </svg>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <p className="num text-xl font-extrabold">{total}</p>
+              <p className="text-[9px] text-muted">مجموع</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
+            {(['healthy', 'watch', 'critical'] as HealthTier[]).map((h) => (
+              <button key={h} onClick={() => setActiveKey(activeKey === h ? '' : h)} className="flex items-center gap-1.5 text-[11px]" style={{ opacity: activeKey && activeKey !== h ? 0.55 : 1 }}>
+                <span className="h-2 w-2 rounded-full" style={{ background: HEALTH_COLOR[h] }} />
+                {HEALTH_LABEL_FA[h]} <span className="num font-bold">{counts[h]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {activeKey && (
+        <div className="mt-3">
+          <ChartDrillPanel title={`پروژه‌های ${HEALTH_LABEL_FA[activeKey as HealthTier]}`} count={filtered.length} onClose={clear}>
+            {filtered.map((s) => (
+              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
+                {s.project.officialName}
+              </button>
+            ))}
+          </ChartDrillPanel>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StackedSegmentBar({ data, activeKey, onSegmentClick }: { data: ChartDatum[]; activeKey: string | null; onSegmentClick: (key: string) => void }) {
+  const total = data.reduce((sum, d) => sum + d.value, 0)
+  if (total === 0) {
+    return <div className="flex h-10 items-center justify-center rounded-full bg-white/5 text-[10px] text-muted">داده‌ای برای نمایش نیست</div>
+  }
+  return (
+    <div>
+      <div className="flex h-3.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(148,163,184,0.12)' }}>
+        {data
+          .filter((d) => d.value > 0)
+          .map((d) => {
+            const isDimmed = !!activeKey && activeKey !== d.key
+            return (
+              <button
+                key={d.key}
+                onClick={() => onSegmentClick(d.key)}
+                title={`${d.label}: ${d.value}`}
+                style={{ width: `${(d.value / total) * 100}%`, background: d.color, opacity: isDimmed ? 0.3 : 1, transition: 'opacity 120ms' }}
+              />
+            )
+          })}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+        {data.map((d) => (
+          <button key={d.key} onClick={() => onSegmentClick(d.key)} className="flex items-center gap-1.5 text-[10.5px]" style={{ opacity: activeKey && activeKey !== d.key ? 0.55 : 1 }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: d.color }} />
+            {d.label} <span className="num font-bold">{d.value}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StrategicAlignmentWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
+  const { activeKey, setActiveKey, clear } = useDrillKey()
+  const aligned = summaries.filter((s) => s.strategicallyAligned === true).length
+  const notAligned = summaries.filter((s) => s.strategicallyAligned === false).length
+  const unknown = summaries.filter((s) => s.strategicallyAligned === null).length
+  const data: ChartDatum[] = [
+    { key: 'aligned', label: 'همراستا', value: aligned, color: '#2ecc71' },
+    { key: 'not', label: 'ناهمراستا', value: notAligned, color: '#e74c3c' },
+    { key: 'unknown', label: 'نامشخص', value: unknown, color: '#64748b' },
+  ]
+  const filtered = activeKey === 'aligned' ? summaries.filter((s) => s.strategicallyAligned === true) : activeKey === 'not' ? summaries.filter((s) => s.strategicallyAligned === false) : []
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold">
+        <Target size={12} style={{ color: CAT.strategic }} /> همراستایی استراتژیک
+      </p>
+      <StackedSegmentBar data={data} activeKey={activeKey} onSegmentClick={setActiveKey} />
+      <p className="mt-2 text-[10px] leading-5 text-muted">هر پروژه همراستا شمرده می‌شود اگر طرح یا پورتفولیوی آن دارای متن «اهداف استراتژیک» ثبت‌شده باشد.</p>
+      {activeKey && filtered.length > 0 && (
+        <div className="mt-3">
+          <ChartDrillPanel title="پروژه‌ها" count={filtered.length} onClose={clear}>
+            {filtered.map((s) => (
+              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
+                {s.project.officialName}
+              </button>
+            ))}
+          </ChartDrillPanel>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScheduleExposureWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
+  const { activeKey, setActiveKey, clear } = useDrillKey()
+  const counts: Record<ScheduleBucket, number> = { on_time: 0, late_30: 0, late_30_90: 0, late_over_90: 0, unknown: 0 }
+  for (const s of summaries) counts[s.scheduleBucket]++
+  const data: ChartDatum[] = (['on_time', 'late_30', 'late_30_90', 'late_over_90', 'unknown'] as ScheduleBucket[]).map((b) => ({
+    key: b,
+    label: SCHEDULE_BUCKET_LABEL_FA[b],
+    value: counts[b],
+    color: SCHEDULE_BUCKET_COLOR[b],
+  }))
+  const filtered = activeKey ? summaries.filter((s) => s.scheduleBucket === activeKey) : []
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold">
+        <CalendarClock size={12} style={{ color: CAT.risk }} /> مواجهه زمان‌بندی
+      </p>
+      <StackedSegmentBar data={data} activeKey={activeKey} onSegmentClick={setActiveKey} />
+      {activeKey && (
+        <div className="mt-3">
+          <ChartDrillPanel title={SCHEDULE_BUCKET_LABEL_FA[activeKey as ScheduleBucket]} count={filtered.length} onClose={clear}>
+            {filtered.map((s) => (
+              <button key={s.masterProjectId} onClick={() => onDrillProject(s.masterProjectId)} className="block w-full rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5">
+                {s.project.officialName} {s.daysLate != null && s.daysLate > 0 && <span className="num text-muted">— {s.daysLate} روز تاخیر</span>}
+              </button>
+            ))}
+          </ChartDrillPanel>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Remaining ranked lists
+// ---------------------------------------------------------------------------
 
 function ResourceCapacityWidget({ summaries, onDrillProject }: { summaries: ProjectDashboardSummary[]; onDrillProject: (id: string) => void }) {
   const data: ChartDatum[] = summaries
     .filter((s) => s.roleCoverageRatio != null)
-    .map((s) => ({ key: s.masterProjectId, label: s.project.officialName, value: Math.round((s.roleCoverageRatio as number) * 100), color: '#38bdf8' }))
+    .map((s) => ({ key: s.masterProjectId, label: s.project.officialName, value: Math.round((s.roleCoverageRatio as number) * 100), color: CAT.people }))
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۹. پوشش منابع کلیدی به تفکیک پروژه" icon={<Users size={12} className="text-teal-400" />} data={data} unit="٪" onBarClick={onDrillProject} />
-      <p className="mt-2 text-[10px] leading-5 text-muted">سهم نقش‌های کلیدی پروژه (مدیر پروژه، مدیر ریسک، PMO و ...) که فرد مشخصی برایشان تعیین شده — شاخص جایگزین برای ظرفیت منابع.</p>
+      <RankedBarChart title="پوشش منابع کلیدی به تفکیک پروژه" icon={<Users size={12} style={{ color: CAT.people }} />} data={data} unit="٪" onBarClick={onDrillProject} />
+      <p className="mt-2 text-[10px] leading-5 text-muted">سهم نقش‌های کلیدی پروژه که فرد مشخصی برایشان تعیین شده — شاخص جایگزین برای ظرفیت منابع.</p>
     </div>
   )
 }
@@ -996,7 +1158,7 @@ function ExecutiveDecisionsWidget({
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۱۰. تصمیمات مدیریتی معوق" icon={<ClipboardList size={12} className="text-teal-400" />} data={data} unit="تصمیم" onBarClick={onDrillProject} />
+      <RankedBarChart title="تصمیمات مدیریتی معوق" icon={<ClipboardList size={12} style={{ color: CAT.people }} />} data={data} unit="تصمیم" onBarClick={onDrillProject} />
       {overdueProjects.length > 0 && (
         <div className="mt-3 space-y-1">
           <p className="text-[10px] font-bold text-red-300">از مهلت گذشته:</p>
@@ -1030,13 +1192,13 @@ function DependencyWidget({
     key: id,
     label: allProjects.find((p) => p.id === id)?.officialName ?? '—',
     value: count,
-    color: '#a78bfa',
+    color: CAT.strategic,
   }))
   const atRisk = impacts.filter((i) => i.atRisk)
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <RankedBarChart title="۱۱. وابستگی‌های بین‌پروژه‌ای — تعداد پروژه‌های وابسته" icon={<Network size={12} className="text-teal-400" />} data={data} unit="پروژه وابسته" onBarClick={onDrillProject} />
+      <RankedBarChart title="وابستگی‌های بین‌پروژه‌ای" icon={<Network size={12} style={{ color: CAT.strategic }} />} data={data} unit="پروژه وابسته" onBarClick={onDrillProject} />
       {dependencies.length === 0 ? (
         <p className="mt-2 text-[10px] text-muted">هنوز هیچ وابستگی بین‌پروژه‌ای در شناسنامه پروژه‌ها ثبت نشده است.</p>
       ) : atRisk.length > 0 ? (
