@@ -165,6 +165,28 @@ export function computeReviewsDue(risks: RmRisk[], assessments: RmRiskAssessment
   return rows.sort((a, b) => b.daysSinceLastReview - a.daysSinceLastReview)
 }
 
+export interface NextReviewInfo {
+  dueDate: string
+  cadenceDays: number
+  overdue: boolean
+  daysUntil: number
+}
+
+/** The concrete next-review date for a single risk (last review date, or identified date if never
+ * reviewed, plus its level's cadence) — the explicit "when" that was previously only implicit in
+ * computeReviewsDue's day-count. Used to show a real date on the risk itself, not just a count
+ * buried in the Intelligence tab. */
+export function computeNextReviewDate(risk: RmRisk, assessments: RmRiskAssessment[], today = todayIso()): NextReviewInfo {
+  const riskAssessments = assessments.filter((a) => a.riskId === risk.id)
+  const latest = latestAssessment(riskAssessments)
+  const state = currentState(risk, riskAssessments)
+  const cadenceDays = REVIEW_CADENCE_DAYS[riskLevel(state.score)]
+  const baseDate = latest ? latest.reviewDate : risk.identifiedDate
+  const dueDate = new Date(Date.parse(baseDate) + cadenceDays * 86400000).toISOString().slice(0, 10)
+  const daysUntil = Math.round((Date.parse(dueDate) - Date.parse(today)) / 86400000)
+  return { dueDate, cadenceDays, overdue: daysUntil < 0, daysUntil }
+}
+
 export interface RiskQualityScore {
   risk: RmRisk
   score: number

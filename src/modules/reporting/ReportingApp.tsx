@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, ClipboardList, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
+import { BarChart3, ClipboardList, Home, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
@@ -99,7 +99,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
-            <ArrowRight size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
+            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
           </button>
           <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
         </div>

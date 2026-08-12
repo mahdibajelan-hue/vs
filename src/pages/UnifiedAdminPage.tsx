@@ -187,20 +187,20 @@ export function UnifiedAdminPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <div className="mx-auto max-w-4xl space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="space-y-3">
           <div>
             <p className="text-sm font-extrabold">فهرست کاربران و دسترسی‌ها</p>
             <p className="text-[10px] text-muted">همه اعضا و نقش آن‌ها در هر پروژه، در PipePulse، مدیریت ریسک و مدیریت مسائل</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={load} disabled={loading} className="rounded-lg p-2 text-secondary hover:bg-white/5 transition-colors" title="بروزرسانی">
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            </button>
             <button
               onClick={() => setShowInviteForm((v) => !v)}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-medium text-white hover:bg-brand-400 transition-colors"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2.5 text-xs font-medium text-white hover:bg-brand-400 transition-colors sm:flex-initial"
             >
               <UserPlus size={14} /> دعوت کاربر به یک پروژه PipePulse
+            </button>
+            <button onClick={load} disabled={loading} className="shrink-0 rounded-lg p-2.5 text-secondary hover:bg-white/5 transition-colors" title="بروزرسانی">
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
 

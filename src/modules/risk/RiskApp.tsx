@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
+import { Brain, Home, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { SignOutButton } from '../../components/Auth/SignOutButton'
@@ -131,7 +131,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             onClick={onExitToHub}
             className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
           >
-            <ArrowRight size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
+            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
           </button>
           <SignOutButton className="flex items-center gap-1.5 rounded-lg border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors sm:px-3" />
         </div>

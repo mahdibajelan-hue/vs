@@ -64,6 +64,15 @@ body {
   background-attachment: fixed;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+/* background-attachment: fixed forces a repaint on every scroll frame on many mobile browsers —
+   combined with the module hub's blurred blobs and glass-panel cards below, this made the hub
+   page feel stuck/janky on phones, needing several swipe attempts to actually scroll. Mobile gets
+   the cheap `scroll` attachment instead; desktop keeps the parallax-y fixed background. */
+@media (max-width: 640px) {
+  body {
+    background-attachment: scroll;
+  }
+}
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -288,6 +297,16 @@ body {
   left: 40%;
   opacity: 0.08;
   animation-delay: -9s;
+}
+/* A 110px blur radius recomposites expensively on mobile GPUs every time the page scrolls behind
+   it — on the module hub (5 glass-panel cards, each also blurred) this was the main cause of the
+   "have to swipe several times before it actually scrolls" complaint. Shrinking the blur and
+   dropping the continuous transform animation removes that recomposite cost entirely on phones. */
+@media (max-width: 640px) {
+  .hub-blob {
+    filter: blur(48px);
+    animation: none;
+  }
 }
 :root[data-theme="light"] .hub-blob {
   opacity: 0.09;

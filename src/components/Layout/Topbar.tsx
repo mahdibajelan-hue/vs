@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, Menu, Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
+import { Home, Menu, Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
@@ -78,7 +78,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
           className="glass-panel rounded-lg p-2 hover:brightness-125 transition"
           title="بازگشت به ماژول‌ها"
         >
-          <ArrowRight size={16} />
+          <Home size={16} />
         </button>
         <button
           onClick={() => signOut()}

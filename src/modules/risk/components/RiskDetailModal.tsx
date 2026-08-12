@@ -32,7 +32,7 @@ import {
   type RmTrend,
 } from '../types'
 import { STRATEGY_FIELDS } from '../lib/strategyFields'
-import { riskInsightBullets } from '../lib/riskIntelligence'
+import { computeNextReviewDate, riskInsightBullets } from '../lib/riskIntelligence'
 import {
   assignReviewNumbers,
   currentState,
@@ -86,6 +86,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
   const latestResidualScore = assessments.length > 0 ? assessments[0].residualScore : null
   const residualLevel = latestResidualScore !== null ? riskLevel(latestResidualScore) : null
   const stage = lifecycleStage(risk, assessments)
+  const nextReview = computeNextReviewDate(risk, assessments)
   const strategyFieldDefs = STRATEGY_FIELDS[risk.responseStrategy]
   const filledStrategyDetails = strategyFieldDefs.filter((f) => (risk.strategyDetails[f.key] ?? '').trim() !== '')
 
@@ -136,6 +137,11 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           <InfoTile label="فاز پروژه" value={risk.projectPhase ? RM_PROJECT_PHASE_LABEL_FA[risk.projectPhase] : '—'} />
           <InfoTile label="تاریخ شناسایی" value={formatJalali(risk.identifiedDate)} />
           <InfoTile label="زمان تا وقوع" value={risk.timeToImpactDays !== null ? `${risk.timeToImpactDays} روز` : '—'} />
+          <InfoTile
+            label="بازبینی بعدی"
+            value={risk.status === 'closed' ? '—' : `${formatJalali(nextReview.dueDate)}${nextReview.overdue ? ` — ${Math.abs(nextReview.daysUntil)} روز تاخیر` : ''}`}
+            valueColor={risk.status !== 'closed' && nextReview.overdue ? '#e74c3c' : undefined}
+          />
           <div className="col-span-2">
             <span className="mb-1 block text-[11px] text-secondary">وضعیت</span>
             {canEdit ? (
@@ -237,11 +243,13 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
   )
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+function InfoTile({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <div>
       <span className="mb-1 block text-[11px] text-secondary">{label}</span>
-      <p className="text-xs font-medium">{value}</p>
+      <p className="text-xs font-medium" style={valueColor ? { color: valueColor } : undefined}>
+        {value}
+      </p>
     </div>
   )
 }
