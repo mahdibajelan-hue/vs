@@ -1,15 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Briefcase, Download, FileSpreadsheet, Layers, Loader2 } from 'lucide-react'
+import { BarChart3, Briefcase, Download, FileSpreadsheet, Layers, ListChecks, Loader2, PieChart } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../../masterdata/components/RollupCharts'
 import { exportElementToPdf } from '../../../lib/export'
 import { exportReportToExcel } from '../lib/reportExport'
-import { useScopedIntelligence } from '../lib/useProjectIntelligence'
+import { useScopedDecisionsActions, useScopedIntelligence } from '../lib/useProjectIntelligence'
 import { type IntelligenceScope } from '../lib/dataAdapter'
 import { DEFAULT_PROFILE_WIDGETS, WIDGET_REGISTRY, computeReportPayload, widgetsByCategory } from '../lib/widgetRegistry'
 import { WidgetGrid } from '../components/WidgetGrid'
-import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
-import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, WIDGET_CATEGORY_LABEL_FA, type ReportType, type WidgetCategory } from '../types'
+import { useReportingStore } from '../store/useReportingStore'
+import {
+  DECISION_STATUS_LABEL_FA,
+  DECISION_STATUSES,
+  RASTA_ACTION_STATUS_LABEL_FA,
+  RASTA_ACTION_STATUSES,
+  REPORT_TYPES,
+  REPORT_TYPE_LABEL_FA,
+  WIDGET_CATEGORY_LABEL_FA,
+  type Decision,
+  type DecisionStatus,
+  type RastaAction,
+  type RastaActionStatus,
+  type ReportType,
+  type WidgetCategory,
+} from '../types'
 import type { WidgetComputeContext } from '../lib/widgetTypes'
+
+const DECISION_STATUS_COLOR: Record<DecisionStatus, string> = {
+  pending: '#94a3b8',
+  in_review: '#f59e0b',
+  approved: '#2ecc71',
+  rejected: '#e74c3c',
+  deferred: '#8b5cf6',
+}
+
+const ACTION_STATUS_COLOR: Record<RastaActionStatus, string> = {
+  not_started: '#94a3b8',
+  in_progress: '#f59e0b',
+  completed: '#2ecc71',
+  cancelled: '#e74c3c',
+}
 
 const CATEGORY_ORDER: WidgetCategory[] = ['executive', 'progress', 'risk', 'issue', 'intelligence', 'decision']
 
@@ -52,8 +82,7 @@ export function PortfolioReportPage() {
 
   const scope: IntelligenceScope | null = scopeId ? { type: scopeType, id: scopeId } : null
   const { bundle, previousBundle, loading } = useScopedIntelligence(scope)
-  const decisions = EMPTY_ARRAY
-  const actions = EMPTY_ARRAY
+  const { decisions, actions } = useScopedDecisionsActions(scope)
 
   const profilesForType = useMemo(() => profiles.filter((p) => p.reportType === reportType), [profiles, reportType])
   const byCategory = useMemo(() => widgetsByCategory(), [])
@@ -232,11 +261,85 @@ export function PortfolioReportPage() {
             <Loader2 size={20} className="animate-spin text-brand-400" />
           </div>
         ) : (
-          <div ref={gridRef}>
-            <WidgetGrid widgetIds={widgetIds} mode="live" ctx={{ bundle, previousBundle, decisions, actions }} />
+          <div className="space-y-4">
+            <DecisionActionChartsSection decisions={decisions} actions={actions} />
+            <div ref={gridRef}>
+              <WidgetGrid widgetIds={widgetIds} mode="live" ctx={{ bundle, previousBundle, decisions, actions }} />
+            </div>
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Power-BI-style breakdown of the Decision Center's own data for this Portfolio/Program scope —
+ * decision-status donut + action-status bar, both click-to-drill into the underlying rows. */
+function DecisionActionChartsSection({ decisions, actions }: { decisions: Decision[]; actions: RastaAction[] }) {
+  const { activeKey: activeDecisionStatus, setActiveKey: setActiveDecisionStatus, clear: clearDecisionStatus } = useDrillKey()
+  const { activeKey: activeActionStatus, setActiveKey: setActiveActionStatus, clear: clearActionStatus } = useDrillKey()
+
+  const decisionCounts = useMemo(() => {
+    const counts: Record<DecisionStatus, number> = { pending: 0, in_review: 0, approved: 0, rejected: 0, deferred: 0 }
+    for (const d of decisions) counts[d.status]++
+    return counts
+  }, [decisions])
+  const decisionDonutData: ChartDatum[] = DECISION_STATUSES.map((s) => ({ key: s, label: DECISION_STATUS_LABEL_FA[s], value: decisionCounts[s], color: DECISION_STATUS_COLOR[s] }))
+
+  const actionCounts = useMemo(() => {
+    const counts: Record<RastaActionStatus, number> = { not_started: 0, in_progress: 0, completed: 0, cancelled: 0 }
+    for (const a of actions) counts[a.status]++
+    return counts
+  }, [actions])
+  const actionBarData: ChartDatum[] = RASTA_ACTION_STATUSES.map((s) => ({ key: s, label: RASTA_ACTION_STATUS_LABEL_FA[s], value: actionCounts[s], color: ACTION_STATUS_COLOR[s] }))
+
+  const filteredDecisions = activeDecisionStatus ? decisions.filter((d) => d.status === activeDecisionStatus) : []
+  const filteredActions = activeActionStatus ? actions.filter((a) => a.status === activeActionStatus) : []
+
+  if (decisions.length === 0 && actions.length === 0) return null
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <BreakdownDonut
+          title="توزیع وضعیت تصمیمات"
+          icon={<PieChart size={12} className="text-teal-400" />}
+          data={decisionDonutData}
+          unit="تصمیم"
+          activeKey={activeDecisionStatus}
+          onSliceClick={setActiveDecisionStatus}
+        />
+        <RankedBarChart title="اقدامات مدیریتی به تفکیک وضعیت" icon={<BarChart3 size={12} className="text-teal-400" />} data={actionBarData} unit="اقدام" activeKey={activeActionStatus} onBarClick={setActiveActionStatus} />
+      </div>
+
+      {activeDecisionStatus && (
+        <div className="mt-3">
+          <ChartDrillPanel title={`تصمیمات با وضعیت «${DECISION_STATUS_LABEL_FA[activeDecisionStatus as DecisionStatus]}»`} count={filteredDecisions.length} onClose={clearDecisionStatus}>
+            {filteredDecisions.map((d) => (
+              <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px]">
+                <span className="font-medium">{d.title}</span>
+                {d.requiredBy && <span className="num text-muted">مهلت: {d.requiredBy}</span>}
+              </div>
+            ))}
+          </ChartDrillPanel>
+        </div>
+      )}
+
+      {activeActionStatus && (
+        <div className="mt-3">
+          <ChartDrillPanel title={`اقدامات با وضعیت «${RASTA_ACTION_STATUS_LABEL_FA[activeActionStatus as RastaActionStatus]}»`} count={filteredActions.length} onClose={clearActionStatus}>
+            {filteredActions.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px]">
+                <span className="flex items-center gap-1.5">
+                  <ListChecks size={11} className="text-muted" />
+                  <span className="font-medium">{a.title}</span>
+                </span>
+                {a.dueDate && <span className="num text-muted">مهلت: {a.dueDate}</span>}
+              </div>
+            ))}
+          </ChartDrillPanel>
+        </div>
+      )}
     </div>
   )
 }

@@ -92,7 +92,7 @@ export function reportSnapshotFromRow(r: ReportSnapshotRow): ReportSnapshot {
   }
 }
 
-interface DecisionRow {
+export interface DecisionRow {
   id: string
   master_project_id: string
   title: string
@@ -154,7 +154,7 @@ export function decisionToRow(masterProjectId: string, d: Partial<Decision>) {
   return row
 }
 
-interface RastaActionRow {
+export interface RastaActionRow {
   id: string
   master_project_id: string
   title: string

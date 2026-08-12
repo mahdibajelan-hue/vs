@@ -5,6 +5,8 @@ import { rmActionFromRow, rmAssessmentFromRow, rmRiskFromRow, type RmRiskActionR
 import type { RmRisk, RmRiskAction, RmRiskAssessment } from '../../risk/types'
 import { imIssueFromRow, type ImIssueRow } from '../../issues/lib/issueData'
 import type { ImIssue } from '../../issues/types'
+import { decisionFromRow, rastaActionFromRow, type DecisionRow, type RastaActionRow } from './reportingData'
+import type { Decision, RastaAction } from '../types'
 
 /**
  * Cross-module data bundle for one master project — resolved via rasta_project_mappings
@@ -108,6 +110,24 @@ export async function fetchScopedIntelligence(scope: IntelligenceScope): Promise
   ])
 
   return { masterProjectId: scope.id, generatedAt: new Date().toISOString(), risk, issues, pipepulse }
+}
+
+/**
+ * Decisions/actions aren't per-module-mapped data (they live directly in rasta_decisions/
+ * rasta_actions, keyed to master_projects) — so unlike fetchScopedIntelligence this needs no
+ * mapping resolution, just the same scope -> master_project_ids expansion reused above.
+ */
+export async function fetchScopedDecisionsActions(scope: IntelligenceScope): Promise<{ decisions: Decision[]; actions: RastaAction[] }> {
+  const masterProjectIds = await resolveMasterProjectIdsForScope(scope)
+  if (masterProjectIds.length === 0) return { decisions: [], actions: [] }
+  const [{ data: decisionRows }, { data: actionRows }] = await Promise.all([
+    supabase.from('rasta_decisions').select('*').in('master_project_id', masterProjectIds),
+    supabase.from('rasta_actions').select('*').in('master_project_id', masterProjectIds),
+  ])
+  return {
+    decisions: ((decisionRows ?? []) as DecisionRow[]).map(decisionFromRow),
+    actions: ((actionRows ?? []) as RastaActionRow[]).map(rastaActionFromRow),
+  }
 }
 
 /**

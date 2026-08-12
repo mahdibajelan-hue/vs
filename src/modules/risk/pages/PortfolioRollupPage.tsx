@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertOctagon, ChevronDown, ChevronLeft, Copy, Folders, Layers, ListChecks, Loader2, Milestone, TrendingUp } from 'lucide-react'
+import { AlertOctagon, BarChart3, ChevronDown, ChevronLeft, Copy, Folders, Layers, ListChecks, Loader2, Milestone, PieChart, TrendingUp } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../../masterdata/components/RollupCharts'
 import { RM_CATEGORY_LABEL_FA, type RmRiskAction, type RmRiskAssessment } from '../types'
 import type { RmRisk } from '../types'
 import { detectCrossProjectDuplicates, detectPortfolioPatterns } from '../lib/riskIntelligence'
 import { computeCriticalHighAttention } from '../lib/riskAnalytics'
-import { currentState, riskLevel, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
+import { currentState, riskLevel, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA, type RiskLevel } from '../lib/riskScore'
 import {
   buildPortfolioTree,
   fetchRiskBundlesForProjects,
@@ -177,6 +178,8 @@ function PortfolioCard({ rollup, bundles, onOpenProject }: { rollup: PortfolioRo
       </div>
       {open && (
         <div className="mt-3 space-y-2 border-t pr-6 pt-3" style={{ borderColor: 'var(--border-soft)' }}>
+          <RiskChartsSection groups={groups} projects={allProjects} onOpenProject={onOpenProject} />
+
           {rollup.programs.map((pr) => (
             <ProgramRow key={pr.program.id} rollup={pr} bundles={bundles} onOpenProject={onOpenProject} />
           ))}
@@ -319,8 +322,80 @@ function ProgramRow({ rollup, bundles, onOpenProject }: { rollup: ProgramRollup;
       </div>
       {open && (
         <div className="mt-2 space-y-1.5 pr-5">
+          <RiskChartsSection groups={groups} projects={rollup.projects} onOpenProject={onOpenProject} />
           {rollup.projects.length === 0 ? <p className="text-[11px] text-muted">پروژه‌ای در این طرح تعریف نشده است</p> : rollup.projects.map((p) => <ProjectRow key={p.masterProjectId} summary={p} onOpenProject={onOpenProject} />)}
           <RiskAggregateDetail label="این طرح" groups={groups} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Power-BI-style breakdown for one portfolio/program's own scope — risk-level donut (click a
+ * slice to drill into the matching risks below) + a ranked bar of active risks per project
+ * (click a bar to jump straight to that project's Risk Register). */
+function RiskChartsSection({ groups, projects, onOpenProject }: { groups: RiskGroup[]; projects: ProjectRiskSummary[]; onOpenProject: (rmProjectId: string) => void }) {
+  const { activeKey: activeLevel, setActiveKey: setActiveLevel, clear: clearLevel } = useDrillKey()
+
+  const riskRows = useMemo(
+    () =>
+      groups.flatMap((g) =>
+        g.risks
+          .filter((r) => r.status !== 'closed')
+          .map((r) => ({ risk: r, projectName: g.projectName, level: riskLevel(currentState(r, g.assessments.filter((a) => a.riskId === r.id)).score) })),
+      ),
+    [groups],
+  )
+
+  const levelCounts = useMemo(() => {
+    const counts: Record<RiskLevel, number> = { critical: 0, high: 0, medium: 0, low: 0 }
+    for (const r of riskRows) counts[r.level]++
+    return counts
+  }, [riskRows])
+
+  const donutData: ChartDatum[] = (['critical', 'high', 'medium', 'low'] as RiskLevel[]).map((level) => ({
+    key: level,
+    label: RISK_LEVEL_LABEL_FA[level],
+    value: levelCounts[level],
+    color: RISK_LEVEL_COLOR[level],
+  }))
+
+  const barData: ChartDatum[] = projects
+    .filter((p) => p.activeRisks > 0)
+    .map((p) => ({ key: p.rmProjectId ?? p.masterProjectId, label: p.projectName, value: p.activeRisks, color: '#e74c3c' }))
+
+  const filteredRows = activeLevel ? riskRows.filter((r) => r.level === activeLevel) : []
+
+  if (riskRows.length === 0) return null
+
+  return (
+    <div className="rounded-xl bg-white/[0.02] p-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <BreakdownDonut title="توزیع سطح ریسک" icon={<PieChart size={12} className="text-red-400" />} data={donutData} unit="ریسک" activeKey={activeLevel} onSliceClick={setActiveLevel} />
+        <RankedBarChart
+          title="ریسک‌های فعال به تفکیک پروژه"
+          icon={<BarChart3 size={12} className="text-red-400" />}
+          data={barData}
+          unit="ریسک"
+          onBarClick={(key) => key && onOpenProject(key)}
+        />
+      </div>
+      {activeLevel && (
+        <div className="mt-3">
+          <ChartDrillPanel title={`ریسک‌های سطح «${RISK_LEVEL_LABEL_FA[activeLevel as RiskLevel]}»`} count={filteredRows.length} onClose={clearLevel}>
+            {filteredRows.map(({ risk, projectName, level }) => (
+              <div key={risk.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px]">
+                <span className="flex items-center gap-2">
+                  <span className="num text-muted">{risk.code}</span>
+                  <span className="font-medium">{risk.title}</span>
+                  <span className="text-[10px] text-muted">({projectName})</span>
+                </span>
+                <span className="num rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${RISK_LEVEL_COLOR[level]}22`, color: RISK_LEVEL_COLOR[level] }}>
+                  {RISK_LEVEL_LABEL_FA[level]}
+                </span>
+              </div>
+            ))}
+          </ChartDrillPanel>
         </div>
       )}
     </div>

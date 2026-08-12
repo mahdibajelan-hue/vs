@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronLeft, Clock, Folders, Layers, ListChecks, Loader2, Milestone } from 'lucide-react'
+import { AlertTriangle, BarChart3, ChevronDown, ChevronLeft, Clock, Folders, Layers, ListChecks, Loader2, Milestone, PieChart } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useIssuesStore } from '../store/useIssuesStore'
-import { IM_PRIORITY_COLOR, IM_PRIORITY_LABEL_FA, type ImIssue } from '../types'
+import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum, type ChartTheme } from '../../masterdata/components/RollupCharts'
+import { IM_PRIORITY_COLOR, IM_PRIORITY_LABEL_FA, IM_STATUSES, IM_STATUS_LABEL_FA, type ImIssue, type ImIssueStatus } from '../types'
 import { isIssueOpen, isIssueOverdue } from '../lib/issueRing'
 import {
   buildIssuePortfolioTree,
@@ -149,6 +150,8 @@ function PortfolioCard({ rollup, onSelectIssue }: { rollup: PortfolioIssueRollup
       </div>
       {open && (
         <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 24, borderTop: '1px solid var(--im-line)', paddingTop: 12 }}>
+          <IssueChartsSection projects={allProjects} onSelectIssue={onSelectIssue} />
+
           {rollup.programs.map((pr) => (
             <ProgramRow key={pr.program.id} rollup={pr} onSelectIssue={onSelectIssue} />
           ))}
@@ -188,12 +191,114 @@ function ProgramRow({ rollup, onSelectIssue }: { rollup: ProgramIssueRollup; onS
       </div>
       {open && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 20 }}>
+          <IssueChartsSection projects={rollup.projects} onSelectIssue={onSelectIssue} />
           {rollup.projects.length === 0 ? (
             <p style={{ fontSize: 11, color: 'var(--im-muted)' }}>پروژه‌ای در این طرح تعریف نشده است</p>
           ) : (
             rollup.projects.map((p) => <ProjectRow key={p.masterProjectId} summary={p} />)
           )}
           <IssueAttentionList label="این طرح" projects={rollup.projects} onSelectIssue={onSelectIssue} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const IM_CHART_THEME: ChartTheme = { panelBg: 'var(--im-panel)', border: 'var(--im-line)', textSecondary: 'var(--im-muted-2)', textMuted: 'var(--im-muted)' }
+
+/** Literal hex twins of IM_STATUS_COLOR (issues.css --im-* tokens) — Recharts renders these as raw
+ * SVG fill attributes, which don't reliably resolve CSS custom properties the way an HTML style
+ * property does, so chart data colors stay literal while chrome (tooltip/legend, real CSS) keeps using var(). */
+const IM_CHART_STATUS_COLOR: Record<ImIssueStatus, string> = {
+  open: '#8b7cf6',
+  in_progress: '#f5b248',
+  pending_approval: '#c8cedb',
+  approved: '#4ade9e',
+  rejected: '#e85d4e',
+}
+
+/** Power-BI-style breakdown for one portfolio/program's own scope — issue-status donut (click a
+ * slice to drill into matching issues) crossed with a ranked bar of open issues per project
+ * (click a bar to drill into that project's issues too — both filters combine). */
+function IssueChartsSection({ projects, onSelectIssue }: { projects: ProjectIssueSummary[]; onSelectIssue: (issueId: string) => void }) {
+  const allIssues = useIssuesStore((s) => s.issues)
+  const mappedProjectIds = useMemo(() => new Set(projects.map((p) => p.imProjectId).filter((id): id is string => !!id)), [projects])
+  const projectNameByImId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of projects) if (p.imProjectId) map.set(p.imProjectId, p.projectName)
+    return map
+  }, [projects])
+  const scopedIssues = useMemo(() => allIssues.filter((i) => mappedProjectIds.has(i.projectId)), [allIssues, mappedProjectIds])
+
+  const { activeKey: activeStatus, setActiveKey: setActiveStatus, clear: clearStatus } = useDrillKey()
+  const { activeKey: activeProject, setActiveKey: setActiveProject, clear: clearProject } = useDrillKey()
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<ImIssueStatus, number> = { open: 0, in_progress: 0, pending_approval: 0, approved: 0, rejected: 0 }
+    for (const i of scopedIssues) counts[i.status]++
+    return counts
+  }, [scopedIssues])
+
+  const donutData: ChartDatum[] = IM_STATUSES.map((s) => ({ key: s, label: IM_STATUS_LABEL_FA[s], value: statusCounts[s], color: IM_CHART_STATUS_COLOR[s] }))
+  const barData: ChartDatum[] = projects.filter((p) => p.openIssues > 0).map((p) => ({ key: p.imProjectId ?? p.masterProjectId, label: p.projectName, value: p.openIssues, color: '#f5b248' }))
+
+  const hasFilter = !!activeStatus || !!activeProject
+  const filteredIssues = useMemo(() => {
+    if (!hasFilter) return []
+    return scopedIssues.filter((i) => (!activeStatus || i.status === activeStatus) && (!activeProject || i.projectId === activeProject))
+  }, [hasFilter, scopedIssues, activeStatus, activeProject])
+
+  if (scopedIssues.length === 0) return null
+
+  const panelTitle = activeStatus && activeProject ? `مسائل «${IM_STATUS_LABEL_FA[activeStatus as ImIssueStatus]}» در ${projectNameByImId.get(activeProject) ?? ''}` : activeStatus ? `مسائل با وضعیت «${IM_STATUS_LABEL_FA[activeStatus as ImIssueStatus]}»` : `مسائل پروژه «${projectNameByImId.get(activeProject!) ?? ''}»`
+
+  return (
+    <div className="im-card" style={{ background: 'var(--im-panel)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+        <BreakdownDonut title="توزیع وضعیت مسائل" icon={<PieChart size={12} style={{ color: 'var(--im-amber)' }} />} data={donutData} unit="مسئله" activeKey={activeStatus} onSliceClick={setActiveStatus} theme={IM_CHART_THEME} />
+        <RankedBarChart
+          title="مسائل باز به تفکیک پروژه"
+          icon={<BarChart3 size={12} style={{ color: 'var(--im-amber)' }} />}
+          data={barData}
+          unit="مسئله"
+          activeKey={activeProject}
+          onBarClick={setActiveProject}
+          theme={IM_CHART_THEME}
+        />
+      </div>
+      {hasFilter && (
+        <div style={{ marginTop: 12 }}>
+          <ChartDrillPanel
+            title={panelTitle}
+            count={filteredIssues.length}
+            onClose={() => {
+              clearStatus()
+              clearProject()
+            }}
+          >
+            {filteredIssues.map((issue) => (
+              <button
+                key={issue.id}
+                onClick={() => onSelectIssue(issue.id)}
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, borderRadius: 8, padding: '6px 8px', fontSize: 11, textAlign: 'right', width: '100%' }}
+                className="im-issue-card"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <ListChecks size={11} style={{ color: 'var(--im-muted)' }} />
+                  <span style={{ fontWeight: 700 }}>{issue.title}</span>
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--im-muted)' }}>({projectNameByImId.get(issue.projectId)})</span>
+                <span className="im-chip" style={{ color: IM_PRIORITY_COLOR[issue.priority] }}>
+                  {IM_PRIORITY_LABEL_FA[issue.priority]}
+                </span>
+                {isIssueOverdue(issue) && (
+                  <span className="im-chip" style={{ color: 'var(--im-coral)' }}>
+                    <Clock size={10} /> معوق
+                  </span>
+                )}
+              </button>
+            ))}
+          </ChartDrillPanel>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronLeft, Folders, Layers, Loader2, Milestone, TrendingUp } from 'lucide-react'
+import { AlertTriangle, BarChart3, ChevronDown, ChevronLeft, Folders, Layers, Loader2, Milestone, PieChart, TrendingUp } from 'lucide-react'
 import { useMasterDataStore } from '../modules/masterdata/store/useMasterDataStore'
+import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../modules/masterdata/components/RollupCharts'
 import { formatJalali } from '../lib/jalali'
 import {
   buildProgressPortfolioTree,
@@ -148,6 +149,8 @@ function PortfolioCard({ rollup, onOpenProject }: { rollup: PortfolioProgressRol
       </div>
       {open && (
         <div className="mt-3 space-y-2 border-t pr-6 pt-3" style={{ borderColor: 'var(--border-soft)' }}>
+          <ProgressChartsSection projects={allProjects} onOpenProject={onOpenProject} />
+
           {rollup.programs.map((pr) => (
             <ProgramRow key={pr.program.id} rollup={pr} onOpenProject={onOpenProject} />
           ))}
@@ -187,12 +190,77 @@ function ProgramRow({ rollup, onOpenProject }: { rollup: ProgramProgressRollup; 
       </div>
       {open && (
         <div className="mt-2 space-y-1.5 pr-5">
+          <ProgressChartsSection projects={rollup.projects} onOpenProject={onOpenProject} />
           {rollup.projects.length === 0 ? (
             <p className="text-[11px] text-muted">پروژه‌ای در این طرح تعریف نشده است</p>
           ) : (
             rollup.projects.map((p) => <ProjectRow key={p.masterProjectId} summary={p} onOpenProject={onOpenProject} />)
           )}
           <DelayAttentionList label="این طرح" projects={rollup.projects} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+type ProgressStatusKey = 'on_track' | 'delayed' | 'unconfigured'
+const PROGRESS_STATUS_LABEL: Record<ProgressStatusKey, string> = { on_track: 'طبق برنامه', delayed: 'دارای تاخیر', unconfigured: 'بدون زمان‌بندی' }
+const PROGRESS_STATUS_COLOR: Record<ProgressStatusKey, string> = { on_track: '#2ecc71', delayed: '#e74c3c', unconfigured: '#64748b' }
+
+function progressStatusOf(p: ProjectProgressSummary): ProgressStatusKey {
+  if (p.configuredCount === 0) return 'unconfigured'
+  return p.isDelayed ? 'delayed' : 'on_track'
+}
+
+/** Power-BI-style breakdown for one portfolio/program's own scope — project-status donut (on
+ * track / delayed / not yet scheduled) + a ranked bar of delay days per project, both clicking
+ * straight into that project's Schedule page. */
+function ProgressChartsSection({ projects, onOpenProject }: { projects: ProjectProgressSummary[]; onOpenProject: (pipepulseProjectId: string) => void }) {
+  const { activeKey: activeStatus, setActiveKey: setActiveStatus, clear: clearStatus } = useDrillKey()
+
+  const mapped = projects.filter((p) => p.pipepulseProjectId !== null)
+  const statusCounts = useMemo(() => {
+    const counts: Record<ProgressStatusKey, number> = { on_track: 0, delayed: 0, unconfigured: 0 }
+    for (const p of mapped) counts[progressStatusOf(p)]++
+    return counts
+  }, [mapped])
+
+  const donutData: ChartDatum[] = (['delayed', 'unconfigured', 'on_track'] as ProgressStatusKey[]).map((s) => ({
+    key: s,
+    label: PROGRESS_STATUS_LABEL[s],
+    value: statusCounts[s],
+    color: PROGRESS_STATUS_COLOR[s],
+  }))
+
+  const barData: ChartDatum[] = projects.filter((p) => p.isDelayed).map((p) => ({ key: p.pipepulseProjectId ?? p.masterProjectId, label: p.projectName, value: p.delayDays, color: '#e74c3c' }))
+
+  const filteredProjects = activeStatus ? mapped.filter((p) => progressStatusOf(p) === activeStatus) : []
+
+  if (mapped.length === 0) return null
+
+  return (
+    <div className="rounded-xl bg-white/[0.02] p-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <BreakdownDonut title="توزیع وضعیت پروژه‌ها" icon={<PieChart size={12} className="text-brand-400" />} data={donutData} unit="پروژه" activeKey={activeStatus} onSliceClick={setActiveStatus} />
+        <RankedBarChart title="پروژه‌های دارای تاخیر (روز)" icon={<BarChart3 size={12} className="text-brand-400" />} data={barData} unit="روز" onBarClick={(key) => key && onOpenProject(key)} />
+      </div>
+      {activeStatus && (
+        <div className="mt-3">
+          <ChartDrillPanel title={`پروژه‌های با وضعیت «${PROGRESS_STATUS_LABEL[activeStatus as ProgressStatusKey]}»`} count={filteredProjects.length} onClose={clearStatus}>
+            {filteredProjects.map((p) => (
+              <button
+                key={p.masterProjectId}
+                onClick={() => p.pipepulseProjectId && onOpenProject(p.pipepulseProjectId)}
+                className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-right text-[11px] hover:bg-white/5 transition-colors"
+              >
+                <span className="font-medium">{p.projectName}</span>
+                <span className="flex items-center gap-2">
+                  <span className="num text-muted">واقعی {p.actualPercent}%</span>
+                  {p.isDelayed && <span className="num rounded-full bg-red-500/15 px-2 py-0.5 text-red-300">{p.delayDays} روز تاخیر</span>}
+                </span>
+              </button>
+            ))}
+          </ChartDrillPanel>
         </div>
       )}
     </div>
