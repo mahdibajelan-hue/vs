@@ -1883,26 +1883,32 @@ returns boolean as $$
 $$ language sql security definer stable set search_path = public;
 
 drop policy if exists "rasta_report_snapshots_select_authenticated" on rasta_report_snapshots;
+drop policy if exists "rasta_report_snapshots_select_scoped" on rasta_report_snapshots;
 create policy "rasta_report_snapshots_select_scoped" on rasta_report_snapshots
   for select using (rasta_user_can_access_master_project(master_project_id));
 
 drop policy if exists "rasta_report_snapshots_insert_authenticated" on rasta_report_snapshots;
+drop policy if exists "rasta_report_snapshots_insert_scoped" on rasta_report_snapshots;
 create policy "rasta_report_snapshots_insert_scoped" on rasta_report_snapshots
   for insert with check (rasta_user_can_access_master_project(master_project_id));
 
 drop policy if exists "rasta_decisions_select_authenticated" on rasta_decisions;
+drop policy if exists "rasta_decisions_select_scoped" on rasta_decisions;
 create policy "rasta_decisions_select_scoped" on rasta_decisions
   for select using (rasta_user_can_access_master_project(master_project_id));
 
 drop policy if exists "rasta_decisions_insert_authenticated" on rasta_decisions;
+drop policy if exists "rasta_decisions_insert_scoped" on rasta_decisions;
 create policy "rasta_decisions_insert_scoped" on rasta_decisions
   for insert with check (rasta_user_can_access_master_project(master_project_id));
 
 drop policy if exists "rasta_actions_select_authenticated" on rasta_actions;
+drop policy if exists "rasta_actions_select_scoped" on rasta_actions;
 create policy "rasta_actions_select_scoped" on rasta_actions
   for select using (rasta_user_can_access_master_project(master_project_id));
 
 drop policy if exists "rasta_actions_insert_authenticated" on rasta_actions;
+drop policy if exists "rasta_actions_insert_scoped" on rasta_actions;
 create policy "rasta_actions_insert_scoped" on rasta_actions
   for insert with check (rasta_user_can_access_master_project(master_project_id));
 
