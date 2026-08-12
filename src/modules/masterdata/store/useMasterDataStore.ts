@@ -83,32 +83,31 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
 
   fetchAll: async () => {
     set({ loading: true })
-    const [
-      { data: orgs, error: e1 },
-      { data: pf, error: e2 },
-      { data: pg, error: e3 },
-      { data: pj, error: e4 },
-      { data: users, error: e5 },
-      { data: deps, error: e6 },
-    ] = await Promise.all([
-      supabase.from('organizations').select('*').order('name'),
-      supabase.from('portfolios').select('*').order('name'),
-      supabase.from('programs').select('*').order('name'),
-      supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id, email, full_name').order('email'),
-      supabase.from('master_project_dependencies').select('*'),
-    ])
-    if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6)) {
+    const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }] =
+      await Promise.all([
+        supabase.from('organizations').select('*').order('name'),
+        supabase.from('portfolios').select('*').order('name'),
+        supabase.from('programs').select('*').order('name'),
+        supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id, email, full_name').order('email'),
+      ])
+    if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5)) {
       set({ loading: false })
       return
     }
+    // Fetched separately and never allowed to block the rest of master data: this table is new
+    // (Portfolio Dashboard's dependency widget) and a deployment that hasn't run that migration
+    // yet must not lose Organizations/Portfolios/Programs/Projects just because this one query
+    // 404s — it simply comes back empty until the migration is applied.
+    const { data: deps, error: e6 } = await supabase.from('master_project_dependencies').select('*')
+    if (e6) console.warn('[masterdata] master_project_dependencies unavailable (migration not yet applied?):', e6.message)
     set({
       organizations: (orgs ?? []).map(organizationFromRow),
       portfolios: (pf ?? []).map(portfolioFromRow),
       programs: (pg ?? []).map(programFromRow),
       projects: (pj ?? []).map(masterProjectFromRow),
       users: (users ?? []).map((u) => ({ id: u.id, email: u.email, fullName: u.full_name })),
-      dependencies: (deps ?? []).map(projectDependencyFromRow),
+      dependencies: e6 ? [] : (deps ?? []).map(projectDependencyFromRow),
       loading: false,
       loaded: true,
     })
