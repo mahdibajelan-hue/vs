@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, BadgeCheck, Check, Eye, EyeOff, HeartHandshake, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ROLE_DESCRIPTION_FA, ROLE_LABEL_FA, type UserRole } from '../../types'
-import { LogoFull } from '../common/Logo'
+import { LogoFull, RastaMark } from '../common/Logo'
 
 const LOGIN_COPY = {
   title: 'ورود به سامانه RASTA',
@@ -193,7 +193,7 @@ export function LoginScreen() {
     <div className={`auth-split-shell ${exiting ? 'auth-card-exit' : ''}`}>
       <div className="auth-form-panel">
         <div className={`glass-panel w-full max-w-sm rounded-3xl p-8 ${status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''}`}>
-          <LogoFull width={170} className="mx-auto mb-4" />
+          <RastaMark size={64} className="mb-4" />
           <div className="mb-1 flex items-center justify-center gap-1.5">
             <BadgeCheck size={14} className="text-brand-400" />
             <h1 className="text-center text-lg font-extrabold">{copy.title}</h1>
