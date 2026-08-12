@@ -1,4 +1,5 @@
 import type {
+  DependencyType,
   MasterProject,
   Organization,
   OrgType,
@@ -6,6 +7,7 @@ import type {
   Portfolio,
   PortfolioProgramStatus,
   Program,
+  ProjectDependency,
   ProjectLifecycleStatus,
   ProjectPhase,
   ScheduleStatus,
@@ -161,6 +163,7 @@ interface MasterProjectRow {
   contract_number: string
   contract_type: string
   contract_value: number | null
+  forecast_cost_at_completion: number | null
   currency: string
   contract_start_date: string | null
   contractual_completion_date: string | null
@@ -201,6 +204,7 @@ export function masterProjectFromRow(r: MasterProjectRow): MasterProject {
     contractNumber: r.contract_number,
     contractType: r.contract_type,
     contractValue: r.contract_value == null ? null : Number(r.contract_value),
+    forecastCostAtCompletion: r.forecast_cost_at_completion == null ? null : Number(r.forecast_cost_at_completion),
     currency: r.currency,
     contractStartDate: r.contract_start_date,
     contractualCompletionDate: r.contractual_completion_date,
@@ -242,6 +246,7 @@ export function masterProjectToRow(p: Partial<MasterProject>) {
   if (p.contractNumber !== undefined) row.contract_number = p.contractNumber
   if (p.contractType !== undefined) row.contract_type = p.contractType
   if (p.contractValue !== undefined) row.contract_value = p.contractValue
+  if (p.forecastCostAtCompletion !== undefined) row.forecast_cost_at_completion = p.forecastCostAtCompletion
   if (p.currency !== undefined) row.currency = p.currency
   if (p.contractStartDate !== undefined) row.contract_start_date = p.contractStartDate || null
   if (p.contractualCompletionDate !== undefined) row.contractual_completion_date = p.contractualCompletionDate || null
@@ -310,5 +315,32 @@ export function projectPhaseToRow(projectId: string, p: Partial<ProjectPhase>) {
   if (p.forecastFinish !== undefined) row.forecast_finish = p.forecastFinish || null
   if (p.status !== undefined) row.status = p.status
   if (p.progress !== undefined) row.progress = p.progress
+  return row
+}
+
+interface ProjectDependencyRow {
+  id: string
+  project_id: string
+  depends_on_project_id: string
+  dependency_type: string
+  notes: string
+  created_at: string
+}
+
+export function projectDependencyFromRow(r: ProjectDependencyRow): ProjectDependency {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    dependsOnProjectId: r.depends_on_project_id,
+    dependencyType: r.dependency_type as DependencyType,
+    notes: r.notes,
+    createdAt: r.created_at,
+  }
+}
+
+export function projectDependencyToRow(p: { projectId: string; dependsOnProjectId: string; dependencyType?: DependencyType; notes?: string }) {
+  const row: Record<string, unknown> = { project_id: p.projectId, depends_on_project_id: p.dependsOnProjectId }
+  if (p.dependencyType !== undefined) row.dependency_type = p.dependencyType
+  if (p.notes !== undefined) row.notes = p.notes
   return row
 }

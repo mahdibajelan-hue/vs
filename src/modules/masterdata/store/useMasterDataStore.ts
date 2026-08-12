@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
-import type { MasterProject, Organization, Portfolio, Program, ProjectPhase } from '../types'
+import type { DependencyType, MasterProject, Organization, Portfolio, Program, ProjectDependency, ProjectPhase } from '../types'
 import {
   masterProjectFromRow,
   masterProjectToRow,
@@ -12,6 +12,8 @@ import {
   portfolioToRow,
   programFromRow,
   programToRow,
+  projectDependencyFromRow,
+  projectDependencyToRow,
   projectPhaseFromRow,
   projectPhaseToRow,
 } from '../lib/data'
@@ -34,6 +36,8 @@ interface MasterDataState {
   programs: Program[]
   projects: MasterProject[]
   phasesByProject: Record<string, ProjectPhase[]>
+  /** Every dependency across every project — small reference data, fetched whole (like portfolios/programs) so the Portfolio Dashboard's dependency widget doesn't need a per-project fetch loop. */
+  dependencies: ProjectDependency[]
   /** Every platform user, for owner/manager/sponsor pickers — reuses the shared `profiles` table. */
   users: UserOption[]
   loading: boolean
@@ -61,6 +65,9 @@ interface MasterDataState {
   createPhase: (projectId: string, data: Partial<ProjectPhase>) => Promise<void>
   updatePhase: (id: string, projectId: string, data: Partial<ProjectPhase>) => Promise<void>
   deletePhase: (id: string, projectId: string) => Promise<void>
+
+  createDependency: (projectId: string, dependsOnProjectId: string, dependencyType?: DependencyType, notes?: string) => Promise<void>
+  deleteDependency: (id: string) => Promise<void>
 }
 
 export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
@@ -69,21 +76,29 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
   programs: [],
   projects: [],
   phasesByProject: {},
+  dependencies: [],
   users: [],
   loading: false,
   loaded: false,
 
   fetchAll: async () => {
     set({ loading: true })
-    const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }] =
-      await Promise.all([
-        supabase.from('organizations').select('*').order('name'),
-        supabase.from('portfolios').select('*').order('name'),
-        supabase.from('programs').select('*').order('name'),
-        supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id, email, full_name').order('email'),
-      ])
-    if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5)) {
+    const [
+      { data: orgs, error: e1 },
+      { data: pf, error: e2 },
+      { data: pg, error: e3 },
+      { data: pj, error: e4 },
+      { data: users, error: e5 },
+      { data: deps, error: e6 },
+    ] = await Promise.all([
+      supabase.from('organizations').select('*').order('name'),
+      supabase.from('portfolios').select('*').order('name'),
+      supabase.from('programs').select('*').order('name'),
+      supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('id, email, full_name').order('email'),
+      supabase.from('master_project_dependencies').select('*'),
+    ])
+    if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6)) {
       set({ loading: false })
       return
     }
@@ -93,6 +108,7 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
       programs: (pg ?? []).map(programFromRow),
       projects: (pj ?? []).map(masterProjectFromRow),
       users: (users ?? []).map((u) => ({ id: u.id, email: u.email, fullName: u.full_name })),
+      dependencies: (deps ?? []).map(projectDependencyFromRow),
       loading: false,
       loaded: true,
     })
@@ -182,5 +198,18 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
     const { error } = await supabase.from('project_phases').delete().eq('id', id)
     if (reportError('حذف فاز', error)) return
     set((s) => ({ phasesByProject: { ...s.phasesByProject, [projectId]: (s.phasesByProject[projectId] ?? []).filter((p) => p.id !== id) } }))
+  },
+
+  createDependency: async (projectId, dependsOnProjectId, dependencyType, notes) => {
+    const { error } = await supabase
+      .from('master_project_dependencies')
+      .insert(projectDependencyToRow({ projectId, dependsOnProjectId, dependencyType, notes }))
+    if (reportError('ثبت وابستگی پروژه', error)) return
+    await get().fetchAll()
+  },
+  deleteDependency: async (id) => {
+    const { error } = await supabase.from('master_project_dependencies').delete().eq('id', id)
+    if (reportError('حذف وابستگی پروژه', error)) return
+    set((s) => ({ dependencies: s.dependencies.filter((d) => d.id !== id) }))
   },
 }))

@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileText,
   Layers,
+  Network,
   Pencil,
   Plug,
   Plus,
@@ -20,6 +21,8 @@ import { useMasterDataStore } from '../store/useMasterDataStore'
 import { useAccessStore } from '../store/useAccessStore'
 import { MAPPING_SOURCE_MODULE_LABEL_FA } from '../rbacTypes'
 import {
+  DEPENDENCY_TYPE_LABEL_FA,
+  DEPENDENCY_TYPES,
   PHASE_STATUS_LABEL_FA,
   PHASE_STATUSES,
   PROJECT_LIFECYCLE_STATUSES,
@@ -27,8 +30,10 @@ import {
   PROJECT_STATUS_TONE,
   SCHEDULE_STATUS_LABEL_FA,
   SCHEDULE_STATUSES,
+  type DependencyType,
   type MasterProject,
   type PhaseStatus,
+  type ProjectDependency,
   type ProjectLifecycleStatus,
   type ScheduleStatus,
 } from '../types'
@@ -60,6 +65,7 @@ function editableFormFromProject(p: MasterProject) {
     contractNumber: p.contractNumber,
     contractType: p.contractType,
     contractValue: p.contractValue == null ? '' : String(p.contractValue),
+    forecastCostAtCompletion: p.forecastCostAtCompletion == null ? '' : String(p.forecastCostAtCompletion),
     currency: p.currency,
     contractStartDate: p.contractStartDate ?? '',
     contractualCompletionDate: p.contractualCompletionDate ?? '',
@@ -96,6 +102,10 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
   const fetchPhases = useMasterDataStore((s) => s.fetchPhases)
   const createPhase = useMasterDataStore((s) => s.createPhase)
   const deletePhase = useMasterDataStore((s) => s.deletePhase)
+  const allProjects = useMasterDataStore((s) => s.projects)
+  const dependencies = useMasterDataStore((s) => s.dependencies)
+  const createDependency = useMasterDataStore((s) => s.createDependency)
+  const deleteDependency = useMasterDataStore((s) => s.deleteDependency)
 
   const accessLoaded = useAccessStore((s) => s.loaded)
   const fetchAccessAll = useAccessStore((s) => s.fetchAll)
@@ -184,6 +194,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
     await updateProject(project.id, {
       ...form,
       contractValue: form.contractValue === '' ? null : Number(form.contractValue),
+      forecastCostAtCompletion: form.forecastCostAtCompletion === '' ? null : Number(form.forecastCostAtCompletion),
       portfolioId: form.portfolioId || null,
       programId: form.programId || null,
       employerOrgId: form.employerOrgId || null,
@@ -301,7 +312,11 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <Field label="شماره قرارداد" value={project.contractNumber || '—'} dir="ltr" />
                 <Field label="نوع قرارداد" value={project.contractType || '—'} />
-                <Field label="مبلغ قرارداد" value={project.contractValue != null ? `${project.contractValue.toLocaleString('fa-IR')} ${project.currency}` : '—'} />
+                <Field label="مبلغ قرارداد (BAC)" value={project.contractValue != null ? `${project.contractValue.toLocaleString('fa-IR')} ${project.currency}` : '—'} />
+                <Field
+                  label="پیش‌بینی هزینه در تکمیل (EAC)"
+                  value={project.forecastCostAtCompletion != null ? `${project.forecastCostAtCompletion.toLocaleString('fa-IR')} ${project.currency}` : 'ثبت نشده'}
+                />
                 <Field label="تاریخ شروع قرارداد" value={project.contractStartDate ?? '—'} num />
                 <Field label="تاریخ تکمیل قراردادی" value={project.contractualCompletionDate ?? '—'} num />
                 <Field label="تاریخ تکمیل بازنگری‌شده" value={project.revisedCompletionDate ?? '—'} num />
@@ -397,6 +412,14 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
               assignments={projectRoleAssignments.filter((a) => a.projectId === project.id)}
               onAssign={assignProjectRole}
               onRemove={removeProjectRoleAssignment}
+            />
+
+            <DependenciesSection
+              projectId={project.id}
+              otherProjects={allProjects.filter((p) => p.id !== project.id)}
+              dependencies={dependencies.filter((d) => d.projectId === project.id)}
+              onCreate={createDependency}
+              onRemove={deleteDependency}
             />
 
             <SectionCard icon={Plug} title="ماژول‌های متصل">
@@ -559,6 +582,95 @@ function ProjectTeamSection({
   )
 }
 
+/** This project's declared dependencies on other projects — feeds the Portfolio Dashboard's dependency-impact widget (which project's delay affects which other project). */
+function DependenciesSection({
+  projectId,
+  otherProjects,
+  dependencies,
+  onCreate,
+  onRemove,
+}: {
+  projectId: string
+  otherProjects: { id: string; officialName: string }[]
+  dependencies: ProjectDependency[]
+  onCreate: (projectId: string, dependsOnProjectId: string, dependencyType?: DependencyType, notes?: string) => Promise<void>
+  onRemove: (id: string) => Promise<void>
+}) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [dependsOnId, setDependsOnId] = useState('')
+  const [depType, setDepType] = useState<DependencyType>('finish_to_start')
+  const [busy, setBusy] = useState(false)
+  const projectName = (id: string) => otherProjects.find((p) => p.id === id)?.officialName ?? '—'
+
+  return (
+    <SectionCard
+      icon={Network}
+      title="وابستگی به پروژه‌های دیگر"
+      action={
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1 rounded-lg border border-dashed border-white/15 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+        >
+          <Plus size={12} /> افزودن وابستگی
+        </button>
+      }
+    >
+      <p className="mb-2 text-[11px] leading-5 text-muted">این پروژه برای پیشرفت خودش به کدام پروژه‌های دیگر وابسته است — برای داشبورد اجرایی پورتفولیو استفاده می‌شود.</p>
+      {dependencies.length === 0 && !showAdd ? (
+        <p className="text-xs text-muted">وابستگی‌ای ثبت نشده است.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {dependencies.map((d) => (
+            <span key={d.id} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs">
+              {projectName(d.dependsOnProjectId)} <span className="text-[10px] text-muted">— {DEPENDENCY_TYPE_LABEL_FA[d.dependencyType]}</span>
+              <button onClick={() => onRemove(d.id)} className="text-muted hover:text-red-400 transition-colors">
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-brand-400/30 bg-brand-500/5 px-2.5 py-2">
+          <select value={dependsOnId} onChange={(e) => setDependsOnId(e.target.value)} className="rounded-md bg-black/20 border border-white/10 px-2 py-1 text-[11px] outline-none">
+            <option value="">وابسته به پروژه...</option>
+            {otherProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.officialName}
+              </option>
+            ))}
+          </select>
+          <select value={depType} onChange={(e) => setDepType(e.target.value as DependencyType)} className="rounded-md bg-black/20 border border-white/10 px-2 py-1 text-[11px] outline-none">
+            {DEPENDENCY_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {DEPENDENCY_TYPE_LABEL_FA[t]}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              if (!dependsOnId) return
+              setBusy(true)
+              await onCreate(projectId, dependsOnId, depType)
+              setBusy(false)
+              setShowAdd(false)
+              setDependsOnId('')
+            }}
+            disabled={!dependsOnId || busy}
+            className="text-[11px] font-medium text-brand-300 hover:underline disabled:opacity-40"
+          >
+            افزودن
+          </button>
+          <button onClick={() => setShowAdd(false)} className="text-muted hover:text-current transition-colors">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
 type EditFormState = ReturnType<typeof editableFormFromProject>
 
 function EditForm({
@@ -653,11 +765,21 @@ function EditForm({
             <input value={form.contractType} onChange={(e) => set('contractType', e.target.value)} className="input" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ قرارداد</span>
+            <span className="mb-1 block text-xs text-secondary">مبلغ قرارداد (BAC)</span>
             <div className="flex gap-1.5">
               <input type="number" value={form.contractValue} onChange={(e) => set('contractValue', e.target.value)} className="input num" />
               <input value={form.currency} onChange={(e) => set('currency', e.target.value)} className="input w-20" dir="ltr" />
             </div>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-secondary">پیش‌بینی هزینه در تکمیل (EAC)</span>
+            <input
+              type="number"
+              value={form.forecastCostAtCompletion}
+              onChange={(e) => set('forecastCostAtCompletion', e.target.value)}
+              className="input num"
+              placeholder="خالی = ثبت‌نشده"
+            />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ شروع قرارداد</span>

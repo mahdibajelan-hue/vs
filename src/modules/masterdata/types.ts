@@ -145,6 +145,8 @@ export interface MasterProject {
   contractNumber: string
   contractType: string
   contractValue: number | null
+  /** PM-enterable estimate at completion (EAC) — null until someone fills it in; the Portfolio Dashboard's Cost Exposure/VAC widgets treat that as "not entered", never as zero. */
+  forecastCostAtCompletion: number | null
   currency: string
   contractStartDate: string | null
   contractualCompletionDate: string | null
@@ -196,4 +198,26 @@ export interface ProjectPhase {
   forecastFinish: string | null
   status: PhaseStatus
   progress: number
+}
+
+export type DependencyType = 'finish_to_start' | 'start_to_start' | 'finish_to_finish' | 'resource' | 'other'
+
+export const DEPENDENCY_TYPES: DependencyType[] = ['finish_to_start', 'start_to_start', 'finish_to_finish', 'resource', 'other']
+
+export const DEPENDENCY_TYPE_LABEL_FA: Record<DependencyType, string> = {
+  finish_to_start: 'پایان به شروع',
+  start_to_start: 'شروع به شروع',
+  finish_to_finish: 'پایان به پایان',
+  resource: 'منابع مشترک',
+  other: 'سایر',
+}
+
+/** A real, admin-declared cross-project dependency — feeds the Portfolio Dependency widget. */
+export interface ProjectDependency {
+  id: string
+  projectId: string
+  dependsOnProjectId: string
+  dependencyType: DependencyType
+  notes: string
+  createdAt: string
 }

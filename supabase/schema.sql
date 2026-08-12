@@ -2244,3 +2244,42 @@ begin
     execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
   end loop;
 end $$;
+
+-- ============================================================================
+-- 18. Portfolio Executive Dashboard — two small additive pieces of real data
+--     the dashboard's Cost Exposure/EAC/VAC and Portfolio Dependency widgets
+--     need but nothing in the schema captured yet. Both are optional/empty by
+--     default: the dashboard shows an honest "not entered yet" state until a
+--     PM fills them in, rather than fabricating numbers to fill the widgets.
+-- ============================================================================
+
+-- PM-enterable forecast cost, mirroring the simplicity of contract_value (BAC) already on this
+-- table — lets Cost Exposure/EAC/VAC be computed from real data instead of invented ones.
+alter table master_projects add column if not exists forecast_cost_at_completion numeric;
+
+-- Cross-project dependencies for the Portfolio Dependency widget ("which project's delay affects
+-- which other project") — a real relational fact, not derivable from any existing table.
+create table if not exists master_project_dependencies (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  depends_on_project_id uuid not null references master_projects (id) on delete cascade,
+  dependency_type text not null default 'finish_to_start' check (dependency_type in ('finish_to_start', 'start_to_start', 'finish_to_finish', 'resource', 'other')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  check (project_id <> depends_on_project_id),
+  unique (project_id, depends_on_project_id)
+);
+
+alter table master_project_dependencies enable row level security;
+
+drop policy if exists "master_project_dependencies_select_authenticated" on master_project_dependencies;
+create policy "master_project_dependencies_select_authenticated" on master_project_dependencies
+  for select using (auth.uid() is not null);
+
+drop policy if exists "master_project_dependencies_write_admin" on master_project_dependencies;
+create policy "master_project_dependencies_write_admin" on master_project_dependencies
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create index if not exists idx_master_project_dependencies_project on master_project_dependencies (project_id);
+create index if not exists idx_master_project_dependencies_depends_on on master_project_dependencies (depends_on_project_id);
