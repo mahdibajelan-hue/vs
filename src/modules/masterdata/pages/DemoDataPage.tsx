@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { AlertTriangle, Database, Loader2, RefreshCcw } from 'lucide-react'
+import { AlertTriangle, Banknote, Database, Loader2, Package, Plus, RefreshCcw } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { wipeAllDemoData, seedDemoData, type DemoSeedCounts } from '../lib/demoSeed'
+import { seedFinanceDemoData, type FinanceDemoSeedCounts } from '../../finance/lib/financeDemoSeed'
+import { seedMaterialDemoData, type MaterialDemoSeedCounts } from '../../material/lib/materialDemoSeed'
 
 /**
  * Admin-only, demo/test-environment tool (spec §31): wipes every Portfolio/Program/Project and
@@ -19,6 +21,12 @@ export function DemoDataPage() {
   const [result, setResult] = useState<DemoSeedCounts | null>(null)
   const [error, setError] = useState('')
 
+  const [confirming2, setConfirming2] = useState(false)
+  const [busy2, setBusy2] = useState(false)
+  const [progress2, setProgress2] = useState('')
+  const [result2, setResult2] = useState<{ finance: FinanceDemoSeedCounts; material: MaterialDemoSeedCounts } | null>(null)
+  const [error2, setError2] = useState('')
+
   const run = async () => {
     setBusy(true)
     setError('')
@@ -35,6 +43,23 @@ export function DemoDataPage() {
     } finally {
       setBusy(false)
       setProgress('')
+    }
+  }
+
+  const runFinanceMaterial = async () => {
+    setBusy2(true)
+    setError2('')
+    setResult2(null)
+    try {
+      const finance = await seedFinanceDemoData(setProgress2)
+      const material = await seedMaterialDemoData(setProgress2)
+      setResult2({ finance, material })
+      setConfirming2(false)
+    } catch (err) {
+      setError2(err instanceof Error ? err.message : 'خطای نامشخص در تولید داده نمایشی مالی و تامین کالا')
+    } finally {
+      setBusy2(false)
+      setProgress2('')
     }
   }
 
@@ -117,6 +142,72 @@ export function DemoDataPage() {
                 <span>{result.decisions} تصمیم</span>
                 <span>{result.actions} اقدام مدیریتی</span>
                 <span>{result.roleAssignments} نقش تخصیص‌یافته</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="glass-panel rounded-2xl border border-amber-400/25 p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-sm font-bold">
+            <Banknote size={15} className="text-amber-300" />
+            <Package size={15} className="text-amber-300" />
+            داده نمایشی مالی و تامین کالا
+          </div>
+          <p className="mb-3 text-[11px] text-muted">
+            بدون حذف پورتفولیو، طرح، پروژه یا داده هیچ ماژول دیگری، برای همان ۱۶ پروژه پایه موجود، داده نمایشی ماژول «مدیریت مالی» (بودجه، قرارداد، صورت‌وضعیت) و ماژول «مدیریت تامین کالا» (MTO، خرید، ساخت، حمل، انبار، تخصیص) تولید می‌کند. اجرای مجدد فقط داده نمایشی همین دو ماژول را جایگزین می‌کند.
+          </p>
+
+          {!confirming2 ? (
+            <button
+              onClick={() => setConfirming2(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-medium text-white hover:bg-amber-400 transition-colors"
+            >
+              <Plus size={13} /> افزودن داده نمایشی مالی و تامین کالا
+            </button>
+          ) : (
+            <div className="space-y-2.5">
+              <p className="text-[11px] text-amber-300">برای همه پروژه‌های پایه موجود، داده مالی و تامین کالا تولید می‌شود. اگر قبلاً یک بار اجرا شده باشد، داده نمایشی قبلی همین دو ماژول جایگزین می‌شود.</p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirming2(false)} disabled={busy2} className="rounded-lg px-3.5 py-2 text-xs text-secondary hover:bg-white/5 disabled:opacity-50">
+                  انصراف
+                </button>
+                <button
+                  onClick={runFinanceMaterial}
+                  disabled={busy2}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-medium text-white hover:bg-amber-400 disabled:opacity-40 transition-colors"
+                >
+                  {busy2 ? <Loader2 size={13} className="animate-spin" /> : <RefreshCcw size={13} />}
+                  {busy2 ? progress2 || 'در حال اجرا...' : 'تایید و اجرا'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {error2 && <p className="mt-3 text-xs text-red-400">خطا: {error2}</p>}
+
+          {result2 && (
+            <div className="mt-3 rounded-xl bg-green-500/10 p-3 text-[11px] text-green-300">
+              <p className="mb-1.5 font-bold">داده نمایشی مالی و تامین کالا با موفقیت تولید شد:</p>
+              <p className="mb-1 font-bold text-green-200">مدیریت مالی</p>
+              <div className="mb-2 grid grid-cols-2 gap-2 num sm:grid-cols-3">
+                <span>{result2.finance.projectsCovered} پروژه</span>
+                <span>{result2.finance.budgets} بودجه</span>
+                <span>{result2.finance.budgetChanges} تغییر بودجه</span>
+                <span>{result2.finance.contracts} قرارداد</span>
+                <span>{result2.finance.amendments} الحاقیه</span>
+                <span>{result2.finance.certificates} صورت‌وضعیت</span>
+              </div>
+              <p className="mb-1 font-bold text-green-200">مدیریت تامین کالا</p>
+              <div className="grid grid-cols-2 gap-2 num sm:grid-cols-3">
+                <span>{result2.material.projectsCovered} پروژه</span>
+                <span>{result2.material.mtoRevisions} ریویژن MTO</span>
+                <span>{result2.material.materials} کالا</span>
+                <span>{result2.material.procurementRequests} درخواست خرید</span>
+                <span>{result2.material.purchaseOrders} سفارش خرید</span>
+                <span>{result2.material.manufacturing} قلم ساخت</span>
+                <span>{result2.material.shipments} محموله</span>
+                <span>{result2.material.warehouseReceipts} رسید انبار</span>
+                <span>{result2.material.allocations} تخصیص</span>
               </div>
             </div>
           )}
