@@ -9,6 +9,7 @@ import { RiskApp } from './modules/risk/RiskApp'
 import { IssuesApp } from './modules/issues/IssuesApp'
 import { AdminApp } from './pages/AdminApp'
 import { ReportingApp } from './modules/reporting/ReportingApp'
+import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 
 /**
  * Top-level flow: authenticate once (single shared account across every module), THEN show the
@@ -58,6 +59,8 @@ export function RootApp() {
     <IssuesApp onExitToHub={exitToHub} />
   ) : activeModule === 'reporting' ? (
     <ReportingApp onExitToHub={exitToHub} />
+  ) : activeModule === 'executive' ? (
+    <ExecutiveApp onExitToHub={exitToHub} />
   ) : (
     <AdminApp onExitToHub={exitToHub} />
   )

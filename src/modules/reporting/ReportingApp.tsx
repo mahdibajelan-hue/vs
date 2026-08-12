@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, Crown, Home, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
+import { BarChart3, ClipboardList, Home, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
@@ -9,13 +9,11 @@ import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
 import { DecisionCenterPage } from './pages/DecisionCenterPage'
 import { PortfolioReportPage } from './pages/PortfolioReportPage'
-import { PortfolioDashboardPage } from './pages/PortfolioDashboardPage'
 
-type Tab = 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio' | 'executive'
+type Tab = 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio'
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'داشبورد هوشمند', icon: LayoutDashboard },
-  { id: 'executive', label: 'داشبورد اجرایی پورتفولیو', icon: Crown },
   { id: 'builder', label: 'ساخت گزارش', icon: Wand2 },
   { id: 'center', label: 'مرکز گزارش‌ها', icon: BarChart3 },
   { id: 'decisions', label: 'مرکز تصمیم', icon: ClipboardList },
@@ -112,8 +110,6 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
         {tab === 'portfolio' ? (
           <PortfolioReportPage />
-        ) : tab === 'executive' ? (
-          <PortfolioDashboardPage />
         ) : !projectId ? (
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Clock3, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, CheckCircle2, Clock3, Crown, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { SignOutButton } from './SignOutButton'
@@ -56,6 +56,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['تجمیع زنده داده از همه ماژول‌ها', 'هشدار زودهنگام و مرکز تصمیم'],
     icon: BarChart3,
     accent: '#2dd4bf',
+    status: 'active',
+  },
+  {
+    key: 'executive',
+    title: 'داشبورد اجرایی پورتفولیو',
+    englishTag: 'Portfolio Executive Dashboard',
+    teaser: 'کنترل استراتژیک، مالی و ریسک کل سبد پروژه‌ها',
+    bullets: ['وضعیت کلی سلامت پورتفولیو برای مدیران ارشد', 'ابزار تصمیم‌گیری اجرایی، نه جمع ساده KPIهای پروژه'],
+    icon: Crown,
+    accent: '#f59e0b',
     status: 'active',
   },
   {
@@ -140,7 +150,7 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
           <p className="mt-3 text-sm text-secondary">یک ماژول را برای ورود انتخاب کنید</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {MODULES.map((m, i) => (
             <ModuleCard key={m.key} module={m} index={i} onSelect={() => handleSelect(m)} />
           ))}

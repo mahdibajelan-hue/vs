@@ -1,9 +1,34 @@
 import { Fragment, useMemo, useState } from 'react'
-import { AlertTriangle, Award, CalendarClock, ChevronLeft, ClipboardList, Gauge, ListChecks, Network, PieChart, ShieldAlert, Target, Users, Wallet } from 'lucide-react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  Award,
+  Briefcase,
+  CalendarClock,
+  ChevronLeft,
+  ClipboardList,
+  Crown,
+  Flag,
+  Gauge,
+  Gift,
+  Info,
+  Layers,
+  ListChecks,
+  Network,
+  PieChart,
+  RefreshCw,
+  Scale,
+  ShieldAlert,
+  Target,
+  TrendingUp,
+  Users,
+  Wallet,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { RiskHeatMap } from '../../risk/components/RiskHeatMap'
-import { KpiTile } from '../../risk/components/KpiTile'
 import { BreakdownDonut, ChartDrillPanel, RankedBarChart, useDrillKey, type ChartDatum } from '../../masterdata/components/RollupCharts'
+import { PORTFOLIO_PROGRAM_STATUS_LABEL_FA } from '../../masterdata/types'
 import {
   aggregatePortfolioTotals,
   buildProjectSummaries,
@@ -15,7 +40,7 @@ import {
   type ScheduleBucket,
   type StrategicImportance,
 } from '../lib/portfolioDashboard'
-import type { MasterProject, ProjectDependency } from '../../masterdata/types'
+import type { MasterProject, Portfolio, ProjectDependency } from '../../masterdata/types'
 
 const HEALTH_COLOR: Record<HealthTier, string> = { healthy: '#2ecc71', watch: '#f1c40f', critical: '#e74c3c' }
 const HEALTH_LABEL_FA: Record<HealthTier, string> = { healthy: 'سالم', watch: 'نیازمند توجه', critical: 'بحرانی' }
@@ -28,6 +53,9 @@ const SCHEDULE_BUCKET_LABEL_FA: Record<ScheduleBucket, string> = {
   unknown: 'بدون پیش‌بینی ثبت‌شده',
 }
 const IMPORTANCE_LABEL_FA: Record<StrategicImportance, string> = { high: 'بالا', medium: 'متوسط', low: 'پایین' }
+
+/** A distinct visual identity per portfolio (icon chip + glow), independent of health color — mirrors the module hub's own card identity system so a portfolio "feels" like a place, not just a filter. */
+const PORTFOLIO_ACCENTS = ['#38bdf8', '#a78bfa', '#2dd4bf', '#f59e0b', '#f472b6', '#22c55e', '#818cf8', '#fb923c']
 
 /** Compact currency formatting (میلیون/میلیارد/هزار میلیارد) — raw rial amounts on real contracts run into the trillions and overflow any fixed-width KPI tile or bar label if printed in full. */
 function fmtCurrency(n: number, currency = ''): string {
@@ -47,6 +75,10 @@ function compactCurrencyParts(n: number, currency: string): { value: number; uni
   if (abs >= 1e9) return { value: Math.round((n / 1e9) * 10) / 10, unit: `میلیارد ${currency}` }
   if (abs >= 1e6) return { value: Math.round((n / 1e6) * 10) / 10, unit: `میلیون ${currency}` }
   return { value: Math.round(n), unit: currency }
+}
+
+function healthTone(score: number): HealthTier {
+  return score >= 70 ? 'healthy' : score >= 40 ? 'watch' : 'critical'
 }
 
 /**
@@ -120,13 +152,14 @@ export function PortfolioDashboardPage() {
 
   return (
     <div className="space-y-4">
-      <ScopeBreadcrumb
+      <ScopeHero
         portfolios={portfolios}
         programs={programs}
         projects={projects}
         scopePortfolioId={scopePortfolioId}
         scopeProgramId={scopeProgramId}
         scopeProjectId={scopeProjectId}
+        totals={totals}
         onRoot={() => drillToPortfolio(null)}
         onPortfolio={drillToPortfolio}
         onProgram={drillToProgram}
@@ -169,26 +202,28 @@ export function PortfolioDashboardPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Scope navigation
+// Hero: big scope title + breadcrumb trail + spotlighted Portfolio Health Index
 // ---------------------------------------------------------------------------
 
-function ScopeBreadcrumb({
+function ScopeHero({
   portfolios,
   programs,
   projects,
   scopePortfolioId,
   scopeProgramId,
   scopeProjectId,
+  totals,
   onRoot,
   onPortfolio,
   onProgram,
 }: {
-  portfolios: { id: string; name: string }[]
-  programs: { id: string; name: string }[]
+  portfolios: Portfolio[]
+  programs: { id: string; name: string; code: string }[]
   projects: MasterProject[]
   scopePortfolioId: string | null
   scopeProgramId: string | null
   scopeProjectId: string | null
+  totals: ReturnType<typeof aggregatePortfolioTotals>
   onRoot: () => void
   onPortfolio: (id: string) => void
   onProgram: (id: string) => void
@@ -197,42 +232,140 @@ function ScopeBreadcrumb({
   const program = scopeProgramId ? programs.find((p) => p.id === scopeProgramId) : null
   const project = scopeProjectId ? projects.find((p) => p.id === scopeProjectId) : null
 
+  const { title, eyebrow, Icon, code } = project
+    ? { title: project.officialName, eyebrow: 'پروژه', Icon: Briefcase, code: project.projectIdCode }
+    : program
+      ? { title: program.name, eyebrow: 'طرح', Icon: Layers, code: program.code }
+      : portfolio
+        ? { title: portfolio.name, eyebrow: 'پورتفولیو', Icon: Briefcase, code: portfolio.code }
+        : { title: 'کل سبد پروژه‌های سازمان', eyebrow: 'نمای کلی', Icon: Crown, code: '' }
+
   return (
-    <div className="glass-panel flex flex-wrap items-center gap-1.5 rounded-2xl px-4 py-2.5 text-xs">
-      <button onClick={onRoot} className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!portfolio ? 'bg-teal-500/20 text-teal-300' : 'text-secondary hover:bg-white/5'}`}>
-        کل پورتفولیو
-      </button>
-      {portfolio && (
-        <>
-          <ChevronLeft size={12} className="opacity-40" />
-          <button
-            onClick={() => onPortfolio(portfolio.id)}
-            className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!program ? 'bg-teal-500/20 text-teal-300' : 'text-secondary hover:bg-white/5'}`}
-          >
-            {portfolio.name}
-          </button>
-        </>
-      )}
-      {program && (
-        <>
-          <ChevronLeft size={12} className="opacity-40" />
-          <button
-            onClick={() => onProgram(program.id)}
-            className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!project ? 'bg-teal-500/20 text-teal-300' : 'text-secondary hover:bg-white/5'}`}
-          >
-            {program.name}
-          </button>
-        </>
-      )}
-      {project && (
-        <>
-          <ChevronLeft size={12} className="opacity-40" />
-          <span className="rounded-full bg-teal-500/20 px-2.5 py-1 font-medium text-teal-300">{project.officialName}</span>
-        </>
-      )}
+    <div className="glass-panel overflow-hidden rounded-2xl">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10">
+              <Icon size={17} className="text-amber-400" />
+            </div>
+            <span className="text-[11px] font-bold tracking-wide text-amber-300">{eyebrow.toUpperCase() === eyebrow ? eyebrow : eyebrow}</span>
+            {code && (
+              <span className="num text-[11px] text-muted" dir="ltr">
+                {code}
+              </span>
+            )}
+          </div>
+          <h1 className="mt-2 truncate text-2xl font-extrabold leading-tight sm:text-[2rem]">{title}</h1>
+          <p className="mt-1 text-xs text-secondary" dir="ltr">
+            Portfolio Executive Dashboard
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs">
+            <button onClick={onRoot} className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!portfolio ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}>
+              کل پورتفولیو
+            </button>
+            {portfolio && (
+              <>
+                <ChevronLeft size={12} className="opacity-40" />
+                <button
+                  onClick={() => onPortfolio(portfolio.id)}
+                  className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!program ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}
+                >
+                  {portfolio.name}
+                </button>
+              </>
+            )}
+            {program && (
+              <>
+                <ChevronLeft size={12} className="opacity-40" />
+                <button
+                  onClick={() => onProgram(program.id)}
+                  className={`rounded-full px-2.5 py-1 font-medium transition-colors ${!project ? 'bg-amber-500/20 text-amber-300' : 'text-secondary hover:bg-white/5'}`}
+                >
+                  {program.name}
+                </button>
+              </>
+            )}
+            {project && (
+              <>
+                <ChevronLeft size={12} className="opacity-40" />
+                <span className="rounded-full bg-amber-500/20 px-2.5 py-1 font-medium text-amber-300">{project.officialName}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <HealthSpotlight score={totals.avgHealthScore} projectCount={totals.projectCount} healthy={totals.healthy} watch={totals.watch} critical={totals.critical} />
+      </div>
     </div>
   )
 }
+
+/** The Portfolio Health Index gets a dedicated spotlight treatment — a glowing radial gauge, not just another tile in the grid — since it's the single "is this under control?" number an executive looks at first. */
+function HealthSpotlight({ score, projectCount, healthy, watch, critical }: { score: number; projectCount: number; healthy: number; watch: number; critical: number }) {
+  const tier = healthTone(score)
+  const color = HEALTH_COLOR[tier]
+  const radius = 46
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference * (1 - score / 100)
+
+  return (
+    <div
+      className="relative flex shrink-0 items-center gap-4 rounded-2xl border p-4"
+      style={{ borderColor: `${color}44`, background: `linear-gradient(135deg, ${color}14, transparent 70%)`, boxShadow: `0 0 40px -12px ${color}55` }}
+    >
+      <div className="relative h-28 w-28 shrink-0">
+        <svg viewBox="0 0 110 110" className="h-full w-full -rotate-90">
+          <circle cx={55} cy={55} r={radius} fill="none" stroke="rgba(148,163,184,0.15)" strokeWidth={9} />
+          <circle
+            cx={55}
+            cy={55}
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth={9}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            style={{ filter: `drop-shadow(0 0 6px ${color}aa)`, transition: 'stroke-dashoffset 500ms ease' }}
+          />
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="num text-3xl font-extrabold" style={{ color }}>
+            {score}
+          </p>
+          <p className="text-[9px] text-muted">از ۱۰۰</p>
+        </div>
+        {tier === 'critical' && <div className="absolute inset-0 -z-10 animate-ping rounded-full opacity-20" style={{ background: color }} />}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-secondary">شاخص سلامت پورتفولیو</p>
+        <p className="mt-0.5 text-[10px] leading-4 text-muted">میانگین وزنی زمان‌بندی، ریسک، مسائل باز و تصمیمات معوق هر پروژه</p>
+        <div className="mt-2.5 flex items-center gap-2.5 text-[10px]">
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: HEALTH_COLOR.healthy }} />
+            سالم <span className="num font-bold">{healthy}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: HEALTH_COLOR.watch }} />
+            توجه <span className="num font-bold">{watch}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: HEALTH_COLOR.critical }} />
+            بحرانی <span className="num font-bold">{critical}</span>
+          </span>
+        </div>
+        <p className="mt-1.5 text-[10px] text-muted">
+          از مجموع <span className="num font-bold text-secondary">{projectCount}</span> پروژه در این محدوده
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Scope navigation — Portfolio -> Program -> Project drill-down
+// ---------------------------------------------------------------------------
 
 function LevelPicker({
   portfolios,
@@ -246,7 +379,7 @@ function LevelPicker({
   onProgram,
   onProject,
 }: {
-  portfolios: { id: string; name: string; code: string }[]
+  portfolios: Portfolio[]
   programs: { id: string; name: string; code: string; portfolioId: string | null }[]
   projects: MasterProject[]
   summaries: ProjectDashboardSummary[]
@@ -267,27 +400,17 @@ function LevelPicker({
 
   if (!scopePortfolioId) {
     return (
-      <div className="glass-panel rounded-2xl p-4">
-        <p className="mb-2 text-xs font-bold text-muted">پورتفولیوها — برای ورود کلیک کنید</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {portfolios.map((pf) => {
+      <div>
+        <p className="mb-2.5 flex items-center gap-1.5 px-1 text-xs font-bold text-secondary">
+          <Briefcase size={13} className="text-amber-400" /> پورتفولیوهای سازمان — برای مشاهده کنترل استراتژیک هر یک کلیک کنید
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {portfolios.map((pf, i) => {
+            const portfolioPrograms = programs.filter((pg) => pg.portfolioId === pf.id)
             const projectIds = projects.filter((p) => p.portfolioId === pf.id).map((p) => p.id)
             const avgHealth = healthOf(projectIds)
-            return (
-              <button
-                key={pf.id}
-                onClick={() => onPortfolio(pf.id)}
-                className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-right transition-colors hover:bg-white/5"
-              >
-                <p className="truncate text-xs font-bold">{pf.name}</p>
-                <p className="mt-1 text-[10px] text-muted">{projectIds.length} پروژه</p>
-                {avgHealth != null && (
-                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full" style={{ width: `${avgHealth}%`, background: avgHealth >= 70 ? '#2ecc71' : avgHealth >= 40 ? '#f1c40f' : '#e74c3c' }} />
-                  </div>
-                )}
-              </button>
-            )
+            const accent = PORTFOLIO_ACCENTS[i % PORTFOLIO_ACCENTS.length]
+            return <PortfolioIdentityCard key={pf.id} portfolio={pf} accent={accent} programCount={portfolioPrograms.length} projectCount={projectIds.length} avgHealth={avgHealth} onSelect={() => onPortfolio(pf.id)} />
           })}
         </div>
       </div>
@@ -313,7 +436,7 @@ function LevelPicker({
                 <p className="mt-1 text-[10px] text-muted">{projectIds.length} پروژه — طرح</p>
                 {avgHealth != null && (
                   <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full" style={{ width: `${avgHealth}%`, background: avgHealth >= 70 ? '#2ecc71' : avgHealth >= 40 ? '#f1c40f' : '#e74c3c' }} />
+                    <div className="h-full rounded-full" style={{ width: `${avgHealth}%`, background: HEALTH_COLOR[healthTone(avgHealth)] }} />
                   </div>
                 )}
               </button>
@@ -346,9 +469,149 @@ function LevelPicker({
   )
 }
 
+/** The single largest, most decorated card type on the whole dashboard — each portfolio gets its own identity (accent color + glow), mirroring the module hub's own card language, since this is the entry point into the executive's world. */
+function PortfolioIdentityCard({
+  portfolio,
+  accent,
+  programCount,
+  projectCount,
+  avgHealth,
+  onSelect,
+}: {
+  portfolio: Portfolio
+  accent: string
+  programCount: number
+  projectCount: number
+  avgHealth: number | null
+  onSelect: () => void
+}) {
+  const healthColor = avgHealth == null ? '#64748b' : HEALTH_COLOR[healthTone(avgHealth)]
+  return (
+    <button
+      onClick={onSelect}
+      className="hub-grid-card glass-panel group flex min-h-[220px] flex-col rounded-[1.25rem] border p-6 text-right"
+      style={{
+        borderColor: 'var(--border-soft)',
+        // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
+        '--card-accent': accent,
+      }}
+    >
+      <div className="hub-grid-card-glow" style={{ background: accent }} />
+
+      <div className="relative z-10 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110"
+            style={{ background: `${accent}1a`, borderColor: `${accent}44` }}
+          >
+            <Briefcase size={26} style={{ color: accent }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-lg font-extrabold leading-tight">{portfolio.name}</p>
+            {portfolio.code && (
+              <p className="num text-[11px] text-muted" dir="ltr">
+                {portfolio.code}
+              </p>
+            )}
+          </div>
+        </div>
+        {avgHealth != null && (
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ boxShadow: `0 0 16px -4px ${healthColor}88` }}>
+            <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90">
+              <circle cx={22} cy={22} r={18} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth={4} />
+              <circle
+                cx={22}
+                cy={22}
+                r={18}
+                fill="none"
+                stroke={healthColor}
+                strokeWidth={4}
+                strokeLinecap="round"
+                strokeDasharray={2 * Math.PI * 18}
+                strokeDashoffset={2 * Math.PI * 18 * (1 - avgHealth / 100)}
+              />
+            </svg>
+            <span className="num absolute text-[10px] font-extrabold">{avgHealth}</span>
+          </div>
+        )}
+      </div>
+
+      {portfolio.description && <p className="relative z-10 mt-3 line-clamp-2 text-xs leading-5 text-secondary">{portfolio.description}</p>}
+
+      <div className="relative z-10 mt-auto flex items-center gap-3 pt-4 text-[11px] text-muted">
+        <span className="flex items-center gap-1">
+          <Layers size={12} /> <span className="num">{programCount}</span> طرح
+        </span>
+        <span className="flex items-center gap-1">
+          <Briefcase size={12} /> <span className="num">{projectCount}</span> پروژه
+        </span>
+        <span className="rounded-full border border-white/10 px-2 py-0.5">{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[portfolio.status]}</span>
+      </div>
+
+      <div className="relative z-10 mt-3 flex items-center gap-1.5 text-xs font-bold transition-all duration-300 group-hover:gap-2.5" style={{ color: accent }}>
+        مشاهده کنترل استراتژیک
+        <ChevronLeft size={14} className="rotate-180 transition-transform duration-300 group-hover:translate-x-0.5" />
+      </div>
+    </button>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // KPI row
 // ---------------------------------------------------------------------------
+
+function ExecutiveKpiTile({
+  icon: Icon,
+  label,
+  value,
+  color,
+  status,
+  trend,
+  tooltip,
+}: {
+  icon: LucideIcon
+  label: string
+  value: number | string
+  color: string
+  status?: 'good' | 'warn' | 'bad'
+  trend?: { label: string; isGood: boolean }
+  tooltip?: string
+}) {
+  const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#2ecc71', warn: '#f1c40f', bad: '#e74c3c' }
+  return (
+    <div className="glass-panel group relative flex flex-col gap-2.5 rounded-2xl p-4 transition-transform hover:-translate-y-0.5">
+      <div className="flex items-start justify-between">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: `${color}1a` }}>
+          <Icon size={16} style={{ color }} />
+        </div>
+        <div className="flex items-center gap-1">
+          {status && <span className="h-2 w-2 rounded-full" style={{ background: STATUS_DOT[status] }} />}
+          {tooltip && (
+            <button type="button" tabIndex={0} className="text-muted outline-none hover:text-secondary focus-visible:text-secondary" aria-label={`توضیح ${label}`}>
+              <Info size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div>
+        <p className="num text-xl font-extrabold leading-tight" style={{ color }}>
+          {value}
+        </p>
+        <p className="mt-1 text-[11px] font-medium leading-4 text-secondary">{label}</p>
+      </div>
+      {trend && (
+        <span className="flex items-center gap-1 text-[10px] font-medium" style={{ color: trend.isGood ? '#2ecc71' : '#e74c3c' }}>
+          {trend.label}
+        </span>
+      )}
+      {tooltip && (
+        <div className="pointer-events-none absolute bottom-full right-2 z-20 mb-2 w-56 max-w-[80vw] rounded-lg border border-white/10 bg-[var(--bg-panel-solid)] p-2.5 text-[10px] leading-5 text-secondary opacity-0 shadow-2xl transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+          {tooltip}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function KpiRow({ totals, currency }: { totals: ReturnType<typeof aggregatePortfolioTotals>; currency: string }) {
   const scheduleKnown = totals.projectCount - totals.scheduleBuckets.unknown
@@ -357,67 +620,82 @@ function KpiRow({ totals, currency }: { totals: ReturnType<typeof aggregatePortf
   const changeExposurePercent = totals.projectCount > 0 ? Math.round((totals.changeExposureCount / totals.projectCount) * 100) : 0
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
-      <KpiTile
-        label="شاخص سلامت پورتفولیو"
-        value={totals.avgHealthScore}
-        color={totals.avgHealthScore >= 70 ? '#2ecc71' : totals.avgHealthScore >= 40 ? '#f1c40f' : '#e74c3c'}
-        status={totals.avgHealthScore >= 70 ? 'good' : totals.avgHealthScore >= 40 ? 'warn' : 'bad'}
-        tooltip="میانگین وزنی وضعیت زمان‌بندی، ریسک، مسائل باز و تصمیمات معوق هر پروژه — از ۰ تا ۱۰۰."
-      />
-      <KpiTile
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <ExecutiveKpiTile
+        icon={Target}
         label="همراستایی استراتژیک"
         value={alignmentPercent == null ? '—' : `${alignmentPercent}٪`}
         color="#38bdf8"
         tooltip="سهم پروژه‌های زیرمجموعه طرح/پورتفولیویی که اهداف استراتژیک برای آن‌ها ثبت شده — به‌عنوان شاخص جایگزین، چون امتیاز عددی همراستایی در سامانه ثبت نمی‌شود."
       />
-      <KpiTile label="بودجه مصوب کل (BAC)" value={fmtCurrency(totals.bacSum, currency)} color="#a78bfa" tooltip="مجموع مبلغ قرارداد پروژه‌های این محدوده." />
-      <KpiTile
+      <ExecutiveKpiTile icon={Wallet} label="بودجه مصوب کل (BAC)" value={fmtCurrency(totals.bacSum, currency)} color="#a78bfa" tooltip="مجموع مبلغ قرارداد پروژه‌های این محدوده." />
+      <ExecutiveKpiTile
+        icon={TrendingUp}
         label="پیش‌بینی هزینه در تکمیل (EAC)"
         value={totals.eacCoverageCount > 0 ? fmtCurrency(totals.eacSum, currency) : 'ثبت نشده'}
         color="#f59e0b"
         tooltip={`فقط پروژه‌هایی که EAC برایشان ثبت شده (${totals.eacCoverageCount} از ${totals.projectCount}) — از صفحه شناسنامه پروژه قابل ثبت است.`}
       />
-      <KpiTile
+      <ExecutiveKpiTile
+        icon={Scale}
         label={totals.eacCoverageCount === 0 ? 'مواجهه هزینه‌ای (VAC)' : totals.costExposureSum >= 0 ? 'مواجهه هزینه‌ای (VAC) — صرفه‌جویی' : 'مواجهه هزینه‌ای (VAC) — مازاد هزینه'}
         value={totals.eacCoverageCount > 0 ? fmtCurrency(Math.abs(totals.costExposureSum), currency) : 'ثبت نشده'}
         color={totals.costExposureSum >= 0 ? '#2ecc71' : '#e74c3c'}
         status={totals.eacCoverageCount === 0 ? undefined : totals.costExposureSum >= 0 ? 'good' : 'bad'}
         tooltip="BAC منهای EAC، فقط روی پروژه‌های دارای هر دو مقدار. مقدار منفی یعنی هزینه پیش‌بینی‌شده از بودجه مصوب فراتر رفته است."
       />
-      <KpiTile
+      <ExecutiveKpiTile
+        icon={CalendarClock}
         label="مواجهه زمان‌بندی"
         value={scheduleLatePercent == null ? '—' : `${scheduleLatePercent}٪ تاخیر`}
         color="#f97316"
         status={scheduleLatePercent == null ? undefined : scheduleLatePercent <= 15 ? 'good' : scheduleLatePercent <= 40 ? 'warn' : 'bad'}
         tooltip="سهم پروژه‌هایی که پیش‌بینی پایان آن‌ها از تاریخ برنامه‌ریزی‌شده عقب‌تر است."
       />
-      <KpiTile label="پروژه‌های بحرانی" value={totals.criticalProjectCount} color="#e74c3c" status={totals.criticalProjectCount === 0 ? 'good' : 'bad'} tooltip="پروژه‌هایی با شاخص سلامت زیر ۴۰." />
-      <KpiTile label="پروژه‌های پرریسک" value={totals.highRiskProjectCount} color="#f97316" status={totals.highRiskProjectCount === 0 ? 'good' : 'warn'} tooltip="پروژه‌های دارای حداقل یک ریسک فعال با سطح زیاد یا بحرانی." />
-      <KpiTile
+      <ExecutiveKpiTile icon={AlertTriangle} label="پروژه‌های بحرانی" value={totals.criticalProjectCount} color="#e74c3c" status={totals.criticalProjectCount === 0 ? 'good' : 'bad'} tooltip="پروژه‌هایی با شاخص سلامت زیر ۴۰." />
+      <ExecutiveKpiTile
+        icon={ShieldAlert}
+        label="پروژه‌های پرریسک"
+        value={totals.highRiskProjectCount}
+        color="#f97316"
+        status={totals.highRiskProjectCount === 0 ? 'good' : 'warn'}
+        tooltip="پروژه‌های دارای حداقل یک ریسک فعال با سطح زیاد یا بحرانی."
+      />
+      <ExecutiveKpiTile
+        icon={Flag}
         label="نقاط عطف معوق"
         value={totals.overdueMilestoneCount}
         color="#e74c3c"
         status={totals.overdueMilestoneCount === 0 ? 'good' : 'bad'}
         tooltip="فازهای پروژه (Master Data) با تاریخ پایان برنامه‌ریزی‌شده گذشته که هنوز تکمیل نشده‌اند."
       />
-      <KpiTile
+      <ExecutiveKpiTile
+        icon={Users}
         label="پوشش منابع کلیدی"
         value={totals.avgRoleCoverage == null ? '—' : `${Math.round(totals.avgRoleCoverage * 100)}٪`}
         color="#38bdf8"
         tooltip="سهم نقش‌های کلیدی تعریف‌شده که برای هر پروژه فردی مشخص شده — شاخص جایگزین برای ظرفیت منابع، چون ساعت/نفرساعت واقعی در سامانه ثبت نمی‌شود."
       />
-      <KpiTile label="تحقق منافع (Benefits)" value="ثبت نشده" color="#64748b" tooltip="هیچ داده یا معیار جایگزینی برای تحقق منافع در سامانه وجود ندارد — به‌جای فرضی‌سازی، این شاخص خالی نمایش داده می‌شود." />
-      <KpiTile label="مسائل بحرانی باز" value={totals.openCriticalIssueCount} color="#e74c3c" status={totals.openCriticalIssueCount === 0 ? 'good' : 'bad'} tooltip="مسائل با اولویت بحرانی که هنوز باز/در حال اقدام/منتظر تایید هستند." />
-      <KpiTile
+      <ExecutiveKpiTile icon={Gift} label="تحقق منافع (Benefits)" value="ثبت نشده" color="#64748b" tooltip="هیچ داده یا معیار جایگزینی برای تحقق منافع در سامانه وجود ندارد — به‌جای فرضی‌سازی، این شاخص خالی نمایش داده می‌شود." />
+      <ExecutiveKpiTile
+        icon={AlertCircle}
+        label="مسائل بحرانی باز"
+        value={totals.openCriticalIssueCount}
+        color="#e74c3c"
+        status={totals.openCriticalIssueCount === 0 ? 'good' : 'bad'}
+        tooltip="مسائل با اولویت بحرانی که هنوز باز/در حال اقدام/منتظر تایید هستند."
+      />
+      <ExecutiveKpiTile
+        icon={ClipboardList}
         label="تصمیمات معوق مدیریتی"
         value={totals.pendingDecisionCount}
         color="#f1c40f"
         status={totals.overduePendingDecisionCount === 0 ? 'good' : 'bad'}
-        trend={totals.overduePendingDecisionCount > 0 ? { direction: 'up', label: `${totals.overduePendingDecisionCount} مورد از مهلت گذشته`, isGood: false } : undefined}
+        trend={totals.overduePendingDecisionCount > 0 ? { label: `${totals.overduePendingDecisionCount} مورد از مهلت گذشته`, isGood: false } : undefined}
         tooltip="تصمیمات با وضعیت در انتظار/در حال بررسی."
       />
-      <KpiTile
+      <ExecutiveKpiTile
+        icon={RefreshCw}
         label="مواجهه تغییرات"
         value={`${changeExposurePercent}٪`}
         color="#8b5cf6"
@@ -555,6 +833,7 @@ function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries
   const cellItems = (importance: StrategicImportance, health: HealthTier) =>
     summaries.filter((s) => s.health === health && strategicImportanceOf(s, summaries) === importance)
 
+  const rowTotal = (importance: StrategicImportance) => healths.reduce((sum, h) => sum + cellItems(importance, h).length, 0)
   const activeItems = active ? cellItems(active.importance, active.health) : []
 
   return (
@@ -562,40 +841,72 @@ function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
         <ShieldAlert size={12} className="text-teal-400" /> ۶. ماتریس اهمیت استراتژیک × سلامت پروژه
       </p>
-      <p className="mb-2 text-[10px] leading-5 text-muted">اهمیت استراتژیک بر مبنای رتبه مبلغ قرارداد (BAC) در میان پروژه‌های این محدوده تخمین زده می‌شود.</p>
-      <div className="grid gap-1" style={{ gridTemplateColumns: '70px repeat(3, 1fr)' }} dir="ltr">
-        <div />
+      <p className="mb-3 text-[10px] leading-5 text-muted">
+        اهمیت استراتژیک بر مبنای رتبه مبلغ قرارداد (BAC) در میان پروژه‌های این محدوده تخمین زده می‌شود — هر ردیف یک سطح اهمیت و هر ستون یک وضعیت سلامت را نشان می‌دهد؛ عدد داخل هر خانه، تعداد پروژه‌های آن ترکیب است.
+      </p>
+
+      <div className="mb-2 flex items-center justify-end gap-3 text-[10px]">
         {healths.map((h) => (
-          <div key={h} className="text-center text-[9px] text-muted">
+          <span key={h} className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: HEALTH_COLOR[h] }} />
             {HEALTH_LABEL_FA[h]}
-          </div>
-        ))}
-        {importances.map((imp) => (
-          <Fragment key={imp}>
-            <div className="flex items-center text-[9px] text-muted">{IMPORTANCE_LABEL_FA[imp]}</div>
-            {healths.map((h) => {
-              const items = cellItems(imp, h)
-              const isActive = active?.importance === imp && active?.health === h
-              const flagStrategicUnhealthy = imp === 'high' && h !== 'healthy' && items.length > 0
-              return (
-                <button
-                  key={`${imp}-${h}`}
-                  onClick={() => setActive(isActive ? null : { importance: imp, health: h })}
-                  className="flex h-11 items-center justify-center rounded-lg text-sm font-bold text-white transition-transform hover:scale-[1.04]"
-                  style={{
-                    background: HEALTH_COLOR[h],
-                    opacity: items.length === 0 ? 0.18 : isActive ? 1 : 0.75,
-                    outline: flagStrategicUnhealthy ? '2px solid white' : isActive ? '2px solid rgba(255,255,255,0.6)' : 'none',
-                  }}
-                >
-                  {items.length > 0 ? items.length : ''}
-                </button>
-              )
-            })}
-          </Fragment>
+          </span>
         ))}
       </div>
-      <p className="mt-2 text-[9px] text-muted">حاشیه سفید = پروژه‌های با اهمیت استراتژیک بالا که سالم نیستند و نیاز به توجه فوری مدیریت دارند.</p>
+
+      <div className="overflow-x-auto">
+        <div className="grid min-w-[380px] gap-1.5" style={{ gridTemplateColumns: '96px repeat(3, 1fr)' }}>
+          <div className="flex items-end justify-center pb-1 text-[10px] font-bold text-secondary">اهمیت ↓ سلامت →</div>
+          {healths.map((h) => (
+            <div key={h} className="rounded-lg py-1.5 text-center text-[10px] font-bold" style={{ background: `${HEALTH_COLOR[h]}1f`, color: HEALTH_COLOR[h] }}>
+              {HEALTH_LABEL_FA[h]}
+            </div>
+          ))}
+          {importances.map((imp) => {
+            const total = rowTotal(imp)
+            return (
+              <Fragment key={imp}>
+                <div className="flex flex-col items-center justify-center rounded-lg bg-white/[0.03] py-1 text-center">
+                  <span className="text-[11px] font-bold">{IMPORTANCE_LABEL_FA[imp]}</span>
+                  <span className="num text-[9px] text-muted">{total} پروژه</span>
+                </div>
+                {healths.map((h) => {
+                  const items = cellItems(imp, h)
+                  const isActive = active?.importance === imp && active?.health === h
+                  const flagStrategicUnhealthy = imp === 'high' && h !== 'healthy' && items.length > 0
+                  const percent = total > 0 ? Math.round((items.length / total) * 100) : 0
+                  return (
+                    <button
+                      key={`${imp}-${h}`}
+                      onClick={() => setActive(isActive ? null : { importance: imp, health: h })}
+                      className="flex h-16 flex-col items-center justify-center gap-0.5 rounded-lg text-white transition-transform hover:scale-[1.03]"
+                      style={{
+                        background: HEALTH_COLOR[h],
+                        opacity: items.length === 0 ? 0.15 : isActive ? 1 : 0.8,
+                        outline: flagStrategicUnhealthy ? '2.5px solid white' : isActive ? '2px solid rgba(255,255,255,0.7)' : 'none',
+                        outlineOffset: flagStrategicUnhealthy || isActive ? '-2.5px' : 0,
+                      }}
+                    >
+                      {items.length > 0 && (
+                        <>
+                          <span className="num text-lg font-extrabold leading-none">{items.length}</span>
+                          <span className="num text-[9px] opacity-90">{percent}٪</span>
+                        </>
+                      )}
+                    </button>
+                  )
+                })}
+              </Fragment>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-secondary">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-white" />
+        حاشیه سفید ضخیم = پروژه‌های با <b>اهمیت استراتژیک بالا</b> که سالم نیستند — نیازمند توجه فوری مدیریت ارشد
+      </div>
+
       {active && activeItems.length > 0 && (
         <div className="mt-3">
           <ChartDrillPanel title={`اهمیت ${IMPORTANCE_LABEL_FA[active.importance]} — ${HEALTH_LABEL_FA[active.health]}`} count={activeItems.length} onClose={() => setActive(null)}>
