@@ -81,7 +81,7 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
                 const daysLeft = g.expiryDate ? Math.round((Date.parse(g.expiryDate) - Date.now()) / 86400000) : null
                 const tone = FIN_GUARANTEE_STATUS_COLOR[g.status]
                 return (
-                  <tr key={g.id} className="border-t" style={{ borderColor: 'rgba(15,23,42,0.06)' }}>
+                  <tr key={g.id} className="border-t" style={{ borderColor: 'var(--fin-divider)' }}>
                     <td className="fin-text py-2">{FIN_GUARANTEE_TYPE_LABEL_FA[g.guaranteeType]}</td>
                     <td className="num fin-text py-2">{g.number || '—'}</td>
                     <td className="fin-text py-2">{contractOf(g.contractId)?.title || contractOf(g.contractId)?.contractNumber || '—'}</td>
@@ -231,7 +231,7 @@ function GuaranteeModal({
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:bg-black/5">
+          <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={saving || !contractId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#10b981' }}>

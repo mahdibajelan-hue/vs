@@ -98,7 +98,7 @@ export function PaymentsRecordPage({ masterProjectId }: { masterProjectId: strin
             </thead>
             <tbody>
               {list.map((p) => (
-                <tr key={p.id} className="border-t" style={{ borderColor: 'rgba(15,23,42,0.06)' }}>
+                <tr key={p.id} className="border-t" style={{ borderColor: 'var(--fin-divider)' }}>
                   <td className="num fin-text py-2">{fmtDate(p.paymentDate)}</td>
                   <td className="fin-text py-2">{certOf(p.certificateId)?.certificateNumber || '—'}</td>
                   <td className="fin-text py-2">{contractOf(p.certificateId)?.title || contractOf(p.certificateId)?.contractNumber || '—'}</td>
@@ -241,7 +241,7 @@ function PaymentModal({
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className="fin-input" />
         </label>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:bg-black/5">
+          <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={saving || !certificateId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#10b981' }}>

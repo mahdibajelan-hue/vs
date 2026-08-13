@@ -106,13 +106,13 @@ export function FinancialDashboardPage() {
   return (
     <div className="space-y-4">
       <div className="fin-card p-4">
-        <div className="flex flex-wrap items-center gap-1 rounded-full p-1 w-fit" style={{ background: 'rgba(15,23,42,0.05)' }}>
+        <div className="flex flex-wrap items-center gap-1 rounded-full p-1 w-fit" style={{ background: 'var(--fin-divider)' }}>
           {LEVELS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setLevel(id)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-              style={level === id ? { background: '#10b981', color: '#fff' } : { color: '#475569' }}
+              style={level === id ? { background: '#10b981', color: '#fff' } : { color: 'var(--fin-text-secondary)' }}
             >
               <Icon size={13} />
               {label}

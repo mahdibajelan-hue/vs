@@ -1,11 +1,10 @@
 /*
  * Scoped design system for the Financial Management dashboard redesign — deliberately separate
- * from the app-wide --bg-panel-solid glass-panel look (same convention as issues.css's .im-root):
- * the mockup calls for light/white cards on a dark navy shell rather than RASTA's usual dark-on-
- * dark glass cards, so it gets its own token set instead of overriding the global one and risking
- * every other module's look. The .fin-light class (toggled locally, see FinanceApp.tsx) swaps the
- * shell from dark navy to a soft light background — cards stay light in both, only the chrome
- * (page background, sidebar, topbar) and text tones change.
+ * from the app-wide --bg-panel-solid glass-panel look (same convention as issues.css's .im-root).
+ * The .fin-light class (toggled locally, see FinanceApp.tsx) swaps the whole surface — shell
+ * chrome AND cards — between a dark-navy palette and a light one; only the semantic/brand colors
+ * used for KPI icons, donut segments and chart series (green/blue/purple/red/amber) stay constant
+ * across both, same as any conventional light/dark theme.
  */
 
 .fin-shell {
@@ -15,12 +14,13 @@
   --fin-sidebar-bg: #0c1638;
   --fin-sidebar-border: rgba(148, 163, 184, 0.12);
   --fin-topbar-bg: rgba(12, 22, 56, 0.72);
-  --fin-card-bg: #ffffff;
-  --fin-card-border: rgba(15, 23, 42, 0.06);
-  --fin-card-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
-  --fin-text: #0f172a;
-  --fin-text-secondary: #475569;
-  --fin-text-muted: #94a3b8;
+  --fin-card-bg: #111c40;
+  --fin-card-border: rgba(255, 255, 255, 0.08);
+  --fin-card-shadow: 0 10px 30px rgba(2, 6, 23, 0.45);
+  --fin-divider: rgba(255, 255, 255, 0.08);
+  --fin-text: #e8edf7;
+  --fin-text-secondary: #9fb0c9;
+  --fin-text-muted: #6b7a99;
   --fin-nav-text: #cbd5e1;
   --fin-nav-text-muted: #7c8bb0;
   --fin-nav-active-bg: rgba(56, 189, 248, 0.18);
@@ -42,6 +42,7 @@
   --fin-card-bg: #ffffff;
   --fin-card-border: rgba(15, 23, 42, 0.08);
   --fin-card-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  --fin-divider: rgba(15, 23, 42, 0.07);
   --fin-text: #0f172a;
   --fin-text-secondary: #475569;
   --fin-text-muted: #64748b;
@@ -53,6 +54,7 @@
   border-radius: 1rem;
   box-shadow: var(--fin-card-shadow);
   color: var(--fin-text);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .fin-text {
@@ -63,6 +65,13 @@
 }
 .fin-text-muted {
   color: var(--fin-text-muted);
+}
+
+/* fa-IR digits render poorly in the app-wide monospace (.num) font — Vazirmatn (the module's own
+   Persian sans) has proper Persian-digit glyphs, so every number inside the module overrides it. */
+.fin-shell .num {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 .fin-input {
@@ -79,6 +88,10 @@
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
 }
+.fin-input option {
+  color: #0f172a;
+  background: #ffffff;
+}
 
 .fin-nav-item {
   color: var(--fin-nav-text-muted);
@@ -91,4 +104,12 @@
 .fin-nav-item.is-active {
   background: var(--fin-nav-active-bg);
   color: var(--fin-nav-active-text);
+}
+
+/* Small elegant KPI/metric card — hover lift only, colors come from --fin-card-* tokens above. */
+.fin-metric-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.fin-metric-card:hover {
+  transform: translateY(-1px);
 }

@@ -21,14 +21,14 @@ function downloadBlob(blob: Blob, filename: string) {
  * of a wide page. Content taller than one page is split across multiple pages rather than
  * shrunk to fit, so nothing becomes illegibly small.
  */
-export async function exportElementToPdf(el: HTMLElement, filename: string, options?: { orientation?: 'portrait' | 'landscape' }) {
+export async function exportElementToPdf(el: HTMLElement, filename: string, options?: { orientation?: 'portrait' | 'landscape'; backgroundColor?: string }) {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import('html2canvas-pro'),
     import('jspdf'),
   ])
   const canvas = await html2canvas(el, {
     scale: 2,
-    backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-panel-solid') || '#ffffff',
+    backgroundColor: options?.backgroundColor || getComputedStyle(document.body).getPropertyValue('--bg-panel-solid') || '#ffffff',
     useCORS: true,
   })
   const imgData = canvas.toDataURL('image/png')

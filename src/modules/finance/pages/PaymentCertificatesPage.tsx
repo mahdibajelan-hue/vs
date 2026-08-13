@@ -3,7 +3,8 @@ import { AlertCircle, CheckCircle2, Clock, Link2, Plus, Receipt, Trash2, Wallet 
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { averagePaymentDelayDays, certificateGrossTotal, certificateOutstanding, certificatePaidTotal, paymentAgingDays, realizedPaymentDelayDays } from '../lib/financeCalc'
-import { fmtCurrency, fmtDate, FinanceKpiTile } from '../components/FinanceKpiTile'
+import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
+import { MetricCard } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
@@ -31,7 +32,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
   const [showNew, setShowNew] = useState(false)
   const [editing, setEditing] = useState<FinPaymentCertificate | null>(null)
 
-  if (!project) return <div className="flex h-40 items-center justify-center text-xs text-muted">پروژه یافت نشد</div>
+  if (!project) return <div className="flex h-40 items-center justify-center text-xs fin-text-muted">پروژه یافت نشد</div>
 
   const activeContract = contracts.find((c) => c.id === (contractId ?? contracts[0]?.id))
   const list = activeContract
@@ -48,9 +49,9 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
+      <div className="fin-card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
-          <p className="text-xs text-muted">صورت‌وضعیت‌های پرداخت</p>
+          <p className="text-xs fin-text-muted">صورت‌وضعیت‌های پرداخت</p>
           <h1 className="mt-1 text-lg font-extrabold">{project.officialName}</h1>
         </div>
         {contracts.length > 0 && (
@@ -58,7 +59,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
             <select
               value={activeContract?.id ?? ''}
               onChange={(e) => setContractId(e.target.value)}
-              className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs outline-none focus:border-brand-400"
+              className="fin-input"
             >
               {contracts.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -79,28 +80,28 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
 
       {activeContract && list.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <FinanceKpiTile
+          <MetricCard
             icon={Receipt}
             label="جمع ناخالص (شامل ارزی)"
             value={fmtCurrency(grossTotal, activeContract.currency)}
             color="#38bdf8"
             tooltip="مجموع مبلغ ناخالص همه صورت‌وضعیت‌های این قرارداد پیش از هرگونه کسورات، به‌علاوه معادل ریالی سهم ارزی. هرچه بالاتر، حجم کارکرد گزارش‌شده بیشتر است."
           />
-          <FinanceKpiTile
+          <MetricCard
             icon={CheckCircle2}
             label="جمع تاییدشده"
             value={fmtCurrency(certifiedTotal, activeContract.currency)}
             color="#a78bfa"
             tooltip="مجموع مبالغی که توسط کارفرما/مشاور تایید نهایی شده‌اند. فاصله زیاد بین این مقدار و «جمع ناخالص» نشانه صورت‌وضعیت‌های معطل‌مانده در فرآیند تایید است."
           />
-          <FinanceKpiTile
+          <MetricCard
             icon={Wallet}
             label="جمع پرداخت‌شده (شامل ارزی)"
             value={fmtCurrency(paidTotal, activeContract.currency)}
             color="#2ecc71"
             tooltip="مجموع مبالغ واقعا پرداخت‌شده به پیمانکار برای این قرارداد، به‌علاوه معادل ریالی سهم ارزی پرداختی."
           />
-          <FinanceKpiTile
+          <MetricCard
             icon={AlertCircle}
             label="مانده پرداخت‌نشده"
             value={fmtCurrency(outstandingTotal, activeContract.currency)}
@@ -109,7 +110,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
             tooltip="تفاوت بین مبلغ تاییدشده (یا قابل پرداخت، اگر هنوز تایید نشده) و مبلغ پرداخت‌شده. این عدد بدهی جاری کارفرما به پیمانکار برای این قرارداد است."
             emphasize
           />
-          <FinanceKpiTile
+          <MetricCard
             icon={Clock}
             label="میانگین تاخیر پرداخت (روز)"
             value={avgDelay != null ? avgDelay.toLocaleString('fa-IR') : '—'}
@@ -121,9 +122,9 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
       )}
 
       {contracts.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">ابتدا برای این پروژه یک قرارداد ثبت کنید.</div>
+        <div className="fin-card p-8 text-center text-xs fin-text-muted">ابتدا برای این پروژه یک قرارداد ثبت کنید.</div>
       ) : list.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">برای این قرارداد هنوز صورت‌وضعیتی ثبت نشده است.</div>
+        <div className="fin-card p-8 text-center text-xs fin-text-muted">برای این قرارداد هنوز صورت‌وضعیتی ثبت نشده است.</div>
       ) : (
         <div className="space-y-3">
           {list.map((cert) => {
@@ -132,7 +133,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
             const tone = FIN_CERTIFICATE_STATUS_COLOR[cert.status]
             const related = certByNumber(cert.relatedCertificateId)
             return (
-              <div key={cert.id} className="glass-panel rounded-2xl p-4">
+              <div key={cert.id} className="fin-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -153,16 +154,16 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                         </span>
                       )}
                       {realizedDelay != null && (
-                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-medium text-secondary">
+                        <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium fin-text-secondary" style={{ borderColor: 'var(--fin-divider)' }}>
                           تاخیر واقعی پرداخت: {realizedDelay.toLocaleString('fa-IR')} روز
                         </span>
                       )}
                     </div>
-                    <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
+                    <p className="num mt-0.5 text-[11px] fin-text-muted" dir="ltr">
                       {fmtDate(cert.certificateDate)}
                     </p>
                     {cert.certificateType === 'adjustment' && (
-                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-secondary">
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] fin-text-secondary">
                         <Link2 size={11} />
                         تعدیل صورت‌وضعیت کارکرد {related ? `شماره ${related.certificateNumber || '—'}` : 'نامشخص'}
                         {cert.adjustmentFactor != null && <span className="num"> — ضریب تعدیل: {cert.adjustmentFactor.toLocaleString('fa-IR')}</span>}
@@ -170,10 +171,10 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setEditing(cert)} className="text-xs text-secondary hover:underline">
+                    <button onClick={() => setEditing(cert)} className="text-xs fin-text-secondary hover:underline">
                       ویرایش
                     </button>
-                    <button onClick={() => deleteCertificate(cert.id)} className="text-muted hover:text-red-400">
+                    <button onClick={() => deleteCertificate(cert.id)} className="fin-text-muted hover:text-red-400">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -195,13 +196,13 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                 {(cert.grossFx.fcAmount > 0 || cert.paidFx.fcAmount > 0) && (
                   <div className="mt-2 space-y-0.5" dir="ltr">
                     {cert.grossFx.fcAmount > 0 && (
-                      <p className="num text-[10.5px] text-muted">
+                      <p className="num text-[10.5px] fin-text-muted">
                         سهم ارزی ناخالص: {cert.grossFx.fcAmount.toLocaleString('fa-IR')} {cert.grossFx.fcCurrency} × {cert.grossFx.exchangeRate.toLocaleString('fa-IR')} ={' '}
                         {fmtCurrency(cert.grossFx.fcRialEquivalent, activeContract?.currency)}
                       </p>
                     )}
                     {cert.paidFx.fcAmount > 0 && (
-                      <p className="num text-[10.5px] text-muted">
+                      <p className="num text-[10.5px] fin-text-muted">
                         سهم ارزی پرداختی: {cert.paidFx.fcAmount.toLocaleString('fa-IR')} {cert.paidFx.fcCurrency} × {cert.paidFx.exchangeRate.toLocaleString('fa-IR')} ={' '}
                         {fmtCurrency(cert.paidFx.fcRialEquivalent, activeContract?.currency)}
                       </p>
@@ -246,7 +247,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
 function MiniField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
-      <p className="text-[10px] text-muted">{label}</p>
+      <p className="text-[10px] fin-text-muted">{label}</p>
       <p className="num text-sm font-bold" style={highlight ? { color: FINANCE_ACCENT } : undefined}>
         {value}
       </p>
@@ -328,20 +329,20 @@ function CertificateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="glass-panel w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="fin-card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-sm font-extrabold">{title}</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">شماره صورت‌وضعیت</span>
-            <input value={certificateNumber} onChange={(e) => setCertificateNumber(e.target.value)} className="input" dir="ltr" autoFocus />
+            <span className="mb-1 block text-xs fin-text-secondary">شماره صورت‌وضعیت</span>
+            <input value={certificateNumber} onChange={(e) => setCertificateNumber(e.target.value)} className="fin-input" dir="ltr" autoFocus />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ صورت‌وضعیت</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ صورت‌وضعیت</span>
             <JalaliDateInput value={certificateDate} onChange={setCertificateDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نوع صورت‌وضعیت</span>
-            <select value={certificateType} onChange={(e) => setCertificateType(e.target.value as FinCertificateType)} className="input">
+            <span className="mb-1 block text-xs fin-text-secondary">نوع صورت‌وضعیت</span>
+            <select value={certificateType} onChange={(e) => setCertificateType(e.target.value as FinCertificateType)} className="fin-input">
               {FIN_CERTIFICATE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {FIN_CERTIFICATE_TYPE_LABEL_FA[t]}
@@ -351,8 +352,8 @@ function CertificateModal({
           </label>
           {certificateType === 'adjustment' && (
             <label className="block">
-              <span className="mb-1 block text-xs text-secondary">صورت‌وضعیت کارکرد مرتبط</span>
-              <select value={relatedCertificateId} onChange={(e) => setRelatedCertificateId(e.target.value)} className="input">
+              <span className="mb-1 block text-xs fin-text-secondary">صورت‌وضعیت کارکرد مرتبط</span>
+              <select value={relatedCertificateId} onChange={(e) => setRelatedCertificateId(e.target.value)} className="fin-input">
                 <option value="">—</option>
                 {workCertificates.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -364,64 +365,64 @@ function CertificateModal({
           )}
           {certificateType === 'adjustment' && (
             <label className="block">
-              <span className="mb-1 block text-xs text-secondary">ضریب تعدیل</span>
-              <input type="number" step="0.0001" value={adjustmentFactor} onChange={(e) => setAdjustmentFactor(e.target.value)} className="input num" />
+              <span className="mb-1 block text-xs fin-text-secondary">ضریب تعدیل</span>
+              <input type="number" step="0.0001" value={adjustmentFactor} onChange={(e) => setAdjustmentFactor(e.target.value)} className="fin-input num" />
             </label>
           )}
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ ناخالص ریالی (Gross)</span>
-            <input type="number" value={grossAmount} onChange={(e) => setGrossAmount(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ ناخالص ریالی (Gross)</span>
+            <input type="number" value={grossAmount} onChange={(e) => setGrossAmount(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ ناخالص ارزی</span>
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ ناخالص ارزی</span>
             <div className="flex gap-1.5">
-              <input type="number" value={fcAmount} onChange={(e) => setFcAmount(e.target.value)} className="input num" />
-              <input value={fcCurrency} onChange={(e) => setFcCurrency(e.target.value)} className="input w-20" dir="ltr" />
+              <input type="number" value={fcAmount} onChange={(e) => setFcAmount(e.target.value)} className="fin-input num" />
+              <input value={fcCurrency} onChange={(e) => setFcCurrency(e.target.value)} className="fin-input w-20" dir="ltr" />
             </div>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نرخ تبدیل (ناخالص)</span>
-            <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">نرخ تبدیل (ناخالص)</span>
+            <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تعدیلات (Adjustments)</span>
-            <input type="number" value={adjustments} onChange={(e) => setAdjustments(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">تعدیلات (Adjustments)</span>
+            <input type="number" value={adjustments} onChange={(e) => setAdjustments(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">کسورات متفرقه (Deductions)</span>
-            <input type="number" value={deductions} onChange={(e) => setDeductions(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">کسورات متفرقه (Deductions)</span>
+            <input type="number" value={deductions} onChange={(e) => setDeductions(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">کسر حسن انجام کار (Retention)</span>
-            <input type="number" value={retentionAmount} onChange={(e) => setRetentionAmount(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">کسر حسن انجام کار (Retention)</span>
+            <input type="number" value={retentionAmount} onChange={(e) => setRetentionAmount(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">بازپرداخت پیش‌پرداخت (Advance Recovery)</span>
-            <input type="number" value={advanceRecoveryAmount} onChange={(e) => setAdvanceRecoveryAmount(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">بازپرداخت پیش‌پرداخت (Advance Recovery)</span>
+            <input type="number" value={advanceRecoveryAmount} onChange={(e) => setAdvanceRecoveryAmount(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ قابل پرداخت (محاسبه خودکار)</span>
-            <input value={fmtCurrency(previewPayable, currency)} disabled className="input num opacity-70" />
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ قابل پرداخت (محاسبه خودکار)</span>
+            <input value={fmtCurrency(previewPayable, currency)} disabled className="fin-input num opacity-70" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ تاییدشده</span>
-            <input type="number" value={certifiedAmount} onChange={(e) => setCertifiedAmount(e.target.value)} className="input num" placeholder="در انتظار تایید" />
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ تاییدشده</span>
+            <input type="number" value={certifiedAmount} onChange={(e) => setCertifiedAmount(e.target.value)} className="fin-input num" placeholder="در انتظار تایید" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ پرداخت‌شده ریالی</span>
-            <input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ پرداخت‌شده ریالی</span>
+            <input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ پرداخت‌شده ارزی</span>
-            <input type="number" value={paidFcAmount} onChange={(e) => setPaidFcAmount(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ پرداخت‌شده ارزی</span>
+            <input type="number" value={paidFcAmount} onChange={(e) => setPaidFcAmount(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نرخ تبدیل (پرداختی)</span>
-            <input type="number" value={paidExchangeRate} onChange={(e) => setPaidExchangeRate(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">نرخ تبدیل (پرداختی)</span>
+            <input type="number" value={paidExchangeRate} onChange={(e) => setPaidExchangeRate(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">وضعیت</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value as FinCertificateStatus)} className="input">
+            <span className="mb-1 block text-xs fin-text-secondary">وضعیت</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value as FinCertificateStatus)} className="fin-input">
               {FIN_CERTIFICATE_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {FIN_CERTIFICATE_STATUS_LABEL_FA[s]}
@@ -430,24 +431,24 @@ function CertificateModal({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ ارسال</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ ارسال</span>
             <JalaliDateInput value={submittedDate} onChange={setSubmittedDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ تایید</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ تایید</span>
             <JalaliDateInput value={certifiedDate} onChange={setCertifiedDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ پرداخت</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ پرداخت</span>
             <JalaliDateInput value={paidDate} onChange={setPaidDate} />
           </label>
         </div>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">یادداشت</span>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input" />
+          <span className="mb-1 block text-xs fin-text-secondary">یادداشت</span>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="fin-input" />
         </label>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>

@@ -54,13 +54,13 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
   const projectGuarantees = guarantees.filter((g) => contractIds.has(g.contractId))
   const soonExpiring = expiringGuarantees(projectGuarantees)
 
-  if (!project) return <div className="flex h-40 items-center justify-center text-xs text-muted">پروژه یافت نشد</div>
+  if (!project) return <div className="flex h-40 items-center justify-center text-xs fin-text-muted">پروژه یافت نشد</div>
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
+      <div className="fin-card flex items-center justify-between p-4">
         <div>
-          <p className="text-xs text-muted">قراردادها و تعهدات مالی</p>
+          <p className="text-xs fin-text-muted">قراردادها و تعهدات مالی</p>
           <h1 className="mt-1 text-lg font-extrabold">{project.officialName}</h1>
         </div>
         <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: FINANCE_ACCENT }}>
@@ -69,7 +69,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
       </div>
 
       {projectGuarantees.length > 0 && (
-        <div className="glass-panel flex flex-wrap items-center gap-4 rounded-2xl border p-4" style={{ borderColor: `${FINANCE_ACCENT}40` }}>
+        <div className="fin-card flex flex-wrap items-center gap-4 border p-4" style={{ borderColor: `${FINANCE_ACCENT}40` }}>
           <div className="flex items-center gap-2">
             <ShieldCheck size={18} style={{ color: FINANCE_ACCENT }} />
             <div>
@@ -79,7 +79,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                   project.currency,
                 )}
               </p>
-              <p className="text-[10.5px] text-secondary">مجموع ضمانت‌نامه‌های معتبر دریافتی از پیمانکاران</p>
+              <p className="text-[10.5px] fin-text-secondary">مجموع ضمانت‌نامه‌های معتبر دریافتی از پیمانکاران</p>
             </div>
           </div>
           {soonExpiring.length > 0 && (
@@ -91,7 +91,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
       )}
 
       {contracts.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">هنوز قراردادی برای این پروژه ثبت نشده است.</div>
+        <div className="fin-card p-8 text-center text-xs fin-text-muted">هنوز قراردادی برای این پروژه ثبت نشده است.</div>
       ) : (
         <div className="space-y-3">
           {contracts.map((c) => {
@@ -100,7 +100,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
             const current = currentContractValue(c, amendments)
             const expanded = expandedId === c.id
             return (
-              <div key={c.id} className="glass-panel rounded-2xl p-4">
+              <div key={c.id} className="fin-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -116,16 +116,16 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                         {FIN_CONTRACT_STATUS_LABEL_FA[c.status]}
                       </span>
                     </div>
-                    <p className="num mt-0.5 text-[11px] text-muted" dir="ltr">
+                    <p className="num mt-0.5 text-[11px] fin-text-muted" dir="ltr">
                       {c.contractNumber}
                     </p>
-                    <p className="mt-1 text-xs text-secondary">پیمانکار/طرف قرارداد: {orgName(c.contractorOrgId)}</p>
+                    <p className="mt-1 text-xs fin-text-secondary">پیمانکار/طرف قرارداد: {orgName(c.contractorOrgId)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setEditing(c)} className="text-xs text-secondary hover:underline">
+                    <button onClick={() => setEditing(c)} className="text-xs fin-text-secondary hover:underline">
                       ویرایش
                     </button>
-                    <button onClick={() => deleteContract(c.id)} className="text-muted hover:text-red-400">
+                    <button onClick={() => deleteContract(c.id)} className="fin-text-muted hover:text-red-400">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -138,7 +138,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                   <MiniField label="کسر حسن انجام کار (Retention)" value={`${c.retentionPercent}٪`} />
                 </div>
                 {c.fx.fcAmount > 0 && (
-                  <p className="num mt-2 text-[10.5px] text-muted" dir="ltr">
+                  <p className="num mt-2 text-[10.5px] fin-text-muted" dir="ltr">
                     سهم ارزی: {c.fx.fcAmount.toLocaleString('fa-IR')} {c.fx.fcCurrency} × {c.fx.exchangeRate.toLocaleString('fa-IR')} = {fmtCurrency(c.fx.fcRialEquivalent, c.currency)}
                   </p>
                 )}
@@ -150,44 +150,44 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                 </div>
 
                 {expanded && (
-                  <div className="mt-3 space-y-4 border-t pt-3" style={{ borderColor: 'var(--border-soft)' }}>
+                  <div className="mt-3 space-y-4 border-t pt-3" style={{ borderColor: 'var(--fin-divider)' }}>
                     <div>
-                      <p className="mb-1.5 text-[11px] font-bold text-secondary">الحاقیه‌ها و تغییرات قرارداد</p>
-                      {contractAmendments.length === 0 && <p className="text-xs text-muted">الحاقیه‌ای ثبت نشده است.</p>}
+                      <p className="mb-1.5 text-[11px] font-bold fin-text-secondary">الحاقیه‌ها و تغییرات قرارداد</p>
+                      {contractAmendments.length === 0 && <p className="text-xs fin-text-muted">الحاقیه‌ای ثبت نشده است.</p>}
                       <div className="space-y-1.5">
                         {contractAmendments.map((a) => (
-                          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5">
-                            <span className="num text-[11px] text-muted">{fmtDate(a.amendmentDate)}</span>
+                          <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)' }}>
+                            <span className="num text-[11px] fin-text-muted">{fmtDate(a.amendmentDate)}</span>
                             <span className="min-w-0 flex-1 truncate text-xs">{a.reason || a.amendmentNumber || '—'}</span>
                             <span className="num shrink-0 text-xs font-bold" style={{ color: a.amount >= 0 ? '#2ecc71' : '#e74c3c' }}>
                               {a.amount >= 0 ? '+' : ''}
                               {fmtCurrency(a.amount, c.currency)}
                             </span>
-                            <button onClick={() => deleteAmendment(a.id)} className="shrink-0 text-muted hover:text-red-400">
+                            <button onClick={() => deleteAmendment(a.id)} className="shrink-0 fin-text-muted hover:text-red-400">
                               <Trash2 size={12} />
                             </button>
                           </div>
                         ))}
                       </div>
-                      <button onClick={() => setAddingAmendmentFor(c.id)} className="mt-1.5 flex items-center gap-1 text-[11px] text-secondary hover:text-current">
+                      <button onClick={() => setAddingAmendmentFor(c.id)} className="mt-1.5 flex items-center gap-1 text-[11px] fin-text-secondary hover:text-current">
                         <Plus size={11} /> افزودن الحاقیه
                       </button>
                     </div>
 
                     <div>
-                      <p className="mb-1.5 text-[11px] font-bold text-secondary">ضمانت‌نامه‌ها</p>
-                      {contractGuarantees.length === 0 && <p className="text-xs text-muted">ضمانت‌نامه‌ای ثبت نشده است.</p>}
+                      <p className="mb-1.5 text-[11px] font-bold fin-text-secondary">ضمانت‌نامه‌ها</p>
+                      {contractGuarantees.length === 0 && <p className="text-xs fin-text-muted">ضمانت‌نامه‌ای ثبت نشده است.</p>}
                       <div className="space-y-1.5">
                         {contractGuarantees.map((g) => {
                           const daysLeft = g.expiryDate ? Math.round((Date.parse(g.expiryDate) - Date.now()) / 86400000) : null
                           return (
-                            <div key={g.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5">
-                              <ShieldCheck size={12} className="shrink-0 text-muted" />
+                            <div key={g.id} className="flex flex-wrap items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)' }}>
+                              <ShieldCheck size={12} className="shrink-0 fin-text-muted" />
                               <span className="min-w-0 flex-1 truncate text-xs">
                                 {FIN_GUARANTEE_TYPE_LABEL_FA[g.guaranteeType]} — {g.number || '—'}
                               </span>
                               <span className="num shrink-0 text-xs font-bold">{fmtCurrency(g.amount, g.currency)}</span>
-                              <span className="num shrink-0 text-[10.5px] text-muted">تا {fmtDate(g.expiryDate)}</span>
+                              <span className="num shrink-0 text-[10.5px] fin-text-muted">تا {fmtDate(g.expiryDate)}</span>
                               {g.status === 'active' && daysLeft != null && daysLeft <= 60 && (
                                 <span className="rounded-full border border-red-400/40 bg-red-500/10 px-1.5 py-0.5 text-[9.5px] font-bold text-red-300">
                                   {daysLeft <= 0 ? 'منقضی' : `${daysLeft} روز مانده`}
@@ -199,17 +199,17 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                               >
                                 {FIN_GUARANTEE_STATUS_LABEL_FA[g.status]}
                               </span>
-                              <button onClick={() => setEditingGuarantee(g)} className="shrink-0 text-[10.5px] text-secondary hover:underline">
+                              <button onClick={() => setEditingGuarantee(g)} className="shrink-0 text-[10.5px] fin-text-secondary hover:underline">
                                 ویرایش
                               </button>
-                              <button onClick={() => deleteGuarantee(g.id)} className="shrink-0 text-muted hover:text-red-400">
+                              <button onClick={() => deleteGuarantee(g.id)} className="shrink-0 fin-text-muted hover:text-red-400">
                                 <Trash2 size={12} />
                               </button>
                             </div>
                           )
                         })}
                       </div>
-                      <button onClick={() => setAddingGuaranteeFor(c.id)} className="mt-1.5 flex items-center gap-1 text-[11px] text-secondary hover:text-current">
+                      <button onClick={() => setAddingGuaranteeFor(c.id)} className="mt-1.5 flex items-center gap-1 text-[11px] fin-text-secondary hover:text-current">
                         <Plus size={11} /> افزودن ضمانت‌نامه
                       </button>
                     </div>
@@ -281,7 +281,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
 function MiniField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
-      <p className="text-[10px] text-muted">{label}</p>
+      <p className="text-[10px] fin-text-muted">{label}</p>
       <p className="num text-sm font-bold" style={highlight ? { color: FINANCE_ACCENT } : undefined}>
         {value}
       </p>
@@ -341,20 +341,20 @@ function ContractModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="glass-panel w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="fin-card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-sm font-extrabold">{title}</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">عنوان قرارداد</span>
-            <input value={ctitle} onChange={(e) => setCtitle(e.target.value)} className="input" autoFocus />
+            <span className="mb-1 block text-xs fin-text-secondary">عنوان قرارداد</span>
+            <input value={ctitle} onChange={(e) => setCtitle(e.target.value)} className="fin-input" autoFocus />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">شماره قرارداد</span>
-            <input value={contractNumber} onChange={(e) => setContractNumber(e.target.value)} className="input" dir="ltr" />
+            <span className="mb-1 block text-xs fin-text-secondary">شماره قرارداد</span>
+            <input value={contractNumber} onChange={(e) => setContractNumber(e.target.value)} className="fin-input" dir="ltr" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نوع قرارداد</span>
-            <select value={contractRole} onChange={(e) => setContractRole(e.target.value as FinContractRole)} className="input">
+            <span className="mb-1 block text-xs fin-text-secondary">نوع قرارداد</span>
+            <select value={contractRole} onChange={(e) => setContractRole(e.target.value as FinContractRole)} className="fin-input">
               {FIN_CONTRACT_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {FIN_CONTRACT_ROLE_LABEL_FA[r]}
@@ -363,8 +363,8 @@ function ContractModal({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">طرف قرارداد (پیمانکار/مشاور/...)</span>
-            <select value={contractorOrgId} onChange={(e) => setContractorOrgId(e.target.value)} className="input">
+            <span className="mb-1 block text-xs fin-text-secondary">طرف قرارداد (پیمانکار/مشاور/...)</span>
+            <select value={contractorOrgId} onChange={(e) => setContractorOrgId(e.target.value)} className="fin-input">
               <option value="">—</option>
               {organizations.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -374,8 +374,8 @@ function ContractModal({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">وضعیت</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value as FinContractStatus)} className="input">
+            <span className="mb-1 block text-xs fin-text-secondary">وضعیت</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value as FinContractStatus)} className="fin-input">
               {FIN_CONTRACT_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {FIN_CONTRACT_STATUS_LABEL_FA[s]}
@@ -384,46 +384,46 @@ function ContractModal({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ ریالی قرارداد</span>
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ ریالی قرارداد</span>
             <div className="flex gap-1.5">
-              <input type="number" value={contractValue} onChange={(e) => setContractValue(e.target.value)} className="input num" />
-              <input value={currency} onChange={(e) => setCurrency(e.target.value)} className="input w-20" dir="ltr" />
+              <input type="number" value={contractValue} onChange={(e) => setContractValue(e.target.value)} className="fin-input num" />
+              <input value={currency} onChange={(e) => setCurrency(e.target.value)} className="fin-input w-20" dir="ltr" />
             </div>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مبلغ ارزی قرارداد</span>
+            <span className="mb-1 block text-xs fin-text-secondary">مبلغ ارزی قرارداد</span>
             <div className="flex gap-1.5">
-              <input type="number" value={fcAmount} onChange={(e) => setFcAmount(e.target.value)} className="input num" />
-              <input value={fcCurrency} onChange={(e) => setFcCurrency(e.target.value)} className="input w-20" dir="ltr" />
+              <input type="number" value={fcAmount} onChange={(e) => setFcAmount(e.target.value)} className="fin-input num" />
+              <input value={fcCurrency} onChange={(e) => setFcCurrency(e.target.value)} className="fin-input w-20" dir="ltr" />
             </div>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">نرخ تبدیل ارز</span>
-            <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">نرخ تبدیل ارز</span>
+            <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">پیش‌پرداخت (٪)</span>
-            <input type="number" value={advancePaymentPercent} onChange={(e) => setAdvancePaymentPercent(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">پیش‌پرداخت (٪)</span>
+            <input type="number" value={advancePaymentPercent} onChange={(e) => setAdvancePaymentPercent(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">کسر حسن انجام کار — Retention (٪)</span>
-            <input type="number" value={retentionPercent} onChange={(e) => setRetentionPercent(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">کسر حسن انجام کار — Retention (٪)</span>
+            <input type="number" value={retentionPercent} onChange={(e) => setRetentionPercent(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">ضمانت‌نامه انجام تعهدات (٪)</span>
-            <input type="number" value={performanceGuaranteePercent} onChange={(e) => setPerformanceGuaranteePercent(e.target.value)} className="input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">ضمانت‌نامه انجام تعهدات (٪)</span>
+            <input type="number" value={performanceGuaranteePercent} onChange={(e) => setPerformanceGuaranteePercent(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ شروع</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ شروع</span>
             <JalaliDateInput value={startDate} onChange={setStartDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ تکمیل برنامه‌ریزی‌شده</span>
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ تکمیل برنامه‌ریزی‌شده</span>
             <JalaliDateInput value={plannedCompletionDate} onChange={setPlannedCompletionDate} />
           </label>
         </div>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>
@@ -451,26 +451,26 @@ function AmendmentModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="glass-panel w-full max-w-sm rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="fin-card w-full max-w-sm p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-sm font-extrabold">افزودن الحاقیه قرارداد</h3>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">شماره الحاقیه</span>
-          <input value={amendmentNumber} onChange={(e) => setAmendmentNumber(e.target.value)} className="input" dir="ltr" autoFocus />
+          <span className="mb-1 block text-xs fin-text-secondary">شماره الحاقیه</span>
+          <input value={amendmentNumber} onChange={(e) => setAmendmentNumber(e.target.value)} className="fin-input" dir="ltr" autoFocus />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">تاریخ</span>
+          <span className="mb-1 block text-xs fin-text-secondary">تاریخ</span>
           <JalaliDateInput value={amendmentDate} onChange={setAmendmentDate} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">مبلغ تغییر (مثبت = افزایش، منفی = کاهش)</span>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="input num" />
+          <span className="mb-1 block text-xs fin-text-secondary">مبلغ تغییر (مثبت = افزایش، منفی = کاهش)</span>
+          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="fin-input num" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">دلیل</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} className="input" />
+          <span className="mb-1 block text-xs fin-text-secondary">دلیل</span>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} className="fin-input" />
         </label>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={amount === '' || saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>
@@ -500,13 +500,13 @@ function GuaranteeModal({ title, initial, onClose, onSave }: { title: string; in
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="glass-panel w-full max-w-sm rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="fin-card w-full max-w-sm p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="flex items-center gap-2 text-sm font-extrabold">
           <ShieldCheck size={15} style={{ color: FINANCE_ACCENT }} /> {title}
         </h3>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">نوع ضمانت‌نامه</span>
-          <select value={guaranteeType} onChange={(e) => setGuaranteeType(e.target.value as FinGuaranteeType)} className="input" autoFocus>
+          <span className="mb-1 block text-xs fin-text-secondary">نوع ضمانت‌نامه</span>
+          <select value={guaranteeType} onChange={(e) => setGuaranteeType(e.target.value as FinGuaranteeType)} className="fin-input" autoFocus>
             {FIN_GUARANTEE_TYPES.map((t) => (
               <option key={t} value={t}>
                 {FIN_GUARANTEE_TYPE_LABEL_FA[t]}
@@ -515,27 +515,27 @@ function GuaranteeModal({ title, initial, onClose, onSave }: { title: string; in
           </select>
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">شماره</span>
-          <input value={number} onChange={(e) => setNumber(e.target.value)} className="input" dir="ltr" />
+          <span className="mb-1 block text-xs fin-text-secondary">شماره</span>
+          <input value={number} onChange={(e) => setNumber(e.target.value)} className="fin-input" dir="ltr" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">مبلغ</span>
+          <span className="mb-1 block text-xs fin-text-secondary">مبلغ</span>
           <div className="flex gap-1.5">
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="input num" />
-            <input value={currency} onChange={(e) => setCurrency(e.target.value)} className="input w-20" dir="ltr" />
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="fin-input num" />
+            <input value={currency} onChange={(e) => setCurrency(e.target.value)} className="fin-input w-20" dir="ltr" />
           </div>
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">تاریخ صدور</span>
+          <span className="mb-1 block text-xs fin-text-secondary">تاریخ صدور</span>
           <JalaliDateInput value={issueDate} onChange={setIssueDate} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">تاریخ انقضا</span>
+          <span className="mb-1 block text-xs fin-text-secondary">تاریخ انقضا</span>
           <JalaliDateInput value={expiryDate} onChange={setExpiryDate} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-secondary">وضعیت</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value as FinGuaranteeStatus)} className="input">
+          <span className="mb-1 block text-xs fin-text-secondary">وضعیت</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value as FinGuaranteeStatus)} className="fin-input">
             {FIN_GUARANTEE_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {FIN_GUARANTEE_STATUS_LABEL_FA[s]}
@@ -544,7 +544,7 @@ function GuaranteeModal({ title, initial, onClose, onSave }: { title: string; in
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
             انصراف
           </button>
           <button onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>

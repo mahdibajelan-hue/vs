@@ -3,7 +3,8 @@ import { Calculator, Gauge, Layers, Scale, ShieldCheck, TrendingDown, TrendingUp
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { computeProjectFinancialSummary, currentContractValue } from '../lib/financeCalc'
-import { FinanceKpiTile, fmtCurrency } from '../components/FinanceKpiTile'
+import { fmtCurrency } from '../components/FinanceKpiTile'
+import { MetricCard } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { BulletComparison } from './FinancialDashboardPage'
 import { BreakdownDonut, type ChartDatum } from '../../masterdata/components/RollupCharts'
@@ -60,20 +61,20 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
     return FIN_CONTRACT_ROLES.map((r) => ({ key: r, label: FIN_CONTRACT_ROLE_LABEL_FA[r], value: Math.round(map.get(r) ?? 0), color: FIN_CONTRACT_ROLE_COLOR[r] })).filter((d) => d.value > 0)
   }, [projectContracts, projectCertificates])
 
-  if (!project) return <div className="flex h-40 items-center justify-center text-xs text-muted">پروژه یافت نشد</div>
+  if (!project) return <div className="flex h-40 items-center justify-center text-xs fin-text-muted">پروژه یافت نشد</div>
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel rounded-2xl p-4">
-        <p className="text-xs text-muted">مدیریت هزینه پروژه (Cost Management)</p>
+      <div className="fin-card p-4">
+        <p className="text-xs fin-text-muted">مدیریت هزینه پروژه (Cost Management)</p>
         <h1 className="mt-1 text-lg font-extrabold">{project.officialName}</h1>
-        <p className="mt-1 text-[10.5px] leading-5 text-muted">
+        <p className="mt-1 text-[10.5px] leading-5 fin-text-muted">
           هزینه پروژه صرفا محدود به پیمانکار EPC نیست — قراردادهای مشاور نظارت، مدیریت طرح (MC)، بازرسی شخص ثالث (TPI) و سایر قراردادهای مرتبط نیز در همه اعداد این صفحه لحاظ شده‌اند.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-        <FinanceKpiTile
+        <MetricCard
           icon={Gauge}
           label="هزینه واقعی تا امروز (Cost Incurred to Date)"
           value={fmtCurrency(summary.actualCost, currency)}
@@ -81,35 +82,35 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           tooltip="مجموع مبالغ تاییدشده صورت‌وضعیت‌های همه قراردادهای پروژه (EPC، مشاور، MC، TPI، سایر) تا امروز — معیار هزینه واقعا انجام‌شده، نه تعهد قراردادی."
           emphasize
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={Calculator}
           label="هزینه متعهدشده (Committed Cost)"
           value={fmtCurrency(summary.committedCost, currency)}
           color="#38bdf8"
           tooltip="ارزش جاری همه قراردادهای فعال/تکمیل‌شده پروژه، از هر نوع (EPC/مشاور/MC/TPI/سایر) — یعنی چقدر تعهد مالی امضا شده، صرف‌نظر از اینکه هنوز پرداخت شده یا نه."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={TrendingUp}
           label="پیش‌بینی هزینه (Forecast Cost)"
           value={fmtCurrency(forecastCost, currency)}
           color="#f59e0b"
           tooltip="در صورت ثبت EAC از شناسنامه پروژه همان مقدار، در غیر این صورت هزینه متعهدشده به‌عنوان بهترین برآورد جایگزین در نظر گرفته می‌شود."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={Layers}
           label="هزینه باقی‌مانده تا تکمیل (Cost to Complete)"
           value={fmtCurrency(summary.costToComplete, currency)}
           color="#f59e0b"
           tooltip="پیش‌بینی هزینه منهای آنچه تاکنون تاییدشده — یعنی چه مقدار هزینه دیگر تا پایان پروژه پیش‌بینی می‌شود."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={TrendingUp}
           label="پیش‌بینی هزینه در تکمیل (EAC)"
           value={eac != null ? fmtCurrency(eac, currency) : 'در شناسنامه پروژه ثبت نشده'}
           color="#f59e0b"
           tooltip="Estimate at Completion — برآورد کل هزینه پروژه در پایان کار، از شناسنامه پروژه در داده پایه خوانده می‌شود."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={Scale}
           label="انحراف بودجه (Budget vs EAC Variance)"
           value={fmtCurrency(summary.budgetVariance, currency)}
@@ -117,14 +118,14 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           status={summary.budgetVariance >= 0 ? 'good' : 'bad'}
           tooltip="بودجه جاری منهای پیش‌بینی هزینه (EAC). مثبت یعنی پروژه در چارچوب بودجه پیش می‌رود؛ منفی یعنی هزینه از بودجه فراتر می‌رود."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={Wallet}
           label="بودجه جاری پروژه"
           value={fmtCurrency(summary.currentBudgetAmount, currency)}
           color={FINANCE_ACCENT}
           tooltip="بودجه مصوب به‌علاوه هر تغییر بودجه ثبت‌شده — مبنای مقایسه با EAC در نمودار زیر."
         />
-        <FinanceKpiTile
+        <MetricCard
           icon={ShieldCheck}
           label="جذب بودجه (Budget Absorption)"
           value={`${summary.budgetAbsorptionPct.toLocaleString('fa-IR')}٪`}
@@ -146,30 +147,30 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
       />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="glass-panel rounded-2xl p-4">
+        <div className="fin-card p-4">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
             <Calculator size={12} style={{ color: '#38bdf8' }} /> هزینه متعهدشده به تفکیک نوع قرارداد
           </p>
-          <p className="mb-2 text-[10px] leading-5 text-muted">سهم هر نوع قرارداد (EPC/مشاور/MC/TPI/سایر) از کل تعهد مالی پروژه.</p>
+          <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد (EPC/مشاور/MC/TPI/سایر) از کل تعهد مالی پروژه.</p>
           <BreakdownDonut title="" data={committedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
         </div>
-        <div className="glass-panel rounded-2xl p-4">
+        <div className="fin-card p-4">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
             <Gauge size={12} style={{ color: '#a78bfa' }} /> هزینه واقعی (تاییدشده) به تفکیک نوع قرارداد
           </p>
-          <p className="mb-2 text-[10px] leading-5 text-muted">سهم هر نوع قرارداد از هزینه واقعا تاییدشده تا امروز.</p>
+          <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد از هزینه واقعا تاییدشده تا امروز.</p>
           <BreakdownDonut title="" data={certifiedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
         </div>
       </div>
 
-      <div className="glass-panel overflow-x-auto rounded-2xl p-4">
+      <div className="fin-card overflow-x-auto p-4">
         <p className="mb-3 text-[11px] font-bold">وضعیت هزینه به تفکیک قرارداد</p>
         {projectContracts.length === 0 ? (
-          <p className="text-xs text-muted">قراردادی برای این پروژه ثبت نشده است.</p>
+          <p className="text-xs fin-text-muted">قراردادی برای این پروژه ثبت نشده است.</p>
         ) : (
           <table className="w-full min-w-[560px] text-right text-xs">
             <thead>
-              <tr className="border-b text-[10.5px] text-muted" style={{ borderColor: 'var(--border-soft)' }}>
+              <tr className="border-b text-[10.5px] fin-text-muted" style={{ borderColor: 'var(--fin-divider)' }}>
                 <th className="pb-2 font-medium">قرارداد</th>
                 <th className="pb-2 font-medium">نوع</th>
                 <th className="pb-2 font-medium">وضعیت</th>
@@ -183,10 +184,10 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
                 const current = currentContractValue(c, projectAmendments)
                 const certified = projectCertificates.filter((cert) => cert.contractId === c.id).reduce((s, cert) => s + (cert.certifiedAmount ?? 0), 0)
                 return (
-                  <tr key={c.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-soft)' }}>
+                  <tr key={c.id} className="border-b last:border-0" style={{ borderColor: 'var(--fin-divider)' }}>
                     <td className="py-2">
                       <p className="font-bold">{c.title || c.contractNumber || 'بدون عنوان'}</p>
-                      <p className="num text-[10px] text-muted" dir="ltr">
+                      <p className="num text-[10px] fin-text-muted" dir="ltr">
                         {c.contractNumber}
                       </p>
                     </td>
@@ -198,7 +199,7 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
                         {FIN_CONTRACT_ROLE_LABEL_FA[c.contractRole]}
                       </span>
                     </td>
-                    <td className="py-2 text-[10.5px] text-secondary">{FIN_CONTRACT_STATUS_LABEL_FA[c.status]}</td>
+                    <td className="py-2 text-[10.5px] fin-text-secondary">{FIN_CONTRACT_STATUS_LABEL_FA[c.status]}</td>
                     <td className="num py-2 font-bold">{fmtCurrency(current, c.currency)}</td>
                     <td className="num py-2">{fmtCurrency(certified, c.currency)}</td>
                     <td className="num py-2" style={{ color: current - certified >= 0 ? undefined : '#e74c3c' }}>

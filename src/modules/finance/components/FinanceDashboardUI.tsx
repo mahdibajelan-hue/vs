@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
 import { BreakdownDonut, type ChartDatum, type ChartTheme } from '../../masterdata/components/RollupCharts'
@@ -15,21 +15,24 @@ function fmtCompact(n: number): string {
   return `${sign}${Math.round(abs).toLocaleString('fa-IR')}`
 }
 
-/** Light-card theme for donuts/bars drawn on the module's new white fin-card surface, regardless of the shell's dark/light mode. */
+/** Chart neutrals (grid, axis, tooltip, donut legend) follow the module's CSS vars so they flip with the dark/light toggle — only semantic/brand colors (donut segment hues, icon colors) stay constant. */
 const FIN_CHART_THEME: ChartTheme = {
-  panelBg: '#ffffff',
-  border: 'rgba(15, 23, 42, 0.08)',
-  textSecondary: '#475569',
-  textMuted: '#94a3b8',
+  panelBg: 'var(--fin-card-bg)',
+  border: 'var(--fin-card-border)',
+  textSecondary: 'var(--fin-text-secondary)',
+  textMuted: 'var(--fin-text-muted)',
 }
 
-/** Executive metric card: icon circle, large number, label, trend pill — the KPI-row primitive from the mockup. */
+/** Compact, elegant metric card: small icon circle, bold number, label, optional trend pill. */
 export function MetricCard({
   icon: Icon,
   label,
   value,
   color,
   trend,
+  tooltip,
+  status,
+  emphasize,
 }: {
   icon: LucideIcon
   label: string
@@ -37,25 +40,47 @@ export function MetricCard({
   color: string
   /** Positive = up (green), negative = down (red); omit when there's no meaningful trend. */
   trend?: { pct: number; goodDirection?: 'up' | 'down' }
+  /** Definition/how-to-read hover popup, same convention as the old FinanceKpiTile. */
+  tooltip?: string
+  status?: 'good' | 'warn' | 'bad'
+  /** Slightly larger card for headline KPIs. */
+  emphasize?: boolean
 }) {
   const trendUp = trend != null && trend.pct >= 0
   const trendGood = trend == null ? true : trend.goodDirection === 'down' ? !trendUp : trendUp
+  const statusDot: Record<'good' | 'warn' | 'bad', string> = { good: '#16a34a', warn: '#f59e0b', bad: '#dc2626' }
   return (
-    <div className="fin-card flex flex-col gap-3 p-4">
+    <div className={`fin-card fin-metric-card group relative flex flex-col gap-2 ${emphasize ? 'p-4' : 'p-3'}`}>
       <div className="flex items-center justify-between">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: `${color}1a` }}>
-          <Icon size={18} style={{ color }} />
+        <div className={`flex items-center justify-center rounded-full ${emphasize ? 'h-9 w-9' : 'h-8 w-8'}`} style={{ background: `${color}1a` }}>
+          <Icon size={emphasize ? 17 : 15} style={{ color }} />
+        </div>
+        <div className="flex items-center gap-1">
+          {status && <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusDot[status] }} />}
+          {tooltip && (
+            <button type="button" tabIndex={0} className="fin-text-muted outline-none hover:opacity-70" aria-label={`توضیح ${label}`}>
+              <Info size={11} />
+            </button>
+          )}
         </div>
       </div>
       <div>
-        <p className="num fin-text text-2xl font-extrabold leading-tight">{value}</p>
-        <p className="fin-text-secondary mt-1 text-[11px] font-medium">{label}</p>
+        <p className={`num fin-text truncate font-extrabold leading-tight ${emphasize ? 'text-xl' : 'text-lg'}`}>{value}</p>
+        <p className="fin-text-secondary mt-0.5 text-[10.5px] font-medium leading-4">{label}</p>
       </div>
       {trend && (
-        <p className="flex items-center gap-1 text-[10.5px] font-bold" style={{ color: trendGood ? '#16a34a' : '#dc2626' }}>
-          {trendUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+        <p className="flex items-center gap-1 text-[10px] font-bold" style={{ color: trendGood ? '#16a34a' : '#dc2626' }}>
+          {trendUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
           {Math.abs(trend.pct).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪ نسبت به ماه قبل
         </p>
+      )}
+      {tooltip && (
+        <div
+          className="fin-card pointer-events-none absolute bottom-full right-2 z-20 mb-2 w-64 max-w-[85vw] p-2.5 text-[10.5px] leading-5 opacity-0 shadow-2xl transition-opacity duration-150 group-hover:opacity-100"
+          style={{ color: 'var(--fin-text-secondary)' }}
+        >
+          {tooltip}
+        </div>
       )}
     </div>
   )
@@ -64,18 +89,18 @@ export function MetricCard({
 /** Smaller single-stat card for secondary metric rows. */
 export function MiniStatCard({ icon: Icon, label, value, color, sub }: { icon: LucideIcon; label: string; value: string; color: string; sub?: string }) {
   return (
-    <div className="fin-card flex flex-col items-center gap-2 p-4 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-full" style={{ background: `${color}1a` }}>
-        <Icon size={18} style={{ color }} />
+    <div className="fin-card fin-metric-card flex flex-col items-center gap-1.5 p-3 text-center">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${color}1a` }}>
+        <Icon size={15} style={{ color }} />
       </div>
-      <p className="num fin-text text-xl font-extrabold">{value}</p>
-      <p className="fin-text-secondary text-[10.5px] font-medium">{label}</p>
-      {sub && <p className="fin-text-muted text-[9.5px]">{sub}</p>}
+      <p className="num fin-text text-lg font-extrabold">{value}</p>
+      <p className="fin-text-secondary text-[10px] font-medium leading-4">{label}</p>
+      {sub && <p className="num fin-text-muted text-[9px]">{sub}</p>}
     </div>
   )
 }
 
-/** White fin-card wrapper around the shared BreakdownDonut, pre-themed for the light card surface. */
+/** fin-card wrapper around the shared BreakdownDonut, themed to track the module's dark/light toggle. */
 export function DonutPanel({
   title,
   icon,
@@ -128,12 +153,12 @@ export function CashFlowComboChart({ title, icon, points, currency }: { title: s
                   <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="rgba(15,23,42,0.06)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={fmtMonthJalali} />
-              <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={56} tickFormatter={fmtCompact} />
+              <CartesianGrid stroke="var(--fin-divider)" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--fin-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={fmtMonthJalali} />
+              <YAxis tick={{ fontSize: 9, fill: 'var(--fin-text-muted)' }} tickLine={false} axisLine={false} width={56} tickFormatter={fmtCompact} />
               <RTooltip
-                contentStyle={{ background: '#ffffff', border: '1px solid rgba(15,23,42,0.08)', borderRadius: 10, fontSize: 11 }}
-                labelStyle={{ color: '#475569' }}
+                contentStyle={{ background: 'var(--fin-card-bg)', border: '1px solid var(--fin-card-border)', borderRadius: 10, fontSize: 11, color: 'var(--fin-text)' }}
+                labelStyle={{ color: 'var(--fin-text-secondary)' }}
                 labelFormatter={(label) => fmtMonthJalali(String(label))}
                 formatter={(value, name) => [`${Number(value).toLocaleString('fa-IR')} ${currency}`, String(name)]}
               />
@@ -215,11 +240,11 @@ export function RankedProgressTable({ title, icon, rows, valueLabel }: { title: 
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.key} className="border-t" style={{ borderColor: 'rgba(15,23,42,0.06)' }}>
+              <tr key={r.key} className="border-t" style={{ borderColor: 'var(--fin-divider)' }}>
                 <td className="w-28 py-2">
                   <div className="flex items-center gap-2">
                     <span className="num fin-text-secondary shrink-0 text-[10.5px]">{r.pct.toLocaleString('fa-IR')}٪</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'rgba(15,23,42,0.06)' }}>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--fin-divider)' }}>
                       <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.pct)}%`, background: r.color }} />
                     </div>
                   </div>
@@ -264,7 +289,7 @@ export function SimpleTable<T extends { id: string }>({ title, icon, columns, ro
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-t" style={{ borderColor: 'rgba(15,23,42,0.06)' }}>
+                <tr key={row.id} className="border-t" style={{ borderColor: 'var(--fin-divider)' }}>
                   {columns.map((c) => (
                     <td key={c.key} className="fin-text py-2">
                       {c.render(row)}
