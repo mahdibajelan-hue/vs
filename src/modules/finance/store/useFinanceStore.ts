@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
-import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate } from '../types'
+import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinContract, FinContractAmendment, FinGuarantee, FinPayment, FinPaymentCertificate } from '../types'
 import {
   finAnnualBudgetFromRow,
   finAnnualBudgetToRow,
@@ -18,6 +18,8 @@ import {
   finGuaranteeToRow,
   finPaymentCertificateFromRow,
   finPaymentCertificateToRow,
+  finPaymentFromRow,
+  finPaymentToRow,
 } from '../lib/financeData'
 
 function reportError(action: string, error: { message: string } | null): boolean {
@@ -39,6 +41,7 @@ interface FinanceState {
   amendments: FinContractAmendment[]
   certificates: FinPaymentCertificate[]
   guarantees: FinGuarantee[]
+  payments: FinPayment[]
   loading: boolean
   loaded: boolean
 
@@ -65,6 +68,10 @@ interface FinanceState {
   createGuarantee: (contractId: string, data: Partial<FinGuarantee>) => Promise<void>
   updateGuarantee: (id: string, data: Partial<FinGuarantee>) => Promise<void>
   deleteGuarantee: (id: string) => Promise<void>
+
+  createPayment: (certificateId: string, data: Partial<FinPayment>) => Promise<void>
+  updatePayment: (id: string, data: Partial<FinPayment>) => Promise<void>
+  deletePayment: (id: string) => Promise<void>
 }
 
 export const useFinanceStore = create<FinanceState>()((set, get) => ({
@@ -75,6 +82,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
   amendments: [],
   certificates: [],
   guarantees: [],
+  payments: [],
   loading: false,
   loaded: false,
 
@@ -103,6 +111,13 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       set({ loading: false })
       return
     }
+    const certificateIds = ((certificates ?? []) as { id: string }[]).map((c) => c.id)
+    const { data: payments, error: e8 } =
+      certificateIds.length > 0 ? await supabase.from('fin_payments').select('*').in('certificate_id', certificateIds).order('payment_date') : { data: [], error: null }
+    if (reportError('بارگذاری سوابق پرداخت', e8)) {
+      set({ loading: false })
+      return
+    }
     set({
       budgets: (budgets ?? []).map(finBudgetFromRow),
       budgetChanges: (changes ?? []).map(finBudgetChangeFromRow),
@@ -111,6 +126,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       amendments: (amendments ?? []).map(finContractAmendmentFromRow),
       certificates: (certificates ?? []).map(finPaymentCertificateFromRow),
       guarantees: (guarantees ?? []).map(finGuaranteeFromRow),
+      payments: (payments ?? []).map(finPaymentFromRow),
       loading: false,
       loaded: true,
     })
@@ -207,5 +223,21 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const { error } = await supabase.from('fin_guarantees').delete().eq('id', id)
     if (reportError('حذف ضمانت‌نامه', error)) return
     set((s) => ({ guarantees: s.guarantees.filter((g) => g.id !== id) }))
+  },
+
+  createPayment: async (certificateId, data) => {
+    const { error } = await supabase.from('fin_payments').insert(finPaymentToRow(certificateId, data))
+    if (reportError('ثبت پرداخت', error)) return
+    await get().fetchAll()
+  },
+  updatePayment: async (id, data) => {
+    const { error } = await supabase.from('fin_payments').update(finPaymentToRow(null, data)).eq('id', id)
+    if (reportError('ویرایش پرداخت', error)) return
+    await get().fetchAll()
+  },
+  deletePayment: async (id) => {
+    const { error } = await supabase.from('fin_payments').delete().eq('id', id)
+    if (reportError('حذف پرداخت', error)) return
+    set((s) => ({ payments: s.payments.filter((p) => p.id !== id) }))
   },
 }))

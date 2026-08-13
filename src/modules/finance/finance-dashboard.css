@@ -1,0 +1,94 @@
+/*
+ * Scoped design system for the Financial Management dashboard redesign — deliberately separate
+ * from the app-wide --bg-panel-solid glass-panel look (same convention as issues.css's .im-root):
+ * the mockup calls for light/white cards on a dark navy shell rather than RASTA's usual dark-on-
+ * dark glass cards, so it gets its own token set instead of overriding the global one and risking
+ * every other module's look. The .fin-light class (toggled locally, see FinanceApp.tsx) swaps the
+ * shell from dark navy to a soft light background — cards stay light in both, only the chrome
+ * (page background, sidebar, topbar) and text tones change.
+ */
+
+.fin-shell {
+  --fin-bg: #0a1330;
+  --fin-bg-accent-1: rgba(56, 189, 248, 0.16);
+  --fin-bg-accent-2: rgba(16, 185, 129, 0.12);
+  --fin-sidebar-bg: #0c1638;
+  --fin-sidebar-border: rgba(148, 163, 184, 0.12);
+  --fin-topbar-bg: rgba(12, 22, 56, 0.72);
+  --fin-card-bg: #ffffff;
+  --fin-card-border: rgba(15, 23, 42, 0.06);
+  --fin-card-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+  --fin-text: #0f172a;
+  --fin-text-secondary: #475569;
+  --fin-text-muted: #94a3b8;
+  --fin-nav-text: #cbd5e1;
+  --fin-nav-text-muted: #7c8bb0;
+  --fin-nav-active-bg: rgba(56, 189, 248, 0.18);
+  --fin-nav-active-text: #ffffff;
+
+  background: var(--fin-bg);
+  background-image:
+    radial-gradient(circle at 8% 6%, var(--fin-bg-accent-1), transparent 42%),
+    radial-gradient(circle at 92% 88%, var(--fin-bg-accent-2), transparent 42%),
+    repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 64px);
+  color: var(--fin-nav-text);
+}
+
+.fin-shell.fin-light {
+  --fin-bg: #eef2f9;
+  --fin-bg-accent-1: rgba(56, 189, 248, 0.1);
+  --fin-bg-accent-2: rgba(16, 185, 129, 0.08);
+  --fin-sidebar-bg: #101d42;
+  --fin-card-bg: #ffffff;
+  --fin-card-border: rgba(15, 23, 42, 0.08);
+  --fin-card-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  --fin-text: #0f172a;
+  --fin-text-secondary: #475569;
+  --fin-text-muted: #64748b;
+}
+
+.fin-card {
+  background: var(--fin-card-bg);
+  border: 1px solid var(--fin-card-border);
+  border-radius: 1rem;
+  box-shadow: var(--fin-card-shadow);
+  color: var(--fin-text);
+}
+
+.fin-text {
+  color: var(--fin-text);
+}
+.fin-text-secondary {
+  color: var(--fin-text-secondary);
+}
+.fin-text-muted {
+  color: var(--fin-text-muted);
+}
+
+.fin-input {
+  border-radius: 0.6rem;
+  border: 1px solid var(--fin-card-border);
+  background: var(--fin-card-bg);
+  color: var(--fin-text);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
+}
+.fin-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+}
+
+.fin-nav-item {
+  color: var(--fin-nav-text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.fin-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fin-nav-text);
+}
+.fin-nav-item.is-active {
+  background: var(--fin-nav-active-bg);
+  color: var(--fin-nav-active-text);
+}

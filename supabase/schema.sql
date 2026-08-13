@@ -2954,3 +2954,45 @@ create index if not exists idx_fin_guarantees_contract on fin_guarantees (contra
 create index if not exists idx_fin_annual_budgets_project on fin_annual_budgets (master_project_id);
 create index if not exists idx_fin_payment_certificates_related on fin_payment_certificates (related_certificate_id);
 create index if not exists idx_mtl_allocations_material on mtl_allocations (material_id);
+
+-- ============================================================================
+-- 22. Payment records (سوابق پرداخت) — an itemized payment ledger against a
+--     certificate, additive on top of section 19/21: fin_payment_certificates
+--     keeps its own paid_amount/paid_date exactly as before (still the figure
+--     every existing dashboard/report/calc reads), this table just lets a
+--     single certificate's payment be logged as one or several dated
+--     transactions (partial payments, installments) with a method/reference,
+--     for the "سوابق پرداخت" listing page. It is a record-keeping layer, not a
+--     new source of truth — the client does not recompute
+--     fin_payment_certificates.paid_amount from this table.
+-- ============================================================================
+
+create table if not exists fin_payments (
+  id uuid primary key default gen_random_uuid(),
+  certificate_id uuid not null references fin_payment_certificates (id) on delete cascade,
+  payment_date date not null default current_date,
+  amount numeric not null default 0,
+  amount_fc numeric not null default 0,
+  fc_currency text not null default 'EUR',
+  exchange_rate numeric not null default 0,
+  amount_fc_rial_equivalent numeric generated always as (amount_fc * exchange_rate) stored,
+  method text not null default '',
+  reference_number text not null default '',
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_payments enable row level security;
+
+drop policy if exists "fin_payments_select_authenticated" on fin_payments;
+create policy "fin_payments_select_authenticated" on fin_payments for select using (auth.uid() is not null);
+drop policy if exists "fin_payments_write_admin" on fin_payments;
+create policy "fin_payments_write_admin" on fin_payments for all using (is_admin_user()) with check (is_admin_user());
+
+drop trigger if exists trg_set_updated_at on fin_payments;
+create trigger trg_set_updated_at before update on fin_payments for each row execute function set_updated_at_and_by_fin();
+
+create index if not exists idx_fin_payments_certificate on fin_payments (certificate_id);

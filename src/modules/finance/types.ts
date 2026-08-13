@@ -209,3 +209,21 @@ export interface FinGuarantee {
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * سوابق پرداخت (Payment Records) — an itemized ledger of individual payment transactions
+ * against a certificate. Record-keeping only: does NOT replace or feed back into
+ * FinPaymentCertificate.paidAmount/paidDate, which every existing calc/dashboard still reads.
+ */
+export interface FinPayment {
+  id: string
+  certificateId: string
+  paymentDate: string
+  amount: number
+  fx: FxAmount
+  method: string
+  referenceNumber: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+}

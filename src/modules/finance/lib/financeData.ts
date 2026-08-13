@@ -11,6 +11,7 @@ import type {
   FinGuarantee,
   FinGuaranteeStatus,
   FinGuaranteeType,
+  FinPayment,
   FinPaymentCertificate,
   FxAmount,
 } from '../types'
@@ -355,5 +356,50 @@ export function finGuaranteeToRow(contractId: string | null, g: Partial<FinGuara
   if (g.expiryDate !== undefined) row.expiry_date = g.expiryDate || null
   if (g.status !== undefined) row.status = g.status
   if (g.notes !== undefined) row.notes = g.notes
+  return row
+}
+
+interface FinPaymentRow {
+  id: string
+  certificate_id: string
+  payment_date: string
+  amount: number
+  amount_fc: number
+  fc_currency: string
+  exchange_rate: number
+  amount_fc_rial_equivalent: number
+  method: string
+  reference_number: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export function finPaymentFromRow(r: FinPaymentRow): FinPayment {
+  return {
+    id: r.id,
+    certificateId: r.certificate_id,
+    paymentDate: r.payment_date,
+    amount: Number(r.amount),
+    fx: fxFromRow(r.amount_fc, r.fc_currency, r.exchange_rate, r.amount_fc_rial_equivalent),
+    method: r.method,
+    referenceNumber: r.reference_number,
+    notes: r.notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export function finPaymentToRow(certificateId: string | null, p: Partial<FinPayment>) {
+  const row: Record<string, unknown> = {}
+  if (certificateId) row.certificate_id = certificateId
+  if (p.paymentDate !== undefined) row.payment_date = p.paymentDate
+  if (p.amount !== undefined) row.amount = p.amount
+  if (p.fx?.fcAmount !== undefined) row.amount_fc = p.fx.fcAmount
+  if (p.fx?.fcCurrency !== undefined) row.fc_currency = p.fx.fcCurrency
+  if (p.fx?.exchangeRate !== undefined) row.exchange_rate = p.fx.exchangeRate
+  if (p.method !== undefined) row.method = p.method
+  if (p.referenceNumber !== undefined) row.reference_number = p.referenceNumber
+  if (p.notes !== undefined) row.notes = p.notes
   return row
 }
