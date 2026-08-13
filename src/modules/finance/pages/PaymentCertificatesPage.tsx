@@ -4,7 +4,7 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { averagePaymentDelayDays, certificateGrossTotal, certificateOutstanding, certificatePaidTotal, paymentAgingDays, realizedPaymentDelayDays } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
-import { MetricCard } from '../components/FinanceDashboardUI'
+import { MetricCard, StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
@@ -18,7 +18,7 @@ import {
   type FinPaymentCertificate,
 } from '../types'
 
-const CERT_TYPE_COLOR: Record<FinCertificateType, string> = { work: '#38bdf8', adjustment: '#a78bfa' }
+const CERT_TYPE_COLOR: Record<FinCertificateType, string> = { work: '#5c7290', adjustment: '#8b6e9c' }
 
 export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
@@ -84,28 +84,28 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
             icon={Receipt}
             label="جمع ناخالص (شامل ارزی)"
             value={fmtCurrency(grossTotal, activeContract.currency)}
-            color="#38bdf8"
+            color="#5c7290"
             tooltip="مجموع مبلغ ناخالص همه صورت‌وضعیت‌های این قرارداد پیش از هرگونه کسورات، به‌علاوه معادل ریالی سهم ارزی. هرچه بالاتر، حجم کارکرد گزارش‌شده بیشتر است."
           />
           <MetricCard
             icon={CheckCircle2}
             label="جمع تاییدشده"
             value={fmtCurrency(certifiedTotal, activeContract.currency)}
-            color="#a78bfa"
+            color="#8b6e9c"
             tooltip="مجموع مبالغی که توسط کارفرما/مشاور تایید نهایی شده‌اند. فاصله زیاد بین این مقدار و «جمع ناخالص» نشانه صورت‌وضعیت‌های معطل‌مانده در فرآیند تایید است."
           />
           <MetricCard
             icon={Wallet}
             label="جمع پرداخت‌شده (شامل ارزی)"
             value={fmtCurrency(paidTotal, activeContract.currency)}
-            color="#2ecc71"
+            color="#3e7c74"
             tooltip="مجموع مبالغ واقعا پرداخت‌شده به پیمانکار برای این قرارداد، به‌علاوه معادل ریالی سهم ارزی پرداختی."
           />
           <MetricCard
             icon={AlertCircle}
             label="مانده پرداخت‌نشده"
             value={fmtCurrency(outstandingTotal, activeContract.currency)}
-            color={outstandingTotal > 0 ? '#f59e0b' : '#2ecc71'}
+            color={outstandingTotal > 0 ? '#b8863b' : '#3e7c74'}
             status={outstandingTotal > 0 ? 'warn' : 'good'}
             tooltip="تفاوت بین مبلغ تاییدشده (یا قابل پرداخت، اگر هنوز تایید نشده) و مبلغ پرداخت‌شده. این عدد بدهی جاری کارفرما به پیمانکار برای این قرارداد است."
             emphasize
@@ -114,7 +114,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
             icon={Clock}
             label="میانگین تاخیر پرداخت (روز)"
             value={avgDelay != null ? avgDelay.toLocaleString('fa-IR') : '—'}
-            color={avgDelay != null && avgDelay > 30 ? '#e74c3c' : '#38bdf8'}
+            color={avgDelay != null && avgDelay > 30 ? '#b5573a' : '#5c7290'}
             status={avgDelay != null && avgDelay > 30 ? 'bad' : undefined}
             tooltip="میانگین فاصله زمانی بین تاریخ تایید (یا ارسال) و تاریخ پرداخت واقعی، فقط برای صورت‌وضعیت‌های پرداخت‌شده. عدد بالا یعنی روند پرداخت کند شده است."
           />
@@ -139,25 +139,10 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                     <div className="flex flex-wrap items-center gap-2">
                       <Receipt size={14} style={{ color: FINANCE_ACCENT }} />
                       <p className="text-sm font-bold">صورت‌وضعیت {cert.certificateNumber || '—'}</p>
-                      <span
-                        className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                        style={{ borderColor: `${CERT_TYPE_COLOR[cert.certificateType]}55`, color: CERT_TYPE_COLOR[cert.certificateType] }}
-                      >
-                        {FIN_CERTIFICATE_TYPE_LABEL_FA[cert.certificateType]}
-                      </span>
-                      <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: `${tone}55`, color: tone }}>
-                        {FIN_CERTIFICATE_STATUS_LABEL_FA[cert.status]}
-                      </span>
-                      {aging != null && (
-                        <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: aging > 30 ? '#e74c3c55' : '#f1c40f55', color: aging > 30 ? '#e74c3c' : '#f1c40f' }}>
-                          {aging.toLocaleString('fa-IR')} روز معطلی پرداخت
-                        </span>
-                      )}
-                      {realizedDelay != null && (
-                        <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium fin-text-secondary" style={{ borderColor: 'var(--fin-divider)' }}>
-                          تاخیر واقعی پرداخت: {realizedDelay.toLocaleString('fa-IR')} روز
-                        </span>
-                      )}
+                      <StampBadge label={FIN_CERTIFICATE_TYPE_LABEL_FA[cert.certificateType]} tone={hexToStampTone(CERT_TYPE_COLOR[cert.certificateType])} />
+                      <StampBadge label={FIN_CERTIFICATE_STATUS_LABEL_FA[cert.status]} tone={hexToStampTone(tone)} />
+                      {aging != null && <StampBadge label={`${aging.toLocaleString('fa-IR')} روز معطلی پرداخت`} tone={aging > 30 ? 'bad' : 'warn'} />}
+                      {realizedDelay != null && <StampBadge label={`تاخیر واقعی پرداخت: ${realizedDelay.toLocaleString('fa-IR')} روز`} tone="neutral" />}
                     </div>
                     <p className="num mt-0.5 text-[11px] fin-text-muted" dir="ltr">
                       {fmtDate(cert.certificateDate)}

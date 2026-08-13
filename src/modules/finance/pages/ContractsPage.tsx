@@ -4,6 +4,7 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { currentContractValue, expiringGuarantees } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
+import { StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
@@ -25,7 +26,7 @@ import {
   type FinGuaranteeType,
 } from '../types'
 
-const STATUS_TONE: Record<FinContractStatus, string> = { draft: '#64748b', active: '#2ecc71', completed: '#38bdf8', terminated: '#e74c3c' }
+const STATUS_TONE: Record<FinContractStatus, string> = { draft: '#7c8794', active: '#3e7c74', completed: '#5c7290', terminated: '#b5573a' }
 
 export function ContractsPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
@@ -83,7 +84,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
             </div>
           </div>
           {soonExpiring.length > 0 && (
-            <span className="flex items-center gap-1.5 rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-300">
+            <span className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold" style={{ borderColor: 'var(--fin-bad)', color: 'var(--fin-bad)' }}>
               <AlertTriangle size={12} /> {soonExpiring.length} ضمانت‌نامه نزدیک به انقضا (تا ۶۰ روز آینده)
             </span>
           )}
@@ -106,15 +107,8 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                     <div className="flex flex-wrap items-center gap-2">
                       <FileText size={14} style={{ color: FINANCE_ACCENT }} />
                       <p className="text-sm font-bold">{c.title || c.contractNumber || 'قرارداد بدون عنوان'}</p>
-                      <span
-                        className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                        style={{ borderColor: `${FIN_CONTRACT_ROLE_COLOR[c.contractRole]}55`, color: FIN_CONTRACT_ROLE_COLOR[c.contractRole] }}
-                      >
-                        {FIN_CONTRACT_ROLE_LABEL_FA[c.contractRole]}
-                      </span>
-                      <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium" style={{ borderColor: `${STATUS_TONE[c.status]}55`, color: STATUS_TONE[c.status] }}>
-                        {FIN_CONTRACT_STATUS_LABEL_FA[c.status]}
-                      </span>
+                      <StampBadge label={FIN_CONTRACT_ROLE_LABEL_FA[c.contractRole]} tone={hexToStampTone(FIN_CONTRACT_ROLE_COLOR[c.contractRole])} />
+                      <StampBadge label={FIN_CONTRACT_STATUS_LABEL_FA[c.status]} tone={hexToStampTone(STATUS_TONE[c.status])} />
                     </div>
                     <p className="num mt-0.5 text-[11px] fin-text-muted" dir="ltr">
                       {c.contractNumber}
@@ -159,7 +153,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                           <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)' }}>
                             <span className="num text-[11px] fin-text-muted">{fmtDate(a.amendmentDate)}</span>
                             <span className="min-w-0 flex-1 truncate text-xs">{a.reason || a.amendmentNumber || '—'}</span>
-                            <span className="num shrink-0 text-xs font-bold" style={{ color: a.amount >= 0 ? '#2ecc71' : '#e74c3c' }}>
+                            <span className="num shrink-0 text-xs font-bold" style={{ color: a.amount >= 0 ? '#3e7c74' : '#b5573a' }}>
                               {a.amount >= 0 ? '+' : ''}
                               {fmtCurrency(a.amount, c.currency)}
                             </span>
@@ -189,16 +183,9 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                               <span className="num shrink-0 text-xs font-bold">{fmtCurrency(g.amount, g.currency)}</span>
                               <span className="num shrink-0 text-[10.5px] fin-text-muted">تا {fmtDate(g.expiryDate)}</span>
                               {g.status === 'active' && daysLeft != null && daysLeft <= 60 && (
-                                <span className="rounded-full border border-red-400/40 bg-red-500/10 px-1.5 py-0.5 text-[9.5px] font-bold text-red-300">
-                                  {daysLeft <= 0 ? 'منقضی' : `${daysLeft} روز مانده`}
-                                </span>
+                                <StampBadge label={daysLeft <= 0 ? 'منقضی' : `${daysLeft} روز مانده`} tone="bad" />
                               )}
-                              <span
-                                className="shrink-0 rounded-full border px-2 py-0.5 text-[10px]"
-                                style={{ borderColor: `${FIN_GUARANTEE_STATUS_COLOR[g.status]}55`, color: FIN_GUARANTEE_STATUS_COLOR[g.status] }}
-                              >
-                                {FIN_GUARANTEE_STATUS_LABEL_FA[g.status]}
-                              </span>
+                              <StampBadge label={FIN_GUARANTEE_STATUS_LABEL_FA[g.status]} tone={hexToStampTone(FIN_GUARANTEE_STATUS_COLOR[g.status])} />
                               <button onClick={() => setEditingGuarantee(g)} className="shrink-0 text-[10.5px] fin-text-secondary hover:underline">
                                 ویرایش
                               </button>

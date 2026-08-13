@@ -62,7 +62,7 @@ function ReportPrintTemplate({
       </div>
 
       {rows.length === 0 ? (
-        <p style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, color: '#64748b' }}>صورت‌وضعیتی مطابق فیلترهای انتخاب‌شده یافت نشد.</p>
+        <p style={{ padding: '32px 0', textAlign: 'center', fontSize: 12, color: '#7c8794' }}>صورت‌وضعیتی مطابق فیلترهای انتخاب‌شده یافت نشد.</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
           <thead>
@@ -248,10 +248,10 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard icon={Receipt} label="جمع ناخالص" value={fmtCurrency(totals.gross, currency)} color="#38bdf8" />
-        <MetricCard icon={CheckCircle2} label="جمع خالص تاییدشده" value={fmtCurrency(totals.netCertified, currency)} color="#a78bfa" />
-        <MetricCard icon={Wallet} label="جمع پرداخت‌شده" value={fmtCurrency(totals.paid, currency)} color="#2ecc71" />
-        <MetricCard icon={AlertCircle} label="جمع مانده پرداخت‌نشده" value={fmtCurrency(totals.outstanding, currency)} color={totals.outstanding > 0 ? '#f59e0b' : '#2ecc71'} />
+        <MetricCard icon={Receipt} label="جمع ناخالص" value={fmtCurrency(totals.gross, currency)} color="#5c7290" />
+        <MetricCard icon={CheckCircle2} label="جمع خالص تاییدشده" value={fmtCurrency(totals.netCertified, currency)} color="#8b6e9c" />
+        <MetricCard icon={Wallet} label="جمع پرداخت‌شده" value={fmtCurrency(totals.paid, currency)} color="#3e7c74" />
+        <MetricCard icon={AlertCircle} label="جمع مانده پرداخت‌نشده" value={fmtCurrency(totals.outstanding, currency)} color={totals.outstanding > 0 ? '#b8863b' : '#3e7c74'} />
       </div>
 
       <div className="fin-card overflow-x-auto p-4">
@@ -290,7 +290,7 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
                   <td className="num fin-text py-2">{fmtCurrency(c.deductions)}</td>
                   <td className="num fin-text py-2 font-bold">{c.certifiedAmount != null ? fmtCurrency(c.certifiedAmount) : '—'}</td>
                   <td className="num fin-text py-2">{fmtCurrency(certificatePaidTotal(c))}</td>
-                  <td className="num py-2" style={{ color: certificateOutstanding(c) > 0 ? '#f59e0b' : 'var(--fin-text)' }}>
+                  <td className="num py-2" style={{ color: certificateOutstanding(c) > 0 ? '#b8863b' : 'var(--fin-text)' }}>
                     {fmtCurrency(certificateOutstanding(c))}
                   </td>
                 </tr>

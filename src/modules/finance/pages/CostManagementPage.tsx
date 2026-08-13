@@ -78,7 +78,7 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           icon={Gauge}
           label="هزینه واقعی تا امروز (Cost Incurred to Date)"
           value={fmtCurrency(summary.actualCost, currency)}
-          color="#a78bfa"
+          color="#8b6e9c"
           tooltip="مجموع مبالغ تاییدشده صورت‌وضعیت‌های همه قراردادهای پروژه (EPC، مشاور، MC، TPI، سایر) تا امروز — معیار هزینه واقعا انجام‌شده، نه تعهد قراردادی."
           emphasize
         />
@@ -86,35 +86,35 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           icon={Calculator}
           label="هزینه متعهدشده (Committed Cost)"
           value={fmtCurrency(summary.committedCost, currency)}
-          color="#38bdf8"
+          color="#5c7290"
           tooltip="ارزش جاری همه قراردادهای فعال/تکمیل‌شده پروژه، از هر نوع (EPC/مشاور/MC/TPI/سایر) — یعنی چقدر تعهد مالی امضا شده، صرف‌نظر از اینکه هنوز پرداخت شده یا نه."
         />
         <MetricCard
           icon={TrendingUp}
           label="پیش‌بینی هزینه (Forecast Cost)"
           value={fmtCurrency(forecastCost, currency)}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="در صورت ثبت EAC از شناسنامه پروژه همان مقدار، در غیر این صورت هزینه متعهدشده به‌عنوان بهترین برآورد جایگزین در نظر گرفته می‌شود."
         />
         <MetricCard
           icon={Layers}
           label="هزینه باقی‌مانده تا تکمیل (Cost to Complete)"
           value={fmtCurrency(summary.costToComplete, currency)}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="پیش‌بینی هزینه منهای آنچه تاکنون تاییدشده — یعنی چه مقدار هزینه دیگر تا پایان پروژه پیش‌بینی می‌شود."
         />
         <MetricCard
           icon={TrendingUp}
           label="پیش‌بینی هزینه در تکمیل (EAC)"
           value={eac != null ? fmtCurrency(eac, currency) : 'در شناسنامه پروژه ثبت نشده'}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="Estimate at Completion — برآورد کل هزینه پروژه در پایان کار، از شناسنامه پروژه در داده پایه خوانده می‌شود."
         />
         <MetricCard
           icon={Scale}
           label="انحراف بودجه (Budget vs EAC Variance)"
           value={fmtCurrency(summary.budgetVariance, currency)}
-          color={summary.budgetVariance >= 0 ? '#2ecc71' : '#e74c3c'}
+          color={summary.budgetVariance >= 0 ? '#3e7c74' : '#b5573a'}
           status={summary.budgetVariance >= 0 ? 'good' : 'bad'}
           tooltip="بودجه جاری منهای پیش‌بینی هزینه (EAC). مثبت یعنی پروژه در چارچوب بودجه پیش می‌رود؛ منفی یعنی هزینه از بودجه فراتر می‌رود."
         />
@@ -129,14 +129,14 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           icon={ShieldCheck}
           label="جذب بودجه (Budget Absorption)"
           value={`${summary.budgetAbsorptionPct.toLocaleString('fa-IR')}٪`}
-          color={summary.budgetAbsorptionPct > 100 ? '#e74c3c' : '#2ecc71'}
+          color={summary.budgetAbsorptionPct > 100 ? '#b5573a' : '#3e7c74'}
           status={summary.budgetAbsorptionPct > 100 ? 'bad' : 'good'}
           tooltip="سهم هزینه متعهدشده از بودجه جاری پروژه. بالای ۱۰۰٪ یعنی تعهدات از بودجه مصوب عبور کرده است."
         />
       </div>
 
       <BulletComparison
-        icon={<TrendingDown size={12} style={{ color: '#f59e0b' }} />}
+        icon={<TrendingDown size={12} style={{ color: '#b8863b' }} />}
         title="بودجه جاری در برابر پیش‌بینی هزینه در تکمیل (EAC)"
         valueLabel="EAC / پیش‌بینی هزینه"
         value={forecastCost}
@@ -149,14 +149,14 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="fin-card p-4">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
-            <Calculator size={12} style={{ color: '#38bdf8' }} /> هزینه متعهدشده به تفکیک نوع قرارداد
+            <Calculator size={12} style={{ color: '#5c7290' }} /> هزینه متعهدشده به تفکیک نوع قرارداد
           </p>
           <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد (EPC/مشاور/MC/TPI/سایر) از کل تعهد مالی پروژه.</p>
           <BreakdownDonut title="" data={committedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
         </div>
         <div className="fin-card p-4">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
-            <Gauge size={12} style={{ color: '#a78bfa' }} /> هزینه واقعی (تاییدشده) به تفکیک نوع قرارداد
+            <Gauge size={12} style={{ color: '#8b6e9c' }} /> هزینه واقعی (تاییدشده) به تفکیک نوع قرارداد
           </p>
           <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد از هزینه واقعا تاییدشده تا امروز.</p>
           <BreakdownDonut title="" data={certifiedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
@@ -202,7 +202,7 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
                     <td className="py-2 text-[10.5px] fin-text-secondary">{FIN_CONTRACT_STATUS_LABEL_FA[c.status]}</td>
                     <td className="num py-2 font-bold">{fmtCurrency(current, c.currency)}</td>
                     <td className="num py-2">{fmtCurrency(certified, c.currency)}</td>
-                    <td className="num py-2" style={{ color: current - certified >= 0 ? undefined : '#e74c3c' }}>
+                    <td className="num py-2" style={{ color: current - certified >= 0 ? undefined : '#b5573a' }}>
                       {fmtCurrency(current - certified, c.currency)}
                     </td>
                   </tr>

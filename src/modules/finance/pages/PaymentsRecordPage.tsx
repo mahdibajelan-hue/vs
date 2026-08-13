@@ -60,7 +60,7 @@ export function PaymentsRecordPage({ masterProjectId }: { masterProjectId: strin
                 </option>
               ))}
             </select>
-            <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#10b981' }}>
+            <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#c9a654' }}>
               <Plus size={13} /> ثبت پرداخت
             </button>
           </div>
@@ -68,13 +68,13 @@ export function PaymentsRecordPage({ masterProjectId }: { masterProjectId: strin
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <MetricCard icon={Wallet} label="مجموع پرداخت‌های ثبت‌شده" value={fmtCurrency(totalLogged, currency)} color="#10b981" />
-        <MetricCard icon={Receipt} label="تعداد رکورد پرداخت" value={list.length.toLocaleString('fa-IR')} color="#3b82f6" />
+        <MetricCard icon={Wallet} label="مجموع پرداخت‌های ثبت‌شده" value={fmtCurrency(totalLogged, currency)} color="#c9a654" />
+        <MetricCard icon={Receipt} label="تعداد رکورد پرداخت" value={list.length.toLocaleString('fa-IR')} color="#5c7290" />
         <MetricCard
           icon={AlertTriangle}
           label="صورت‌وضعیت‌های دارای مغایرت"
           value={mismatchCount.toLocaleString('fa-IR')}
-          color={mismatchCount > 0 ? '#ef4444' : '#16a34a'}
+          color={mismatchCount > 0 ? '#b5573a' : '#3e7c74'}
         />
       </div>
 
@@ -244,7 +244,7 @@ function PaymentModal({
           <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف
           </button>
-          <button onClick={submit} disabled={saving || !certificateId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#10b981' }}>
+          <button onClick={submit} disabled={saving || !certificateId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#c9a654' }}>
             {saving ? 'در حال ذخیره...' : 'ذخیره'}
           </button>
         </div>

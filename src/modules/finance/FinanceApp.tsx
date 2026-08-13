@@ -43,7 +43,8 @@ import { ProjectsBrowsePage } from './pages/ProjectsBrowsePage'
 import { PaymentsRecordPage } from './pages/PaymentsRecordPage'
 import { GuaranteesPage } from './pages/GuaranteesPage'
 
-export const FINANCE_ACCENT = '#10b981'
+/** Signature brass/ledger accent — see finance-dashboard.css for the full "EPC ledger control tower" token system. */
+export const FINANCE_ACCENT = '#c9a654'
 
 type Tab =
   | 'dashboard'
@@ -161,14 +162,17 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
         className={`fixed inset-y-0 z-50 flex w-64 shrink-0 flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}
         style={{ background: 'var(--fin-sidebar-bg)', borderInlineStart: '1px solid var(--fin-sidebar-border)' }}
       >
-        <div className="flex items-center gap-2.5 px-4 py-5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${FINANCE_ACCENT}26` }}>
-            <Banknote size={18} style={{ color: FINANCE_ACCENT }} />
+        <div className="flex items-center gap-3 px-4 py-5">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            style={{ border: `1.5px solid ${FINANCE_ACCENT}`, boxShadow: `inset 0 0 0 3px ${FINANCE_ACCENT}22` }}
+          >
+            <Banknote size={16} style={{ color: FINANCE_ACCENT }} />
           </div>
           <div className="min-w-0 leading-tight">
             <p className="truncate text-sm font-extrabold text-white">مدیریت مالی پروژه</p>
-            <p className="truncate text-[10px]" style={{ color: 'var(--fin-nav-text-muted)' }}>
-              سیستم مدیریت پروژه RASTA
+            <p className="truncate text-[9.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--fin-nav-text-muted)', fontFamily: 'var(--font-mono)' }} dir="ltr">
+              RASTA · Ledger
             </p>
           </div>
           <button onClick={() => setMobileNavOpen(false)} className="mr-auto text-white lg:hidden">
@@ -214,10 +218,12 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3" style={{ background: 'var(--fin-topbar-bg)', backdropFilter: 'blur(10px)' }}>
           <div className="min-w-0">
-            <p className="truncate text-[11px]" style={{ color: 'var(--fin-nav-text-muted)' }}>
+            <p className="truncate text-[10.5px] font-semibold tracking-[0.02em]" style={{ color: 'var(--fin-nav-text-muted)' }}>
               {meta.subtitle}
             </p>
-            <h1 className="truncate text-base font-extrabold text-white">{meta.title}</h1>
+            <h1 className="truncate text-lg font-bold text-white" style={{ fontFamily: "'Noto Naskh Arabic', var(--font-sans)" }}>
+              {meta.title}
+            </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -226,20 +232,20 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
                 value={projectId ?? ''}
                 onChange={(e) => setProjectId(e.target.value || null)}
                 className="fin-input w-40"
-                style={{ background: 'rgba(255,255,255,0.06)', color: '#fff', borderColor: 'rgba(255,255,255,0.14)' }}
+                style={{ background: 'rgba(201,166,84,0.08)', color: '#fff', borderColor: 'rgba(201,166,84,0.22)' }}
               >
                 <option value="">پروژه‌ای انتخاب کنید</option>
                 {projects.map((p) => (
-                  <option key={p.id} value={p.id} style={{ color: '#0f172a' }}>
+                  <option key={p.id} value={p.id} style={{ color: '#1b2333' }}>
                     {p.officialName}
                   </option>
                 ))}
               </select>
             )}
-            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] sm:flex" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--fin-nav-text)' }}>
+            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] sm:flex" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}>
               <Calendar size={12} /> سال مالی {jy.toLocaleString('fa-IR')}
             </span>
-            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] md:flex" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--fin-nav-text-muted)' }}>
+            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] md:flex" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text-muted)' }}>
               <Calendar size={12} /> آخرین به‌روزرسانی: {jy.toLocaleString('fa-IR')}/{String(todayJalali().jm).padStart(2, '0')}/{String(todayJalali().jd).padStart(2, '0')} (
               {JALALI_MONTHS[todayJalali().jm - 1]})
             </span>
@@ -247,14 +253,14 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
               onClick={toggleFinTheme}
               title={finLight ? 'حالت تاریک' : 'حالت روشن'}
               className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--fin-nav-text)' }}
+              style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
             >
               {finLight ? <Moon size={14} /> : <Sun size={14} />}
             </button>
-            <button className="relative flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--fin-nav-text)' }} title="اعلان‌ها">
+            <button className="relative flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }} title="اعلان‌ها">
               <Bell size={14} />
               {notificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: '#b5573a' }}>
                   {notificationCount.toLocaleString('fa-IR')}
                 </span>
               )}
@@ -262,12 +268,12 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             <button
               onClick={() => setTab('settings')}
               className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--fin-nav-text)' }}
+              style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
               title="تنظیمات"
             >
               <Settings size={14} />
             </button>
-            <button onClick={() => setMobileNavOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-white lg:hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <button onClick={() => setMobileNavOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-white lg:hidden" style={{ background: 'rgba(201,166,84,0.08)' }}>
               <Menu size={16} />
             </button>
           </div>

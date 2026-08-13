@@ -4,7 +4,7 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { activeGuaranteesTotal, expiringGuarantees } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
-import { MetricCard } from '../components/FinanceDashboardUI'
+import { MetricCard, StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
   FIN_GUARANTEE_STATUS_COLOR,
@@ -45,16 +45,16 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
           <h1 className="fin-text mt-1 text-lg font-extrabold">{project.officialName}</h1>
         </div>
         {contracts.length > 0 && (
-          <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#10b981' }}>
+          <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#c9a654' }}>
             <Plus size={13} /> ضمانت‌نامه جدید
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <MetricCard icon={ShieldCheck} label="مجموع ضمانت‌نامه‌های معتبر" value={fmtCurrency(activeGuaranteesTotal(list), currency)} color="#10b981" />
-        <MetricCard icon={AlertTriangle} label="نزدیک به انقضا (۶۰ روز آینده)" value={soonExpiring.length.toLocaleString('fa-IR')} color={soonExpiring.length > 0 ? '#ef4444' : '#16a34a'} />
-        <MetricCard icon={ShieldCheck} label="تعداد کل ضمانت‌نامه‌ها" value={list.length.toLocaleString('fa-IR')} color="#3b82f6" />
+        <MetricCard icon={ShieldCheck} label="مجموع ضمانت‌نامه‌های معتبر" value={fmtCurrency(activeGuaranteesTotal(list), currency)} color="#c9a654" />
+        <MetricCard icon={AlertTriangle} label="نزدیک به انقضا (۶۰ روز آینده)" value={soonExpiring.length.toLocaleString('fa-IR')} color={soonExpiring.length > 0 ? '#b5573a' : '#3e7c74'} />
+        <MetricCard icon={ShieldCheck} label="تعداد کل ضمانت‌نامه‌ها" value={list.length.toLocaleString('fa-IR')} color="#5c7290" />
       </div>
 
       {contracts.length === 0 ? (
@@ -90,15 +90,13 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
                     <td className="num fin-text py-2">
                       {fmtDate(g.expiryDate)}
                       {g.status === 'active' && daysLeft != null && daysLeft <= 60 && (
-                        <span className="mr-1.5 rounded-full border border-red-400/40 bg-red-500/10 px-1.5 py-0.5 text-[9.5px] font-bold text-red-500">
-                          {daysLeft <= 0 ? 'منقضی' : `${daysLeft} روز`}
+                        <span className="mr-1.5 inline-block">
+                          <StampBadge label={daysLeft <= 0 ? 'منقضی' : `${daysLeft} روز`} tone="bad" />
                         </span>
                       )}
                     </td>
                     <td className="py-2">
-                      <span className="rounded-full border px-2 py-0.5 text-[10px]" style={{ borderColor: `${tone}55`, color: tone }}>
-                        {FIN_GUARANTEE_STATUS_LABEL_FA[g.status]}
-                      </span>
+                      <StampBadge label={FIN_GUARANTEE_STATUS_LABEL_FA[g.status]} tone={hexToStampTone(tone)} />
                     </td>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
@@ -179,7 +177,7 @@ function GuaranteeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="fin-card w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="fin-text flex items-center gap-2 text-sm font-extrabold">
-          <ShieldCheck size={15} style={{ color: '#10b981' }} /> {title}
+          <ShieldCheck size={15} style={{ color: '#c9a654' }} /> {title}
         </h3>
         <label className="block">
           <span className="fin-text-secondary mb-1 block text-xs">قرارداد</span>
@@ -234,7 +232,7 @@ function GuaranteeModal({
           <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف
           </button>
-          <button onClick={submit} disabled={saving || !contractId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#10b981' }}>
+          <button onClick={submit} disabled={saving || !contractId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#c9a654' }}>
             {saving ? 'در حال ذخیره...' : 'ذخیره'}
           </button>
         </div>

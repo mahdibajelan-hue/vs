@@ -48,14 +48,18 @@ export function MetricCard({
 }) {
   const trendUp = trend != null && trend.pct >= 0
   const trendGood = trend == null ? true : trend.goodDirection === 'down' ? !trendUp : trendUp
-  const statusDot: Record<'good' | 'warn' | 'bad', string> = { good: '#16a34a', warn: '#f59e0b', bad: '#dc2626' }
+  const statusDot: Record<'good' | 'warn' | 'bad', string> = { good: 'var(--fin-good)', warn: 'var(--fin-warn)', bad: 'var(--fin-bad)' }
   return (
-    <div className={`fin-card fin-metric-card group relative flex flex-col gap-2 ${emphasize ? 'p-4' : 'p-3'}`}>
-      <div className="flex items-center justify-between">
-        <div className={`flex items-center justify-center rounded-full ${emphasize ? 'h-9 w-9' : 'h-8 w-8'}`} style={{ background: `${color}1a` }}>
-          <Icon size={emphasize ? 17 : 15} style={{ color }} />
+    <div
+      className={`fin-card fin-metric-card group relative flex flex-col gap-1.5 ${emphasize ? 'p-4' : 'p-3'}`}
+      style={{ borderInlineStart: `3px solid ${color}` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Icon size={12} style={{ color }} className="shrink-0" />
+          <span className="fin-text-secondary truncate text-[10px] font-semibold leading-4 tracking-[0.01em]">{label}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {status && <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusDot[status] }} />}
           {tooltip && (
             <button type="button" tabIndex={0} className="fin-text-muted outline-none hover:opacity-70" aria-label={`توضیح ${label}`}>
@@ -64,12 +68,9 @@ export function MetricCard({
           )}
         </div>
       </div>
-      <div>
-        <p className={`num fin-text truncate font-extrabold leading-tight ${emphasize ? 'text-xl' : 'text-lg'}`}>{value}</p>
-        <p className="fin-text-secondary mt-0.5 text-[10.5px] font-medium leading-4">{label}</p>
-      </div>
+      <p className={`num fin-text truncate font-extrabold leading-tight ${emphasize ? 'text-xl' : 'text-lg'}`}>{value}</p>
       {trend && (
-        <p className="flex items-center gap-1 text-[10px] font-bold" style={{ color: trendGood ? '#16a34a' : '#dc2626' }}>
+        <p className="flex items-center gap-1 text-[10px] font-bold" style={{ color: trendGood ? 'var(--fin-good)' : 'var(--fin-bad)' }}>
           {trendUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
           {Math.abs(trend.pct).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪ نسبت به ماه قبل
         </p>
@@ -86,18 +87,52 @@ export function MetricCard({
   )
 }
 
-/** Smaller single-stat card for secondary metric rows. */
+/** Smaller single-stat card for secondary metric rows — icon sits in a thin seal-ring rather than a filled disc. */
 export function MiniStatCard({ icon: Icon, label, value, color, sub }: { icon: LucideIcon; label: string; value: string; color: string; sub?: string }) {
   return (
     <div className="fin-card fin-metric-card flex flex-col items-center gap-1.5 p-3 text-center">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${color}1a` }}>
-        <Icon size={15} style={{ color }} />
+      <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ border: `1.5px solid ${color}`, boxShadow: `inset 0 0 0 2px ${color}1f` }}>
+        <Icon size={13} style={{ color }} />
       </div>
       <p className="num fin-text text-lg font-extrabold">{value}</p>
       <p className="fin-text-secondary text-[10px] font-medium leading-4">{label}</p>
       {sub && <p className="num fin-text-muted text-[9px]">{sub}</p>}
     </div>
   )
+}
+
+/**
+ * Signature element: the official stamp (مهر) — this module's one memorable device. Used wherever
+ * a record has been formally certified/paid/verified/flagged, replacing generic rounded-pill
+ * status badges everywhere in the module (Contracts, Certificates, Guarantees, Payments).
+ */
+export type StampTone = 'good' | 'warn' | 'bad' | 'info' | 'neutral' | 'tertiary'
+
+export function StampBadge({ label, tone = 'neutral', icon: Icon }: { label: string; tone?: StampTone; icon?: LucideIcon }) {
+  return (
+    <span className={`fin-stamp fin-stamp-tone-${tone}`}>
+      {Icon && <Icon size={10} />}
+      {label}
+    </span>
+  )
+}
+
+/** Maps the module's semantic hex literals (FIN_*_COLOR lookups, also reused as chart colors) to a StampBadge tone. */
+export function hexToStampTone(hex: string | undefined): StampTone {
+  switch (hex?.toLowerCase()) {
+    case '#3e7c74':
+      return 'good'
+    case '#b8863b':
+      return 'warn'
+    case '#b5573a':
+      return 'bad'
+    case '#5c7290':
+      return 'info'
+    case '#8b6e9c':
+      return 'tertiary'
+    default:
+      return 'neutral'
+  }
 }
 
 /** fin-card wrapper around the shared BreakdownDonut, themed to track the module's dark/light toggle. */
@@ -118,7 +153,7 @@ export function DonutPanel({
 }) {
   return (
     <div className="fin-card p-4">
-      <p className="fin-text mb-2 flex items-center gap-1.5 text-[12px] font-bold">
+      <p className="fin-eyebrow">
         {icon} {title}
       </p>
       <BreakdownDonut title="" data={data} unit={unit} height={height} formatTotal={formatTotal} theme={FIN_CHART_THEME} />
@@ -138,7 +173,7 @@ export function CashFlowComboChart({ title, icon, points, currency }: { title: s
   const gid = useId()
   return (
     <div className="fin-card p-4">
-      <p className="fin-text mb-2 flex items-center gap-1.5 text-[12px] font-bold">
+      <p className="fin-eyebrow">
         {icon} {title}
       </p>
       {points.length === 0 ? (
@@ -149,22 +184,22 @@ export function CashFlowComboChart({ title, icon, points, currency }: { title: s
             <ComposedChart data={points} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
               <defs>
                 <linearGradient id={`${gid}-actual`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05} />
+                  <stop offset="0%" stopColor="var(--fin-good)" stopOpacity={0.45} />
+                  <stop offset="100%" stopColor="var(--fin-good)" stopOpacity={0.04} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="var(--fin-divider)" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--fin-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={fmtMonthJalali} />
               <YAxis tick={{ fontSize: 9, fill: 'var(--fin-text-muted)' }} tickLine={false} axisLine={false} width={56} tickFormatter={fmtCompact} />
               <RTooltip
-                contentStyle={{ background: 'var(--fin-card-bg)', border: '1px solid var(--fin-card-border)', borderRadius: 10, fontSize: 11, color: 'var(--fin-text)' }}
+                contentStyle={{ background: 'var(--fin-card-bg)', border: '1px solid var(--fin-card-border)', borderRadius: 8, fontSize: 11, color: 'var(--fin-text)' }}
                 labelStyle={{ color: 'var(--fin-text-secondary)' }}
                 labelFormatter={(label) => fmtMonthJalali(String(label))}
                 formatter={(value, name) => [`${Number(value).toLocaleString('fa-IR')} ${currency}`, String(name)]}
               />
-              <Bar dataKey="actual" name="جریان نقدی واقعی" fill={`url(#${gid}-actual)`} radius={[6, 6, 0, 0]} barSize={22} />
-              <Line type="monotone" dataKey="planned" name="پرداخت واقعی" stroke="#2563eb" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="forecast" name="جریان نقدینگی پیش‌بینی‌شده" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4" dot={false} />
+              <Bar dataKey="actual" name="جریان نقدی واقعی" fill={`url(#${gid}-actual)`} radius={[3, 3, 0, 0]} barSize={22} />
+              <Line type="monotone" dataKey="planned" name="پرداخت واقعی" stroke="var(--fin-info)" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="forecast" name="جریان نقدینگی پیش‌بینی‌شده" stroke="var(--fin-brass)" strokeWidth={2} strokeDasharray="6 4" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -181,13 +216,13 @@ export interface AlertItem {
   text: string
 }
 
-const ALERT_TONE: Record<AlertItem['severity'], string> = { bad: '#ef4444', warn: '#f59e0b', info: '#3b82f6' }
+const ALERT_TONE: Record<AlertItem['severity'], string> = { bad: 'var(--fin-bad)', warn: 'var(--fin-warn)', info: 'var(--fin-info)' }
 
 /** Alerts/warnings feed card — severity dot, day-count badge, message. */
 export function AlertFeed({ title, icon, items }: { title: string; icon?: ReactNode; items: AlertItem[] }) {
   return (
     <div className="fin-card flex flex-col p-4">
-      <p className="fin-text mb-3 flex items-center gap-1.5 text-[12px] font-bold">
+      <p className="fin-eyebrow">
         {icon} {title}
       </p>
       {items.length === 0 ? (
@@ -224,7 +259,7 @@ export interface RankedProgressRow {
 export function RankedProgressTable({ title, icon, rows, valueLabel }: { title: string; icon?: ReactNode; rows: RankedProgressRow[]; valueLabel: string }) {
   return (
     <div className="fin-card p-4">
-      <p className="fin-text mb-3 flex items-center gap-1.5 text-[12px] font-bold">
+      <p className="fin-eyebrow">
         {icon} {title}
       </p>
       {rows.length === 0 ? (
@@ -270,7 +305,7 @@ export interface SimpleTableColumn<T> {
 export function SimpleTable<T extends { id: string }>({ title, icon, columns, rows }: { title: string; icon?: ReactNode; columns: SimpleTableColumn<T>[]; rows: T[] }) {
   return (
     <div className="fin-card p-4">
-      <p className="fin-text mb-3 flex items-center gap-1.5 text-[12px] font-bold">
+      <p className="fin-eyebrow">
         {icon} {title}
       </p>
       {rows.length === 0 ? (

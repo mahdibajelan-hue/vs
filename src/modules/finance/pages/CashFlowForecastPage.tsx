@@ -302,14 +302,14 @@ export function FundingRequirementPanel({ cashFlow, currency, showManagementNote
           icon={CalendarClock}
           label="نیاز مالی برآوردی ماه جاری"
           value={fmtCurrency(thisMonth, currency)}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="مبلغ برآوردی صورت‌وضعیت/پرداخت مورد انتظار در ماه جاری، بر مبنای تعهد باقیمانده قراردادهای فعال این محدوده."
         />
         <MetricCard
           icon={Landmark}
           label="نیاز مالی کل ۱۲ ماه آینده"
           value={fmtCurrency(next12Total, currency)}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="مجموع نیاز مالی برآوردی این محدوده برای ۱۲ ماه پیش رو — پاسخ به «تا یک سال آینده چقدر منبع مالی لازم است»."
           emphasize
         />
@@ -335,31 +335,31 @@ function ScopeKpis({ summary, currency }: { summary: ProjectFinancialSummary; cu
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
       <MetricCard icon={Wallet} label="بودجه جاری" value={fmtCurrency(summary.currentBudgetAmount, currency)} color={FINANCE_ACCENT} />
-      <MetricCard icon={Calculator} label="هزینه متعهدشده" value={fmtCurrency(summary.committedCost, currency)} color="#38bdf8" />
-      <MetricCard icon={Banknote} label="مبلغ پرداخت‌شده" value={fmtCurrency(summary.paidTotal, currency)} color="#2ecc71" />
+      <MetricCard icon={Calculator} label="هزینه متعهدشده" value={fmtCurrency(summary.committedCost, currency)} color="#5c7290" />
+      <MetricCard icon={Banknote} label="مبلغ پرداخت‌شده" value={fmtCurrency(summary.paidTotal, currency)} color="#3e7c74" />
       <MetricCard
         icon={Scale}
         label="بودجه باقی‌مانده"
         value={fmtCurrency(summary.remainingBudget, currency)}
-        color={summary.remainingBudget >= 0 ? '#2ecc71' : '#e74c3c'}
+        color={summary.remainingBudget >= 0 ? '#3e7c74' : '#b5573a'}
         status={summary.remainingBudget >= 0 ? 'good' : 'bad'}
       />
       <MetricCard
         icon={TrendingDown}
         label="انحراف بودجه"
         value={fmtCurrency(summary.budgetVariance, currency)}
-        color={summary.budgetVariance >= 0 ? '#2ecc71' : '#e74c3c'}
+        color={summary.budgetVariance >= 0 ? '#3e7c74' : '#b5573a'}
         status={summary.budgetVariance >= 0 ? 'good' : 'bad'}
       />
-      <MetricCard icon={Target} label="پیش‌بینی هزینه در تکمیل (EAC)" value={summary.eac != null ? fmtCurrency(summary.eac, currency) : 'ثبت نشده'} color="#f59e0b" />
+      <MetricCard icon={Target} label="پیش‌بینی هزینه در تکمیل (EAC)" value={summary.eac != null ? fmtCurrency(summary.eac, currency) : 'ثبت نشده'} color="#b8863b" />
       <MetricCard
         icon={Scale}
         label="مواجهه مالی (Exposure)"
         value={fmtCurrency(summary.financialExposure, currency)}
-        color={summary.financialExposure > 0 ? '#f1c40f' : '#2ecc71'}
+        color={summary.financialExposure > 0 ? '#b8863b' : '#3e7c74'}
         status={summary.financialExposure > 0 ? 'warn' : 'good'}
       />
-      <MetricCard icon={FolderKanban} label="تعداد قرارداد" value={summary.contractCount.toLocaleString('fa-IR')} color="#64748b" />
+      <MetricCard icon={FolderKanban} label="تعداد قرارداد" value={summary.contractCount.toLocaleString('fa-IR')} color="#7c8794" />
     </div>
   )
 }
@@ -385,16 +385,16 @@ export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<t
                 <AreaChart data={points} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
                   <defs>
                     <linearGradient id={`${gid}-${title}-actual`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2ecc71" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#2ecc71" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#3e7c74" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#3e7c74" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id={`${gid}-${title}-forecast`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#b8863b" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#b8863b" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id={`${gid}-${title}-planned`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.22} />
-                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#5c7290" stopOpacity={0.22} />
+                      <stop offset="100%" stopColor="#5c7290" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--fin-divider)" vertical={false} />
@@ -406,9 +406,9 @@ export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<t
                     labelFormatter={(label) => fmtMonthJalali(String(label))}
                     formatter={(value, name) => [fmtCurrency(Number(value), currency), String(name)]}
                   />
-                  <Area type="monotone" dataKey="planned" name="برنامه" stroke="#38bdf8" strokeWidth={1.5} fill={`url(#${gid}-${title}-planned)`} />
-                  <Area type="monotone" dataKey="actual" name="واقعی" stroke="#2ecc71" strokeWidth={2} fill={`url(#${gid}-${title}-actual)`} />
-                  <Area type="monotone" dataKey="forecast" name="پیش‌بینی (نیاز مالی)" stroke="#f59e0b" strokeWidth={1.5} fill={`url(#${gid}-${title}-forecast)`} />
+                  <Area type="monotone" dataKey="planned" name="برنامه" stroke="#5c7290" strokeWidth={1.5} fill={`url(#${gid}-${title}-planned)`} />
+                  <Area type="monotone" dataKey="actual" name="واقعی" stroke="#3e7c74" strokeWidth={2} fill={`url(#${gid}-${title}-actual)`} />
+                  <Area type="monotone" dataKey="forecast" name="پیش‌بینی (نیاز مالی)" stroke="#b8863b" strokeWidth={1.5} fill={`url(#${gid}-${title}-forecast)`} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

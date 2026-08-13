@@ -2,7 +2,7 @@ import { Info } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { formatJalali, isoToJalali, JALALI_MONTHS } from '../../../lib/jalali'
 
-const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#2ecc71', warn: '#f1c40f', bad: '#e74c3c' }
+const STATUS_DOT: Record<'good' | 'warn' | 'bad', string> = { good: '#3e7c74', warn: '#b8863b', bad: '#b5573a' }
 
 /**
  * Executive-level KPI tile: large bold numbers first (spec: "قابل درک در چند ثانیه"), a status

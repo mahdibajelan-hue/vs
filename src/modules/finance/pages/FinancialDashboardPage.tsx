@@ -29,7 +29,19 @@ import {
   type ProjectFinancialSummary,
 } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
-import { AlertFeed, CashFlowComboChart, DonutPanel, MetricCard, MiniStatCard, RankedProgressTable, SimpleTable, type AlertItem, type SimpleTableColumn } from '../components/FinanceDashboardUI'
+import {
+  AlertFeed,
+  CashFlowComboChart,
+  DonutPanel,
+  MetricCard,
+  MiniStatCard,
+  RankedProgressTable,
+  SimpleTable,
+  StampBadge,
+  type AlertItem,
+  type SimpleTableColumn,
+  type StampTone,
+} from '../components/FinanceDashboardUI'
 import type { ChartDatum } from '../../masterdata/components/RollupCharts'
 import type { FinContractRole, FinGuarantee, FinPaymentCertificate } from '../types'
 import { FIN_CONTRACT_ROLE_COLOR, FIN_CONTRACT_ROLE_LABEL_FA, FIN_CONTRACT_ROLES, FIN_CERTIFICATE_TYPE_LABEL_FA } from '../types'
@@ -112,7 +124,7 @@ export function FinancialDashboardPage() {
               key={id}
               onClick={() => setLevel(id)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-              style={level === id ? { background: '#10b981', color: '#fff' } : { color: 'var(--fin-text-secondary)' }}
+              style={level === id ? { background: '#c9a654', color: '#fff' } : { color: 'var(--fin-text-secondary)' }}
             >
               <Icon size={13} />
               {label}
@@ -216,7 +228,7 @@ function PortfolioDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <Building2 size={14} style={{ color: '#10b981' }} />
+        <Building2 size={14} style={{ color: '#c9a654' }} />
         <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} className="fin-input w-56">
           <option value="">همه پرتفولیوها ({portfolios.length})</option>
           {portfolios.map((p) => (
@@ -281,7 +293,7 @@ function ProgramDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <Briefcase size={14} style={{ color: '#10b981' }} />
+        <Briefcase size={14} style={{ color: '#c9a654' }} />
         <select value={programId} onChange={(e) => setProgramId(e.target.value)} className="fin-input w-56">
           <option value="">همه طرح‌ها ({programs.length})</option>
           {programs.map((p) => (
@@ -343,7 +355,7 @@ function ProjectDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <FolderKanban size={14} style={{ color: '#10b981' }} />
+        <FolderKanban size={14} style={{ color: '#c9a654' }} />
         <select value={activeId} onChange={(e) => setProjectId(e.target.value)} className="fin-input w-56">
           {projects.length === 0 && <option value="">پروژه‌ای ثبت نشده</option>}
           {projects.map((p) => (
@@ -369,7 +381,7 @@ function ProjectDashboard({
   )
 }
 
-const DONUT_PALETTE = ['#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#14b8a6', '#ef4444']
+const DONUT_PALETTE = ['#3e7c74', '#5c7290', '#8b6e9c', '#a65d82', '#b8863b', '#c9a654', '#b5573a']
 
 /** Sum of the next 3 forward months' funding-requirement bucket — used to rank child entities by near-term cash need. */
 function next12MonthNeed(points: { month: string; forecast: number }[]): number {
@@ -418,24 +430,24 @@ function DashboardBody({
   const fundingNext12 = forwardPoints.reduce((sum, p) => sum + p.forecast, 0)
 
   const budgetDonut: ChartDatum[] = [
-    { key: 'approved', label: 'مصوب‌شده', value: Math.max(0, summary.currentBudgetAmount), color: '#22c55e' },
-    { key: 'absorbed', label: 'جذب‌شده', value: Math.max(0, summary.committedCost), color: '#3b82f6' },
+    { key: 'approved', label: 'مصوب‌شده', value: Math.max(0, summary.currentBudgetAmount), color: '#3e7c74' },
+    { key: 'absorbed', label: 'جذب‌شده', value: Math.max(0, summary.committedCost), color: '#5c7290' },
     { key: 'remaining', label: 'باقی‌مانده', value: Math.max(0, summary.currentBudgetAmount - summary.committedCost), color: '#94a3b8' },
   ]
 
   const overdueAmount = summary.overduePayableTotal
   const payableNotOverdue = Math.max(0, summary.outstandingTotal - overdueAmount)
   const paymentDonut: ChartDatum[] = [
-    { key: 'paid', label: 'پرداخت‌شده', value: Math.max(0, summary.paidTotal), color: '#14b8a6' },
-    { key: 'payable', label: 'قابل‌پرداخت', value: payableNotOverdue, color: '#f59e0b' },
-    { key: 'overdue', label: 'تاخیر در پرداخت', value: overdueAmount, color: '#ef4444' },
+    { key: 'paid', label: 'پرداخت‌شده', value: Math.max(0, summary.paidTotal), color: '#3e7c74' },
+    { key: 'payable', label: 'قابل‌پرداخت', value: payableNotOverdue, color: '#b8863b' },
+    { key: 'overdue', label: 'تاخیر در پرداخت', value: overdueAmount, color: '#b5573a' },
   ]
 
   const doneCost = summary.actualCost
   const forecastCost = summary.eac ?? summary.committedCost
   const eacDonut: ChartDatum[] = [
-    { key: 'done', label: 'هزینه تا امروز', value: Math.max(0, doneCost), color: '#14b8a6' },
-    { key: 'remaining', label: 'هزینه پیش‌بینی‌شده باقی‌مانده', value: Math.max(0, forecastCost - doneCost), color: '#3b82f6' },
+    { key: 'done', label: 'هزینه تا امروز', value: Math.max(0, doneCost), color: '#3e7c74' },
+    { key: 'remaining', label: 'هزینه پیش‌بینی‌شده باقی‌مانده', value: Math.max(0, forecastCost - doneCost), color: '#5c7290' },
   ]
 
   const activeGuaranteeCount = guarantees.filter((g) => g.status === 'active').length
@@ -470,15 +482,33 @@ function DashboardBody({
   }
   alerts.sort((a, b) => a.days - b.days)
 
+  const healthTone: StampTone = summary.remainingBudget < 0 ? 'bad' : summary.budgetAbsorptionPct > 90 ? 'warn' : 'good'
+  const healthLabel = summary.remainingBudget < 0 ? 'کسری بودجه' : summary.budgetAbsorptionPct > 90 ? 'نیازمند پیگیری' : 'در وضعیت کنترل'
+
   return (
     <div className="space-y-4">
+      <div className="fin-card flex flex-wrap items-end justify-between gap-4 p-5">
+        <div>
+          <p className="fin-text-secondary text-[10.5px] font-semibold tracking-[0.01em]">بودجه باقی‌مانده پس از تعهدات جاری</p>
+          <p className="fin-hero-figure fin-text num mt-1 text-[34px] leading-none sm:text-[40px]" style={{ color: summary.remainingBudget >= 0 ? undefined : 'var(--fin-bad)' }}>
+            {fmtCurrency(summary.remainingBudget, currency)}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <StampBadge label={healthLabel} tone={healthTone} />
+          <div className="text-left">
+            <p className="fin-text-muted text-[9.5px]">جذب بودجه</p>
+            <p className="num fin-text text-sm font-bold">{summary.budgetAbsorptionPct.toLocaleString('fa-IR')}٪</p>
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <MetricCard icon={Wallet} label="بودجه کل" value={fmtCurrency(summary.currentBudgetAmount, currency)} color="#22c55e" />
-        <MetricCard icon={FileText} label="ارزش کل قراردادها" value={fmtCurrency(summary.currentContractValueTotal, currency)} color="#3b82f6" />
-        <MetricCard icon={ShieldCheck} label="مبلغ صورت‌وضعیت (تاییدشده)" value={fmtCurrency(summary.certifiedTotal, currency)} color="#8b5cf6" />
-        <MetricCard icon={Banknote} label="مبلغ پرداخت‌شده" value={fmtCurrency(summary.paidTotal, currency)} color="#ec4899" />
-        <MetricCard icon={Calculator} label="موجودی تعهدات" value={fmtCurrency(summary.committedCost, currency)} color="#f59e0b" />
-        <MetricCard icon={PieChart} label="پیش‌بینی نیاز نقدینگی ۱۲ ماهه" value={fmtCurrency(fundingNext12, currency)} color="#14b8a6" />
+        <MetricCard icon={Wallet} label="بودجه کل" value={fmtCurrency(summary.currentBudgetAmount, currency)} color="#3e7c74" />
+        <MetricCard icon={FileText} label="ارزش کل قراردادها" value={fmtCurrency(summary.currentContractValueTotal, currency)} color="#5c7290" />
+        <MetricCard icon={ShieldCheck} label="مبلغ صورت‌وضعیت (تاییدشده)" value={fmtCurrency(summary.certifiedTotal, currency)} color="#8b6e9c" />
+        <MetricCard icon={Banknote} label="مبلغ پرداخت‌شده" value={fmtCurrency(summary.paidTotal, currency)} color="#a65d82" />
+        <MetricCard icon={Calculator} label="موجودی تعهدات" value={fmtCurrency(summary.committedCost, currency)} color="#b8863b" />
+        <MetricCard icon={PieChart} label="پیش‌بینی نیاز نقدینگی ۱۲ ماهه" value={fmtCurrency(fundingNext12, currency)} color="#3e7c74" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -492,10 +522,10 @@ function DashboardBody({
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <DonutPanel title="وضعیت پرداخت‌ها" icon={<Receipt size={13} />} data={paymentDonut} unit={currency} formatTotal={(n) => fmtCurrency(n, currency)} />
         <div className="grid grid-cols-2 gap-3">
-          <MiniStatCard icon={Clock} label="میانگین تاخیر پرداخت" value={summary.avgPaymentDelayDays != null ? `${summary.avgPaymentDelayDays.toLocaleString('fa-IR')} روز` : '—'} color="#f59e0b" />
-          <MiniStatCard icon={UserRound} label="بدهی کارفرما" value={fmtCurrency(summary.outstandingTotal, currency)} color="#ef4444" />
-          <MiniStatCard icon={Scale} label="دریافت بیش از حد پیمانکار" value={fmtCurrency(summary.contractorOverpaymentTotal, currency)} color="#f97316" />
-          <MiniStatCard icon={ShieldCheck} label="ضمانت‌نامه‌های فعال" value={activeGuaranteeCount.toLocaleString('fa-IR')} color="#10b981" sub={fmtCurrency(summary.guaranteesTotal, currency)} />
+          <MiniStatCard icon={Clock} label="میانگین تاخیر پرداخت" value={summary.avgPaymentDelayDays != null ? `${summary.avgPaymentDelayDays.toLocaleString('fa-IR')} روز` : '—'} color="#b8863b" />
+          <MiniStatCard icon={UserRound} label="بدهی کارفرما" value={fmtCurrency(summary.outstandingTotal, currency)} color="#b5573a" />
+          <MiniStatCard icon={Scale} label="دریافت بیش از حد پیمانکار" value={fmtCurrency(summary.contractorOverpaymentTotal, currency)} color="#c4793a" />
+          <MiniStatCard icon={ShieldCheck} label="ضمانت‌نامه‌های فعال" value={activeGuaranteeCount.toLocaleString('fa-IR')} color="#c9a654" sub={fmtCurrency(summary.guaranteesTotal, currency)} />
         </div>
         <DonutPanel title="وضعیت هزینه (EAC)" icon={<Calculator size={13} />} data={eacDonut} unit={currency} formatTotal={(n) => fmtCurrency(n, currency)} />
       </div>
@@ -563,12 +593,12 @@ export function BulletComparison({
         {icon} {title}
       </p>
       <div className="relative mt-4 h-6 w-full rounded-lg" style={{ background: 'rgba(148,163,184,0.12)' }}>
-        <div className="absolute inset-y-0 rounded-lg" style={{ right: 0, width: `${valuePct}%`, background: over ? '#e74c3c' : '#10b981', opacity: 0.85 }} />
+        <div className="absolute inset-y-0 rounded-lg" style={{ right: 0, width: `${valuePct}%`, background: over ? '#b5573a' : '#c9a654', opacity: 0.85 }} />
         <div className="absolute inset-y-[-4px] w-[2.5px] rounded-full bg-white" style={{ right: `${targetPct}%` }} title={targetLabel} />
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full" style={{ background: over ? '#e74c3c' : '#10b981' }} /> {valueLabel}: <span className="num font-bold">{fmtCurrency(value, currency)}</span>
+          <span className="h-2 w-2 rounded-full" style={{ background: over ? '#b5573a' : '#c9a654' }} /> {valueLabel}: <span className="num font-bold">{fmtCurrency(value, currency)}</span>
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2 w-0.5 bg-white" /> {targetLabel}: <span className="num font-bold">{fmtCurrency(target, currency)}</span>

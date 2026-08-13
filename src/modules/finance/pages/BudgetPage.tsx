@@ -80,16 +80,16 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
           icon={Gauge}
           label="جذب بودجه (Absorption)"
           value={`${summary.budgetAbsorptionPct}٪`}
-          color={summary.budgetAbsorptionPct <= 100 ? '#38bdf8' : '#e74c3c'}
+          color={summary.budgetAbsorptionPct <= 100 ? '#5c7290' : '#b5573a'}
           status={summary.budgetAbsorptionPct <= 90 ? 'good' : summary.budgetAbsorptionPct <= 100 ? 'warn' : 'bad'}
           tooltip="تعریف: نسبت هزینه متعهدشده به بودجه جاری. هدف: نشان‌دادن سرعت مصرف بودجه. تفسیر: افزایش به سمت ۱۰۰٪ طبیعی است؛ عبور از ۱۰۰٪ یعنی هزینه از بودجه مصوب فراتر رفته است."
         />
-        <MetricCard icon={Target} label="بودجه سال جاری (Annual)" value={summary.annualBudgetAmount != null ? fmtCurrency(summary.annualBudgetAmount, currency) : 'ثبت نشده'} color="#eab308" tooltip={`تعریف: بودجه مصوب سال ${todayJalali().jy} شمسی برای این پروژه — با «بودجه جاری» (کل پروژه) اشتباه نشود. هدف: کنترل مصرف بودجه در بازه یک‌ساله. تفسیر: در بخش «بودجه سالانه» پایین همین صفحه قابل ثبت و ویرایش است.`} />
+        <MetricCard icon={Target} label="بودجه سال جاری (Annual)" value={summary.annualBudgetAmount != null ? fmtCurrency(summary.annualBudgetAmount, currency) : 'ثبت نشده'} color="#b8863b" tooltip={`تعریف: بودجه مصوب سال ${todayJalali().jy} شمسی برای این پروژه — با «بودجه جاری» (کل پروژه) اشتباه نشود. هدف: کنترل مصرف بودجه در بازه یک‌ساله. تفسیر: در بخش «بودجه سالانه» پایین همین صفحه قابل ثبت و ویرایش است.`} />
         <MetricCard
           icon={Scale}
           label="بودجه باقی‌مانده (Remaining)"
           value={fmtCurrency(summary.remainingBudget, currency)}
-          color={summary.remainingBudget >= 0 ? '#2ecc71' : '#e74c3c'}
+          color={summary.remainingBudget >= 0 ? '#3e7c74' : '#b5573a'}
           status={summary.remainingBudget >= 0 ? 'good' : 'bad'}
           tooltip="تعریف: بودجه جاری منهای هزینه متعهدشده. هدف: ظرفیت باقی‌مانده برای تعهدات جدید. تفسیر: منفی‌شدن یعنی هزینه متعهدشده از بودجه فراتر رفته و نیاز به تغییر بودجه یا کنترل هزینه دارد."
         />
@@ -97,18 +97,18 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
           icon={TrendingUp}
           label="پیش‌بینی هزینه در تکمیل (EAC)"
           value={eac != null ? fmtCurrency(eac, currency) : 'ثبت نشده'}
-          color="#f59e0b"
+          color="#b8863b"
           tooltip="تعریف: برآورد کل هزینه پروژه در زمان تکمیل، از شناسنامه پروژه در داده پایه خوانده می‌شود. هدف: مقایسه با بودجه برای پیش‌بینی انحراف نهایی. تفسیر: بالاتر از بودجه جاری یعنی هشدار انحراف هزینه."
         />
         <MetricCard
           icon={TrendingDown}
           label="انحراف بودجه (Variance)"
           value={fmtCurrency(summary.budgetVariance, currency)}
-          color={summary.budgetVariance >= 0 ? '#2ecc71' : '#e74c3c'}
+          color={summary.budgetVariance >= 0 ? '#3e7c74' : '#b5573a'}
           status={summary.budgetVariance >= 0 ? 'good' : 'bad'}
           tooltip={`تعریف: بودجه جاری منهای ${eac != null ? 'EAC' : 'هزینه متعهدشده (چون EAC هنوز ثبت نشده)'}. هدف: سنجش کفایت بودجه نسبت به برآورد نهایی هزینه. تفسیر: مثبت یعنی بودجه کافی است؛ منفی یعنی نیاز به بودجه اضافه پیش‌بینی می‌شود.`}
         />
-        <MetricCard icon={PieChart} label="تعداد تغییرات بودجه" value={projectChanges.length.toLocaleString('fa-IR')} color="#64748b" tooltip="تعداد رکوردهای افزایش/کاهش بودجه ثبت‌شده برای این پروژه." />
+        <MetricCard icon={PieChart} label="تعداد تغییرات بودجه" value={projectChanges.length.toLocaleString('fa-IR')} color="#7c8794" tooltip="تعداد رکوردهای افزایش/کاهش بودجه ثبت‌شده برای این پروژه." />
       </div>
 
       <div className="fin-card p-4">
@@ -180,7 +180,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
               <div key={c.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--fin-divider)' }}>
                 <span className="num text-[11px] fin-text-muted">{fmtDate(c.changeDate)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs">{c.reason || '—'}</span>
-                <span className="num shrink-0 text-sm font-bold" style={{ color: c.amount >= 0 ? '#2ecc71' : '#e74c3c' }}>
+                <span className="num shrink-0 text-sm font-bold" style={{ color: c.amount >= 0 ? '#3e7c74' : '#b5573a' }}>
                   {c.amount >= 0 ? '+' : ''}
                   {fmtCurrency(c.amount, currency)}
                 </span>
@@ -225,7 +225,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
                       <td className="num p-2 font-bold">{row.jalaliYear}</td>
                       <td className="num p-2">{fmtCurrency(row.budgetAmount, currency)}</td>
                       <td className="num p-2">{fmtCurrency(row.actualCommitted, currency)}</td>
-                      <td className="num p-2 font-bold" style={{ color: row.remaining >= 0 ? '#2ecc71' : '#e74c3c' }}>
+                      <td className="num p-2 font-bold" style={{ color: row.remaining >= 0 ? '#3e7c74' : '#b5573a' }}>
                         {fmtCurrency(row.remaining, currency)}
                       </td>
                       <td className="p-2">{rowId && <button onClick={() => deleteAnnualBudget(rowId)} className="fin-text-muted hover:text-red-400"><Trash2 size={12} /></button>}</td>

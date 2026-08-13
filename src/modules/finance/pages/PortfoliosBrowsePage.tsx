@@ -64,7 +64,7 @@ export function PortfoliosBrowsePage() {
       key: 'outstanding',
       label: 'مانده',
       render: (r) => (
-        <span className="num font-bold" style={{ color: r.outstandingTotal > 0 ? '#f59e0b' : '#16a34a' }}>
+        <span className="num font-bold" style={{ color: r.outstandingTotal > 0 ? '#b8863b' : '#3e7c74' }}>
           {fmtCurrency(r.outstandingTotal, r.currency)}
         </span>
       ),
