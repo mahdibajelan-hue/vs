@@ -121,6 +121,19 @@ export const ACTIVITY_LABEL_FA: Record<ActivityKind, string> = {
   hydrotest: 'تست هیدرواستاتیک',
 }
 
+/**
+ * Color for the 3D model viewer's progress-by-work-type coloring — a line is painted the color
+ * of the furthest stage it has reached along this same sequence (see ACTIVITY_KINDS), so the
+ * color deepens toward green as the line moves through weld -> NDT -> coating -> hydrotest.
+ * hydrotest reuses STATUS_COLOR.completed's green since reaching it means the line is done.
+ */
+export const ACTIVITY_COLOR: Record<ActivityKind, string> = {
+  welding: '#f1c40f',
+  ndt: '#e67e22',
+  coating: '#3498db',
+  hydrotest: '#2ecc71',
+}
+
 export interface ActivitySchedule {
   id: string
   lineId: string

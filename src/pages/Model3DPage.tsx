@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Box, Loader2, RefreshCcw, Trash2, Upload } from 'lucide-react'
 import type { Project } from '../types'
+import { ACTIVITY_KINDS, ACTIVITY_COLOR, ACTIVITY_LABEL_FA } from '../types'
 import { useStore } from '../store/useStore'
 import { useCurrentRole } from '../store/useMembersStore'
 import { useAuthStore } from '../store/useAuthStore'
@@ -25,6 +26,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [resolving, setResolving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [matchStats, setMatchStats] = useState<{ matched: number; total: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -102,6 +104,26 @@ export function Model3DPage({ project }: { project: Project }) {
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
 
+      {signedUrl && (
+        <div className="glass-panel flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-2xl px-4 py-2.5 text-[11px]">
+          <span className="flex items-center gap-1.5 text-muted">
+            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: '#4b5563', opacity: 0.6 }} />
+            شروع‌نشده / بدون تطبیق
+          </span>
+          {ACTIVITY_KINDS.map((activity) => (
+            <span key={activity} className="flex items-center gap-1.5 text-secondary">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ACTIVITY_COLOR[activity] }} />
+              {ACTIVITY_LABEL_FA[activity]}
+            </span>
+          ))}
+          {matchStats && (
+            <span className="mr-auto text-muted">
+              {matchStats.matched.toLocaleString('fa-IR')} از {matchStats.total.toLocaleString('fa-IR')} جزء مدل به خطوط لوله تطبیق داده شد
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="min-h-0 flex-1">
         {!project.model3dPath ? (
           <div className="glass-panel flex h-full flex-col items-center justify-center gap-3 rounded-2xl p-10 text-center">
@@ -117,7 +139,7 @@ export function Model3DPage({ project }: { project: Project }) {
             <Loader2 size={24} className="animate-spin text-brand-400" />
           </div>
         ) : (
-          <ThreeViewer url={signedUrl} />
+          <ThreeViewer url={signedUrl} lines={project.lines} logs={project.logs} onMatchStats={setMatchStats} />
         )}
       </div>
     </div>

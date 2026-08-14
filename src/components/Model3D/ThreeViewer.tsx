@@ -3,9 +3,52 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { Loader2 } from 'lucide-react'
+import { ACTIVITY_COLOR, type DailyLog, type IsoLine } from '../../types'
+import { furthestCompletedActivity } from '../../lib/progress'
+import { matchLineByObjectName } from '../../lib/model3dMatch'
 
-/** Loads an FBX model (typically exported from Navisworks Manage) from a URL and renders it with orbit/pan/zoom controls. */
-export function ThreeViewer({ url }: { url: string }) {
+const DIM_COLOR = 0x4b5563
+const DIM_OPACITY = 0.22
+
+/** Recolors every mesh in the loaded object: matched-and-worked-on parts get their furthest completed activity's color at full opacity, everything else (unmatched, or matched but not started) fades to a dim neutral gray. */
+function applyProgressColoring(root: THREE.Object3D, lines: IsoLine[], logs: DailyLog[]): { matched: number; total: number } {
+  let matched = 0
+  let total = 0
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    total++
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    const cloned = materials.map((m) => m.clone())
+    child.material = Array.isArray(child.material) ? cloned : cloned[0]
+
+    const line = matchLineByObjectName(child.name, lines)
+    const activity = line ? furthestCompletedActivity(line.id, logs) : null
+    if (line && activity) matched++
+
+    for (const mat of cloned) {
+      const colorable = mat as THREE.Material & { color?: THREE.Color; opacity: number; transparent: boolean }
+      if (!colorable.color) continue
+      if (activity) {
+        colorable.color.set(ACTIVITY_COLOR[activity])
+        colorable.opacity = 1
+        colorable.transparent = false
+      } else {
+        colorable.color.set(DIM_COLOR)
+        colorable.opacity = DIM_OPACITY
+        colorable.transparent = true
+      }
+    }
+  })
+  return { matched, total }
+}
+
+/**
+ * Loads an FBX model (typically exported from Navisworks Manage) and renders it with orbit/pan/
+ * zoom controls. When `lines`/`logs` are given, every mesh is auto-linked to a PipePulse line by
+ * name and colored by the furthest work stage reached on it (see applyProgressColoring) — parts
+ * with no matched, started work stay dim.
+ */
+export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url: string; lines?: IsoLine[]; logs?: DailyLog[]; onMatchStats?: (stats: { matched: number; total: number }) => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -64,6 +107,12 @@ export function ThreeViewer({ url }: { url: string }) {
         const scale = 20 / maxDim
         object.scale.setScalar(scale)
         object.position.sub(center.multiplyScalar(scale))
+
+        if (lines.length > 0) {
+          const stats = applyProgressColoring(object, lines, logs)
+          onMatchStats?.(stats)
+        }
+
         scene.add(object)
 
         const fitDistance = 24
@@ -106,6 +155,10 @@ export function ThreeViewer({ url }: { url: string }) {
       })
       if (renderer.domElement.parentElement === container) container.removeChild(renderer.domElement)
     }
+    // lines/logs/onMatchStats intentionally excluded: re-coloring happens by re-running this whole
+    // effect only when the model url changes, not on every progress edit elsewhere in the app —
+    // reopen the tab (or re-select the project) to see freshly logged progress reflected.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
   return (
