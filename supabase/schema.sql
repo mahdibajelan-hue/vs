@@ -3260,12 +3260,16 @@ create table if not exists joints (
   axis_x numeric,
   axis_y numeric,
   axis_z numeric,
+  -- Estimated pipe cross-section radius at position_x/y/z (same world units as the model), so the
+  -- weld-seam marker ring can be sized to actually hug the pipe instead of a generic fixed size.
+  ring_radius numeric,
   created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now()
 );
 alter table joints add column if not exists axis_x numeric;
 alter table joints add column if not exists axis_y numeric;
 alter table joints add column if not exists axis_z numeric;
+alter table joints add column if not exists ring_radius numeric;
 
 create table if not exists spools (
   id uuid primary key default gen_random_uuid(),

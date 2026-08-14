@@ -224,6 +224,8 @@ export interface Joint {
   position: Point3D | null
   /** Unit vector approximating the pipe's local run direction at `position` — lets the marker render as a ring around the pipe's circumference (like a real weld seam) instead of a sphere sitting on top of it. Null for joints placed before this was tracked. */
   axis: Point3D | null
+  /** Estimated pipe cross-section radius at `position` (same world units as the model), used to size the marker ring so it actually hugs the pipe. Null for joints placed before this was tracked. */
+  ringRadius: number | null
   createdAt: string
 }
 

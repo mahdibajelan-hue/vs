@@ -8,10 +8,16 @@ import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
-const JOINT_RING_RADIUS = 0.28
-const JOINT_RING_TUBE = 0.045
+// Fallback ring size for joints placed before per-joint radius estimation existed (ringRadius null).
+const JOINT_RING_RADIUS_FALLBACK = 0.12
+const JOINT_RING_TUBE_FRACTION = 0.18
+const JOINT_RING_TUBE_MIN = 0.006
 const JOINT_COLOR_DONE = 0x2ecc71
 const JOINT_COLOR_PENDING = 0xe74c3c
+// A click that moves the pointer more than this (css px) between down and up is an orbit/pan drag,
+// not a selection tap — without this guard, dragging the camera while in 'selectMeshes' mode kept
+// toggling whatever mesh happened to be under the cursor at release, silently adding wrong items.
+const CLICK_DRAG_THRESHOLD_PX = 6
 
 type ColorableMaterial = THREE.Material & { color?: THREE.Color; opacity: number; transparent: boolean }
 
@@ -67,32 +73,43 @@ function disposeGroupChildren(group: THREE.Group) {
 }
 
 /**
- * Best-effort estimate of a clicked pipe segment's local run direction, used to orient the weld
- * marker ring around the pipe instead of guessing an arbitrary plane. Since the model is typically
- * already split into one mesh per spool at every weld (the CAD/BIM authoring naturally breaks
- * geometry there), the clicked mesh's own bounding box is almost always a single straight or
- * near-straight run — its longest local dimension is the pipe axis, and transforming that
- * direction (not a point) through the mesh's world matrix carries any hierarchy rotation with it.
+ * Best-effort estimate of a clicked pipe segment's local run direction and cross-section radius,
+ * used to draw the weld marker ring hugging the actual pipe instead of a generic fixed size. Since
+ * the model is typically already split into one mesh per spool at every weld (the CAD/BIM
+ * authoring naturally breaks geometry there), the clicked mesh's own bounding box is almost always
+ * a single straight or near-straight run: its longest dimension is the pipe's length (the axis),
+ * and the other two are its cross-section — averaged and halved to get the radius. The world-space
+ * box already reflects the whole scene graph's transforms (including the model's own load-time
+ * normalization), so the numbers come out directly comparable to everything else in the scene.
  */
-function estimatePipeAxis(mesh: THREE.Mesh): THREE.Vector3 | null {
+function estimatePipeGeometry(mesh: THREE.Mesh): { axis: THREE.Vector3; radius: number } | null {
   const geometry = mesh.geometry
   if (!geometry.boundingBox) geometry.computeBoundingBox()
-  const box = geometry.boundingBox
-  if (!box) return null
-  const size = box.getSize(new THREE.Vector3())
+  const localBox = geometry.boundingBox
+  if (!localBox) return null
+  const localSize = localBox.getSize(new THREE.Vector3())
   let localAxis: THREE.Vector3
-  if (size.x >= size.y && size.x >= size.z) localAxis = new THREE.Vector3(1, 0, 0)
-  else if (size.y >= size.x && size.y >= size.z) localAxis = new THREE.Vector3(0, 1, 0)
+  if (localSize.x >= localSize.y && localSize.x >= localSize.z) localAxis = new THREE.Vector3(1, 0, 0)
+  else if (localSize.y >= localSize.x && localSize.y >= localSize.z) localAxis = new THREE.Vector3(0, 1, 0)
   else localAxis = new THREE.Vector3(0, 0, 1)
-  return localAxis.transformDirection(mesh.matrixWorld).normalize()
+  const axis = localAxis.transformDirection(mesh.matrixWorld).normalize()
+
+  const worldBox = new THREE.Box3().setFromObject(mesh)
+  const worldSize = worldBox.getSize(new THREE.Vector3()).toArray().sort((a, b) => a - b)
+  // worldSize is now ascending: the two smaller entries are the cross-section, the largest is the length.
+  const radius = Math.min(Math.max((worldSize[0] + worldSize[1]) / 4, 0.02), 4)
+
+  return { axis, radius }
 }
 
-/** Thin colored rings around each placed joint's position, oriented across the pipe's run direction like a real weld seam — red while pending, green once completed. Rings are hollow so they never occlude the spool surface underneath (unlike a solid marker). */
+/** Thin colored rings around each placed joint's position, sized and oriented to hug the pipe like a real weld seam — red while pending, green once completed. Rings are hollow so they never occlude the spool surface underneath (unlike a solid marker). */
 function rebuildJointMarkers(group: THREE.Group, joints: Joint[]) {
   disposeGroupChildren(group)
   for (const joint of joints) {
     if (!joint.position) continue
-    const geometry = new THREE.TorusGeometry(JOINT_RING_RADIUS, JOINT_RING_TUBE, 10, 32)
+    const radius = joint.ringRadius ?? JOINT_RING_RADIUS_FALLBACK
+    const tube = Math.max(radius * JOINT_RING_TUBE_FRACTION, JOINT_RING_TUBE_MIN)
+    const geometry = new THREE.TorusGeometry(radius, tube, 10, 32)
     const material = new THREE.MeshBasicMaterial({ color: joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING })
     const ring = new THREE.Mesh(geometry, material)
     ring.position.set(joint.position.x, joint.position.y, joint.position.z)
@@ -112,8 +129,8 @@ interface ThreeViewerProps {
   /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. */
   mode?: ViewerMode
   selectedMeshNames?: string[]
-  /** axis is a best-effort estimate of the pipe's local run direction at that point (see estimatePipeAxis) — null if it couldn't be determined. */
-  onPointPicked?: (point: Point3D, axis: Point3D | null) => void
+  /** axis/radius are a best-effort estimate of the clicked pipe segment's run direction and cross-section (see estimatePipeGeometry) — null if it couldn't be determined. */
+  onPointPicked?: (point: Point3D, axis: Point3D | null, radius: number | null) => void
   onMeshToggle?: (meshName: string) => void
 }
 
@@ -197,7 +214,17 @@ export function ThreeViewer({
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
-    const handleClick = (event: MouseEvent) => {
+    let pointerDownAt: { x: number; y: number } | null = null
+    const handlePointerDown = (event: PointerEvent) => {
+      pointerDownAt = { x: event.clientX, y: event.clientY }
+    }
+    const handlePointerUp = (event: PointerEvent) => {
+      const downAt = pointerDownAt
+      pointerDownAt = null
+      if (!downAt) return
+      // A drag (orbiting/panning the camera) should never register as a selection tap.
+      if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > CLICK_DRAG_THRESHOLD_PX) return
+
       const { mode: liveMode, onPointPicked: livePicked, onMeshToggle: liveToggle } = liveRef.current
       if (liveMode === 'view') return
       const object = objectRef.current
@@ -209,13 +236,14 @@ export function ThreeViewer({
       const hit = raycaster.intersectObject(object, true).find((h) => h.object instanceof THREE.Mesh)
       if (!hit) return
       if (liveMode === 'placeJoint') {
-        const axisVec = hit.object instanceof THREE.Mesh ? estimatePipeAxis(hit.object) : null
-        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z }, axisVec ? { x: axisVec.x, y: axisVec.y, z: axisVec.z } : null)
+        const geo = hit.object instanceof THREE.Mesh ? estimatePipeGeometry(hit.object) : null
+        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z }, geo ? { x: geo.axis.x, y: geo.axis.y, z: geo.axis.z } : null, geo?.radius ?? null)
       } else if (liveMode === 'selectMeshes') {
         liveToggle?.(hit.object.name)
       }
     }
-    renderer.domElement.addEventListener('click', handleClick)
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
+    renderer.domElement.addEventListener('pointerup', handlePointerUp)
 
     const loader = new FBXLoader()
     loader.load(
@@ -269,7 +297,8 @@ export function ThreeViewer({
       disposed = true
       cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
-      renderer.domElement.removeEventListener('click', handleClick)
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp)
       controls.dispose()
       renderer.dispose()
       scene.traverse((obj) => {

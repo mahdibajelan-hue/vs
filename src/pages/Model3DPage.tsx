@@ -56,7 +56,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [selectedLineId, setSelectedLineId] = useState('')
 
   const [viewerMode, setViewerMode] = useState<ViewerMode>('view')
-  const [pendingJoint, setPendingJoint] = useState<{ position: Point3D; axis: Point3D | null } | null>(null)
+  const [pendingJoint, setPendingJoint] = useState<{ position: Point3D; axis: Point3D | null; ringRadius: number | null } | null>(null)
   const [editingJoint, setEditingJoint] = useState<Joint | null>(null)
   const [completingJointId, setCompletingJointId] = useState<string | null>(null)
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
@@ -109,8 +109,8 @@ export function Model3DPage({ project }: { project: Project }) {
     setViewerMode('placeJoint')
   }
 
-  const handlePointPicked = (point: Point3D, axis: Point3D | null) => {
-    setPendingJoint({ position: point, axis })
+  const handlePointPicked = (point: Point3D, axis: Point3D | null, ringRadius: number | null) => {
+    setPendingJoint({ position: point, axis, ringRadius })
     setViewerMode('view')
   }
 
@@ -364,21 +364,39 @@ export function Model3DPage({ project }: { project: Project }) {
                 onMeshToggle={handleMeshToggle}
               />
               {viewerMode === 'selectMeshes' && (
-                <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-xl bg-black/70 px-4 py-2.5 backdrop-blur-sm">
-                  <span className="text-xs text-white">
-                    {selectedMeshNames.length.toLocaleString('fa-IR')} جزء انتخاب شد — روی اجزای مدل کلیک کنید تا انتخاب/لغو شود
-                  </span>
-                  <div className="flex gap-2">
-                    <button onClick={resetInteraction} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">
-                      انصراف
-                    </button>
-                    <button
-                      onClick={confirmMeshSelection}
-                      className="flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-400"
-                    >
-                      <Check size={13} /> تایید
-                    </button>
+                <div className="absolute inset-x-3 bottom-3 flex max-h-[55%] flex-col gap-2 rounded-xl bg-black/75 p-3 backdrop-blur-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-white">
+                      {selectedMeshNames.length.toLocaleString('fa-IR')} جزء انتخاب شد — روی اجزای مدل کلیک کنید تا انتخاب/لغو شود
+                    </span>
+                    <div className="flex shrink-0 gap-2">
+                      <button onClick={resetInteraction} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">
+                        انصراف
+                      </button>
+                      <button
+                        onClick={confirmMeshSelection}
+                        className="flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-400"
+                      >
+                        <Check size={13} /> تایید
+                      </button>
+                    </div>
                   </div>
+                  {selectedMeshNames.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 overflow-y-auto border-t border-white/10 pt-2">
+                      {selectedMeshNames.map((name) => (
+                        <span key={name} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white">
+                          {name}
+                          <button
+                            onClick={() => handleMeshToggle(name)}
+                            className="rounded-full p-0.5 text-white/70 hover:bg-white/20 hover:text-white"
+                            title="حذف از انتخاب"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -405,6 +423,7 @@ export function Model3DPage({ project }: { project: Project }) {
               notes: data.notes,
               position: pendingJoint.position,
               axis: pendingJoint.axis,
+              ringRadius: pendingJoint.ringRadius,
             })
             setPendingJoint(null)
           }}

@@ -111,6 +111,7 @@ interface JointRow {
   axis_x: number | string | null
   axis_y: number | string | null
   axis_z: number | string | null
+  ring_radius: number | string | null
   created_at: string
 }
 
@@ -279,6 +280,7 @@ export function jointFromRow(r: JointRow): Joint {
       r.axis_x != null && r.axis_y != null && r.axis_z != null
         ? { x: Number(r.axis_x), y: Number(r.axis_y), z: Number(r.axis_z) }
         : null,
+    ringRadius: r.ring_radius != null ? Number(r.ring_radius) : null,
     createdAt: r.created_at,
   }
 }
@@ -305,6 +307,7 @@ export function jointToRow(projectId: string, j: Partial<Joint>) {
     row.axis_y = j.axis?.y ?? null
     row.axis_z = j.axis?.z ?? null
   }
+  if (j.ringRadius !== undefined) row.ring_radius = j.ringRadius
   return row
 }
 
