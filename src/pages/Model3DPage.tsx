@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Box, Boxes, Check, Loader2, MapPin, MousePointerClick, Pencil, Plus, RefreshCcw, Trash2, Upload, X } from 'lucide-react'
+import { Box, Boxes, Check, Loader2, Map, MapPin, MousePointerClick, Pencil, Plus, RefreshCcw, Trash2, Upload, X } from 'lucide-react'
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { Equipment3D, Joint, Point3D, Project, Spool } from '../types'
 import { JOINT_TYPE_LABEL_FA } from '../types'
 import { useStore } from '../store/useStore'
@@ -10,11 +11,13 @@ import { getProjectModel3dSignedUrl } from '../lib/model3dStorage'
 import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
+import { WeldMap2D } from '../components/Model3D/WeldMap2D'
 import { JointFormModal, JointCompleteDateModal } from '../components/Model3D/JointFormModal'
 import { Equipment3DFormModal } from '../components/Model3D/Equipment3DFormModal'
 import { JalaliDateInput } from '../components/common/JalaliDateInput'
 
 type SidePanelTab = 'lines' | 'equipment'
+type PageView = '3d' | 'map'
 
 type MeshSelectionTarget =
   | { kind: 'spool'; lineId: string; startJointId: string; endJointId: string; spoolId?: string }
@@ -54,6 +57,7 @@ export function Model3DPage({ project }: { project: Project }) {
 
   const [tab, setTab] = useState<SidePanelTab>('lines')
   const [selectedLineId, setSelectedLineId] = useState('')
+  const [pageView, setPageView] = useState<PageView>('3d')
 
   const [viewerMode, setViewerMode] = useState<ViewerMode>('view')
   const [pendingJointPosition, setPendingJointPosition] = useState<Point3D | null>(null)
@@ -108,6 +112,7 @@ export function Model3DPage({ project }: { project: Project }) {
 
   const startPlaceJoint = () => {
     if (!selectedLineId) return
+    setPageView('3d')
     setViewerMode('placeJoint')
   }
 
@@ -136,12 +141,14 @@ export function Model3DPage({ project }: { project: Project }) {
   }, [])
 
   const startSpoolLink = (lineId: string, startJointId: string, endJointId: string, existing?: Spool | null) => {
+    setPageView('3d')
     setMeshSelectionTarget({ kind: 'spool', lineId, startJointId, endJointId, spoolId: existing?.id })
     setSelectedMeshNames(existing?.meshObjectNames ?? [])
     setViewerMode('selectMeshes')
   }
 
   const startEquipmentLink = (equipment: Equipment3D) => {
+    setPageView('3d')
     setMeshSelectionTarget({ kind: 'equipment', equipmentId: equipment.id })
     setSelectedMeshNames(equipment.meshObjectNames)
     setViewerMode('selectMeshes')
@@ -180,37 +187,59 @@ export function Model3DPage({ project }: { project: Project }) {
             <p className="text-xs text-muted">{project.model3dFileName || 'مدلی بارگذاری نشده است'}</p>
           </div>
         </div>
-        {editable && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-3.5 py-2 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-50 transition-colors"
-            >
-              {uploading ? <Loader2 size={14} className="animate-spin" /> : project.model3dPath ? <RefreshCcw size={14} /> : <Upload size={14} />}
-              {uploading ? 'در حال بارگذاری...' : project.model3dPath ? 'جایگزینی مدل (FBX)' : 'بارگذاری مدل (FBX)'}
-            </button>
-            {project.model3dPath && (
+        <div className="flex items-center gap-2">
+          {project.model3dPath && (
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 p-1">
               <button
-                onClick={() => clearProjectModel3d(project.id)}
-                className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5 transition-colors"
+                onClick={() => setPageView('3d')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  pageView === '3d' ? 'bg-brand-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
               >
-                <Trash2 size={13} /> حذف
+                <Box size={13} /> نمای سه‌بعدی
               </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".fbx"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) handleFile(f)
-                e.target.value = ''
-              }}
-            />
-          </div>
-        )}
+              <button
+                onClick={() => setPageView('map')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  pageView === 'map' ? 'bg-brand-500 text-white' : 'text-secondary hover:bg-white/5'
+                }`}
+              >
+                <Map size={13} /> نقشهٔ جوش
+              </button>
+            </div>
+          )}
+          {editable && (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-3.5 py-2 text-xs font-medium text-white hover:bg-brand-400 disabled:opacity-50 transition-colors"
+              >
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : project.model3dPath ? <RefreshCcw size={14} /> : <Upload size={14} />}
+                {uploading ? 'در حال بارگذاری...' : project.model3dPath ? 'جایگزینی مدل (FBX)' : 'بارگذاری مدل (FBX)'}
+              </button>
+              {project.model3dPath && (
+                <button
+                  onClick={() => clearProjectModel3d(project.id)}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5 transition-colors"
+                >
+                  <Trash2 size={13} /> حذف
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".fbx"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleFile(f)
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
@@ -396,7 +425,8 @@ export function Model3DPage({ project }: { project: Project }) {
             </div>
           ) : (
             <>
-              <ThreeViewer
+              <div className={pageView === '3d' ? 'relative h-full' : 'hidden'}>
+                <ThreeViewer
                 url={signedUrl}
                 joints={project.joints}
                 equipment3d={project.equipment3d}
@@ -497,6 +527,56 @@ export function Model3DPage({ project }: { project: Project }) {
                   )}
                 </div>
               )}
+              </div>
+
+              {pageView === 'map' && (
+                <div className="flex h-full flex-col gap-3">
+                  <div className="min-h-0 flex-1">
+                    <WeldMap2D
+                      joints={lineJoints}
+                      lineLabel={selectedLine?.svgElementId ?? ''}
+                      equipment3d={project.equipment3d}
+                      selectedJointId={selectedJointId}
+                      onSelectJoint={setSelectedJointId}
+                      onEditJoint={(joint) => {
+                        setEditingJoint(joint)
+                        setSelectedJointId(null)
+                      }}
+                      editable={editable}
+                    />
+                  </div>
+                  <div className="glass-panel grid shrink-0 grid-cols-2 gap-3 rounded-2xl p-3 sm:grid-cols-4">
+                    <StatTile label="کل اتصالات" value={jointStats.total} color="var(--text-primary)" />
+                    <StatTile label="تکمیل‌شده" value={jointStats.completed} color="#2ecc71" />
+                    <StatTile label="باقیمانده" value={jointStats.total - jointStats.completed} color="#e74c3c" />
+                    <div className="col-span-2 h-20 sm:col-span-1">
+                      {jointStats.total > 0 && (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'تکمیل‌شده', value: jointStats.completed },
+                                { name: 'باقیمانده', value: jointStats.total - jointStats.completed },
+                              ]}
+                              dataKey="value"
+                              innerRadius={22}
+                              outerRadius={34}
+                              strokeWidth={0}
+                            >
+                              <Cell fill="#2ecc71" />
+                              <Cell fill="#e74c3c" />
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
+                              formatter={(v) => [Number(v).toLocaleString('fa-IR'), '']}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -582,6 +662,17 @@ export function Model3DPage({ project }: { project: Project }) {
           }
         />
       )}
+    </div>
+  )
+}
+
+function StatTile({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 p-2 text-center">
+      <p className="num text-lg font-bold" style={{ color }}>
+        {value.toLocaleString('fa-IR')}
+      </p>
+      <p className="text-[10px] text-muted">{label}</p>
     </div>
   )
 }
