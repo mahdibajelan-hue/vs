@@ -108,6 +108,9 @@ interface JointRow {
   position_x: number | string | null
   position_y: number | string | null
   position_z: number | string | null
+  axis_x: number | string | null
+  axis_y: number | string | null
+  axis_z: number | string | null
   created_at: string
 }
 
@@ -272,6 +275,10 @@ export function jointFromRow(r: JointRow): Joint {
       r.position_x != null && r.position_y != null && r.position_z != null
         ? { x: Number(r.position_x), y: Number(r.position_y), z: Number(r.position_z) }
         : null,
+    axis:
+      r.axis_x != null && r.axis_y != null && r.axis_z != null
+        ? { x: Number(r.axis_x), y: Number(r.axis_y), z: Number(r.axis_z) }
+        : null,
     createdAt: r.created_at,
   }
 }
@@ -292,6 +299,11 @@ export function jointToRow(projectId: string, j: Partial<Joint>) {
     row.position_x = j.position?.x ?? null
     row.position_y = j.position?.y ?? null
     row.position_z = j.position?.z ?? null
+  }
+  if (j.axis !== undefined) {
+    row.axis_x = j.axis?.x ?? null
+    row.axis_y = j.axis?.y ?? null
+    row.axis_z = j.axis?.z ?? null
   }
   return row
 }

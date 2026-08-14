@@ -3254,9 +3254,18 @@ create table if not exists joints (
   position_x numeric,
   position_y numeric,
   position_z numeric,
+  -- Unit vector approximating the pipe's local run direction at the clicked point (derived
+  -- client-side from the hit mesh's own bounding box) — lets the weld-seam marker be drawn as a
+  -- ring around the pipe's circumference instead of a sphere sitting on top of it.
+  axis_x numeric,
+  axis_y numeric,
+  axis_z numeric,
   created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now()
 );
+alter table joints add column if not exists axis_x numeric;
+alter table joints add column if not exists axis_y numeric;
+alter table joints add column if not exists axis_z numeric;
 
 create table if not exists spools (
   id uuid primary key default gen_random_uuid(),

@@ -8,7 +8,8 @@ import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
-const JOINT_MARKER_RADIUS = 0.12
+const JOINT_RING_RADIUS = 0.28
+const JOINT_RING_TUBE = 0.045
 const JOINT_COLOR_DONE = 0x2ecc71
 const JOINT_COLOR_PENDING = 0xe74c3c
 
@@ -65,17 +66,41 @@ function disposeGroupChildren(group: THREE.Group) {
   group.clear()
 }
 
-/** Small colored spheres at each placed joint's position — red/gray while pending, green once completed. */
+/**
+ * Best-effort estimate of a clicked pipe segment's local run direction, used to orient the weld
+ * marker ring around the pipe instead of guessing an arbitrary plane. Since the model is typically
+ * already split into one mesh per spool at every weld (the CAD/BIM authoring naturally breaks
+ * geometry there), the clicked mesh's own bounding box is almost always a single straight or
+ * near-straight run — its longest local dimension is the pipe axis, and transforming that
+ * direction (not a point) through the mesh's world matrix carries any hierarchy rotation with it.
+ */
+function estimatePipeAxis(mesh: THREE.Mesh): THREE.Vector3 | null {
+  const geometry = mesh.geometry
+  if (!geometry.boundingBox) geometry.computeBoundingBox()
+  const box = geometry.boundingBox
+  if (!box) return null
+  const size = box.getSize(new THREE.Vector3())
+  let localAxis: THREE.Vector3
+  if (size.x >= size.y && size.x >= size.z) localAxis = new THREE.Vector3(1, 0, 0)
+  else if (size.y >= size.x && size.y >= size.z) localAxis = new THREE.Vector3(0, 1, 0)
+  else localAxis = new THREE.Vector3(0, 0, 1)
+  return localAxis.transformDirection(mesh.matrixWorld).normalize()
+}
+
+/** Thin colored rings around each placed joint's position, oriented across the pipe's run direction like a real weld seam — red while pending, green once completed. Rings are hollow so they never occlude the spool surface underneath (unlike a solid marker). */
 function rebuildJointMarkers(group: THREE.Group, joints: Joint[]) {
   disposeGroupChildren(group)
   for (const joint of joints) {
     if (!joint.position) continue
-    const geometry = new THREE.SphereGeometry(JOINT_MARKER_RADIUS, 12, 12)
+    const geometry = new THREE.TorusGeometry(JOINT_RING_RADIUS, JOINT_RING_TUBE, 10, 32)
     const material = new THREE.MeshBasicMaterial({ color: joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING })
-    const sphere = new THREE.Mesh(geometry, material)
-    sphere.position.set(joint.position.x, joint.position.y, joint.position.z)
-    sphere.name = `__joint_marker_${joint.id}`
-    group.add(sphere)
+    const ring = new THREE.Mesh(geometry, material)
+    ring.position.set(joint.position.x, joint.position.y, joint.position.z)
+    const axisVec = joint.axis ? new THREE.Vector3(joint.axis.x, joint.axis.y, joint.axis.z) : new THREE.Vector3(0, 1, 0)
+    if (axisVec.lengthSq() < 1e-6) axisVec.set(0, 1, 0)
+    ring.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisVec.normalize()))
+    ring.name = `__joint_marker_${joint.id}`
+    group.add(ring)
   }
 }
 
@@ -87,7 +112,8 @@ interface ThreeViewerProps {
   /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. */
   mode?: ViewerMode
   selectedMeshNames?: string[]
-  onPointPicked?: (point: Point3D) => void
+  /** axis is a best-effort estimate of the pipe's local run direction at that point (see estimatePipeAxis) — null if it couldn't be determined. */
+  onPointPicked?: (point: Point3D, axis: Point3D | null) => void
   onMeshToggle?: (meshName: string) => void
 }
 
@@ -96,8 +122,8 @@ interface ThreeViewerProps {
  * zoom controls. Progress coloring is entirely driven by the joint-centric model (see
  * src/lib/model3dColoring.ts) — nothing is auto-matched by object name: a spool's linked meshes
  * light up only once both its bounding joints are completed, equipment's linked meshes light up
- * once both its install milestones are set, and every joint gets a small marker sphere at its
- * clicked position.
+ * once both its install milestones are set, and every joint gets a thin ring marker around the
+ * pipe at its clicked position.
  */
 export function ThreeViewer({
   url,
@@ -183,7 +209,8 @@ export function ThreeViewer({
       const hit = raycaster.intersectObject(object, true).find((h) => h.object instanceof THREE.Mesh)
       if (!hit) return
       if (liveMode === 'placeJoint') {
-        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z })
+        const axisVec = hit.object instanceof THREE.Mesh ? estimatePipeAxis(hit.object) : null
+        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z }, axisVec ? { x: axisVec.x, y: axisVec.y, z: axisVec.z } : null)
       } else if (liveMode === 'selectMeshes') {
         liveToggle?.(hit.object.name)
       }

@@ -56,7 +56,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [selectedLineId, setSelectedLineId] = useState('')
 
   const [viewerMode, setViewerMode] = useState<ViewerMode>('view')
-  const [pendingJointPosition, setPendingJointPosition] = useState<Point3D | null>(null)
+  const [pendingJoint, setPendingJoint] = useState<{ position: Point3D; axis: Point3D | null } | null>(null)
   const [editingJoint, setEditingJoint] = useState<Joint | null>(null)
   const [completingJointId, setCompletingJointId] = useState<string | null>(null)
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
@@ -99,7 +99,7 @@ export function Model3DPage({ project }: { project: Project }) {
 
   const resetInteraction = () => {
     setViewerMode('view')
-    setPendingJointPosition(null)
+    setPendingJoint(null)
     setMeshSelectionTarget(null)
     setSelectedMeshNames([])
   }
@@ -109,8 +109,8 @@ export function Model3DPage({ project }: { project: Project }) {
     setViewerMode('placeJoint')
   }
 
-  const handlePointPicked = (point: Point3D) => {
-    setPendingJointPosition(point)
+  const handlePointPicked = (point: Point3D, axis: Point3D | null) => {
+    setPendingJoint({ position: point, axis })
     setViewerMode('view')
   }
 
@@ -386,12 +386,12 @@ export function Model3DPage({ project }: { project: Project }) {
         </div>
       </div>
 
-      {pendingJointPosition && selectedLine && (
+      {pendingJoint && selectedLine && (
         <JointFormModal
           lineLabel={selectedLine.svgElementId}
-          position={pendingJointPosition}
+          position={pendingJoint.position}
           equipment3d={project.equipment3d}
-          onClose={() => setPendingJointPosition(null)}
+          onClose={() => setPendingJoint(null)}
           onSubmit={async (data) => {
             await addJoint(project.id, {
               lineId: selectedLineId,
@@ -403,9 +403,10 @@ export function Model3DPage({ project }: { project: Project }) {
               status: 'not_started',
               completedDate: null,
               notes: data.notes,
-              position: pendingJointPosition,
+              position: pendingJoint.position,
+              axis: pendingJoint.axis,
             })
-            setPendingJointPosition(null)
+            setPendingJoint(null)
           }}
         />
       )}
