@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPayment, FinPaymentCertificate, FinRetentionRelease } from '../types'
+import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinCashflowForecast, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPayment, FinPaymentCertificate, FinRetentionRelease } from '../types'
 import {
   finAnnualBudgetFromRow,
   finAnnualBudgetToRow,
@@ -11,6 +11,8 @@ import {
   finBudgetChangeToRow,
   finBudgetFromRow,
   finBudgetToRow,
+  finCashflowForecastFromRow,
+  finCashflowForecastToRow,
   finClaimFromRow,
   finClaimToRow,
   finContractAmendmentFromRow,
@@ -54,6 +56,7 @@ interface FinanceState {
   payments: FinPayment[]
   claims: FinClaim[]
   retentionReleases: FinRetentionRelease[]
+  cashflowForecasts: FinCashflowForecast[]
   profiles: FinProfileRef[]
   loading: boolean
   loaded: boolean
@@ -95,6 +98,9 @@ interface FinanceState {
   createRetentionRelease: (contractId: string, data: Partial<FinRetentionRelease>) => Promise<void>
   updateRetentionRelease: (id: string, data: Partial<FinRetentionRelease>) => Promise<void>
   deleteRetentionRelease: (id: string) => Promise<void>
+
+  upsertCashflowForecast: (contractId: string, jalaliYear: number, jalaliMonth: number, data: Partial<FinCashflowForecast>) => Promise<void>
+  deleteCashflowForecast: (id: string) => Promise<void>
 }
 
 export const useFinanceStore = create<FinanceState>()((set, get) => ({
@@ -108,6 +114,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
   payments: [],
   claims: [],
   retentionReleases: [],
+  cashflowForecasts: [],
   profiles: [],
   loading: false,
   loaded: false,
@@ -126,7 +133,14 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       return
     }
     const contractIds = ((contracts ?? []) as { id: string }[]).map((c) => c.id)
-    const [{ data: amendments, error: e4 }, { data: certificates, error: e5 }, { data: guarantees, error: e6 }, { data: claims, error: e9 }, { data: retentionReleases, error: e10 }] =
+    const [
+      { data: amendments, error: e4 },
+      { data: certificates, error: e5 },
+      { data: guarantees, error: e6 },
+      { data: claims, error: e9 },
+      { data: retentionReleases, error: e10 },
+      { data: cashflowForecasts, error: e11 },
+    ] =
       contractIds.length > 0
         ? await Promise.all([
             supabase.from('fin_contract_amendments').select('*').in('contract_id', contractIds).order('amendment_date'),
@@ -134,9 +148,10 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
             supabase.from('fin_guarantees').select('*').in('contract_id', contractIds).order('expiry_date'),
             supabase.from('fin_claims').select('*').in('contract_id', contractIds).order('submitted_date'),
             supabase.from('fin_retention_releases').select('*').in('contract_id', contractIds).order('planned_date'),
+            supabase.from('fin_cashflow_forecasts').select('*').in('contract_id', contractIds).order('jalali_year').order('jalali_month'),
           ])
-        : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
-    if (reportError('بارگذاری داده‌های مالی', e4 ?? e5 ?? e6 ?? e9 ?? e10)) {
+        : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
+    if (reportError('بارگذاری داده‌های مالی', e4 ?? e5 ?? e6 ?? e9 ?? e10 ?? e11)) {
       set({ loading: false })
       return
     }
@@ -158,6 +173,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       payments: (payments ?? []).map(finPaymentFromRow),
       claims: (claims ?? []).map(finClaimFromRow),
       retentionReleases: (retentionReleases ?? []).map(finRetentionReleaseFromRow),
+      cashflowForecasts: (cashflowForecasts ?? []).map(finCashflowForecastFromRow),
       profiles: ((profileRows ?? []) as { id: string; full_name: string }[]).map((p) => ({ id: p.id, fullName: p.full_name })),
       loading: false,
       loaded: true,
@@ -321,5 +337,19 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const { error } = await supabase.from('fin_retention_releases').delete().eq('id', id)
     if (reportError('حذف آزادسازی حسن انجام کار', error)) return
     set((s) => ({ retentionReleases: s.retentionReleases.filter((r) => r.id !== id) }))
+  },
+
+  upsertCashflowForecast: async (contractId, jalaliYear, jalaliMonth, data) => {
+    const existing = get().cashflowForecasts.find((f) => f.contractId === contractId && f.jalaliYear === jalaliYear && f.jalaliMonth === jalaliMonth)
+    const { error } = existing
+      ? await supabase.from('fin_cashflow_forecasts').update(finCashflowForecastToRow(null, data)).eq('id', existing.id)
+      : await supabase.from('fin_cashflow_forecasts').insert(finCashflowForecastToRow(contractId, { ...data, jalaliYear, jalaliMonth }))
+    if (reportError('ثبت برآورد نقدینگی ماهانه', error)) return
+    await get().fetchAll()
+  },
+  deleteCashflowForecast: async (id) => {
+    const { error } = await supabase.from('fin_cashflow_forecasts').delete().eq('id', id)
+    if (reportError('حذف برآورد نقدینگی ماهانه', error)) return
+    set((s) => ({ cashflowForecasts: s.cashflowForecasts.filter((f) => f.id !== id) }))
   },
 }))

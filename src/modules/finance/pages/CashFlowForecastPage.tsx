@@ -1,9 +1,19 @@
 import { useId, useState } from 'react'
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
-import { Banknote, Briefcase, Building2, Calculator, CalendarClock, FolderKanban, Landmark, Scale, Target, TrendingDown, Wallet } from 'lucide-react'
+import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
+import { AlertTriangle, Banknote, Briefcase, Building2, Calculator, CalendarClock, FolderKanban, Landmark, Scale, Target, TrendingDown, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
-import { aggregateFinancialSummaries, computeCashFlowSeries, computeProjectFinancialSummary, cumulativeCashFlow, ensureForwardMonths, todayIso, type CashFlowPoint, type ProjectFinancialSummary } from '../lib/financeCalc'
+import {
+  aggregateFinancialSummaries,
+  computeCashFlowSeries,
+  computeProjectFinancialSummary,
+  cumulativeCashFlow,
+  ensureForwardMonths,
+  mergeRequiredCashflow,
+  todayIso,
+  type CashFlowPointWithRequired,
+  type ProjectFinancialSummary,
+} from '../lib/financeCalc'
 import { fmtCurrency, fmtMonthJalali } from '../components/FinanceKpiTile'
 import { MetricCard } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
@@ -27,6 +37,7 @@ export function CashFlowForecastPage() {
   const contracts = useFinanceStore((s) => s.contracts)
   const amendments = useFinanceStore((s) => s.amendments)
   const certificates = useFinanceStore((s) => s.certificates)
+  const cashflowForecasts = useFinanceStore((s) => s.cashflowForecasts)
 
   const [level, setLevel] = useState<Level>('portfolio')
   const [portfolioId, setPortfolioId] = useState<string>('')
@@ -43,14 +54,17 @@ export function CashFlowForecastPage() {
     return aggregateFinancialSummaries(summaries)
   }
 
-  const scopedCashFlow = (projectIds: string[]) => {
+  /** Also merges the contractor-submitted monthly Cash Call onto the series, so "required" (what the contractor said) and "gap" (required - actual paid) chart alongside planned/actual/forecast. */
+  const scopedCashFlow = (projectIds: string[]): CashFlowPointWithRequired[] => {
     const idSet = new Set(projectIds)
     const scopedContracts = contracts.filter((c) => idSet.has(c.masterProjectId))
     const contractIds = new Set(scopedContracts.map((c) => c.id))
     const scopedAmendments = amendments.filter((a) => contractIds.has(a.contractId))
     const scopedCertificates = certificates.filter((c) => contractIds.has(c.contractId))
+    const scopedForecasts = cashflowForecasts.filter((f) => contractIds.has(f.contractId))
     // Spec: "minimum 12-month forecast" at every level — pad forward months with zero activity rather than truncating the chart/report.
-    return ensureForwardMonths(computeCashFlowSeries(scopedContracts, scopedAmendments, scopedCertificates))
+    const points = ensureForwardMonths(computeCashFlowSeries(scopedContracts, scopedAmendments, scopedCertificates))
+    return mergeRequiredCashflow(points, scopedForecasts)
   }
 
   const scopeCurrency = (projectIds: string[]) => {
@@ -110,7 +124,7 @@ export function CashFlowForecastPage() {
 }
 
 type Summarize = (projectIds: string[]) => ProjectFinancialSummary
-type ScopedCashFlow = (projectIds: string[]) => ReturnType<typeof computeCashFlowSeries>
+type ScopedCashFlow = (projectIds: string[]) => CashFlowPointWithRequired[]
 type ScopeCurrency = (projectIds: string[]) => string
 
 function PortfolioScope({
@@ -283,11 +297,13 @@ function ProjectScope({
  * plain-language portfolio-level summary the spec calls for ("how much certificate/cash does the
  * whole company need this month, and over the next 12 months").
  */
-export function FundingRequirementPanel({ cashFlow, currency, showManagementNote }: { cashFlow: CashFlowPoint[]; currency: string; showManagementNote?: boolean }) {
+export function FundingRequirementPanel({ cashFlow, currency, showManagementNote }: { cashFlow: CashFlowPointWithRequired[]; currency: string; showManagementNote?: boolean }) {
   const nowMonth = todayIso().slice(0, 7)
   const forwardPoints = cashFlow.filter((p) => p.month >= nowMonth).slice(0, 12)
   const thisMonth = forwardPoints[0]?.forecast ?? 0
   const next12Total = forwardPoints.reduce((sum, p) => sum + p.forecast, 0)
+  const hasContractorEstimate = cashFlow.some((p) => p.required > 0)
+  const thisMonthGap = forwardPoints[0]?.gap ?? 0
 
   return (
     <div className="fin-card p-4">
@@ -297,7 +313,7 @@ export function FundingRequirementPanel({ cashFlow, currency, showManagementNote
       <p className="mb-3 text-[10px] leading-5 fin-text-muted">
         برآورد ماهانه صورت‌وضعیت و پرداخت مورد انتظار، بر مبنای تعهد باقیمانده قراردادها تا تاریخ تکمیل برنامه‌ریزی‌شده هر قرارداد.
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={CalendarClock}
           label="نیاز مالی برآوردی ماه جاری"
@@ -313,6 +329,16 @@ export function FundingRequirementPanel({ cashFlow, currency, showManagementNote
           tooltip="مجموع نیاز مالی برآوردی این محدوده برای ۱۲ ماه پیش رو — پاسخ به «تا یک سال آینده چقدر منبع مالی لازم است»."
           emphasize
         />
+        {hasContractorEstimate && (
+          <MetricCard
+            icon={AlertTriangle}
+            label="اختلاف نیاز اعلامی پیمانکار و پرداخت واقعی (ماه جاری)"
+            value={fmtCurrency(thisMonthGap, currency)}
+            color={thisMonthGap > 0 ? '#b5573a' : '#3e7c74'}
+            status={thisMonthGap > 0 ? 'bad' : 'good'}
+            tooltip="نیاز نقدینگی اعلامی پیمانکار برای این ماه (از بخش «قراردادها») منهای پرداخت واقعی همان ماه. مثبت یعنی پرداخت از نیاز اعلامی پیمانکار عقب‌تر است."
+          />
+        )}
       </div>
       {showManagementNote && (
         <p className="mt-3 rounded-lg border p-2.5 text-[10.5px] leading-6 fin-text-secondary" style={{ borderColor: 'var(--fin-divider)' }}>
@@ -364,20 +390,26 @@ function ScopeKpis({ summary, currency }: { summary: ProjectFinancialSummary; cu
   )
 }
 
-export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<typeof computeCashFlowSeries>; currency: string }) {
+export function CashFlowSection({ cashFlow, currency }: { cashFlow: CashFlowPointWithRequired[]; currency: string }) {
   const cumulative = cumulativeCashFlow(cashFlow)
   const gid = useId()
+  const hasContractorEstimate = cashFlow.some((p) => p.required > 0)
   if (cashFlow.length === 0) {
     return <div className="fin-card p-8 text-center text-xs fin-text-muted">داده کافی برای رسم جریان نقدی در این محدوده ثبت نشده است.</div>
   }
   return (
     <div className="fin-card p-4">
       <p className="mb-2 text-[11px] font-bold">جریان نقدی — ماهانه و تجمعی</p>
+      {hasContractorEstimate && (
+        <p className="mb-2 text-[10px] leading-5 fin-text-muted">
+          «نیاز اعلامی پیمانکار» برآورد ماهانه‌ای است که خود پیمانکار ثبت کرده (از بخش «قراردادها» ← «برآورد نقدینگی ماهانه پیمانکار»)؛ «اختلاف» = نیاز اعلامی منهای پرداخت واقعی همان ماه.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {[
-          { title: 'ماهانه', points: cashFlow },
-          { title: 'تجمعی', points: cumulative },
-        ].map(({ title, points }) => (
+          { title: 'ماهانه', points: cashFlow, showRequired: hasContractorEstimate },
+          { title: 'تجمعی', points: cumulative, showRequired: false },
+        ].map(({ title, points, showRequired }) => (
           <div key={title}>
             <p className="mb-1.5 text-[10.5px] font-bold fin-text-secondary">{title}</p>
             <div style={{ height: 190 }}>
@@ -396,6 +428,10 @@ export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<t
                       <stop offset="0%" stopColor="#5c7290" stopOpacity={0.22} />
                       <stop offset="100%" stopColor="#5c7290" stopOpacity={0} />
                     </linearGradient>
+                    <linearGradient id={`${gid}-${title}-required`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a65d82" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#a65d82" stopOpacity={0} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--fin-divider)" vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 9, fill: 'var(--fin-text-muted)' }} tickLine={false} axisLine={false} tickFormatter={fmtMonthJalali} />
@@ -409,6 +445,10 @@ export function CashFlowSection({ cashFlow, currency }: { cashFlow: ReturnType<t
                   <Area type="monotone" dataKey="planned" name="برنامه" stroke="#5c7290" strokeWidth={1.5} fill={`url(#${gid}-${title}-planned)`} />
                   <Area type="monotone" dataKey="actual" name="واقعی" stroke="#3e7c74" strokeWidth={2} fill={`url(#${gid}-${title}-actual)`} />
                   <Area type="monotone" dataKey="forecast" name="پیش‌بینی (نیاز مالی)" stroke="#b8863b" strokeWidth={1.5} fill={`url(#${gid}-${title}-forecast)`} />
+                  {showRequired && (
+                    <Area type="monotone" dataKey="required" name="نیاز اعلامی پیمانکار" stroke="#a65d82" strokeWidth={1.5} fill={`url(#${gid}-${title}-required)`} />
+                  )}
+                  {showRequired && <Line type="monotone" dataKey="gap" name="اختلاف (نیاز - واقعی)" stroke="#b5573a" strokeWidth={2} strokeDasharray="4 3" dot={false} />}
                 </AreaChart>
               </ResponsiveContainer>
             </div>

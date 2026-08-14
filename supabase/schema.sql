@@ -3137,3 +3137,42 @@ create policy "finance_docs_update_admin" on storage.objects
 drop policy if exists "finance_docs_delete_admin" on storage.objects;
 create policy "finance_docs_delete_admin" on storage.objects
   for delete using (bucket_id = 'finance-docs' and is_admin_user());
+
+-- ============================================================================
+-- 24. Contractor-submitted monthly funding requirement (Cash Call)
+--
+--     The Cash Flow & Funding Forecast page's "planned"/"forecast" series were
+--     always a straight-line proxy computed from contract value/dates — never
+--     a number the contractor actually submitted. This table lets a PM enter
+--     the contractor's own monthly cash-call estimate per contract (in Jalali
+--     year/month, matching how this module dates everything), so it can be
+--     charted against real fin_payment_certificates.paid_amount and the gap
+--     between "what the contractor said they'd need" and "what was actually
+--     paid" becomes a visible number instead of an implicit straight line.
+-- ============================================================================
+
+create table if not exists fin_cashflow_forecasts (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  jalali_year integer not null,
+  jalali_month smallint not null check (jalali_month between 1 and 12),
+  forecast_amount numeric not null default 0,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  unique (contract_id, jalali_year, jalali_month)
+);
+
+alter table fin_cashflow_forecasts enable row level security;
+
+drop policy if exists "fin_cashflow_forecasts_select_authenticated" on fin_cashflow_forecasts;
+create policy "fin_cashflow_forecasts_select_authenticated" on fin_cashflow_forecasts for select using (auth.uid() is not null);
+drop policy if exists "fin_cashflow_forecasts_write_admin" on fin_cashflow_forecasts;
+create policy "fin_cashflow_forecasts_write_admin" on fin_cashflow_forecasts for all using (is_admin_user()) with check (is_admin_user());
+
+drop trigger if exists trg_set_updated_at on fin_cashflow_forecasts;
+create trigger trg_set_updated_at before update on fin_cashflow_forecasts for each row execute function set_updated_at_and_by_fin();
+
+create index if not exists idx_fin_cashflow_forecasts_contract on fin_cashflow_forecasts (contract_id);

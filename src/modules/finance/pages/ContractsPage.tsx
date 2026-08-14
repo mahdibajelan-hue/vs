@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Award, AlertTriangle, FileText, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Award, AlertTriangle, Banknote, FileText, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { computeContractorScorecard, currentContractValue, expiringGuarantees } from '../lib/financeCalc'
@@ -7,6 +7,7 @@ import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { JALALI_MONTHS, todayJalali } from '../../../lib/jalali'
 import {
   FIN_CONTRACT_ROLE_COLOR,
   FIN_CONTRACT_ROLE_LABEL_FA,
@@ -18,6 +19,7 @@ import {
   FIN_GUARANTEE_STATUSES,
   FIN_GUARANTEE_TYPE_LABEL_FA,
   FIN_GUARANTEE_TYPES,
+  type FinCashflowForecast,
   type FinContract,
   type FinContractRole,
   type FinContractStatus,
@@ -36,6 +38,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
   const guarantees = useFinanceStore((s) => s.guarantees)
   const certificates = useFinanceStore((s) => s.certificates)
   const claims = useFinanceStore((s) => s.claims)
+  const cashflowForecasts = useFinanceStore((s) => s.cashflowForecasts)
   const createContract = useFinanceStore((s) => s.createContract)
   const updateContract = useFinanceStore((s) => s.updateContract)
   const deleteContract = useFinanceStore((s) => s.deleteContract)
@@ -44,6 +47,8 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
   const createGuarantee = useFinanceStore((s) => s.createGuarantee)
   const updateGuarantee = useFinanceStore((s) => s.updateGuarantee)
   const deleteGuarantee = useFinanceStore((s) => s.deleteGuarantee)
+  const upsertCashflowForecast = useFinanceStore((s) => s.upsertCashflowForecast)
+  const deleteCashflowForecast = useFinanceStore((s) => s.deleteCashflowForecast)
 
   const [showNew, setShowNew] = useState(false)
   const [editing, setEditing] = useState<FinContract | null>(null)
@@ -51,6 +56,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
   const [addingAmendmentFor, setAddingAmendmentFor] = useState<string | null>(null)
   const [addingGuaranteeFor, setAddingGuaranteeFor] = useState<string | null>(null)
   const [editingGuarantee, setEditingGuarantee] = useState<FinGuarantee | null>(null)
+  const [cashflowModal, setCashflowModal] = useState<{ contractId: string; initial: FinCashflowForecast | null } | null>(null)
 
   const orgName = (id: string | null) => organizations.find((o) => o.id === id)?.name ?? '—'
   const contractIds = new Set(contracts.map((c) => c.id))
@@ -149,6 +155,9 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
           {contracts.map((c) => {
             const contractAmendments = amendments.filter((a) => a.contractId === c.id)
             const contractGuarantees = guarantees.filter((g) => g.contractId === c.id)
+            const contractCashflowForecasts = cashflowForecasts
+              .filter((f) => f.contractId === c.id)
+              .sort((a, b) => (a.jalaliYear !== b.jalaliYear ? a.jalaliYear - b.jalaliYear : a.jalaliMonth - b.jalaliMonth))
             const current = currentContractValue(c, amendments)
             const expanded = expandedId === c.id
             return (
@@ -190,7 +199,9 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
 
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)} className="text-[11px] font-medium hover:underline" style={{ color: FINANCE_ACCENT }}>
-                    {expanded ? 'بستن جزئیات' : `الحاقیه‌ها (${contractAmendments.length}) و ضمانت‌نامه‌ها (${contractGuarantees.length})`}
+                    {expanded
+                      ? 'بستن جزئیات'
+                      : `الحاقیه‌ها (${contractAmendments.length})، ضمانت‌نامه‌ها (${contractGuarantees.length}) و برآورد نقدینگی (${contractCashflowForecasts.length})`}
                   </button>
                 </div>
 
@@ -251,6 +262,38 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                         <Plus size={11} /> افزودن ضمانت‌نامه
                       </button>
                     </div>
+
+                    <div>
+                      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold fin-text-secondary">
+                        <Banknote size={12} /> برآورد نقدینگی ماهانه پیمانکار (Cash Call)
+                      </p>
+                      <p className="mb-1.5 text-[10px] leading-5 fin-text-muted">
+                        مبلغی که پیمانکار برای هر ماه به‌عنوان نیاز نقدینگی اعلام کرده — در نمودار «جریان نقدی و پیش‌بینی مالی» با پرداخت واقعی همان ماه مقایسه می‌شود.
+                      </p>
+                      {contractCashflowForecasts.length === 0 && <p className="text-xs fin-text-muted">برآوردی ثبت نشده است.</p>}
+                      <div className="space-y-1.5">
+                        {contractCashflowForecasts.map((f) => (
+                          <div key={f.id} className="flex items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)' }}>
+                            <span className="num text-[11px] fin-text-muted">
+                              {JALALI_MONTHS[f.jalaliMonth - 1]} {f.jalaliYear.toLocaleString('fa-IR')}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-xs">{f.notes || '—'}</span>
+                            <span className="num shrink-0 text-xs font-bold" style={{ color: FINANCE_ACCENT }}>
+                              {fmtCurrency(f.forecastAmount, c.currency)}
+                            </span>
+                            <button onClick={() => setCashflowModal({ contractId: c.id, initial: f })} className="shrink-0 text-[10.5px] fin-text-secondary hover:underline">
+                              ویرایش
+                            </button>
+                            <button onClick={() => deleteCashflowForecast(f.id)} className="shrink-0 fin-text-muted hover:text-red-400">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setCashflowModal({ contractId: c.id, initial: null })} className="mt-1.5 flex items-center gap-1 text-[11px] fin-text-secondary hover:text-current">
+                        <Plus size={11} /> افزودن برآورد ماه
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -309,6 +352,17 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
           onSave={async (data) => {
             await updateGuarantee(editingGuarantee.id, data)
             setEditingGuarantee(null)
+          }}
+        />
+      )}
+      {cashflowModal && (
+        <CashflowForecastModal
+          initial={cashflowModal.initial}
+          currency={contracts.find((c) => c.id === cashflowModal.contractId)?.currency}
+          onClose={() => setCashflowModal(null)}
+          onSave={async (jalaliYear, jalaliMonth, data) => {
+            await upsertCashflowForecast(cashflowModal.contractId, jalaliYear, jalaliMonth, data)
+            setCashflowModal(null)
           }}
         />
       )}
@@ -580,6 +634,73 @@ function GuaranteeModal({ title, initial, onClose, onSave }: { title: string; in
               </option>
             ))}
           </select>
+        </label>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
+            انصراف
+          </button>
+          <button onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>
+            {saving ? 'در حال ذخیره...' : 'ذخیره'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CashflowForecastModal({
+  initial,
+  currency,
+  onClose,
+  onSave,
+}: {
+  initial: FinCashflowForecast | null
+  currency?: string
+  onClose: () => void
+  onSave: (jalaliYear: number, jalaliMonth: number, data: Partial<FinCashflowForecast>) => Promise<void>
+}) {
+  const [jalaliYear, setJalaliYear] = useState(String(initial?.jalaliYear ?? todayJalali().jy))
+  const [jalaliMonth, setJalaliMonth] = useState(initial?.jalaliMonth ?? todayJalali().jm)
+  const [forecastAmount, setForecastAmount] = useState(initial?.forecastAmount != null ? String(initial.forecastAmount) : '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    if (jalaliYear === '') return
+    setSaving(true)
+    await onSave(Number(jalaliYear), jalaliMonth, { forecastAmount: forecastAmount === '' ? 0 : Number(forecastAmount), notes })
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="fin-card w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="flex items-center gap-2 text-sm font-extrabold">
+          <Banknote size={15} style={{ color: FINANCE_ACCENT }} /> {initial ? 'ویرایش برآورد نقدینگی ماه' : 'برآورد نقدینگی ماه جدید'}
+        </h3>
+        <div className="flex gap-1.5">
+          <label className="block flex-1">
+            <span className="mb-1 block text-xs fin-text-secondary">سال شمسی</span>
+            <input type="number" value={jalaliYear} onChange={(e) => setJalaliYear(e.target.value)} className="fin-input num" autoFocus />
+          </label>
+          <label className="block flex-1">
+            <span className="mb-1 block text-xs fin-text-secondary">ماه</span>
+            <select value={jalaliMonth} onChange={(e) => setJalaliMonth(Number(e.target.value))} className="fin-input">
+              {JALALI_MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs fin-text-secondary">نیاز نقدینگی اعلامی پیمانکار ({currency ?? 'ریال'})</span>
+          <input type="number" value={forecastAmount} onChange={(e) => setForecastAmount(e.target.value)} className="fin-input num" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs fin-text-secondary">یادداشت</span>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="fin-input" />
         </label>
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">

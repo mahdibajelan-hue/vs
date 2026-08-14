@@ -2,6 +2,7 @@ import type {
   FinAnnualBudget,
   FinBudget,
   FinBudgetChange,
+  FinCashflowForecast,
   FinCertificateStatus,
   FinCertificateType,
   FinClaim,
@@ -538,5 +539,39 @@ export function finRetentionReleaseToRow(contractId: string | null, r: Partial<F
   if (r.actualAmount !== undefined) row.actual_amount = r.actualAmount
   if (r.status !== undefined) row.status = r.status
   if (r.notes !== undefined) row.notes = r.notes
+  return row
+}
+
+interface FinCashflowForecastRow {
+  id: string
+  contract_id: string
+  jalali_year: number
+  jalali_month: number
+  forecast_amount: number
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export function finCashflowForecastFromRow(r: FinCashflowForecastRow): FinCashflowForecast {
+  return {
+    id: r.id,
+    contractId: r.contract_id,
+    jalaliYear: r.jalali_year,
+    jalaliMonth: r.jalali_month,
+    forecastAmount: Number(r.forecast_amount),
+    notes: r.notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export function finCashflowForecastToRow(contractId: string | null, f: Partial<FinCashflowForecast>) {
+  const row: Record<string, unknown> = {}
+  if (contractId) row.contract_id = contractId
+  if (f.jalaliYear !== undefined) row.jalali_year = f.jalaliYear
+  if (f.jalaliMonth !== undefined) row.jalali_month = f.jalaliMonth
+  if (f.forecastAmount !== undefined) row.forecast_amount = f.forecastAmount
+  if (f.notes !== undefined) row.notes = f.notes
   return row
 }

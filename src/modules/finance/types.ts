@@ -342,3 +342,20 @@ export interface FinRetentionRelease {
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * Contractor-submitted monthly funding requirement (Cash Call) — one row per contract per Jalali
+ * month, entered by the PM from the contractor's own cash-call statement. This is the real number
+ * the Cash Flow & Funding Forecast page's "required" series is built from, distinct from the
+ * straight-line contract-value/date proxy computeCashFlowSeries already produces.
+ */
+export interface FinCashflowForecast {
+  id: string
+  contractId: string
+  jalaliYear: number
+  jalaliMonth: number
+  forecastAmount: number
+  notes: string
+  createdAt: string
+  updatedAt: string
+}

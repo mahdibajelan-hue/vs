@@ -1,5 +1,5 @@
-import { isoToJalali, todayJalali } from '../../../lib/jalali'
-import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate, FinRetentionRelease } from '../types'
+import { isoToJalali, jalaliToIso, todayJalali } from '../../../lib/jalali'
+import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinCashflowForecast, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate, FinRetentionRelease } from '../types'
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -514,4 +514,40 @@ export function ensureForwardMonths(points: CashFlowPoint[], today = todayIso(),
   const past = points.filter((p) => p.month < currentMonth)
   const forward = forwardMonths.map((m) => byMonth.get(m) ?? { month: m, planned: 0, actual: 0, forecast: 0 })
   return [...past, ...forward]
+}
+
+// ---------------------------------------------------------------------------
+// Contractor-submitted monthly funding requirement (Cash Call) — the real number the contractor
+// says they need each month, entered by the PM in Jalali year/month, as opposed to the
+// straight-line planned/forecast proxy computeCashFlowSeries derives from contract dates/value.
+// ---------------------------------------------------------------------------
+
+export interface CashFlowPointWithRequired extends CashFlowPoint {
+  /** Contractor-submitted required amount for this month, summed across the scoped contracts. Zero when nothing was entered for the month. */
+  required: number
+  /** required - actual: positive means paid so far falls short of what the contractor said they'd need; negative means more was paid than requested. */
+  gap: number
+}
+
+/** Sums fin_cashflow_forecasts by Gregorian month (converting each Jalali year/month to the same 'YYYY-MM' bucket computeCashFlowSeries uses) so it can be merged onto the same chart. */
+export function requiredCashflowByMonth(forecasts: FinCashflowForecast[]): Map<string, number> {
+  const monthly = new Map<string, number>()
+  for (const f of forecasts) {
+    const month = jalaliToIso(f.jalaliYear, f.jalaliMonth, 1).slice(0, 7)
+    monthly.set(month, (monthly.get(month) ?? 0) + f.forecastAmount)
+  }
+  return monthly
+}
+
+/** Left-merges the contractor's monthly requirement (and the resulting gap vs. actual paid) onto an existing cash-flow series, extending the month range if the forecast covers months the series doesn't. */
+export function mergeRequiredCashflow(points: CashFlowPoint[], forecasts: FinCashflowForecast[]): CashFlowPointWithRequired[] {
+  const requiredByMonth = requiredCashflowByMonth(forecasts)
+  const allMonths = new Set([...points.map((p) => p.month), ...requiredByMonth.keys()])
+  return [...allMonths]
+    .sort((a, b) => (a < b ? -1 : 1))
+    .map((month) => {
+      const p = points.find((pt) => pt.month === month) ?? { month, planned: 0, actual: 0, forecast: 0 }
+      const required = requiredByMonth.get(month) ?? 0
+      return { ...p, required, gap: required - p.actual }
+    })
 }
