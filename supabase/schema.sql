@@ -2996,3 +2996,141 @@ drop trigger if exists trg_set_updated_at on fin_payments;
 create trigger trg_set_updated_at before update on fin_payments for each row execute function set_updated_at_and_by_fin();
 
 create index if not exists idx_fin_payments_certificate on fin_payments (certificate_id);
+
+-- ============================================================================
+-- 23. Financial Management, owner-executive round: contractor claims register,
+--     retention release schedule, tax/insurance deduction split, certificate
+--     approval audit trail + delegation-of-authority threshold, and document
+--     attachments — closing the gap between "a data-entry tool" and what an
+--     owner-side PM/CEO actually needs to run EPC contract administration.
+--
+--     Deduction split keeps `deductions` and `payable_amount` as the exact
+--     same generated-column NAMES as before (now sourced from the new
+--     tax_deduction/insurance_deduction/other_deduction columns instead of a
+--     single hand-entered value) so every existing calc/dashboard/report that
+--     reads certificate.deductions keeps working unchanged as the total.
+-- ============================================================================
+
+alter table fin_payment_certificates add column if not exists tax_deduction numeric not null default 0;
+alter table fin_payment_certificates add column if not exists insurance_deduction numeric not null default 0;
+alter table fin_payment_certificates add column if not exists other_deduction numeric not null default 0;
+
+-- Preserve any previously hand-entered deductions value as "other" before the column becomes generated.
+update fin_payment_certificates set other_deduction = deductions where other_deduction = 0 and deductions <> 0;
+
+alter table fin_payment_certificates drop column if exists payable_amount;
+alter table fin_payment_certificates drop column if exists deductions;
+alter table fin_payment_certificates add column deductions numeric generated always as (tax_deduction + insurance_deduction + other_deduction) stored;
+alter table fin_payment_certificates add column payable_amount numeric generated always as (gross_amount + adjustments - deductions - retention_amount - advance_recovery_amount) stored;
+
+-- Approval workflow / audit trail — who certified and who gave final approval, not just a status enum.
+alter table fin_payment_certificates add column if not exists certified_by uuid references profiles (id);
+alter table fin_payment_certificates add column if not exists approved_by uuid references profiles (id);
+alter table fin_payment_certificates add column if not exists approved_date date;
+
+-- Document attachments (guarantee letter scan, certificate backup docs) — see the finance-docs
+-- storage bucket below.
+alter table fin_payment_certificates add column if not exists attachment_url text not null default '';
+alter table fin_guarantees add column if not exists attachment_url text not null default '';
+
+-- Delegation of authority: certificates certified above this rial amount require an admin/owner
+-- approval (profiles.is_admin), not just the project-level certifier. Null = no threshold set
+-- (every certificate can be approved by any authorized user, current behavior).
+alter table fin_budgets add column if not exists certificate_approval_threshold numeric;
+
+-- Contractor claims (کلایم پیمانکار) — time extension / cost / disruption / variation claims,
+-- deliberately a distinct entity from fin_contract_amendments (which is an *agreed* value change):
+-- a claim starts as a contractor assertion that may be rejected or only partially approved, and
+-- carries its own review workflow.
+create table if not exists fin_claims (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  claim_number text not null default '',
+  claim_type text not null default 'other' check (claim_type in ('time_extension', 'cost', 'disruption', 'variation', 'other')),
+  title text not null default '',
+  description text not null default '',
+  submitted_date date not null default current_date,
+  amount_claimed numeric not null default 0,
+  amount_approved numeric,
+  currency text not null default 'IRR',
+  status text not null default 'submitted' check (status in ('submitted', 'under_review', 'approved', 'partially_approved', 'rejected', 'arbitration')),
+  correspondence_ref text not null default '',
+  attachment_url text not null default '',
+  resolution_date date,
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_claims enable row level security;
+
+drop policy if exists "fin_claims_select_authenticated" on fin_claims;
+create policy "fin_claims_select_authenticated" on fin_claims for select using (auth.uid() is not null);
+drop policy if exists "fin_claims_write_admin" on fin_claims;
+create policy "fin_claims_write_admin" on fin_claims for all using (is_admin_user()) with check (is_admin_user());
+
+-- Retention (حسن انجام کار) release schedule — the amount withheld per certificate is already
+-- tracked (fin_payment_certificates.retention_amount); this table is the *liability side*: when
+-- the accumulated retention on a contract is actually due back to the contractor, in one or more
+-- stages (provisional handover / final handover after the defects-liability period).
+create table if not exists fin_retention_releases (
+  id uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references fin_contracts (id) on delete cascade,
+  release_stage text not null default 'provisional_handover' check (release_stage in ('provisional_handover', 'final_handover', 'other')),
+  planned_date date,
+  planned_amount numeric not null default 0,
+  actual_date date,
+  actual_amount numeric,
+  status text not null default 'pending' check (status in ('pending', 'released', 'cancelled')),
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table fin_retention_releases enable row level security;
+
+drop policy if exists "fin_retention_releases_select_authenticated" on fin_retention_releases;
+create policy "fin_retention_releases_select_authenticated" on fin_retention_releases for select using (auth.uid() is not null);
+drop policy if exists "fin_retention_releases_write_admin" on fin_retention_releases;
+create policy "fin_retention_releases_write_admin" on fin_retention_releases for all using (is_admin_user()) with check (is_admin_user());
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['fin_claims', 'fin_retention_releases']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by_fin()', t);
+  end loop;
+end $$;
+
+create index if not exists idx_fin_claims_contract on fin_claims (contract_id);
+create index if not exists idx_fin_retention_releases_contract on fin_retention_releases (contract_id);
+
+-- Storage bucket for finance document attachments (guarantee letters, certificate backup docs) —
+-- mirrors the 'avatars' bucket pattern above, but read is authenticated-only (these are internal
+-- contract documents, not public) and write is admin-only (matches every fin_* table's RLS).
+insert into storage.buckets (id, name, public)
+values ('finance-docs', 'finance-docs', false)
+on conflict (id) do nothing;
+
+drop policy if exists "finance_docs_read_authenticated" on storage.objects;
+create policy "finance_docs_read_authenticated" on storage.objects
+  for select using (bucket_id = 'finance-docs' and auth.uid() is not null);
+
+drop policy if exists "finance_docs_write_admin" on storage.objects;
+create policy "finance_docs_write_admin" on storage.objects
+  for insert with check (bucket_id = 'finance-docs' and is_admin_user());
+
+drop policy if exists "finance_docs_update_admin" on storage.objects;
+create policy "finance_docs_update_admin" on storage.objects
+  for update using (bucket_id = 'finance-docs' and is_admin_user());
+
+drop policy if exists "finance_docs_delete_admin" on storage.objects;
+create policy "finance_docs_delete_admin" on storage.objects
+  for delete using (bucket_id = 'finance-docs' and is_admin_user());

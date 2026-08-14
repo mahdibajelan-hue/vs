@@ -19,12 +19,16 @@ import {
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import {
+  activeGuaranteesTotal,
   aggregateFinancialSummaries,
   certificateOutstanding,
+  claimsExposureTotal,
   computeCashFlowSeries,
   computeProjectFinancialSummary,
   ensureForwardMonths,
+  expiringGuarantees,
   paymentAgingDays,
+  retentionLiability,
   todayIso,
   type ProjectFinancialSummary,
 } from '../lib/financeCalc'
@@ -42,8 +46,11 @@ import {
   type SimpleTableColumn,
   type StampTone,
 } from '../components/FinanceDashboardUI'
+import { CostProgressCheckCard } from '../components/CostProgressCheckCard'
+import { ExecutiveExportButton } from '../components/ExecutiveExportButton'
+import type { ExecutiveReportExtras } from '../components/ExecutiveReportPrint'
 import type { ChartDatum } from '../../masterdata/components/RollupCharts'
-import type { FinContractRole, FinGuarantee, FinPaymentCertificate } from '../types'
+import type { FinClaim, FinContractRole, FinGuarantee, FinPaymentCertificate, FinRetentionRelease } from '../types'
 import { FIN_CONTRACT_ROLE_COLOR, FIN_CONTRACT_ROLE_LABEL_FA, FIN_CONTRACT_ROLES, FIN_CERTIFICATE_TYPE_LABEL_FA } from '../types'
 import type { MasterProject } from '../../masterdata/types'
 
@@ -71,6 +78,8 @@ export function FinancialDashboardPage() {
   const certificates = useFinanceStore((s) => s.certificates)
   const annualBudgets = useFinanceStore((s) => s.annualBudgets)
   const guarantees = useFinanceStore((s) => s.guarantees)
+  const claims = useFinanceStore((s) => s.claims)
+  const retentionReleases = useFinanceStore((s) => s.retentionReleases)
 
   const [level, setLevel] = useState<Level>('portfolio')
   const [portfolioId, setPortfolioId] = useState('')
@@ -110,6 +119,34 @@ export function FinancialDashboardPage() {
     return guarantees.filter((g) => contractIds.has(g.contractId))
   }
 
+  const scopedClaims = (projectIds: string[]): FinClaim[] => {
+    const idSet = new Set(projectIds)
+    const scopedContracts = contracts.filter((c) => idSet.has(c.masterProjectId))
+    const contractIds = new Set(scopedContracts.map((c) => c.id))
+    return claims.filter((c) => contractIds.has(c.contractId))
+  }
+
+  const scopedRetentionReleases = (projectIds: string[]): FinRetentionRelease[] => {
+    const idSet = new Set(projectIds)
+    const scopedContracts = contracts.filter((c) => idSet.has(c.masterProjectId))
+    const contractIds = new Set(scopedContracts.map((c) => c.id))
+    return retentionReleases.filter((r) => contractIds.has(r.contractId))
+  }
+
+  const scopedExtras = (projectIds: string[]): ExecutiveReportExtras => {
+    const g = scopedGuarantees(projectIds)
+    const cl = scopedClaims(projectIds)
+    const certs = scopedCertificates(projectIds)
+    const rr = scopedRetentionReleases(projectIds)
+    return {
+      claimsExposure: claimsExposureTotal(cl),
+      claimCount: cl.length,
+      retentionLiabilityAmount: retentionLiability(certs, rr),
+      activeGuaranteesTotalAmount: activeGuaranteesTotal(g),
+      expiringGuaranteeCount: expiringGuarantees(g).length,
+    }
+  }
+
   const scopeCurrency = (projectIds: string[]) => {
     const p = projects.find((pr) => projectIds.includes(pr.id))
     return budgets.find((b) => b.masterProjectId === p?.id)?.currency ?? p?.currency ?? 'ریال'
@@ -145,6 +182,7 @@ export function FinancialDashboardPage() {
           scopedCertificates={scopedCertificates}
           scopedGuarantees={scopedGuarantees}
           scopeCurrency={scopeCurrency}
+          scopedExtras={scopedExtras}
         />
       )}
       {level === 'program' && (
@@ -159,6 +197,7 @@ export function FinancialDashboardPage() {
           scopedCertificates={scopedCertificates}
           scopedGuarantees={scopedGuarantees}
           scopeCurrency={scopeCurrency}
+          scopedExtras={scopedExtras}
         />
       )}
       {level === 'project' && (
@@ -172,6 +211,7 @@ export function FinancialDashboardPage() {
           scopedCertificates={scopedCertificates}
           scopedGuarantees={scopedGuarantees}
           scopeCurrency={scopeCurrency}
+          scopedExtras={scopedExtras}
         />
       )}
     </div>
@@ -183,6 +223,7 @@ type ScopedCashFlow = (projectIds: string[]) => ReturnType<typeof computeCashFlo
 type ScopedCertificates = (projectIds: string[]) => FinPaymentCertificate[]
 type ScopedGuarantees = (projectIds: string[]) => FinGuarantee[]
 type ScopeCurrency = (projectIds: string[]) => string
+type ScopedExtras = (projectIds: string[]) => ExecutiveReportExtras
 
 function PortfolioDashboard({
   portfolios,
@@ -195,6 +236,7 @@ function PortfolioDashboard({
   scopedCertificates,
   scopedGuarantees,
   scopeCurrency,
+  scopedExtras,
 }: {
   portfolios: { id: string; name: string }[]
   programs: { id: string; name: string; portfolioId: string | null }[]
@@ -206,6 +248,7 @@ function PortfolioDashboard({
   scopedCertificates: ScopedCertificates
   scopedGuarantees: ScopedGuarantees
   scopeCurrency: ScopeCurrency
+  scopedExtras: ScopedExtras
 }) {
   const scopedProjects = portfolioId ? projects.filter((p) => p.portfolioId === portfolioId) : projects
   const projectIds = scopedProjects.map((p) => p.id)
@@ -238,6 +281,15 @@ function PortfolioDashboard({
           ))}
         </select>
         <span className="fin-text-muted text-[11px]">{scopedProjects.length} پروژه در این محدوده</span>
+        <div className="mr-auto">
+          <ExecutiveExportButton
+            scopeLabel="گزارش اجرایی سطح پرتفولیو"
+            entityName={portfolioId ? portfolios.find((p) => p.id === portfolioId)?.name || 'پرتفولیو' : 'کل شرکت (همه پرتفولیوها)'}
+            currency={scopeCurrency(projectIds)}
+            summary={summarize(projectIds)}
+            extras={scopedExtras(projectIds)}
+          />
+        </div>
       </div>
       <DashboardBody
         summary={summarize(projectIds)}
@@ -265,6 +317,7 @@ function ProgramDashboard({
   scopedCertificates,
   scopedGuarantees,
   scopeCurrency,
+  scopedExtras,
 }: {
   programs: { id: string; name: string; portfolioId: string | null }[]
   portfolios: { id: string; name: string }[]
@@ -276,6 +329,7 @@ function ProgramDashboard({
   scopedCertificates: ScopedCertificates
   scopedGuarantees: ScopedGuarantees
   scopeCurrency: ScopeCurrency
+  scopedExtras: ScopedExtras
 }) {
   const scopedProjects = programId ? projects.filter((p) => p.programId === programId) : projects.filter((p) => !!p.programId)
   const projectIds = scopedProjects.map((p) => p.id)
@@ -303,6 +357,15 @@ function ProgramDashboard({
           ))}
         </select>
         <span className="fin-text-muted text-[11px]">{scopedProjects.length} پروژه در این محدوده</span>
+        <div className="mr-auto">
+          <ExecutiveExportButton
+            scopeLabel="گزارش اجرایی سطح طرح"
+            entityName={programId ? programs.find((p) => p.id === programId)?.name || 'طرح' : 'همه طرح‌ها'}
+            currency={scopeCurrency(projectIds)}
+            summary={summarize(projectIds)}
+            extras={scopedExtras(projectIds)}
+          />
+        </div>
       </div>
       <DashboardBody
         summary={summarize(projectIds)}
@@ -329,6 +392,7 @@ function ProjectDashboard({
   scopedCertificates,
   scopedGuarantees,
   scopeCurrency,
+  scopedExtras,
 }: {
   projects: MasterProject[]
   contracts: { id: string; masterProjectId: string; title: string; contractNumber: string; contractRole: FinContractRole }[]
@@ -339,6 +403,7 @@ function ProjectDashboard({
   scopedCertificates: ScopedCertificates
   scopedGuarantees: ScopedGuarantees
   scopeCurrency: ScopeCurrency
+  scopedExtras: ScopedExtras
 }) {
   const activeId = projectId || projects[0]?.id || ''
   const project = projects.find((p) => p.id === activeId)
@@ -352,6 +417,9 @@ function ProjectDashboard({
 
   if (!project) return <div className="fin-card flex h-40 items-center justify-center text-sm fin-text-muted">پروژه‌ای برای نمایش وجود ندارد.</div>
 
+  const projectSummary = summarize([activeId])
+  const financialPercent = projectSummary.currentBudgetAmount > 0 ? Math.round((projectSummary.certifiedTotal / projectSummary.currentBudgetAmount) * 1000) / 10 : 0
+
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
@@ -364,9 +432,19 @@ function ProjectDashboard({
             </option>
           ))}
         </select>
+        <div className="mr-auto">
+          <ExecutiveExportButton
+            scopeLabel="گزارش اجرایی سطح پروژه"
+            entityName={project.officialName}
+            currency={scopeCurrency([activeId])}
+            summary={projectSummary}
+            extras={scopedExtras([activeId])}
+          />
+        </div>
       </div>
+      <CostProgressCheckCard project={project} financialPercent={financialPercent} />
       <DashboardBody
-        summary={summarize([activeId])}
+        summary={projectSummary}
         cashFlow={scopedCashFlow([activeId])}
         certificates={scopedCertificates([activeId])}
         guarantees={scopedGuarantees([activeId])}

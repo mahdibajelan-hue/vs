@@ -15,6 +15,8 @@ export interface FinBudget {
   currency: string
   fx: FxAmount
   notes: string
+  /** Delegation of authority: certificates certified above this rial amount require an admin/owner approval. Null = no threshold set. */
+  certificateApprovalThreshold: number | null
   createdAt: string
   updatedAt: string
 }
@@ -150,7 +152,11 @@ export interface FinPaymentCertificate {
   grossAmount: number
   grossFx: FxAmount
   adjustments: number
+  /** Generated column: taxDeduction + insuranceDeduction + otherDeduction. Never hand-entered directly — see schema.sql §23. */
   deductions: number
+  taxDeduction: number
+  insuranceDeduction: number
+  otherDeduction: number
   retentionAmount: number
   advanceRecoveryAmount: number
   /** Generated column: gross + adjustments - deductions - retention - advanceRecovery (rial only — see schema.sql §21). Never hand-entered. */
@@ -162,6 +168,12 @@ export interface FinPaymentCertificate {
   submittedDate: string | null
   certifiedDate: string | null
   paidDate: string | null
+  /** Approval audit trail — who certified this figure and, for amounts above the project's DOA threshold, who gave final approval. */
+  certifiedBy: string | null
+  approvedBy: string | null
+  approvedDate: string | null
+  /** Storage path in the finance-docs bucket (backup documents), not a public URL — resolve with a signed URL on demand. */
+  attachmentUrl: string
   notes: string
   createdAt: string
   updatedAt: string
@@ -206,6 +218,8 @@ export interface FinGuarantee {
   expiryDate: string | null
   status: FinGuaranteeStatus
   notes: string
+  /** Storage path in the finance-docs bucket (scan of the guarantee letter), not a public URL. */
+  attachmentUrl: string
   createdAt: string
   updatedAt: string
 }
@@ -223,6 +237,107 @@ export interface FinPayment {
   fx: FxAmount
   method: string
   referenceNumber: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type FinClaimType = 'time_extension' | 'cost' | 'disruption' | 'variation' | 'other'
+
+export const FIN_CLAIM_TYPES: FinClaimType[] = ['time_extension', 'cost', 'disruption', 'variation', 'other']
+
+export const FIN_CLAIM_TYPE_LABEL_FA: Record<FinClaimType, string> = {
+  time_extension: 'تمدید زمان',
+  cost: 'هزینه',
+  disruption: 'توقف/اختلال کار',
+  variation: 'تغییر اسکوپ',
+  other: 'سایر',
+}
+
+export type FinClaimStatus = 'submitted' | 'under_review' | 'approved' | 'partially_approved' | 'rejected' | 'arbitration'
+
+export const FIN_CLAIM_STATUSES: FinClaimStatus[] = ['submitted', 'under_review', 'approved', 'partially_approved', 'rejected', 'arbitration']
+
+export const FIN_CLAIM_STATUS_LABEL_FA: Record<FinClaimStatus, string> = {
+  submitted: 'ارسال‌شده',
+  under_review: 'در حال بررسی',
+  approved: 'تاییدشده',
+  partially_approved: 'تایید جزئی',
+  rejected: 'ردشده',
+  arbitration: 'در حال داوری',
+}
+
+export const FIN_CLAIM_STATUS_COLOR: Record<FinClaimStatus, string> = {
+  submitted: '#5c7290',
+  under_review: '#b8863b',
+  approved: '#3e7c74',
+  partially_approved: '#8b6e9c',
+  rejected: '#b5573a',
+  arbitration: '#b5573a',
+}
+
+/**
+ * کلایم پیمانکار (Contractor Claims) — deliberately distinct from FinContractAmendment: an
+ * amendment is an *agreed* contract-value change; a claim starts as a contractor assertion that
+ * may be rejected, partially approved, or go to arbitration, and carries its own review status.
+ * Spec: owner-side EPC financial management needs claim exposure tracked separately from settled
+ * contract value, since an unresolved claim is a contingent liability, not a certain one.
+ */
+export interface FinClaim {
+  id: string
+  contractId: string
+  claimNumber: string
+  claimType: FinClaimType
+  title: string
+  description: string
+  submittedDate: string
+  amountClaimed: number
+  amountApproved: number | null
+  currency: string
+  status: FinClaimStatus
+  correspondenceRef: string
+  /** Storage path in the finance-docs bucket, not a public URL. */
+  attachmentUrl: string
+  resolutionDate: string | null
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type FinRetentionReleaseStage = 'provisional_handover' | 'final_handover' | 'other'
+
+export const FIN_RETENTION_RELEASE_STAGES: FinRetentionReleaseStage[] = ['provisional_handover', 'final_handover', 'other']
+
+export const FIN_RETENTION_RELEASE_STAGE_LABEL_FA: Record<FinRetentionReleaseStage, string> = {
+  provisional_handover: 'تحویل موقت',
+  final_handover: 'تحویل قطعی',
+  other: 'سایر',
+}
+
+export type FinRetentionReleaseStatus = 'pending' | 'released' | 'cancelled'
+
+export const FIN_RETENTION_RELEASE_STATUSES: FinRetentionReleaseStatus[] = ['pending', 'released', 'cancelled']
+
+export const FIN_RETENTION_RELEASE_STATUS_LABEL_FA: Record<FinRetentionReleaseStatus, string> = {
+  pending: 'در انتظار آزادسازی',
+  released: 'آزادشده',
+  cancelled: 'لغوشده',
+}
+
+/**
+ * حسن انجام کار — Retention Release schedule. retentionAmount withheld per certificate is already
+ * tracked (fin_payment_certificates.retention_amount); this is the liability side: when the
+ * accumulated retention on a contract is actually due back, in one or more planned stages.
+ */
+export interface FinRetentionRelease {
+  id: string
+  contractId: string
+  releaseStage: FinRetentionReleaseStage
+  plannedDate: string | null
+  plannedAmount: number
+  actualDate: string | null
+  actualAmount: number | null
+  status: FinRetentionReleaseStatus
   notes: string
   createdAt: string
   updatedAt: string

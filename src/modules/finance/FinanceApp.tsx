@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  AlertTriangle,
   Banknote,
   Bell,
   Briefcase,
@@ -8,8 +9,11 @@ import {
   Calendar,
   ClipboardList,
   FileText,
+  FileWarning,
   FolderKanban,
   Home,
+  Info,
+  Landmark,
   LayoutDashboard,
   LineChart,
   Loader2,
@@ -27,7 +31,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { SignOutButton } from '../../components/Auth/SignOutButton'
-import { expiringGuarantees, paymentAgingDays } from './lib/financeCalc'
+import { buildFinanceNotifications, type FinNotification } from './lib/financeNotifications'
 import { todayJalali, JALALI_MONTHS } from '../../lib/jalali'
 import './finance-dashboard.css'
 import { BudgetPage } from './pages/BudgetPage'
@@ -42,6 +46,8 @@ import { ProgramsBrowsePage } from './pages/ProgramsBrowsePage'
 import { ProjectsBrowsePage } from './pages/ProjectsBrowsePage'
 import { PaymentsRecordPage } from './pages/PaymentsRecordPage'
 import { GuaranteesPage } from './pages/GuaranteesPage'
+import { ClaimsPage } from './pages/ClaimsPage'
+import { RetentionPage } from './pages/RetentionPage'
 
 /** Signature brass/ledger accent — see finance-dashboard.css for the full "EPC ledger control tower" token system. */
 export const FINANCE_ACCENT = '#c9a654'
@@ -58,6 +64,8 @@ type Tab =
   | 'cost'
   | 'cashflow'
   | 'guarantees'
+  | 'claims'
+  | 'retention'
   | 'reports'
   | 'settings'
 
@@ -73,12 +81,14 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'cost', label: 'مدیریت هزینه', icon: Calculator },
   { id: 'cashflow', label: 'جریان نقدینگی', icon: LineChart },
   { id: 'guarantees', label: 'ضمانت‌نامه‌ها', icon: ShieldCheck },
+  { id: 'claims', label: 'کلایم پیمانکار', icon: FileWarning },
+  { id: 'retention', label: 'حسن انجام کار', icon: Landmark },
   { id: 'reports', label: 'گزارش‌ها', icon: ClipboardList },
   { id: 'settings', label: 'تنظیمات', icon: Settings },
 ]
 
 /** Tabs that operate on a single selected project and need the project dropdown in the topbar. */
-const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees'])
+const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention'])
 
 const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'داشبورد مدیریت مالی', subtitle: 'نمای کلی سبد پروژه‌ها' },
@@ -92,6 +102,8 @@ const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   cost: { title: 'مدیریت هزینه', subtitle: 'هزینه واقعی، متعهدشده و پیش‌بینی' },
   cashflow: { title: 'جریان نقدینگی و پیش‌بینی', subtitle: 'برنامه، واقعی و پیش‌بینی نقدینگی' },
   guarantees: { title: 'ضمانت‌نامه‌ها', subtitle: 'فهرست و پیگیری ضمانت‌نامه‌های دریافتی' },
+  claims: { title: 'کلایم پیمانکار', subtitle: 'ثبت و پیگیری ادعاهای پیمانکار' },
+  retention: { title: 'حسن انجام کار', subtitle: 'بدهی و برنامه آزادسازی حسن انجام کار' },
   reports: { title: 'گزارش‌های مالی', subtitle: 'گزارش تفکیکی صورت‌وضعیت‌ها' },
   settings: { title: 'تنظیمات', subtitle: '' },
 }
@@ -109,13 +121,17 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const financeLoaded = useFinanceStore((s) => s.loaded)
   const fetchFinance = useFinanceStore((s) => s.fetchAll)
+  const contracts = useFinanceStore((s) => s.contracts)
   const certificates = useFinanceStore((s) => s.certificates)
   const guarantees = useFinanceStore((s) => s.guarantees)
+  const claims = useFinanceStore((s) => s.claims)
+  const retentionReleases = useFinanceStore((s) => s.retentionReleases)
   const profile = useAuthStore((s) => s.profile)
 
   const [projectId, setProjectId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
   const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
 
   useEffect(() => {
@@ -138,11 +154,16 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   const jy = todayJalali().jy
-  const notificationCount = useMemo(() => {
-    const expiring = expiringGuarantees(guarantees).length
-    const overdue = certificates.filter((c) => (paymentAgingDays(c) ?? 0) > 30).length
-    return expiring + overdue
-  }, [guarantees, certificates])
+  const notifications = useMemo(
+    () => buildFinanceNotifications(contracts, certificates, guarantees, claims, retentionReleases),
+    [contracts, certificates, guarantees, claims, retentionReleases],
+  )
+
+  const openNotification = (n: FinNotification) => {
+    setTab(n.tab)
+    if (n.masterProjectId) setProjectId(n.masterProjectId)
+    setNotifOpen(false)
+  }
 
   if ((masterDataLoading && !masterDataLoaded) || (!financeLoaded && !masterDataLoaded)) {
     return (
@@ -257,14 +278,54 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             >
               {finLight ? <Moon size={14} /> : <Sun size={14} />}
             </button>
-            <button className="relative flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }} title="اعلان‌ها">
-              <Bell size={14} />
-              {notificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: '#b5573a' }}>
-                  {notificationCount.toLocaleString('fa-IR')}
-                </span>
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen((v) => !v)}
+                className="relative flex h-8 w-8 items-center justify-center rounded-lg"
+                style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
+                title="اعلان‌ها"
+              >
+                <Bell size={14} />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: '#b5573a' }}>
+                    {notifications.length.toLocaleString('fa-IR')}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <div className="fin-card absolute left-0 top-full z-50 mt-2 w-80 max-w-[85vw] overflow-hidden p-0 sm:w-96">
+                    <div className="fin-eyebrow m-0 px-4 pt-3">
+                      <Bell size={12} /> اعلان‌ها ({notifications.length.toLocaleString('fa-IR')})
+                    </div>
+                    <div className="max-h-80 overflow-y-auto px-2 pb-2">
+                      {notifications.length === 0 ? (
+                        <p className="fin-text-muted px-2 py-6 text-center text-[11px]">اعلان فعالی وجود ندارد.</p>
+                      ) : (
+                        notifications.map((n) => {
+                          const Icon = n.severity === 'bad' ? AlertTriangle : n.severity === 'warn' ? AlertTriangle : Info
+                          const tone = n.severity === 'bad' ? 'var(--fin-bad)' : n.severity === 'warn' ? 'var(--fin-warn)' : 'var(--fin-info)'
+                          return (
+                            <button key={n.id} onClick={() => openNotification(n)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2.5 text-right hover:opacity-80">
+                              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: `${tone}1a` }}>
+                                <Icon size={12} style={{ color: tone }} />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="fin-text block text-[11.5px] leading-5">{n.text}</span>
+                                <span className="num mt-0.5 block text-[10px] font-bold" style={{ color: tone }}>
+                                  {n.daysLabel}
+                                </span>
+                              </span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
-            </button>
+            </div>
             <button
               onClick={() => setTab('settings')}
               className="flex h-8 w-8 items-center justify-center rounded-lg"
@@ -308,6 +369,10 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             <PaymentsRecordPage masterProjectId={projectId} />
           ) : tab === 'guarantees' ? (
             <GuaranteesPage masterProjectId={projectId} />
+          ) : tab === 'claims' ? (
+            <ClaimsPage masterProjectId={projectId} />
+          ) : tab === 'retention' ? (
+            <RetentionPage masterProjectId={projectId} />
           ) : tab === 'cost' ? (
             <CostManagementPage masterProjectId={projectId} />
           ) : (

@@ -4,6 +4,9 @@ import type {
   FinBudgetChange,
   FinCertificateStatus,
   FinCertificateType,
+  FinClaim,
+  FinClaimStatus,
+  FinClaimType,
   FinContract,
   FinContractAmendment,
   FinContractRole,
@@ -13,6 +16,9 @@ import type {
   FinGuaranteeType,
   FinPayment,
   FinPaymentCertificate,
+  FinRetentionRelease,
+  FinRetentionReleaseStage,
+  FinRetentionReleaseStatus,
   FxAmount,
 } from '../types'
 
@@ -30,6 +36,7 @@ interface FinBudgetRow {
   exchange_rate: number
   approved_budget_fc_rial_equivalent: number
   notes: string
+  certificate_approval_threshold: number | null
   created_at: string
   updated_at: string
 }
@@ -42,6 +49,7 @@ export function finBudgetFromRow(r: FinBudgetRow): FinBudget {
     currency: r.currency,
     fx: fxFromRow(r.approved_budget_fc, r.fc_currency, r.exchange_rate, r.approved_budget_fc_rial_equivalent),
     notes: r.notes,
+    certificateApprovalThreshold: r.certificate_approval_threshold == null ? null : Number(r.certificate_approval_threshold),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -55,6 +63,7 @@ export function finBudgetToRow(masterProjectId: string, b: Partial<FinBudget>) {
   if (b.fx?.fcCurrency !== undefined) row.fc_currency = b.fx.fcCurrency
   if (b.fx?.exchangeRate !== undefined) row.exchange_rate = b.fx.exchangeRate
   if (b.notes !== undefined) row.notes = b.notes
+  if (b.certificateApprovalThreshold !== undefined) row.certificate_approval_threshold = b.certificateApprovalThreshold
   return row
 }
 
@@ -237,6 +246,9 @@ interface FinPaymentCertificateRow {
   gross_amount_fc_rial_equivalent: number
   adjustments: number
   deductions: number
+  tax_deduction: number
+  insurance_deduction: number
+  other_deduction: number
   retention_amount: number
   advance_recovery_amount: number
   payable_amount: number
@@ -249,6 +261,10 @@ interface FinPaymentCertificateRow {
   submitted_date: string | null
   certified_date: string | null
   paid_date: string | null
+  certified_by: string | null
+  approved_by: string | null
+  approved_date: string | null
+  attachment_url: string
   notes: string
   created_at: string
   updated_at: string
@@ -267,6 +283,9 @@ export function finPaymentCertificateFromRow(r: FinPaymentCertificateRow): FinPa
     grossFx: fxFromRow(r.gross_amount_fc, r.fc_currency, r.exchange_rate, r.gross_amount_fc_rial_equivalent),
     adjustments: Number(r.adjustments),
     deductions: Number(r.deductions),
+    taxDeduction: Number(r.tax_deduction),
+    insuranceDeduction: Number(r.insurance_deduction),
+    otherDeduction: Number(r.other_deduction),
     retentionAmount: Number(r.retention_amount),
     advanceRecoveryAmount: Number(r.advance_recovery_amount),
     payableAmount: Number(r.payable_amount),
@@ -277,6 +296,10 @@ export function finPaymentCertificateFromRow(r: FinPaymentCertificateRow): FinPa
     submittedDate: r.submitted_date,
     certifiedDate: r.certified_date,
     paidDate: r.paid_date,
+    certifiedBy: r.certified_by,
+    approvedBy: r.approved_by,
+    approvedDate: r.approved_date,
+    attachmentUrl: r.attachment_url,
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -298,7 +321,10 @@ export function finPaymentCertificateToRow(contractId: string | null, c: Partial
   if (c.grossFx?.fcCurrency !== undefined) row.fc_currency = c.grossFx.fcCurrency
   if (c.grossFx?.exchangeRate !== undefined) row.exchange_rate = c.grossFx.exchangeRate
   if (c.adjustments !== undefined) row.adjustments = c.adjustments
-  if (c.deductions !== undefined) row.deductions = c.deductions
+  // deductions itself is a generated column (tax + insurance + other) — never written directly.
+  if (c.taxDeduction !== undefined) row.tax_deduction = c.taxDeduction
+  if (c.insuranceDeduction !== undefined) row.insurance_deduction = c.insuranceDeduction
+  if (c.otherDeduction !== undefined) row.other_deduction = c.otherDeduction
   if (c.retentionAmount !== undefined) row.retention_amount = c.retentionAmount
   if (c.advanceRecoveryAmount !== undefined) row.advance_recovery_amount = c.advanceRecoveryAmount
   if (c.certifiedAmount !== undefined) row.certified_amount = c.certifiedAmount
@@ -309,6 +335,10 @@ export function finPaymentCertificateToRow(contractId: string | null, c: Partial
   if (c.submittedDate !== undefined) row.submitted_date = c.submittedDate || null
   if (c.certifiedDate !== undefined) row.certified_date = c.certifiedDate || null
   if (c.paidDate !== undefined) row.paid_date = c.paidDate || null
+  if (c.certifiedBy !== undefined) row.certified_by = c.certifiedBy || null
+  if (c.approvedBy !== undefined) row.approved_by = c.approvedBy || null
+  if (c.approvedDate !== undefined) row.approved_date = c.approvedDate || null
+  if (c.attachmentUrl !== undefined) row.attachment_url = c.attachmentUrl
   if (c.notes !== undefined) row.notes = c.notes
   return row
 }
@@ -324,6 +354,7 @@ interface FinGuaranteeRow {
   expiry_date: string | null
   status: string
   notes: string
+  attachment_url: string
   created_at: string
   updated_at: string
 }
@@ -340,6 +371,7 @@ export function finGuaranteeFromRow(r: FinGuaranteeRow): FinGuarantee {
     expiryDate: r.expiry_date,
     status: r.status as FinGuaranteeStatus,
     notes: r.notes,
+    attachmentUrl: r.attachment_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -356,6 +388,7 @@ export function finGuaranteeToRow(contractId: string | null, g: Partial<FinGuara
   if (g.expiryDate !== undefined) row.expiry_date = g.expiryDate || null
   if (g.status !== undefined) row.status = g.status
   if (g.notes !== undefined) row.notes = g.notes
+  if (g.attachmentUrl !== undefined) row.attachment_url = g.attachmentUrl
   return row
 }
 
@@ -401,5 +434,109 @@ export function finPaymentToRow(certificateId: string | null, p: Partial<FinPaym
   if (p.method !== undefined) row.method = p.method
   if (p.referenceNumber !== undefined) row.reference_number = p.referenceNumber
   if (p.notes !== undefined) row.notes = p.notes
+  return row
+}
+
+interface FinClaimRow {
+  id: string
+  contract_id: string
+  claim_number: string
+  claim_type: string
+  title: string
+  description: string
+  submitted_date: string
+  amount_claimed: number
+  amount_approved: number | null
+  currency: string
+  status: string
+  correspondence_ref: string
+  attachment_url: string
+  resolution_date: string | null
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export function finClaimFromRow(r: FinClaimRow): FinClaim {
+  return {
+    id: r.id,
+    contractId: r.contract_id,
+    claimNumber: r.claim_number,
+    claimType: r.claim_type as FinClaimType,
+    title: r.title,
+    description: r.description,
+    submittedDate: r.submitted_date,
+    amountClaimed: Number(r.amount_claimed),
+    amountApproved: r.amount_approved == null ? null : Number(r.amount_approved),
+    currency: r.currency,
+    status: r.status as FinClaimStatus,
+    correspondenceRef: r.correspondence_ref,
+    attachmentUrl: r.attachment_url,
+    resolutionDate: r.resolution_date,
+    notes: r.notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export function finClaimToRow(contractId: string | null, c: Partial<FinClaim>) {
+  const row: Record<string, unknown> = {}
+  if (contractId) row.contract_id = contractId
+  if (c.claimNumber !== undefined) row.claim_number = c.claimNumber
+  if (c.claimType !== undefined) row.claim_type = c.claimType
+  if (c.title !== undefined) row.title = c.title
+  if (c.description !== undefined) row.description = c.description
+  if (c.submittedDate !== undefined) row.submitted_date = c.submittedDate
+  if (c.amountClaimed !== undefined) row.amount_claimed = c.amountClaimed
+  if (c.amountApproved !== undefined) row.amount_approved = c.amountApproved
+  if (c.currency !== undefined) row.currency = c.currency
+  if (c.status !== undefined) row.status = c.status
+  if (c.correspondenceRef !== undefined) row.correspondence_ref = c.correspondenceRef
+  if (c.attachmentUrl !== undefined) row.attachment_url = c.attachmentUrl
+  if (c.resolutionDate !== undefined) row.resolution_date = c.resolutionDate || null
+  if (c.notes !== undefined) row.notes = c.notes
+  return row
+}
+
+interface FinRetentionReleaseRow {
+  id: string
+  contract_id: string
+  release_stage: string
+  planned_date: string | null
+  planned_amount: number
+  actual_date: string | null
+  actual_amount: number | null
+  status: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export function finRetentionReleaseFromRow(r: FinRetentionReleaseRow): FinRetentionRelease {
+  return {
+    id: r.id,
+    contractId: r.contract_id,
+    releaseStage: r.release_stage as FinRetentionReleaseStage,
+    plannedDate: r.planned_date,
+    plannedAmount: Number(r.planned_amount),
+    actualDate: r.actual_date,
+    actualAmount: r.actual_amount == null ? null : Number(r.actual_amount),
+    status: r.status as FinRetentionReleaseStatus,
+    notes: r.notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export function finRetentionReleaseToRow(contractId: string | null, r: Partial<FinRetentionRelease>) {
+  const row: Record<string, unknown> = {}
+  if (contractId) row.contract_id = contractId
+  if (r.releaseStage !== undefined) row.release_stage = r.releaseStage
+  if (r.plannedDate !== undefined) row.planned_date = r.plannedDate || null
+  if (r.plannedAmount !== undefined) row.planned_amount = r.plannedAmount
+  if (r.actualDate !== undefined) row.actual_date = r.actualDate || null
+  if (r.actualAmount !== undefined) row.actual_amount = r.actualAmount
+  if (r.status !== undefined) row.status = r.status
+  if (r.notes !== undefined) row.notes = r.notes
   return row
 }

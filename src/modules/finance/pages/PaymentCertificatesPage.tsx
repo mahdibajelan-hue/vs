@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Link2, Plus, Receipt, Trash2, Wallet } from 'lucide-react'
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Link2, Plus, Receipt, ShieldCheck, Stamp, Trash2, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { averagePaymentDelayDays, certificateGrossTotal, certificateOutstanding, certificatePaidTotal, paymentAgingDays, realizedPaymentDelayDays } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { MetricCard, StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
+import { AttachmentField, AttachmentLink } from '../components/AttachmentField'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
@@ -27,10 +29,19 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
   const createCertificate = useFinanceStore((s) => s.createCertificate)
   const updateCertificate = useFinanceStore((s) => s.updateCertificate)
   const deleteCertificate = useFinanceStore((s) => s.deleteCertificate)
+  const certifyCertificate = useFinanceStore((s) => s.certifyCertificate)
+  const approveCertificate = useFinanceStore((s) => s.approveCertificate)
+  const profiles = useFinanceStore((s) => s.profiles)
+  const budget = useFinanceStore((s) => s.budgets.find((b) => b.masterProjectId === masterProjectId))
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const profileName = (id: string | null) => (id ? profiles.find((p) => p.id === id)?.fullName || 'کاربر نامشخص' : null)
+  const approvalThreshold = budget?.certificateApprovalThreshold ?? null
+  const exceedsThreshold = (cert: FinPaymentCertificate) => approvalThreshold != null && (cert.certifiedAmount ?? 0) > approvalThreshold
 
   const [contractId, setContractId] = useState<string | null>(contracts[0]?.id ?? null)
   const [showNew, setShowNew] = useState(false)
   const [editing, setEditing] = useState<FinPaymentCertificate | null>(null)
+  const [certifying, setCertifying] = useState<FinPaymentCertificate | null>(null)
 
   if (!project) return <div className="flex h-40 items-center justify-center text-xs fin-text-muted">پروژه یافت نشد</div>
 
@@ -155,7 +166,28 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!cert.certifiedBy && (
+                      <button
+                        onClick={() => setCertifying(cert)}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-white"
+                        style={{ background: '#8b6e9c' }}
+                      >
+                        <Stamp size={12} /> ثبت تایید کارکرد
+                      </button>
+                    )}
+                    {cert.certifiedBy && !cert.approvedBy && (
+                      <button
+                        onClick={() => isAdmin && approveCertificate(cert.id)}
+                        disabled={!isAdmin}
+                        title={!isAdmin ? 'تصویب نهایی صرفا برای مدیران سیستم مجاز است' : undefined}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-40"
+                        style={{ background: exceedsThreshold(cert) ? '#b5573a' : '#3e7c74' }}
+                      >
+                        {exceedsThreshold(cert) ? <AlertTriangle size={12} /> : <ShieldCheck size={12} />}
+                        {exceedsThreshold(cert) ? 'تصویب مدیرعامل (فراتر از سقف اختیار)' : 'تصویب نهایی'}
+                      </button>
+                    )}
                     <button onClick={() => setEditing(cert)} className="text-xs fin-text-secondary hover:underline">
                       ویرایش
                     </button>
@@ -167,7 +199,10 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
 
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <MiniField label="مبلغ ناخالص" value={fmtCurrency(cert.grossAmount, activeContract?.currency)} />
-                  <MiniField label="کسورات (حسن انجام کار + بازپرداخت پیش‌پرداخت)" value={fmtCurrency(cert.retentionAmount + cert.advanceRecoveryAmount + cert.deductions, activeContract?.currency)} />
+                  <MiniField label="کسر حسن انجام کار" value={fmtCurrency(cert.retentionAmount, activeContract?.currency)} />
+                  <MiniField label="مالیات تکلیفی" value={fmtCurrency(cert.taxDeduction, activeContract?.currency)} />
+                  <MiniField label="بیمه تامین اجتماعی" value={fmtCurrency(cert.insuranceDeduction, activeContract?.currency)} />
+                  <MiniField label="سایر کسورات" value={fmtCurrency(cert.otherDeduction, activeContract?.currency)} />
                   <MiniField label="مبلغ قابل پرداخت (محاسبه‌شده)" value={fmtCurrency(cert.payableAmount, activeContract?.currency)} highlight />
                   <MiniField
                     label="مبلغ تاییدشده"
@@ -194,16 +229,52 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
                     )}
                   </div>
                 )}
+                {cert.attachmentUrl && (
+                  <div className="mt-2">
+                    <AttachmentLink path={cert.attachmentUrl} />
+                  </div>
+                )}
+                {(cert.certifiedBy || cert.approvedBy) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-3 border-t pt-2.5 text-[10.5px] fin-text-muted" style={{ borderColor: 'var(--fin-divider)' }}>
+                    <span className="flex items-center gap-1">
+                      <Stamp size={11} />
+                      زنجیره تایید:
+                    </span>
+                    {cert.certifiedBy && (
+                      <span>
+                        تایید کارکرد توسط <span className="font-bold fin-text-secondary">{profileName(cert.certifiedBy)}</span> در <span className="num">{fmtDate(cert.certifiedDate)}</span>
+                      </span>
+                    )}
+                    {cert.approvedBy && (
+                      <span>
+                        تصویب نهایی توسط <span className="font-bold fin-text-secondary">{profileName(cert.approvedBy)}</span> در <span className="num">{fmtDate(cert.approvedDate)}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
       )}
 
+      {certifying && (
+        <CertifyModal
+          cert={certifying}
+          currency={activeContract?.currency}
+          onClose={() => setCertifying(null)}
+          onConfirm={async (amount) => {
+            await certifyCertificate(certifying.id, amount)
+            setCertifying(null)
+          }}
+        />
+      )}
+
       {showNew && activeContract && (
         <CertificateModal
           title="صورت‌وضعیت جدید"
           currency={activeContract.currency}
+          contractId={activeContract.id}
           workCertificates={workCertificates}
           onClose={() => setShowNew(false)}
           onSave={async (data) => {
@@ -216,6 +287,7 @@ export function PaymentCertificatesPage({ masterProjectId }: { masterProjectId: 
         <CertificateModal
           title="ویرایش صورت‌وضعیت"
           currency={activeContract?.currency}
+          contractId={activeContract?.id ?? editing.contractId}
           initial={editing}
           workCertificates={workCertificates.filter((c) => c.id !== editing.id)}
           onClose={() => setEditing(null)}
@@ -240,9 +312,59 @@ function MiniField({ label, value, highlight }: { label: string; value: string; 
   )
 }
 
+function CertifyModal({
+  cert,
+  currency,
+  onClose,
+  onConfirm,
+}: {
+  cert: FinPaymentCertificate
+  currency?: string
+  onClose: () => void
+  onConfirm: (amount: number) => Promise<void>
+}) {
+  const [amount, setAmount] = useState(String(cert.payableAmount))
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="fin-card w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="flex items-center gap-1.5 text-sm font-extrabold">
+          <Stamp size={15} style={{ color: '#8b6e9c' }} /> ثبت تایید کارکرد صورت‌وضعیت {cert.certificateNumber || '—'}
+        </h3>
+        <p className="text-[11px] fin-text-muted">
+          با ثبت این تایید، مبلغ زیر به‌عنوان مبلغ نهایی تاییدشده کارکرد ثبت شده و نام و تاریخ شما به‌عنوان تاییدکننده در زنجیره تایید صورت‌وضعیت درج می‌شود.
+        </p>
+        <label className="block">
+          <span className="mb-1 block text-xs fin-text-secondary">مبلغ تاییدشده ({currency ?? 'ریال'})</span>
+          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="fin-input num" autoFocus />
+        </label>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
+            انصراف
+          </button>
+          <button
+            onClick={async () => {
+              setSaving(true)
+              await onConfirm(Number(amount) || 0)
+              setSaving(false)
+            }}
+            disabled={saving}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            style={{ background: '#8b6e9c' }}
+          >
+            {saving ? 'در حال ثبت...' : 'ثبت تایید'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CertificateModal({
   title,
   currency,
+  contractId,
   initial,
   workCertificates,
   onClose,
@@ -250,6 +372,7 @@ function CertificateModal({
 }: {
   title: string
   currency?: string
+  contractId: string
   initial?: FinPaymentCertificate
   workCertificates: FinPaymentCertificate[]
   onClose: () => void
@@ -265,7 +388,9 @@ function CertificateModal({
   const [fcCurrency, setFcCurrency] = useState(initial?.grossFx.fcCurrency ?? 'EUR')
   const [exchangeRate, setExchangeRate] = useState(initial?.grossFx.exchangeRate != null ? String(initial.grossFx.exchangeRate) : '0')
   const [adjustments, setAdjustments] = useState(initial?.adjustments != null ? String(initial.adjustments) : '0')
-  const [deductions, setDeductions] = useState(initial?.deductions != null ? String(initial.deductions) : '0')
+  const [taxDeduction, setTaxDeduction] = useState(initial?.taxDeduction != null ? String(initial.taxDeduction) : '0')
+  const [insuranceDeduction, setInsuranceDeduction] = useState(initial?.insuranceDeduction != null ? String(initial.insuranceDeduction) : '0')
+  const [otherDeduction, setOtherDeduction] = useState(initial?.otherDeduction != null ? String(initial.otherDeduction) : '0')
   const [retentionAmount, setRetentionAmount] = useState(initial?.retentionAmount != null ? String(initial.retentionAmount) : '0')
   const [advanceRecoveryAmount, setAdvanceRecoveryAmount] = useState(initial?.advanceRecoveryAmount != null ? String(initial.advanceRecoveryAmount) : '0')
   const [certifiedAmount, setCertifiedAmount] = useState(initial?.certifiedAmount != null ? String(initial.certifiedAmount) : '')
@@ -277,12 +402,15 @@ function CertificateModal({
   const [certifiedDate, setCertifiedDate] = useState(initial?.certifiedDate ?? '')
   const [paidDate, setPaidDate] = useState(initial?.paidDate ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [attachmentUrl, setAttachmentUrl] = useState(initial?.attachmentUrl ?? '')
   const [saving, setSaving] = useState(false)
 
   const previewPayable =
     (grossAmount === '' ? 0 : Number(grossAmount)) +
     (Number(adjustments) || 0) -
-    (Number(deductions) || 0) -
+    (Number(taxDeduction) || 0) -
+    (Number(insuranceDeduction) || 0) -
+    (Number(otherDeduction) || 0) -
     (Number(retentionAmount) || 0) -
     (Number(advanceRecoveryAmount) || 0)
 
@@ -297,7 +425,9 @@ function CertificateModal({
       grossAmount: grossAmount === '' ? 0 : Number(grossAmount),
       grossFx: { fcAmount: Number(fcAmount) || 0, fcCurrency, exchangeRate: Number(exchangeRate) || 0, fcRialEquivalent: 0 },
       adjustments: Number(adjustments) || 0,
-      deductions: Number(deductions) || 0,
+      taxDeduction: Number(taxDeduction) || 0,
+      insuranceDeduction: Number(insuranceDeduction) || 0,
+      otherDeduction: Number(otherDeduction) || 0,
       retentionAmount: Number(retentionAmount) || 0,
       advanceRecoveryAmount: Number(advanceRecoveryAmount) || 0,
       certifiedAmount: certifiedAmount === '' ? null : Number(certifiedAmount),
@@ -308,6 +438,7 @@ function CertificateModal({
       certifiedDate: certifiedDate || null,
       paidDate: paidDate || null,
       notes,
+      attachmentUrl,
     })
     setSaving(false)
   }
@@ -374,8 +505,16 @@ function CertificateModal({
             <input type="number" value={adjustments} onChange={(e) => setAdjustments(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs fin-text-secondary">کسورات متفرقه (Deductions)</span>
-            <input type="number" value={deductions} onChange={(e) => setDeductions(e.target.value)} className="fin-input num" />
+            <span className="mb-1 block text-xs fin-text-secondary">مالیات تکلیفی (Tax)</span>
+            <input type="number" value={taxDeduction} onChange={(e) => setTaxDeduction(e.target.value)} className="fin-input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">بیمه تامین اجتماعی (Insurance)</span>
+            <input type="number" value={insuranceDeduction} onChange={(e) => setInsuranceDeduction(e.target.value)} className="fin-input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">سایر کسورات (Other)</span>
+            <input type="number" value={otherDeduction} onChange={(e) => setOtherDeduction(e.target.value)} className="fin-input num" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs fin-text-secondary">کسر حسن انجام کار (Retention)</span>
@@ -432,6 +571,7 @@ function CertificateModal({
           <span className="mb-1 block text-xs fin-text-secondary">یادداشت</span>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className="fin-input" />
         </label>
+        <AttachmentField folder={`certificates/${contractId}`} value={attachmentUrl} onChange={setAttachmentUrl} />
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm fin-text-secondary hover:opacity-70">
             انصراف

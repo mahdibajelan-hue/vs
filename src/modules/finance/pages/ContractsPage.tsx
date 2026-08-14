@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { AlertTriangle, FileText, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Award, AlertTriangle, FileText, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
-import { currentContractValue, expiringGuarantees } from '../lib/financeCalc'
+import { computeContractorScorecard, currentContractValue, expiringGuarantees } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
@@ -34,6 +34,8 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
   const contracts = useFinanceStore((s) => s.contracts).filter((c) => c.masterProjectId === masterProjectId)
   const amendments = useFinanceStore((s) => s.amendments)
   const guarantees = useFinanceStore((s) => s.guarantees)
+  const certificates = useFinanceStore((s) => s.certificates)
+  const claims = useFinanceStore((s) => s.claims)
   const createContract = useFinanceStore((s) => s.createContract)
   const updateContract = useFinanceStore((s) => s.updateContract)
   const deleteContract = useFinanceStore((s) => s.deleteContract)
@@ -68,6 +70,55 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
           <Plus size={13} /> قرارداد جدید
         </button>
       </div>
+
+      {contracts.length > 0 && (
+        <div className="fin-card overflow-x-auto p-4">
+          <p className="fin-text mb-3 flex items-center gap-1.5 text-sm font-bold">
+            <Award size={14} style={{ color: FINANCE_ACCENT }} /> کارنامه پرداخت به پیمانکاران
+          </p>
+          <table className="w-full min-w-[820px] text-right text-[11px]">
+            <thead>
+              <tr className="fin-text-muted border-b text-[10px]" style={{ borderColor: 'var(--fin-divider)' }}>
+                <th className="pb-2 font-medium">قرارداد</th>
+                <th className="pb-2 font-medium">تعداد صورت‌وضعیت</th>
+                <th className="pb-2 font-medium">میانگین تاخیر پرداخت</th>
+                <th className="pb-2 font-medium">نرخ پرداخت به‌موقع</th>
+                <th className="pb-2 font-medium">مانده پرداخت‌نشده</th>
+                <th className="pb-2 font-medium">کلایم باز</th>
+                <th className="pb-2 font-medium">امتیاز کارنامه</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contracts.map((c) => {
+                const row = computeContractorScorecard(c, certificates, claims)
+                const scoreColor = row.score >= 80 ? '#3e7c74' : row.score >= 60 ? '#b8863b' : '#b5573a'
+                return (
+                  <tr key={c.id} className="border-b last:border-0" style={{ borderColor: 'var(--fin-divider)' }}>
+                    <td className="fin-text py-2 font-bold">{c.title || c.contractNumber || 'قرارداد بدون عنوان'}</td>
+                    <td className="num fin-text py-2">{row.certificateCount.toLocaleString('fa-IR')}</td>
+                    <td className="num fin-text py-2">{row.avgPaymentDelayDays != null ? `${row.avgPaymentDelayDays.toLocaleString('fa-IR')} روز` : '—'}</td>
+                    <td className="num fin-text py-2">{row.onTimePaymentPct != null ? `${row.onTimePaymentPct.toLocaleString('fa-IR')}٪` : '—'}</td>
+                    <td className="num py-2" style={{ color: row.outstandingTotal > 0 ? '#b8863b' : 'var(--fin-text)' }}>
+                      {fmtCurrency(row.outstandingTotal, c.currency)}
+                    </td>
+                    <td className="num py-2" style={{ color: row.claimCount > 0 ? '#b5573a' : 'var(--fin-text)' }}>
+                      {row.claimCount.toLocaleString('fa-IR')}
+                    </td>
+                    <td className="py-2">
+                      <span className="num rounded-full px-2 py-0.5 text-[11px] font-extrabold text-white" style={{ background: scoreColor }}>
+                        {row.score.toLocaleString('fa-IR')}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[10px] leading-5 fin-text-muted">
+            امتیاز کارنامه از ۱۰۰ شروع شده و بر اساس میانگین تاخیر پرداخت، نسبت مانده پرداخت‌نشده و ریسک کلایم‌های باز نسبت به مبلغ قرارداد کسر می‌شود — شاخصی راهنما برای مقایسه نسبی قراردادها، نه یک معیار قراردادی رسمی.
+          </p>
+        </div>
+      )}
 
       {projectGuarantees.length > 0 && (
         <div className="fin-card flex flex-wrap items-center gap-4 border p-4" style={{ borderColor: `${FINANCE_ACCENT}40` }}>

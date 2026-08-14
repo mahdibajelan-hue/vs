@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarRange, Coins, Gauge, PieChart, Plus, Scale, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { CalendarRange, Coins, Gauge, PieChart, Plus, Scale, ShieldCheck, Target, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
 import { computeAnnualBudgetRows, computeProjectFinancialSummary } from '../lib/financeCalc'
@@ -40,6 +40,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
   const [approvedInput, setApprovedInput] = useState(budget?.approvedBudget != null ? String(budget.approvedBudget) : '')
   const [approvedFcInput, setApprovedFcInput] = useState(budget?.fx.fcAmount != null ? String(budget.fx.fcAmount) : '0')
   const [approvedRateInput, setApprovedRateInput] = useState(budget?.fx.exchangeRate != null ? String(budget.fx.exchangeRate) : '0')
+  const [thresholdInput, setThresholdInput] = useState(budget?.certificateApprovalThreshold != null ? String(budget.certificateApprovalThreshold) : '')
   const [showAddChange, setShowAddChange] = useState(false)
   const [showAnnualForm, setShowAnnualForm] = useState(false)
 
@@ -50,6 +51,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
       approvedBudget: approvedInput === '' ? 0 : Number(approvedInput),
       currency,
       fx: { fcAmount: Number(approvedFcInput) || 0, fcCurrency: budget?.fx.fcCurrency ?? 'EUR', exchangeRate: Number(approvedRateInput) || 0, fcRialEquivalent: 0 },
+      certificateApprovalThreshold: thresholdInput === '' ? null : Number(thresholdInput),
     })
     setEditingApproved(false)
   }
@@ -120,6 +122,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
                 setApprovedInput(budget?.approvedBudget != null ? String(budget.approvedBudget) : '')
                 setApprovedFcInput(budget?.fx.fcAmount != null ? String(budget.fx.fcAmount) : '0')
                 setApprovedRateInput(budget?.fx.exchangeRate != null ? String(budget.fx.exchangeRate) : '0')
+                setThresholdInput(budget?.certificateApprovalThreshold != null ? String(budget.certificateApprovalThreshold) : '')
                 setEditingApproved(true)
               }}
               className="text-xs fin-text-secondary hover:underline"
@@ -142,6 +145,22 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
               <span className="w-16 shrink-0 text-[11px] fin-text-muted">نرخ ارز</span>
               <input type="number" value={approvedRateInput} onChange={(e) => setApprovedRateInput(e.target.value)} className="fin-input num w-32" />
             </div>
+            <div className="flex flex-wrap items-center gap-2 border-t pt-2.5" style={{ borderColor: 'var(--fin-divider)' }}>
+              <span className="flex items-center gap-1 w-52 shrink-0 text-[11px] fin-text-muted">
+                <ShieldCheck size={12} /> سقف اختیار تصویب صورت‌وضعیت (DOA)
+              </span>
+              <input
+                type="number"
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                placeholder="بدون سقف — بدون نیاز به تصویب مدیرعامل"
+                className="fin-input num w-56"
+              />
+              <span className="text-xs fin-text-muted">{currency}</span>
+            </div>
+            <p className="text-[10.5px] leading-5 fin-text-muted">
+              صورت‌وضعیت‌هایی که مبلغ تاییدشده آن‌ها از این سقف فراتر رود، در صفحه «صورت‌وضعیت‌های پرداخت» با نشان «فراتر از سقف اختیار» علامت‌گذاری می‌شوند و برای تصویب نهایی به تایید مدیرعامل نیاز دارند.
+            </p>
             <div className="flex gap-2">
               <button onClick={saveApproved} className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: FINANCE_ACCENT }}>
                 ذخیره
@@ -159,6 +178,12 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
             {budget && budget.fx.fcAmount > 0 && (
               <p className="num mt-1 text-[11px] fin-text-muted" dir="ltr">
                 + {budget.fx.fcAmount.toLocaleString('fa-IR')} {budget.fx.fcCurrency} × {budget.fx.exchangeRate.toLocaleString('fa-IR')} = {fmtCurrency(budget.fx.fcRialEquivalent, currency)}
+              </p>
+            )}
+            {budget?.certificateApprovalThreshold != null && (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] fin-text-secondary">
+                <ShieldCheck size={12} />
+                سقف اختیار تصویب صورت‌وضعیت: <span className="num font-bold">{fmtCurrency(budget.certificateApprovalThreshold, currency)}</span>
               </p>
             )}
           </>

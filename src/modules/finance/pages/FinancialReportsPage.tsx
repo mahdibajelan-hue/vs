@@ -2,11 +2,22 @@ import { useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Receipt, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useFinanceStore } from '../store/useFinanceStore'
-import { certificateGrossTotal, certificateOutstanding, certificatePaidTotal } from '../lib/financeCalc'
+import {
+  activeGuaranteesTotal,
+  certificateGrossTotal,
+  certificateOutstanding,
+  certificatePaidTotal,
+  claimsExposureTotal,
+  computeProjectFinancialSummary,
+  expiringGuarantees,
+  retentionLiability,
+} from '../lib/financeCalc'
 import { exportFinanceReportToExcel } from '../lib/financeExport'
 import { exportElementToPdf } from '../../../lib/export'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { MetricCard } from '../components/FinanceDashboardUI'
+import { ExecutiveExportButton } from '../components/ExecutiveExportButton'
+import type { ExecutiveReportExtras } from '../components/ExecutiveReportPrint'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { JALALI_MONTHS, todayJalali } from '../../../lib/jalali'
@@ -23,7 +34,7 @@ function fmtTodayJalaliFull(): string {
   return `${jd.toLocaleString('fa-IR')} ${JALALI_MONTHS[jm - 1]} ${jy.toLocaleString('fa-IR')}`
 }
 
-const PRINT_HEADERS = ['شماره', 'قرارداد', 'تاریخ', 'ناخالص', 'تعدیلات', 'بازپرداخت پیش‌پرداخت', 'حسن انجام کار', 'سایر کسورات', 'خالص تاییدشده', 'پرداخت‌شده', 'مانده']
+const PRINT_HEADERS = ['شماره', 'قرارداد', 'تاریخ', 'ناخالص', 'تعدیلات', 'بازپرداخت پیش‌پرداخت', 'حسن انجام کار', 'مالیات', 'بیمه', 'سایر کسورات', 'خالص تاییدشده', 'پرداخت‌شده', 'مانده']
 
 /**
  * Print-friendly report template — a dedicated white/no-shadow layout captured separately from
@@ -46,7 +57,7 @@ function ReportPrintTemplate({
   currency: string
   contractLabel: (id: string) => string
   rows: FinPaymentCertificate[]
-  totals: { gross: number; adjustments: number; advanceRecovery: number; retention: number; otherDeductions: number; netCertified: number; paid: number; outstanding: number }
+  totals: { gross: number; adjustments: number; advanceRecovery: number; retention: number; taxDeductions: number; insuranceDeductions: number; otherDeductions: number; netCertified: number; paid: number; outstanding: number }
 }) {
   return (
     <div style={{ background: '#ffffff', color: '#0f172a', width: 1180, padding: '32px 36px', fontFamily: 'var(--font-sans)', direction: 'rtl' }}>
@@ -84,7 +95,9 @@ function ReportPrintTemplate({
                 <td style={{ padding: '6px 8px' }}>{fmtFull(c.adjustments)}</td>
                 <td style={{ padding: '6px 8px' }}>{fmtFull(c.advanceRecoveryAmount)}</td>
                 <td style={{ padding: '6px 8px' }}>{fmtFull(c.retentionAmount)}</td>
-                <td style={{ padding: '6px 8px' }}>{fmtFull(c.deductions)}</td>
+                <td style={{ padding: '6px 8px' }}>{fmtFull(c.taxDeduction)}</td>
+                <td style={{ padding: '6px 8px' }}>{fmtFull(c.insuranceDeduction)}</td>
+                <td style={{ padding: '6px 8px' }}>{fmtFull(c.otherDeduction)}</td>
                 <td style={{ padding: '6px 8px', fontWeight: 700 }}>{c.certifiedAmount != null ? fmtFull(c.certifiedAmount) : '—'}</td>
                 <td style={{ padding: '6px 8px' }}>{fmtFull(certificatePaidTotal(c))}</td>
                 <td style={{ padding: '6px 8px' }}>{fmtFull(certificateOutstanding(c))}</td>
@@ -100,6 +113,8 @@ function ReportPrintTemplate({
               <td style={{ padding: '8px' }}>{fmtFull(totals.adjustments)}</td>
               <td style={{ padding: '8px' }}>{fmtFull(totals.advanceRecovery)}</td>
               <td style={{ padding: '8px' }}>{fmtFull(totals.retention)}</td>
+              <td style={{ padding: '8px' }}>{fmtFull(totals.taxDeductions)}</td>
+              <td style={{ padding: '8px' }}>{fmtFull(totals.insuranceDeductions)}</td>
               <td style={{ padding: '8px' }}>{fmtFull(totals.otherDeductions)}</td>
               <td style={{ padding: '8px' }}>{fmtFull(totals.netCertified)}</td>
               <td style={{ padding: '8px' }}>{fmtFull(totals.paid)}</td>
@@ -116,14 +131,20 @@ function ReportPrintTemplate({
 
 /**
  * Financial Reports (spec item 8): filter by Contract + date range, show Gross/Adjustments/
- * Advance Recovery/Retention/Other Deductions (tax + insurance + misc — this module tracks them
- * as one generic deduction field, see PaymentCertificatesPage)/Net Certified/Paid/Outstanding,
+ * Advance Recovery/Retention/Tax/Insurance/Other Deductions/Net Certified/Paid/Outstanding,
  * export to Excel and PDF.
  */
 export function FinancialReportsPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
   const contracts = useFinanceStore((s) => s.contracts).filter((c) => c.masterProjectId === masterProjectId)
   const certificates = useFinanceStore((s) => s.certificates)
+  const budgets = useFinanceStore((s) => s.budgets)
+  const budgetChanges = useFinanceStore((s) => s.budgetChanges)
+  const amendments = useFinanceStore((s) => s.amendments)
+  const annualBudgets = useFinanceStore((s) => s.annualBudgets)
+  const guarantees = useFinanceStore((s) => s.guarantees)
+  const claims = useFinanceStore((s) => s.claims)
+  const retentionReleases = useFinanceStore((s) => s.retentionReleases)
 
   const [contractId, setContractId] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -138,6 +159,32 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
   const contractLabel = (id: string) => contractOf(id)?.title || contractOf(id)?.contractNumber || '—'
   const currency = contracts[0]?.currency ?? project.currency ?? 'ریال'
 
+  const projectBudget = budgets.find((b) => b.masterProjectId === masterProjectId) ?? null
+  const projectBudgetChanges = budgetChanges.filter((c) => c.masterProjectId === masterProjectId)
+  const projectAmendments = amendments.filter((a) => contractIds.has(a.contractId))
+  const projectCertificatesAll = certificates.filter((c) => contractIds.has(c.contractId))
+  const projectGuarantees = guarantees.filter((g) => contractIds.has(g.contractId))
+  const projectClaims = claims.filter((c) => contractIds.has(c.contractId))
+  const projectRetentionReleases = retentionReleases.filter((r) => contractIds.has(r.contractId))
+  const executiveSummary = computeProjectFinancialSummary(
+    masterProjectId,
+    project.forecastCostAtCompletion ?? null,
+    projectBudget,
+    projectBudgetChanges,
+    contracts,
+    projectAmendments,
+    projectCertificatesAll,
+    annualBudgets,
+    projectGuarantees,
+  )
+  const executiveExtras: ExecutiveReportExtras = {
+    claimsExposure: claimsExposureTotal(projectClaims),
+    claimCount: projectClaims.length,
+    retentionLiabilityAmount: retentionLiability(projectCertificatesAll, projectRetentionReleases),
+    activeGuaranteesTotalAmount: activeGuaranteesTotal(projectGuarantees),
+    expiringGuaranteeCount: expiringGuarantees(projectGuarantees).length,
+  }
+
   const filtered = certificates
     .filter((c) => contractIds.has(c.contractId))
     .filter((c) => !contractId || c.contractId === contractId)
@@ -151,13 +198,15 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
       acc.adjustments += c.adjustments
       acc.advanceRecovery += c.advanceRecoveryAmount
       acc.retention += c.retentionAmount
-      acc.otherDeductions += c.deductions
+      acc.taxDeductions += c.taxDeduction
+      acc.insuranceDeductions += c.insuranceDeduction
+      acc.otherDeductions += c.otherDeduction
       acc.netCertified += c.certifiedAmount ?? 0
       acc.paid += certificatePaidTotal(c)
       acc.outstanding += certificateOutstanding(c)
       return acc
     },
-    { gross: 0, adjustments: 0, advanceRecovery: 0, retention: 0, otherDeductions: 0, netCertified: 0, paid: 0, outstanding: 0 },
+    { gross: 0, adjustments: 0, advanceRecovery: 0, retention: 0, taxDeductions: 0, insuranceDeductions: 0, otherDeductions: 0, netCertified: 0, paid: 0, outstanding: 0 },
   )
 
   const reportType = `گزارش تفکیکی صورت‌وضعیت‌های پرداخت — ${contractId ? `قرارداد ${contractLabel(contractId)}` : 'همه قراردادها'}`
@@ -173,7 +222,9 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
       'تعدیلات': Math.round(c.adjustments),
       'بازپرداخت پیش‌پرداخت': Math.round(c.advanceRecoveryAmount),
       'کسر حسن انجام کار': Math.round(c.retentionAmount),
-      'سایر کسورات (مالیات، بیمه، متفرقه)': Math.round(c.deductions),
+      'مالیات تکلیفی': Math.round(c.taxDeduction),
+      'بیمه تامین اجتماعی': Math.round(c.insuranceDeduction),
+      'سایر کسورات': Math.round(c.otherDeduction),
       'مبلغ خالص تاییدشده': Math.round(c.certifiedAmount ?? 0),
       'مبلغ پرداخت‌شده (شامل ارزی)': Math.round(certificatePaidTotal(c)),
       'مانده پرداخت‌نشده': Math.round(certificateOutstanding(c)),
@@ -195,10 +246,11 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
-          <p className="fin-text-muted text-xs">گزارش‌های مالی</p>
+          <p className="fin-text-muted text-xs">گزارش‌های مالی — گزارش عملیاتی تفصیلی (مدیر پروژه)</p>
           <h1 className="fin-text mt-1 text-lg font-extrabold">{project.officialName}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExecutiveExportButton scopeLabel="گزارش اجرایی سطح پروژه" entityName={project.officialName} currency={currency} summary={executiveSummary} extras={executiveExtras} />
           <button onClick={handleExportExcel} disabled={filtered.length === 0} className="fin-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold hover:opacity-70 disabled:opacity-40" style={{ borderColor: 'var(--fin-divider)' }}>
             <FileSpreadsheet size={13} /> خروجی اکسل
           </button>
@@ -261,7 +313,7 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
         {filtered.length === 0 ? (
           <p className="fin-text-muted py-8 text-center text-xs">صورت‌وضعیتی مطابق فیلترهای انتخاب‌شده یافت نشد.</p>
         ) : (
-          <table className="w-full min-w-[920px] text-right text-[11px]">
+          <table className="w-full min-w-[1080px] text-right text-[11px]">
             <thead>
               <tr className="fin-text-muted border-b text-[10px]" style={{ borderColor: 'var(--fin-divider)' }}>
                 <th className="pb-2 font-medium">شماره</th>
@@ -271,6 +323,8 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
                 <th className="pb-2 font-medium">تعدیلات</th>
                 <th className="pb-2 font-medium">بازپرداخت پیش‌پرداخت</th>
                 <th className="pb-2 font-medium">حسن انجام کار</th>
+                <th className="pb-2 font-medium">مالیات</th>
+                <th className="pb-2 font-medium">بیمه</th>
                 <th className="pb-2 font-medium">سایر کسورات</th>
                 <th className="pb-2 font-medium">خالص تاییدشده</th>
                 <th className="pb-2 font-medium">پرداخت‌شده</th>
@@ -287,7 +341,9 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
                   <td className="num fin-text py-2">{fmtCurrency(c.adjustments)}</td>
                   <td className="num fin-text py-2">{fmtCurrency(c.advanceRecoveryAmount)}</td>
                   <td className="num fin-text py-2">{fmtCurrency(c.retentionAmount)}</td>
-                  <td className="num fin-text py-2">{fmtCurrency(c.deductions)}</td>
+                  <td className="num fin-text py-2">{fmtCurrency(c.taxDeduction)}</td>
+                  <td className="num fin-text py-2">{fmtCurrency(c.insuranceDeduction)}</td>
+                  <td className="num fin-text py-2">{fmtCurrency(c.otherDeduction)}</td>
                   <td className="num fin-text py-2 font-bold">{c.certifiedAmount != null ? fmtCurrency(c.certifiedAmount) : '—'}</td>
                   <td className="num fin-text py-2">{fmtCurrency(certificatePaidTotal(c))}</td>
                   <td className="num py-2" style={{ color: certificateOutstanding(c) > 0 ? '#b8863b' : 'var(--fin-text)' }}>
@@ -305,6 +361,8 @@ export function FinancialReportsPage({ masterProjectId }: { masterProjectId: str
                 <td className="num fin-text py-2">{fmtCurrency(totals.adjustments)}</td>
                 <td className="num fin-text py-2">{fmtCurrency(totals.advanceRecovery)}</td>
                 <td className="num fin-text py-2">{fmtCurrency(totals.retention)}</td>
+                <td className="num fin-text py-2">{fmtCurrency(totals.taxDeductions)}</td>
+                <td className="num fin-text py-2">{fmtCurrency(totals.insuranceDeductions)}</td>
                 <td className="num fin-text py-2">{fmtCurrency(totals.otherDeductions)}</td>
                 <td className="num py-2" style={{ color: FINANCE_ACCENT }}>
                   {fmtCurrency(totals.netCertified)}

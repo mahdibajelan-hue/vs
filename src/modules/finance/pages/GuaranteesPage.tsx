@@ -5,6 +5,7 @@ import { useFinanceStore } from '../store/useFinanceStore'
 import { activeGuaranteesTotal, expiringGuarantees } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { MetricCard, StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
+import { AttachmentField, AttachmentLink } from '../components/AttachmentField'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import {
   FIN_GUARANTEE_STATUS_COLOR,
@@ -73,6 +74,7 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
                 <th className="pb-2 font-medium">تاریخ صدور</th>
                 <th className="pb-2 font-medium">تاریخ انقضا</th>
                 <th className="pb-2 font-medium">وضعیت</th>
+                <th className="pb-2 font-medium">سند</th>
                 <th className="pb-2 font-medium"></th>
               </tr>
             </thead>
@@ -98,6 +100,7 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
                     <td className="py-2">
                       <StampBadge label={FIN_GUARANTEE_STATUS_LABEL_FA[g.status]} tone={hexToStampTone(tone)} />
                     </td>
+                    <td className="py-2">{g.attachmentUrl ? <AttachmentLink path={g.attachmentUrl} /> : <span className="fin-text-muted">—</span>}</td>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
                         <button onClick={() => setEditing(g)} className="fin-text-secondary text-[10.5px] hover:underline">
@@ -164,12 +167,22 @@ function GuaranteeModal({
   const [issueDate, setIssueDate] = useState(initial?.issueDate ?? '')
   const [expiryDate, setExpiryDate] = useState(initial?.expiryDate ?? '')
   const [status, setStatus] = useState<FinGuaranteeStatus>(initial?.status ?? 'active')
+  const [attachmentUrl, setAttachmentUrl] = useState(initial?.attachmentUrl ?? '')
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
     if (!contractId) return
     setSaving(true)
-    await onSave(contractId, { guaranteeType, number, amount: amount === '' ? 0 : Number(amount), currency, issueDate: issueDate || null, expiryDate: expiryDate || null, status })
+    await onSave(contractId, {
+      guaranteeType,
+      number,
+      amount: amount === '' ? 0 : Number(amount),
+      currency,
+      issueDate: issueDate || null,
+      expiryDate: expiryDate || null,
+      status,
+      attachmentUrl,
+    })
     setSaving(false)
   }
 
@@ -228,6 +241,7 @@ function GuaranteeModal({
             ))}
           </select>
         </label>
+        <AttachmentField folder={`guarantees/${contractId || 'unassigned'}`} value={attachmentUrl} onChange={setAttachmentUrl} />
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف

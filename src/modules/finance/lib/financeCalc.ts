@@ -1,5 +1,5 @@
 import { isoToJalali, todayJalali } from '../../../lib/jalali'
-import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate } from '../types'
+import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate, FinRetentionRelease } from '../types'
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -94,6 +94,112 @@ export function activeGuaranteesTotal(guarantees: FinGuarantee[]): number {
 export function expiringGuarantees(guarantees: FinGuarantee[], today = todayIso(), withinDays = 60): FinGuarantee[] {
   const horizon = Date.parse(today) + withinDays * 86400000
   return guarantees.filter((g) => g.status === 'active' && g.expiryDate && Date.parse(g.expiryDate) <= horizon)
+}
+
+// ---------------------------------------------------------------------------
+// Retention (حسن انجام کار) — the amount withheld per certificate is already tracked
+// (certificate.retentionAmount); these compute the *liability* side: how much is currently held
+// vs. how much has actually been released back to the contractor.
+// ---------------------------------------------------------------------------
+
+/** Total retention withheld to date across the given certificates. */
+export function retentionHeldTotal(certificates: FinPaymentCertificate[]): number {
+  return certificates.reduce((sum, c) => sum + c.retentionAmount, 0)
+}
+
+/** Total retention actually released (only rows marked 'released', using the actual amount if entered). */
+export function retentionReleasedTotal(releases: FinRetentionRelease[]): number {
+  return releases.filter((r) => r.status === 'released').reduce((sum, r) => sum + (r.actualAmount ?? r.plannedAmount), 0)
+}
+
+/** Outstanding retention liability — held minus what's already been paid back. Never negative. */
+export function retentionLiability(certificates: FinPaymentCertificate[], releases: FinRetentionRelease[]): number {
+  return Math.max(0, retentionHeldTotal(certificates) - retentionReleasedTotal(releases))
+}
+
+/** Pending retention releases whose planned date falls within `withinDays` (default 60) — release-schedule alerts. */
+export function upcomingRetentionReleases(releases: FinRetentionRelease[], today = todayIso(), withinDays = 60): FinRetentionRelease[] {
+  const horizon = Date.parse(today) + withinDays * 86400000
+  return releases.filter((r) => r.status === 'pending' && r.plannedDate && Date.parse(r.plannedDate) <= horizon)
+}
+
+// ---------------------------------------------------------------------------
+// Contractor claims (کلایم پیمانکار) — a claim is a contractor assertion that may be rejected or
+// only partially approved, so its claimed amount is a contingent exposure, not a settled cost,
+// until it resolves to 'approved'/'partially_approved'/'rejected'.
+// ---------------------------------------------------------------------------
+
+const UNRESOLVED_CLAIM_STATUSES = new Set(['submitted', 'under_review', 'arbitration'])
+
+/** Sum of amountClaimed across every claim still unresolved (submitted/under_review/arbitration) — the contingent financial exposure. */
+export function claimsExposureTotal(claims: FinClaim[]): number {
+  return claims.filter((c) => UNRESOLVED_CLAIM_STATUSES.has(c.status)).reduce((sum, c) => sum + c.amountClaimed, 0)
+}
+
+/** Claims still awaiting a decision, past `staleDays` (default 14) since submission — for a "needs attention" alert. */
+export function staleClaims(claims: FinClaim[], today = todayIso(), staleDays = 14): FinClaim[] {
+  return claims.filter((c) => UNRESOLVED_CLAIM_STATUSES.has(c.status) && Math.round((Date.parse(today) - Date.parse(c.submittedDate)) / 86400000) > staleDays)
+}
+
+// ---------------------------------------------------------------------------
+// Contractor payment scorecard — per-contract view of the employer's own payment discipline
+// (delay, on-time rate, outstanding) plus that contract's claim load, so the CEO can see at a
+// glance which contractor relationships are running hot.
+// ---------------------------------------------------------------------------
+
+export interface ContractorScorecardRow {
+  contractId: string
+  certificateCount: number
+  certifiedTotal: number
+  paidTotal: number
+  outstandingTotal: number
+  avgPaymentDelayDays: number | null
+  maxPaymentDelayDays: number | null
+  /** % of realized (paid) certificates settled within `onTimeDays` of certification. Null when nothing paid yet. */
+  onTimePaymentPct: number | null
+  overdueCount: number
+  claimCount: number
+  claimsExposure: number
+  /** 0-100 composite: starts at 100, penalized by average delay, outstanding-vs-contract-value ratio, and claims exposure-vs-contract-value ratio. A rough, honest single number — not a certified KPI. */
+  score: number
+}
+
+export function computeContractorScorecard(contract: FinContract, certificates: FinPaymentCertificate[], claims: FinClaim[], today = todayIso(), onTimeDays = 30): ContractorScorecardRow {
+  const certs = certificates.filter((c) => c.contractId === contract.id)
+  const contractClaims = claims.filter((c) => c.contractId === contract.id)
+
+  const certifiedTotal = certs.reduce((sum, c) => sum + (c.certifiedAmount ?? 0), 0)
+  const paidTotal = certs.reduce((sum, c) => sum + certificatePaidTotal(c), 0)
+  const outstandingTotal = certs.reduce((sum, c) => sum + certificateOutstanding(c), 0)
+  const realizedDelays = certs.map(realizedPaymentDelayDays).filter((d): d is number => d != null)
+  const onTimeCount = realizedDelays.filter((d) => d <= onTimeDays).length
+  const overdueCount = certs.filter((c) => (paymentAgingDays(c, today) ?? 0) > onTimeDays).length
+  const claimsExposure = claimsExposureTotal(contractClaims)
+
+  const avgDelay = averagePaymentDelayDays(certs)
+  const maxDelay = maxPaymentDelayDays(certs)
+  const onTimePaymentPct = realizedDelays.length > 0 ? Math.round((onTimeCount / realizedDelays.length) * 100) : null
+
+  const contractValue = contract.contractValue + contract.fx.fcRialEquivalent
+  const delayPenalty = avgDelay != null ? Math.min(40, avgDelay / 2) : 0
+  const outstandingPenalty = outstandingTotal > 0 && contractValue > 0 ? Math.min(30, (outstandingTotal / contractValue) * 100) : 0
+  const claimsPenalty = contractValue > 0 ? Math.min(30, (claimsExposure / contractValue) * 100) : 0
+  const score = Math.max(0, Math.round(100 - delayPenalty - outstandingPenalty - claimsPenalty))
+
+  return {
+    contractId: contract.id,
+    certificateCount: certs.length,
+    certifiedTotal,
+    paidTotal,
+    outstandingTotal,
+    avgPaymentDelayDays: avgDelay,
+    maxPaymentDelayDays: maxDelay,
+    onTimePaymentPct,
+    overdueCount,
+    claimCount: contractClaims.length,
+    claimsExposure,
+    score,
+  }
 }
 
 // ---------------------------------------------------------------------------
