@@ -3021,7 +3021,10 @@ update fin_payment_certificates set other_deduction = deductions where other_ded
 alter table fin_payment_certificates drop column if exists payable_amount;
 alter table fin_payment_certificates drop column if exists deductions;
 alter table fin_payment_certificates add column deductions numeric generated always as (tax_deduction + insurance_deduction + other_deduction) stored;
-alter table fin_payment_certificates add column payable_amount numeric generated always as (gross_amount + adjustments - deductions - retention_amount - advance_recovery_amount) stored;
+-- Postgres forbids a generated column from referencing another generated column, so this expression
+-- inlines the tax+insurance+other sum directly rather than referencing the `deductions` column above
+-- (the two stay mathematically identical, just computed independently).
+alter table fin_payment_certificates add column payable_amount numeric generated always as (gross_amount + adjustments - (tax_deduction + insurance_deduction + other_deduction) - retention_amount - advance_recovery_amount) stored;
 
 -- Approval workflow / audit trail — who certified and who gave final approval, not just a status enum.
 alter table fin_payment_certificates add column if not exists certified_by uuid references profiles (id);
