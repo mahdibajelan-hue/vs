@@ -8,9 +8,13 @@ import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
-const JOINT_SPRITE_WIDTH = 1.4
+// Small on-pipe dot, not a floating label — a label big enough to read text always ended up
+// dwarfing the pipe it marked. Full details now live in the click-to-open side panel instead.
+const JOINT_MARKER_SIZE = 0.32
+const JOINT_MARKER_SIZE_SELECTED = 0.44
 const JOINT_COLOR_DONE = '#2ecc71'
 const JOINT_COLOR_PENDING = '#e74c3c'
+const JOINT_MARKER_PREFIX = '__joint_marker_'
 // A click that moves the pointer more than this (css px) between down and up is an orbit/pan drag,
 // not a selection tap — without this guard, dragging the camera while in 'selectMeshes' mode kept
 // toggling whatever mesh happened to be under the cursor at release, silently adding wrong items.
@@ -73,65 +77,52 @@ function disposeGroupChildren(group: THREE.Group) {
 }
 
 /**
- * Draws a small weld-tag icon (weld symbol + joint number) on a canvas, used as a camera-facing
- * sprite. A 3D ring/sphere sitting on the pipe either occluded the spool underneath or had to guess
- * a size that never quite matched the real pipe — a flat always-readable tag sidesteps both: its
- * size is picked for legibility, not for "looking like" the pipe, and depthTest is off so it never
- * gets swallowed by surrounding geometry.
+ * Draws a small dot marker on a canvas, used as a camera-facing sprite — no text, no ring geometry
+ * to size against the pipe. It's just a "there's a joint here" indicator; clicking it is how you
+ * see the actual weld number/status/etc. (see the side panel in Model3DPage), so the marker itself
+ * only needs to be small and legible from any angle.
  */
-function createJointSprite(joint: Joint): THREE.Sprite {
+function createJointMarkerSprite(joint: Joint, selected: boolean): THREE.Sprite {
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 110
+  canvas.width = 64
+  canvas.height = 64
   const ctx = canvas.getContext('2d')!
   const color = joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING
+  const cx = 32
+  const cy = 32
 
-  const r = 20
-  ctx.fillStyle = 'rgba(15, 18, 24, 0.88)'
   ctx.beginPath()
-  ctx.roundRect(3, 3, canvas.width - 6, canvas.height - 6, r)
+  ctx.arc(cx, cy, 26, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.globalAlpha = 0.22
   ctx.fill()
-  ctx.lineWidth = 5
-  ctx.strokeStyle = color
+  ctx.globalAlpha = 1
+  ctx.lineWidth = selected ? 7 : 4
+  ctx.strokeStyle = selected ? '#ffffff' : color
   ctx.stroke()
 
-  // Simple weld-bead symbol (zigzag) on the left.
-  ctx.strokeStyle = color
-  ctx.lineWidth = 6
-  ctx.lineJoin = 'round'
-  ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(22, 55)
-  ctx.lineTo(38, 30)
-  ctx.lineTo(54, 80)
-  ctx.lineTo(70, 30)
-  ctx.lineTo(86, 55)
-  ctx.stroke()
-
-  const label = joint.jointNumber || `#${joint.sequenceNumber}`
-  ctx.fillStyle = '#ffffff'
-  ctx.font = 'bold 46px Vazirmatn, Arial, sans-serif'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(label, 108, 55, canvas.width - 118)
+  ctx.arc(cx, cy, 9, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = THREE.LinearFilter
   const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true })
   const sprite = new THREE.Sprite(material)
   sprite.renderOrder = 999
-  const aspect = canvas.width / canvas.height
-  sprite.scale.set(JOINT_SPRITE_WIDTH, JOINT_SPRITE_WIDTH / aspect, 1)
-  sprite.name = `__joint_marker_${joint.id}`
+  const size = selected ? JOINT_MARKER_SIZE_SELECTED : JOINT_MARKER_SIZE
+  sprite.scale.set(size, size, 1)
+  sprite.name = `${JOINT_MARKER_PREFIX}${joint.id}`
   return sprite
 }
 
-/** Camera-facing weld-tag sprites at each placed joint's position — red while pending, green once completed. */
-function rebuildJointMarkers(group: THREE.Group, joints: Joint[]) {
+/** Small camera-facing dot markers at each placed joint's position — red while pending, green once completed, highlighted white ring when selected. */
+function rebuildJointMarkers(group: THREE.Group, joints: Joint[], selectedJointId: string | null) {
   disposeGroupChildren(group)
   for (const joint of joints) {
     if (!joint.position) continue
-    const sprite = createJointSprite(joint)
+    const sprite = createJointMarkerSprite(joint, joint.id === selectedJointId)
     sprite.position.set(joint.position.x, joint.position.y, joint.position.z)
     group.add(sprite)
   }
@@ -142,11 +133,15 @@ interface ThreeViewerProps {
   joints?: Joint[]
   equipment3d?: Equipment3D[]
   spools?: Spool[]
-  /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. */
+  /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. In 'view' mode, clicking a joint marker reports its id via onJointClick instead (and clicking empty space reports null, to close a detail panel). */
   mode?: ViewerMode
   selectedMeshNames?: string[]
   onPointPicked?: (point: Point3D) => void
   onMeshToggle?: (meshName: string) => void
+  onJointClick?: (jointId: string | null) => void
+  /** id of the joint whose detail panel is open — its marker is highlighted, and its live screen position is reported every frame via onJointScreenPosition so the caller can anchor a panel to it. */
+  selectedJointId?: string | null
+  onJointScreenPosition?: (pos: { x: number; y: number } | null) => void
 }
 
 /**
@@ -154,8 +149,9 @@ interface ThreeViewerProps {
  * zoom controls. Progress coloring is entirely driven by the joint-centric model (see
  * src/lib/model3dColoring.ts) — nothing is auto-matched by object name: a spool's linked meshes
  * light up only once both its bounding joints are completed, equipment's linked meshes light up
- * once both its install milestones are set, and every joint gets a small camera-facing weld-tag
- * label (symbol + joint number) at its clicked position.
+ * once both its install milestones are set, and every joint gets a small camera-facing dot marker
+ * at its clicked position — clicking a marker in 'view' mode reports its id via onJointClick so the
+ * caller can show a detail panel (see Model3DPage), rather than cluttering the model with text.
  */
 export function ThreeViewer({
   url,
@@ -166,6 +162,9 @@ export function ThreeViewer({
   selectedMeshNames = [],
   onPointPicked,
   onMeshToggle,
+  onJointClick,
+  selectedJointId = null,
+  onJointScreenPosition,
 }: ThreeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
@@ -175,12 +174,13 @@ export function ThreeViewer({
   const objectRef = useRef<THREE.Object3D | null>(null)
   const markersGroupRef = useRef<THREE.Group | null>(null)
 
-  // Kept fresh via this cheap effect so the click handler (bound once per model load) always sees
-  // the latest mode/callbacks without needing to re-bind — editing props never triggers a reload.
-  const liveRef = useRef({ mode, onPointPicked, onMeshToggle })
+  // Kept fresh via this cheap effect so the click handler and animate loop (bound once per model
+  // load) always see the latest mode/callbacks/selection without needing to re-bind — editing
+  // props never triggers a reload.
+  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition })
   useEffect(() => {
-    liveRef.current = { mode, onPointPicked, onMeshToggle }
-  }, [mode, onPointPicked, onMeshToggle])
+    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition }
+  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition])
 
   useEffect(() => {
     const container = containerRef.current
@@ -224,6 +224,23 @@ export function ThreeViewer({
       if (disposed) return
       controls.update()
       renderer.render(scene, camera)
+
+      const { selectedJointId: liveSelectedJointId, onJointScreenPosition: liveOnJointScreenPosition } = liveRef.current
+      if (liveOnJointScreenPosition) {
+        const marker = liveSelectedJointId
+          ? markersGroupRef.current?.children.find((c) => c.name === `${JOINT_MARKER_PREFIX}${liveSelectedJointId}`)
+          : undefined
+        if (marker) {
+          const projected = marker.position.clone().project(camera)
+          liveOnJointScreenPosition({
+            x: (projected.x * 0.5 + 0.5) * container.clientWidth,
+            y: (-projected.y * 0.5 + 0.5) * container.clientHeight,
+          })
+        } else {
+          liveOnJointScreenPosition(null)
+        }
+      }
+
       frameId = requestAnimationFrame(animate)
     }
 
@@ -240,14 +257,25 @@ export function ThreeViewer({
       // A drag (orbiting/panning the camera) should never register as a selection tap.
       if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > CLICK_DRAG_THRESHOLD_PX) return
 
-      const { mode: liveMode, onPointPicked: livePicked, onMeshToggle: liveToggle } = liveRef.current
-      if (liveMode === 'view') return
-      const object = objectRef.current
-      if (!object) return
+      const { mode: liveMode, onPointPicked: livePicked, onMeshToggle: liveToggle, onJointClick: liveJointClick } = liveRef.current
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
+
+      if (liveMode === 'view') {
+        const markers = markersGroupRef.current
+        const markerHit = markers ? raycaster.intersectObjects(markers.children, false)[0] : undefined
+        if (markerHit && markerHit.object.name.startsWith(JOINT_MARKER_PREFIX)) {
+          liveJointClick?.(markerHit.object.name.slice(JOINT_MARKER_PREFIX.length))
+        } else {
+          liveJointClick?.(null)
+        }
+        return
+      }
+
+      const object = objectRef.current
+      if (!object) return
       const hit = raycaster.intersectObject(object, true).find((h) => h.object instanceof THREE.Mesh)
       if (!hit) return
       if (liveMode === 'placeJoint') {
@@ -339,8 +367,8 @@ export function ThreeViewer({
     if (!modelReady || !objectRef.current || !markersGroupRef.current) return
     const colorMap = buildMeshColorMap(spools, equipment3d, joints)
     applyMeshColoring(objectRef.current, colorMap, mode, selectedMeshNames)
-    rebuildJointMarkers(markersGroupRef.current, joints)
-  }, [modelReady, joints, equipment3d, spools, mode, selectedMeshNames])
+    rebuildJointMarkers(markersGroupRef.current, joints, selectedJointId)
+  }, [modelReady, joints, equipment3d, spools, mode, selectedMeshNames, selectedJointId])
 
   return (
     <div ref={containerRef} className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}>

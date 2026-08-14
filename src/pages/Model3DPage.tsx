@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Boxes, Check, Loader2, MapPin, MousePointerClick, Pencil, Plus, RefreshCcw, Trash2, Upload, X } from 'lucide-react'
 import type { Equipment3D, Joint, Point3D, Project, Spool } from '../types'
 import { JOINT_TYPE_LABEL_FA } from '../types'
@@ -62,6 +62,8 @@ export function Model3DPage({ project }: { project: Project }) {
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
   const [meshSelectionTarget, setMeshSelectionTarget] = useState<MeshSelectionTarget | null>(null)
   const [selectedMeshNames, setSelectedMeshNames] = useState<string[]>([])
+  const [selectedJointId, setSelectedJointId] = useState<string | null>(null)
+  const jointPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!selectedLineId && project.lines.length > 0) setSelectedLineId(project.lines[0].id)
@@ -119,6 +121,20 @@ export function Model3DPage({ project }: { project: Project }) {
     setSelectedMeshNames((names) => (names.includes(meshName) ? names.filter((n) => n !== meshName) : [...names, meshName]))
   }
 
+  // Position updates arrive every animation frame while a joint's detail panel is open (the camera
+  // keeps orbiting/damping) — mutating the DOM node directly here avoids a React re-render per frame.
+  const handleJointScreenPosition = useCallback((pos: { x: number; y: number } | null) => {
+    const el = jointPanelRef.current
+    if (!el) return
+    if (!pos) {
+      el.style.visibility = 'hidden'
+      return
+    }
+    el.style.visibility = 'visible'
+    el.style.left = `${pos.x}px`
+    el.style.top = `${pos.y}px`
+  }, [])
+
   const startSpoolLink = (lineId: string, startJointId: string, endJointId: string, existing?: Spool | null) => {
     setMeshSelectionTarget({ kind: 'spool', lineId, startJointId, endJointId, spoolId: existing?.id })
     setSelectedMeshNames(existing?.meshObjectNames ?? [])
@@ -144,9 +160,15 @@ export function Model3DPage({ project }: { project: Project }) {
 
   const lineJoints = project.joints.filter((j) => j.lineId === selectedLineId).sort((a, b) => a.sequenceNumber - b.sequenceNumber)
   const selectedLine = project.lines.find((l) => l.id === selectedLineId)
+  const selectedJoint = selectedJointId ? (project.joints.find((j) => j.id === selectedJointId) ?? null) : null
 
   const spoolFor = (startJointId: string, endJointId: string) =>
     project.spools.find((sp) => sp.startJointId === startJointId && sp.endJointId === endJointId)
+
+  const jointStats = {
+    total: project.joints.length,
+    completed: project.joints.filter((j) => j.status === 'completed').length,
+  }
 
   return (
     <div className="flex h-full flex-col gap-3 p-4">
@@ -334,6 +356,27 @@ export function Model3DPage({ project }: { project: Project }) {
                 </div>
               )}
             </div>
+
+            <div className="shrink-0 border-t border-white/10 p-3">
+              <p className="mb-2 text-[10px] font-bold text-secondary">آمار جوشکاری</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded-lg border border-white/10 p-1.5 text-center">
+                  <p className="num text-sm font-bold">{jointStats.total.toLocaleString('fa-IR')}</p>
+                  <p className="text-[9px] text-muted">کل اتصالات</p>
+                </div>
+                <div className="rounded-lg border border-white/10 p-1.5 text-center">
+                  <p className="num text-sm font-bold text-green-400">{jointStats.completed.toLocaleString('fa-IR')}</p>
+                  <p className="text-[9px] text-muted">تکمیل‌شده</p>
+                </div>
+                <div className="rounded-lg border border-white/10 p-1.5 text-center">
+                  <p className="num text-sm font-bold text-red-400">{(jointStats.total - jointStats.completed).toLocaleString('fa-IR')}</p>
+                  <p className="text-[9px] text-muted">باقیمانده</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[9px] leading-4 text-muted">
+                آمار رادیوگرافی (NDT) در مرحلهٔ بعدی — پس از افزودن مراحل جداگانهٔ جوش/تست به هر اتصال — اضافه می‌شود.
+              </p>
+            </div>
           </div>
         )}
 
@@ -362,7 +405,62 @@ export function Model3DPage({ project }: { project: Project }) {
                 selectedMeshNames={selectedMeshNames}
                 onPointPicked={handlePointPicked}
                 onMeshToggle={handleMeshToggle}
+                onJointClick={setSelectedJointId}
+                selectedJointId={selectedJointId}
+                onJointScreenPosition={handleJointScreenPosition}
               />
+
+              {selectedJoint && (
+                <div
+                  ref={jointPanelRef}
+                  className="glass-panel absolute z-20 w-64 -translate-x-1/2 -translate-y-[calc(100%+14px)] rounded-2xl p-3 text-xs"
+                  style={{ left: 0, top: 0, visibility: 'hidden', background: 'var(--bg-panel-solid)' }}
+                >
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold">
+                        {JOINT_TYPE_LABEL_FA[selectedJoint.jointType]} {selectedJoint.jointNumber || `#${selectedJoint.sequenceNumber}`}
+                      </p>
+                      <p className="text-[10px] text-muted">{project.lines.find((l) => l.id === selectedJoint.lineId)?.svgElementId ?? ''}</p>
+                    </div>
+                    <button onClick={() => setSelectedJointId(null)} className="shrink-0 rounded-lg p-1 text-secondary hover:bg-white/10">
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <span
+                    className="mb-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    style={{
+                      background: selectedJoint.status === 'completed' ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)',
+                      color: selectedJoint.status === 'completed' ? '#2ecc71' : '#e74c3c',
+                    }}
+                  >
+                    {selectedJoint.status === 'completed' ? 'تکمیل شده' : 'شروع‌نشده'}
+                  </span>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-secondary">
+                    <span>قطر: {selectedJoint.diameter || '—'}</span>
+                    <span>ضخامت: {selectedJoint.thickness || '—'}</span>
+                    {selectedJoint.completedDate && <span className="col-span-2">تاریخ تکمیل: {formatJalali(selectedJoint.completedDate)}</span>}
+                    {selectedJoint.connectedEquipmentId && (
+                      <span className="col-span-2">
+                        تجهیز: {project.equipment3d.find((e) => e.id === selectedJoint.connectedEquipmentId)?.tag ?? '—'}
+                      </span>
+                    )}
+                    {selectedJoint.notes && <span className="col-span-2 truncate">یادداشت: {selectedJoint.notes}</span>}
+                  </div>
+                  {editable && (
+                    <button
+                      onClick={() => {
+                        setEditingJoint(selectedJoint)
+                        setSelectedJointId(null)
+                      }}
+                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-brand-500/15 px-2 py-1.5 text-[10px] font-medium text-brand-300 hover:bg-brand-500/25"
+                    >
+                      <Pencil size={11} /> ویرایش اتصال
+                    </button>
+                  )}
+                </div>
+              )}
+
               {viewerMode === 'selectMeshes' && (
                 <div className="absolute inset-x-3 bottom-3 flex max-h-[55%] flex-col gap-2 rounded-xl bg-black/75 p-3 backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">
@@ -428,9 +526,9 @@ export function Model3DPage({ project }: { project: Project }) {
         />
       )}
 
-      {editingJoint && selectedLine && (
+      {editingJoint && (
         <JointFormModal
-          lineLabel={selectedLine.svgElementId}
+          lineLabel={project.lines.find((l) => l.id === editingJoint.lineId)?.svgElementId ?? ''}
           joint={editingJoint}
           equipment3d={project.equipment3d}
           onClose={() => setEditingJoint(null)}
