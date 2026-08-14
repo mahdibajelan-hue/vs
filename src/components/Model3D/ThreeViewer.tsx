@@ -10,8 +10,12 @@ export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
 // Small on-pipe dot, not a floating label — a label big enough to read text always ended up
 // dwarfing the pipe it marked. Full details now live in the click-to-open side panel instead.
-const JOINT_MARKER_SIZE = 0.32
-const JOINT_MARKER_SIZE_SELECTED = 0.44
+// Sized in screen pixels (see resizeJointMarkers), not world units: the station is normally
+// viewed zoomed all the way out to fit the whole model, where any fixed world-space size already
+// dwarfs the actual pipes/welds at that distance — a constant on-screen pixel size stays exactly
+// as small whether you're looking at the whole station or zoomed into one weld.
+const JOINT_MARKER_PX = 12
+const JOINT_MARKER_PX_SELECTED = 18
 const JOINT_COLOR_DONE = '#2ecc71'
 const JOINT_COLOR_PENDING = '#e74c3c'
 const JOINT_MARKER_PREFIX = '__joint_marker_'
@@ -111,10 +115,24 @@ function createJointMarkerSprite(joint: Joint, selected: boolean): THREE.Sprite 
   const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true })
   const sprite = new THREE.Sprite(material)
   sprite.renderOrder = 999
-  const size = selected ? JOINT_MARKER_SIZE_SELECTED : JOINT_MARKER_SIZE
-  sprite.scale.set(size, size, 1)
+  // Real scale is set every frame in the animate loop (resizeJointMarkers) to keep a constant
+  // pixel size regardless of zoom — this is just a harmless non-zero default before the first frame.
+  sprite.scale.set(1, 1, 1)
   sprite.name = `${JOINT_MARKER_PREFIX}${joint.id}`
   return sprite
+}
+
+/** Rescales every marker sprite so it covers a constant number of screen pixels regardless of camera distance/zoom — otherwise a fixed world-space size looks tiny zoomed in and huge zoomed out (or vice versa). */
+function resizeJointMarkers(group: THREE.Group, camera: THREE.PerspectiveCamera, viewportHeightPx: number, selectedJointId: string | null) {
+  const worldPerPixel = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / viewportHeightPx
+  for (const child of group.children) {
+    if (!(child instanceof THREE.Sprite)) continue
+    const distance = camera.position.distanceTo(child.position)
+    const isSelected = selectedJointId !== null && child.name === `${JOINT_MARKER_PREFIX}${selectedJointId}`
+    const targetPx = isSelected ? JOINT_MARKER_PX_SELECTED : JOINT_MARKER_PX
+    const worldSize = worldPerPixel * distance * targetPx
+    child.scale.set(worldSize, worldSize, 1)
+  }
 }
 
 /** Small camera-facing dot markers at each placed joint's position — red while pending, green once completed, highlighted white ring when selected. */
@@ -223,9 +241,12 @@ export function ThreeViewer({
     const animate = () => {
       if (disposed) return
       controls.update()
-      renderer.render(scene, camera)
 
       const { selectedJointId: liveSelectedJointId, onJointScreenPosition: liveOnJointScreenPosition } = liveRef.current
+      if (markersGroupRef.current) resizeJointMarkers(markersGroupRef.current, camera, container.clientHeight, liveSelectedJointId)
+
+      renderer.render(scene, camera)
+
       if (liveOnJointScreenPosition) {
         const marker = liveSelectedJointId
           ? markersGroupRef.current?.children.find((c) => c.name === `${JOINT_MARKER_PREFIX}${liveSelectedJointId}`)

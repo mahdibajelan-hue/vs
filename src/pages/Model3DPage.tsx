@@ -414,7 +414,7 @@ export function Model3DPage({ project }: { project: Project }) {
                 <div
                   ref={jointPanelRef}
                   className="glass-panel absolute z-20 w-64 -translate-x-1/2 -translate-y-[calc(100%+14px)] rounded-2xl p-3 text-xs"
-                  style={{ left: 0, top: 0, visibility: 'hidden', background: 'var(--bg-panel-solid)' }}
+                  style={{ left: 0, top: 0, visibility: 'hidden' }}
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <div>
