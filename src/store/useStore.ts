@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { ActivityKind, ActivitySchedule, DailyLog, IsoLine, Milestone, NewDailyLogInput, PlannedProgressPoint, Project, ReportConfig, ThemeMode, UserRole } from '../types'
+import type { ActivityKind, ActivitySchedule, DailyLog, Equipment3D, IsoLine, Joint, Milestone, NewDailyLogInput, PlannedProgressPoint, Project, ReportConfig, ThemeMode, UserRole } from '../types'
 import { makeId } from '../lib/id'
 import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
@@ -12,7 +12,21 @@ import { friendlyErrorMessage } from '../lib/friendlyError'
 import { useAuthStore } from './useAuthStore'
 import { useMembersStore } from './useMembersStore'
 import { useSystemStore } from './useSystemStore'
-import { lineFromRow, lineToRow, logFromRow, logToRow, projectFromRow, projectSummaryFromRow, type ProjectSummary } from '../lib/supabaseData'
+import {
+  equipment3dFromRow,
+  equipment3dToRow,
+  jointFromRow,
+  jointToRow,
+  lineFromRow,
+  lineToRow,
+  logFromRow,
+  logToRow,
+  projectFromRow,
+  projectSummaryFromRow,
+  spoolFromRow,
+  spoolToRow,
+  type ProjectSummary,
+} from '../lib/supabaseData'
 
 /**
  * Supabase calls fail silently by default (RLS rejection, network error, schema mismatch) —
@@ -82,6 +96,23 @@ interface AppState {
 
   setEquipment: (projectId: string, equipment: Project['equipment']) => Promise<void>
 
+  /** Places a joint at the end of its line's sequence (sequenceNumber = current max + 1). */
+  addJoint: (projectId: string, joint: Omit<Joint, 'id' | 'createdAt' | 'sequenceNumber'>) => Promise<void>
+  updateJoint: (projectId: string, jointId: string, data: Partial<Joint>) => Promise<void>
+  deleteJoint: (projectId: string, jointId: string) => Promise<void>
+
+  addEquipment3D: (projectId: string, equipment: Omit<Equipment3D, 'id' | 'createdAt'>) => Promise<void>
+  updateEquipment3D: (projectId: string, equipmentId: string, data: Partial<Equipment3D>) => Promise<void>
+  deleteEquipment3D: (projectId: string, equipmentId: string) => Promise<void>
+
+  /** Creates (or updates, if one already links these two joints) the spool between two consecutive joints and links it to 3D mesh objects. */
+  upsertSpool: (
+    projectId: string,
+    data: { lineId: string; startJointId: string | null; endJointId: string | null; meshObjectNames: string[] },
+    spoolId?: string,
+  ) => Promise<void>
+  deleteSpool: (projectId: string, spoolId: string) => Promise<void>
+
   setMilestones: (projectId: string, milestones: Milestone[]) => Promise<void>
   approveMilestoneAsConsultant: (projectId: string, milestoneId: string) => Promise<void>
   /** Owner (or admin) audit outside the approve cycle — confirms as-is or corrects the percent. */
@@ -94,14 +125,25 @@ interface AppState {
 }
 
 async function fetchProjectDetail(id: string): Promise<Project | null> {
-  const [{ data: projectRow }, { data: lineRows }, { data: logRows }] = await Promise.all([
-    supabase.from('projects').select('*').eq('id', id).single(),
-    supabase.from('lines').select('*').eq('project_id', id).order('created_at'),
-    supabase.from('daily_logs').select('*').eq('project_id', id).order('date', { ascending: false }),
-  ])
+  const [{ data: projectRow }, { data: lineRows }, { data: logRows }, { data: jointRows }, { data: equipment3dRows }, { data: spoolRows }] =
+    await Promise.all([
+      supabase.from('projects').select('*').eq('id', id).single(),
+      supabase.from('lines').select('*').eq('project_id', id).order('created_at'),
+      supabase.from('daily_logs').select('*').eq('project_id', id).order('date', { ascending: false }),
+      supabase.from('joints').select('*').eq('project_id', id).order('sequence_number'),
+      supabase.from('equipment3d').select('*').eq('project_id', id).order('created_at'),
+      supabase.from('spools').select('*').eq('project_id', id).order('created_at'),
+    ])
   if (!projectRow) return null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return projectFromRow(projectRow as any, (lineRows ?? []) as any, (logRows ?? []) as any)
+  return projectFromRow(
+    projectRow as any,
+    (lineRows ?? []) as any,
+    (logRows ?? []) as any,
+    (jointRows ?? []) as any,
+    (equipment3dRows ?? []) as any,
+    (spoolRows ?? []) as any,
+  )
 }
 
 export const useStore = create<AppState>()(
@@ -558,6 +600,111 @@ export const useStore = create<AppState>()(
         const { error } = await supabase.from('projects').update({ equipment }).eq('id', projectId)
         if (reportSupabaseError('ذخیره فهرست تجهیزات', error)) return
         set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, equipment } } : {}))
+      },
+
+      addJoint: async (projectId, joint) => {
+        const detail = get().projectDetail
+        if (!detail || detail.id !== projectId) return
+        const nextSeq = Math.max(0, ...detail.joints.filter((j) => j.lineId === joint.lineId).map((j) => j.sequenceNumber)) + 1
+        const { data, error } = await supabase
+          .from('joints')
+          .insert(jointToRow(projectId, { ...joint, sequenceNumber: nextSeq }))
+          .select()
+          .single()
+        if (reportSupabaseError('افزودن اتصال', error) || !data) return
+        const newJoint = jointFromRow(data)
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, joints: [...s.projectDetail.joints, newJoint] } } : {}))
+      },
+
+      updateJoint: async (projectId, jointId, data) => {
+        const { error } = await supabase.from('joints').update(jointToRow(projectId, data)).eq('id', jointId)
+        if (reportSupabaseError('ذخیره تغییرات اتصال', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? { projectDetail: { ...s.projectDetail, joints: s.projectDetail.joints.map((j) => (j.id === jointId ? { ...j, ...data } : j)) } }
+            : {},
+        )
+      },
+
+      deleteJoint: async (projectId, jointId) => {
+        const { error } = await supabase.from('joints').delete().eq('id', jointId)
+        if (reportSupabaseError('حذف اتصال', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? {
+                projectDetail: {
+                  ...s.projectDetail,
+                  joints: s.projectDetail.joints.filter((j) => j.id !== jointId),
+                  // A spool that referenced this joint as a bound loses that bound rather than pointing at a dead id.
+                  spools: s.projectDetail.spools.map((sp) => ({
+                    ...sp,
+                    startJointId: sp.startJointId === jointId ? null : sp.startJointId,
+                    endJointId: sp.endJointId === jointId ? null : sp.endJointId,
+                  })),
+                },
+              }
+            : {},
+        )
+      },
+
+      addEquipment3D: async (projectId, equipment) => {
+        const { data, error } = await supabase.from('equipment3d').insert(equipment3dToRow(projectId, equipment)).select().single()
+        if (reportSupabaseError('افزودن تجهیز', error) || !data) return
+        const newEquipment = equipment3dFromRow(data)
+        set((s) =>
+          s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, equipment3d: [...s.projectDetail.equipment3d, newEquipment] } } : {},
+        )
+      },
+
+      updateEquipment3D: async (projectId, equipmentId, data) => {
+        const { error } = await supabase.from('equipment3d').update(equipment3dToRow(projectId, data)).eq('id', equipmentId)
+        if (reportSupabaseError('ذخیره تغییرات تجهیز', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? { projectDetail: { ...s.projectDetail, equipment3d: s.projectDetail.equipment3d.map((e) => (e.id === equipmentId ? { ...e, ...data } : e)) } }
+            : {},
+        )
+      },
+
+      deleteEquipment3D: async (projectId, equipmentId) => {
+        const { error } = await supabase.from('equipment3d').delete().eq('id', equipmentId)
+        if (reportSupabaseError('حذف تجهیز', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId
+            ? {
+                projectDetail: {
+                  ...s.projectDetail,
+                  equipment3d: s.projectDetail.equipment3d.filter((e) => e.id !== equipmentId),
+                  joints: s.projectDetail.joints.map((j) => (j.connectedEquipmentId === equipmentId ? { ...j, connectedEquipmentId: null } : j)),
+                },
+              }
+            : {},
+        )
+      },
+
+      upsertSpool: async (projectId, data, spoolId) => {
+        if (spoolId) {
+          const { error } = await supabase.from('spools').update(spoolToRow(projectId, data)).eq('id', spoolId)
+          if (reportSupabaseError('ذخیره اسپول', error)) return
+          set((s) =>
+            s.projectDetail?.id === projectId
+              ? { projectDetail: { ...s.projectDetail, spools: s.projectDetail.spools.map((sp) => (sp.id === spoolId ? { ...sp, ...data } : sp)) } }
+              : {},
+          )
+          return
+        }
+        const { data: row, error } = await supabase.from('spools').insert(spoolToRow(projectId, data)).select().single()
+        if (reportSupabaseError('ایجاد اسپول', error) || !row) return
+        const newSpool = spoolFromRow(row)
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, spools: [...s.projectDetail.spools, newSpool] } } : {}))
+      },
+
+      deleteSpool: async (projectId, spoolId) => {
+        const { error } = await supabase.from('spools').delete().eq('id', spoolId)
+        if (reportSupabaseError('حذف اسپول', error)) return
+        set((s) =>
+          s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, spools: s.projectDetail.spools.filter((sp) => sp.id !== spoolId) } } : {},
+        )
       },
 
       setMilestones: async (projectId, milestones) => {

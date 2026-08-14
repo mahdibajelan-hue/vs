@@ -3,61 +3,134 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { Loader2 } from 'lucide-react'
-import { ACTIVITY_COLOR, type DailyLog, type IsoLine } from '../../types'
-import { furthestCompletedActivity } from '../../lib/progress'
-import { matchLineByObjectName } from '../../lib/model3dMatch'
+import type { Equipment3D, Joint, Point3D, Spool } from '../../types'
+import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
 
-const DIM_COLOR = 0x4b5563
-const DIM_OPACITY = 0.22
+export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
-/** Recolors every mesh in the loaded object: matched-and-worked-on parts get their furthest completed activity's color at full opacity, everything else (unmatched, or matched but not started) fades to a dim neutral gray. */
-function applyProgressColoring(root: THREE.Object3D, lines: IsoLine[], logs: DailyLog[]): { matched: number; total: number } {
-  let matched = 0
-  let total = 0
+const JOINT_MARKER_RADIUS = 0.12
+const JOINT_COLOR_DONE = 0x2ecc71
+const JOINT_COLOR_PENDING = 0xe74c3c
+
+type ColorableMaterial = THREE.Material & { color?: THREE.Color; opacity: number; transparent: boolean }
+
+function forEachMaterial(child: THREE.Mesh, fn: (m: ColorableMaterial) => void) {
+  const materials = Array.isArray(child.material) ? child.material : [child.material]
+  materials.forEach((m) => fn(m as ColorableMaterial))
+}
+
+/** Clones every mesh's material once at load time so later recoloring only ever mutates our own clones. */
+function prepareMaterialsForColoring(root: THREE.Object3D) {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    total++
     const materials = Array.isArray(child.material) ? child.material : [child.material]
     const cloned = materials.map((m) => m.clone())
     child.material = Array.isArray(child.material) ? cloned : cloned[0]
-
-    const line = matchLineByObjectName(child.name, lines)
-    const activity = line ? furthestCompletedActivity(line.id, logs) : null
-    if (line && activity) matched++
-
-    for (const mat of cloned) {
-      const colorable = mat as THREE.Material & { color?: THREE.Color; opacity: number; transparent: boolean }
-      if (!colorable.color) continue
-      if (activity) {
-        colorable.color.set(ACTIVITY_COLOR[activity])
-        colorable.opacity = 1
-        colorable.transparent = false
-      } else {
-        colorable.color.set(DIM_COLOR)
-        colorable.opacity = DIM_OPACITY
-        colorable.transparent = true
-      }
-    }
   })
-  return { matched, total }
+}
+
+function applyMeshColoring(root: THREE.Object3D, colorMap: Map<string, string>, mode: ViewerMode, selectedMeshNames: string[]) {
+  const selectedSet = new Set(selectedMeshNames)
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    const isSelected = mode === 'selectMeshes' && selectedSet.has(child.name)
+    const completeColor = colorMap.get(child.name)
+    forEachMaterial(child, (mat) => {
+      if (!mat.color) return
+      if (isSelected) {
+        mat.color.set(SELECTED_MESH_COLOR)
+        mat.opacity = 1
+        mat.transparent = false
+      } else if (completeColor) {
+        mat.color.set(completeColor)
+        mat.opacity = 1
+        mat.transparent = false
+      } else {
+        mat.color.set(DIM_COLOR)
+        mat.opacity = DIM_OPACITY
+        mat.transparent = true
+      }
+    })
+  })
+}
+
+function disposeGroupChildren(group: THREE.Group) {
+  for (const child of group.children) {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose()
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      materials.forEach((m) => m.dispose())
+    }
+  }
+  group.clear()
+}
+
+/** Small colored spheres at each placed joint's position — red/gray while pending, green once completed. */
+function rebuildJointMarkers(group: THREE.Group, joints: Joint[]) {
+  disposeGroupChildren(group)
+  for (const joint of joints) {
+    if (!joint.position) continue
+    const geometry = new THREE.SphereGeometry(JOINT_MARKER_RADIUS, 12, 12)
+    const material = new THREE.MeshBasicMaterial({ color: joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING })
+    const sphere = new THREE.Mesh(geometry, material)
+    sphere.position.set(joint.position.x, joint.position.y, joint.position.z)
+    sphere.name = `__joint_marker_${joint.id}`
+    group.add(sphere)
+  }
+}
+
+interface ThreeViewerProps {
+  url: string
+  joints?: Joint[]
+  equipment3d?: Equipment3D[]
+  spools?: Spool[]
+  /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. */
+  mode?: ViewerMode
+  selectedMeshNames?: string[]
+  onPointPicked?: (point: Point3D) => void
+  onMeshToggle?: (meshName: string) => void
 }
 
 /**
  * Loads an FBX model (typically exported from Navisworks Manage) and renders it with orbit/pan/
- * zoom controls. When `lines`/`logs` are given, every mesh is auto-linked to a PipePulse line by
- * name and colored by the furthest work stage reached on it (see applyProgressColoring) — parts
- * with no matched, started work stay dim.
+ * zoom controls. Progress coloring is entirely driven by the joint-centric model (see
+ * src/lib/model3dColoring.ts) — nothing is auto-matched by object name: a spool's linked meshes
+ * light up only once both its bounding joints are completed, equipment's linked meshes light up
+ * once both its install milestones are set, and every joint gets a small marker sphere at its
+ * clicked position.
  */
-export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url: string; lines?: IsoLine[]; logs?: DailyLog[]; onMatchStats?: (stats: { matched: number; total: number }) => void }) {
+export function ThreeViewer({
+  url,
+  joints = [],
+  equipment3d = [],
+  spools = [],
+  mode = 'view',
+  selectedMeshNames = [],
+  onPointPicked,
+  onMeshToggle,
+}: ThreeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [modelReady, setModelReady] = useState(false)
+
+  const objectRef = useRef<THREE.Object3D | null>(null)
+  const markersGroupRef = useRef<THREE.Group | null>(null)
+
+  // Kept fresh via this cheap effect so the click handler (bound once per model load) always sees
+  // the latest mode/callbacks without needing to re-bind — editing props never triggers a reload.
+  const liveRef = useRef({ mode, onPointPicked, onMeshToggle })
+  useEffect(() => {
+    liveRef.current = { mode, onPointPicked, onMeshToggle }
+  }, [mode, onPointPicked, onMeshToggle])
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
     setLoading(true)
     setError('')
+    setModelReady(false)
+    objectRef.current = null
 
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x11151c)
@@ -79,6 +152,10 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
     scene.add(dirLight2)
     scene.add(new THREE.GridHelper(200, 40, 0x334155, 0x1e293b))
 
+    const markersGroup = new THREE.Group()
+    scene.add(markersGroup)
+    markersGroupRef.current = markersGroup
+
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
@@ -92,6 +169,27 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
       frameId = requestAnimationFrame(animate)
     }
 
+    const raycaster = new THREE.Raycaster()
+    const pointer = new THREE.Vector2()
+    const handleClick = (event: MouseEvent) => {
+      const { mode: liveMode, onPointPicked: livePicked, onMeshToggle: liveToggle } = liveRef.current
+      if (liveMode === 'view') return
+      const object = objectRef.current
+      if (!object) return
+      const rect = renderer.domElement.getBoundingClientRect()
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+      raycaster.setFromCamera(pointer, camera)
+      const hit = raycaster.intersectObject(object, true).find((h) => h.object instanceof THREE.Mesh)
+      if (!hit) return
+      if (liveMode === 'placeJoint') {
+        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z })
+      } else if (liveMode === 'selectMeshes') {
+        liveToggle?.(hit.object.name)
+      }
+    }
+    renderer.domElement.addEventListener('click', handleClick)
+
     const loader = new FBXLoader()
     loader.load(
       url,
@@ -99,7 +197,9 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
         if (disposed) return
         // Center and scale the model to fit a consistent view — Navisworks/CAD exports carry
         // arbitrary real-world coordinates and units, so without this the camera's default
-        // distance would show either a speck or nothing at all.
+        // distance would show either a speck or nothing at all. This same normalization runs
+        // identically on every load of the same file, so joint positions captured via raycasting
+        // stay put across reloads.
         const box = new THREE.Box3().setFromObject(object)
         const size = box.getSize(new THREE.Vector3())
         const center = box.getCenter(new THREE.Vector3())
@@ -108,12 +208,9 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
         object.scale.setScalar(scale)
         object.position.sub(center.multiplyScalar(scale))
 
-        if (lines.length > 0) {
-          const stats = applyProgressColoring(object, lines, logs)
-          onMatchStats?.(stats)
-        }
-
+        prepareMaterialsForColoring(object)
         scene.add(object)
+        objectRef.current = object
 
         const fitDistance = 24
         camera.position.set(fitDistance, fitDistance * 0.8, fitDistance)
@@ -122,6 +219,7 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
         controls.update()
 
         setLoading(false)
+        setModelReady(true)
         animate()
       },
       undefined,
@@ -144,6 +242,7 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
       disposed = true
       cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
+      renderer.domElement.removeEventListener('click', handleClick)
       controls.dispose()
       renderer.dispose()
       scene.traverse((obj) => {
@@ -154,15 +253,27 @@ export function ThreeViewer({ url, lines = [], logs = [], onMatchStats }: { url:
         }
       })
       if (renderer.domElement.parentElement === container) container.removeChild(renderer.domElement)
+      objectRef.current = null
+      markersGroupRef.current = null
     }
-    // lines/logs/onMatchStats intentionally excluded: re-coloring happens by re-running this whole
-    // effect only when the model url changes, not on every progress edit elsewhere in the app —
-    // reopen the tab (or re-select the project) to see freshly logged progress reflected.
+    // joints/equipment3d/spools/mode/selectedMeshNames/callbacks intentionally excluded: this
+    // effect only (re)loads the model itself on url change — see the coloring effect below for
+    // how progress edits get reflected without a reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
+  // Recolors meshes and rebuilds joint markers whenever the underlying progress data, the
+  // interaction mode, or the in-progress mesh selection changes — independent of the (expensive)
+  // model-load effect above, so editing joints/spools/equipment never triggers a reload.
+  useEffect(() => {
+    if (!modelReady || !objectRef.current || !markersGroupRef.current) return
+    const colorMap = buildMeshColorMap(spools, equipment3d, joints)
+    applyMeshColoring(objectRef.current, colorMap, mode, selectedMeshNames)
+    rebuildJointMarkers(markersGroupRef.current, joints)
+  }, [modelReady, joints, equipment3d, spools, mode, selectedMeshNames])
+
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-2xl">
+    <div ref={containerRef} className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}>
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <Loader2 size={26} className="animate-spin text-brand-400" />

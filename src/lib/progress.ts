@@ -1,22 +1,8 @@
-import { ACTIVITY_KINDS, type ActivityKind, type DailyLog, type IsoLine, type LineStatus, type Project } from '../types'
+import type { DailyLog, IsoLine, LineStatus, Project } from '../types'
 
 /** Rejected entries never count toward progress; pending entries still count (provisionally) until reviewed. */
 export function isCountedLog(log: DailyLog): boolean {
   return log.approvalStatus !== 'rejected'
-}
-
-/**
- * The furthest stage (weld -> NDT -> coating -> hydrotest, per ACTIVITY_KINDS' order) that has at
- * least one counted log against this line — used to color a line by "what work has been done"
- * (e.g. in the 3D model viewer) rather than by its overall percent. Null if nothing logged yet.
- */
-export function furthestCompletedActivity(lineId: string, logs: DailyLog[]): ActivityKind | null {
-  const done = new Set(logs.filter((l) => l.lineId === lineId && isCountedLog(l)).map((l) => l.activity))
-  let furthest: ActivityKind | null = null
-  for (const activity of ACTIVITY_KINDS) {
-    if (done.has(activity)) furthest = activity
-  }
-  return furthest
 }
 
 export interface LineProgress {

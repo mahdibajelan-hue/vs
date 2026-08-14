@@ -3212,3 +3212,99 @@ create policy "project_models_update_members" on storage.objects
 drop policy if exists "project_models_delete_members" on storage.objects;
 create policy "project_models_delete_members" on storage.objects
   for delete using (bucket_id = 'project-models' and (can_edit_project(((storage.foldername(name))[1])::uuid) or is_admin_user()));
+
+-- ============================================================================
+-- 26. Joint-centric 3D progress tracking (weld/flange register, spools,
+--     equipment) — the 3D model viewer's real unit of progress is the joint
+--     (a weld between two spools, or a flange bolt-up to another spool or to
+--     equipment), placed by clicking its point on the model; a spool is the
+--     gap between two consecutive joints (or a joint and equipment) and is
+--     linked to one or more 3D mesh objects only once both its bounding
+--     joints exist; equipment is a separate, self-contained item (its own
+--     mesh group + foundation/erection milestones) since it isn't a linear
+--     run like a pipe spool.
+-- ============================================================================
+
+create table if not exists equipment3d (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects (id) on delete cascade,
+  tag text not null default '',
+  description text not null default '',
+  foundation_ready_date date,
+  erected_date date,
+  mesh_object_names text[] not null default '{}',
+  notes text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists joints (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects (id) on delete cascade,
+  line_id uuid not null references lines (id) on delete cascade,
+  sequence_number integer not null default 1,
+  joint_type text not null default 'weld' check (joint_type in ('weld', 'flange')),
+  joint_number text not null default '',
+  diameter text not null default '',
+  thickness text not null default '',
+  connected_equipment_id uuid references equipment3d (id) on delete set null,
+  status text not null default 'not_started' check (status in ('not_started', 'completed')),
+  completed_date date,
+  notes text not null default '',
+  position_x numeric,
+  position_y numeric,
+  position_z numeric,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists spools (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects (id) on delete cascade,
+  line_id uuid not null references lines (id) on delete cascade,
+  -- null start_joint_id = spool starts at the line's own origin (not yet bounded by a joint);
+  -- null end_joint_id = spool ends at the line's own terminus. Both null only very briefly,
+  -- for a line with no joints placed at all yet.
+  start_joint_id uuid references joints (id) on delete set null,
+  end_joint_id uuid references joints (id) on delete set null,
+  mesh_object_names text[] not null default '{}',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table equipment3d enable row level security;
+alter table joints enable row level security;
+alter table spools enable row level security;
+
+drop policy if exists "equipment3d_select_member" on equipment3d;
+create policy "equipment3d_select_member" on equipment3d
+  for select using (is_project_member(project_id) or is_admin_user());
+drop policy if exists "equipment3d_write_editor" on equipment3d;
+create policy "equipment3d_write_editor" on equipment3d
+  for all
+  using (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user())
+  with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
+
+drop policy if exists "joints_select_member" on joints;
+create policy "joints_select_member" on joints
+  for select using (is_project_member(project_id) or is_admin_user());
+drop policy if exists "joints_write_editor" on joints;
+create policy "joints_write_editor" on joints
+  for all
+  using (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user())
+  with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
+
+drop policy if exists "spools_select_member" on spools;
+create policy "spools_select_member" on spools
+  for select using (is_project_member(project_id) or is_admin_user());
+drop policy if exists "spools_write_editor" on spools;
+create policy "spools_write_editor" on spools
+  for all
+  using (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user())
+  with check (can_edit_project(project_id) or project_role(project_id) = 'owner' or is_admin_user());
+
+create index if not exists idx_equipment3d_project on equipment3d (project_id);
+create index if not exists idx_joints_project on joints (project_id);
+create index if not exists idx_joints_line on joints (line_id);
+create index if not exists idx_spools_project on spools (project_id);
+create index if not exists idx_spools_line on spools (line_id);

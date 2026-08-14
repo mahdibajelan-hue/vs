@@ -3,13 +3,18 @@ import type {
   ActivitySchedule,
   ApprovalStatus,
   DailyLog,
+  Equipment3D,
   IsoLine,
+  Joint,
+  JointStatus,
+  JointType,
   LineStatus,
   Milestone,
   PlacedEquipmentItem,
   PlannedProgressPoint,
   Project,
   ReportConfig,
+  Spool,
 } from '../types'
 import { defaultReportConfig } from './reportConfig'
 import { createDefaultMilestones } from './milestones'
@@ -87,11 +92,59 @@ interface LogRow {
   owner_note: string
 }
 
+interface JointRow {
+  id: string
+  project_id: string
+  line_id: string
+  sequence_number: number
+  joint_type: string
+  joint_number: string
+  diameter: string
+  thickness: string
+  connected_equipment_id: string | null
+  status: string
+  completed_date: string | null
+  notes: string
+  position_x: number | string | null
+  position_y: number | string | null
+  position_z: number | string | null
+  created_at: string
+}
+
+interface Equipment3DRow {
+  id: string
+  project_id: string
+  tag: string
+  description: string
+  foundation_ready_date: string | null
+  erected_date: string | null
+  mesh_object_names: string[] | null
+  notes: string
+  created_at: string
+}
+
+interface SpoolRow {
+  id: string
+  project_id: string
+  line_id: string
+  start_joint_id: string | null
+  end_joint_id: string | null
+  mesh_object_names: string[] | null
+  created_at: string
+}
+
 export function projectSummaryFromRow(r: Pick<ProjectRow, 'id' | 'name' | 'client' | 'location' | 'unit' | 'created_at'>): ProjectSummary {
   return { id: r.id, name: r.name, client: r.client, location: r.location, unit: r.unit, createdAt: r.created_at }
 }
 
-export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]): Project {
+export function projectFromRow(
+  r: ProjectRow,
+  lines: LineRow[],
+  logs: LogRow[],
+  joints: JointRow[] = [],
+  equipment3d: Equipment3DRow[] = [],
+  spools: SpoolRow[] = [],
+): Project {
   return {
     id: r.id,
     name: r.name,
@@ -107,6 +160,9 @@ export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]):
     plannedCurve: r.planned_curve ?? [],
     schedules: r.schedules ?? [],
     equipment: r.equipment ?? [],
+    joints: joints.map(jointFromRow),
+    equipment3d: equipment3d.map(equipment3dFromRow),
+    spools: spools.map(spoolFromRow),
     milestones: r.milestones?.length ? r.milestones : createDefaultMilestones(),
     reportConfig: r.report_config?.template ? r.report_config : defaultReportConfig(),
     scheduleApprovedAt: r.schedule_owner_approved_at ?? null,
@@ -196,5 +252,90 @@ export function logToRow(projectId: string, l: Partial<DailyLog>) {
   if (l.ownerReviewedAt !== undefined) row.owner_reviewed_at = l.ownerReviewedAt
   if (l.ownerReviewedBy !== undefined) row.owner_reviewed_by = l.ownerReviewedBy
   if (l.ownerNote !== undefined) row.owner_note = l.ownerNote
+  return row
+}
+
+export function jointFromRow(r: JointRow): Joint {
+  return {
+    id: r.id,
+    lineId: r.line_id,
+    sequenceNumber: r.sequence_number,
+    jointType: r.joint_type as JointType,
+    jointNumber: r.joint_number,
+    diameter: r.diameter,
+    thickness: r.thickness,
+    connectedEquipmentId: r.connected_equipment_id,
+    status: r.status as JointStatus,
+    completedDate: r.completed_date,
+    notes: r.notes,
+    position:
+      r.position_x != null && r.position_y != null && r.position_z != null
+        ? { x: Number(r.position_x), y: Number(r.position_y), z: Number(r.position_z) }
+        : null,
+    createdAt: r.created_at,
+  }
+}
+
+export function jointToRow(projectId: string, j: Partial<Joint>) {
+  const row: Record<string, unknown> = { project_id: projectId }
+  if (j.lineId !== undefined) row.line_id = j.lineId
+  if (j.sequenceNumber !== undefined) row.sequence_number = j.sequenceNumber
+  if (j.jointType !== undefined) row.joint_type = j.jointType
+  if (j.jointNumber !== undefined) row.joint_number = j.jointNumber
+  if (j.diameter !== undefined) row.diameter = j.diameter
+  if (j.thickness !== undefined) row.thickness = j.thickness
+  if (j.connectedEquipmentId !== undefined) row.connected_equipment_id = j.connectedEquipmentId
+  if (j.status !== undefined) row.status = j.status
+  if (j.completedDate !== undefined) row.completed_date = j.completedDate
+  if (j.notes !== undefined) row.notes = j.notes
+  if (j.position !== undefined) {
+    row.position_x = j.position?.x ?? null
+    row.position_y = j.position?.y ?? null
+    row.position_z = j.position?.z ?? null
+  }
+  return row
+}
+
+export function equipment3dFromRow(r: Equipment3DRow): Equipment3D {
+  return {
+    id: r.id,
+    tag: r.tag,
+    description: r.description,
+    foundationReadyDate: r.foundation_ready_date,
+    erectedDate: r.erected_date,
+    meshObjectNames: r.mesh_object_names ?? [],
+    notes: r.notes,
+    createdAt: r.created_at,
+  }
+}
+
+export function equipment3dToRow(projectId: string, e: Partial<Equipment3D>) {
+  const row: Record<string, unknown> = { project_id: projectId }
+  if (e.tag !== undefined) row.tag = e.tag
+  if (e.description !== undefined) row.description = e.description
+  if (e.foundationReadyDate !== undefined) row.foundation_ready_date = e.foundationReadyDate
+  if (e.erectedDate !== undefined) row.erected_date = e.erectedDate
+  if (e.meshObjectNames !== undefined) row.mesh_object_names = e.meshObjectNames
+  if (e.notes !== undefined) row.notes = e.notes
+  return row
+}
+
+export function spoolFromRow(r: SpoolRow): Spool {
+  return {
+    id: r.id,
+    lineId: r.line_id,
+    startJointId: r.start_joint_id,
+    endJointId: r.end_joint_id,
+    meshObjectNames: r.mesh_object_names ?? [],
+    createdAt: r.created_at,
+  }
+}
+
+export function spoolToRow(projectId: string, s: Partial<Spool>) {
+  const row: Record<string, unknown> = { project_id: projectId }
+  if (s.lineId !== undefined) row.line_id = s.lineId
+  if (s.startJointId !== undefined) row.start_joint_id = s.startJointId
+  if (s.endJointId !== undefined) row.end_joint_id = s.endJointId
+  if (s.meshObjectNames !== undefined) row.mesh_object_names = s.meshObjectNames
   return row
 }

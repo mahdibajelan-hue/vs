@@ -121,19 +121,6 @@ export const ACTIVITY_LABEL_FA: Record<ActivityKind, string> = {
   hydrotest: 'تست هیدرواستاتیک',
 }
 
-/**
- * Color for the 3D model viewer's progress-by-work-type coloring — a line is painted the color
- * of the furthest stage it has reached along this same sequence (see ACTIVITY_KINDS), so the
- * color deepens toward green as the line moves through weld -> NDT -> coating -> hydrotest.
- * hydrotest reuses STATUS_COLOR.completed's green since reaching it means the line is done.
- */
-export const ACTIVITY_COLOR: Record<ActivityKind, string> = {
-  welding: '#f1c40f',
-  ndt: '#e67e22',
-  coating: '#3498db',
-  hydrotest: '#2ecc71',
-}
-
 export interface ActivitySchedule {
   id: string
   lineId: string
@@ -199,6 +186,76 @@ export interface PlacedEquipmentItem {
   createdAt: string
 }
 
+export type JointType = 'weld' | 'flange'
+
+export const JOINT_TYPES: JointType[] = ['weld', 'flange']
+
+export const JOINT_TYPE_LABEL_FA: Record<JointType, string> = {
+  weld: 'جوش',
+  flange: 'فلنج',
+}
+
+export type JointStatus = 'not_started' | 'completed'
+
+export interface Point3D {
+  x: number
+  y: number
+  z: number
+}
+
+/**
+ * The 3D model viewer's real unit of progress (spec: "محوریت به اتصال خواهد بود" — the joint is
+ * the center of the model). A weld joint sits between two spools on the same line; a flange joint
+ * either sits between two spools too, or (when connectedEquipmentId is set) bolts the line's end
+ * spool to a piece of equipment. Ordered per line via sequenceNumber.
+ */
+export interface Joint {
+  id: string
+  lineId: string
+  sequenceNumber: number
+  jointType: JointType
+  jointNumber: string
+  diameter: string
+  thickness: string
+  connectedEquipmentId: string | null
+  status: JointStatus
+  completedDate: string | null
+  notes: string
+  position: Point3D | null
+  createdAt: string
+}
+
+/**
+ * A vessel/valve/package item in the 3D model — deliberately NOT modeled as sitting "between two
+ * joints" like a spool, since its shape isn't linear (e.g. a valve + actuator, or a pig receiver
+ * with several nozzles). Its own installation status is just two milestones (foundation, erection);
+ * its mesh group is built by manually multi-selecting every 3D part that belongs to it.
+ */
+export interface Equipment3D {
+  id: string
+  tag: string
+  description: string
+  foundationReadyDate: string | null
+  erectedDate: string | null
+  meshObjectNames: string[]
+  notes: string
+  createdAt: string
+}
+
+/**
+ * The physical pipe segment between two consecutive joints on a line (or between a joint and the
+ * line's own open end, before both its bounding joints exist). Only meaningful — and only ever
+ * linked to a 3D mesh group — once both startJointId and endJointId are set.
+ */
+export interface Spool {
+  id: string
+  lineId: string
+  startJointId: string | null
+  endJointId: string | null
+  meshObjectNames: string[]
+  createdAt: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -215,6 +272,9 @@ export interface Project {
   plannedCurve: PlannedProgressPoint[]
   schedules: ActivitySchedule[]
   equipment: PlacedEquipmentItem[]
+  joints: Joint[]
+  equipment3d: Equipment3D[]
+  spools: Spool[]
   milestones: Milestone[]
   reportConfig: ReportConfig
   /** Owner's sign-off on the whole schedule (all lines/activities) — outside the per-row consultant approve cycle. */
