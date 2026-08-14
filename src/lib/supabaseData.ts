@@ -32,6 +32,8 @@ interface ProjectRow {
   unit: string
   svg_raw: string | null
   svg_file_name: string | null
+  model3d_path: string | null
+  model3d_file_name: string | null
   schedules: ActivitySchedule[]
   equipment: PlacedEquipmentItem[] | null
   milestones: Milestone[]
@@ -98,6 +100,8 @@ export function projectFromRow(r: ProjectRow, lines: LineRow[], logs: LogRow[]):
     unit: r.unit,
     svgRaw: r.svg_raw ? sanitizeSvg(r.svg_raw) : r.svg_raw,
     svgFileName: r.svg_file_name,
+    model3dPath: r.model3d_path,
+    model3dFileName: r.model3d_file_name,
     lines: lines.map(lineFromRow),
     logs: logs.map(logFromRow),
     plannedCurve: r.planned_curve ?? [],

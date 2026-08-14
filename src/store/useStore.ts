@@ -6,6 +6,7 @@ import { createDefaultMilestones } from '../lib/milestones'
 import { defaultReportConfig } from '../lib/reportConfig'
 import { createSafeLocalStorage } from '../lib/safeStorage'
 import { sanitizeSvg } from '../lib/sanitizeSvg'
+import { deleteProjectModel3d, uploadProjectModel3d } from '../lib/model3dStorage'
 import { supabase } from '../lib/supabaseClient'
 import { friendlyErrorMessage } from '../lib/friendlyError'
 import { useAuthStore } from './useAuthStore'
@@ -44,6 +45,9 @@ interface AppState {
 
   /** Returns the newly-inserted lines (with real db ids) — match by svgElementId to relate other new records to them. */
   setProjectSvg: (projectId: string, svgRaw: string, fileName: string, lines: IsoLine[]) => Promise<IsoLine[]>
+  /** Uploads an FBX (or other supported) 3D model to Storage and records its path on the project. Returns false on failure. */
+  setProjectModel3d: (projectId: string, file: File) => Promise<boolean>
+  clearProjectModel3d: (projectId: string) => Promise<void>
   addLine: (projectId: string, line: Omit<IsoLine, 'id' | 'createdAt'>) => Promise<void>
   updateLine: (projectId: string, lineId: string, data: Partial<IsoLine>) => Promise<void>
   deleteLine: (projectId: string, lineId: string) => Promise<void>
@@ -238,6 +242,27 @@ export const useStore = create<AppState>()(
             : {},
         )
         return newLines
+      },
+
+      setProjectModel3d: async (projectId, file) => {
+        const { path, error: uploadErr } = await uploadProjectModel3d(projectId, file)
+        if (uploadErr || !path) {
+          reportSupabaseError('بارگذاری مدل سه‌بعدی', { message: uploadErr ?? 'خطای نامشخص' })
+          return false
+        }
+        const { error: updateErr } = await supabase.from('projects').update({ model3d_path: path, model3d_file_name: file.name }).eq('id', projectId)
+        if (reportSupabaseError('ذخیره مدل سه‌بعدی', updateErr)) return false
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, model3dPath: path, model3dFileName: file.name } } : {}))
+        return true
+      },
+
+      clearProjectModel3d: async (projectId) => {
+        const current = get().projectDetail
+        const path = current?.id === projectId ? current.model3dPath : null
+        const { error: updateErr } = await supabase.from('projects').update({ model3d_path: null, model3d_file_name: null }).eq('id', projectId)
+        if (reportSupabaseError('حذف مدل سه‌بعدی', updateErr)) return
+        if (path) await deleteProjectModel3d(path)
+        set((s) => (s.projectDetail?.id === projectId ? { projectDetail: { ...s.projectDetail, model3dPath: null, model3dFileName: null } } : {}))
       },
 
       addLine: async (projectId, line) => {

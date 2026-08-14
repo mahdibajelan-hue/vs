@@ -3176,3 +3176,39 @@ drop trigger if exists trg_set_updated_at on fin_cashflow_forecasts;
 create trigger trg_set_updated_at before update on fin_cashflow_forecasts for each row execute function set_updated_at_and_by_fin();
 
 create index if not exists idx_fin_cashflow_forecasts_contract on fin_cashflow_forecasts (contract_id);
+
+-- ============================================================================
+-- 25. PipePulse 3D model viewer — FBX upload (e.g. exported from Autodesk
+--     Navisworks Manage) per project, stored in a private bucket and rendered
+--     client-side with three.js. One model per project — mirrors the existing
+--     svg_raw/svg_file_name field-on-projects pattern, except the file itself
+--     lives in Storage (it's a large binary, not text) and the column holds a
+--     storage path, resolved to a signed URL on demand (same approach as the
+--     finance-docs bucket).
+-- ============================================================================
+
+alter table projects add column if not exists model3d_path text;
+alter table projects add column if not exists model3d_file_name text;
+
+insert into storage.buckets (id, name, public)
+values ('project-models', 'project-models', false)
+on conflict (id) do nothing;
+
+-- Path convention: <project_id>/<filename> — read/write gated by the same
+-- project-membership functions (is_project_member/can_edit_project) that
+-- already govern the `lines`/`daily_logs` tables for this project.
+drop policy if exists "project_models_read_members" on storage.objects;
+create policy "project_models_read_members" on storage.objects
+  for select using (bucket_id = 'project-models' and (is_project_member(((storage.foldername(name))[1])::uuid) or is_admin_user()));
+
+drop policy if exists "project_models_write_members" on storage.objects;
+create policy "project_models_write_members" on storage.objects
+  for insert with check (bucket_id = 'project-models' and (can_edit_project(((storage.foldername(name))[1])::uuid) or is_admin_user()));
+
+drop policy if exists "project_models_update_members" on storage.objects;
+create policy "project_models_update_members" on storage.objects
+  for update using (bucket_id = 'project-models' and (can_edit_project(((storage.foldername(name))[1])::uuid) or is_admin_user()));
+
+drop policy if exists "project_models_delete_members" on storage.objects;
+create policy "project_models_delete_members" on storage.objects
+  for delete using (bucket_id = 'project-models' and (can_edit_project(((storage.foldername(name))[1])::uuid) or is_admin_user()));

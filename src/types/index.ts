@@ -194,6 +194,9 @@ export interface Project {
   unit: string
   svgRaw: string | null
   svgFileName: string | null
+  /** Storage path in the private 'project-models' bucket, not a public URL — resolve via a signed URL on demand. */
+  model3dPath: string | null
+  model3dFileName: string | null
   lines: IsoLine[]
   logs: DailyLog[]
   plannedCurve: PlannedProgressPoint[]

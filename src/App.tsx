@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Sparkles, Plus, Loader2 } from 'lucide-react'
 import { useStore } from './store/useStore'
 import { Sidebar } from './components/Layout/Sidebar'
@@ -18,7 +18,11 @@ import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
 
-export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'portfolio' | 'about'
+// Lazy-loaded: pulls in three.js (large) only when the user actually opens the 3D viewer tab,
+// keeping it out of the initial bundle every other page load pays for.
+const Model3DPage = lazy(() => import('./pages/Model3DPage').then((m) => ({ default: m.Model3DPage })))
+
+export type Page = 'viewer' | 'worklog' | 'onepager' | 'reports' | 'schematic' | 'schedule' | 'model3d' | 'portfolio' | 'about'
 
 const PAGE_TITLE: Record<Page, string> = {
   viewer: 'نقشه ایزومتریک تعاملی',
@@ -27,6 +31,7 @@ const PAGE_TITLE: Record<Page, string> = {
   reports: 'گزارش‌های تحلیلی',
   schematic: 'طراحی نقشه شماتیک',
   schedule: 'برنامه زمان‌بندی',
+  model3d: 'مدل سه‌بعدی',
   portfolio: 'تحلیل سه‌سطحی پورتفولیو/طرح/پروژه',
   about: 'درباره ما',
 }
@@ -191,6 +196,17 @@ function App() {
               {page === 'reports' && <ReportsPage project={currentProject} />}
               {page === 'schematic' && <SchematicPage project={currentProject} onSaved={() => setPage('viewer')} />}
               {page === 'schedule' && <SchedulePage project={currentProject} />}
+              {page === 'model3d' && (
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center">
+                      <Loader2 size={24} className="animate-spin text-brand-400" />
+                    </div>
+                  }
+                >
+                  <Model3DPage project={currentProject} />
+                </Suspense>
+              )}
             </>
           )}
         </main>

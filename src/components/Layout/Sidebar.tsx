@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, ClipboardList, Download, Upload, Pencil, Trash2, X, UserCircle2, Network } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Plus, FolderKanban, PenTool, Info, CalendarRange, ClipboardList, Download, Upload, Pencil, Trash2, X, UserCircle2, Network, Box } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useCurrentRole } from '../../store/useMembersStore'
@@ -25,6 +25,7 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'worklog', label: 'کارکرد روزانه', icon: ClipboardList },
   { id: 'schematic', label: 'طراحی نقشه شماتیک', icon: PenTool },
   { id: 'schedule', label: 'برنامه زمان‌بندی', icon: CalendarRange },
+  { id: 'model3d', label: 'مدل سه‌بعدی', icon: Box },
   { id: 'onepager', label: 'داشبورد مدیریتی', icon: LayoutDashboard },
   { id: 'reports', label: 'گزارش‌ها', icon: BarChart3 },
   { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network },
