@@ -56,7 +56,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [selectedLineId, setSelectedLineId] = useState('')
 
   const [viewerMode, setViewerMode] = useState<ViewerMode>('view')
-  const [pendingJoint, setPendingJoint] = useState<{ position: Point3D; axis: Point3D | null; ringRadius: number | null } | null>(null)
+  const [pendingJointPosition, setPendingJointPosition] = useState<Point3D | null>(null)
   const [editingJoint, setEditingJoint] = useState<Joint | null>(null)
   const [completingJointId, setCompletingJointId] = useState<string | null>(null)
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
@@ -99,7 +99,7 @@ export function Model3DPage({ project }: { project: Project }) {
 
   const resetInteraction = () => {
     setViewerMode('view')
-    setPendingJoint(null)
+    setPendingJointPosition(null)
     setMeshSelectionTarget(null)
     setSelectedMeshNames([])
   }
@@ -109,8 +109,8 @@ export function Model3DPage({ project }: { project: Project }) {
     setViewerMode('placeJoint')
   }
 
-  const handlePointPicked = (point: Point3D, axis: Point3D | null, ringRadius: number | null) => {
-    setPendingJoint({ position: point, axis, ringRadius })
+  const handlePointPicked = (point: Point3D) => {
+    setPendingJointPosition(point)
     setViewerMode('view')
   }
 
@@ -404,12 +404,12 @@ export function Model3DPage({ project }: { project: Project }) {
         </div>
       </div>
 
-      {pendingJoint && selectedLine && (
+      {pendingJointPosition && selectedLine && (
         <JointFormModal
           lineLabel={selectedLine.svgElementId}
-          position={pendingJoint.position}
+          position={pendingJointPosition}
           equipment3d={project.equipment3d}
-          onClose={() => setPendingJoint(null)}
+          onClose={() => setPendingJointPosition(null)}
           onSubmit={async (data) => {
             await addJoint(project.id, {
               lineId: selectedLineId,
@@ -421,11 +421,9 @@ export function Model3DPage({ project }: { project: Project }) {
               status: 'not_started',
               completedDate: null,
               notes: data.notes,
-              position: pendingJoint.position,
-              axis: pendingJoint.axis,
-              ringRadius: pendingJoint.ringRadius,
+              position: pendingJointPosition,
             })
-            setPendingJoint(null)
+            setPendingJointPosition(null)
           }}
         />
       )}

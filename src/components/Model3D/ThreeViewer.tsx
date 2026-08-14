@@ -8,12 +8,9 @@ import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
-// Fallback ring size for joints placed before per-joint radius estimation existed (ringRadius null).
-const JOINT_RING_RADIUS_FALLBACK = 0.12
-const JOINT_RING_TUBE_FRACTION = 0.18
-const JOINT_RING_TUBE_MIN = 0.006
-const JOINT_COLOR_DONE = 0x2ecc71
-const JOINT_COLOR_PENDING = 0xe74c3c
+const JOINT_SPRITE_WIDTH = 1.4
+const JOINT_COLOR_DONE = '#2ecc71'
+const JOINT_COLOR_PENDING = '#e74c3c'
 // A click that moves the pointer more than this (css px) between down and up is an orbit/pan drag,
 // not a selection tap — without this guard, dragging the camera while in 'selectMeshes' mode kept
 // toggling whatever mesh happened to be under the cursor at release, silently adding wrong items.
@@ -67,57 +64,76 @@ function disposeGroupChildren(group: THREE.Group) {
       child.geometry.dispose()
       const materials = Array.isArray(child.material) ? child.material : [child.material]
       materials.forEach((m) => m.dispose())
+    } else if (child instanceof THREE.Sprite) {
+      child.material.map?.dispose()
+      child.material.dispose()
     }
   }
   group.clear()
 }
 
 /**
- * Best-effort estimate of a clicked pipe segment's local run direction and cross-section radius,
- * used to draw the weld marker ring hugging the actual pipe instead of a generic fixed size. Since
- * the model is typically already split into one mesh per spool at every weld (the CAD/BIM
- * authoring naturally breaks geometry there), the clicked mesh's own bounding box is almost always
- * a single straight or near-straight run: its longest dimension is the pipe's length (the axis),
- * and the other two are its cross-section — averaged and halved to get the radius. The world-space
- * box already reflects the whole scene graph's transforms (including the model's own load-time
- * normalization), so the numbers come out directly comparable to everything else in the scene.
+ * Draws a small weld-tag icon (weld symbol + joint number) on a canvas, used as a camera-facing
+ * sprite. A 3D ring/sphere sitting on the pipe either occluded the spool underneath or had to guess
+ * a size that never quite matched the real pipe — a flat always-readable tag sidesteps both: its
+ * size is picked for legibility, not for "looking like" the pipe, and depthTest is off so it never
+ * gets swallowed by surrounding geometry.
  */
-function estimatePipeGeometry(mesh: THREE.Mesh): { axis: THREE.Vector3; radius: number } | null {
-  const geometry = mesh.geometry
-  if (!geometry.boundingBox) geometry.computeBoundingBox()
-  const localBox = geometry.boundingBox
-  if (!localBox) return null
-  const localSize = localBox.getSize(new THREE.Vector3())
-  let localAxis: THREE.Vector3
-  if (localSize.x >= localSize.y && localSize.x >= localSize.z) localAxis = new THREE.Vector3(1, 0, 0)
-  else if (localSize.y >= localSize.x && localSize.y >= localSize.z) localAxis = new THREE.Vector3(0, 1, 0)
-  else localAxis = new THREE.Vector3(0, 0, 1)
-  const axis = localAxis.transformDirection(mesh.matrixWorld).normalize()
+function createJointSprite(joint: Joint): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 110
+  const ctx = canvas.getContext('2d')!
+  const color = joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING
 
-  const worldBox = new THREE.Box3().setFromObject(mesh)
-  const worldSize = worldBox.getSize(new THREE.Vector3()).toArray().sort((a, b) => a - b)
-  // worldSize is now ascending: the two smaller entries are the cross-section, the largest is the length.
-  const radius = Math.min(Math.max((worldSize[0] + worldSize[1]) / 4, 0.02), 4)
+  const r = 20
+  ctx.fillStyle = 'rgba(15, 18, 24, 0.88)'
+  ctx.beginPath()
+  ctx.roundRect(3, 3, canvas.width - 6, canvas.height - 6, r)
+  ctx.fill()
+  ctx.lineWidth = 5
+  ctx.strokeStyle = color
+  ctx.stroke()
 
-  return { axis, radius }
+  // Simple weld-bead symbol (zigzag) on the left.
+  ctx.strokeStyle = color
+  ctx.lineWidth = 6
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(22, 55)
+  ctx.lineTo(38, 30)
+  ctx.lineTo(54, 80)
+  ctx.lineTo(70, 30)
+  ctx.lineTo(86, 55)
+  ctx.stroke()
+
+  const label = joint.jointNumber || `#${joint.sequenceNumber}`
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 46px Vazirmatn, Arial, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, 108, 55, canvas.width - 118)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.minFilter = THREE.LinearFilter
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true })
+  const sprite = new THREE.Sprite(material)
+  sprite.renderOrder = 999
+  const aspect = canvas.width / canvas.height
+  sprite.scale.set(JOINT_SPRITE_WIDTH, JOINT_SPRITE_WIDTH / aspect, 1)
+  sprite.name = `__joint_marker_${joint.id}`
+  return sprite
 }
 
-/** Thin colored rings around each placed joint's position, sized and oriented to hug the pipe like a real weld seam — red while pending, green once completed. Rings are hollow so they never occlude the spool surface underneath (unlike a solid marker). */
+/** Camera-facing weld-tag sprites at each placed joint's position — red while pending, green once completed. */
 function rebuildJointMarkers(group: THREE.Group, joints: Joint[]) {
   disposeGroupChildren(group)
   for (const joint of joints) {
     if (!joint.position) continue
-    const radius = joint.ringRadius ?? JOINT_RING_RADIUS_FALLBACK
-    const tube = Math.max(radius * JOINT_RING_TUBE_FRACTION, JOINT_RING_TUBE_MIN)
-    const geometry = new THREE.TorusGeometry(radius, tube, 10, 32)
-    const material = new THREE.MeshBasicMaterial({ color: joint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING })
-    const ring = new THREE.Mesh(geometry, material)
-    ring.position.set(joint.position.x, joint.position.y, joint.position.z)
-    const axisVec = joint.axis ? new THREE.Vector3(joint.axis.x, joint.axis.y, joint.axis.z) : new THREE.Vector3(0, 1, 0)
-    if (axisVec.lengthSq() < 1e-6) axisVec.set(0, 1, 0)
-    ring.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisVec.normalize()))
-    ring.name = `__joint_marker_${joint.id}`
-    group.add(ring)
+    const sprite = createJointSprite(joint)
+    sprite.position.set(joint.position.x, joint.position.y, joint.position.z)
+    group.add(sprite)
   }
 }
 
@@ -129,8 +145,7 @@ interface ThreeViewerProps {
   /** 'placeJoint' reports the clicked point on the model via onPointPicked; 'selectMeshes' toggles the clicked mesh's name in/out of selectedMeshNames. */
   mode?: ViewerMode
   selectedMeshNames?: string[]
-  /** axis/radius are a best-effort estimate of the clicked pipe segment's run direction and cross-section (see estimatePipeGeometry) — null if it couldn't be determined. */
-  onPointPicked?: (point: Point3D, axis: Point3D | null, radius: number | null) => void
+  onPointPicked?: (point: Point3D) => void
   onMeshToggle?: (meshName: string) => void
 }
 
@@ -139,8 +154,8 @@ interface ThreeViewerProps {
  * zoom controls. Progress coloring is entirely driven by the joint-centric model (see
  * src/lib/model3dColoring.ts) — nothing is auto-matched by object name: a spool's linked meshes
  * light up only once both its bounding joints are completed, equipment's linked meshes light up
- * once both its install milestones are set, and every joint gets a thin ring marker around the
- * pipe at its clicked position.
+ * once both its install milestones are set, and every joint gets a small camera-facing weld-tag
+ * label (symbol + joint number) at its clicked position.
  */
 export function ThreeViewer({
   url,
@@ -236,8 +251,7 @@ export function ThreeViewer({
       const hit = raycaster.intersectObject(object, true).find((h) => h.object instanceof THREE.Mesh)
       if (!hit) return
       if (liveMode === 'placeJoint') {
-        const geo = hit.object instanceof THREE.Mesh ? estimatePipeGeometry(hit.object) : null
-        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z }, geo ? { x: geo.axis.x, y: geo.axis.y, z: geo.axis.z } : null, geo?.radius ?? null)
+        livePicked?.({ x: hit.point.x, y: hit.point.y, z: hit.point.z })
       } else if (liveMode === 'selectMeshes') {
         liveToggle?.(hit.object.name)
       }

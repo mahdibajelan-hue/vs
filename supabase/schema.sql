@@ -3254,22 +3254,15 @@ create table if not exists joints (
   position_x numeric,
   position_y numeric,
   position_z numeric,
-  -- Unit vector approximating the pipe's local run direction at the clicked point (derived
-  -- client-side from the hit mesh's own bounding box) — lets the weld-seam marker be drawn as a
-  -- ring around the pipe's circumference instead of a sphere sitting on top of it.
-  axis_x numeric,
-  axis_y numeric,
-  axis_z numeric,
-  -- Estimated pipe cross-section radius at position_x/y/z (same world units as the model), so the
-  -- weld-seam marker ring can be sized to actually hug the pipe instead of a generic fixed size.
-  ring_radius numeric,
   created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now()
 );
-alter table joints add column if not exists axis_x numeric;
-alter table joints add column if not exists axis_y numeric;
-alter table joints add column if not exists axis_z numeric;
-alter table joints add column if not exists ring_radius numeric;
+-- axis_x/y/z and ring_radius were a short-lived attempt at orienting a 3D ring marker to the pipe;
+-- replaced by a flat camera-facing weld-tag label that needs neither, so they're dropped again.
+alter table joints drop column if exists axis_x;
+alter table joints drop column if exists axis_y;
+alter table joints drop column if exists axis_z;
+alter table joints drop column if exists ring_radius;
 
 create table if not exists spools (
   id uuid primary key default gen_random_uuid(),
