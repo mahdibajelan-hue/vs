@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Boxes, Check, Loader2, Map, MapPin, MousePointerClick, Pencil, Plus, RefreshCcw, Trash2, Upload, X } from 'lucide-react'
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { Equipment3D, Joint, Point3D, Project, Spool } from '../types'
 import { JOINT_TYPE_LABEL_FA } from '../types'
 import { useStore } from '../store/useStore'
@@ -12,6 +11,7 @@ import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
 import { WeldMap2D } from '../components/Model3D/WeldMap2D'
+import { JointInfoCard } from '../components/Model3D/JointInfoCard'
 import { JointFormModal, JointCompleteDateModal } from '../components/Model3D/JointFormModal'
 import { Equipment3DFormModal } from '../components/Model3D/Equipment3DFormModal'
 import { JalaliDateInput } from '../components/common/JalaliDateInput'
@@ -441,53 +441,18 @@ export function Model3DPage({ project }: { project: Project }) {
               />
 
               {selectedJoint && (
-                <div
-                  ref={jointPanelRef}
-                  className="glass-panel absolute z-20 w-64 -translate-x-1/2 -translate-y-[calc(100%+14px)] rounded-2xl p-3 text-xs"
-                  style={{ left: 0, top: 0, visibility: 'hidden' }}
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-bold">
-                        {JOINT_TYPE_LABEL_FA[selectedJoint.jointType]} {selectedJoint.jointNumber || `#${selectedJoint.sequenceNumber}`}
-                      </p>
-                      <p className="text-[10px] text-muted">{project.lines.find((l) => l.id === selectedJoint.lineId)?.svgElementId ?? ''}</p>
-                    </div>
-                    <button onClick={() => setSelectedJointId(null)} className="shrink-0 rounded-lg p-1 text-secondary hover:bg-white/10">
-                      <X size={13} />
-                    </button>
-                  </div>
-                  <span
-                    className="mb-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      background: selectedJoint.status === 'completed' ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)',
-                      color: selectedJoint.status === 'completed' ? '#2ecc71' : '#e74c3c',
+                <div ref={jointPanelRef} className="absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+12px)]" style={{ left: 0, top: 0, visibility: 'hidden' }}>
+                  <JointInfoCard
+                    joint={selectedJoint}
+                    lineLabel={project.lines.find((l) => l.id === selectedJoint.lineId)?.svgElementId ?? ''}
+                    equipment3d={project.equipment3d}
+                    editable={editable}
+                    onEdit={() => {
+                      setEditingJoint(selectedJoint)
+                      setSelectedJointId(null)
                     }}
-                  >
-                    {selectedJoint.status === 'completed' ? 'تکمیل شده' : 'شروع‌نشده'}
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-secondary">
-                    <span>قطر: {selectedJoint.diameter || '—'}</span>
-                    <span>ضخامت: {selectedJoint.thickness || '—'}</span>
-                    {selectedJoint.completedDate && <span className="col-span-2">تاریخ تکمیل: {formatJalali(selectedJoint.completedDate)}</span>}
-                    {selectedJoint.connectedEquipmentId && (
-                      <span className="col-span-2">
-                        تجهیز: {project.equipment3d.find((e) => e.id === selectedJoint.connectedEquipmentId)?.tag ?? '—'}
-                      </span>
-                    )}
-                    {selectedJoint.notes && <span className="col-span-2 truncate">یادداشت: {selectedJoint.notes}</span>}
-                  </div>
-                  {editable && (
-                    <button
-                      onClick={() => {
-                        setEditingJoint(selectedJoint)
-                        setSelectedJointId(null)
-                      }}
-                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-brand-500/15 px-2 py-1.5 text-[10px] font-medium text-brand-300 hover:bg-brand-500/25"
-                    >
-                      <Pencil size={11} /> ویرایش اتصال
-                    </button>
-                  )}
+                    onClose={() => setSelectedJointId(null)}
+                  />
                 </div>
               )}
 
@@ -545,34 +510,12 @@ export function Model3DPage({ project }: { project: Project }) {
                       editable={editable}
                     />
                   </div>
-                  <div className="glass-panel grid shrink-0 grid-cols-2 gap-3 rounded-2xl p-3 sm:grid-cols-4">
-                    <StatTile label="کل اتصالات" value={jointStats.total} color="var(--text-primary)" />
-                    <StatTile label="تکمیل‌شده" value={jointStats.completed} color="#2ecc71" />
-                    <StatTile label="باقیمانده" value={jointStats.total - jointStats.completed} color="#e74c3c" />
-                    <div className="col-span-2 h-20 sm:col-span-1">
-                      {jointStats.total > 0 && (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={[
-                                { name: 'تکمیل‌شده', value: jointStats.completed },
-                                { name: 'باقیمانده', value: jointStats.total - jointStats.completed },
-                              ]}
-                              dataKey="value"
-                              innerRadius={22}
-                              outerRadius={34}
-                              strokeWidth={0}
-                            >
-                              <Cell fill="#2ecc71" />
-                              <Cell fill="#e74c3c" />
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
-                              formatter={(v) => [Number(v).toLocaleString('fa-IR'), '']}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      )}
+                  <div className="glass-panel flex shrink-0 flex-wrap items-center gap-4 rounded-2xl p-3">
+                    <NestedWeldDonut total={jointStats.total} completed={jointStats.completed} />
+                    <div className="grid flex-1 grid-cols-3 gap-2">
+                      <StatTile label="کل اتصالات" value={jointStats.total} color="#38bdf8" />
+                      <StatTile label="جوشکاری‌شده" value={jointStats.completed} color="#2ecc71" />
+                      <StatTile label="باقیمانده" value={jointStats.total - jointStats.completed} color="#e74c3c" />
                     </div>
                   </div>
                 </div>
@@ -663,6 +606,51 @@ export function Model3DPage({ project }: { project: Project }) {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Concentric-ring donut: innermost ring is the total joint count (a full reference circle), the
+ * next ring out is welded (completed) vs not. Two more rings — radiography done, and pass/defective/
+ * repeat-film breakdown — are part of the intended design but need new fields on Joint (an NDT/RT
+ * stage separate from weld status) that don't exist yet, so they're left off rather than showing
+ * fabricated numbers.
+ */
+function NestedWeldDonut({ total, completed }: { total: number; completed: number }) {
+  const size = 88
+  const cx = size / 2
+  const cy = size / 2
+  const strokeWidth = 9
+  const gap = 3
+  const totalRadius = 15
+  const weldedRadius = totalRadius + strokeWidth + gap
+  const weldedPercent = total > 0 ? (completed / total) * 100 : 0
+
+  const ring = (radius: number, percent: number, color: string, track: string) => {
+    const circumference = 2 * Math.PI * radius
+    const filled = (percent / 100) * circumference
+    return (
+      <g transform={`rotate(-90 ${cx} ${cy})`}>
+        <circle cx={cx} cy={cy} r={radius} fill="none" stroke={track} strokeWidth={strokeWidth} />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${filled} ${circumference}`}
+          strokeLinecap="round"
+        />
+      </g>
+    )
+  }
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      {ring(totalRadius, 100, '#38bdf8', 'rgba(56,189,248,0.18)')}
+      {ring(weldedRadius, weldedPercent, '#2ecc71', 'rgba(231,76,60,0.3)')}
+    </svg>
   )
 }
 

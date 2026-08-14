@@ -1,16 +1,19 @@
 import { useMemo } from 'react'
-import { Pencil, X } from 'lucide-react'
 import type { Equipment3D, Joint } from '../../types'
-import { JOINT_TYPE_LABEL_FA } from '../../types'
-import { formatJalali } from '../../lib/jalali'
 import { DIM_COLOR, SPOOL_COMPLETE_COLOR } from '../../lib/model3dColoring'
+import { JointInfoCard } from './JointInfoCard'
 
 const JOINT_COLOR_DONE = '#2ecc71'
 const JOINT_COLOR_PENDING = '#e74c3c'
 const NODE_RADIUS = 15
 const COL_SPACING = 92
 const ROW_SPACING = 86
-const PADDING = 46
+const PADDING_SIDE = 60
+const PADDING_BOTTOM = 60
+// Generous headroom above the first row — the detail card opens above whichever node was
+// clicked, and without real room here it gets clipped by the scroll container's top edge (a
+// scrollable box only grows to reveal overflow past its "far" edges, never above y=0).
+const PADDING_TOP = 90
 const NODES_PER_ROW = 7
 
 interface WeldMap2DProps {
@@ -31,7 +34,10 @@ interface WeldMap2DProps {
  * mesh-based spool selection impossible: the diagram doesn't care what the underlying mesh looks
  * like, only which joints exist and their sequence. Node/edge pixel positions are plain SVG
  * coordinates (no responsive scaling), so the click-to-open detail card can anchor to a node with
- * simple left/top math instead of a 3D-to-screen projection.
+ * simple left/top math instead of a 3D-to-screen projection. Every connector is drawn strictly
+ * horizontal or vertical (the snake layout never needs a diagonal), and rendered as a double-line
+ * "pipe" stroke so turns read as elbows — real branch/tee topology (a joint spanning two lines, or
+ * an equipment nozzle drawn as an actual T) isn't modeled yet, so it isn't drawn.
  */
 export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onSelectJoint, onEditJoint, editable }: WeldMap2DProps) {
   const { positions, width, height } = useMemo(() => {
@@ -40,13 +46,13 @@ export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onS
       const posInRow = i % NODES_PER_ROW
       const leftToRight = row % 2 === 0
       const col = leftToRight ? posInRow : NODES_PER_ROW - 1 - posInRow
-      return { x: PADDING + col * COL_SPACING, y: PADDING + row * ROW_SPACING }
+      return { x: PADDING_SIDE + col * COL_SPACING, y: PADDING_TOP + row * ROW_SPACING }
     })
     const rows = Math.max(1, Math.ceil(joints.length / NODES_PER_ROW))
     return {
       positions: pos,
-      width: PADDING * 2 + (NODES_PER_ROW - 1) * COL_SPACING,
-      height: PADDING * 2 + (rows - 1) * ROW_SPACING,
+      width: PADDING_SIDE * 2 + (NODES_PER_ROW - 1) * COL_SPACING,
+      height: PADDING_TOP + PADDING_BOTTOM + (rows - 1) * ROW_SPACING,
     }
   }, [joints])
 
@@ -67,17 +73,12 @@ export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onS
             const p1 = positions[i]
             const p2 = positions[i + 1]
             const complete = joint.status === 'completed' && next.status === 'completed'
+            const color = complete ? SPOOL_COMPLETE_COLOR : DIM_COLOR
             return (
-              <line
-                key={joint.id}
-                x1={p1.x}
-                y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
-                stroke={complete ? SPOOL_COMPLETE_COLOR : DIM_COLOR}
-                strokeWidth={4}
-                strokeLinecap="round"
-              />
+              <g key={joint.id}>
+                <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={color} strokeOpacity={0.28} strokeWidth={9} strokeLinecap="round" />
+                <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={color} strokeWidth={2.5} strokeLinecap="round" />
+              </g>
             )
           })}
           {joints.map((joint, i) => {
@@ -85,11 +86,7 @@ export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onS
             const done = joint.status === 'completed'
             const selected = joint.id === selectedJointId
             return (
-              <g
-                key={joint.id}
-                onClick={() => onSelectJoint(selected ? null : joint.id)}
-                style={{ cursor: 'pointer' }}
-              >
+              <g key={joint.id} onClick={() => onSelectJoint(selected ? null : joint.id)} style={{ cursor: 'pointer' }}>
                 <circle
                   cx={p.x}
                   cy={p.y}
@@ -107,47 +104,15 @@ export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onS
         </svg>
 
         {selectedJoint && selectedPos && (
-          <div
-            className="glass-panel absolute z-10 w-60 -translate-x-1/2 -translate-y-[calc(100%+16px)] rounded-2xl p-3 text-xs"
-            style={{ left: selectedPos.x, top: selectedPos.y }}
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-bold">
-                  {JOINT_TYPE_LABEL_FA[selectedJoint.jointType]} {selectedJoint.jointNumber || `#${selectedJoint.sequenceNumber}`}
-                </p>
-                <p className="text-[10px] text-muted">{lineLabel}</p>
-              </div>
-              <button onClick={() => onSelectJoint(null)} className="shrink-0 rounded-lg p-1 text-secondary hover:bg-white/10">
-                <X size={13} />
-              </button>
-            </div>
-            <span
-              className="mb-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                background: selectedJoint.status === 'completed' ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)',
-                color: selectedJoint.status === 'completed' ? JOINT_COLOR_DONE : JOINT_COLOR_PENDING,
-              }}
-            >
-              {selectedJoint.status === 'completed' ? 'تکمیل شده' : 'شروع‌نشده'}
-            </span>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-secondary">
-              <span>قطر: {selectedJoint.diameter || '—'}</span>
-              <span>ضخامت: {selectedJoint.thickness || '—'}</span>
-              {selectedJoint.completedDate && <span className="col-span-2">تاریخ تکمیل: {formatJalali(selectedJoint.completedDate)}</span>}
-              {selectedJoint.connectedEquipmentId && (
-                <span className="col-span-2">تجهیز: {equipment3d.find((e) => e.id === selectedJoint.connectedEquipmentId)?.tag ?? '—'}</span>
-              )}
-              {selectedJoint.notes && <span className="col-span-2 truncate">یادداشت: {selectedJoint.notes}</span>}
-            </div>
-            {editable && (
-              <button
-                onClick={() => onEditJoint(selectedJoint)}
-                className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-brand-500/15 px-2 py-1.5 text-[10px] font-medium text-brand-300 hover:bg-brand-500/25"
-              >
-                <Pencil size={11} /> ویرایش اتصال
-              </button>
-            )}
+          <div className="absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+12px)]" style={{ left: selectedPos.x, top: selectedPos.y }}>
+            <JointInfoCard
+              joint={selectedJoint}
+              lineLabel={lineLabel}
+              equipment3d={equipment3d}
+              editable={editable}
+              onEdit={() => onEditJoint(selectedJoint)}
+              onClose={() => onSelectJoint(null)}
+            />
           </div>
         )}
       </div>
