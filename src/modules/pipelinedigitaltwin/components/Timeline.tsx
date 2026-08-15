@@ -1,24 +1,53 @@
+import { useMemo } from 'react'
 import { CalendarClock } from 'lucide-react'
+import { usePdtStore } from '../store/usePdtStore'
+import { formatJalali } from '../../../lib/jalali'
 
 /**
- * Bottom timeline bar — the static shell only (project start/finish + a "today" marker). The
- * interactive date-scrubbing behavior ("see the pipeline as it looked on 2026-07-01") is Phase 10
- * and needs the Joint/status history that later phases build, so it isn't wired up yet.
+ * Scrubs the pipeline's visual state (pipe color, joint markers, KPI numbers — all recomputed by
+ * DashboardPage from `scrubDate`) across the project's real history: from `projectCreatedAt` to
+ * now. There is no separate stored snapshot per date — moving the slider just changes which
+ * moment each joint's own append-only history log gets replayed up to (see lib/jointHistory.ts),
+ * so a scrubbed view can never show something that wasn't actually logged.
  */
 export function Timeline() {
+  const projectCreatedAt = usePdtStore((s) => s.projectCreatedAt)
+  const scrubDate = usePdtStore((s) => s.scrubDate)
+  const setScrubDate = usePdtStore((s) => s.setScrubDate)
+
+  const startMs = useMemo(() => new Date(projectCreatedAt).getTime(), [projectCreatedAt])
+  const nowMs = useMemo(() => Date.now(), [])
+  const totalMs = Math.max(1, nowMs - startMs)
+
+  const currentMs = scrubDate ? new Date(scrubDate).getTime() : nowMs
+  const percent = Math.min(100, Math.max(0, ((currentMs - startMs) / totalMs) * 100))
+
+  const handleChange = (v: number) => {
+    if (v >= 99.5) {
+      setScrubDate(null)
+      return
+    }
+    setScrubDate(new Date(startMs + (v / 100) * totalMs).toISOString())
+  }
+
   return (
     <div className="glass-panel flex shrink-0 items-center gap-4 rounded-2xl px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[11px] font-bold text-secondary">
+      <div className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold text-secondary">
         <CalendarClock size={13} /> جدول زمانی اجرا
       </div>
-      <div className="relative h-1.5 flex-1 rounded-full bg-white/10">
-        <div className="absolute inset-y-0 right-0 w-[38%] rounded-full bg-brand-500/60" />
-        <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-brand-400" style={{ right: '38%' }} />
-      </div>
-      <div className="flex shrink-0 gap-4 text-[10px] text-muted">
-        <span>شروع پروژه</span>
-        <span>امروز</span>
-        <span>پایان پروژه</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={0.5}
+        value={percent}
+        onChange={(e) => handleChange(Number(e.target.value))}
+        className="h-1.5 flex-1 accent-brand-400"
+      />
+      <div className="flex shrink-0 items-center gap-3 text-[10px] text-muted">
+        <span className="num">{formatJalali(projectCreatedAt.slice(0, 10))}</span>
+        <span className={`font-bold ${scrubDate ? 'num text-amber-300' : 'text-brand-300'}`}>{scrubDate ? formatJalali(scrubDate.slice(0, 10)) : 'امروز'}</span>
+        <span className="num">{formatJalali(new Date(nowMs).toISOString().slice(0, 10))}</span>
       </div>
     </div>
   )

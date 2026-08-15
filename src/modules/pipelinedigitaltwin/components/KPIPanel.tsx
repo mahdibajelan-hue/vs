@@ -1,29 +1,20 @@
 import { useRef } from 'react'
 import { CheckCircle2, Loader2, MapPin, Upload } from 'lucide-react'
+import type { Joint } from '../types'
 import { usePdtStore } from '../store/usePdtStore'
 import { importRouteFromKml } from '../lib/kmlImport'
 import { formatChainage } from '../lib/chainage'
+import { computeProjectProgress } from '../lib/progressEngine'
+import { DEFAULT_STOCK_LENGTH_M } from '../lib/jointGeneration'
 import type * as Cesium from 'cesium'
 
-const KPI_PLACEHOLDERS = [
-  'پیشرفت کلی',
-  'کل جوینت‌ها',
-  'جوش‌شده',
-  'NDT پاس‌شده',
-  'پوشش‌شده',
-  'پایین‌آوری‌شده',
-  'خاک‌ریزی‌شده',
-  'NCR باز',
-]
-
 /**
- * Right-side panel: route import + a live Route Info readout (Phase 3-4 data — real, computed from
- * whatever route is loaded), then the spec's 8 project KPIs as placeholders. The KPI numbers need
- * the Joint model and Progress Engine (phases 6-9, not built yet in this batch) to mean anything —
- * showing zeros here would misleadingly imply "0% done" rather than "not tracked yet", so they're
- * left as "—" instead.
+ * Right-side panel: route import + a live Route Info readout, then the spec's project KPIs —
+ * computed for real from `joints` (Phase 9's progress engine) now that joints exist. `joints` is
+ * the caller's possibly-scrubbed set (see DashboardPage), so these numbers stay in sync with
+ * whatever moment the Timeline is showing.
  */
-export function KPIPanel({ viewerRef }: { viewerRef: React.RefObject<Cesium.Viewer | null> }) {
+export function KPIPanel({ viewerRef, joints }: { viewerRef: React.RefObject<Cesium.Viewer | null>; joints: Joint[] }) {
   const route = usePdtStore((s) => s.route)
   const importing = usePdtStore((s) => s.importing)
   const importError = usePdtStore((s) => s.importError)
@@ -31,6 +22,8 @@ export function KPIPanel({ viewerRef }: { viewerRef: React.RefObject<Cesium.View
   const setImporting = usePdtStore((s) => s.setImporting)
   const setImportError = usePdtStore((s) => s.setImportError)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const progress = computeProjectProgress(joints)
 
   const handleFile = async (file: File) => {
     if (!viewerRef.current) return
@@ -43,6 +36,17 @@ export function KPIPanel({ viewerRef }: { viewerRef: React.RefObject<Cesium.View
     }
     setRoute(result.route)
   }
+
+  const kpis: { label: string; value: string }[] = [
+    { label: 'پیشرفت کلی', value: `٪${progress.overallProgressPercent.toLocaleString('fa-IR')}` },
+    { label: 'کل جوینت‌ها', value: progress.totalJoints.toLocaleString('fa-IR') },
+    { label: 'جوش‌شده', value: progress.weldedCount.toLocaleString('fa-IR') },
+    { label: 'NDT پاس‌شده', value: progress.ndtPassedCount.toLocaleString('fa-IR') },
+    { label: 'پوشش‌شده', value: progress.coatedCount.toLocaleString('fa-IR') },
+    { label: 'پایین‌آوری‌شده', value: progress.loweredCount.toLocaleString('fa-IR') },
+    { label: 'خاک‌ریزی‌شده', value: progress.backfilledCount.toLocaleString('fa-IR') },
+    { label: 'NCR باز', value: progress.ncrOpenCount.toLocaleString('fa-IR') },
+  ]
 
   return (
     <div className="glass-panel flex min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl p-4">
@@ -87,15 +91,15 @@ export function KPIPanel({ viewerRef }: { viewerRef: React.RefObject<Cesium.View
       <div>
         <p className="mb-2 text-[11px] font-bold text-secondary">شاخص‌های پروژه</p>
         <div className="grid grid-cols-2 gap-1.5">
-          {KPI_PLACEHOLDERS.map((label) => (
-            <div key={label} className="rounded-lg border border-white/10 p-2 text-center">
-              <p className="num text-base font-bold text-muted">—</p>
-              <p className="text-[9px] text-muted">{label}</p>
+          {kpis.map((k) => (
+            <div key={k.label} className="rounded-lg border border-white/10 p-2 text-center">
+              <p className="num text-base font-bold">{k.value}</p>
+              <p className="text-[9px] text-muted">{k.label}</p>
             </div>
           ))}
         </div>
         <p className="mt-2 text-[9px] leading-4 text-muted">
-          این شاخص‌ها پس از افزودن مدل جوینت‌ها و موتور محاسبه پیشرفت (مراحل بعدی) نمایش داده می‌شوند.
+          محاسبه‌شده از وضعیت واقعی {progress.totalJoints.toLocaleString('fa-IR')} سرجوش تولیدشده روی مسیر (هر {DEFAULT_STOCK_LENGTH_M.toLocaleString('fa-IR')} متر یک سرجوش).
         </p>
       </div>
     </div>

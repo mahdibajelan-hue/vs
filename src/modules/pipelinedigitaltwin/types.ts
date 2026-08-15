@@ -1,8 +1,8 @@
 /**
- * Data model for the Pipeline Digital Twin MVP. Phases 1-4 (this batch) only populate Route —
- * Joint/Pipe/Valve/Crossing/NCR/Document are declared now (per the spec's "design the architecture
- * correctly from day one" requirement) but stay empty until the later phases that actually build
- * joint placement, construction-status tracking, and the progress engine.
+ * Data model for the Pipeline Digital Twin MVP. Route, Pipe and Joint are populated as of Phase
+ * 5-9 (procedural 3D pipe, joint placement, construction-status tracking, progress engine).
+ * Valve/Crossing/NCR/Document are declared per the spec's "design the architecture correctly from
+ * day one" requirement but stay unpopulated until a later phase actually builds them.
  */
 
 export interface GeoPoint {
@@ -31,7 +31,18 @@ export type LoweringStatus = 'pending' | 'completed'
 export type BackfillStatus = 'pending' | 'completed'
 export type JointFinalStatus = 'not_started' | 'in_progress' | 'ncr' | 'completed'
 
-/** Not yet populated (Phase 6+) — declared now so Route/Chainage code already has a real target shape to place joints onto later. */
+export type JointStatusField = 'weldingStatus' | 'ndtStatus' | 'coatingStatus' | 'loweringStatus' | 'backfillStatus'
+
+/** One append-only log line, written whenever a construction-status field on a joint changes. */
+export interface JointHistoryEntry {
+  id: string
+  /** ISO timestamp. */
+  at: string
+  field: JointStatusField | 'notes' | 'welders'
+  fromValue: string
+  toValue: string
+}
+
 export interface Joint {
   id: string
   jointNumber: string
@@ -42,12 +53,14 @@ export interface Joint {
   coatingStatus: CoatingStatus
   loweringStatus: LoweringStatus
   backfillStatus: BackfillStatus
+  /** Always derived from the five stage fields above — never set directly. See lib/progressEngine.ts. */
   finalStatus: JointFinalStatus
   welders: string[]
   notes: string
+  history: JointHistoryEntry[]
 }
 
-/** Not yet populated (Phase 5+). */
+/** Populated by demo data (Phase 5); a real project would carry one Pipe per pipe-class/diameter change along the route. */
 export interface Pipe {
   id: string
   diameterInch: number
