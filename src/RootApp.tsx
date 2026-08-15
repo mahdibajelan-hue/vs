@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
@@ -12,6 +13,11 @@ import { ReportingApp } from './modules/reporting/ReportingApp'
 import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
+
+// Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
+const PipelineDigitalTwinApp = lazy(() =>
+  import('./modules/pipelinedigitaltwin/PipelineDigitalTwinApp').then((m) => ({ default: m.PipelineDigitalTwinApp })),
+)
 
 /**
  * Top-level flow: authenticate once (single shared account across every module), THEN show the
@@ -67,6 +73,16 @@ export function RootApp() {
     <FinanceApp onExitToHub={exitToHub} />
   ) : activeModule === 'material' ? (
     <MaterialApp onExitToHub={exitToHub} />
+  ) : activeModule === 'pipelinedigitaltwin' ? (
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}>
+          <Loader2 size={26} className="animate-spin text-brand-400" />
+        </div>
+      }
+    >
+      <PipelineDigitalTwinApp onExitToHub={exitToHub} />
+    </Suspense>
   ) : (
     <AdminApp onExitToHub={exitToHub} />
   )

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { SignOutButton } from './SignOutButton'
@@ -86,6 +86,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['زنجیره کامل تامین: MTO، خرید، ساخت، حمل و انبار', 'کسری و آمادگی اجرا برای هر بسته کاری'],
     icon: Package,
     accent: '#f59e0b',
+    status: 'active',
+  },
+  {
+    key: 'pipelinedigitaltwin',
+    title: 'دوقلوی دیجیتال خط لوله',
+    englishTag: 'Pipeline Digital Twin',
+    teaser: 'نمایش سه‌بعدی جغرافیایی و کنترل اجرای خط لوله',
+    bullets: ['مسیر خط روی مدل سه‌بعدی زمین (Cesium)', 'واردکردن مسیر از KMZ/KML و محاسبه Chainage'],
+    icon: Route,
+    accent: '#38bdf8',
     status: 'active',
   },
   {

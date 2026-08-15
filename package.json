@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.1",
     "@tailwindcss/vite": "^4.3.3",
+    "cesium": "^1.144.0",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.13",
     "html2canvas-pro": "^2.3.3",
@@ -22,6 +23,7 @@
     "recharts": "^3.10.1",
     "tailwindcss": "^4.3.3",
     "three": "^0.185.1",
+    "vite-plugin-cesium": "^1.2.23",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.14"
   },
