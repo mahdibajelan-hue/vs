@@ -104,50 +104,10 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     const updateHeading = () => setHeadingDeg(Cesium.Math.toDegrees(viewer.camera.heading))
     viewer.scene.postRender.addEventListener(updateHeading)
 
-    // Cesium's default wheel-zoom always targets where the cursor ray hits the bare ellipsoid —
-    // never whatever's actually drawn under the cursor. With a flat ellipsoid (no ion/DEM terrain)
-    // and a pipe that sits some real height above it, that target can be far from what the user is
-    // looking at, so a couple of scroll ticks fly the camera straight past the pipe and it
-    // "disappears". Replacing wheel-zoom with one that dollies toward the real picked point under
-    // the cursor (the pipe/joint itself when the mouse is over one, via scene.pickPosition — the
-    // same depth buffer that makes the pipe visible in the first place) keeps zooming converging on
-    // whatever the user is actually pointing at.
-    const canvas = viewer.scene.canvas
-    viewer.scene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH]
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      const rect = canvas.getBoundingClientRect()
-      const windowPosition = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top)
-      const scene = viewer.scene
-
-      let target = scene.pickPositionSupported ? scene.pickPosition(windowPosition) : undefined
-      if (!Cesium.defined(target)) {
-        // Same ray-ellipsoid intersection Cesium's own default zoom uses internally — pure math,
-        // so it still resolves a sensible target even where there's no rendered geometry to pick
-        // (e.g. imagery tiles that haven't loaded yet) as long as the ray points at the globe.
-        target = viewer.camera.pickEllipsoid(windowPosition, scene.globe.ellipsoid) ?? undefined
-      }
-      if (!target) return
-
-      const cameraPosition = viewer.camera.position
-      const distance = Cesium.Cartesian3.distance(cameraPosition, target)
-      const factor = e.deltaY < 0 ? 0.8 : 1.25
-      const controller = scene.screenSpaceCameraController
-      const newDistance = Cesium.Math.clamp(distance * factor, controller.minimumZoomDistance, controller.maximumZoomDistance)
-      const moveAmount = distance - newDistance
-
-      const direction = Cesium.Cartesian3.subtract(target, cameraPosition, new Cesium.Cartesian3())
-      Cesium.Cartesian3.normalize(direction, direction)
-      const offset = Cesium.Cartesian3.multiplyByScalar(direction, moveAmount, new Cesium.Cartesian3())
-      viewer.camera.position = Cesium.Cartesian3.add(cameraPosition, offset, new Cesium.Cartesian3())
-    }
-    canvas.addEventListener('wheel', onWheel, { passive: false })
-
     onViewerReady?.(viewer)
     setLoading(false)
 
     return () => {
-      canvas.removeEventListener('wheel', onWheel)
       viewer.scene.postRender.removeEventListener(updateHeading)
       handler.destroy()
       viewer.destroy()
