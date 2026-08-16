@@ -80,7 +80,7 @@ export function KPIPanel({ viewerRef, joints }: { viewerRef: React.RefObject<Ces
   ]
 
   return (
-    <div className="glass-panel flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl p-3.5">
+    <div className="glass-panel flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl p-3.5">
       <div>
         <button
           onClick={() => fileInputRef.current?.click()}

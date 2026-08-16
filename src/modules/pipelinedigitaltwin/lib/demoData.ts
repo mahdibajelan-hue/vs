@@ -19,7 +19,11 @@ export function generateDemoRoute(): Route {
     const stepDeg = 0.0075
     lon += Math.cos(heading) * stepDeg
     lat += Math.sin(heading) * stepDeg * 0.75
-    const elevation = 1250 + Math.sin(i * 0.22) * 90 + i * 1.1
+    // Kept modest (tens of meters, not hundreds) on purpose: terrain is a flat WGS84 ellipsoid in
+    // this MVP (no ion/DEM access), so a route floating far above it makes Cesium's default
+    // wheel-zoom — which targets the ellipsoid surface under the cursor, not the route geometry —
+    // fly the camera straight past the pipe in one or two scroll ticks, making it vanish.
+    const elevation = 40 + Math.sin(i * 0.22) * 25 + i * 0.3
     points.push({ lon, lat, elevation })
   }
   return {
