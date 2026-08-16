@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Joint, JointFinalStatus, JointStatusField, Pipe, Route } from '../types'
+import type { Joint, JointFinalStatus, JointStatusField, Pipe, ProjectPhase, Route } from '../types'
 import { DEMO_PIPE, DEMO_PROJECT_CREATED_AT, generateDemoJoints, generateDemoRoute } from '../lib/demoData'
 import { generateJointsForRoute } from '../lib/jointGeneration'
 import { deriveFinalStatus } from '../lib/progressEngine'
@@ -12,6 +12,7 @@ interface PdtState {
   projectName: string
   englishTag: string
   projectCreatedAt: string
+  projectPhase: ProjectPhase
   route: Route
   pipe: Pipe
   joints: Joint[]
@@ -29,6 +30,7 @@ interface PdtState {
   updateJointField: (jointId: string, field: JointStatusField | 'notes', value: string) => void
   setScrubDate: (iso: string | null) => void
   setStatusFilter: (f: JointFinalStatus | 'all') => void
+  setProjectPhase: (p: ProjectPhase) => void
 }
 
 const initialDemoRoute = generateDemoRoute()
@@ -37,6 +39,7 @@ export const usePdtStore = create<PdtState>()((set, get) => ({
   projectName: 'IGAT-XX Demo Pipeline',
   englishTag: 'Pipeline Digital Twin',
   projectCreatedAt: DEMO_PROJECT_CREATED_AT,
+  projectPhase: 'construction',
   route: initialDemoRoute,
   pipe: DEMO_PIPE,
   joints: generateDemoJoints(initialDemoRoute),
@@ -97,4 +100,5 @@ export const usePdtStore = create<PdtState>()((set, get) => ({
 
   setScrubDate: (iso) => set({ scrubDate: iso }),
   setStatusFilter: (f) => set({ statusFilter: f }),
+  setProjectPhase: (p) => set({ projectPhase: p }),
 }))

@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import { Loader2 } from 'lucide-react'
+import { Home, Layers, Loader2, LocateFixed } from 'lucide-react'
 import type { Joint, JointFinalStatus, Pipe, Route } from '../types'
 import { cumulativeDistances, pointAtChainage, sliceRoutePoints } from '../lib/chainage'
 import { computeProgressSpans } from '../lib/routeSegments'
 import { FINAL_STATUS_COLOR } from '../lib/progressEngine'
 
 // No Cesium ion account for this MVP (per spec: mock/offline terrain, no token dependency) — so
-// imagery comes from OpenStreetMap (free, no key) and terrain is a flat WGS84 ellipsoid rather
-// than a real elevation mesh. An imported KMZ/KML's own per-point elevation still draws correctly
-// (the route sits at its real height above the flat ellipsoid); what's missing is the ground
-// surface itself bulging to match — that needs a real terrain dataset, a later phase once
-// ion/DEM access is available.
+// terrain is a flat WGS84 ellipsoid rather than a real elevation mesh (an imported KMZ/KML's own
+// per-point elevation still draws correctly; what's missing is the ground surface itself bulging
+// to match — that needs a real terrain dataset, a later phase once ion/DEM access is available).
+// Imagery comes from two free, token-free public tile services instead of Cesium ion: OpenStreetMap
+// streets, and Esri's public World Imagery REST endpoint for satellite view (the older MapServer
+// REST API, not the newer ion-gated ArcGIS Basemap Styles service).
 Cesium.Ion.defaultAccessToken = ''
+
+const OSM_URL = 'https://tile.openstreetmap.org/'
+const ESRI_SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+
+type ImageryStyle = 'satellite' | 'street'
 
 const INCH_TO_METER = 0.0254
 const CROSS_SECTION_SIDES = 16
@@ -46,23 +52,31 @@ interface PipelineViewerProps {
  * (cheap for the thousands of joints a real multi-km route generates at one per pipe-stock-length) —
  * both rebuilt whenever the route or joint statuses change.
  */
+function imageryProviderPromise(style: ImageryStyle): Promise<Cesium.ImageryProvider> {
+  return style === 'satellite'
+    ? Cesium.ArcGisMapServerImageryProvider.fromUrl(ESRI_SATELLITE_URL)
+    : Promise.resolve(new Cesium.OpenStreetMapImageryProvider({ url: OSM_URL }))
+}
+
 export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady }: PipelineViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const pointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
   const hasFlownRef = useRef(false)
   const [loading, setLoading] = useState(true)
+  const [imageryStyle, setImageryStyle] = useState<ImageryStyle>('satellite')
+  const [headingDeg, setHeadingDeg] = useState(0)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     const viewer = new Cesium.Viewer(container, {
-      baseLayer: new Cesium.ImageryLayer(new Cesium.OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/' })),
+      baseLayer: Cesium.ImageryLayer.fromProviderAsync(imageryProviderPromise('satellite')),
       terrainProvider: new Cesium.EllipsoidTerrainProvider(),
       baseLayerPicker: false,
       geocoder: false,
-      homeButton: true,
+      homeButton: false,
       sceneModePicker: false,
       navigationHelpButton: false,
       animation: false,
@@ -70,7 +84,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
-      creditContainer: document.createElement('div'), // keep the OSM attribution out of the viewport; still required to exist somewhere per OSM's tile usage policy — see the small credit line rendered in the panel below instead.
+      creditContainer: document.createElement('div'), // keep the imagery attribution out of the viewport; still required to exist somewhere per OSM/Esri's tile usage policy — see the small credit line rendered in the panel below instead.
     })
     viewer.scene.globe.enableLighting = false
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#11151c')
@@ -84,10 +98,15 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       onSelectJoint(typeof id === 'string' ? id : null)
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 
+    // Real compass — reflects the camera's actual bearing every frame, not a decorative fixed icon.
+    const updateHeading = () => setHeadingDeg(Cesium.Math.toDegrees(viewer.camera.heading))
+    viewer.scene.postRender.addEventListener(updateHeading)
+
     onViewerReady?.(viewer)
     setLoading(false)
 
     return () => {
+      viewer.scene.postRender.removeEventListener(updateHeading)
       handler.destroy()
       viewer.destroy()
       viewerRef.current = null
@@ -95,6 +114,31 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const flyHome = () => {
+    const viewer = viewerRef.current
+    if (viewer) viewer.flyTo(viewer.entities, { duration: 1 })
+  }
+
+  const toggleImagery = async () => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    const next: ImageryStyle = imageryStyle === 'satellite' ? 'street' : 'satellite'
+    setImageryStyle(next)
+    const layer = Cesium.ImageryLayer.fromProviderAsync(imageryProviderPromise(next))
+    viewer.imageryLayers.removeAll(true)
+    viewer.imageryLayers.add(layer)
+  }
+
+  const locateSelected = () => {
+    const viewer = viewerRef.current
+    if (!viewer || !selectedJointId) return
+    const cumulative = cumulativeDistances(route.points)
+    const joint = joints.find((j) => j.id === selectedJointId)
+    if (!joint) return
+    const p = pointAtChainage(route.points, cumulative, joint.chainageMeters)
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 400), duration: 1 })
+  }
 
   // A genuinely new route (e.g. a fresh KMZ import) should re-fly the camera once; a joint-status
   // edit on the same route should not yank the view away from what the user is looking at.
@@ -166,7 +210,29 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
           <Loader2 size={26} className="animate-spin text-brand-400" />
         </div>
       )}
-      <span className="pointer-events-none absolute bottom-1.5 left-2 z-10 text-[9px] text-white/40">© OpenStreetMap contributors</span>
+
+      <div
+        className="pointer-events-none absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,14,20,0.75)] text-[9px] font-bold text-white/80 backdrop-blur-md"
+        title="جهت شمال"
+      >
+        <span style={{ transform: `rotate(${-headingDeg}deg)`, transition: 'transform 0.1s linear' }}>N</span>
+      </div>
+
+      <div className="absolute right-3 top-14 z-10 flex flex-col overflow-hidden rounded-xl border border-white/15 bg-[rgba(10,14,20,0.75)] backdrop-blur-md">
+        <button onClick={flyHome} title="بازگشت به نمای کامل مسیر" className="border-b border-white/10 p-2 text-white/80 hover:bg-white/10">
+          <Home size={14} />
+        </button>
+        <button onClick={toggleImagery} title="تغییر نوع تصویر (ماهواره‌ای/خیابانی)" className="border-b border-white/10 p-2 text-white/80 hover:bg-white/10">
+          <Layers size={14} />
+        </button>
+        <button onClick={locateSelected} disabled={!selectedJointId} title="پرواز به سرجوش انتخاب‌شده" className="p-2 text-white/80 hover:bg-white/10 disabled:opacity-30">
+          <LocateFixed size={14} />
+        </button>
+      </div>
+
+      <span className="pointer-events-none absolute bottom-1.5 left-2 z-10 text-[9px] text-white/40">
+        {imageryStyle === 'satellite' ? '© Esri, Maxar, Earthstar Geographics' : '© OpenStreetMap contributors'}
+      </span>
     </div>
   )
 }

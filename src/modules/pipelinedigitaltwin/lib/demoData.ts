@@ -36,6 +36,8 @@ export const DEMO_PIPE: Pipe = {
   diameterInch: 30,
   wallThicknessMm: 9.5,
   material: 'API 5L X60',
+  designPressureBar: 100,
+  fluidType: 'گاز طبیعی',
 }
 
 /** The demo project's fictional "project start" — 45 days before this module was loaded, purely so Timeline scrubbing has a real (if synthetic) date range to move across. */

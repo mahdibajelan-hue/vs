@@ -66,7 +66,11 @@ export interface Pipe {
   diameterInch: number
   wallThicknessMm: number
   material: string
+  designPressureBar: number
+  fluidType: string
 }
+
+export type ProjectPhase = 'design' | 'procurement' | 'construction' | 'commissioning'
 
 /** Not yet populated (later phase). */
 export interface Valve {
