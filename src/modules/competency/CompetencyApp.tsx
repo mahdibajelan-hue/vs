@@ -13,8 +13,9 @@ type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: strin
 
 /**
  * Competency Assessment — structured interview/scoring tool for evaluating gas transmission
- * pipeline construction project manager candidates across 7 fixed competency domains
- * (see lib/competencyModel.ts), producing a radar-chart report per candidate.
+ * pipeline construction project manager candidates across 8 weighted competency domains plus a
+ * closing capstone scenario (see lib/competencyModel.ts), with multi-interviewer panel scoring,
+ * candidate self-service profile intake, and a radar-chart report per candidate.
  */
 export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const loading = useCompetencyStore((s) => s.loading)

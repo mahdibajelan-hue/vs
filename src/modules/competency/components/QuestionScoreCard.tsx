@@ -4,13 +4,16 @@ import type { CompetencyAnswer, CompetencyQuestion } from '../types'
 interface QuestionScoreCardProps {
   index: number
   question: CompetencyQuestion
+  hint?: string
   answer: CompetencyAnswer | undefined
   editable: boolean
   onChange: (score: number | null, note: string) => void
+  /** Optional side-note shown next to the score row (e.g. "میانگین داوران: ۳٫۲"). */
+  averageHint?: string
 }
 
-/** One interview question with a 1-5 score picker and an optional note — the interviewer reads the question aloud, listens to the candidate, then records the score here. */
-export function QuestionScoreCard({ index, question, answer, editable, onChange }: QuestionScoreCardProps) {
+/** One interview question with a 0-5 score picker and an optional note — the interviewer reads the question aloud, listens to the candidate, then records the score here. */
+export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, averageHint }: QuestionScoreCardProps) {
   const score = answer?.score ?? null
   const note = answer?.note ?? ''
 
@@ -20,8 +23,9 @@ export function QuestionScoreCard({ index, question, answer, editable, onChange 
         <span className="num ml-1.5 text-muted">{index + 1}.</span>
         {question.text}
       </p>
+      {hint && <p className="mt-1 text-[10.5px] leading-5 text-muted">راهنمای پاسخ ممتاز: {hint}</p>}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {[1, 2, 3, 4, 5].map((s) => (
+        {[0, 1, 2, 3, 4, 5].map((s) => (
           <button
             key={s}
             type="button"
@@ -35,7 +39,8 @@ export function QuestionScoreCard({ index, question, answer, editable, onChange 
             {s}
           </button>
         ))}
-        <span className="mr-1 text-[10px] text-muted">{score ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
+        <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
+        {averageHint && <span className="mr-auto text-[10px] text-brand-300">{averageHint}</span>}
       </div>
       {editable ? (
         <textarea

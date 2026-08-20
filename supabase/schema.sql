@@ -3318,44 +3318,197 @@ create index if not exists idx_spools_line on spools (line_id);
 -- ============================================================================
 -- 19. Competency Assessment module — structured interview/evaluation tool for
 --     gas transmission pipeline construction project manager candidates: take
---     a candidate profile, score answers across a fixed set of competency
---     domains (defined in application code, not this schema — see
---     src/modules/competency/lib/competencyModel.ts), and compute domain +
---     overall scores from those answers for a radar-chart report.
+--     a full candidate profile (with employment/insurance/education history and
+--     document attachments), let a multi-person interview panel each score the
+--     candidate independently across a fixed set of weighted competency domains
+--     (defined in application code, not this schema — see
+--     src/modules/competency/lib/competencyModel.ts), show the panel average to
+--     the interview lead who then records one final score with their own
+--     judgment, and produce a weighted domain + overall maturity report.
 --
 --     Interview records are sensitive HR content, so — unlike the
 --     project-membership-scoped modules above — visibility here is private to
---     whoever ran the interview (created_by = auth.uid()) plus admins, not
---     shared with every project member. created_by defaults to auth.uid()
---     server-side (never client-supplied) per BL-09.
+--     whoever ran the interview (created_by = auth.uid()), the panelists
+--     assigned to that specific interview, and admins — not shared with every
+--     project member. created_by defaults to auth.uid() server-side (never
+--     client-supplied) per BL-09.
 -- ============================================================================
 
 create table if not exists comp_assessments (
   id uuid primary key default gen_random_uuid(),
   candidate_name text not null,
   candidate_position text not null default '',
+  candidate_national_id text not null default '',
+  candidate_phone text not null default '',
+  candidate_email text not null default '',
+  photo_url text not null default '',
   years_experience_total numeric,
   years_experience_pipeline numeric,
   current_employer text not null default '',
-  education text not null default '',
-  certifications text not null default '',
+  -- Structured repeatable history — arrays of objects (see competencyData.ts for the exact shape
+  -- of each entry). Kept as JSONB rather than child tables since entries are always read/written
+  -- as a whole list with the rest of the profile, never queried independently.
+  education jsonb not null default '[]'::jsonb,
+  employment_history jsonb not null default '[]'::jsonb,
+  certifications jsonb not null default '[]'::jsonb,
   notable_projects text not null default '',
   interview_date date not null default current_date,
   status text not null default 'draft' check (status in ('draft', 'completed')),
-  -- Keyed by question key (see competencyModel.ts), value {"score": 1-5, "note": "..."}.
-  -- The question set itself lives in application code, not a DB table, since it's a fixed,
-  -- versioned rubric rather than user-defined content.
+  -- The interview lead's FINAL scoring pass — keyed by question key (see competencyModel.ts),
+  -- value {"score": 0-5, "note": "..."}. Individual panelists score independently in
+  -- comp_panelist_scores below; the lead reviews the panel average and records their own final
+  -- judgment here. The question set itself lives in application code, not a DB table, since it's
+  -- a fixed, versioned rubric rather than user-defined content.
   answers jsonb not null default '{}'::jsonb,
+  capstone_score int check (capstone_score is null or capstone_score between 0 and 5),
+  capstone_note text not null default '',
+  -- Qualification scorecard (item 5 of the spec): four manually-judged components alongside the
+  -- auto-derived interview score, each 0-5. Nullable = not yet judged.
+  education_score numeric check (education_score is null or education_score between 0 and 5),
+  experience_score numeric check (experience_score is null or experience_score between 0 and 5),
+  pm_training_score numeric check (pm_training_score is null or pm_training_score between 0 and 5),
+  pm_certification_score numeric check (pm_certification_score is null or pm_certification_score between 0 and 5),
+  -- Self-service candidate link: an unguessable capability token. Whoever holds the link (sent
+  -- privately by the interview lead) can fill in their own profile/documents without a RASTA
+  -- login — see the comp_self_service_* functions below, which are the ONLY write path for that
+  -- token (never a direct table grant), so a leaked token can only ever touch this one row.
+  self_service_token uuid not null default gen_random_uuid(),
+  self_service_status text not null default 'not_sent' check (self_service_status in ('not_sent', 'pending', 'submitted', 'reviewed')),
+  reviewed_by uuid references profiles (id),
+  reviewed_at timestamptz,
   created_by uuid not null default auth.uid() references profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+-- Migrate pre-existing free-text education/certifications columns (from the module's first
+-- version) into the new structured jsonb shape, wrapping any existing text as a single note entry
+-- so nothing is silently dropped.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'comp_assessments' and column_name = 'education' and data_type = 'text') then
+    alter table comp_assessments alter column education drop default;
+    alter table comp_assessments alter column education type jsonb using (
+      case when education is null or education = '' then '[]'::jsonb
+      else jsonb_build_array(jsonb_build_object('id', gen_random_uuid()::text, 'degree', education, 'field', '', 'institution', '', 'year', '')) end
+    );
+    alter table comp_assessments alter column education set default '[]'::jsonb;
+    alter table comp_assessments alter column education set not null;
+  end if;
+  if exists (select 1 from information_schema.columns where table_name = 'comp_assessments' and column_name = 'certifications' and data_type = 'text') then
+    alter table comp_assessments alter column certifications drop default;
+    alter table comp_assessments alter column certifications type jsonb using (
+      case when certifications is null or certifications = '' then '[]'::jsonb
+      else jsonb_build_array(jsonb_build_object('id', gen_random_uuid()::text, 'title', certifications, 'issuer', '', 'date', '', 'isPmp', false)) end
+    );
+    alter table comp_assessments alter column certifications set default '[]'::jsonb;
+    alter table comp_assessments alter column certifications set not null;
+  end if;
+end $$;
+
+alter table comp_assessments add column if not exists candidate_national_id text not null default '';
+alter table comp_assessments add column if not exists candidate_phone text not null default '';
+alter table comp_assessments add column if not exists candidate_email text not null default '';
+alter table comp_assessments add column if not exists photo_url text not null default '';
+alter table comp_assessments add column if not exists employment_history jsonb not null default '[]'::jsonb;
+alter table comp_assessments add column if not exists capstone_score int;
+alter table comp_assessments add column if not exists capstone_note text not null default '';
+alter table comp_assessments add column if not exists education_score numeric;
+alter table comp_assessments add column if not exists experience_score numeric;
+alter table comp_assessments add column if not exists pm_training_score numeric;
+alter table comp_assessments add column if not exists pm_certification_score numeric;
+alter table comp_assessments add column if not exists self_service_token uuid not null default gen_random_uuid();
+alter table comp_assessments add column if not exists self_service_status text not null default 'not_sent';
+alter table comp_assessments add column if not exists reviewed_by uuid references profiles (id);
+alter table comp_assessments add column if not exists reviewed_at timestamptz;
+
+create unique index if not exists idx_comp_assessments_self_service_token on comp_assessments (self_service_token);
+
 alter table comp_assessments enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_assessments;
+create trigger trg_set_updated_at before update on comp_assessments
+  for each row execute function set_updated_at();
+
+create index if not exists idx_comp_assessments_created_by on comp_assessments (created_by);
+
+-- ----------------------------------------------------------------------------
+-- Interview panel: who is assigned to score a given candidate, and each
+-- panelist's own independent scoring pass (kept separate from comp_assessments.
+-- answers, which is the lead's final record).
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_panelists (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  user_id uuid not null references profiles (id),
+  is_lead boolean not null default false,
+  added_by uuid not null default auth.uid() references profiles (id),
+  created_at timestamptz not null default now(),
+  unique (assessment_id, user_id)
+);
+
+alter table comp_panelists enable row level security;
+
+create table if not exists comp_panelist_scores (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  panelist_id uuid not null default auth.uid() references profiles (id),
+  answers jsonb not null default '{}'::jsonb,
+  capstone_score int check (capstone_score is null or capstone_score between 0 and 5),
+  capstone_note text not null default '',
+  submitted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (assessment_id, panelist_id)
+);
+
+alter table comp_panelist_scores enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_panelist_scores;
+create trigger trg_set_updated_at before update on comp_panelist_scores
+  for each row execute function set_updated_at();
+
+-- ----------------------------------------------------------------------------
+-- Candidate documents: resume, education/certification scans, national ID,
+-- insurance records, etc. Uploaded either by interview staff or, via the
+-- self-service RPC functions further below, by the candidate themselves.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_attachments (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  kind text not null default 'other' check (kind in ('resume', 'education', 'certification', 'national_id', 'insurance', 'other')),
+  file_name text not null,
+  storage_path text not null,
+  uploaded_by uuid references profiles (id),
+  uploaded_by_candidate boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table comp_attachments enable row level security;
+
+-- ----------------------------------------------------------------------------
+-- comp_can_access_assessment: shared visibility check for everything above —
+-- the interview lead (created_by), an admin, or any assigned panelist. Security
+-- definer so it can read comp_assessments/comp_panelists without recursing into
+-- their own RLS policies (same pattern as is_project_member() etc. above).
+-- ----------------------------------------------------------------------------
+
+create or replace function comp_can_access_assessment(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or is_admin_user())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid()
+  );
+$$ language sql security definer stable;
 
 drop policy if exists "comp_assessments_select_own" on comp_assessments;
 create policy "comp_assessments_select_own" on comp_assessments
-  for select using (created_by = auth.uid() or is_admin_user());
+  for select using (comp_can_access_assessment(id));
 
 drop policy if exists "comp_assessments_insert_own" on comp_assessments;
 create policy "comp_assessments_insert_own" on comp_assessments
@@ -3369,11 +3522,176 @@ drop policy if exists "comp_assessments_delete_own" on comp_assessments;
 create policy "comp_assessments_delete_own" on comp_assessments
   for delete using (created_by = auth.uid() or is_admin_user());
 
-drop trigger if exists trg_set_updated_at on comp_assessments;
-create trigger trg_set_updated_at before update on comp_assessments
-  for each row execute function set_updated_at();
+drop policy if exists "comp_panelists_select" on comp_panelists;
+create policy "comp_panelists_select" on comp_panelists
+  for select using (comp_can_access_assessment(assessment_id));
 
-create index if not exists idx_comp_assessments_created_by on comp_assessments (created_by);
+drop policy if exists "comp_panelists_insert" on comp_panelists;
+create policy "comp_panelists_insert" on comp_panelists
+  for insert with check (
+    exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or is_admin_user()))
+  );
+
+drop policy if exists "comp_panelists_delete" on comp_panelists;
+create policy "comp_panelists_delete" on comp_panelists
+  for delete using (
+    exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or is_admin_user()))
+  );
+
+drop policy if exists "comp_panelist_scores_select" on comp_panelist_scores;
+create policy "comp_panelist_scores_select" on comp_panelist_scores
+  for select using (comp_can_access_assessment(assessment_id));
+
+drop policy if exists "comp_panelist_scores_insert" on comp_panelist_scores;
+create policy "comp_panelist_scores_insert" on comp_panelist_scores
+  for insert with check (panelist_id = auth.uid() and comp_can_access_assessment(assessment_id));
+
+drop policy if exists "comp_panelist_scores_update" on comp_panelist_scores;
+create policy "comp_panelist_scores_update" on comp_panelist_scores
+  for update using (panelist_id = auth.uid());
+
+drop policy if exists "comp_panelist_scores_delete" on comp_panelist_scores;
+create policy "comp_panelist_scores_delete" on comp_panelist_scores
+  for delete using (
+    panelist_id = auth.uid()
+    or exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or is_admin_user()))
+  );
+
+drop policy if exists "comp_attachments_select" on comp_attachments;
+create policy "comp_attachments_select" on comp_attachments
+  for select using (comp_can_access_assessment(assessment_id));
+
+drop policy if exists "comp_attachments_insert" on comp_attachments;
+create policy "comp_attachments_insert" on comp_attachments
+  for insert with check (comp_can_access_assessment(assessment_id) and uploaded_by_candidate = false);
+
+drop policy if exists "comp_attachments_delete" on comp_attachments;
+create policy "comp_attachments_delete" on comp_attachments
+  for delete using (comp_can_access_assessment(assessment_id));
+
+create index if not exists idx_comp_panelists_assessment on comp_panelists (assessment_id);
+create index if not exists idx_comp_panelist_scores_assessment on comp_panelist_scores (assessment_id);
+create index if not exists idx_comp_attachments_assessment on comp_attachments (assessment_id);
+
+-- ----------------------------------------------------------------------------
+-- Candidate self-service: three SECURITY DEFINER RPC functions are the only
+-- way an unauthenticated candidate (holding the self_service_token link) can
+-- read or write anything. They deliberately expose/accept only candidate-owned
+-- profile fields — never the interview questions, scores, or any other
+-- candidate's row — so granting execute to anon cannot be used to read or
+-- modify anything beyond "my own profile, given my own link".
+-- ----------------------------------------------------------------------------
+
+create or replace function comp_self_service_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  candidate_national_id text,
+  candidate_phone text,
+  candidate_email text,
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text,
+  education jsonb,
+  employment_history jsonb,
+  certifications jsonb,
+  notable_projects text,
+  self_service_status text
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.years_experience_total, a.years_experience_pipeline, a.current_employer,
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status
+  from comp_assessments a
+  where a.self_service_token = p_token;
+$$ language sql security definer stable;
+
+create or replace function comp_self_service_submit(
+  p_token uuid,
+  p_candidate_name text,
+  p_candidate_national_id text,
+  p_candidate_phone text,
+  p_candidate_email text,
+  p_years_experience_total numeric,
+  p_years_experience_pipeline numeric,
+  p_current_employer text,
+  p_education jsonb,
+  p_employment_history jsonb,
+  p_certifications jsonb,
+  p_notable_projects text
+)
+returns void as $$
+  update comp_assessments set
+    candidate_name = coalesce(nullif(p_candidate_name, ''), candidate_name),
+    candidate_national_id = p_candidate_national_id,
+    candidate_phone = p_candidate_phone,
+    candidate_email = p_candidate_email,
+    years_experience_total = p_years_experience_total,
+    years_experience_pipeline = p_years_experience_pipeline,
+    current_employer = p_current_employer,
+    education = p_education,
+    employment_history = p_employment_history,
+    certifications = p_certifications,
+    notable_projects = coalesce(nullif(p_notable_projects, ''), notable_projects),
+    self_service_status = 'submitted'
+  where self_service_token = p_token;
+$$ language sql security definer;
+
+create or replace function comp_self_service_add_attachment(p_token uuid, p_kind text, p_file_name text, p_storage_path text)
+returns void as $$
+  insert into comp_attachments (assessment_id, kind, file_name, storage_path, uploaded_by, uploaded_by_candidate)
+  select a.id, p_kind, p_file_name, p_storage_path, null, true
+  from comp_assessments a where a.self_service_token = p_token;
+$$ language sql security definer;
+
+grant execute on function comp_self_service_get(uuid) to anon, authenticated;
+grant execute on function comp_self_service_submit(uuid, text, text, text, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
+grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Storage bucket for candidate documents. Staff read/write is gated by the
+-- same comp_can_access_assessment() check as the tables above (folder = the
+-- assessment id). Candidate self-service uploads go through a second, narrower
+-- policy: the object path must be "<assessment id>/<token>/<file>" and the
+-- token segment must match that exact assessment's self_service_token, so
+-- holding one candidate's link can never write into another candidate's folder.
+-- ----------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public)
+values ('comp-docs', 'comp-docs', false)
+on conflict (id) do nothing;
+
+drop policy if exists "comp_docs_read_staff" on storage.objects;
+create policy "comp_docs_read_staff" on storage.objects
+  for select using (
+    bucket_id = 'comp-docs'
+    and comp_can_access_assessment(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists "comp_docs_write_staff" on storage.objects;
+create policy "comp_docs_write_staff" on storage.objects
+  for insert with check (
+    bucket_id = 'comp-docs'
+    and comp_can_access_assessment(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists "comp_docs_delete_staff" on storage.objects;
+create policy "comp_docs_delete_staff" on storage.objects
+  for delete using (
+    bucket_id = 'comp-docs'
+    and comp_can_access_assessment(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists "comp_docs_write_candidate" on storage.objects;
+create policy "comp_docs_write_candidate" on storage.objects
+  for insert to anon with check (
+    bucket_id = 'comp-docs'
+    and exists (
+      select 1 from comp_assessments a
+      where a.id::text = (storage.foldername(name))[1]
+        and a.self_service_token::text = (storage.foldername(name))[2]
+    )
+  );
 
 insert into rasta_modules (key, label_fa) values
   ('competency', 'ارزیابی شایستگی')

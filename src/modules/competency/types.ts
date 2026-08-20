@@ -1,16 +1,22 @@
-/** Data model for the Competency Assessment module — a structured interview/scoring tool for gas
- * transmission pipeline construction project manager candidates. The question bank itself lives in
- * lib/competencyModel.ts as a fixed, versioned rubric (not a DB table) — only the candidate's
- * profile and their answers to that fixed rubric are real per-assessment data.
- */
-
-export type CompetencyDomainKey = 'technical' | 'planning' | 'hse' | 'quality' | 'risk' | 'contract' | 'leadership'
+export type CompetencyDomainKey =
+  | 'governance'
+  | 'planning'
+  | 'cost'
+  | 'hse'
+  | 'quality'
+  | 'changeRisk'
+  | 'stakeholder'
+  | 'execution'
 
 export interface CompetencyDomain {
   key: CompetencyDomainKey
   title: string
   shortTitle: string
+  /** Percentage weight in the overall weighted score; the 8 domain weights sum to 100. */
+  weight: number
   description: string
+  /** Shown to interviewers as scoring guidance — what marks an excellent answer in this domain. */
+  excellentAnswerHint: string
 }
 
 export interface CompetencyQuestion {
@@ -19,7 +25,6 @@ export interface CompetencyQuestion {
   text: string
 }
 
-/** score: 1 (ضعیف) to 5 (عالی), or null if not yet answered. */
 export interface CompetencyAnswer {
   score: number | null
   note: string
@@ -28,20 +33,62 @@ export interface CompetencyAnswer {
 export type CompetencyAnswers = Record<string, CompetencyAnswer>
 
 export type AssessmentStatus = 'draft' | 'completed'
+export type SelfServiceStatus = 'not_sent' | 'pending' | 'submitted' | 'reviewed'
+
+export interface EducationEntry {
+  id: string
+  degree: string
+  field: string
+  institution: string
+  year: string
+}
+
+export interface EmploymentEntry {
+  id: string
+  employer: string
+  position: string
+  startDate: string
+  endDate: string
+  insuranceMonths: number | null
+  note: string
+}
+
+export interface CertificationEntry {
+  id: string
+  title: string
+  issuer: string
+  date: string
+  isPmp: boolean
+}
 
 export interface CompetencyAssessment {
   id: string
   candidateName: string
   candidatePosition: string
+  candidateNationalId: string
+  candidatePhone: string
+  candidateEmail: string
+  photoUrl: string
   yearsExperienceTotal: number | null
   yearsExperiencePipeline: number | null
   currentEmployer: string
-  education: string
-  certifications: string
+  education: EducationEntry[]
+  employmentHistory: EmploymentEntry[]
+  certifications: CertificationEntry[]
   notableProjects: string
   interviewDate: string
   status: AssessmentStatus
   answers: CompetencyAnswers
+  capstoneScore: number | null
+  capstoneNote: string
+  educationScore: number | null
+  experienceScore: number | null
+  pmTrainingScore: number | null
+  pmCertificationScore: number | null
+  selfServiceToken: string
+  selfServiceStatus: SelfServiceStatus
+  reviewedBy: string | null
+  reviewedAt: string | null
   createdBy: string | null
   createdAt: string
   updatedAt: string
@@ -51,8 +98,55 @@ export interface DomainScore {
   domain: CompetencyDomain
   answeredCount: number
   totalCount: number
-  /** 1-5 average of answered questions in this domain; null until at least one is answered. */
   averageScore: number | null
-  /** averageScore mapped to 0-100. */
   percentScore: number | null
+}
+
+export interface CompProfileLite {
+  id: string
+  email: string
+  fullName: string
+}
+
+export interface CompPanelist {
+  id: string
+  assessmentId: string
+  userId: string
+  isLead: boolean
+  addedBy: string | null
+  createdAt: string
+}
+
+export interface CompPanelistScore {
+  id: string
+  assessmentId: string
+  panelistId: string
+  answers: CompetencyAnswers
+  capstoneScore: number | null
+  capstoneNote: string
+  submittedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type AttachmentKind = 'resume' | 'education' | 'certification' | 'national_id' | 'insurance' | 'other'
+
+export interface CompAttachment {
+  id: string
+  assessmentId: string
+  kind: AttachmentKind
+  fileName: string
+  storagePath: string
+  uploadedBy: string | null
+  uploadedByCandidate: boolean
+  createdAt: string
+}
+
+export const ATTACHMENT_KIND_LABEL_FA: Record<AttachmentKind, string> = {
+  resume: 'رزومه',
+  education: 'مدرک تحصیلی',
+  certification: 'گواهینامه حرفه‌ای',
+  national_id: 'کارت ملی',
+  insurance: 'سوابق بیمه',
+  other: 'سایر مدارک',
 }

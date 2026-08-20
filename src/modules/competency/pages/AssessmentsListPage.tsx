@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ClipboardList, Plus, Trash2, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent, overallRatingLabel } from '../lib/competencyModel'
+import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
+import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
+import type { CompetencyAssessment } from '../types'
 
 interface AssessmentsListPageProps {
   onOpen: (id: string) => void
@@ -15,7 +17,7 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
   const [confirmId, setConfirmId] = useState<string | null>(null)
 
   return (
-    <div className="mx-auto max-w-4xl p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
       <div className="mb-5 flex items-center justify-between">
         <div>
           <p className="text-lg font-extrabold">مصاحبه‌ها و ارزیابی‌های شایستگی</p>
@@ -35,38 +37,10 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
           </button>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {assessments.map((a) => {
-            const domainScores = computeDomainScores(a.answers)
-            const overall = computeOverallPercent(domainScores)
-            return (
-              <div key={a.id} className="glass-panel flex items-center gap-3 rounded-xl p-3.5">
-                <button onClick={() => onOpen(a.id)} className="flex flex-1 items-center gap-3 text-right">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-300">
-                    <User size={16} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">{a.candidateName}</p>
-                    <p className="truncate text-[11px] text-muted">
-                      {a.candidatePosition} · {formatJalali(a.interviewDate)}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-left">
-                    <p className="num text-base font-extrabold">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</p>
-                    <p className="text-[10px] text-muted">{overall != null ? overallRatingLabel(overall) : 'شروع‌نشده'}</p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${a.status === 'completed' ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}
-                  >
-                    {a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'}
-                  </span>
-                </button>
-                <button onClick={() => setConfirmId(a.id)} title="حذف" className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-300">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )
-          })}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {assessments.map((a) => (
+            <CandidateCard key={a.id} assessment={a} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
+          ))}
         </div>
       )}
 
@@ -92,6 +66,61 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: CompetencyAssessment; onOpen: () => void; onDelete: () => void }) {
+  const domainScores = computeDomainScores(a.answers)
+  const overall = computeOverallPercent(domainScores)
+  const band = maturityBand(overall)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    if (a.photoUrl) getCompDocSignedUrl(a.photoUrl).then((u) => active && setPhotoUrl(u))
+    return () => {
+      active = false
+    }
+  }, [a.photoUrl])
+
+  return (
+    <div className="glass-panel group relative overflow-hidden rounded-2xl transition-transform hover:-translate-y-0.5">
+      <button onClick={onOpen} className="flex w-full flex-col items-center gap-2.5 p-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-brand-400/30 bg-brand-500/10 text-brand-300">
+          {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={24} />}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold">{a.candidateName}</p>
+          <p className="truncate text-[10.5px] text-muted">{a.candidatePosition}</p>
+        </div>
+        <p className="text-[10px] text-muted">{formatJalali(a.interviewDate)}</p>
+        <div className="mt-1 flex items-center gap-2">
+          <span className="num text-xl font-extrabold">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+              overall == null ? 'bg-white/5 text-muted' : overall >= 75 ? 'bg-green-500/15 text-green-300' : overall >= 60 ? 'bg-amber-500/15 text-amber-300' : 'bg-red-500/15 text-red-300'
+            }`}
+          >
+            {band.label}
+          </span>
+        </div>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${a.status === 'completed' ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}
+        >
+          {a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'}
+        </span>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete()
+        }}
+        title="حذف"
+        className="absolute left-2 top-2 rounded-lg p-1.5 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+      >
+        <Trash2 size={13} />
+      </button>
     </div>
   )
 }

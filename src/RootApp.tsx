@@ -14,6 +14,7 @@ import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
+import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -34,6 +35,12 @@ export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
+
+  // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
+  // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
+  // auth-gated rendering below, since it must never require a RASTA login.
+  const candidateToken = new URLSearchParams(window.location.search).get('candidate')
+  if (candidateToken) return <CandidateSelfServicePage token={candidateToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (
