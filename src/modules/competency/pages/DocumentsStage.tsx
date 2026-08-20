@@ -45,7 +45,7 @@ export function DocumentsStage({ assessment }: DocumentsStageProps) {
     <div className="space-y-4">
       <div className="glass-panel space-y-3 rounded-2xl p-4">
         <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Link2 size={14} className="text-brand-300" /> لینک خوداظهاری نامزد
+          <Link2 size={14} className="text-purple-300" /> لینک خوداظهاری نامزد
         </p>
         <p className="text-[11px] leading-5 text-muted">
           این لینک را برای نامزد ارسال کنید تا مشخصات و مدارک خود را مستقیماً ثبت کند؛ تیم مصاحبه‌کننده فقط آن‌ها را بررسی می‌کند.
@@ -60,7 +60,7 @@ export function DocumentsStage({ assessment }: DocumentsStageProps) {
               markSelfServiceSent(assessment.id)
               setTimeout(() => setCopied(false), 2000)
             }}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-brand-400"
+            className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
           >
             <Copy size={12} /> {copied ? 'کپی شد' : 'کپی لینک'}
           </button>
@@ -99,7 +99,7 @@ export function DocumentsStage({ assessment }: DocumentsStageProps) {
 
       <div className="glass-panel space-y-3 rounded-2xl p-4">
         <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Camera size={14} className="text-brand-300" /> عکس پرسنلی
+          <Camera size={14} className="text-purple-300" /> عکس پرسنلی
         </p>
         <div className="flex items-center gap-3">
           <PhotoPreview path={assessment.photoUrl} />
@@ -126,7 +126,7 @@ export function DocumentsStage({ assessment }: DocumentsStageProps) {
 
       <div className="glass-panel space-y-3 rounded-2xl p-4">
         <p className="flex items-center gap-1.5 text-sm font-bold">
-          <FileText size={14} className="text-brand-300" /> مدارک پیوست‌شده
+          <FileText size={14} className="text-purple-300" /> مدارک پیوست‌شده
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <select value={kind} onChange={(e) => setKind(e.target.value as AttachmentKind)} className="input max-w-[12rem]">
@@ -216,7 +216,7 @@ function AttachmentOpenButton({ path }: { path: string }) {
         if (url) window.open(url, '_blank', 'noopener')
       }}
       disabled={loading}
-      className="flex items-center gap-1 text-muted hover:text-brand-300 disabled:opacity-50"
+      className="flex items-center gap-1 text-muted hover:text-purple-300 disabled:opacity-50"
     >
       {loading ? <Loader2 size={12} className="animate-spin" /> : <ExternalLink size={12} />}
     </button>

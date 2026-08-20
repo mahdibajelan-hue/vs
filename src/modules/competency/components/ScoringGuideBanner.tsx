@@ -10,7 +10,7 @@ export function ScoringGuideBanner() {
     <div className="glass-panel rounded-2xl p-3.5">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-xs font-bold">
-          <Info size={13} className="text-brand-300" /> راهنمای امتیازدهی (۰ تا ۵)
+          <Info size={13} className="text-purple-300" /> راهنمای امتیازدهی (۰ تا ۵)
         </span>
         {open ? <ChevronUp size={14} className="text-muted" /> : <ChevronDown size={14} className="text-muted" />}
       </button>
@@ -27,7 +27,7 @@ export function ScoringGuideBanner() {
             <tbody>
               {SCORE_GUIDE.map((g) => (
                 <tr key={g.score} className="border-b border-white/5 last:border-0">
-                  <td className="num py-1.5 pr-2 font-bold text-brand-300">{g.score}</td>
+                  <td className="num py-1.5 pr-2 font-bold text-purple-300">{g.score}</td>
                   <td className="py-1.5 pr-2 font-medium">{g.level}</td>
                   <td className="py-1.5 leading-5 text-secondary">{g.criteria}</td>
                 </tr>

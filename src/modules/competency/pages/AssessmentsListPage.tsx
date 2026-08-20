@@ -23,7 +23,7 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
           <p className="text-lg font-extrabold">مصاحبه‌ها و ارزیابی‌های شایستگی</p>
           <p className="text-xs text-muted">ارزیابی شایستگی مدیران پروژه احداث خطوط لوله انتقال گاز</p>
         </div>
-        <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400 transition-colors">
+        <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
           <Plus size={14} /> مصاحبه جدید
         </button>
       </div>
@@ -32,7 +32,7 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
         <div className="glass-panel flex flex-col items-center gap-2 rounded-2xl p-10 text-center">
           <ClipboardList size={28} className="text-muted" />
           <p className="text-sm text-secondary">هنوز مصاحبه‌ای ثبت نشده است.</p>
-          <button onClick={onNew} className="mt-2 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400">
+          <button onClick={onNew} className="mt-2 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
             شروع اولین مصاحبه
           </button>
         </div>
@@ -87,7 +87,7 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
   return (
     <div className="glass-panel group relative overflow-hidden rounded-2xl transition-transform hover:-translate-y-0.5">
       <button onClick={onOpen} className="flex w-full flex-col items-center gap-2.5 p-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-brand-400/30 bg-brand-500/10 text-brand-300">
+        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
           {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={24} />}
         </div>
         <div className="min-w-0">

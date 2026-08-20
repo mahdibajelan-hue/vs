@@ -65,7 +65,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
       {isLead && (
         <div className="glass-panel rounded-2xl p-4">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-bold">
-            <Users size={14} className="text-brand-300" /> پنل داوران این مصاحبه
+            <Users size={14} className="text-purple-300" /> پنل داوران این مصاحبه
           </p>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
@@ -83,7 +83,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
                 addPanelist(assessmentId, pickUserId, false)
                 setPickUserId('')
               }}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-brand-400 disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
             >
               <UserPlus size={13} /> افزودن داور
             </button>
@@ -122,14 +122,14 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
         <div className="glass-panel rounded-2xl p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold">میانگین امتیاز داوران ({submittedScores.length} داور ثبت‌شده)</p>
-            <span className="num text-sm font-extrabold text-brand-300">{overallAvg != null ? `٪${overallAvg.toLocaleString('fa-IR')}` : '—'}</span>
+            <span className="num text-sm font-extrabold text-purple-300">{overallAvg != null ? `٪${overallAvg.toLocaleString('fa-IR')}` : '—'}</span>
           </div>
           <div className="space-y-1.5">
             {averageDomainScores.map((d) => (
               <div key={d.domain.key} className="flex items-center gap-3">
                 <span className="w-24 shrink-0 text-[11px] text-secondary">{d.domain.shortTitle}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
-                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${d.avg ?? 0}%` }} />
+                  <div className="h-full rounded-full bg-purple-500" style={{ width: `${d.avg ?? 0}%` }} />
                 </div>
                 <span className="num w-10 shrink-0 text-left text-[10px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
               </div>
@@ -172,7 +172,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
             ) : (
               <button
                 onClick={() => submitMyPanelistScore(assessmentId)}
-                className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400"
+                className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
               >
                 <Plus size={14} /> ثبت نهایی امتیاز من
               </button>

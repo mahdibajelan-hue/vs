@@ -65,9 +65,9 @@ export function QualificationStage({ assessment }: QualificationStageProps) {
         />
         <div className="glass-panel flex flex-col justify-between rounded-2xl p-3.5">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
-            <MessageSquareText size={13} /> نتایج مصاحبه (خودکار)
+            <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار)
           </div>
-          <p className="num text-2xl font-extrabold text-brand-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
+          <p className="num text-2xl font-extrabold text-purple-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
           <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
         </div>
       </div>
@@ -79,7 +79,7 @@ function QualificationChip({ icon: Icon, label, value, onChange }: { icon: Lucid
   return (
     <div className="glass-panel rounded-2xl p-3.5">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
-        <Icon size={13} /> {label}
+        <Icon size={13} className="text-purple-300" /> {label}
       </div>
       <div className="flex flex-wrap gap-1">
         {SCORE_OPTIONS.map((s) => (
@@ -88,7 +88,7 @@ function QualificationChip({ icon: Icon, label, value, onChange }: { icon: Lucid
             type="button"
             onClick={() => onChange(value === s ? null : s)}
             className={`num flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-bold transition-colors ${
-              value === s ? 'border-brand-400 bg-brand-500 text-white' : 'border-white/15 text-secondary hover:bg-white/5'
+              value === s ? 'border-purple-400 bg-purple-500 text-white' : 'border-white/15 text-secondary hover:bg-white/5'
             }`}
           >
             {s}

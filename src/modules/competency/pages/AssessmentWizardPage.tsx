@@ -77,7 +77,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             <button
               key={s}
               onClick={() => setStage(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stage === s ? 'bg-brand-500/25 text-brand-300' : 'text-secondary'}`}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
             >
               {STAGE_LABEL[s]}
             </button>
@@ -99,7 +99,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
           <div className="glass-panel space-y-3 rounded-2xl p-5">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
-              <button onClick={() => setEditingProfile(true)} className="flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200">
+              <button onClick={() => setEditingProfile(true)} className="flex items-center gap-1 text-xs text-purple-300 hover:text-purple-200">
                 <Pencil size={12} /> ویرایش
               </button>
             </div>
@@ -157,7 +157,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
                 <p className="text-xs leading-6 text-secondary">{assessment.notableProjects}</p>
               </div>
             )}
-            <button onClick={() => setStage('panel')} className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400">
+            <button onClick={() => setStage('panel')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
               ادامه <ArrowLeft size={13} />
             </button>
           </div>
@@ -187,7 +187,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
                     key={d.key}
                     onClick={() => setDomainIndex(i)}
                     className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                      i === domainIndex ? 'bg-brand-500/25 text-brand-300' : 'bg-white/5 text-secondary hover:bg-white/10'
+                      i === domainIndex ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'
                     }`}
                   >
                     {d.shortTitle}
@@ -234,12 +234,12 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             {!onCapstoneStep ? (
               <button
                 onClick={() => setDomainIndex((i) => i + 1)}
-                className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400"
+                className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
               >
                 {isLastDomain ? 'سناریوی پایانی' : 'حوزه بعد'} <ArrowLeft size={13} />
               </button>
             ) : (
-              <button onClick={() => setStage('qualification')} className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-400">
+              <button onClick={() => setStage('qualification')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
                 کارت امتیاز شایستگی <ArrowLeft size={13} />
               </button>
             )}

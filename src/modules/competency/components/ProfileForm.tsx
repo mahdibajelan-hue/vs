@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
 import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 
 const EMPTY: CandidateProfileInput = {
   candidateName: '',
@@ -67,7 +68,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
                 <input value={form.candidatePosition} onChange={(e) => set('candidatePosition', e.target.value)} className="input" />
               </Field>
               <Field label="تاریخ مصاحبه">
-                <input type="date" value={form.interviewDate} onChange={(e) => set('interviewDate', e.target.value)} className="input num" />
+                <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />
               </Field>
             </>
           )}
@@ -111,7 +112,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
         />
       </Field>
 
-      <button type="submit" className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-400 transition-colors">
+      <button type="submit" className="rounded-xl bg-purple-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-purple-400 transition-colors">
         {submitLabel}
       </button>
     </form>
@@ -123,6 +124,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <label className="block">
       <span className="mb-1 block text-[11px] text-muted">{label}</span>
       {children}
+    </label>
+  )
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] text-muted">{label}</span>
+      <JalaliDateInput value={value} onChange={onChange} />
     </label>
   )
 }
@@ -184,8 +194,8 @@ function EmploymentSection({ value, onChange }: { value: EmploymentEntry[]; onCh
         <RowShell key={e.id} onRemove={() => onChange(value.filter((x) => x.id !== e.id))}>
           <input value={e.employer} onChange={(ev) => update(e.id, { employer: ev.target.value })} className="input" placeholder="کارفرما" />
           <input value={e.position} onChange={(ev) => update(e.id, { position: ev.target.value })} className="input" placeholder="سمت" />
-          <input type="date" value={e.startDate} onChange={(ev) => update(e.id, { startDate: ev.target.value })} className="input num" placeholder="تاریخ شروع همکاری" />
-          <input type="date" value={e.endDate} onChange={(ev) => update(e.id, { endDate: ev.target.value })} className="input num" placeholder="تاریخ قطع همکاری" />
+          <DateField label="تاریخ شروع همکاری" value={e.startDate} onChange={(v) => update(e.id, { startDate: v })} />
+          <DateField label="تاریخ قطع همکاری" value={e.endDate} onChange={(v) => update(e.id, { endDate: v })} />
           <input
             type="number"
             min={0}
@@ -213,7 +223,7 @@ function CertificationSection({ value, onChange }: { value: CertificationEntry[]
         <RowShell key={e.id} onRemove={() => onChange(value.filter((x) => x.id !== e.id))}>
           <input value={e.title} onChange={(ev) => update(e.id, { title: ev.target.value })} className="input" placeholder="عنوان دوره/گواهینامه" />
           <input value={e.issuer} onChange={(ev) => update(e.id, { issuer: ev.target.value })} className="input" placeholder="مرجع صادرکننده" />
-          <input type="date" value={e.date} onChange={(ev) => update(e.id, { date: ev.target.value })} className="input num" placeholder="تاریخ اخذ" />
+          <DateField label="تاریخ اخذ" value={e.date} onChange={(v) => update(e.id, { date: v })} />
           <label className="flex items-center gap-1.5 text-[11px] text-secondary">
             <input type="checkbox" checked={e.isPmp} onChange={(ev) => update(e.id, { isPmp: ev.target.checked })} className="h-3.5 w-3.5" />
             صلاحیت حرفه‌ای مدیریت پروژه (مانند PMP)

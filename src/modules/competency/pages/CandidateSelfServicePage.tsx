@@ -89,7 +89,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}>
-        <Loader2 size={26} className="animate-spin text-brand-400" />
+        <Loader2 size={26} className="animate-spin text-purple-400" />
       </div>
     )
   }
@@ -136,7 +136,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
         <div className="glass-panel space-y-3 rounded-2xl p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold">
-            <FileText size={14} className="text-brand-300" /> پیوست مدارک
+            <FileText size={14} className="text-purple-300" /> پیوست مدارک
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={pendingKind} onChange={(e) => setPendingKind(e.target.value as AttachmentKind)} className="input max-w-[12rem]">

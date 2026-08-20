@@ -33,14 +33,14 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
             onClick={() => onChange(score === s ? null : s, note)}
             title={SCORE_LABELS_FA[s]}
             className={`num flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-bold transition-colors disabled:cursor-default ${
-              score === s ? 'border-brand-400 bg-brand-500 text-white' : 'border-white/15 text-secondary hover:bg-white/5'
+              score === s ? 'border-purple-400 bg-purple-500 text-white' : 'border-white/15 text-secondary hover:bg-white/5'
             }`}
           >
             {s}
           </button>
         ))}
         <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
-        {averageHint && <span className="mr-auto text-[10px] text-brand-300">{averageHint}</span>}
+        {averageHint && <span className="mr-auto text-[10px] text-purple-300">{averageHint}</span>}
       </div>
       {editable ? (
         <textarea
@@ -48,7 +48,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
           onBlur={(e) => onChange(score, e.target.value)}
           rows={1}
           placeholder="یادداشت (اختیاری)…"
-          className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-white/5 p-1.5 text-[11px] outline-none focus:border-brand-400"
+          className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-white/5 p-1.5 text-[11px] outline-none focus:border-purple-400"
         />
       ) : (
         note && <p className="mt-2 text-[11px] text-secondary">{note}</p>

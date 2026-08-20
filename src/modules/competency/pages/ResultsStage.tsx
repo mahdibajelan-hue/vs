@@ -70,7 +70,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           onClick={handleSend}
           disabled={!assessment.candidateEmail}
           title={!assessment.candidateEmail ? 'ابتدا ایمیل نامزد را در بخش مشخصات ثبت کنید' : ''}
-          className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-brand-400 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
         >
           <Mail size={14} /> ارسال به نامزد
         </button>
@@ -87,7 +87,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       <div ref={reportRef} className="space-y-4 rounded-2xl bg-[#0b0f16] p-1">
         {/* Personnel card header */}
         <div className="glass-panel overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 bg-gradient-to-l from-brand-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-center gap-4 bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
             <PhotoBadge path={assessment.photoUrl} />
             <div className="flex-1 text-center sm:text-right">
               <p className="text-lg font-extrabold">{assessment.candidateName}</p>
@@ -99,7 +99,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-center rounded-2xl border border-white/10 bg-black/20 px-6 py-3 text-center">
-              <p className="num text-3xl font-extrabold text-brand-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</p>
+              <p className="num text-3xl font-extrabold text-purple-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</p>
               <p className="mt-0.5 text-[11px] font-bold">{band.label}</p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
             {qualificationChips.map((c) => (
               <div key={c.label} className="rounded-xl border border-white/10 p-2.5 text-center">
-                <p className="num text-lg font-extrabold text-brand-300">{c.value != null ? c.value.toLocaleString('fa-IR') : '—'}</p>
+                <p className="num text-lg font-extrabold text-purple-300">{c.value != null ? c.value.toLocaleString('fa-IR') : '—'}</p>
                 <p className="mt-0.5 text-[10px] text-muted leading-4">{c.label}</p>
               </div>
             ))}
@@ -131,10 +131,10 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           <div className="space-y-3">
             <div className="glass-panel rounded-2xl p-4">
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
-                <Sparkles size={13} className="text-brand-300" /> تفسیر بلوغ و توصیه استفاده
+                <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
               </p>
               <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-brand-500/10 p-2.5 text-[11px] leading-6 text-brand-200">پوزیشن‌های پیشنهادی: {band.suggestedPositions}</p>
+              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">پوزیشن‌های پیشنهادی: {band.suggestedPositions}</p>
             </div>
 
             {assessment.capstoneScore != null && (
@@ -179,7 +179,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
               </span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: `${d.percentScore ?? 0}%` }} />
+                <div className="h-full rounded-full bg-purple-500" style={{ width: `${d.percentScore ?? 0}%` }} />
               </div>
               <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
                 {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
@@ -202,7 +202,7 @@ function PhotoBadge({ path }: { path: string }) {
     }
   }, [path])
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-brand-400/40 bg-white/5">
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
       {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
     </div>
   )
