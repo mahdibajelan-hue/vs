@@ -68,7 +68,8 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const panelists = allPanelists.filter((p) => p.assessmentId === assessmentId)
   const submittedScores = allPanelistScores.filter((p) => p.assessmentId === assessmentId && p.submittedAt)
 
-  const isLead = assessment != null && (assessment.createdBy === myId || isAdmin)
+  const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
+  const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
   const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
   // Interviewers open straight into their own scoring sheet; the lead opens on the final verdict.
   const [stage, setStage] = useState<Stage | null>(null)
@@ -106,6 +107,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
     candidateNationalId: assessment.candidateNationalId,
     candidatePhone: assessment.candidatePhone,
     candidateEmail: assessment.candidateEmail,
+    candidateBirthDate: assessment.candidateBirthDate,
     candidateAge: assessment.candidateAge,
     hasDisability: assessment.hasDisability,
     disabilityNote: assessment.disabilityNote,

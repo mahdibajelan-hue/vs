@@ -48,8 +48,11 @@ export interface EmploymentEntry {
   employer: string
   position: string
   startDate: string
+  /** Empty = still employed there; duration is computed through today. */
   endDate: string
   insuranceMonths: number | null
+  /** Marks this position as pipeline-construction work specifically, so its duration counts toward yearsExperiencePipeline (auto-computed) rather than only the generic career total. */
+  isPipelineRole: boolean
   note: string
 }
 
@@ -68,6 +71,8 @@ export interface CompetencyAssessment {
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string
+  /** Source of truth for age — candidateAge is derived from this and stored alongside it (see profileCalc.ts) rather than typed in directly, so the two can never disagree. */
+  candidateBirthDate: string
   candidateAge: number | null
   hasDisability: boolean
   disabilityNote: string
@@ -94,6 +99,9 @@ export interface CompetencyAssessment {
   reviewedAt: string | null
   /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */
   isApproved: boolean
+  /** Lead's own narrative judgment — distinct from the per-domain strengths/weaknesses derived automatically from question scores (see domainFlags in competencyModel.ts). */
+  strengths: string
+  developmentAreas: string
   createdBy: string | null
   createdAt: string
   updatedAt: string

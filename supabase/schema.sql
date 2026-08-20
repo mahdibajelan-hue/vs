@@ -3428,6 +3428,15 @@ alter table comp_assessments add column if not exists disability_note text not n
 -- status='completed' (which only means the scoring flow was finished, not that the candidate was
 -- approved). Shown as a badge on the candidate's card once set.
 alter table comp_assessments add column if not exists is_approved boolean not null default false;
+-- candidate_age is now derived client-side from this and stored alongside it (not typed manually)
+-- so the two can never disagree; kept as a real column rather than computed-on-read since it's the
+-- field candidates fill in through the self-service form.
+alter table comp_assessments add column if not exists candidate_birth_date date;
+-- Free-text narrative judgment from the assessment lead — distinct from the per-domain
+-- strengths/weaknesses derived automatically from question scores (competencyModel.domainFlags),
+-- which stay score-driven; these are the lead's own words.
+alter table comp_assessments add column if not exists strengths text not null default '';
+alter table comp_assessments add column if not exists development_areas text not null default '';
 
 create unique index if not exists idx_comp_assessments_self_service_token on comp_assessments (self_service_token);
 
@@ -3513,6 +3522,22 @@ returns boolean as $$
   );
 $$ language sql security definer stable;
 
+-- comp_is_lead: who may write the final verdict (comp_assessments) and manage the panel roster —
+-- the assessment's creator, an admin, or whichever single panelist has been explicitly designated
+-- team lead (comp_panelists.is_lead). Designating a lead at assignment time (rather than only ever
+-- trusting created_by) lets the person who actually runs the interview record the final scores
+-- even when someone else set the assessment up.
+create or replace function comp_is_lead(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or is_admin_user())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid() and p.is_lead
+  );
+$$ language sql security definer stable;
+
 drop policy if exists "comp_assessments_select_own" on comp_assessments;
 create policy "comp_assessments_select_own" on comp_assessments
   for select using (comp_can_access_assessment(id));
@@ -3523,7 +3548,7 @@ create policy "comp_assessments_insert_own" on comp_assessments
 
 drop policy if exists "comp_assessments_update_own" on comp_assessments;
 create policy "comp_assessments_update_own" on comp_assessments
-  for update using (created_by = auth.uid() or is_admin_user());
+  for update using (comp_is_lead(id));
 
 drop policy if exists "comp_assessments_delete_own" on comp_assessments;
 create policy "comp_assessments_delete_own" on comp_assessments
@@ -3535,15 +3560,19 @@ create policy "comp_panelists_select" on comp_panelists
 
 drop policy if exists "comp_panelists_insert" on comp_panelists;
 create policy "comp_panelists_insert" on comp_panelists
-  for insert with check (
-    exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or is_admin_user()))
-  );
+  for insert with check (comp_is_lead(assessment_id));
+
+drop policy if exists "comp_panelists_update" on comp_panelists;
+create policy "comp_panelists_update" on comp_panelists
+  for update using (comp_is_lead(assessment_id));
 
 drop policy if exists "comp_panelists_delete" on comp_panelists;
 create policy "comp_panelists_delete" on comp_panelists
-  for delete using (
-    exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or is_admin_user()))
-  );
+  for delete using (comp_is_lead(assessment_id));
+
+-- At most one designated lead per assessment — the client always clears the previous lead before
+-- setting a new one, but this makes that invariant a guarantee rather than a convention.
+create unique index if not exists idx_comp_panelists_one_lead on comp_panelists (assessment_id) where is_lead;
 
 drop policy if exists "comp_panelist_scores_select" on comp_panelist_scores;
 create policy "comp_panelist_scores_select" on comp_panelist_scores
@@ -3589,13 +3618,15 @@ create index if not exists idx_comp_attachments_assessment on comp_attachments (
 -- modify anything beyond "my own profile, given my own link".
 -- ----------------------------------------------------------------------------
 
--- Both functions below changed shape when candidate_age/has_disability/disability_note were
--- added (a new OUT column set for _get, three new parameters for _submit). Postgres cannot
--- CREATE OR REPLACE across either change — it refuses the return-type change outright, and it
--- would leave the old _submit as a stale overload — so the previous signatures are dropped
--- first. Safe to re-run: these are stateless SQL functions, no data lives in them.
+-- Both functions below have changed shape more than once — new OUT columns for _get, new
+-- parameters for _submit — and Postgres cannot CREATE OR REPLACE across either change (it refuses
+-- the return-type change outright, and a changed parameter list would leave the old _submit behind
+-- as a stale overload instead of replacing it). Every prior signature this function has ever had is
+-- dropped first, so this file stays re-runnable no matter which shape is currently live. Safe: these
+-- are stateless SQL functions, no data lives in them.
 drop function if exists comp_self_service_get(uuid);
 drop function if exists comp_self_service_submit(uuid, text, text, text, text, numeric, numeric, text, jsonb, jsonb, jsonb, text);
+drop function if exists comp_self_service_submit(uuid, text, text, text, text, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text);
 
 create or replace function comp_self_service_get(p_token uuid)
 returns table (
@@ -3605,6 +3636,7 @@ returns table (
   candidate_national_id text,
   candidate_phone text,
   candidate_email text,
+  candidate_birth_date date,
   candidate_age int,
   has_disability boolean,
   disability_note text,
@@ -3618,7 +3650,7 @@ returns table (
   self_service_status text
 ) as $$
   select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
-         a.candidate_age, a.has_disability, a.disability_note,
+         a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
          a.years_experience_total, a.years_experience_pipeline, a.current_employer,
          a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status
   from comp_assessments a
@@ -3631,6 +3663,7 @@ create or replace function comp_self_service_submit(
   p_candidate_national_id text,
   p_candidate_phone text,
   p_candidate_email text,
+  p_candidate_birth_date date,
   p_candidate_age int,
   p_has_disability boolean,
   p_disability_note text,
@@ -3648,6 +3681,7 @@ returns void as $$
     candidate_national_id = p_candidate_national_id,
     candidate_phone = p_candidate_phone,
     candidate_email = p_candidate_email,
+    candidate_birth_date = p_candidate_birth_date,
     candidate_age = p_candidate_age,
     has_disability = p_has_disability,
     disability_note = p_disability_note,
@@ -3670,7 +3704,7 @@ returns void as $$
 $$ language sql security definer;
 
 grant execute on function comp_self_service_get(uuid) to anon, authenticated;
-grant execute on function comp_self_service_submit(uuid, text, text, text, text, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
+grant execute on function comp_self_service_submit(uuid, text, text, text, text, date, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
 grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
 
 -- ----------------------------------------------------------------------------

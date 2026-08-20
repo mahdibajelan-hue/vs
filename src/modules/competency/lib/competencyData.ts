@@ -20,6 +20,7 @@ export interface CompAssessmentRow {
   candidate_national_id: string
   candidate_phone: string
   candidate_email: string
+  candidate_birth_date: string | null
   candidate_age: number | null
   has_disability: boolean
   disability_note: string
@@ -45,6 +46,8 @@ export interface CompAssessmentRow {
   reviewed_by: string | null
   reviewed_at: string | null
   is_approved: boolean
+  strengths: string
+  development_areas: string
   created_by: string | null
   created_at: string
   updated_at: string
@@ -58,6 +61,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     candidateNationalId: r.candidate_national_id,
     candidatePhone: r.candidate_phone,
     candidateEmail: r.candidate_email,
+    candidateBirthDate: r.candidate_birth_date ?? '',
     candidateAge: r.candidate_age,
     hasDisability: r.has_disability,
     disabilityNote: r.disability_note ?? '',
@@ -83,6 +87,8 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     reviewedBy: r.reviewed_by,
     reviewedAt: r.reviewed_at,
     isApproved: r.is_approved,
+    strengths: r.strengths ?? '',
+    developmentAreas: r.development_areas ?? '',
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

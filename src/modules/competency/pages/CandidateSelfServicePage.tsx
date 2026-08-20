@@ -13,6 +13,7 @@ interface SelfServiceRow {
   candidate_national_id: string
   candidate_phone: string
   candidate_email: string
+  candidate_birth_date: string | null
   candidate_age: number | null
   has_disability: boolean
   disability_note: string
@@ -39,7 +40,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [row, setRow] = useState<SelfServiceRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [uploadedKinds, setUploadedKinds] = useState<string[]>([])
   const [uploading, setUploading] = useState<AttachmentKind | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -50,7 +53,15 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       .rpc('comp_self_service_get', { p_token: token })
       .then(({ data, error }) => {
         setLoading(false)
-        if (error || !data || data.length === 0) {
+        if (error) {
+          setNotFound(true)
+          // Surfaced only in the "جزئیات فنی" disclosure below — this is the one place that can
+          // tell us WHY the link failed (wrong/rolled-back schema, revoked grant, bad token) instead
+          // of leaving both of us guessing at "invalid or expired" again.
+          setLoadErrorDetail(`${error.code ?? ''} ${error.message}`.trim())
+          return
+        }
+        if (!data || data.length === 0) {
           setNotFound(true)
           return
         }
@@ -62,12 +73,14 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   }, [token])
 
   const handleSubmit = async (profile: CandidateProfileInput) => {
+    setSubmitError(null)
     const { error } = await supabase.rpc('comp_self_service_submit', {
       p_token: token,
       p_candidate_name: profile.candidateName,
       p_candidate_national_id: profile.candidateNationalId,
       p_candidate_phone: profile.candidatePhone,
       p_candidate_email: profile.candidateEmail,
+      p_candidate_birth_date: profile.candidateBirthDate || null,
       p_candidate_age: profile.candidateAge,
       p_has_disability: profile.hasDisability,
       p_disability_note: profile.disabilityNote,
@@ -79,7 +92,11 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       p_certifications: profile.certifications,
       p_notable_projects: profile.notableProjects,
     })
-    if (!error) setSubmitted(true)
+    if (error) {
+      setSubmitError(`${error.code ?? ''} ${error.message}`.trim())
+      return
+    }
+    setSubmitted(true)
   }
 
   const handleUpload = async (file: File) => {
@@ -94,7 +111,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}>
+      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
         <Loader2 size={26} className="animate-spin text-purple-400" />
       </div>
     )
@@ -102,8 +119,18 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
   if (notFound || !row) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)' }}>
-        <p className="text-sm text-secondary">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
+      <div className="flex h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+        <div className="max-w-sm">
+          <p className="text-sm text-secondary">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
+          {loadErrorDetail && (
+            <details className="mt-3 text-right text-[10px] text-muted">
+              <summary className="cursor-pointer">جزئیات فنی</summary>
+              <p dir="ltr" className="mt-1 break-all rounded-lg bg-black/20 p-2">
+                {loadErrorDetail}
+              </p>
+            </details>
+          )}
+        </div>
       </div>
     )
   }
@@ -114,6 +141,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     candidateNationalId: row.candidate_national_id,
     candidatePhone: row.candidate_phone,
     candidateEmail: row.candidate_email,
+    candidateBirthDate: row.candidate_birth_date ?? '',
     candidateAge: row.candidate_age,
     hasDisability: row.has_disability,
     disabilityNote: row.disability_note ?? '',
@@ -128,7 +156,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)' }}>
+    <div className="min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="glass-panel rounded-2xl p-4 text-center">
           <p className="text-sm font-bold">فرم ثبت مشخصات نامزد — ارزیابی شایستگی RASTA</p>
@@ -138,6 +166,18 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         {submitted && (
           <div className="glass-panel flex items-center gap-2 rounded-2xl border border-green-400/25 bg-green-500/[0.05] p-4 text-xs text-green-300">
             <CheckCircle2 size={16} /> اطلاعات شما ثبت شد. می‌توانید در صورت نیاز دوباره فرم را تکمیل و ثبت کنید یا مدارک بیشتری پیوست نمایید.
+          </div>
+        )}
+
+        {submitError && (
+          <div className="glass-panel rounded-2xl border border-red-400/25 bg-red-500/[0.05] p-4 text-xs text-red-300">
+            ثبت اطلاعات با خطا مواجه شد. لطفاً دوباره تلاش کنید یا با تیم مصاحبه‌کننده تماس بگیرید.
+            <details className="mt-2 text-[10px] text-red-200/70">
+              <summary className="cursor-pointer">جزئیات فنی</summary>
+              <p dir="ltr" className="mt-1 break-all rounded-lg bg-black/20 p-2">
+                {submitError}
+              </p>
+            </details>
           </div>
         )}
 

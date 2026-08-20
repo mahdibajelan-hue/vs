@@ -229,6 +229,22 @@ body {
 :root[data-theme="light"] .input {
   background: rgba(15, 23, 42, 0.04);
 }
+/*
+ * Defense in depth for native <select> dropdown popups. The popup box itself is drawn by the OS
+ * and only respects `color-scheme`, not `background`/`color` — normally :root's color-scheme
+ * (dark, or light under [data-theme="light"]) is enough, but that's a single global attribute two
+ * unrelated modules (PipePulse, Finance) flip via document.documentElement, and it leaks into every
+ * other module's dropdowns for the rest of the session. These rules keep <option> text legible even
+ * when a stray color-scheme value slips through.
+ */
+.input option {
+  background: #170f24;
+  color: #e5e9f0;
+}
+:root[data-theme="light"] .input option {
+  background: #ffffff;
+  color: #0f172a;
+}
 
 @keyframes auth-success-pop {
   0% { transform: scale(0); opacity: 0; }

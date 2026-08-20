@@ -45,6 +45,7 @@ export interface CandidateProfileInput {
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string
+  candidateBirthDate: string
   candidateAge: number | null
   hasDisability: boolean
   disabilityNote: string
@@ -72,6 +73,7 @@ function profileToRowPayload(profile: CandidateProfileInput) {
     candidate_national_id: profile.candidateNationalId,
     candidate_phone: profile.candidatePhone,
     candidate_email: profile.candidateEmail,
+    candidate_birth_date: profile.candidateBirthDate || null,
     candidate_age: profile.candidateAge,
     has_disability: profile.hasDisability,
     disability_note: profile.disabilityNote,
@@ -153,6 +155,7 @@ interface CompetencyState {
   setQualificationScores: (id: string, scores: QualificationScoresInput) => Promise<void>
   setStatus: (id: string, status: AssessmentStatus) => Promise<void>
   setApproved: (id: string, approved: boolean) => Promise<void>
+  setStrengthsAndDevelopment: (id: string, strengths: string, developmentAreas: string) => Promise<void>
   deleteAssessment: (id: string) => Promise<void>
   uploadPhoto: (id: string, file: File) => Promise<void>
   regenerateSelfServiceLink: (id: string) => Promise<void>
@@ -162,6 +165,8 @@ interface CompetencyState {
   fetchPanelists: (assessmentId: string) => Promise<void>
   addPanelist: (assessmentId: string, userId: string, isLead: boolean) => Promise<void>
   removePanelist: (id: string) => Promise<void>
+  /** Designates one panelist as the interview-team lead, demoting whoever previously held it for this assessment (at most one lead per assessment — see idx_comp_panelists_one_lead). */
+  setPanelistLead: (assessmentId: string, panelistRowId: string) => Promise<void>
 
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string) => Promise<void>
@@ -216,6 +221,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       candidateNationalId: profile.candidateNationalId,
       candidatePhone: profile.candidatePhone,
       candidateEmail: profile.candidateEmail,
+      candidateBirthDate: profile.candidateBirthDate,
       candidateAge: profile.candidateAge,
       hasDisability: profile.hasDisability,
       disabilityNote: profile.disabilityNote,
@@ -241,6 +247,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reviewedBy: null,
       reviewedAt: null,
       isApproved: false,
+      strengths: '',
+      developmentAreas: '',
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -264,6 +272,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
               candidateNationalId: profile.candidateNationalId,
               candidatePhone: profile.candidatePhone,
               candidateEmail: profile.candidateEmail,
+              candidateBirthDate: profile.candidateBirthDate,
               candidateAge: profile.candidateAge,
               hasDisability: profile.hasDisability,
               disabilityNote: profile.disabilityNote,
@@ -341,6 +350,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, isApproved: approved } : a)) })
   },
 
+  setStrengthsAndDevelopment: async (id, strengths, developmentAreas) => {
+    const { error } = await supabase.from('comp_assessments').update({ strengths, development_areas: developmentAreas }).eq('id', id)
+    if (reportError('ثبت جمع‌بندی نقاط قوت و بهبود', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, strengths, developmentAreas } : a)) })
+  },
+
   deleteAssessment: async (id) => {
     const previous = get().assessments
     set({ assessments: previous.filter((a) => a.id !== id) })
@@ -388,12 +403,19 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   addPanelist: async (assessmentId, userId, isLead) => {
+    if (isLead) {
+      // Clear any existing lead first — idx_comp_panelists_one_lead allows only one per assessment.
+      const { error: clearError } = await supabase.from('comp_panelists').update({ is_lead: false }).eq('assessment_id', assessmentId).eq('is_lead', true)
+      if (reportError('افزودن داور', clearError)) return
+    }
     const id = crypto.randomUUID()
     const uid = currentUserId()
     const { error } = await supabase.from('comp_panelists').insert({ id, assessment_id: assessmentId, user_id: userId, is_lead: isLead })
     if (reportError('افزودن داور', error)) return
     const created: CompPanelist = { id, assessmentId, userId, isLead, addedBy: uid, createdAt: new Date().toISOString() }
-    set({ panelists: [...get().panelists, created] })
+    set({
+      panelists: [...get().panelists.map((p) => (isLead && p.assessmentId === assessmentId ? { ...p, isLead: false } : p)), created],
+    })
   },
 
   removePanelist: async (id) => {
@@ -401,6 +423,23 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ panelists: previous.filter((p) => p.id !== id) })
     const { error } = await supabase.from('comp_panelists').delete().eq('id', id)
     if (reportError('حذف داور', error)) set({ panelists: previous })
+  },
+
+  setPanelistLead: async (assessmentId, panelistRowId) => {
+    const previous = get().panelists
+    // Clear the previous lead first, then set the new one — idx_comp_panelists_one_lead only
+    // allows one is_lead=true row per assessment, so setting the new lead before clearing the old
+    // one would violate it.
+    const { error: clearError } = await supabase.from('comp_panelists').update({ is_lead: false }).eq('assessment_id', assessmentId).eq('is_lead', true)
+    if (reportError('تغییر مسئول تیم', clearError)) return
+    const { error: setError } = await supabase.from('comp_panelists').update({ is_lead: true }).eq('id', panelistRowId)
+    if (reportError('تغییر مسئول تیم', setError)) {
+      set({ panelists: previous })
+      return
+    }
+    set({
+      panelists: get().panelists.map((p) => (p.assessmentId === assessmentId ? { ...p, isLead: p.id === panelistRowId } : p)),
+    })
   },
 
   fetchPanelistScores: async (assessmentId) => {

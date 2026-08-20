@@ -278,7 +278,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 {strengths.length > 0 && (
                   <div>
                     <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت برجسته
+                      <TrendingUp size={12} /> نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)
                     </p>
                     <p className="text-[11px] leading-6 text-secondary">{strengths.map((s) => s.domain.title).join('، ')}</p>
                   </div>
@@ -286,9 +286,31 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 {weaknesses.length > 0 && (
                   <div>
                     <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-300">
-                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه
+                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)
                     </p>
                     <p className="text-[11px] leading-6 text-secondary">{weaknesses.map((s) => s.domain.title).join('، ')}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(assessment.strengths || assessment.developmentAreas) && (
+              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
+                <p className="text-[11px] font-bold text-purple-200">جمع‌بندی مسئول ارزیابی</p>
+                {assessment.strengths && (
+                  <div>
+                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
+                      <TrendingUp size={12} /> نقاط قوت
+                    </p>
+                    <p className="text-[11px] leading-6 text-secondary">{assessment.strengths}</p>
+                  </div>
+                )}
+                {assessment.developmentAreas && (
+                  <div>
+                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
+                      <TrendingDown size={12} /> زمینه‌های قابل بهبود
+                    </p>
+                    <p className="text-[11px] leading-6 text-secondary">{assessment.developmentAreas}</p>
                   </div>
                 )}
               </div>

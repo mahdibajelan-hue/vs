@@ -131,6 +131,26 @@ export const CAPSTONE_QUESTION = {
   hint: 'پاسخ قوی باید شامل تفکیک فوری HSE و کیفیت از فشار زمان، تشکیل اتاق کنترل بحران، تحلیل مسیر بحرانی، کنترل علت Repair Rate، برنامه جایگزین برای جبهه‌های کاری، پیگیری خرید و حمل، مدیریت معارض، گزارش شفاف به کارفرما و تدوین Recovery Plan باشد. مدیری که فقط «افزایش شیفت و نیروی انسانی» را پیشنهاد می‌کند، بدون تحلیل محدودیت‌ها و کیفیت، نباید نمره بالایی بگیرد.',
 }
 
+/**
+ * Curated list of PM courses/certifications worth recommending to a project manager candidate on
+ * gas transmission pipeline work. ProfileForm offers these as autocomplete suggestions in the
+ * certifications section (candidates can still type anything else); a certification whose title
+ * exactly matches one of these is flagged as "recommended" so the count can guide the lead's manual
+ * pmTrainingScore judgment on the qualification scorecard.
+ */
+export const RECOMMENDED_PM_COURSES: string[] = [
+  'مدیریت پروژه حرفه‌ای (PMP)',
+  'زمان‌بندی و کنترل پروژه با Primavera P6',
+  'مدیریت ریسک پروژه (PMI-RMP)',
+  'مدیریت ایمنی، بهداشت و محیط‌زیست (HSE) در پروژه‌های عمرانی و نفت‌وگاز',
+  'مدیریت قراردادهای EPC و فیدیک (FIDIC)',
+  'مدیریت کیفیت پروژه (QA/QC)',
+  'مدیریت هزینه و بودجه پروژه (Cost Control)',
+  'مدیریت تدارکات و زنجیره تأمین پروژه',
+  'مدیریت ذی‌نفعان و ارتباطات پروژه',
+  'دوره تخصصی احداث خطوط لوله انتقال گاز',
+]
+
 /** Fixed 0-5 maturity scoring guide shown to every interviewer at the top of the scoring page. */
 export const SCORE_GUIDE: { score: number; level: string; criteria: string }[] = [
   { score: 0, level: 'فاقد شواهد', criteria: 'پاسخ ندارد، تجربه مرتبط ندارد یا پاسخ فنی/مدیریتی نادرست است' },

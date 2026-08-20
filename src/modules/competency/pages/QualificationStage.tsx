@@ -1,7 +1,8 @@
-import { GraduationCap, Briefcase, BookOpen, Award, MessageSquareText } from 'lucide-react'
+import { useState } from 'react'
+import { GraduationCap, Briefcase, BookOpen, Award, MessageSquareText, ThumbsUp, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent } from '../lib/competencyModel'
+import { computeDomainScores, computeOverallPercent, RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
 interface QualificationStageProps {
@@ -13,10 +14,15 @@ const SCORE_OPTIONS = [0, 1, 2, 3, 4, 5]
 /** Qualification scorecard: education, relevant experience, PM training, and professional certification (PMP etc) are each judged manually by the lead from the candidate's profile/documents; the interview score is auto-derived from the weighted domain average, never re-entered by hand. */
 export function QualificationStage({ assessment }: QualificationStageProps) {
   const setQualificationScores = useCompetencyStore((s) => s.setQualificationScores)
+  const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
 
   const domainScores = computeDomainScores(assessment.answers)
   const overallPercent = computeOverallPercent(domainScores)
   const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
+  const recommendedCoursesTaken = assessment.certifications.filter((c) => RECOMMENDED_PM_COURSES.includes(c.title.trim())).length
+
+  const [strengths, setStrengths] = useState(assessment.strengths)
+  const [developmentAreas, setDevelopmentAreas] = useState(assessment.developmentAreas)
 
   const set = (patch: Partial<Pick<CompetencyAssessment, 'educationScore' | 'experienceScore' | 'pmTrainingScore' | 'pmCertificationScore'>>) => {
     setQualificationScores(assessment.id, {
@@ -56,6 +62,7 @@ export function QualificationStage({ assessment }: QualificationStageProps) {
           label="دوره‌های حرفه‌ای مدیریت پروژه"
           value={assessment.pmTrainingScore}
           onChange={(v) => set({ pmTrainingScore: v })}
+          hint={`${recommendedCoursesTaken.toLocaleString('fa-IR')} از ${RECOMMENDED_PM_COURSES.length.toLocaleString('fa-IR')} دورهٔ توصیه‌شده گذرانده‌شده`}
         />
         <QualificationChip
           icon={Award}
@@ -71,11 +78,58 @@ export function QualificationStage({ assessment }: QualificationStageProps) {
           <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
         </div>
       </div>
+
+      <div className="glass-panel space-y-3 rounded-2xl p-4">
+        <p className="text-sm font-bold">جمع‌بندی مسئول ارزیابی</p>
+        <p className="text-[11px] leading-5 text-muted">
+          جمع‌بندی روایی خودتان از نامزد — جدا از نقاط قوت/ضعف خودکاری که از امتیاز حوزه‌ها استخراج می‌شود و در گزارش نتیجه نشان داده می‌شود.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1.5 text-[11px] text-green-300">
+              <ThumbsUp size={12} /> نقاط قوت
+            </span>
+            <textarea
+              value={strengths}
+              onChange={(e) => setStrengths(e.target.value)}
+              onBlur={() => setStrengthsAndDevelopment(assessment.id, strengths, developmentAreas)}
+              rows={3}
+              className="input resize-none"
+              placeholder="جمع‌بندی نقاط قوت برجستهٔ نامزد…"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1.5 text-[11px] text-amber-300">
+              <TrendingUp size={12} /> زمینه‌های قابل بهبود
+            </span>
+            <textarea
+              value={developmentAreas}
+              onChange={(e) => setDevelopmentAreas(e.target.value)}
+              onBlur={() => setStrengthsAndDevelopment(assessment.id, strengths, developmentAreas)}
+              rows={3}
+              className="input resize-none"
+              placeholder="زمینه‌هایی که نیاز به توسعه دارند…"
+            />
+          </label>
+        </div>
+      </div>
     </div>
   )
 }
 
-function QualificationChip({ icon: Icon, label, value, onChange }: { icon: LucideIcon; label: string; value: number | null; onChange: (v: number | null) => void }) {
+function QualificationChip({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  icon: LucideIcon
+  label: string
+  value: number | null
+  onChange: (v: number | null) => void
+  hint?: string
+}) {
   return (
     <div className="glass-panel rounded-2xl p-3.5">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
@@ -95,6 +149,7 @@ function QualificationChip({ icon: Icon, label, value, onChange }: { icon: Lucid
           </button>
         ))}
       </div>
+      {hint && <p className="mt-1.5 text-[10px] text-muted">{hint}</p>}
     </div>
   )
 }

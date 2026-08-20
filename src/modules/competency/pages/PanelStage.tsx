@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Plus, Trash2, UserPlus, Users } from 'lucide-react'
+import { CheckCircle2, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
@@ -31,15 +31,18 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const fetchPanelistScores = useCompetencyStore((s) => s.fetchPanelistScores)
   const addPanelist = useCompetencyStore((s) => s.addPanelist)
   const removePanelist = useCompetencyStore((s) => s.removePanelist)
+  const setPanelistLead = useCompetencyStore((s) => s.setPanelistLead)
   const setMyPanelistAnswer = useCompetencyStore((s) => s.setMyPanelistAnswer)
   const setMyPanelistCapstone = useCompetencyStore((s) => s.setMyPanelistCapstone)
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
 
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
-  const isLead = assessment?.createdBy === myId || isAdmin
+  const myPanelistRow = panelists.find((p) => p.userId === myId)
+  const isLead = assessment?.createdBy === myId || isAdmin || myPanelistRow?.isLead === true
 
   const [pickUserId, setPickUserId] = useState('')
+  const [pickAsLead, setPickAsLead] = useState(false)
 
   useEffect(() => {
     if (profiles.length === 0) fetchProfiles()
@@ -87,26 +90,33 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
           {panelFull ? (
             <p className="mb-3 text-[11px] text-amber-300/90">پنل تکمیل شده است (۳ داور). یکی از داوران را حذف کنید تا بتوانید داور دیگری اضافه کنید.</p>
           ) : (
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
-                <option value="">انتخاب داور از فهرست کاربران…</option>
-                {availableProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.fullName} ({p.email})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!pickUserId}
-                onClick={() => {
-                  addPanelist(assessmentId, pickUserId, false)
-                  setPickUserId('')
-                }}
-                className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
-              >
-                <UserPlus size={13} /> افزودن داور
-              </button>
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
+                  <option value="">انتخاب داور از فهرست کاربران…</option>
+                  {availableProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.fullName} ({p.email})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!pickUserId}
+                  onClick={() => {
+                    addPanelist(assessmentId, pickUserId, pickAsLead)
+                    setPickUserId('')
+                    setPickAsLead(false)
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+                >
+                  <UserPlus size={13} /> افزودن داور
+                </button>
+              </div>
+              <label className="flex items-center gap-1.5 text-[11px] text-secondary">
+                <input type="checkbox" checked={pickAsLead} onChange={(e) => setPickAsLead(e.target.checked)} className="h-3.5 w-3.5" />
+                این فرد مسئول تیم مصاحبه‌کننده باشد (نظر نهایی و تایید صلاحیت را او ثبت می‌کند)
+              </label>
             </div>
           )}
           {panelists.length === 0 ? (
@@ -119,7 +129,14 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
                 const answered = score ? Object.values(score.answers).filter((a) => a.score != null).length : 0
                 return (
                   <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px]">
-                    <span>{profile?.fullName ?? p.userId}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>{profile?.fullName ?? p.userId}</span>
+                      {p.isLead && (
+                        <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                          <ShieldCheck size={11} /> مسئول تیم
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="num text-muted">{answered.toLocaleString('fa-IR')} پاسخ</span>
                       {score?.submittedAt ? (
@@ -130,6 +147,11 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
                         <span className="text-amber-300">در حال امتیازدهی</span>
                       ) : (
                         <span className="text-muted">در انتظار امتیازدهی</span>
+                      )}
+                      {!p.isLead && (
+                        <button onClick={() => setPanelistLead(assessmentId, p.id)} title="تعیین به‌عنوان مسئول تیم" className="text-muted hover:text-amber-300">
+                          <ShieldCheck size={12} />
+                        </button>
                       )}
                       <button onClick={() => removePanelist(p.id)} className="text-muted hover:text-red-300">
                         <Trash2 size={12} />

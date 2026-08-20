@@ -211,16 +211,36 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
         <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
           {strengths.length > 0 && (
             <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 800, color: '#15803d' }}>نقاط قوت برجسته</p>
+              <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 800, color: '#15803d' }}>نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)</p>
               <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.7, color: sub }}>{strengths.map((s) => s.domain.title).join('، ')}</p>
             </div>
           )}
           {weaknesses.length > 0 && (
             <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 800, color: '#b91c1c' }}>حوزه‌های نیازمند توسعه</p>
+              <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 800, color: '#b91c1c' }}>حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)</p>
               <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.7, color: sub }}>{weaknesses.map((s) => s.domain.title).join('، ')}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {(assessment.strengths || assessment.developmentAreas) && (
+        <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
+          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800 }}>جمع‌بندی مسئول ارزیابی</p>
+          <div style={{ display: 'flex', gap: 16 }}>
+            {assessment.strengths && (
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: '#15803d' }}>نقاط قوت</p>
+                <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.7, color: sub }}>{assessment.strengths}</p>
+              </div>
+            )}
+            {assessment.developmentAreas && (
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: '#b45309' }}>زمینه‌های قابل بهبود</p>
+                <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.7, color: sub }}>{assessment.developmentAreas}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
