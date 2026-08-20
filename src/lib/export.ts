@@ -18,10 +18,21 @@ function downloadBlob(blob: Blob, filename: string) {
  * Renders `el` to a PDF. Orientation defaults to whatever matches the captured content's own
  * aspect ratio (a tall stacked dashboard gets portrait pages, a wide one-pager gets landscape)
  * instead of always forcing landscape, which squished tall reports into a sliver in the middle
- * of a wide page. Content taller than one page is split across multiple pages rather than
- * shrunk to fit, so nothing becomes illegibly small.
+ * of a wide page.
+ *
+ * By default, content taller than one page is split across multiple pages rather than shrunk to
+ * fit, so nothing becomes illegibly small — this is right for long, scrolling reports. Pass
+ * `fitToOnePage: true` for content that was authored to be a single page (a candidate summary, a
+ * one-pager): the whole capture is scaled down (preserving aspect ratio, never stretched to fill
+ * the page unevenly) to fit within the page's printable area and centered, instead of always
+ * stretching to the page's full width and paginating whatever doesn't fit — which is what
+ * produced pages whose blank margin or overflow didn't match the content's actual proportions.
  */
-export async function exportElementToPdf(el: HTMLElement, filename: string, options?: { orientation?: 'portrait' | 'landscape'; backgroundColor?: string }) {
+export async function exportElementToPdf(
+  el: HTMLElement,
+  filename: string,
+  options?: { orientation?: 'portrait' | 'landscape'; backgroundColor?: string; fitToOnePage?: boolean; marginMm?: number },
+) {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import('html2canvas-pro'),
     import('jspdf'),
@@ -36,6 +47,20 @@ export async function exportElementToPdf(el: HTMLElement, filename: string, opti
   const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
+
+  if (options?.fitToOnePage) {
+    const margin = options.marginMm ?? 8
+    const maxWidth = pageWidth - margin * 2
+    const maxHeight = pageHeight - margin * 2
+    const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+    const imgWidth = canvas.width * scale
+    const imgHeight = canvas.height * scale
+    const x = (pageWidth - imgWidth) / 2
+    const y = (pageHeight - imgHeight) / 2
+    pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight)
+    pdf.save(filename)
+    return
+  }
 
   const imgWidth = pageWidth
   const imgHeight = (canvas.height * imgWidth) / canvas.width

@@ -156,7 +156,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+    <div className="comp-shell min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="glass-panel rounded-2xl p-4 text-center">
           <p className="text-sm font-bold">فرم ثبت مشخصات نامزد — ارزیابی شایستگی RASTA</p>

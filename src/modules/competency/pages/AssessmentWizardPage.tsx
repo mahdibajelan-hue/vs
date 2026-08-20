@@ -22,7 +22,7 @@ type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' |
 
 const STAGE_LABEL: Record<Stage, string> = {
   profile: 'مشخصات',
-  panel: 'پنل داوران',
+  panel: 'پنل مصاحبه‌گران',
   documents: 'مدارک',
   questions: 'نظر نهایی',
   qualification: 'کارت امتیاز',
@@ -71,9 +71,11 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
   const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
-  // Interviewers open straight into their own scoring sheet; the lead opens on the final verdict.
+  // Everyone lands on the interviewer panel first — profile is already filled in by the time this
+  // page opens, and jumping straight to the final verdict skipped assembling the panel and
+  // reviewing documents, which need to happen before there's anything to verdict on.
   const [stage, setStage] = useState<Stage | null>(null)
-  const activeStage: Stage = stage && stages.includes(stage) ? stage : isLead ? 'questions' : 'panel'
+  const activeStage: Stage = stage && stages.includes(stage) ? stage : 'panel'
 
   const completion = computeCompletion(assessment?.answers ?? {})
 
@@ -160,7 +162,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             {submittedScores.length.toLocaleString('fa-IR')} از {panelists.length.toLocaleString('fa-IR')} داور امتیاز خود را نهایی کرده‌اند
           </span>
           {panelists.length === 0 ? (
-            <span className="text-amber-300">— ابتدا در بخش «پنل داوران» سه داور را اضافه کنید.</span>
+            <span className="text-amber-300">— ابتدا در بخش «پنل مصاحبه‌گران» سه داور را اضافه کنید.</span>
           ) : submittedScores.length < panelists.length ? (
             <span className="text-amber-300">— تا ثبت نهایی همه داوران، نظرات آن‌ها در «نظر نهایی» نمایش داده نمی‌شود.</span>
           ) : (
@@ -251,7 +253,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
       {activeStage === 'panel' && <PanelStage assessmentId={assessment.id} />}
 
-      {activeStage === 'documents' && <DocumentsStage assessment={assessment} />}
+      {activeStage === 'documents' && <DocumentsStage assessment={assessment} isLead={isLead} />}
 
       {activeStage === 'questions' && (
         <div className="space-y-3">

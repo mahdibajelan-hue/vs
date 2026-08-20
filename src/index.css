@@ -246,6 +246,15 @@ body {
   color: #0f172a;
 }
 
+/* .num defaults to a monospace face (JetBrains Mono) for tabular alignment in number-dense
+   tables; its Persian-digit glyphs read poorly set next to Vazirmatn body text on cards that
+   aren't tabular, which is most of the Competency module. Scoped the same way Finance already
+   opted out of it. */
+.comp-shell .num {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes auth-success-pop {
   0% { transform: scale(0); opacity: 0; }
   60% { transform: scale(1.2); opacity: 1; }

@@ -1,11 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, Mail, Printer, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
+import {
+  AlertTriangle,
+  Award,
+  Briefcase,
+  BookOpen,
+  CheckCircle2,
+  Download,
+  GraduationCap,
+  Mail,
+  MessageSquareText,
+  Printer,
+  ShieldCheck,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  User,
+} from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
+import { ApprovalMedal } from '../components/ApprovalMedal'
 import {
   computeCompletion,
   computeDomainScores,
@@ -60,11 +77,11 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
     })
 
   const qualificationChips = [
-    { label: 'مدرک تحصیلی', value: assessment.educationScore },
-    { label: 'سوابق کاری مرتبط', value: assessment.experienceScore },
-    { label: 'دوره‌های حرفه‌ای', value: assessment.pmTrainingScore },
-    { label: 'صلاحیت حرفه‌ای', value: assessment.pmCertificationScore },
-    { label: 'نتایج مصاحبه', value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
+    { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
+    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: assessment.experienceScore },
+    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: assessment.pmTrainingScore },
+    { label: 'صلاحیت حرفه‌ای', icon: Award, value: assessment.pmCertificationScore },
+    { label: 'نتایج مصاحبه', icon: MessageSquareText, value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
   ]
 
   /**
@@ -90,20 +107,18 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       return
     }
 
+    const marginMm = 8
     doc.open()
     doc.write(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
 <title>ارزیابی شایستگی — ${assessment.candidateName}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap">
 <style>
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: ${marginMm}mm; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; background: #fff; }
   body { font-family: "Vazirmatn", "Segoe UI", sans-serif; }
-  /* The report is authored at a fixed 900px for the PDF capture; on paper let it reflow to the
-     page width instead of overflowing the sheet. */
-  body > div { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
   svg, img { break-inside: avoid; page-break-inside: avoid; }
-</style></head><body>${node.innerHTML}</body></html>`)
+</style></head><body><div id="fit-wrap" style="margin:0 auto;overflow:hidden;">${node.innerHTML}</div></body></html>`)
     doc.close()
 
     // Without waiting, Chrome snapshots the page before the webfont arrives and prints fallback
@@ -112,6 +127,28 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       await doc.fonts?.ready
     } catch {
       /* fonts API unavailable — print with whatever is loaded */
+    }
+
+    // The report is authored at a fixed 900px, sized for the PDF capture, without regard for
+    // whether that happens to fit one A4 page. Reflowing its width to the page (the previous
+    // approach) let the report's internal fixed-px columns overflow instead of shrinking, which is
+    // exactly the "page size doesn't match the text" symptom. Uniformly scaling the whole,
+    // unreflowed report down to fit the page's printable box — same idea as the PDF export's
+    // fitToOnePage — keeps every internal proportion intact and guarantees it never spills onto a
+    // second page.
+    const wrap = doc.getElementById('fit-wrap')
+    const reportEl = wrap?.firstElementChild as HTMLElement | undefined
+    if (wrap && reportEl) {
+      const mmToPx = 96 / 25.4
+      const maxWidthPx = (210 - marginMm * 2) * mmToPx
+      const maxHeightPx = (297 - marginMm * 2) * mmToPx
+      const naturalWidth = reportEl.scrollWidth
+      const naturalHeight = reportEl.scrollHeight
+      const scale = Math.min(1, maxWidthPx / naturalWidth, maxHeightPx / naturalHeight)
+      reportEl.style.transformOrigin = 'top left'
+      reportEl.style.transform = `scale(${scale})`
+      wrap.style.width = `${naturalWidth * scale}px`
+      wrap.style.height = `${naturalHeight * scale}px`
     }
 
     win.focus()
@@ -125,7 +162,12 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const handlePdf = async () => {
     if (!printRef.current) return
     setExporting(true)
-    await exportElementToPdf(printRef.current, `ارزیابی-${assessment.candidateName}.pdf`, { orientation: 'portrait', backgroundColor: '#ffffff' })
+    await exportElementToPdf(printRef.current, `ارزیابی-${assessment.candidateName}.pdf`, {
+      orientation: 'portrait',
+      backgroundColor: '#ffffff',
+      fitToOnePage: true,
+      marginMm: 6,
+    })
     setExporting(false)
   }
 
@@ -192,8 +234,13 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 
       <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
         {/* Personnel card header */}
-        <div className="glass-panel overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
+        <div className="glass-panel relative overflow-visible rounded-2xl">
+          {assessment.isApproved && (
+            <div className="absolute -left-2 -top-3 z-10 rotate-[-8deg]">
+              <ApprovalMedal />
+            </div>
+          )}
+          <div className="flex flex-col items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
             <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
             <div className="flex-1 text-center sm:text-right">
               <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
@@ -227,17 +274,22 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 
         {/* Qualification scorecard */}
         <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-xs font-bold">کارت امتیاز شایستگی</p>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+          <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {qualificationChips.map((c) => {
               const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
               return (
-                <div key={c.label} className="relative overflow-hidden rounded-xl border border-white/10 p-2.5 text-center">
-                  <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: color }} />
-                  <p className="num text-lg font-extrabold" style={{ color }}>
+                <div
+                  key={c.label}
+                  className="relative overflow-hidden rounded-2xl border p-3.5 text-center transition-transform hover:-translate-y-0.5"
+                  style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
+                >
+                  <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
+                  <p className="num text-2xl font-black leading-none" style={{ color }}>
                     {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
+                    <span className="text-xs font-bold text-muted"> /۵</span>
                   </p>
-                  <p className="mt-0.5 text-[10px] text-muted leading-4">{c.label}</p>
+                  <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
                 </div>
               )
             })}

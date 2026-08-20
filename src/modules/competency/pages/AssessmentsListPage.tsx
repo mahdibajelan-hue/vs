@@ -37,7 +37,7 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {assessments.map((a) => (
             <CandidateCard key={a.id} assessment={a} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
           ))}
@@ -87,39 +87,39 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
   const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
 
   return (
-    <div className="glass-panel group relative overflow-hidden rounded-2xl transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_rgba(168,85,247,0.35)]">
-      <div className="absolute inset-x-0 top-0 h-1" style={{ background: tier }} />
-      <button onClick={onOpen} className="flex w-full flex-col items-center gap-2.5 p-4 text-center">
+    <div
+      className="glass-panel group relative overflow-hidden rounded-xl border-r-[3px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_-10px_rgba(168,85,247,0.4)]"
+      style={{ borderRightColor: tier }}
+    >
+      <button onClick={onOpen} className="flex w-full flex-col items-center gap-1.5 p-2.5 pt-3 text-center">
         <div className="relative">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
-            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={24} />}
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
+            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={17} />}
           </div>
           {a.isApproved && (
-            <span className="absolute -bottom-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0e0715] bg-emerald-500 text-white shadow-md">
-              <ShieldCheck size={11} />
+            <span className="absolute -bottom-1 -left-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#0e0715] bg-emerald-500 text-white shadow-md">
+              <ShieldCheck size={9} />
             </span>
           )}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold">{a.candidateName}</p>
-          <p className="truncate text-[10.5px] text-muted">{a.candidatePosition}</p>
+        <div className="min-w-0 w-full">
+          <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
+          <p className="truncate text-[10px] text-muted">{a.candidatePosition}</p>
         </div>
-        <p className="text-[10px] text-muted">{formatJalali(a.interviewDate)}</p>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="num text-xl font-extrabold">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              overall == null ? 'bg-white/5 text-muted' : overall >= 75 ? 'bg-green-500/15 text-green-300' : overall >= 60 ? 'bg-amber-500/15 text-amber-300' : 'bg-red-500/15 text-red-300'
-            }`}
-          >
-            {band.label}
+        <div className="mt-0.5 flex items-center gap-1">
+          <span className="num text-sm font-extrabold" style={{ color: tier }}>
+            {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
           </span>
+          <span className="text-[9.5px] text-muted">{band.label}</span>
         </div>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${a.status === 'completed' ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}
-        >
-          {a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'}
-        </span>
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${a.status === 'completed' ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}
+          >
+            {a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'}
+          </span>
+          <span className="text-[9px] text-muted">{formatJalali(a.interviewDate)}</span>
+        </div>
       </button>
       <button
         onClick={(e) => {
@@ -127,9 +127,9 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
           onDelete()
         }}
         title="حذف"
-        className="absolute left-2 top-2 rounded-lg p-1.5 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+        className="absolute left-1 top-1 rounded-lg p-1 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
       >
-        <Trash2 size={13} />
+        <Trash2 size={11} />
       </button>
     </div>
   )

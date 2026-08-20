@@ -40,7 +40,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+    <div className="comp-shell flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: `${COMPETENCY_ACCENT}55`, background: `${COMPETENCY_ACCENT}1a` }}>

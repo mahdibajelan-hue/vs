@@ -6,6 +6,8 @@ import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind, type CompetencyAssessmen
 
 interface DocumentsStageProps {
   assessment: CompetencyAssessment
+  /** Only the team lead may confirm the candidate's self-declared documents/profile are correct. */
+  isLead: boolean
 }
 
 const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
@@ -18,7 +20,7 @@ const SELF_SERVICE_STATUS_LABEL: Record<string, string> = {
 }
 
 /** Document attachments (resume, national ID, education/certification scans, insurance records) plus the candidate self-service link — the interview team just reviews what the candidate submits through that link. */
-export function DocumentsStage({ assessment }: DocumentsStageProps) {
+export function DocumentsStage({ assessment, isLead }: DocumentsStageProps) {
   const attachments = useCompetencyStore((s) => s.attachments).filter((a) => a.assessmentId === assessment.id)
   const fetchAttachments = useCompetencyStore((s) => s.fetchAttachments)
   const addAttachment = useCompetencyStore((s) => s.addAttachment)
@@ -85,15 +87,18 @@ export function DocumentsStage({ assessment }: DocumentsStageProps) {
           >
             {SELF_SERVICE_STATUS_LABEL[assessment.selfServiceStatus]}
           </span>
-          {assessment.selfServiceStatus === 'submitted' && (
-            <button
-              type="button"
-              onClick={() => markReviewed(assessment.id)}
-              className="flex items-center gap-1.5 rounded-lg bg-green-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-400"
-            >
-              <CheckCircle2 size={13} /> علامت‌گذاری «بررسی شد»
-            </button>
-          )}
+          {assessment.selfServiceStatus === 'submitted' &&
+            (isLead ? (
+              <button
+                type="button"
+                onClick={() => markReviewed(assessment.id)}
+                className="flex items-center gap-1.5 rounded-lg bg-green-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-400"
+              >
+                <CheckCircle2 size={13} /> علامت‌گذاری «بررسی شد»
+              </button>
+            ) : (
+              <span className="text-[10px] text-muted">تایید اطلاعات خوداظهاری فقط توسط مسئول تیم انجام می‌شود</span>
+            ))}
         </div>
       </div>
 

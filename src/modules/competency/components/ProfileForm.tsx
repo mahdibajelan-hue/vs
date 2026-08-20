@@ -298,7 +298,14 @@ function CertificationSection({ value, onChange }: { value: CertificationEntry[]
             <label className="relative block">
               <input
                 value={e.title}
-                onChange={(ev) => update(e.id, { title: ev.target.value })}
+                onChange={(ev) => {
+                  const title = ev.target.value
+                  // Every course on the recommended list counts as a professional qualification —
+                  // scheduling/Primavera included, not just the literally-named PMP entry — so
+                  // picking one from the list marks it automatically instead of requiring a second,
+                  // easy-to-forget manual tick.
+                  update(e.id, { title, isPmp: RECOMMENDED_PM_COURSES.includes(title.trim()) ? true : e.isPmp })
+                }}
                 className="input pl-7"
                 placeholder="عنوان دوره/گواهینامه"
                 list="comp-recommended-courses"
