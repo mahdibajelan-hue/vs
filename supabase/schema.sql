@@ -3314,3 +3314,67 @@ create index if not exists idx_joints_project on joints (project_id);
 create index if not exists idx_joints_line on joints (line_id);
 create index if not exists idx_spools_project on spools (project_id);
 create index if not exists idx_spools_line on spools (line_id);
+
+-- ============================================================================
+-- 19. Competency Assessment module — structured interview/evaluation tool for
+--     gas transmission pipeline construction project manager candidates: take
+--     a candidate profile, score answers across a fixed set of competency
+--     domains (defined in application code, not this schema — see
+--     src/modules/competency/lib/competencyModel.ts), and compute domain +
+--     overall scores from those answers for a radar-chart report.
+--
+--     Interview records are sensitive HR content, so — unlike the
+--     project-membership-scoped modules above — visibility here is private to
+--     whoever ran the interview (created_by = auth.uid()) plus admins, not
+--     shared with every project member. created_by defaults to auth.uid()
+--     server-side (never client-supplied) per BL-09.
+-- ============================================================================
+
+create table if not exists comp_assessments (
+  id uuid primary key default gen_random_uuid(),
+  candidate_name text not null,
+  candidate_position text not null default '',
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text not null default '',
+  education text not null default '',
+  certifications text not null default '',
+  notable_projects text not null default '',
+  interview_date date not null default current_date,
+  status text not null default 'draft' check (status in ('draft', 'completed')),
+  -- Keyed by question key (see competencyModel.ts), value {"score": 1-5, "note": "..."}.
+  -- The question set itself lives in application code, not a DB table, since it's a fixed,
+  -- versioned rubric rather than user-defined content.
+  answers jsonb not null default '{}'::jsonb,
+  created_by uuid not null default auth.uid() references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_assessments enable row level security;
+
+drop policy if exists "comp_assessments_select_own" on comp_assessments;
+create policy "comp_assessments_select_own" on comp_assessments
+  for select using (created_by = auth.uid() or is_admin_user());
+
+drop policy if exists "comp_assessments_insert_own" on comp_assessments;
+create policy "comp_assessments_insert_own" on comp_assessments
+  for insert with check (created_by = auth.uid());
+
+drop policy if exists "comp_assessments_update_own" on comp_assessments;
+create policy "comp_assessments_update_own" on comp_assessments
+  for update using (created_by = auth.uid() or is_admin_user());
+
+drop policy if exists "comp_assessments_delete_own" on comp_assessments;
+create policy "comp_assessments_delete_own" on comp_assessments
+  for delete using (created_by = auth.uid() or is_admin_user());
+
+drop trigger if exists trg_set_updated_at on comp_assessments;
+create trigger trg_set_updated_at before update on comp_assessments
+  for each row execute function set_updated_at();
+
+create index if not exists idx_comp_assessments_created_by on comp_assessments (created_by);
+
+insert into rasta_modules (key, label_fa) values
+  ('competency', 'ارزیابی شایستگی')
+on conflict (key) do nothing;

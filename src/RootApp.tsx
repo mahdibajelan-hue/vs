@@ -13,6 +13,7 @@ import { ReportingApp } from './modules/reporting/ReportingApp'
 import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
+import { CompetencyApp } from './modules/competency/CompetencyApp'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -73,6 +74,8 @@ export function RootApp() {
     <FinanceApp onExitToHub={exitToHub} />
   ) : activeModule === 'material' ? (
     <MaterialApp onExitToHub={exitToHub} />
+  ) : activeModule === 'competency' ? (
+    <CompetencyApp onExitToHub={exitToHub} />
   ) : activeModule === 'pipelinedigitaltwin' ? (
     <Suspense
       fallback={

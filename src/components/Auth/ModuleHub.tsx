@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { SignOutButton } from './SignOutButton'
@@ -96,6 +96,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['مسیر خط روی مدل سه‌بعدی زمین (Cesium)', 'واردکردن مسیر از KMZ/KML و محاسبه Chainage'],
     icon: Route,
     accent: '#38bdf8',
+    status: 'active',
+  },
+  {
+    key: 'competency',
+    title: 'ارزیابی شایستگی',
+    englishTag: 'Competency Assessment',
+    teaser: 'مصاحبه ساختاریافته و امتیازدهی مدیران پروژه',
+    bullets: ['ثبت مشخصات و سوابق نامزد پیش از مصاحبه', 'امتیازدهی در ۷ حوزه شایستگی و نمودار رادار'],
+    icon: Award,
+    accent: '#a855f7',
     status: 'active',
   },
   {
