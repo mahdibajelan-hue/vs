@@ -3421,6 +3421,13 @@ alter table comp_assessments add column if not exists self_service_token uuid no
 alter table comp_assessments add column if not exists self_service_status text not null default 'not_sent';
 alter table comp_assessments add column if not exists reviewed_by uuid references profiles (id);
 alter table comp_assessments add column if not exists reviewed_at timestamptz;
+alter table comp_assessments add column if not exists candidate_age int check (candidate_age is null or candidate_age between 0 and 100);
+alter table comp_assessments add column if not exists has_disability boolean not null default false;
+alter table comp_assessments add column if not exists disability_note text not null default '';
+-- The interview lead's (or designated final assessor's) explicit go/no-go verdict — distinct from
+-- status='completed' (which only means the scoring flow was finished, not that the candidate was
+-- approved). Shown as a badge on the candidate's card once set.
+alter table comp_assessments add column if not exists is_approved boolean not null default false;
 
 create unique index if not exists idx_comp_assessments_self_service_token on comp_assessments (self_service_token);
 
@@ -3590,6 +3597,9 @@ returns table (
   candidate_national_id text,
   candidate_phone text,
   candidate_email text,
+  candidate_age int,
+  has_disability boolean,
+  disability_note text,
   years_experience_total numeric,
   years_experience_pipeline numeric,
   current_employer text,
@@ -3600,6 +3610,7 @@ returns table (
   self_service_status text
 ) as $$
   select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.candidate_age, a.has_disability, a.disability_note,
          a.years_experience_total, a.years_experience_pipeline, a.current_employer,
          a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status
   from comp_assessments a
@@ -3612,6 +3623,9 @@ create or replace function comp_self_service_submit(
   p_candidate_national_id text,
   p_candidate_phone text,
   p_candidate_email text,
+  p_candidate_age int,
+  p_has_disability boolean,
+  p_disability_note text,
   p_years_experience_total numeric,
   p_years_experience_pipeline numeric,
   p_current_employer text,
@@ -3626,6 +3640,9 @@ returns void as $$
     candidate_national_id = p_candidate_national_id,
     candidate_phone = p_candidate_phone,
     candidate_email = p_candidate_email,
+    candidate_age = p_candidate_age,
+    has_disability = p_has_disability,
+    disability_note = p_disability_note,
     years_experience_total = p_years_experience_total,
     years_experience_pipeline = p_years_experience_pipeline,
     current_employer = p_current_employer,
@@ -3645,7 +3662,7 @@ returns void as $$
 $$ language sql security definer;
 
 grant execute on function comp_self_service_get(uuid) to anon, authenticated;
-grant execute on function comp_self_service_submit(uuid, text, text, text, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
+grant execute on function comp_self_service_submit(uuid, text, text, text, text, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
 grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
 
 -- ----------------------------------------------------------------------------

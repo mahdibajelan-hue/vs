@@ -10,6 +10,9 @@ const EMPTY: CandidateProfileInput = {
   candidateNationalId: '',
   candidatePhone: '',
   candidateEmail: '',
+  candidateAge: null,
+  hasDisability: false,
+  disabilityNote: '',
   yearsExperienceTotal: null,
   yearsExperiencePipeline: null,
   currentEmployer: '',
@@ -62,6 +65,16 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
           <Field label="ایمیل (جهت ارسال نتیجه مصاحبه)">
             <input type="email" value={form.candidateEmail} onChange={(e) => set('candidateEmail', e.target.value)} className="input" dir="ltr" placeholder="name@example.com" />
           </Field>
+          <Field label="سن (سال)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={form.candidateAge ?? ''}
+              onChange={(e) => set('candidateAge', e.target.value === '' ? null : Number(e.target.value))}
+              className="input num"
+            />
+          </Field>
           {!candidateMode && (
             <>
               <Field label="سمت مورد ارزیابی">
@@ -96,6 +109,15 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
             <input value={form.currentEmployer} onChange={(e) => set('currentEmployer', e.target.value)} className="input" />
           </Field>
         </div>
+        <label className="flex items-center gap-1.5 text-xs text-secondary">
+          <input type="checkbox" checked={form.hasDisability} onChange={(e) => set('hasDisability', e.target.checked)} className="h-3.5 w-3.5" />
+          دارای معلولیت جسمی است
+        </label>
+        {form.hasDisability && (
+          <Field label="توضیح معلولیت (اختیاری)">
+            <input value={form.disabilityNote} onChange={(e) => set('disabilityNote', e.target.value)} className="input" placeholder="نوع و میزان تاثیر بر انجام وظایف شغلی" />
+          </Field>
+        )}
       </section>
 
       <EducationSection value={form.education} onChange={(v) => set('education', v)} />

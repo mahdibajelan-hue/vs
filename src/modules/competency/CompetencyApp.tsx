@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Award, Home, Loader2 } from 'lucide-react'
+import { Award, Home, Loader2, UserCircle2 } from 'lucide-react'
 import { useCompetencyStore } from './store/useCompetencyStore'
+import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { SignOutButton } from '../../components/Auth/SignOutButton'
 import { AssessmentsListPage } from './pages/AssessmentsListPage'
@@ -21,6 +22,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const loading = useCompetencyStore((s) => s.loading)
   const fetchAll = useCompetencyStore((s) => s.fetchAll)
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
+  const myProfile = useAuthStore((s) => s.profile)
 
   const [view, setView] = useState<View>({ name: 'list' })
 
@@ -53,6 +55,24 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {myProfile && (
+            <div
+              className="flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs sm:px-3"
+              style={{ borderColor: `${COMPETENCY_ACCENT}40`, background: `${COMPETENCY_ACCENT}14` }}
+            >
+              <UserCircle2 size={14} style={{ color: COMPETENCY_ACCENT }} />
+              <span className="hidden font-bold text-primary sm:inline">{myProfile.fullName}</span>
+              {myProfile.positionTitle && <span className="hidden text-[10px] text-muted lg:inline">— {myProfile.positionTitle}</span>}
+            </div>
+          )}
+          {view.name !== 'list' && (
+            <button
+              onClick={() => setView({ name: 'list' })}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3"
+            >
+              <Award size={13} /> <span className="hidden sm:inline">فهرست ارزیابی‌ها</span>
+            </button>
+          )}
           <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
             <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
           </button>

@@ -13,6 +13,9 @@ interface SelfServiceRow {
   candidate_national_id: string
   candidate_phone: string
   candidate_email: string
+  candidate_age: number | null
+  has_disability: boolean
+  disability_note: string
   years_experience_total: number | null
   years_experience_pipeline: number | null
   current_employer: string
@@ -65,6 +68,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       p_candidate_national_id: profile.candidateNationalId,
       p_candidate_phone: profile.candidatePhone,
       p_candidate_email: profile.candidateEmail,
+      p_candidate_age: profile.candidateAge,
+      p_has_disability: profile.hasDisability,
+      p_disability_note: profile.disabilityNote,
       p_years_experience_total: profile.yearsExperienceTotal,
       p_years_experience_pipeline: profile.yearsExperiencePipeline,
       p_current_employer: profile.currentEmployer,
@@ -108,6 +114,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     candidateNationalId: row.candidate_national_id,
     candidatePhone: row.candidate_phone,
     candidateEmail: row.candidate_email,
+    candidateAge: row.candidate_age,
+    hasDisability: row.has_disability,
+    disabilityNote: row.disability_note ?? '',
     yearsExperienceTotal: row.years_experience_total,
     yearsExperiencePipeline: row.years_experience_pipeline,
     currentEmployer: row.current_employer,

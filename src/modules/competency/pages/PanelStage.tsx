@@ -11,6 +11,15 @@ interface PanelStageProps {
   assessmentId: string
 }
 
+/** Tiered color for a 0-100 score, matching ResultsStage's tierColor — kept as a local duplicate rather than a shared import to avoid coupling this stage to the results page. */
+function tierColor(percent: number | null): string {
+  if (percent == null) return '#6b7280'
+  if (percent >= 80) return '#34d399'
+  if (percent >= 60) return '#a78bfa'
+  if (percent >= 40) return '#fbbf24'
+  return '#f87171'
+}
+
 /** Multi-interviewer panel: assign panelists, let each score the candidate independently, and show the interview lead the panel's average per domain before the lead records their own final score in the "questions" stage. */
 export function PanelStage({ assessmentId }: PanelStageProps) {
   const profiles = useCompetencyStore((s) => s.profiles)
@@ -42,6 +51,8 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const amPanelist = panelists.some((p) => p.userId === myId)
 
   const availableProfiles = profiles.filter((p) => !panelists.some((pl) => pl.userId === p.id))
+  const PANEL_SIZE = 3
+  const panelFull = panelists.length >= PANEL_SIZE
 
   const submittedScores = panelistScores.filter((p) => p.submittedAt)
   const averageDomainScores = useMemo(() => {
@@ -64,30 +75,39 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
     <div className="space-y-4">
       {isLead && (
         <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-bold">
-            <Users size={14} className="text-purple-300" /> پنل داوران این مصاحبه
-          </p>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
-              <option value="">انتخاب داور از فهرست کاربران…</option>
-              {availableProfiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.fullName} ({p.email})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={!pickUserId}
-              onClick={() => {
-                addPanelist(assessmentId, pickUserId, false)
-                setPickUserId('')
-              }}
-              className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
-            >
-              <UserPlus size={13} /> افزودن داور
-            </button>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="flex items-center gap-1.5 text-xs font-bold">
+              <Users size={14} className="text-purple-300" /> پنل داوران این مصاحبه
+            </p>
+            <span className={`num rounded-full px-2 py-0.5 text-[10px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
+              {panelists.length.toLocaleString('fa-IR')} از {PANEL_SIZE.toLocaleString('fa-IR')} داور
+            </span>
           </div>
+          {panelFull ? (
+            <p className="mb-3 text-[11px] text-amber-300/90">پنل تکمیل شده است (۳ داور). یکی از داوران را حذف کنید تا بتوانید داور دیگری اضافه کنید.</p>
+          ) : (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
+                <option value="">انتخاب داور از فهرست کاربران…</option>
+                {availableProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.fullName} ({p.email})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!pickUserId}
+                onClick={() => {
+                  addPanelist(assessmentId, pickUserId, false)
+                  setPickUserId('')
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+              >
+                <UserPlus size={13} /> افزودن داور
+              </button>
+            </div>
+          )}
           {panelists.length === 0 ? (
             <p className="text-[11px] text-muted">هنوز داوری اضافه نشده است — امتیاز نهایی را خودتان در بخش «سوالات» ثبت می‌کنید.</p>
           ) : (
@@ -129,7 +149,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
               <div key={d.domain.key} className="flex items-center gap-3">
                 <span className="w-24 shrink-0 text-[11px] text-secondary">{d.domain.shortTitle}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
-                  <div className="h-full rounded-full bg-purple-500" style={{ width: `${d.avg ?? 0}%` }} />
+                  <div className="h-full rounded-full" style={{ width: `${d.avg ?? 0}%`, background: tierColor(d.avg) }} />
                 </div>
                 <span className="num w-10 shrink-0 text-left text-[10px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
               </div>

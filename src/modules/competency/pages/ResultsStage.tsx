@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, Mail, Printer, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Mail, Printer, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
+import { CompetencyPrintReport } from '../components/CompetencyPrintReport'
 import {
   computeCompletion,
   computeDomainScores,
@@ -18,11 +19,23 @@ interface ResultsStageProps {
   assessment: CompetencyAssessment
 }
 
+/** Tiered color for a 0-100 score — used to make domain bars and score chips read at a glance instead of every value looking identically purple. */
+function tierColor(percent: number | null): string {
+  if (percent == null) return '#6b7280'
+  if (percent >= 80) return '#34d399'
+  if (percent >= 60) return '#a78bfa'
+  if (percent >= 40) return '#fbbf24'
+  return '#f87171'
+}
+
 /** The final report: a professional candidate card, radar chart, maturity band, strengths/weaknesses, and position recommendations — all on one printable/exportable page. */
 export function ResultsStage({ assessment }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
+  const setApproved = useCompetencyStore((s) => s.setApproved)
   const reportRef = useRef<HTMLDivElement>(null)
+  const printRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
+  const [settingApproval, setSettingApproval] = useState(false)
 
   const domainScores = computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
@@ -39,10 +52,16 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   ]
 
   const handlePdf = async () => {
-    if (!reportRef.current) return
+    if (!printRef.current) return
     setExporting(true)
-    await exportElementToPdf(reportRef.current, `ارزیابی-${assessment.candidateName}.pdf`, { orientation: 'portrait', backgroundColor: '#ffffff' })
+    await exportElementToPdf(printRef.current, `ارزیابی-${assessment.candidateName}.pdf`, { orientation: 'portrait', backgroundColor: '#ffffff' })
     setExporting(false)
+  }
+
+  const handleApprove = async () => {
+    setSettingApproval(true)
+    await setApproved(assessment.id, !assessment.isApproved)
+    setSettingApproval(false)
   }
 
   const handleSend = () => {
@@ -82,15 +101,38 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
             <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
           </button>
         )}
+        <button
+          onClick={handleApprove}
+          disabled={settingApproval}
+          className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
+            assessment.isApproved ? 'border border-white/10 text-secondary hover:bg-white/5' : 'bg-emerald-500 text-white hover:bg-emerald-400'
+          }`}
+        >
+          <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید صلاحیت'}
+        </button>
       </div>
 
-      <div ref={reportRef} className="space-y-4 rounded-2xl bg-[#0b0f16] p-1">
+      {/* Off-screen, light-mode print/PDF template — kept out of view (print-only) so the on-screen
+          dark card above stays as-is, but window.print()/PDF export both target this instead, since
+          html2canvas captures literal colors and a dark background prints/exports poorly. */}
+      <div className="comp-print-offscreen competency-print-portrait" ref={printRef} aria-hidden="true">
+        <CompetencyPrintReport assessment={assessment} />
+      </div>
+
+      <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
         {/* Personnel card header */}
         <div className="glass-panel overflow-hidden rounded-2xl">
           <div className="flex flex-col items-center gap-4 bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <PhotoBadge path={assessment.photoUrl} />
+            <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
             <div className="flex-1 text-center sm:text-right">
-              <p className="text-lg font-extrabold">{assessment.candidateName}</p>
+              <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
+                {assessment.candidateName}
+                {assessment.isApproved && (
+                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    <ShieldCheck size={11} /> تاییدشده
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-muted">{assessment.candidatePosition}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-secondary sm:justify-start">
                 {assessment.candidatePhone && <span dir="ltr">{assessment.candidatePhone}</span>}
@@ -98,9 +140,16 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 <span>تاریخ مصاحبه: {formatJalali(assessment.interviewDate)}</span>
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-center rounded-2xl border border-white/10 bg-black/20 px-6 py-3 text-center">
-              <p className="num text-3xl font-extrabold text-purple-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</p>
-              <p className="mt-0.5 text-[11px] font-bold">{band.label}</p>
+            <div
+              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
+              style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+            >
+              <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
+                <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
+                  {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
+                </p>
+                <p className="mt-0.5 text-[10px] font-bold">{band.label}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -109,12 +158,18 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
         <div className="glass-panel rounded-2xl p-4">
           <p className="mb-3 text-xs font-bold">کارت امتیاز شایستگی</p>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-            {qualificationChips.map((c) => (
-              <div key={c.label} className="rounded-xl border border-white/10 p-2.5 text-center">
-                <p className="num text-lg font-extrabold text-purple-300">{c.value != null ? c.value.toLocaleString('fa-IR') : '—'}</p>
-                <p className="mt-0.5 text-[10px] text-muted leading-4">{c.label}</p>
-              </div>
-            ))}
+            {qualificationChips.map((c) => {
+              const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+              return (
+                <div key={c.label} className="relative overflow-hidden rounded-xl border border-white/10 p-2.5 text-center">
+                  <div className="absolute inset-x-0 top-0 h-0.5" style={{ background: color }} />
+                  <p className="num text-lg font-extrabold" style={{ color }}>
+                    {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted leading-4">{c.label}</p>
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -179,7 +234,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
               </span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full bg-purple-500" style={{ width: `${d.percentScore ?? 0}%` }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: tierColor(d.percentScore) }} />
               </div>
               <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
                 {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
@@ -192,7 +247,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   )
 }
 
-function PhotoBadge({ path }: { path: string }) {
+function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -202,8 +257,15 @@ function PhotoBadge({ path }: { path: string }) {
     }
   }, [path])
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
+    <div className="relative shrink-0">
+      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
+        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
+      </div>
+      {approved && (
+        <span className="absolute -bottom-1.5 -left-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#0b0f16] bg-emerald-500 text-white shadow-lg">
+          <ShieldCheck size={13} />
+        </span>
+      )}
     </div>
   )
 }

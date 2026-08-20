@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { ArrowRight, ArrowLeft, Pencil } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, ArrowLeft, Pencil, User } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain } from '../lib/competencyModel'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
@@ -34,12 +35,34 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
   const setCapstone = useCompetencyStore((s) => s.setCapstone)
+  const fetchPanelistScores = useCompetencyStore((s) => s.fetchPanelistScores)
+  const panelistScores = useCompetencyStore((s) => s.panelistScores).filter((p) => p.assessmentId === assessmentId && p.submittedAt)
+  const myName = useAuthStore((s) => s.profile?.fullName)
 
   const [stage, setStage] = useState<Stage>('questions')
   const [editingProfile, setEditingProfile] = useState(false)
   const [domainIndex, setDomainIndex] = useState(0)
 
+  useEffect(() => {
+    fetchPanelistScores(assessmentId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assessmentId])
+
   const completion = computeCompletion(assessment?.answers ?? {})
+
+  // Per-question panel average — computed from every panelist who has submitted, so the lead can
+  // weigh it while recording their own final score below (item 1 of the multi-interviewer spec).
+  const questionAverages = useMemo(() => {
+    const map = new Map<string, number>()
+    if (panelistScores.length === 0) return map
+    const keys = new Set<string>()
+    panelistScores.forEach((p) => Object.keys(p.answers).forEach((k) => keys.add(k)))
+    keys.forEach((key) => {
+      const scores = panelistScores.map((p) => p.answers[key]?.score).filter((s): s is number => typeof s === 'number')
+      if (scores.length > 0) map.set(key, Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10)
+    })
+    return map
+  }, [panelistScores])
 
   if (!assessment) {
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
@@ -56,6 +79,9 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
     candidateNationalId: assessment.candidateNationalId,
     candidatePhone: assessment.candidatePhone,
     candidateEmail: assessment.candidateEmail,
+    candidateAge: assessment.candidateAge,
+    hasDisability: assessment.hasDisability,
+    disabilityNote: assessment.disabilityNote,
     yearsExperienceTotal: assessment.yearsExperienceTotal,
     yearsExperiencePipeline: assessment.yearsExperiencePipeline,
     currentEmployer: assessment.currentEmployer,
@@ -68,6 +94,15 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] px-3.5 py-2.5">
+        <div className="flex items-center gap-1.5 text-xs text-secondary">
+          <User size={13} className="text-purple-300" /> داور: <span className="font-bold text-primary">{myName ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-secondary">
+          نامزد تحت ارزیابی: <span className="font-bold text-primary">{assessment.candidateName}</span>
+        </div>
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <button onClick={onDone} className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary">
           <ArrowRight size={14} /> بازگشت به فهرست
@@ -109,6 +144,8 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
               <InfoRow label="کد ملی" value={assessment.candidateNationalId || '—'} />
               <InfoRow label="شماره تماس" value={assessment.candidatePhone || '—'} />
               <InfoRow label="ایمیل" value={assessment.candidateEmail || '—'} />
+              <InfoRow label="سن" value={assessment.candidateAge != null ? `${assessment.candidateAge} سال` : '—'} />
+              <InfoRow label="معلولیت جسمی" value={assessment.hasDisability ? assessment.disabilityNote || 'دارد' : 'ندارد'} />
               <InfoRow label="سابقه کل کار" value={assessment.yearsExperienceTotal != null ? `${assessment.yearsExperienceTotal} سال` : '—'} />
               <InfoRow label="سابقه اجرای خط لوله" value={assessment.yearsExperiencePipeline != null ? `${assessment.yearsExperiencePipeline} سال` : '—'} />
               <InfoRow label="کارفرمای فعلی" value={assessment.currentEmployer || '—'} />
@@ -216,6 +253,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
                   answer={assessment.answers[q.key]}
                   editable
                   onChange={(score, note) => setAnswer(assessment.id, q.key, score, note)}
+                  averageHint={questionAverages.has(q.key) ? `میانگین داوران: ${questionAverages.get(q.key)}` : undefined}
                 />
               ))}
             </div>

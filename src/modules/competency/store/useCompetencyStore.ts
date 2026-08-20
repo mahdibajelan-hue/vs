@@ -45,6 +45,9 @@ export interface CandidateProfileInput {
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string
+  candidateAge: number | null
+  hasDisability: boolean
+  disabilityNote: string
   yearsExperienceTotal: number | null
   yearsExperiencePipeline: number | null
   currentEmployer: string
@@ -69,6 +72,9 @@ function profileToRowPayload(profile: CandidateProfileInput) {
     candidate_national_id: profile.candidateNationalId,
     candidate_phone: profile.candidatePhone,
     candidate_email: profile.candidateEmail,
+    candidate_age: profile.candidateAge,
+    has_disability: profile.hasDisability,
+    disability_note: profile.disabilityNote,
     years_experience_total: profile.yearsExperienceTotal,
     years_experience_pipeline: profile.yearsExperiencePipeline,
     current_employer: profile.currentEmployer,
@@ -96,6 +102,7 @@ interface CompetencyState {
   setCapstone: (id: string, score: number | null, note: string) => Promise<void>
   setQualificationScores: (id: string, scores: QualificationScoresInput) => Promise<void>
   setStatus: (id: string, status: AssessmentStatus) => Promise<void>
+  setApproved: (id: string, approved: boolean) => Promise<void>
   deleteAssessment: (id: string) => Promise<void>
   uploadPhoto: (id: string, file: File) => Promise<void>
   regenerateSelfServiceLink: (id: string) => Promise<void>
@@ -159,6 +166,9 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       candidateNationalId: profile.candidateNationalId,
       candidatePhone: profile.candidatePhone,
       candidateEmail: profile.candidateEmail,
+      candidateAge: profile.candidateAge,
+      hasDisability: profile.hasDisability,
+      disabilityNote: profile.disabilityNote,
       photoUrl: '',
       yearsExperienceTotal: profile.yearsExperienceTotal,
       yearsExperiencePipeline: profile.yearsExperiencePipeline,
@@ -180,6 +190,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       selfServiceStatus: 'not_sent',
       reviewedBy: null,
       reviewedAt: null,
+      isApproved: false,
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -203,6 +214,9 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
               candidateNationalId: profile.candidateNationalId,
               candidatePhone: profile.candidatePhone,
               candidateEmail: profile.candidateEmail,
+              candidateAge: profile.candidateAge,
+              hasDisability: profile.hasDisability,
+              disabilityNote: profile.disabilityNote,
               yearsExperienceTotal: profile.yearsExperienceTotal,
               yearsExperiencePipeline: profile.yearsExperiencePipeline,
               currentEmployer: profile.currentEmployer,
@@ -269,6 +283,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     const { error } = await supabase.from('comp_assessments').update({ status }).eq('id', id)
     if (reportError('بروزرسانی وضعیت ارزیابی', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, status } : a)) })
+  },
+
+  setApproved: async (id, approved) => {
+    const { error } = await supabase.from('comp_assessments').update({ is_approved: approved }).eq('id', id)
+    if (reportError('ثبت تایید صلاحیت', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, isApproved: approved } : a)) })
   },
 
   deleteAssessment: async (id) => {

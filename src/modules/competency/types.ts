@@ -68,6 +68,9 @@ export interface CompetencyAssessment {
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string
+  candidateAge: number | null
+  hasDisability: boolean
+  disabilityNote: string
   photoUrl: string
   yearsExperienceTotal: number | null
   yearsExperiencePipeline: number | null
@@ -89,6 +92,8 @@ export interface CompetencyAssessment {
   selfServiceStatus: SelfServiceStatus
   reviewedBy: string | null
   reviewedAt: string | null
+  /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */
+  isApproved: boolean
   createdBy: string | null
   createdAt: string
   updatedAt: string

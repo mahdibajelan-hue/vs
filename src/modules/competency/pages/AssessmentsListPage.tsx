@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, Plus, Trash2, User } from 'lucide-react'
+import { ClipboardList, Plus, ShieldCheck, Trash2, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
@@ -84,11 +84,21 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
     }
   }, [a.photoUrl])
 
+  const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
+
   return (
-    <div className="glass-panel group relative overflow-hidden rounded-2xl transition-transform hover:-translate-y-0.5">
+    <div className="glass-panel group relative overflow-hidden rounded-2xl transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_rgba(168,85,247,0.35)]">
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: tier }} />
       <button onClick={onOpen} className="flex w-full flex-col items-center gap-2.5 p-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
-          {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={24} />}
+        <div className="relative">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
+            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={24} />}
+          </div>
+          {a.isApproved && (
+            <span className="absolute -bottom-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0e0715] bg-emerald-500 text-white shadow-md">
+              <ShieldCheck size={11} />
+            </span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold">{a.candidateName}</p>
