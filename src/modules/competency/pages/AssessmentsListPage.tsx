@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, Plus, ShieldCheck, Trash2, User } from 'lucide-react'
+import { ClipboardList, Plus, Trash2, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
+import { ApprovalMedal } from '../components/ApprovalMedal'
 import type { CompetencyAssessment } from '../types'
 
 interface AssessmentsListPageProps {
@@ -97,8 +98,8 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
             {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={17} />}
           </div>
           {a.isApproved && (
-            <span className="absolute -bottom-1 -left-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#0e0715] bg-emerald-500 text-white shadow-md">
-              <ShieldCheck size={9} />
+            <span className="absolute -bottom-1.5 -left-1.5">
+              <ApprovalMedal size="sm" />
             </span>
           )}
         </div>

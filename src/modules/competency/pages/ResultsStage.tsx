@@ -234,22 +234,13 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 
       <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
         {/* Personnel card header */}
-        <div className="glass-panel relative overflow-visible rounded-2xl">
-          {assessment.isApproved && (
-            <div className="absolute -left-2 -top-3 z-10 rotate-[-8deg]">
-              <ApprovalMedal />
-            </div>
-          )}
-          <div className="flex flex-col items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
+        <div className="glass-panel relative overflow-hidden rounded-2xl">
+          <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
             <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
             <div className="flex-1 text-center sm:text-right">
               <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
                 {assessment.candidateName}
-                {assessment.isApproved && (
-                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                    <ShieldCheck size={11} /> تاییدشده
-                  </span>
-                )}
+                {assessment.isApproved && <ApprovalMedal />}
               </p>
               <p className="text-xs text-muted">{assessment.candidatePosition}</p>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-secondary sm:justify-start">
