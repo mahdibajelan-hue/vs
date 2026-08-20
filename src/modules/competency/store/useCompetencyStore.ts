@@ -86,6 +86,56 @@ function profileToRowPayload(profile: CandidateProfileInput) {
   }
 }
 
+/**
+ * Shared write path for the current user's own panelist-score row. Every caller previously
+ * generated its row id twice — once for the payload, once for the local copy — so the local
+ * record's id never matched the row actually written, and the next write would then upsert
+ * under a stale id. Generating it once here keeps local state and the database in agreement.
+ *
+ * The upsert always carries the full row, not just the changed field: a partial upsert that
+ * inserts (rather than conflicts) would drop whichever columns it omitted.
+ */
+async function upsertMyPanelistScore(
+  set: (partial: Partial<CompetencyState>) => void,
+  get: () => CompetencyState,
+  assessmentId: string,
+  errorLabel: string,
+  patch: (existing: CompPanelistScore | undefined) => { row: Record<string, unknown>; local: Partial<CompPanelistScore> },
+): Promise<void> {
+  const uid = currentUserId()
+  if (!uid) return
+  const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
+  const { row, local } = patch(existing)
+  const now = new Date().toISOString()
+  const merged: CompPanelistScore = {
+    id: existing?.id ?? crypto.randomUUID(),
+    assessmentId,
+    panelistId: uid,
+    answers: existing?.answers ?? {},
+    capstoneScore: existing?.capstoneScore ?? null,
+    capstoneNote: existing?.capstoneNote ?? '',
+    submittedAt: existing?.submittedAt ?? null,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    ...local,
+  }
+  const { error } = await supabase.from('comp_panelist_scores').upsert(
+    {
+      id: merged.id,
+      assessment_id: assessmentId,
+      panelist_id: uid,
+      answers: merged.answers,
+      capstone_score: merged.capstoneScore,
+      capstone_note: merged.capstoneNote,
+      submitted_at: merged.submittedAt,
+      ...row,
+    },
+    { onConflict: 'assessment_id,panelist_id' },
+  )
+  if (reportError(errorLabel, error)) return
+  set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), merged] })
+}
+
 interface CompetencyState {
   assessments: CompetencyAssessment[]
   profiles: CompProfileLite[]
@@ -361,49 +411,26 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   setMyPanelistAnswer: async (assessmentId, questionKey, score, note) => {
-    const uid = currentUserId()
-    if (!uid) return
-    const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
-    const nextAnswers = { ...(existing?.answers ?? {}), [questionKey]: { score, note } }
-    const { error } = await supabase
-      .from('comp_panelist_scores')
-      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, answers: nextAnswers }, { onConflict: 'assessment_id,panelist_id' })
-    if (reportError('ثبت امتیاز داور', error)) return
-    const now = new Date().toISOString()
-    const updated: CompPanelistScore = existing
-      ? { ...existing, answers: nextAnswers, updatedAt: now }
-      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: nextAnswers, capstoneScore: null, capstoneNote: '', submittedAt: null, createdAt: now, updatedAt: now }
-    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
+    const nextAnswers = (existing: CompPanelistScore | undefined) => ({ ...(existing?.answers ?? {}), [questionKey]: { score, note } })
+    await upsertMyPanelistScore(set, get, assessmentId, 'ثبت امتیاز داور', (existing) => ({
+      row: { answers: nextAnswers(existing) },
+      local: { answers: nextAnswers(existing) },
+    }))
   },
 
   setMyPanelistCapstone: async (assessmentId, score, note) => {
-    const uid = currentUserId()
-    if (!uid) return
-    const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
-    const { error } = await supabase
-      .from('comp_panelist_scores')
-      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, capstone_score: score, capstone_note: note }, { onConflict: 'assessment_id,panelist_id' })
-    if (reportError('ثبت امتیاز سناریوی پایانی داور', error)) return
-    const now = new Date().toISOString()
-    const updated: CompPanelistScore = existing
-      ? { ...existing, capstoneScore: score, capstoneNote: note, updatedAt: now }
-      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: {}, capstoneScore: score, capstoneNote: note, submittedAt: null, createdAt: now, updatedAt: now }
-    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
+    await upsertMyPanelistScore(set, get, assessmentId, 'ثبت امتیاز سناریوی پایانی داور', () => ({
+      row: { capstone_score: score, capstone_note: note },
+      local: { capstoneScore: score, capstoneNote: note },
+    }))
   },
 
   submitMyPanelistScore: async (assessmentId) => {
-    const uid = currentUserId()
-    if (!uid) return
-    const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
     const now = new Date().toISOString()
-    const { error } = await supabase
-      .from('comp_panelist_scores')
-      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, submitted_at: now }, { onConflict: 'assessment_id,panelist_id' })
-    if (reportError('ثبت نهایی امتیاز داور', error)) return
-    const updated: CompPanelistScore = existing
-      ? { ...existing, submittedAt: now, updatedAt: now }
-      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: {}, capstoneScore: null, capstoneNote: '', submittedAt: now, createdAt: now, updatedAt: now }
-    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
+    await upsertMyPanelistScore(set, get, assessmentId, 'ثبت نهایی امتیاز داور', () => ({
+      row: { submitted_at: now },
+      local: { submittedAt: now },
+    }))
   },
 
   fetchAttachments: async (assessmentId) => {

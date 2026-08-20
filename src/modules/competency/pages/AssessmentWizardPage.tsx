@@ -4,7 +4,7 @@ import { useCompetencyStore, type CandidateProfileInput } from '../store/useComp
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain } from '../lib/competencyModel'
 import { ProfileForm } from '../components/ProfileForm'
-import { QuestionScoreCard } from '../components/QuestionScoreCard'
+import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
 import { PanelStage } from './PanelStage'
@@ -24,10 +24,20 @@ const STAGE_LABEL: Record<Stage, string> = {
   profile: 'مشخصات',
   panel: 'پنل داوران',
   documents: 'مدارک',
-  questions: 'سوالات',
+  questions: 'نظر نهایی',
   qualification: 'کارت امتیاز',
   results: 'نتیجه',
 }
+
+/**
+ * Who sees which stages. The three interviewers only ever record their own independent scores
+ * (the "panel" stage); the final verdict, scorecard, and report belong to the assessment lead.
+ * This matters beyond tidiness: the database rejects writes to comp_assessments from anyone but
+ * the lead, so showing an interviewer the final-verdict screen would only hand them a form whose
+ * every save fails.
+ */
+const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qualification', 'results']
+const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
 /** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
 export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardPageProps) {
@@ -35,34 +45,51 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
   const setCapstone = useCompetencyStore((s) => s.setCapstone)
+  const fetchPanelists = useCompetencyStore((s) => s.fetchPanelists)
   const fetchPanelistScores = useCompetencyStore((s) => s.fetchPanelistScores)
-  const panelistScores = useCompetencyStore((s) => s.panelistScores).filter((p) => p.assessmentId === assessmentId && p.submittedAt)
+  const fetchProfiles = useCompetencyStore((s) => s.fetchProfiles)
+  const allPanelists = useCompetencyStore((s) => s.panelists)
+  const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
+  const profiles = useCompetencyStore((s) => s.profiles)
   const myName = useAuthStore((s) => s.profile?.fullName)
+  const myId = useAuthStore((s) => s.profile?.id ?? null)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
 
-  const [stage, setStage] = useState<Stage>('questions')
   const [editingProfile, setEditingProfile] = useState(false)
   const [domainIndex, setDomainIndex] = useState(0)
 
   useEffect(() => {
+    fetchProfiles()
+    fetchPanelists(assessmentId)
     fetchPanelistScores(assessmentId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId])
 
+  const panelists = allPanelists.filter((p) => p.assessmentId === assessmentId)
+  const submittedScores = allPanelistScores.filter((p) => p.assessmentId === assessmentId && p.submittedAt)
+
+  const isLead = assessment != null && (assessment.createdBy === myId || isAdmin)
+  const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
+  // Interviewers open straight into their own scoring sheet; the lead opens on the final verdict.
+  const [stage, setStage] = useState<Stage | null>(null)
+  const activeStage: Stage = stage && stages.includes(stage) ? stage : isLead ? 'questions' : 'panel'
+
   const completion = computeCompletion(assessment?.answers ?? {})
 
-  // Per-question panel average — computed from every panelist who has submitted, so the lead can
-  // weigh it while recording their own final score below (item 1 of the multi-interviewer spec).
-  const questionAverages = useMemo(() => {
-    const map = new Map<string, number>()
-    if (panelistScores.length === 0) return map
-    const keys = new Set<string>()
-    panelistScores.forEach((p) => Object.keys(p.answers).forEach((k) => keys.add(k)))
-    keys.forEach((key) => {
-      const scores = panelistScores.map((p) => p.answers[key]?.score).filter((s): s is number => typeof s === 'number')
-      if (scores.length > 0) map.set(key, Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10)
+  // What each interviewer recorded, per question — the lead reads this while setting the final
+  // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
+  const panelVotesByQuestion = useMemo(() => {
+    const map = new Map<string, PanelVote[]>()
+    submittedScores.forEach((sheet) => {
+      const name = profiles.find((p) => p.id === sheet.panelistId)?.fullName ?? 'داور'
+      Object.entries(sheet.answers).forEach(([key, answer]) => {
+        const votes = map.get(key) ?? []
+        votes.push({ name, score: answer.score, note: answer.note })
+        map.set(key, votes)
+      })
     })
     return map
-  }, [panelistScores])
+  }, [submittedScores, profiles])
 
   if (!assessment) {
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
@@ -96,7 +123,11 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] px-3.5 py-2.5">
         <div className="flex items-center gap-1.5 text-xs text-secondary">
-          <User size={13} className="text-purple-300" /> داور: <span className="font-bold text-primary">{myName ?? '—'}</span>
+          <User size={13} className="text-purple-300" />
+          <span className="font-bold text-primary">{myName ?? '—'}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
+            {isLead ? 'مسئول ارزیابی' : 'داور'}
+          </span>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-secondary">
           نامزد تحت ارزیابی: <span className="font-bold text-primary">{assessment.candidateName}</span>
@@ -108,11 +139,11 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
           <ArrowRight size={14} /> بازگشت به فهرست
         </button>
         <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] p-1">
-          {(Object.keys(STAGE_LABEL) as Stage[]).map((s) => (
+          {stages.map((s) => (
             <button
               key={s}
               onClick={() => setStage(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${activeStage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
             >
               {STAGE_LABEL[s]}
             </button>
@@ -120,7 +151,23 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
         </div>
       </div>
 
-      {stage === 'profile' &&
+      {isLead && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2 text-[11px]">
+          <span className="text-muted">وضعیت پنل:</span>
+          <span className="num font-bold">
+            {submittedScores.length.toLocaleString('fa-IR')} از {panelists.length.toLocaleString('fa-IR')} داور امتیاز خود را نهایی کرده‌اند
+          </span>
+          {panelists.length === 0 ? (
+            <span className="text-amber-300">— ابتدا در بخش «پنل داوران» سه داور را اضافه کنید.</span>
+          ) : submittedScores.length < panelists.length ? (
+            <span className="text-amber-300">— تا ثبت نهایی همه داوران، نظرات آن‌ها در «نظر نهایی» نمایش داده نمی‌شود.</span>
+          ) : (
+            <span className="text-green-300">— نظر همه داوران در بخش «نظر نهایی» زیر هر سوال قابل مشاهده است.</span>
+          )}
+        </div>
+      )}
+
+      {activeStage === 'profile' &&
         (editingProfile ? (
           <ProfileForm
             initial={profileInput}
@@ -200,11 +247,11 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
           </div>
         ))}
 
-      {stage === 'panel' && <PanelStage assessmentId={assessment.id} />}
+      {activeStage === 'panel' && <PanelStage assessmentId={assessment.id} />}
 
-      {stage === 'documents' && <DocumentsStage assessment={assessment} />}
+      {activeStage === 'documents' && <DocumentsStage assessment={assessment} />}
 
-      {stage === 'questions' && (
+      {activeStage === 'questions' && (
         <div className="space-y-3">
           <ScoringGuideBanner />
           {domain && (
@@ -253,7 +300,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
                   answer={assessment.answers[q.key]}
                   editable
                   onChange={(score, note) => setAnswer(assessment.id, q.key, score, note)}
-                  averageHint={questionAverages.has(q.key) ? `میانگین داوران: ${questionAverages.get(q.key)}` : undefined}
+                  panelVotes={panelVotesByQuestion.get(q.key)}
                 />
               ))}
             </div>
@@ -285,9 +332,9 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
         </div>
       )}
 
-      {stage === 'qualification' && <QualificationStage assessment={assessment} />}
+      {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
 
-      {stage === 'results' && <ResultsStage assessment={assessment} />}
+      {activeStage === 'results' && <ResultsStage assessment={assessment} />}
     </div>
   )
 }

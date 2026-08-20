@@ -1,6 +1,13 @@
 import { SCORE_LABELS_FA } from '../lib/competencyModel'
 import type { CompetencyAnswer, CompetencyQuestion } from '../types'
 
+/** One panelist's recorded opinion on a single question, shown to the assessment lead. */
+export interface PanelVote {
+  name: string
+  score: number | null
+  note: string
+}
+
 interface QuestionScoreCardProps {
   index: number
   question: CompetencyQuestion
@@ -8,14 +15,20 @@ interface QuestionScoreCardProps {
   answer: CompetencyAnswer | undefined
   editable: boolean
   onChange: (score: number | null, note: string) => void
-  /** Optional side-note shown next to the score row (e.g. "میانگین داوران: ۳٫۲"). */
-  averageHint?: string
+  /**
+   * The three interviewers' scores for this question. Only passed on the lead's final-verdict
+   * screen, where the lead reads what each panelist recorded before setting the final score.
+   */
+  panelVotes?: PanelVote[]
 }
 
 /** One interview question with a 0-5 score picker and an optional note — the interviewer reads the question aloud, listens to the candidate, then records the score here. */
-export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, averageHint }: QuestionScoreCardProps) {
+export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, panelVotes }: QuestionScoreCardProps) {
   const score = answer?.score ?? null
   const note = answer?.note ?? ''
+
+  const votes = panelVotes?.filter((v) => v.score != null) ?? []
+  const average = votes.length > 0 ? Math.round((votes.reduce((sum, v) => sum + (v.score ?? 0), 0) / votes.length) * 10) / 10 : null
 
   return (
     <div className="rounded-xl border border-white/10 p-3.5">
@@ -24,6 +37,25 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
         {question.text}
       </p>
       {hint && <p className="mt-1 text-[10.5px] leading-5 text-muted">راهنمای پاسخ ممتاز: {hint}</p>}
+
+      {panelVotes && panelVotes.length > 0 && (
+        <div className="mt-2.5 rounded-lg border border-purple-400/20 bg-purple-500/[0.06] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-purple-200">نظر داوران</span>
+            <span className="num text-[10px] text-purple-200">میانگین: {average != null ? average.toLocaleString('fa-IR') : '—'}</span>
+          </div>
+          <div className="space-y-1">
+            {panelVotes.map((v) => (
+              <div key={v.name} className="flex items-baseline gap-2 text-[10.5px]">
+                <span className="num w-5 shrink-0 text-center font-bold text-purple-200">{v.score != null ? v.score.toLocaleString('fa-IR') : '—'}</span>
+                <span className="shrink-0 text-secondary">{v.name}</span>
+                {v.note && <span className="truncate text-muted">— {v.note}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {[0, 1, 2, 3, 4, 5].map((s) => (
           <button
@@ -40,7 +72,6 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
           </button>
         ))}
         <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
-        {averageHint && <span className="mr-auto text-[10px] text-purple-300">{averageHint}</span>}
       </div>
       {editable ? (
         <textarea

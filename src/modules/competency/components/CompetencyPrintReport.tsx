@@ -8,7 +8,14 @@ import type { CompetencyAssessment } from '../types'
  * in the Finance module), because html2canvas captures the dark theme's actual colors verbatim
  * and a black background wastes paper/ink and reads poorly once printed.
  */
-export function CompetencyPrintReport({ assessment }: { assessment: CompetencyAssessment }) {
+/** One interviewer's overall contribution, summarised for the report's panel section. */
+export interface PanelSummaryRow {
+  name: string
+  overallPercent: number | null
+  submitted: boolean
+}
+
+export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: CompetencyAssessment; panel?: PanelSummaryRow[] }) {
   const domainScores = computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
@@ -105,6 +112,23 @@ export function CompetencyPrintReport({ assessment }: { assessment: CompetencyAs
           </div>
         ))}
       </div>
+
+      {panel.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>پنل داوران مصاحبه</p>
+          {panel.map((p) => (
+            <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, borderBottom: `1px solid ${line}` }}>
+              <span style={{ color: sub }}>{p.name}</span>
+              <span style={{ fontWeight: 700 }}>
+                {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'ثبت نهایی — بدون امتیاز') : 'ثبت نهایی نشده'}
+              </span>
+            </div>
+          ))}
+          <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>
+            امتیاز کلی بالای این گزارش، نظر نهایی مسئول ارزیابی است و با میانگین سادهٔ داوران یکسان نیست.
+          </p>
+        </div>
+      )}
 
       {assessment.capstoneScore != null && (
         <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>

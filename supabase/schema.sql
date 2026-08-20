@@ -3589,6 +3589,14 @@ create index if not exists idx_comp_attachments_assessment on comp_attachments (
 -- modify anything beyond "my own profile, given my own link".
 -- ----------------------------------------------------------------------------
 
+-- Both functions below changed shape when candidate_age/has_disability/disability_note were
+-- added (a new OUT column set for _get, three new parameters for _submit). Postgres cannot
+-- CREATE OR REPLACE across either change — it refuses the return-type change outright, and it
+-- would leave the old _submit as a stale overload — so the previous signatures are dropped
+-- first. Safe to re-run: these are stateless SQL functions, no data lives in them.
+drop function if exists comp_self_service_get(uuid);
+drop function if exists comp_self_service_submit(uuid, text, text, text, text, numeric, numeric, text, jsonb, jsonb, jsonb, text);
+
 create or replace function comp_self_service_get(p_token uuid)
 returns table (
   id uuid,

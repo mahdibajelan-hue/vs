@@ -36,7 +36,8 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
 
   const myId = useAuthStore((s) => s.profile?.id ?? null)
-  const isLead = assessment?.createdBy === myId
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const isLead = assessment?.createdBy === myId || isAdmin
 
   const [pickUserId, setPickUserId] = useState('')
 
@@ -109,20 +110,24 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
             </div>
           )}
           {panelists.length === 0 ? (
-            <p className="text-[11px] text-muted">هنوز داوری اضافه نشده است — امتیاز نهایی را خودتان در بخش «سوالات» ثبت می‌کنید.</p>
+            <p className="text-[11px] text-muted">هنوز داوری اضافه نشده است — امتیاز نهایی را خودتان در بخش «نظر نهایی» ثبت می‌کنید.</p>
           ) : (
             <div className="space-y-1.5">
               {panelists.map((p) => {
                 const profile = profiles.find((pr) => pr.id === p.userId)
                 const score = panelistScores.find((s) => s.panelistId === p.userId)
+                const answered = score ? Object.values(score.answers).filter((a) => a.score != null).length : 0
                 return (
                   <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px]">
                     <span>{profile?.fullName ?? p.userId}</span>
                     <div className="flex items-center gap-2">
+                      <span className="num text-muted">{answered.toLocaleString('fa-IR')} پاسخ</span>
                       {score?.submittedAt ? (
                         <span className="flex items-center gap-1 text-green-300">
-                          <CheckCircle2 size={12} /> ثبت‌شده
+                          <CheckCircle2 size={12} /> ثبت نهایی
                         </span>
+                      ) : answered > 0 ? (
+                        <span className="text-amber-300">در حال امتیازدهی</span>
                       ) : (
                         <span className="text-muted">در انتظار امتیازدهی</span>
                       )}
@@ -161,6 +166,18 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
 
       {amPanelist ? (
         <div className="space-y-3">
+          <div className="glass-panel rounded-2xl border-purple-400/25 p-3.5">
+            <p className="text-xs font-bold">برگه امتیازدهی شما</p>
+            <p className="mt-1 text-[11px] leading-6 text-secondary">
+              امتیازهای شما مستقل از سایر داوران ثبت می‌شود. پس از پایان، دکمهٔ «ثبت نهایی امتیاز من» را بزنید — تا آن لحظه نظر شما برای مسئول ارزیابی نمایش
+              داده نمی‌شود.
+            </p>
+            {myScore?.submittedAt && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-green-300">
+                <CheckCircle2 size={12} /> امتیاز شما ثبت نهایی شده و برای مسئول ارزیابی قابل مشاهده است. ویرایش‌های بعدی هم برای ایشان دیده می‌شود.
+              </p>
+            )}
+          </div>
           <ScoringGuideBanner />
           {COMPETENCY_DOMAINS.map((domain) => (
             <div key={domain.key} className="glass-panel space-y-2.5 rounded-2xl p-3.5">
@@ -200,7 +217,14 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
           </div>
         </div>
       ) : (
-        !isLead && <p className="text-xs text-muted">شما به‌عنوان داور به این مصاحبه اضافه نشده‌اید.</p>
+        !isLead && (
+          <div className="glass-panel rounded-2xl p-4">
+            <p className="text-xs font-bold">شما داور این مصاحبه نیستید</p>
+            <p className="mt-1 text-[11px] leading-6 text-secondary">
+              برای امتیازدهی، مسئول ارزیابی این مصاحبه باید شما را در بخش «پنل داوران» به‌عنوان داور اضافه کند.
+            </p>
+          </div>
+        )
       )}
 
       {isLead && !amPanelist && (

@@ -5,7 +5,7 @@ import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
-import { CompetencyPrintReport } from '../components/CompetencyPrintReport'
+import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import {
   computeCompletion,
   computeDomainScores,
@@ -32,6 +32,9 @@ function tierColor(percent: number | null): string {
 export function ResultsStage({ assessment }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
+  const allPanelists = useCompetencyStore((s) => s.panelists)
+  const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
+  const profiles = useCompetencyStore((s) => s.profiles)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
@@ -42,6 +45,19 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const band = maturityBand(overall)
   const completion = computeCompletion(assessment.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
+
+  // The panel's contribution, kept alongside the lead's verdict rather than blended into it —
+  // the headline score on this report is the lead's final call, not an average of the three.
+  const panelSummary: PanelSummaryRow[] = allPanelists
+    .filter((p) => p.assessmentId === assessment.id)
+    .map((p) => {
+      const sheet = allPanelistScores.find((s) => s.assessmentId === assessment.id && s.panelistId === p.userId)
+      return {
+        name: profiles.find((pr) => pr.id === p.userId)?.fullName ?? 'داور',
+        overallPercent: sheet ? computeOverallPercent(computeDomainScores(sheet.answers)) : null,
+        submitted: sheet?.submittedAt != null,
+      }
+    })
 
   const qualificationChips = [
     { label: 'مدرک تحصیلی', value: assessment.educationScore },
@@ -116,7 +132,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           dark card above stays as-is, but window.print()/PDF export both target this instead, since
           html2canvas captures literal colors and a dark background prints/exports poorly. */}
       <div className="comp-print-offscreen competency-print-portrait" ref={printRef} aria-hidden="true">
-        <CompetencyPrintReport assessment={assessment} />
+        <CompetencyPrintReport assessment={assessment} panel={panelSummary} />
       </div>
 
       <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
@@ -224,6 +240,21 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
             )}
           </div>
         </div>
+
+        {panelSummary.length > 0 && (
+          <div className="glass-panel space-y-2 rounded-2xl p-4">
+            <p className="text-xs font-bold">پنل داوران مصاحبه</p>
+            {panelSummary.map((p) => (
+              <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
+                <span className="text-secondary">{p.name}</span>
+                <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
+                  {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
+                </span>
+              </div>
+            ))}
+            <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ داوران نیست.</p>
+          </div>
+        )}
 
         {/* Domain breakdown */}
         <div className="glass-panel space-y-2 rounded-2xl p-4">
