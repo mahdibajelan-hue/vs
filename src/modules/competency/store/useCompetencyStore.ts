@@ -140,23 +140,82 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ profiles: ((data ?? []) as ProfileLiteRow[]).map(profileLiteFromRow) })
   },
 
+  // NOTE: every write below deliberately avoids chaining `.select().single()` after
+  // insert/update — some Supabase project configurations reject the implicit
+  // RETURNING-clause read with a row-level-security error even though the write itself
+  // (and a manual follow-up SELECT) succeed. Instead we know every value we just wrote
+  // (we sent it, or we generated it client-side), so we build/merge the local object
+  // directly — this is also one fewer round trip.
   createAssessment: async (profile) => {
-    const { data, error } = await supabase
-      .from('comp_assessments')
-      .insert({ ...profileToRowPayload(profile), status: 'draft', answers: {} })
-      .select('*')
-      .single()
-    if (reportError('ثبت مشخصات نامزد', error) || !data) return null
-    const created = compAssessmentFromRow(data as CompAssessmentRow)
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_assessments').insert({ id, ...profileToRowPayload(profile), status: 'draft', answers: {} })
+    if (reportError('ثبت مشخصات نامزد', error)) return null
+    const created: CompetencyAssessment = {
+      id,
+      candidateName: profile.candidateName,
+      candidatePosition: profile.candidatePosition,
+      candidateNationalId: profile.candidateNationalId,
+      candidatePhone: profile.candidatePhone,
+      candidateEmail: profile.candidateEmail,
+      photoUrl: '',
+      yearsExperienceTotal: profile.yearsExperienceTotal,
+      yearsExperiencePipeline: profile.yearsExperiencePipeline,
+      currentEmployer: profile.currentEmployer,
+      education: profile.education,
+      employmentHistory: profile.employmentHistory,
+      certifications: profile.certifications,
+      notableProjects: profile.notableProjects,
+      interviewDate: profile.interviewDate,
+      status: 'draft',
+      answers: {},
+      capstoneScore: null,
+      capstoneNote: '',
+      educationScore: null,
+      experienceScore: null,
+      pmTrainingScore: null,
+      pmCertificationScore: null,
+      selfServiceToken: crypto.randomUUID(),
+      selfServiceStatus: 'not_sent',
+      reviewedBy: null,
+      reviewedAt: null,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }
     set({ assessments: [created, ...get().assessments] })
     return created.id
   },
 
   updateProfile: async (id, profile) => {
-    const { data, error } = await supabase.from('comp_assessments').update(profileToRowPayload(profile)).eq('id', id).select('*').single()
-    if (reportError('بروزرسانی مشخصات نامزد', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const current = get().assessments.find((a) => a.id === id)
+    if (!current) return
+    const { error } = await supabase.from('comp_assessments').update(profileToRowPayload(profile)).eq('id', id)
+    if (reportError('بروزرسانی مشخصات نامزد', error)) return
+    set({
+      assessments: get().assessments.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              candidateName: profile.candidateName,
+              candidatePosition: profile.candidatePosition,
+              candidateNationalId: profile.candidateNationalId,
+              candidatePhone: profile.candidatePhone,
+              candidateEmail: profile.candidateEmail,
+              yearsExperienceTotal: profile.yearsExperienceTotal,
+              yearsExperiencePipeline: profile.yearsExperiencePipeline,
+              currentEmployer: profile.currentEmployer,
+              education: profile.education,
+              employmentHistory: profile.employmentHistory,
+              certifications: profile.certifications,
+              notableProjects: profile.notableProjects,
+              interviewDate: profile.interviewDate,
+              updatedAt: new Date().toISOString(),
+            }
+          : a,
+      ),
+    })
   },
 
   setAnswer: async (id, questionKey, score, note) => {
@@ -181,7 +240,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   setQualificationScores: async (id, scores) => {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('comp_assessments')
       .update({
         education_score: scores.educationScore,
@@ -190,18 +249,26 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
         pm_certification_score: scores.pmCertificationScore,
       })
       .eq('id', id)
-      .select('*')
-      .single()
-    if (reportError('ثبت امتیاز شایستگی رزومه‌ای', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    if (reportError('ثبت امتیاز شایستگی رزومه‌ای', error)) return
+    set({
+      assessments: get().assessments.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              educationScore: scores.educationScore,
+              experienceScore: scores.experienceScore,
+              pmTrainingScore: scores.pmTrainingScore,
+              pmCertificationScore: scores.pmCertificationScore,
+            }
+          : a,
+      ),
+    })
   },
 
   setStatus: async (id, status) => {
-    const { data, error } = await supabase.from('comp_assessments').update({ status }).eq('id', id).select('*').single()
-    if (reportError('بروزرسانی وضعیت ارزیابی', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const { error } = await supabase.from('comp_assessments').update({ status }).eq('id', id)
+    if (reportError('بروزرسانی وضعیت ارزیابی', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, status } : a)) })
   },
 
   deleteAssessment: async (id) => {
@@ -217,41 +284,30 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reportError('بارگذاری عکس پرسنلی', { message: uploadErr ?? 'خطای نامشخص' })
       return
     }
-    const { data, error } = await supabase.from('comp_assessments').update({ photo_url: path }).eq('id', id).select('*').single()
-    if (reportError('ثبت عکس پرسنلی', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const { error } = await supabase.from('comp_assessments').update({ photo_url: path }).eq('id', id)
+    if (reportError('ثبت عکس پرسنلی', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, photoUrl: path } : a)) })
   },
 
   regenerateSelfServiceLink: async (id) => {
-    const { data, error } = await supabase
-      .from('comp_assessments')
-      .update({ self_service_token: crypto.randomUUID(), self_service_status: 'not_sent' })
-      .eq('id', id)
-      .select('*')
-      .single()
-    if (reportError('صدور لینک جدید', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const token = crypto.randomUUID()
+    const { error } = await supabase.from('comp_assessments').update({ self_service_token: token, self_service_status: 'not_sent' }).eq('id', id)
+    if (reportError('صدور لینک جدید', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, selfServiceToken: token, selfServiceStatus: 'not_sent' } : a)) })
   },
 
   markSelfServiceSent: async (id) => {
-    const { data, error } = await supabase.from('comp_assessments').update({ self_service_status: 'pending' }).eq('id', id).select('*').single()
-    if (reportError('ثبت وضعیت ارسال لینک', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const { error } = await supabase.from('comp_assessments').update({ self_service_status: 'pending' }).eq('id', id)
+    if (reportError('ثبت وضعیت ارسال لینک', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, selfServiceStatus: 'pending' } : a)) })
   },
 
   markReviewed: async (id) => {
-    const { data, error } = await supabase
-      .from('comp_assessments')
-      .update({ self_service_status: 'reviewed', reviewed_by: currentUserId(), reviewed_at: new Date().toISOString() })
-      .eq('id', id)
-      .select('*')
-      .single()
-    if (reportError('ثبت بررسی مدارک', error) || !data) return
-    const updated = compAssessmentFromRow(data as CompAssessmentRow)
-    set({ assessments: get().assessments.map((a) => (a.id === id ? updated : a)) })
+    const uid = currentUserId()
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('comp_assessments').update({ self_service_status: 'reviewed', reviewed_by: uid, reviewed_at: now }).eq('id', id)
+    if (reportError('ثبت بررسی مدارک', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, selfServiceStatus: 'reviewed', reviewedBy: uid, reviewedAt: now } : a)) })
   },
 
   fetchPanelists: async (assessmentId) => {
@@ -262,9 +318,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   addPanelist: async (assessmentId, userId, isLead) => {
-    const { data, error } = await supabase.from('comp_panelists').insert({ assessment_id: assessmentId, user_id: userId, is_lead: isLead }).select('*').single()
-    if (reportError('افزودن داور', error) || !data) return
-    set({ panelists: [...get().panelists, compPanelistFromRow(data as CompPanelistRow)] })
+    const id = crypto.randomUUID()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_panelists').insert({ id, assessment_id: assessmentId, user_id: userId, is_lead: isLead })
+    if (reportError('افزودن داور', error)) return
+    const created: CompPanelist = { id, assessmentId, userId, isLead, addedBy: uid, createdAt: new Date().toISOString() }
+    set({ panelists: [...get().panelists, created] })
   },
 
   removePanelist: async (id) => {
@@ -286,40 +345,45 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (!uid) return
     const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
     const nextAnswers = { ...(existing?.answers ?? {}), [questionKey]: { score, note } }
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('comp_panelist_scores')
-      .upsert({ assessment_id: assessmentId, panelist_id: uid, answers: nextAnswers }, { onConflict: 'assessment_id,panelist_id' })
-      .select('*')
-      .single()
-    if (reportError('ثبت امتیاز داور', error) || !data) return
-    const updated = compPanelistScoreFromRow(data as CompPanelistScoreRow)
-    set({ panelistScores: [...get().panelistScores.filter((s) => s.id !== updated.id), updated] })
+      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, answers: nextAnswers }, { onConflict: 'assessment_id,panelist_id' })
+    if (reportError('ثبت امتیاز داور', error)) return
+    const now = new Date().toISOString()
+    const updated: CompPanelistScore = existing
+      ? { ...existing, answers: nextAnswers, updatedAt: now }
+      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: nextAnswers, capstoneScore: null, capstoneNote: '', submittedAt: null, createdAt: now, updatedAt: now }
+    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
   },
 
   setMyPanelistCapstone: async (assessmentId, score, note) => {
     const uid = currentUserId()
     if (!uid) return
-    const { data, error } = await supabase
+    const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
+    const { error } = await supabase
       .from('comp_panelist_scores')
-      .upsert({ assessment_id: assessmentId, panelist_id: uid, capstone_score: score, capstone_note: note }, { onConflict: 'assessment_id,panelist_id' })
-      .select('*')
-      .single()
-    if (reportError('ثبت امتیاز سناریوی پایانی داور', error) || !data) return
-    const updated = compPanelistScoreFromRow(data as CompPanelistScoreRow)
-    set({ panelistScores: [...get().panelistScores.filter((s) => s.id !== updated.id), updated] })
+      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, capstone_score: score, capstone_note: note }, { onConflict: 'assessment_id,panelist_id' })
+    if (reportError('ثبت امتیاز سناریوی پایانی داور', error)) return
+    const now = new Date().toISOString()
+    const updated: CompPanelistScore = existing
+      ? { ...existing, capstoneScore: score, capstoneNote: note, updatedAt: now }
+      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: {}, capstoneScore: score, capstoneNote: note, submittedAt: null, createdAt: now, updatedAt: now }
+    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
   },
 
   submitMyPanelistScore: async (assessmentId) => {
     const uid = currentUserId()
     if (!uid) return
-    const { data, error } = await supabase
+    const existing = get().panelistScores.find((s) => s.assessmentId === assessmentId && s.panelistId === uid)
+    const now = new Date().toISOString()
+    const { error } = await supabase
       .from('comp_panelist_scores')
-      .upsert({ assessment_id: assessmentId, panelist_id: uid, submitted_at: new Date().toISOString() }, { onConflict: 'assessment_id,panelist_id' })
-      .select('*')
-      .single()
-    if (reportError('ثبت نهایی امتیاز داور', error) || !data) return
-    const updated = compPanelistScoreFromRow(data as CompPanelistScoreRow)
-    set({ panelistScores: [...get().panelistScores.filter((s) => s.id !== updated.id), updated] })
+      .upsert({ id: existing?.id ?? crypto.randomUUID(), assessment_id: assessmentId, panelist_id: uid, submitted_at: now }, { onConflict: 'assessment_id,panelist_id' })
+    if (reportError('ثبت نهایی امتیاز داور', error)) return
+    const updated: CompPanelistScore = existing
+      ? { ...existing, submittedAt: now, updatedAt: now }
+      : { id: crypto.randomUUID(), assessmentId, panelistId: uid, answers: {}, capstoneScore: null, capstoneNote: '', submittedAt: now, createdAt: now, updatedAt: now }
+    set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), updated] })
   },
 
   fetchAttachments: async (assessmentId) => {
@@ -335,13 +399,21 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reportError('بارگذاری مدرک', { message: uploadErr ?? 'خطای نامشخص' })
       return
     }
-    const { data, error } = await supabase
-      .from('comp_attachments')
-      .insert({ assessment_id: assessmentId, kind, file_name: file.name, storage_path: path })
-      .select('*')
-      .single()
-    if (reportError('ثبت مدرک', error) || !data) return
-    set({ attachments: [compAttachmentFromRow(data as CompAttachmentRow), ...get().attachments] })
+    const id = crypto.randomUUID()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_attachments').insert({ id, assessment_id: assessmentId, kind, file_name: file.name, storage_path: path })
+    if (reportError('ثبت مدرک', error)) return
+    const created: CompAttachment = {
+      id,
+      assessmentId,
+      kind,
+      fileName: file.name,
+      storagePath: path,
+      uploadedBy: uid,
+      uploadedByCandidate: false,
+      createdAt: new Date().toISOString(),
+    }
+    set({ attachments: [created, ...get().attachments] })
   },
 
   deleteAttachment: async (id) => {
