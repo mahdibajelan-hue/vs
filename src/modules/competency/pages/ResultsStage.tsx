@@ -312,7 +312,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
                 <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
               </p>
               <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">پوزیشن‌های پیشنهادی: {band.suggestedPositions}</p>
+              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
             </div>
 
             {assessment.capstoneScore != null && (
@@ -370,21 +370,6 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           </div>
         </div>
 
-        {panelSummary.length > 0 && (
-          <div className="glass-panel space-y-2 rounded-2xl p-4">
-            <p className="text-xs font-bold">پنل داوران مصاحبه</p>
-            {panelSummary.map((p) => (
-              <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
-                <span className="text-secondary">{p.name}</span>
-                <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
-                  {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
-                </span>
-              </div>
-            ))}
-            <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ داوران نیست.</p>
-          </div>
-        )}
-
         {/* Domain breakdown */}
         <div className="glass-panel space-y-2 rounded-2xl p-4">
           <p className="mb-1 text-xs font-bold">امتیاز به تفکیک حوزه (با وزن)</p>
@@ -402,6 +387,21 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
             </div>
           ))}
         </div>
+
+        {panelSummary.length > 0 && (
+          <div className="glass-panel space-y-2 rounded-2xl p-4">
+            <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
+            {panelSummary.map((p) => (
+              <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
+                <span className="text-secondary">{p.name}</span>
+                <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
+                  {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
+                </span>
+              </div>
+            ))}
+            <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ اعضای پنل نیست.</p>
+          </div>
+        )}
       </div>
     </div>
   )

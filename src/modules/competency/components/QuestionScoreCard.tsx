@@ -1,4 +1,4 @@
-import { SCORE_LABELS_FA } from '../lib/competencyModel'
+import { SCORE_COLOR, SCORE_GUIDE, SCORE_LABELS_FA } from '../lib/competencyModel'
 import type { CompetencyAnswer, CompetencyQuestion } from '../types'
 
 /** One panelist's recorded opinion on a single question, shown to the assessment lead. */
@@ -30,8 +30,10 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
   const votes = panelVotes?.filter((v) => v.score != null) ?? []
   const average = votes.length > 0 ? Math.round((votes.reduce((sum, v) => sum + (v.score ?? 0), 0) / votes.length) * 10) / 10 : null
 
+  const criteria = score != null ? SCORE_GUIDE.find((g) => g.score === score)?.criteria : null
+
   return (
-    <div className="rounded-xl border border-white/10 p-3.5">
+    <div className="rounded-xl border-[1.5px] border-white/15 bg-white/[0.02] p-3.5 shadow-sm">
       <p className="text-xs leading-6">
         <span className="num ml-1.5 text-muted">{index + 1}.</span>
         {question.text}
@@ -64,15 +66,31 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
             disabled={!editable}
             onClick={() => onChange(score === s ? null : s, note)}
             title={SCORE_LABELS_FA[s]}
-            className={`num flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-bold transition-colors disabled:cursor-default ${
-              score === s ? 'border-purple-400 bg-purple-500 text-white' : 'border-white/15 text-secondary hover:bg-white/5'
+            className={`num flex h-9 w-9 items-center justify-center rounded-xl border-2 text-sm font-extrabold backdrop-blur-sm transition-all disabled:cursor-default ${
+              score === s ? 'scale-105 text-white shadow-lg' : 'hover:-translate-y-0.5'
             }`}
+            style={{
+              borderColor: score === s ? SCORE_COLOR[s] : `${SCORE_COLOR[s]}45`,
+              background: score === s ? SCORE_COLOR[s] : `${SCORE_COLOR[s]}16`,
+              color: score === s ? '#fff' : SCORE_COLOR[s],
+            }}
           >
             {s}
           </button>
         ))}
         <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
       </div>
+      {criteria && (
+        <p
+          className="mt-2 rounded-lg border p-2 text-[10.5px] leading-5 text-secondary"
+          style={{ borderColor: `${SCORE_COLOR[score!]}35`, background: `${SCORE_COLOR[score!]}0f` }}
+        >
+          <span className="font-bold" style={{ color: SCORE_COLOR[score!] }}>
+            {SCORE_LABELS_FA[score!]}:{' '}
+          </span>
+          {criteria}
+        </p>
+      )}
       {editable ? (
         <textarea
           defaultValue={note}

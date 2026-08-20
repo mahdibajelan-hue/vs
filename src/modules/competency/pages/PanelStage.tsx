@@ -81,10 +81,10 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
         <div className="glass-panel rounded-2xl p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-xs font-bold">
-              <Users size={14} className="text-purple-300" /> پنل داوران این مصاحبه
+              <Users size={14} className="text-purple-300" /> پنل مصاحبه‌گران این مصاحبه
             </p>
             <span className={`num rounded-full px-2 py-0.5 text-[10px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
-              {panelists.length.toLocaleString('fa-IR')} از {PANEL_SIZE.toLocaleString('fa-IR')} داور
+              {panelists.length.toLocaleString('fa-IR')} از {PANEL_SIZE.toLocaleString('fa-IR')} مصاحبه‌گر
             </span>
           </div>
           {panelFull ? (
@@ -241,9 +241,9 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
       ) : (
         !isLead && (
           <div className="glass-panel rounded-2xl p-4">
-            <p className="text-xs font-bold">شما داور این مصاحبه نیستید</p>
+            <p className="text-xs font-bold">شما عضو پنل مصاحبه‌گران این مصاحبه نیستید</p>
             <p className="mt-1 text-[11px] leading-6 text-secondary">
-              برای امتیازدهی، مسئول ارزیابی این مصاحبه باید شما را در بخش «پنل داوران» به‌عنوان داور اضافه کند.
+              برای امتیازدهی، مسئول ارزیابی این مصاحبه باید شما را در بخش «پنل مصاحبه‌گران» به‌عنوان مصاحبه‌گر اضافه کند.
             </p>
           </div>
         )

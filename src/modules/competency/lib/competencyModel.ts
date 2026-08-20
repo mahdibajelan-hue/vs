@@ -170,13 +170,23 @@ export const SCORE_LABELS_FA: Record<number, string> = {
   5: 'بهینه‌ساز',
 }
 
+/** Red-to-green tier color per 0-5 score, used to make the score buttons read at a glance. */
+export const SCORE_COLOR: Record<number, string> = {
+  0: '#f87171',
+  1: '#fb923c',
+  2: '#fbbf24',
+  3: '#a78bfa',
+  4: '#38bdf8',
+  5: '#34d399',
+}
+
 /** Overall-maturity interpretation bands (0-100 weighted score) with hiring/role guidance. */
 export const MATURITY_BANDS: { min: number; max: number; label: string; guidance: string; suggestedPositions: string }[] = [
   {
     min: 0,
     max: 39,
     label: 'پرریسک',
-    guidance: 'برای نقش مدیر پروژه مناسب نیست یا به Mentoring سنگین نیاز دارد',
+    guidance: 'برای نقش مدیر پروژه مناسب نیست یا به راهنمایی و پشتیبانی فشرده (Mentoring) نیاز دارد',
     suggestedPositions: 'دستیار مدیر پروژه (Deputy PM) تحت نظارت مستقیم مدیر ارشد؛ عدم واگذاری مسئولیت مستقل جبهه کاری',
   },
   {
@@ -184,7 +194,7 @@ export const MATURITY_BANDS: { min: number; max: number; label: string; guidance
     max: 59,
     label: 'پایه',
     guidance: 'مناسب نقش محدودتر یا پروژه با نظارت نزدیک',
-    suggestedPositions: 'مدیر پروژه در پروژه‌های کوچک یا زیرمجموعه یک مدیر پروژه ارشد؛ مسئول یک Spread واحد',
+    suggestedPositions: 'مدیر پروژه در پروژه‌های کوچک یا زیرمجموعه یک مدیر پروژه ارشد؛ مسئول یک جبهه کاری (Spread) واحد',
   },
   {
     min: 60,
@@ -197,8 +207,8 @@ export const MATURITY_BANDS: { min: number; max: number; label: string; guidance
     min: 75,
     max: 84,
     label: 'توانمند',
-    guidance: 'مناسب پروژه EPC خط انتقال با کنترل مستقل',
-    suggestedPositions: 'مدیر پروژه EPC خط انتقال گاز با کنترل مستقل و چندپیمانکاری محدود',
+    guidance: 'مناسب پروژه طراحی-تأمین-ساخت (EPC) خط انتقال با کنترل مستقل',
+    suggestedPositions: 'مدیر پروژه طراحی-تأمین-ساخت (EPC) خط انتقال گاز با کنترل مستقل و چندپیمانکاری محدود',
   },
   {
     min: 85,

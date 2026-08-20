@@ -142,7 +142,7 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
           <div style={{ border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
             <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800 }}>تفسیر بلوغ و توصیه استفاده</p>
             <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.7, color: sub }}>{band.guidance}</p>
-            <p style={{ margin: '6px 0 0', fontSize: 10.5, lineHeight: 1.7, color: accent, fontWeight: 600 }}>پوزیشن پیشنهادی: {band.suggestedPositions}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 10.5, lineHeight: 1.7, color: accent, fontWeight: 600 }}>سمت شغلی پیشنهادی: {band.suggestedPositions}</p>
           </div>
         </div>
       </div>
@@ -184,7 +184,7 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
 
       {panel.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>پنل داوران مصاحبه</p>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>پنل مصاحبه‌گران</p>
           {panel.map((p) => (
             <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, borderBottom: `1px solid ${line}` }}>
               <span style={{ color: sub }}>{p.name}</span>
