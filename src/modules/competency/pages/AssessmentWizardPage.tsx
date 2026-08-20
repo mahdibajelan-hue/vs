@@ -45,10 +45,10 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
   }
 
-  const domain = COMPETENCY_DOMAINS[domainIndex]
-  const questions = questionsForDomain(domain.key)
-  const isLastDomain = domainIndex === COMPETENCY_DOMAINS.length - 1
   const onCapstoneStep = domainIndex === COMPETENCY_DOMAINS.length
+  const domain = onCapstoneStep ? null : COMPETENCY_DOMAINS[domainIndex]
+  const questions = domain ? questionsForDomain(domain.key) : []
+  const isLastDomain = domainIndex === COMPETENCY_DOMAINS.length - 1
 
   const profileInput: CandidateProfileInput = {
     candidateName: assessment.candidateName,
@@ -170,7 +170,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
       {stage === 'questions' && (
         <div className="space-y-3">
           <ScoringGuideBanner />
-          {!onCapstoneStep && (
+          {domain && (
             <div className="glass-panel rounded-2xl p-3.5">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-bold">
@@ -205,9 +205,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             </div>
           )}
 
-          {onCapstoneStep ? (
-            <CapstoneCard score={assessment.capstoneScore} note={assessment.capstoneNote} editable onChange={(score, note) => setCapstone(assessment.id, score, note)} />
-          ) : (
+          {domain ? (
             <div className="space-y-2.5">
               {questions.map((q, i) => (
                 <QuestionScoreCard
@@ -221,6 +219,8 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
                 />
               ))}
             </div>
+          ) : (
+            <CapstoneCard score={assessment.capstoneScore} note={assessment.capstoneNote} editable onChange={(score, note) => setCapstone(assessment.id, score, note)} />
           )}
 
           <div className="flex items-center justify-between">
