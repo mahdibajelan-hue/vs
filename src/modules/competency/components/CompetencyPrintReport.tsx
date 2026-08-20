@@ -1,6 +1,6 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
-import type { CompetencyAssessment } from '../types'
+import type { CompetencyAssessment, DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -8,6 +8,67 @@ import type { CompetencyAssessment } from '../types'
  * in the Finance module), because html2canvas captures the dark theme's actual colors verbatim
  * and a black background wastes paper/ink and reads poorly once printed.
  */
+/**
+ * Radar plot of the eight domain scores, drawn as plain SVG with fixed coordinates.
+ *
+ * Deliberately not the Recharts chart used on screen: that one animates its shape in on mount and
+ * sizes itself by measuring its container, and html2canvas rasterises whatever happens to be on
+ * the page at capture time — so it lands in the PDF half-drawn or not at all. Static geometry has
+ * neither problem, and prints crisply.
+ */
+function PrintRadar({ domainScores }: { domainScores: DomainScore[] }) {
+  // The box is wider than the plot on purpose: Persian domain labels sit outside the outermost
+  // ring and run 60-70px long, so a box sized to the plot alone clips them.
+  const width = 360
+  const height = 300
+  const cx = width / 2
+  const cy = height / 2
+  const radius = 84
+  const n = domainScores.length
+  const rings = [25, 50, 75, 100]
+  const accent = '#7c3aed'
+
+  const pointAt = (index: number, percent: number) => {
+    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / n
+    const r = (radius * percent) / 100
+    return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)] as const
+  }
+
+  const shape = domainScores.map((d, i) => pointAt(i, d.percentScore ?? 0).join(',')).join(' ')
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', margin: '0 auto' }}>
+      {rings.map((ring) => (
+        <polygon
+          key={ring}
+          points={domainScores.map((_, i) => pointAt(i, ring).join(',')).join(' ')}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth={1}
+        />
+      ))}
+      {domainScores.map((_, i) => {
+        const [x, y] = pointAt(i, 100)
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+      })}
+      <polygon points={shape} fill={accent} fillOpacity={0.18} stroke={accent} strokeWidth={2} />
+      {domainScores.map((d, i) => {
+        const [x, y] = pointAt(i, d.percentScore ?? 0)
+        return <circle key={d.domain.key} cx={x} cy={y} r={2.5} fill={accent} />
+      })}
+      {domainScores.map((d, i) => {
+        const [x, y] = pointAt(i, 118)
+        const anchor = Math.abs(x - cx) < 6 ? 'middle' : x > cx ? 'start' : 'end'
+        return (
+          <text key={d.domain.key} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fontSize={8} fill="#475569">
+            {d.domain.shortTitle}
+          </text>
+        )
+      })}
+    </svg>
+  )
+}
+
 /** One interviewer's overall contribution, summarised for the report's panel section. */
 export interface PanelSummaryRow {
   name: string
@@ -36,7 +97,9 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
   const accent = '#7c3aed'
 
   return (
-    <div style={{ background: '#ffffff', color: ink, width: 900, padding: '36px 40px', fontFamily: 'var(--font-sans)', direction: 'rtl' }}>
+    // Font named explicitly rather than via var(--font-sans): this markup is also cloned into a
+    // blank print iframe, where the app's CSS custom properties don't exist.
+    <div style={{ background: '#ffffff', color: ink, width: 900, padding: '36px 40px', fontFamily: '"Vazirmatn", "Segoe UI", sans-serif', direction: 'rtl' }}>
       <div style={{ borderBottom: `2px solid ${ink}`, paddingBottom: 16, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>گزارش ارزیابی شایستگی — {assessment.candidateName}</p>
@@ -96,9 +159,14 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>امتیاز به تفکیک حوزه (با وزن)</p>
-        {domainScores.map((d) => (
+      <div style={{ display: 'flex', gap: 24, marginBottom: 20, alignItems: 'flex-start' }}>
+        <div style={{ width: 366, flexShrink: 0 }}>
+          <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 800 }}>نمودار رادار بلوغ شایستگی</p>
+          <PrintRadar domainScores={domainScores} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>امتیاز به تفکیک حوزه (با وزن)</p>
+          {domainScores.map((d) => (
           <div key={d.domain.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
             <span style={{ width: 150, flexShrink: 0, fontSize: 10.5, color: sub }}>
               {d.domain.shortTitle} <span style={{ color: '#94a3b8' }}>(٪{d.domain.weight})</span>
@@ -109,8 +177,9 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
             <span style={{ width: 80, flexShrink: 0, textAlign: 'left', fontSize: 10.5, color: sub }}>
               {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'}
             </span>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {panel.length > 0 && (

@@ -67,6 +67,61 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
     { label: 'نتایج مصاحبه', value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
   ]
 
+  /**
+   * Prints the light-mode report on its own, inside a throwaway iframe.
+   *
+   * Calling window.print() on the app can't produce a usable page: the module shell paints its
+   * dark background through inline styles that print CSS can't reach, and the app's global @page
+   * rule is A4 landscape for the wide dashboards. The iframe starts from a blank document, so the
+   * report is the only thing on the paper and it gets its own portrait page box.
+   */
+  const handlePrint = async () => {
+    const node = printRef.current
+    if (!node) return
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
+    document.body.appendChild(frame)
+
+    const doc = frame.contentDocument
+    const win = frame.contentWindow
+    if (!doc || !win) {
+      frame.remove()
+      return
+    }
+
+    doc.open()
+    doc.write(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<title>ارزیابی شایستگی — ${assessment.candidateName}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap">
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: "Vazirmatn", "Segoe UI", sans-serif; }
+  /* The report is authored at a fixed 900px for the PDF capture; on paper let it reflow to the
+     page width instead of overflowing the sheet. */
+  body > div { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+  svg, img { break-inside: avoid; page-break-inside: avoid; }
+</style></head><body>${node.innerHTML}</body></html>`)
+    doc.close()
+
+    // Without waiting, Chrome snapshots the page before the webfont arrives and prints fallback
+    // glyphs with the wrong metrics.
+    try {
+      await doc.fonts?.ready
+    } catch {
+      /* fonts API unavailable — print with whatever is loaded */
+    }
+
+    win.focus()
+    win.print()
+    // Safari fires afterprint late (or not at all when the dialog is dismissed), so also sweep up
+    // on a timer; removing an already-removed node is a no-op.
+    win.addEventListener('afterprint', () => frame.remove())
+    setTimeout(() => frame.remove(), 60_000)
+  }
+
   const handlePdf = async () => {
     if (!printRef.current) return
     setExporting(true)
@@ -91,7 +146,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   return (
     <div className="space-y-4">
       <div className="no-print flex flex-wrap items-center justify-end gap-2">
-        <button onClick={() => window.print()} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
+        <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
           <Printer size={14} /> پرینت
         </button>
         <button
@@ -131,7 +186,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       {/* Off-screen, light-mode print/PDF template — kept out of view (print-only) so the on-screen
           dark card above stays as-is, but window.print()/PDF export both target this instead, since
           html2canvas captures literal colors and a dark background prints/exports poorly. */}
-      <div className="comp-print-offscreen competency-print-portrait" ref={printRef} aria-hidden="true">
+      <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
         <CompetencyPrintReport assessment={assessment} panel={panelSummary} />
       </div>
 

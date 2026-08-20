@@ -195,18 +195,10 @@ body {
   display: none;
 }
 
-/* Competency report prints portrait (unlike the app's default landscape A4 page), since it's a
-   tall candidate profile + domain breakdown rather than a wide table/chart layout. */
-.competency-print-portrait {
-  page: competency-print;
-}
-@page competency-print {
-  size: A4 portrait;
-  margin: 12mm;
-}
-
-/* Off-screen (not display:none, so html2canvas can still rasterize it for PDF export) on normal
-   screens; snapped back into the page flow only while printing. */
+/* Holds the competency module's light-mode report copy. Parked off-screen rather than
+   display:none so html2canvas can still rasterize it for the PDF export, and kept off-screen
+   during print too — printing goes through its own iframe (see ResultsStage.handlePrint), so this
+   node must never reach the app's own printed output. */
 .comp-print-offscreen {
   position: fixed;
   top: 0;
@@ -215,9 +207,7 @@ body {
 }
 @media print {
   .comp-print-offscreen {
-    position: static;
-    left: auto;
-    z-index: auto;
+    display: none !important;
   }
 }
 
