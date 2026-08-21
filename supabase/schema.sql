@@ -3887,3 +3887,84 @@ returns table (module_key text) as $$
 $$ language sql security definer stable;
 
 grant execute on function rasta_my_accessible_modules() to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 18. Project Cost Estimator — project definitions + saved estimate history.
+--     Ownership model is deliberately simple (unlike Risk/Material's multi-role
+--     project membership): a cost estimate is personal working data, so RLS is
+--     just "creator, or an admin". est_estimates is an append-only history —
+--     every "محاسبه" the user runs is saved as a new row (never overwritten),
+--     so a project can be re-priced over time without losing earlier runs.
+-- ----------------------------------------------------------------------------
+
+create table if not exists est_projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  has_onshore boolean not null default true,
+  has_offshore boolean not null default false,
+  has_compressor_station boolean not null default false,
+  launcher_count integer not null default 0 check (launcher_count >= 0),
+  receiver_count integer not null default 0 check (receiver_count >= 0),
+  tie_in_count integer not null default 0 check (tie_in_count >= 0),
+  block_valve_count integer not null default 0 check (block_valve_count >= 0),
+  has_telecom_scada boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table est_projects enable row level security;
+
+drop policy if exists "est_projects_select_own" on est_projects;
+create policy "est_projects_select_own" on est_projects
+  for select using (created_by = auth.uid() or is_admin_user());
+drop policy if exists "est_projects_insert_own" on est_projects;
+create policy "est_projects_insert_own" on est_projects
+  for insert with check (created_by = auth.uid());
+drop policy if exists "est_projects_update_own" on est_projects;
+create policy "est_projects_update_own" on est_projects
+  for update using (created_by = auth.uid() or is_admin_user());
+drop policy if exists "est_projects_delete_own" on est_projects;
+create policy "est_projects_delete_own" on est_projects
+  for delete using (created_by = auth.uid() or is_admin_user());
+
+drop trigger if exists trg_set_updated_at on est_projects;
+create trigger trg_set_updated_at before update on est_projects for each row execute function set_updated_at();
+
+-- inputs/results are stored as JSONB snapshots (the full wizard spec and the full computed
+-- breakdown at that moment) rather than a normalized column-per-field schema — mirrors how
+-- EstimatorInputs/computeCBS already work client-side as one flat config/result object, and lets
+-- the section-spec shape evolve without a migration every time a new option is added.
+create table if not exists est_estimates (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references est_projects (id) on delete cascade,
+  label text not null default '',
+  inputs jsonb not null,
+  results jsonb not null,
+  fx_rial_per_usd numeric not null default 0,
+  grand_total_eur numeric not null default 0,
+  grand_total_rial numeric not null default 0,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table est_estimates enable row level security;
+
+drop policy if exists "est_estimates_select_own" on est_estimates;
+create policy "est_estimates_select_own" on est_estimates
+  for select using (
+    exists (select 1 from est_projects p where p.id = project_id and (p.created_by = auth.uid() or is_admin_user()))
+  );
+drop policy if exists "est_estimates_insert_own" on est_estimates;
+create policy "est_estimates_insert_own" on est_estimates
+  for insert with check (
+    created_by = auth.uid()
+    and exists (select 1 from est_projects p where p.id = project_id and p.created_by = auth.uid())
+  );
+drop policy if exists "est_estimates_delete_own" on est_estimates;
+create policy "est_estimates_delete_own" on est_estimates
+  for delete using (
+    exists (select 1 from est_projects p where p.id = project_id and (p.created_by = auth.uid() or is_admin_user()))
+  );
+
+create index if not exists idx_est_estimates_project on est_estimates (project_id, created_at desc);
