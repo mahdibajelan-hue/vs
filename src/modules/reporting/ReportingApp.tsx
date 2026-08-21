@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, Home, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
+import { BarChart3, ClipboardList, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { DashboardPage } from './pages/DashboardPage'
 import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
@@ -97,12 +97,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
-        </div>
+        <ModuleHeaderActions onExitToHub={onExitToHub} />
       </header>
 
       <StorageErrorBanner />

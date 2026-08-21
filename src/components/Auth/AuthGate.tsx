@@ -306,14 +306,28 @@ function AuthIntroPanel() {
           ))}
         </div>
 
-        <div className="mt-7 flex items-center gap-2">
+        <div className="mt-8 flex flex-col items-center gap-3 text-center">
+          <p dir="ltr" className="text-xs font-medium tracking-wide text-secondary">
+            From Data to Insight. From Insight to Action.
+          </p>
           <div className="rasta-brokenline">
             <span className="rasta-brokenline-seg" />
             <span className="rasta-brokenline-dot" />
             <span className="rasta-brokenline-seg is-reverse" />
           </div>
-          <p dir="ltr" className="text-xs font-medium tracking-wide text-secondary">
-            From Data to Insight. From Insight to Action.
+          <img
+            src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
+            alt="Mahdi Bajelan — Software Engineer"
+            className="mt-1 h-24 w-auto sm:h-28"
+            style={{ filter: 'drop-shadow(0 4px 20px rgba(201,162,39,0.4))' }}
+            onError={(e) => {
+              // Falls back to a styled text signature until signature-mahdi.png is uploaded to public/.
+              e.currentTarget.style.display = 'none'
+              e.currentTarget.nextElementSibling?.classList.remove('hidden')
+            }}
+          />
+          <p style={{ fontFamily: "'Dancing Script', cursive", color: '#c9a227' }} className="hidden text-3xl font-bold leading-none">
+            Mahdi Bajelan
           </p>
         </div>
       </div>

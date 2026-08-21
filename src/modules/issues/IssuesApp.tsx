@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, BarChart3, FolderKanban, Home, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
+import { AlertCircle, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useIssuesStore } from './store/useIssuesStore'
 import { useIssuesMembersStore } from './store/useIssuesMembersStore'
 import { DashboardPage } from './pages/DashboardPage'
@@ -58,15 +58,10 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
   return (
     <div className="im-root">
       <div className="im-mobile-topbar">
-        <button className="im-btn im-btn-ghost im-btn-sm" onClick={onExitToHub} title="بازگشت به ماژول‌ها">
-          <Home size={16} />
-        </button>
-        <div style={{ textAlign: 'center' }}>
-          <div className="im-brand-name" style={{ fontSize: 14 }}>
-            رصد
-          </div>
+        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <div className="im-brand-name" style={{ fontSize: 14 }}>
+          رصد
         </div>
-        <SignOutButton className="im-btn im-btn-ghost im-btn-sm" style={{ color: '#f87171' }} />
       </div>
 
       <div className="im-shell">
@@ -93,10 +88,9 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
                 <div className="im-me-name">{currentUser?.fullName || currentUser?.email}</div>
               </div>
             </div>
-            <button className="im-btn im-btn-ghost im-btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={onExitToHub}>
-              <Home size={13} /> بازگشت به ماژول‌ها
-            </button>
-            <SignOutButton className="im-btn im-btn-ghost im-btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 6, color: '#f87171' }} />
+            <div className="mt-2">
+              <ModuleHeaderActions onExitToHub={onExitToHub} />
+            </div>
           </div>
         </aside>
 

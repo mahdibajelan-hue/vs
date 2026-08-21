@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Home, Menu, Moon, Sun, Building2, MapPin, LogOut, UserCircle2, Users } from 'lucide-react'
+import { Menu, Moon, Sun, Building2, MapPin, UserCircle2, Users } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
 import { useCurrentRole } from '../../store/useMembersStore'
 import { UserManagementModal } from '../Auth/UserManagementModal'
 import { ProfileModal } from '../Auth/ProfileModal'
+import { ModuleHeaderActions } from '../common/ModuleHeaderActions'
 import { ROLE_LABEL_FA, type Project } from '../../types'
 import { LevelBreadcrumb } from '../../modules/masterdata/components/LevelBreadcrumb'
 import { useHierarchyPath } from '../../modules/masterdata/lib/useHierarchyPath'
@@ -15,7 +16,6 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
   const toggleTheme = useStore((s) => s.toggleTheme)
   const currentUser = useAuthStore((s) => s.currentUser())
   const role = useCurrentRole()
-  const signOut = useAuthStore((s) => s.signOut)
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const [showUsers, setShowUsers] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -73,20 +73,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <button
-          onClick={exitToHub}
-          className="glass-panel rounded-lg p-2 hover:brightness-125 transition"
-          title="بازگشت به ماژول‌ها"
-        >
-          <Home size={16} />
-        </button>
-        <button
-          onClick={() => signOut()}
-          className="glass-panel rounded-lg p-2 hover:brightness-125 transition text-red-400"
-          title="خروج از حساب"
-        >
-          <LogOut size={16} />
-        </button>
+        <ModuleHeaderActions onExitToHub={exitToHub} />
       </div>
       {showUsers && project && <UserManagementModal projectName={project.name} onClose={() => setShowUsers(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}

@@ -1,5 +1,5 @@
-import { CalendarDays, Home, Route as RouteIcon, Settings } from 'lucide-react'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { CalendarDays, Route as RouteIcon, Settings } from 'lucide-react'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useAuthStore } from '../../store/useAuthStore'
 import { usePdtStore } from './store/usePdtStore'
@@ -92,10 +92,7 @@ export function PipelineDigitalTwinApp({ onExitToHub }: { onExitToHub: () => voi
           >
             <Settings size={13} /> تنظیمات
           </button>
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
+          <ModuleHeaderActions onExitToHub={onExitToHub} />
         </div>
       </header>
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Award, Home, Loader2, UserCircle2 } from 'lucide-react'
+import { Award, Loader2, UserCircle2 } from 'lucide-react'
 import { useCompetencyStore } from './store/useCompetencyStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { AssessmentsListPage } from './pages/AssessmentsListPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { ProfileForm } from './components/ProfileForm'
@@ -73,10 +73,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
               <Award size={13} /> <span className="hidden sm:inline">فهرست ارزیابی‌ها</span>
             </button>
           )}
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
+          <ModuleHeaderActions onExitToHub={onExitToHub} />
         </div>
       </header>
 

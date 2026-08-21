@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ClipboardCheck, Factory, GitBranch, Home, LayoutDashboard, Loader2, Package, ShoppingCart, Truck, Warehouse } from 'lucide-react'
+import { ClipboardCheck, Factory, GitBranch, LayoutDashboard, Loader2, Package, ShoppingCart, Truck, Warehouse } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useMaterialStore } from './store/useMaterialStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { MaterialDashboardPage } from './pages/MaterialDashboardPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { EngineeringMappingPage } from './pages/EngineeringMappingPage'
@@ -106,12 +106,7 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3">
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 sm:px-3" />
-        </div>
+        <ModuleHeaderActions onExitToHub={onExitToHub} />
       </header>
 
       <StorageErrorBanner />

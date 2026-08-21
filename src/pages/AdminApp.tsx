@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Database, Home, Users } from 'lucide-react'
+import { Database, Users } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import { UnifiedAdminPage } from './UnifiedAdminPage'
 import { MasterDataApp } from '../modules/masterdata/MasterDataApp'
-import { SignOutButton } from '../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../components/common/ModuleHeaderActions'
 
 type Tab = 'users' | 'masterdata'
 
@@ -22,12 +22,7 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 p-8" style={{ background: 'var(--bg-app)' }}>
         <p className="text-sm text-muted">این بخش فقط برای ادمین سامانه در دسترس است.</p>
-        <div className="flex items-center gap-2">
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 transition-colors">
-            <Home size={13} /> بازگشت به ماژول‌ها
-          </button>
-          <SignOutButton />
-        </div>
+        <ModuleHeaderActions onExitToHub={onExitToHub} />
       </div>
     )
   }
@@ -39,12 +34,7 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
           <TabButton active={tab === 'users'} icon={Users} label="کاربران" onClick={() => setTab('users')} />
           <TabButton active={tab === 'masterdata'} icon={Database} label="داده‌های پایه" onClick={() => setTab('masterdata')} />
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <button onClick={onExitToHub} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3.5 sm:py-2">
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton />
-        </div>
+        <ModuleHeaderActions onExitToHub={onExitToHub} />
       </header>
 
       <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UnifiedAdminPage /> : <MasterDataApp />}</div>

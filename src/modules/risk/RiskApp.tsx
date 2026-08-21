@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Brain, Home, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
+import { Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { LevelBreadcrumb } from '../masterdata/components/LevelBreadcrumb'
 import { useHierarchyPath } from '../masterdata/lib/useHierarchyPath'
 import { useRiskStore } from './store/useRiskStore'
@@ -127,13 +127,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {currentUser && <span className="hidden text-xs text-secondary lg:inline">{currentUser.fullName || currentUser.email}</span>}
-          <button
-            onClick={onExitToHub}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
-          >
-            <Home size={13} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton className="flex items-center gap-1.5 rounded-lg border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors sm:px-3" />
+          <ModuleHeaderActions onExitToHub={onExitToHub} />
         </div>
       </header>
 

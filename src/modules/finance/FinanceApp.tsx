@@ -11,7 +11,6 @@ import {
   FileText,
   FileWarning,
   FolderKanban,
-  Home,
   Info,
   Landmark,
   LayoutDashboard,
@@ -30,7 +29,7 @@ import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { SignOutButton } from '../../components/Auth/SignOutButton'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { buildFinanceNotifications, type FinNotification } from './lib/financeNotifications'
 import { todayJalali, JALALI_MONTHS } from '../../lib/jalali'
 import './finance-dashboard.css'
@@ -227,11 +226,8 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
               </p>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <button onClick={onExitToHub} className="fin-nav-item flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px]">
-              <Home size={12} /> ماژول‌ها
-            </button>
-            <SignOutButton className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-400/25 py-1.5 text-[11px] text-red-300 hover:bg-red-500/10" />
+          <div className="mt-3">
+            <ModuleHeaderActions onExitToHub={onExitToHub} />
           </div>
         </div>
       </aside>
