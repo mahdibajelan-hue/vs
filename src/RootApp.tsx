@@ -15,6 +15,7 @@ import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
+import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 
@@ -106,6 +107,8 @@ export function RootApp() {
     <MaterialApp onExitToHub={exitToHub} />
   ) : activeModule === 'competency' ? (
     <CompetencyApp onExitToHub={exitToHub} />
+  ) : activeModule === 'estimator' ? (
+    <EstimatorApp onExitToHub={exitToHub} />
   ) : activeModule === 'pipelinedigitaltwin' ? (
     <Suspense
       fallback={

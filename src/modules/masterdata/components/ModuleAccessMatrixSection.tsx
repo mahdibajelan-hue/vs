@@ -16,6 +16,7 @@ const MODULE_ACCENT: Record<string, string> = {
   material: '#f59e0b',
   pipelinedigitaltwin: '#38bdf8',
   competency: '#a855f7',
+  estimator: '#F2B705',
   admin: '#c9a227',
 }
 

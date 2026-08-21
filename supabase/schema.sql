@@ -3837,6 +3837,13 @@ insert into rasta_modules (key, label_fa) values
   ('pipelinedigitaltwin', 'دوقلوی دیجیتال خط لوله')
 on conflict (key) do nothing;
 
+-- Added later (Project Cost Estimator module) — kept in this same block so a fresh database
+-- only needs to run this file once; on conflict do nothing makes it safe to also re-run on an
+-- existing database that already has the earlier rows.
+insert into rasta_modules (key, label_fa) values
+  ('estimator', 'برآورد هزینه پروژه')
+on conflict (key) do nothing;
+
 insert into rasta_permissions (module_key, action)
 select m.key, a.action
 from rasta_modules m

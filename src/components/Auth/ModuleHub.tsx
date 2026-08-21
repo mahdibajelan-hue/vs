@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, Calculator, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
@@ -107,6 +107,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['ثبت مشخصات و سوابق نامزد پیش از مصاحبه', 'امتیازدهی در ۷ حوزه شایستگی و نمودار رادار'],
     icon: Award,
     accent: '#a855f7',
+    status: 'active',
+  },
+  {
+    key: 'estimator',
+    title: 'برآورد هزینه پروژه',
+    englishTag: 'Project Cost Estimator',
+    teaser: 'ماشین‌حساب برآورد مالی EPC خط لوله',
+    bullets: ['ساختار شکست هزینه (CBS) و تحلیل حساسیت', 'زمان‌بندی فصلی جریان نقدی و خروجی گزارش'],
+    icon: Calculator,
+    accent: '#F2B705',
     status: 'active',
   },
   {
