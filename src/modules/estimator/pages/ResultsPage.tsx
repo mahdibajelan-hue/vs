@@ -1,14 +1,16 @@
 import { useMemo, useRef, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
+  BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell, LabelList, Legend,
 } from 'recharts'
 import { Check, Copy, FileDown, Save } from 'lucide-react'
 import { exportElementToPdf } from '../../../lib/export'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { computeEstimate, PHASES } from '../lib/calc'
+import { computeEstimate, buildCashFlowTimeline } from '../lib/calc'
 import {
-  fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, LINE, SAFETY, SECTION_COLOR, STEEL, STEEL_DARK,
-  TOOLTIP_ITEM_STYLE, TOOLTIP_LABEL_STYLE, TOOLTIP_STYLE, toFa,
+  BG, BORDER, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, GRID, INK, INK_SOFT, MUTED_FG,
+  SAFETY, SECTION_COLOR, STATUS, SURFACE, SURFACE_2, TOOLTIP_ITEM_STYLE, TOOLTIP_LABEL_STYLE,
+  TOOLTIP_STYLE, toFa,
 } from '../lib/theme'
 import { Card } from '../components/ui'
 
@@ -17,11 +19,15 @@ const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
   hse: 'HSE', contractor: 'پیمانکار', permit: 'مجوز/تملک', weather: 'آب‌وهوا', other: 'سایر',
 }
 
+const LIFECYCLE_COLOR: Record<string, string> = {
+  consultant: '#6B7A8F', design: '#3987e5', contractor: '#9085e9', execution: SAFETY,
+}
+
 function riskBand(score: number) {
-  if (score <= 4) return { label: 'کم', color: '#2A8C82' }
-  if (score <= 9) return { label: 'متوسط', color: SAFETY }
-  if (score <= 15) return { label: 'بالا', color: '#B44711' }
-  return { label: 'بحرانی', color: '#9B1C1C' }
+  if (score <= 4) return { label: 'کم', color: STATUS.good }
+  if (score <= 9) return { label: 'متوسط', color: STATUS.warning }
+  if (score <= 15) return { label: 'بالا', color: STATUS.serious }
+  return { label: 'بحرانی', color: STATUS.critical }
 }
 
 export function ResultsPage({
@@ -33,6 +39,7 @@ export function ResultsPage({
   saving: boolean
 }) {
   const results = useMemo(() => computeEstimate(project, inputs), [project, inputs])
+  const cashFlow = useMemo(() => buildCashFlowTimeline(inputs, results), [inputs, results])
   const [copied, setCopied] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
 
@@ -41,29 +48,38 @@ export function ResultsPage({
   const toEur = (usd: number) => usd * eurRate
   const toRial = (usd: number) => usd * rialRate
 
-  const chartData = [...results.sections]
-    .sort((a, b) => b.totalUsd - a.totalUsd)
-    .map((s) => ({ key: s.key, name: s.chartLabel, value: s.totalUsd }))
+  const donutData = results.sections.map((s) => ({ key: s.key, name: s.label, value: s.totalUsd }))
+  const barData = [...results.sections].sort((a, b) => b.totalUsd - a.totalUsd).map((s) => ({ key: s.key, name: s.chartLabel, value: s.totalUsd }))
 
-  const phaseSum = inputs.phaseWeights.reduce((a, b) => a + b, 0) || 1
-  const cashFlow = PHASES.map((ph, i) => ({
-    name: ph.name, desc: ph.desc, pct: inputs.phaseWeights[i],
-    usd: (inputs.phaseWeights[i] / phaseSum) * results.grand,
-  }))
-
+  const totalMonths = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths + inputs.lifecycle.epcContractorSelectionMonths + inputs.lifecycle.executionMonths
   const lifecyclePhases = [
-    { label: 'انتخاب مشاور طراح', months: inputs.lifecycle.consultantSelectionMonths },
-    { label: 'اتمام طراحی پایه', months: inputs.lifecycle.basicDesignMonths },
-    { label: 'انتخاب پیمانکار EPC', months: inputs.lifecycle.epcContractorSelectionMonths },
-    { label: 'اجرا و راه‌اندازی', months: inputs.lifecycle.commissioningMonths },
+    { key: 'consultant', label: 'انتخاب مشاور طراح', months: inputs.lifecycle.consultantSelectionMonths },
+    { key: 'design', label: 'طراحی پایه', months: inputs.lifecycle.basicDesignMonths },
+    { key: 'contractor', label: 'انتخاب پیمانکار EPC', months: inputs.lifecycle.epcContractorSelectionMonths },
+    { key: 'execution', label: 'اجرا و راه‌اندازی', months: inputs.lifecycle.executionMonths },
   ]
-  const totalMonths = lifecyclePhases.reduce((s, p) => s + p.months, 0) || 1
+
+  const activeSectionLabels = results.sections.map((s) => s.label).join('، ')
+  const summary =
+    `این گزارش برآورد هزینهٔ پروژهٔ «${project.name}» را در ${toFa(results.sections.length)} بخش (${activeSectionLabels}) ارائه می‌دهد. ` +
+    `برآورد کل پروژه ${fmtEUR(toEur(results.grand))} معادل ${fmtRial(toRial(results.grand))} است. ` +
+    `چرخهٔ عمر پروژه از انتخاب مشاور طراح تا پایان راه‌اندازی حدود ${toFa(totalMonths)} ماه برآورد می‌شود.`
+
+  // 5x5 likelihood x impact grid — counts + worst band per cell.
+  const heatGrid = Array.from({ length: 5 }, (_, impactIdx) =>
+    Array.from({ length: 5 }, (_, likelihoodIdx) => {
+      const likelihood = likelihoodIdx + 1
+      const impact = 5 - impactIdx
+      const cellRisks = inputs.risks.filter((r) => r.likelihood === likelihood && r.impact === impact)
+      return { likelihood, impact, count: cellRisks.length, risks: cellRisks, score: likelihood * impact }
+    }),
+  )
 
   function smsSummary() {
     return (
       `برآورد هزینه پروژه «${project.name}»\n` +
       `جمع کل: ${fmtEUR(toEur(results.grand))} (≈ ${fmtRialBn(toRial(results.grand))})\n` +
-      `مدت پیش از اجرا: ${toFa(totalMonths)} ماه`
+      `مدت پیش از راه‌اندازی: ${toFa(totalMonths)} ماه`
     ).slice(0, 640)
   }
 
@@ -76,54 +92,157 @@ export function ResultsPage({
 
   async function exportPdf() {
     if (!reportRef.current) return
-    await exportElementToPdf(reportRef.current, `estimate-${project.name}.pdf`, { backgroundColor: '#F3F5F7' })
+    await exportElementToPdf(reportRef.current, `estimate-${project.name}.pdf`, { backgroundColor: BG })
   }
 
   return (
-    <div className="h-full overflow-y-auto est-font" style={{ background: '#F3F5F7' }}>
+    <div className="h-full overflow-y-auto est-font">
       <div ref={reportRef} className="mx-auto max-w-4xl px-4 py-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 no-print">
           <div>
-            <p className="text-sm font-bold" style={{ color: STEEL_DARK }}>۳. نتیجه برآورد هزینه</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">پروژه: {project.name}</p>
+            <p className="text-sm font-bold" style={{ color: INK }}>۳. نتیجه برآورد هزینه</p>
+            <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>پروژه: {project.name}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => onSave({ grandTotalEur: toEur(results.grand), grandTotalRial: toRial(results.grand) })}
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium text-white disabled:opacity-60 transition-transform hover:scale-[1.02]"
-              style={{ background: STEEL }}>
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium disabled:opacity-60 transition-transform hover:scale-[1.02]"
+              style={{ background: SAFETY, color: '#1A1400' }}>
               <Save size={14} /> {saving ? 'در حال ذخیره...' : 'ذخیره در تاریخچه'}
             </button>
             <button onClick={exportPdf}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium border border-slate-300 bg-white transition-transform hover:scale-[1.02]">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-transform hover:scale-[1.02]"
+              style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}>
               <FileDown size={14} /> گزارش جامع PDF
             </button>
             <button onClick={copySms}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium border border-slate-300 bg-white transition-transform hover:scale-[1.02]">
-              {copied ? <Check size={14} color="#2A8C82" /> : <Copy size={14} />}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-transform hover:scale-[1.02]"
+              style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}>
+              {copied ? <Check size={14} color={STATUS.good} /> : <Copy size={14} />}
               {copied ? 'کپی شد' : 'خلاصه پیامکی'}
             </button>
           </div>
         </div>
 
-        {/* Headline */}
-        <div className="est-card rounded-2xl p-6 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${STEEL_DARK}, #0A2434)` }}>
-          <div className="est-hazard absolute inset-x-0 top-0" />
-          <div className="text-[11px] text-slate-300 mb-1 pt-2">جمع کل برآورد پروژه</div>
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="text-3xl md:text-4xl font-extrabold est-mono" style={{ color: SAFETY }}>{fmtEUR(toEur(results.grand))}</div>
-            <div className="text-sm text-slate-300 est-mono mb-1">≈ {fmtRial(toRial(results.grand))}</div>
+        {/* Management report header */}
+        <div className="est-card rounded-2xl p-6" style={{ background: `linear-gradient(160deg, ${SURFACE}, ${SURFACE_2})`, border: `1px solid ${BORDER}` }}>
+          <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: MUTED_FG }}>گزارش مدیریتی برآورد هزینه</div>
+          <h1 className="text-xl font-extrabold mb-3" style={{ color: INK }}>{project.name}</h1>
+          <p className="text-sm leading-relaxed mb-5" style={{ color: INK_SOFT }}>{summary}</p>
+          <div className="flex flex-wrap items-end gap-6">
+            <div>
+              <div className="text-[11px] mb-0.5" style={{ color: MUTED_FG }}>برآورد کل (یورو)</div>
+              <div className="text-3xl md:text-4xl font-extrabold est-mono" style={{ color: SAFETY }}>{fmtEUR(toEur(results.grand))}</div>
+            </div>
+            <div>
+              <div className="text-[11px] mb-0.5" style={{ color: MUTED_FG }}>برآورد کل (ریال)</div>
+              <div className="text-xl md:text-2xl font-extrabold est-mono" style={{ color: INK }}>{fmtRial(toRial(results.grand))}</div>
+            </div>
           </div>
-          <div className="text-xs text-slate-400 mt-1 est-mono">مبنای محاسبه: {fmtUSD(results.grand)} (بر اساس نرخ‌های ارز واردشده)</div>
         </div>
 
-        {/* CBS by section */}
+        {/* Section share + magnitude */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>سهم هر بخش از هزینه کل</h2>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={90} paddingAngle={2} strokeWidth={0}>
+                  {donutData.map((d) => (<Cell key={d.key} fill={SECTION_COLOR[d.key]} />))}
+                </Pie>
+                <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
+                <Legend wrapperStyle={{ fontSize: 11, color: INK_SOFT }} formatter={(v) => <span style={{ color: INK_SOFT }}>{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card>
+            <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>مقایسه مبلغ هر بخش</h2>
+            <div dir="ltr">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={barData} layout="vertical" margin={{ left: 10, right: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={GRID} />
+                  <XAxis type="number" tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 11, fill: MUTED_FG }} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: INK_SOFT }} />
+                  <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} animationDuration={700} animationEasing="ease-out">
+                    {barData.map((d) => (<Cell key={d.key} fill={SECTION_COLOR[d.key]} />))}
+                    <LabelList dataKey="value" position="right" formatter={(v) => fmtEURm(Number(v) * eurRate)} style={{ fontSize: 11, fill: INK_SOFT }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        {/* Lifecycle + cash flow */}
         <Card>
-          <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>ریز برآورد به تفکیک بخش</h2>
+          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>چرخه عمر پروژه و جریان نقدینگی</h2>
+          <p className="text-[11px] mb-3" style={{ color: MUTED_FG }}>جمع مدت پیش از راه‌اندازی: <span className="est-mono font-bold" style={{ color: INK }}>{toFa(totalMonths)} ماه</span></p>
+
+          <div className="flex h-7 w-full overflow-hidden rounded-lg mb-3" dir="ltr">
+            {lifecyclePhases.map((p) => (
+              <div key={p.key} className="flex items-center justify-center text-[10px] font-bold"
+                style={{ width: `${(p.months / totalMonths) * 100}%`, background: LIFECYCLE_COLOR[p.key], color: p.key === 'execution' ? '#1A1400' : '#fff' }}>
+                {toFa(p.months)}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {lifecyclePhases.map((p) => (
+              <div key={p.key} className="flex items-center gap-1.5 text-[11px]" style={{ color: INK_SOFT }}>
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: LIFECYCLE_COLOR[p.key] }} />
+                {p.label} — <span className="est-mono">{toFa(p.months)} ماه</span>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-[11px] mb-1.5" style={{ color: MUTED_FG }}>جریان نقدینگی ماهانه</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={cashFlow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED_FG }} tickFormatter={(v) => toFa(v)} interval={Math.ceil(cashFlow.length / 12)} />
+              <YAxis tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 10, fill: MUTED_FG }} width={44} />
+              <Tooltip
+                formatter={(v) => fmtEUR(Number(v) * eurRate)}
+                labelFormatter={(m) => `ماه ${toFa(Number(m))}`}
+                contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              />
+              <Bar dataKey="monthlyUsd" name="هزینه ماهانه" radius={[3, 3, 0, 0]} animationDuration={600}>
+                {cashFlow.map((p, i) => (<Cell key={i} fill={LIFECYCLE_COLOR[p.phase]} />))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+
+          <p className="text-[11px] mb-1.5 mt-4" style={{ color: MUTED_FG }}>جریان نقدینگی تجمعی</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={cashFlow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="est-cum-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={SAFETY} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={SAFETY} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED_FG }} tickFormatter={(v) => toFa(v)} interval={Math.ceil(cashFlow.length / 12)} />
+              <YAxis tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 10, fill: MUTED_FG }} width={44} />
+              <Tooltip
+                formatter={(v) => fmtEUR(Number(v) * eurRate)}
+                labelFormatter={(m) => `ماه ${toFa(Number(m))}`}
+                contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
+              />
+              <Area type="monotone" dataKey="cumulativeUsd" name="تجمعی" stroke={SAFETY} strokeWidth={2} fill="url(#est-cum-fill)" animationDuration={700} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* CBS detail table */}
+        <Card>
+          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>ریز برآورد به تفکیک بخش</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: 520 }}>
               <thead>
-                <tr className="text-slate-500 text-xs border-b" style={{ borderColor: LINE }}>
+                <tr className="text-xs" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED_FG }}>
                   <th className="text-right py-1.5 font-medium">بخش</th>
                   <th className="text-left py-1.5 font-medium est-mono">یورو</th>
                   <th className="text-left py-1.5 font-medium est-mono">ریال</th>
@@ -131,19 +250,19 @@ export function ResultsPage({
               </thead>
               <tbody>
                 {results.sections.map((s) => (
-                  <tr key={s.key} className="border-b" style={{ borderColor: LINE, borderRight: `3px solid ${SECTION_COLOR[s.key]}` }}>
-                    <td className="py-1.5 pr-2">
+                  <tr key={s.key} style={{ borderBottom: `1px solid ${BORDER}`, borderRight: `3px solid ${SECTION_COLOR[s.key]}` }}>
+                    <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>
                       {s.label}
-                      {s.note && <div className="text-[10px] text-slate-400 mt-0.5">{s.note}</div>}
+                      {s.note && <div className="text-[10px] mt-0.5" style={{ color: MUTED_FG }}>{s.note}</div>}
                     </td>
-                    <td className="text-left est-mono">{fmtEUR(toEur(s.totalUsd))}</td>
-                    <td className="text-left est-mono text-slate-500">{fmtRialBn(toRial(s.totalUsd))}</td>
+                    <td className="text-left est-mono" style={{ color: INK }}>{fmtEUR(toEur(s.totalUsd))}</td>
+                    <td className="text-left est-mono" style={{ color: MUTED_FG }}>{fmtRialBn(toRial(s.totalUsd))}</td>
                   </tr>
                 ))}
-                <tr className="font-bold" style={{ background: '#F7F3E2' }}>
-                  <td className="py-2">جمع هزینه‌های مستقیم</td>
-                  <td className="text-left est-mono">{fmtEUR(toEur(results.direct))}</td>
-                  <td className="text-left est-mono">{fmtRialBn(toRial(results.direct))}</td>
+                <tr className="font-bold" style={{ background: SURFACE_2 }}>
+                  <td className="py-2" style={{ color: INK }}>جمع هزینه‌های مستقیم</td>
+                  <td className="text-left est-mono" style={{ color: INK }}>{fmtEUR(toEur(results.direct))}</td>
+                  <td className="text-left est-mono" style={{ color: INK }}>{fmtRialBn(toRial(results.direct))}</td>
                 </tr>
                 {[
                   ['مهندسی و طراحی', results.eng],
@@ -152,88 +271,67 @@ export function ResultsPage({
                   [`پیش‌بینی‌نشده (${fmtPct(inputs.overhead.contingency)})`, results.contingency],
                   [`ذخیره نوسان ارزی (${fmtPct(inputs.overhead.escalation)})`, results.escalation],
                 ].map(([label, val]) => (
-                  <tr key={label as string} className="border-b" style={{ borderColor: LINE }}>
-                    <td className="py-1.5 text-slate-600">{label}</td>
-                    <td className="text-left est-mono">{fmtEUR(toEur(val as number))}</td>
-                    <td className="text-left est-mono text-slate-500">{fmtRialBn(toRial(val as number))}</td>
+                  <tr key={label as string} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <td className="py-1.5" style={{ color: INK_SOFT }}>{label}</td>
+                    <td className="text-left est-mono" style={{ color: INK }}>{fmtEUR(toEur(val as number))}</td>
+                    <td className="text-left est-mono" style={{ color: MUTED_FG }}>{fmtRialBn(toRial(val as number))}</td>
                   </tr>
                 ))}
-                <tr className="font-extrabold text-white" style={{ background: STEEL_DARK }}>
-                  <td className="py-2.5 rounded-r-md">جمع کل برآورد پروژه</td>
-                  <td className="text-left est-mono" style={{ color: SAFETY }}>{fmtEUR(toEur(results.grand))}</td>
-                  <td className="text-left est-mono rounded-l-md" style={{ color: SAFETY }}>{fmtRialBn(toRial(results.grand))}</td>
+                <tr className="font-extrabold" style={{ background: SAFETY }}>
+                  <td className="py-2.5 rounded-r-md" style={{ color: '#1A1400' }}>جمع کل برآورد پروژه</td>
+                  <td className="text-left est-mono" style={{ color: '#1A1400' }}>{fmtEUR(toEur(results.grand))}</td>
+                  <td className="text-left est-mono rounded-l-md" style={{ color: '#1A1400' }}>{fmtRialBn(toRial(results.grand))}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </Card>
-
-        {/* Chart */}
-        <Card>
-          <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>سهم هر بخش از هزینه مستقیم</h2>
-          <div dir="ltr">
-            <ResponsiveContainer width="100%" height={Math.max(180, chartData.length * 42)}>
-              <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={LINE} />
-                <XAxis type="number" tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(15,47,65,0.04)' }} />
-                <Bar dataKey="value" name="هزینه" radius={[0, 4, 4, 0]} animationDuration={700} animationEasing="ease-out">
-                  {chartData.map((d) => (<Cell key={d.key} fill={SECTION_COLOR[d.key]} />))}
-                  <LabelList dataKey="value" position="right" formatter={(v) => fmtEURm(Number(v) * eurRate)} style={{ fontSize: 11, fill: '#16232E' }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="text-xs mt-3" style={{ color: MUTED_FG }}>
+            هزینه پایه محاسبات (دلار آمریکا، بر اساس جداول مرجع): <span className="est-mono" style={{ color: INK_SOFT }}>{fmtUSD(results.grand)}</span>
           </div>
         </Card>
 
-        {/* Cash flow */}
+        {/* Risk heat map */}
         <Card>
-          <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>جریان نقدی اجرا (Cash Flow)</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={cashFlow} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={LINE} />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)}
-                labelFormatter={(l, d) => (d?.[0]?.payload as { desc?: string } | undefined)?.desc || l}
-                contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(15,47,65,0.04)' }} />
-              <Bar dataKey="usd" name="هزینه" radius={[4, 4, 0, 0]} animationDuration={700} animationEasing="ease-out">
-                {cashFlow.map((_, i) => (<Cell key={i} fill={i % 2 === 0 ? STEEL : '#2E6C8E'} />))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Lifecycle */}
-        <Card>
-          <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>چرخه عمر پروژه تا شروع بهره‌برداری</h2>
-          <div className="flex h-8 w-full overflow-hidden rounded-lg" dir="ltr">
-            {lifecyclePhases.map((p, i) => (
-              <div key={p.label} className="flex items-center justify-center text-[10px] font-medium text-white"
-                style={{ width: `${(p.months / totalMonths) * 100}%`, background: [STEEL_DARK, STEEL, '#2E6C8E', '#3E9C90'][i] }}>
-                {toFa(p.months)}
+          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>نقشه حرارتی ریسک‌های پروژه</h2>
+          <div className="flex gap-3">
+            <div className="flex flex-col justify-between items-center text-[10px] py-2" style={{ color: MUTED_FG }}>
+              <span className="[writing-mode:vertical-rl] rotate-180">شدت اثر ←</span>
+            </div>
+            <div className="flex-1 overflow-x-auto">
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(44px, 1fr))', direction: 'ltr' }}>
+                {heatGrid.flat().map((cell) => {
+                  const band = riskBand(cell.score)
+                  return (
+                    <div
+                      key={`${cell.likelihood}-${cell.impact}`}
+                      title={cell.risks.map((r) => r.title || 'ریسک بی‌نام').join('، ') || 'بدون ریسک'}
+                      className="aspect-square rounded-md flex items-center justify-center text-sm font-bold transition-transform hover:scale-105"
+                      style={{ background: cell.count > 0 ? band.color : SURFACE_2, color: cell.count > 0 ? '#fff' : MUTED_FG, opacity: cell.count > 0 ? 1 : 0.5 }}
+                    >
+                      {cell.count > 0 ? toFa(cell.count) : ''}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex justify-between text-[10px] mt-1.5" style={{ color: MUTED_FG, direction: 'ltr' }}>
+                <span>احتمال کم ←</span>
+                <span>→ احتمال زیاد</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 mt-4">
+            {(['good', 'warning', 'serious', 'critical'] as const).map((k) => (
+              <div key={k} className="flex items-center gap-1.5 text-[11px]" style={{ color: INK_SOFT }}>
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS[k] }} />
+                {k === 'good' ? 'کم' : k === 'warning' ? 'متوسط' : k === 'serious' ? 'بالا' : 'بحرانی'}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-            {lifecyclePhases.map((p) => (
-              <div key={p.label} className="text-[11px] text-slate-600">
-                <div className="font-medium">{p.label}</div>
-                <div className="est-mono text-slate-400">{toFa(p.months)} ماه</div>
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-slate-500 mt-2 est-mono">جمع مدت پیش از شروع اجرا: {toFa(totalMonths)} ماه</div>
-        </Card>
 
-        {/* Risks */}
-        <Card>
-          <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>ریسک‌های پروژه</h2>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto mt-4">
             <table className="w-full text-sm" style={{ minWidth: 480 }}>
               <thead>
-                <tr className="text-slate-500 text-xs border-b" style={{ borderColor: LINE }}>
+                <tr className="text-xs" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED_FG }}>
                   <th className="text-right py-1.5 font-medium">ریسک</th>
                   <th className="text-right py-1.5 font-medium">دسته</th>
                   <th className="text-center py-1.5 font-medium">سطح</th>
@@ -242,18 +340,17 @@ export function ResultsPage({
               </thead>
               <tbody>
                 {inputs.risks.map((r) => {
-                  const score = r.likelihood * r.impact
-                  const band = riskBand(score)
+                  const band = riskBand(r.likelihood * r.impact)
                   return (
-                    <tr key={r.id} className="border-b" style={{ borderColor: LINE }}>
-                      <td className="py-1.5 pr-2">{r.title || '—'}</td>
-                      <td className="py-1.5 text-slate-500 text-xs">{RISK_CATEGORY_LABEL[r.category]}</td>
+                    <tr key={r.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>{r.title || '—'}</td>
+                      <td className="py-1.5 text-xs" style={{ color: MUTED_FG }}>{RISK_CATEGORY_LABEL[r.category]}</td>
                       <td className="py-1.5 text-center">
                         <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: band.color }}>
-                          {band.label} ({toFa(score)})
+                          {band.label} ({toFa(r.likelihood * r.impact)})
                         </span>
                       </td>
-                      <td className="py-1.5 text-slate-500 text-xs">{r.mitigation || '—'}</td>
+                      <td className="py-1.5 text-xs" style={{ color: MUTED_FG }}>{r.mitigation || '—'}</td>
                     </tr>
                   )
                 })}
@@ -262,7 +359,7 @@ export function ResultsPage({
           </div>
         </Card>
 
-        <div className="text-[11px] text-slate-400 leading-relaxed px-1 pb-6">
+        <div className="text-[11px] leading-relaxed px-1 pb-6" style={{ color: MUTED_FG }}>
           توجه: نرخ‌های واحد خطوط لوله بر مبنای ساختار هزینه راهنمای برآورد وزارت نفت است و برای ایستگاه‌های لانچر، رسیور، انشعاب، شیر بین‌راهی و مخابرات/اسکادا — که خارج از محدوده راهنمای رسمی هستند — از برآورد مهندسی-پارامتریک استفاده شده است.
           پیش از ارائه نهایی و تصمیم‌گیری سرمایه‌گذاری، با فهرست‌بهای مصوب و استعلام بازار روز راستی‌آزمایی شوند.
         </div>

@@ -1,27 +1,33 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, Clock, FileSliders, Gauge, ListChecks, Loader2 } from 'lucide-react'
+import { ClipboardList, Clock, FileSliders, Gauge, ListChecks, Loader2, Settings } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { useAuthStore } from '../../store/useAuthStore'
 import { useEstimatorStore } from './store/useEstimatorStore'
 import { buildDefaultInputs, computeEstimate } from './lib/calc'
 import { EST_GLOBAL_STYLE } from './components/ui'
-import { STEEL_DARK } from './lib/theme'
+import { BG, BORDER, INK, MUTED_FG, SAFETY, SURFACE, SURFACE_2 } from './lib/theme'
 import type { EstEstimateRecord, EstFullInputs } from './types'
 import { ProjectListPage } from './pages/ProjectListPage'
 import { SpecsPage } from './pages/SpecsPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { HistoryPage } from './pages/HistoryPage'
+import { SettingsPage } from './pages/SettingsPage'
 
-type Tab = 'specs' | 'results' | 'history'
+type Tab = 'specs' | 'results' | 'history' | 'settings'
 
 export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
+  const profile = useAuthStore((s) => s.profile)
   const currentProject = useEstimatorStore((s) => s.currentProject)
   const currentProjectId = useEstimatorStore((s) => s.currentProjectId)
   const projects = useEstimatorStore((s) => s.projects)
   const estimates = useEstimatorStore((s) => s.estimates)
+  const assumptions = useEstimatorStore((s) => s.assumptions)
   const loadingProjects = useEstimatorStore((s) => s.loadingProjects)
   const loadingEstimates = useEstimatorStore((s) => s.loadingEstimates)
+  const loadingAssumptions = useEstimatorStore((s) => s.loadingAssumptions)
   const saving = useEstimatorStore((s) => s.saving)
   const fetchProjects = useEstimatorStore((s) => s.fetchProjects)
+  const fetchAssumptions = useEstimatorStore((s) => s.fetchAssumptions)
   const selectProject = useEstimatorStore((s) => s.selectProject)
   const saveEstimate = useEstimatorStore((s) => s.saveEstimate)
   const deleteEstimate = useEstimatorStore((s) => s.deleteEstimate)
@@ -31,11 +37,12 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     fetchProjects()
+    fetchAssumptions()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    setInputs(buildDefaultInputs())
+    if (!loadingAssumptions) setInputs(buildDefaultInputs(assumptions))
     setTab('specs')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId])
@@ -62,33 +69,33 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   if (loadingProjects) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: '#F3F5F7' }}>
-        <Loader2 size={24} className="animate-spin" style={{ color: STEEL_DARK }} />
+      <div className="flex h-screen w-screen items-center justify-center" style={{ background: BG }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: SAFETY }} />
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden est-font" style={{ background: '#F3F5F7' }} dir="rtl" lang="fa">
+    <div className="flex h-screen w-screen flex-col overflow-hidden est-font" style={{ background: BG }} dir="rtl" lang="fa">
       <style>{EST_GLOBAL_STYLE}</style>
-      <div className="est-hazard no-print" />
 
-      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-y-2 px-3 py-2.5 sm:px-4 sm:py-3" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
         <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${STEEL_DARK}12`, border: `1px solid ${STEEL_DARK}30` }}>
-            <Gauge size={18} style={{ color: STEEL_DARK }} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: 'rgba(242,183,5,0.10)', border: `1px solid rgba(242,183,5,0.30)` }}>
+            <Gauge size={18} style={{ color: SAFETY }} />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-extrabold" style={{ color: STEEL_DARK }}>برآورد هزینه پروژه</p>
-            <p className="hidden text-[10px] text-slate-400 sm:block" dir="ltr">RASTA · Project Cost Estimator</p>
+            <p className="truncate text-sm font-extrabold" style={{ color: INK }}>برآورد هزینه پروژه</p>
+            <p className="hidden text-[10px] sm:block" style={{ color: MUTED_FG }} dir="ltr">RASTA · Project Cost Estimator</p>
           </div>
           {currentProject && (
             <>
-              <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:mx-2 sm:block" />
+              <span className="mx-1 hidden h-5 w-px sm:mx-2 sm:block" style={{ background: BORDER }} />
               <select
                 value={currentProject.id}
                 onChange={(e) => selectProject(e.target.value)}
-                className="w-32 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none focus:border-slate-400 sm:max-w-[16rem] sm:w-auto"
+                className="w-32 rounded-lg px-2.5 py-1.5 text-xs outline-none sm:max-w-[16rem] sm:w-auto"
+                style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}
               >
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
@@ -97,7 +104,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
             </>
           )}
         </div>
-        <div className="order-3 hidden w-full items-center gap-1 rounded-lg bg-slate-100 p-1 sm:order-none sm:flex sm:w-auto">
+        <div className="order-3 hidden w-full items-center gap-1 rounded-lg p-1 sm:order-none sm:flex sm:w-auto" style={{ background: SURFACE_2 }}>
           {currentProject && (
             <>
               <TabButton active={tab === 'specs'} onClick={() => setTab('specs')} icon={<FileSliders size={13} />} label="مشخصات" />
@@ -105,9 +112,13 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
               <TabButton active={tab === 'history'} onClick={() => setTab('history')} icon={<Clock size={13} />} label="تاریخچه" />
             </>
           )}
+          {profile?.isAdmin && (
+            <TabButton active={tab === 'settings'} onClick={() => setTab('settings')} icon={<Settings size={13} />} label="تنظیمات" />
+          )}
           <button
             onClick={() => selectProject(null)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-white transition-colors"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+            style={{ color: MUTED_FG }}
           >
             <ClipboardList size={13} /> پروژه‌ها
           </button>
@@ -118,7 +129,9 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
       </header>
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        {!currentProject ? (
+        {tab === 'settings' && profile?.isAdmin ? (
+          <SettingsPage />
+        ) : !currentProject ? (
           <ProjectListPage />
         ) : tab === 'specs' ? (
           <SpecsPage project={currentProject} inputs={inputs} onChange={setInputs} saving={saving} onCalculate={() => setTab('results')} />
@@ -142,8 +155,8 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${active ? 'text-white' : 'text-slate-500 hover:bg-white'}`}
-      style={active ? { background: STEEL_DARK } : undefined}
+      className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+      style={active ? { background: SAFETY, color: '#1A1400' } : { color: MUTED_FG }}
     >
       {icon} {label}
     </button>

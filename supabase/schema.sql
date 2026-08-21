@@ -3968,3 +3968,28 @@ create policy "est_estimates_delete_own" on est_estimates
   );
 
 create index if not exists idx_est_estimates_project on est_estimates (project_id, created_at desc);
+
+-- Singleton assumptions row (Ministry-of-Petroleum-guideline default rates, overhead percentages,
+-- and lifecycle durations) — every new calculation seeds from this instead of hardcoded client
+-- constants once an admin has set it. The boolean primary key pinned to true is the standard
+-- Postgres singleton-table trick: only one row can ever exist.
+create table if not exists est_assumptions (
+  id boolean primary key default true check (id),
+  overhead jsonb not null,
+  lifecycle jsonb not null,
+  specs jsonb not null,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table est_assumptions enable row level security;
+
+drop policy if exists "est_assumptions_select_all" on est_assumptions;
+create policy "est_assumptions_select_all" on est_assumptions
+  for select using (auth.uid() is not null);
+drop policy if exists "est_assumptions_write_admin" on est_assumptions;
+create policy "est_assumptions_write_admin" on est_assumptions
+  for all using (is_admin_user()) with check (is_admin_user());
+
+drop trigger if exists trg_set_updated_at on est_assumptions;
+create trigger trg_set_updated_at before update on est_assumptions for each row execute function set_updated_at_and_by();

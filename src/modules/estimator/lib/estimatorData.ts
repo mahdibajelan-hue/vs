@@ -1,4 +1,4 @@
-import type { EstEstimateRecord, EstFullInputs, EstProject, EstResults } from '../types'
+import type { EstAssumptions, EstEstimateRecord, EstFullInputs, EstProject, EstResults } from '../types'
 
 export interface EstProjectRow {
   id: string
@@ -61,4 +61,14 @@ export function estEstimateFromRow(r: EstEstimateRow): EstEstimateRecord {
     createdBy: r.created_by,
     createdAt: r.created_at,
   }
+}
+
+export interface EstAssumptionsRow {
+  overhead: EstAssumptions['overhead']
+  lifecycle: EstAssumptions['lifecycle']
+  specs: EstAssumptions['specs']
+}
+
+export function estAssumptionsFromRow(r: EstAssumptionsRow): EstAssumptions {
+  return { overhead: r.overhead, lifecycle: r.lifecycle, specs: r.specs }
 }

@@ -1,12 +1,17 @@
 import { Calculator, Trash2, Plus } from 'lucide-react'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { PHASES } from '../lib/calc'
-import { fmtPct, SECTION_COLOR, STEEL_DARK } from '../lib/theme'
+import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2 } from '../lib/theme'
 import { Field, Section } from '../components/ui'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
   fx: 'ارزی', procurement: 'تأمین کالا', geotechnical: 'ژئوتکنیک', schedule: 'زمان‌بندی',
   hse: 'HSE', contractor: 'پیمانکار', permit: 'مجوز/تملک', weather: 'آب‌وهوا', other: 'سایر',
+}
+
+function segButtonStyle(active: boolean): React.CSSProperties {
+  return active
+    ? { background: SAFETY, color: '#1A1400', borderColor: SAFETY }
+    : { background: SURFACE_2, color: MUTED_FG, borderColor: BORDER }
 }
 
 export function SpecsPage({
@@ -20,8 +25,6 @@ export function SpecsPage({
 }) {
   const patch = (fn: (draft: EstFullInputs) => EstFullInputs) => onChange(fn(inputs))
 
-  const phaseSum = inputs.phaseWeights.reduce((a, b) => a + b, 0)
-
   function addRisk() {
     const r: EstRisk = { id: `r${Date.now()}`, title: '', category: 'other', likelihood: 3, impact: 3, mitigation: '' }
     patch((d) => ({ ...d, risks: [...d.risks, r] }))
@@ -34,14 +37,14 @@ export function SpecsPage({
   }
 
   return (
-    <div className="h-full overflow-y-auto est-font" style={{ background: '#F3F5F7' }}>
+    <div className="h-full overflow-y-auto est-font">
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
         <div>
-          <p className="text-sm font-bold" style={{ color: STEEL_DARK }}>۲. مشخصات و آپشن‌های هر بخش</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">فقط بخش‌هایی که در تعریف پروژه «{project.name}» فعال شده‌اند نمایش داده می‌شوند</p>
+          <p className="text-sm font-bold" style={{ color: INK }}>۲. مشخصات و آپشن‌های هر بخش</p>
+          <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در تعریف پروژه «{project.name}» فعال شده‌اند نمایش داده می‌شوند</p>
         </div>
 
-        <div className="est-card bg-white rounded-2xl border border-slate-200 px-5">
+        <div className="est-card rounded-2xl px-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           {project.hasOnshore && (
             <Section title="خط لوله خشکی" accent={SECTION_COLOR.onshore} defaultOpen>
               <div className="grid grid-cols-2 gap-x-3">
@@ -106,14 +109,12 @@ export function SpecsPage({
                   <button key={dt} type="button"
                     onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, driverType: dt } } }))}
                     className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                    style={inputs.specs.compressor.driverType === dt
-                      ? { background: STEEL_DARK, color: '#fff', borderColor: STEEL_DARK }
-                      : { background: '#fff', color: '#64748b', borderColor: '#cbd5e1' }}>
+                    style={segButtonStyle(inputs.specs.compressor.driverType === dt)}>
                     {dt === 'gasTurbine' ? 'درایور توربین گازی' : 'درایور الکتروموتور'}
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+              <p className="text-[10px] mt-2 leading-relaxed" style={{ color: MUTED_FG }}>
                 برآورد قیمت تجهیزات دوار بر مبنای منحنی هزینه راهنمای وزارت نفت (۲۰۱۹، دلار بر کیلووات) است.
               </p>
             </Section>
@@ -154,9 +155,7 @@ export function SpecsPage({
                   <button key={m} type="button"
                     onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, mode: m } } }))}
                     className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                    style={inputs.specs.telecom.mode === m
-                      ? { background: STEEL_DARK, color: '#fff', borderColor: STEEL_DARK }
-                      : { background: '#fff', color: '#64748b', borderColor: '#cbd5e1' }}>
+                    style={segButtonStyle(inputs.specs.telecom.mode === m)}>
                     {m === 'perKm' ? 'نرخ به ازای هر کیلومتر' : 'مبلغ مقطوع'}
                   </button>
                 ))}
@@ -190,17 +189,8 @@ export function SpecsPage({
             </div>
           </Section>
 
-          <Section title="زمان‌بندی فصلی هزینه (Cash Flow)">
-            {PHASES.map((ph, i) => (
-              <Field key={ph.name} label={`${ph.name} — ${ph.desc}`} unit="سهم" value={inputs.phaseWeights[i]} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, phaseWeights: d.phaseWeights.map((x, j) => (j === i ? v : x)) }))} />
-            ))}
-            <div className="text-[11px] est-mono" style={{ color: Math.abs(phaseSum - 1) > 0.001 ? '#B44711' : '#2A8C82' }}>
-              جمع سهم فصل‌ها: {fmtPct(phaseSum)}
-            </div>
-          </Section>
-
-          <Section title="چرخه عمر پروژه (پیش از اجرا)">
+          <Section title="چرخه عمر پروژه" defaultOpen>
+            <p className="text-[10px] mb-2" style={{ color: MUTED_FG }}>جریان نقدینگی و مدت کل پروژه به‌صورت خودکار بر اساس این مدت‌ها محاسبه می‌شود.</p>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="انتخاب مشاور طراح" unit="ماه" value={inputs.lifecycle.consultantSelectionMonths}
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, consultantSelectionMonths: v } }))} />
@@ -208,41 +198,43 @@ export function SpecsPage({
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, basicDesignMonths: v } }))} />
               <Field label="انتخاب پیمانکار EPC" unit="ماه" value={inputs.lifecycle.epcContractorSelectionMonths}
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, epcContractorSelectionMonths: v } }))} />
-              <Field label="راه‌اندازی پس از اجرا" unit="ماه" value={inputs.lifecycle.commissioningMonths}
-                onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, commissioningMonths: v } }))} />
+              <Field label="اجرا و راه‌اندازی" unit="ماه" value={inputs.lifecycle.executionMonths}
+                onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, executionMonths: v } }))} />
             </div>
           </Section>
 
           <Section title={`ریسک‌های پروژه (${inputs.risks.length})`}>
             <div className="space-y-2">
               {inputs.risks.map((r) => (
-                <div key={r.id} className="rounded-lg border border-slate-200 p-2.5">
+                <div key={r.id} className="rounded-lg p-2.5" style={{ border: `1px solid ${BORDER}` }}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <input value={r.title} onChange={(e) => updateRisk(r.id, { title: e.target.value })}
-                      placeholder="عنوان ریسک" className="est-input flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs" />
-                    <button onClick={() => removeRisk(r.id)} className="shrink-0 text-slate-300 hover:text-red-500">
+                      placeholder="عنوان ریسک" className="est-input flex-1 rounded-md px-2 py-1 text-xs"
+                      style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }} />
+                    <button onClick={() => removeRisk(r.id)} className="shrink-0" style={{ color: MUTED_FG }}>
                       <Trash2 size={13} />
                     </button>
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     <select value={r.category} onChange={(e) => updateRisk(r.id, { category: e.target.value as EstRisk['category'] })}
-                      className="est-input rounded-md border border-slate-300 px-1.5 py-1 text-[11px]">
+                      className="est-input rounded-md px-1.5 py-1 text-[11px]" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }}>
                       {Object.entries(RISK_CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                     <select value={r.likelihood} onChange={(e) => updateRisk(r.id, { likelihood: Number(e.target.value) as EstRisk['likelihood'] })}
-                      className="est-input rounded-md border border-slate-300 px-1.5 py-1 text-[11px]">
+                      className="est-input rounded-md px-1.5 py-1 text-[11px]" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }}>
                       {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>احتمال {n}</option>)}
                     </select>
                     <select value={r.impact} onChange={(e) => updateRisk(r.id, { impact: Number(e.target.value) as EstRisk['impact'] })}
-                      className="est-input rounded-md border border-slate-300 px-1.5 py-1 text-[11px]">
+                      className="est-input rounded-md px-1.5 py-1 text-[11px]" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }}>
                       {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>اثر {n}</option>)}
                     </select>
                   </div>
                   <input value={r.mitigation} onChange={(e) => updateRisk(r.id, { mitigation: e.target.value })}
-                    placeholder="اقدام کاهش ریسک" className="est-input mt-1.5 w-full rounded-md border border-slate-300 px-2 py-1 text-[11px]" />
+                    placeholder="اقدام کاهش ریسک" className="est-input mt-1.5 w-full rounded-md px-2 py-1 text-[11px]"
+                    style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }} />
                 </div>
               ))}
-              <button onClick={addRisk} className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700">
+              <button onClick={addRisk} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: MUTED_FG }}>
                 <Plus size={13} /> افزودن ریسک
               </button>
             </div>
@@ -252,8 +244,8 @@ export function SpecsPage({
         <button
           onClick={onCalculate}
           disabled={saving}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
-          style={{ background: STEEL_DARK }}
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold disabled:opacity-60 transition-transform hover:scale-[1.01]"
+          style={{ background: SAFETY, color: '#1A1400' }}
         >
           <Calculator size={16} /> {saving ? 'در حال محاسبه...' : 'محاسبه برآورد هزینه'}
         </button>

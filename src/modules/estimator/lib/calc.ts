@@ -1,5 +1,5 @@
 import type {
-  EstFullInputs, EstProjectDraft, EstResults, EstSectionResult,
+  EstAssumptions, EstCashFlowPoint, EstFullInputs, EstProjectDraft, EstResults, EstSectionResult,
   OnshoreSpec, OffshoreSpec, CompressorSpec, StationUnitSpec, TelecomScadaSpec,
 } from '../types'
 
@@ -24,7 +24,9 @@ import type {
  * both uploaded guideline chapters (which explicitly restrict themselves to pipeline segments
  * and to pump/compressor stations only) — those five sections use parametric per-unit cost
  * defaults instead, clearly labeled in the UI as engineering estimates rather than guideline
- * figures, and are fully editable.
+ * figures, and are fully editable. All defaults below are the *fallback* seed values — once an
+ * admin sets org-wide assumptions (est_assumptions), new calculations seed from those instead;
+ * see buildDefaultInputs.
  * ------------------------------------------------------------------------- */
 
 export const DEFAULT_ONSHORE: OnshoreSpec = {
@@ -65,17 +67,19 @@ export const DEFAULT_TIE_IN: StationUnitSpec = { count: 1, unitCostUsd: 120_000 
 export const DEFAULT_BLOCK_VALVE: StationUnitSpec = { count: 1, unitCostUsd: 90_000 }
 export const DEFAULT_TELECOM: TelecomScadaSpec = { mode: 'perKm', perKmUsd: 8_000, lumpSumUsd: 900_000 }
 
-export const DEFAULT_PHASE_WEIGHTS = [0.06, 0.16, 0.2, 0.24, 0.18, 0.11, 0.05]
+/** Typical durations for an EPC pipeline project's pre-construction lifecycle, in months —
+ * consultant selection ~4, basic design ~8, EPC contractor selection ~6, execution ~20. */
+export const DEFAULT_LIFECYCLE = {
+  consultantSelectionMonths: 4,
+  basicDesignMonths: 8,
+  epcContractorSelectionMonths: 6,
+  executionMonths: 20,
+}
 
-export const PHASES = [
-  { name: 'فصل ۱', desc: 'بسیج کارگاه، تملک اراضی، مهندسی پایه' },
-  { name: 'فصل ۲', desc: 'تأمین لوله و تجهیزات، مهندسی تفصیلی' },
-  { name: 'فصل ۳', desc: 'شروع عملیات خطی/نصب' },
-  { name: 'فصل ۴', desc: 'ادامه عملیات خطی و تقاطع‌ها' },
-  { name: 'فصل ۵', desc: 'تکمیل عملیات خطی و شیرآلات' },
-  { name: 'فصل ۶', desc: 'تست هیدرواستاتیک، راه‌اندازی' },
-  { name: 'فصل ۷', desc: 'تحویل موقت، مستندسازی و رفع نقص' },
-]
+export const DEFAULT_OVERHEAD = {
+  eng: 0.06, pm: 0.08, ins: 0.015, contingency: 0.15, escalation: 0.12,
+  fxEurPerUsd: 0.92, fxRialPerUsd: 600000,
+}
 
 export function pipeWeightKgPerM(diameterIn: number, wtMm: number, density: number) {
   return Math.PI * (diameterIn * 0.0254) * (wtMm / 1000) * density
@@ -179,10 +183,89 @@ export function computeEstimate(project: EstProjectDraft, inputs: EstFullInputs)
   return { sections, direct, eng, pm, ins, indirect, base, contingency, escalation, grand }
 }
 
-export function buildDefaultInputs(): EstFullInputs {
+/** Smooth ramp-up/ramp-down weight for month `i` of `n` (0-indexed) — a cosine-based S-curve,
+ * the standard shape of EPC execution spend (slow mobilization, fast mid-project burn, slow
+ * closeout). Weights across the n months sum to 1. */
+function sCurveWeights(n: number): number[] {
+  if (n <= 0) return []
+  if (n === 1) return [1]
+  const raw = Array.from({ length: n }, (_, i) => {
+    const t = (i + 0.5) / n
+    return 1 - Math.cos(t * Math.PI)
+  })
+  const sum = raw.reduce((a, b) => a + b, 0)
+  return raw.map((w) => w / sum)
+}
+
+/** Cash flow across the FULL project lifecycle, not just execution: consultant selection and
+ * EPC contractor selection are procurement/administrative steps with no capital outflow; the
+ * engineering fee (results.eng) is spent evenly across the basic-design months; everything else
+ * (direct cost + PM + insurance + contingency + escalation) is spent during execution, following
+ * an S-curve ramp rather than a flat line — the standard EPC cash-flow shape. */
+export function buildCashFlowTimeline(inputs: EstFullInputs, results: EstResults): EstCashFlowPoint[] {
+  const { consultantSelectionMonths, basicDesignMonths, epcContractorSelectionMonths, executionMonths } = inputs.lifecycle
+  const points: EstCashFlowPoint[] = []
+  let cumulative = 0
+  let month = 0
+
+  for (let i = 0; i < consultantSelectionMonths; i++) {
+    month++
+    points.push({ month, phase: 'consultant', monthlyUsd: 0, cumulativeUsd: cumulative })
+  }
+
+  const designWeights = sCurveWeights(basicDesignMonths)
+  for (let i = 0; i < basicDesignMonths; i++) {
+    month++
+    const amt = results.eng * designWeights[i]
+    cumulative += amt
+    points.push({ month, phase: 'design', monthlyUsd: amt, cumulativeUsd: cumulative })
+  }
+
+  for (let i = 0; i < epcContractorSelectionMonths; i++) {
+    month++
+    points.push({ month, phase: 'contractor', monthlyUsd: 0, cumulativeUsd: cumulative })
+  }
+
+  const executionSpend = Math.max(0, results.grand - results.eng)
+  const execWeights = sCurveWeights(executionMonths)
+  for (let i = 0; i < executionMonths; i++) {
+    month++
+    const amt = executionSpend * execWeights[i]
+    cumulative += amt
+    points.push({ month, phase: 'execution', monthlyUsd: amt, cumulativeUsd: cumulative })
+  }
+
+  return points
+}
+
+export const LIFECYCLE_PHASE_LABEL: Record<string, string> = {
+  consultant: 'انتخاب مشاور طراح',
+  design: 'طراحی پایه',
+  contractor: 'انتخاب پیمانکار EPC',
+  execution: 'اجرا و راه‌اندازی',
+}
+
+export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFullInputs {
+  if (assumptions) {
+    return {
+      overhead: { ...assumptions.overhead },
+      lifecycle: { ...assumptions.lifecycle },
+      specs: {
+        onshore: { ...assumptions.specs.onshore },
+        offshore: { ...assumptions.specs.offshore },
+        compressor: { ...assumptions.specs.compressor },
+        launcher: { ...assumptions.specs.launcher },
+        receiver: { ...assumptions.specs.receiver },
+        tieIn: { ...assumptions.specs.tieIn },
+        blockValve: { ...assumptions.specs.blockValve },
+        telecom: { ...assumptions.specs.telecom },
+      },
+      risks: defaultRisks(),
+    }
+  }
   return {
-    overhead: { eng: 0.06, pm: 0.08, ins: 0.015, contingency: 0.15, escalation: 0.12, fxEurPerUsd: 0.92, fxRialPerUsd: 600000 },
-    lifecycle: { consultantSelectionMonths: 3, basicDesignMonths: 5, epcContractorSelectionMonths: 4, commissioningMonths: 3 },
+    overhead: { ...DEFAULT_OVERHEAD },
+    lifecycle: { ...DEFAULT_LIFECYCLE },
     specs: {
       onshore: { ...DEFAULT_ONSHORE },
       offshore: { ...DEFAULT_OFFSHORE },
@@ -194,7 +277,23 @@ export function buildDefaultInputs(): EstFullInputs {
       telecom: { ...DEFAULT_TELECOM },
     },
     risks: defaultRisks(),
-    phaseWeights: [...DEFAULT_PHASE_WEIGHTS],
+  }
+}
+
+export function buildDefaultAssumptions(): EstAssumptions {
+  return {
+    overhead: { ...DEFAULT_OVERHEAD },
+    lifecycle: { ...DEFAULT_LIFECYCLE },
+    specs: {
+      onshore: { ...DEFAULT_ONSHORE },
+      offshore: { ...DEFAULT_OFFSHORE },
+      compressor: { ...DEFAULT_COMPRESSOR },
+      launcher: { ...DEFAULT_LAUNCHER },
+      receiver: { ...DEFAULT_RECEIVER },
+      tieIn: { ...DEFAULT_TIE_IN },
+      blockValve: { ...DEFAULT_BLOCK_VALVE },
+      telecom: { ...DEFAULT_TELECOM },
+    },
   }
 }
 

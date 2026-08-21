@@ -112,7 +112,7 @@ export interface EstLifecycleInputs {
   consultantSelectionMonths: number
   basicDesignMonths: number
   epcContractorSelectionMonths: number
-  commissioningMonths: number
+  executionMonths: number
 }
 
 export type RiskLikelihood = 1 | 2 | 3 | 4 | 5
@@ -132,7 +132,23 @@ export interface EstFullInputs {
   lifecycle: EstLifecycleInputs
   specs: EstSectionSpecs
   risks: EstRisk[]
-  phaseWeights: number[]
+}
+
+/** Ministry-guideline-sourced default assumptions — the org-wide baseline every new calculation
+ * seeds from. A singleton row, editable only by admins (see est_assumptions RLS). */
+export interface EstAssumptions {
+  overhead: EstOverheadInputs
+  lifecycle: EstLifecycleInputs
+  specs: EstSectionSpecs
+}
+
+export type EstLifecyclePhase = 'consultant' | 'design' | 'contractor' | 'execution'
+
+export interface EstCashFlowPoint {
+  month: number
+  phase: EstLifecyclePhase
+  monthlyUsd: number
+  cumulativeUsd: number
 }
 
 export interface EstSectionResult {
