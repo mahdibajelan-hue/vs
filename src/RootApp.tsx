@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
+import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
 import { LoginScreen, Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
@@ -36,6 +37,7 @@ export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
+  const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
   // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
@@ -71,6 +73,21 @@ export function RootApp() {
   // مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد.
   if (activeModule === 'admin' && profile && !profile.isAdmin) {
     return <AdminOnlyBlock onBack={exitToHub} />
+  }
+
+  // Defense in depth: ModuleHub already hides modules the user can't access, but a stale tab or
+  // an admin narrowing access mid-session shouldn't leave direct entry still open.
+  if (activeModule && !hasModuleAccess(accessibleModules, activeModule)) {
+    return (
+      <Shell title="دسترسی به این محیط محدود شده" subtitle="دسترسی شما به این ماژول توسط مدیر سامانه غیرفعال شده است.">
+        <button
+          onClick={exitToHub}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-2.5 text-sm text-secondary hover:bg-white/5 transition-colors"
+        >
+          <ArrowRight size={15} /> بازگشت به ماژول‌ها
+        </button>
+      </Shell>
+    )
   }
 
   return activeModule === 'pipepulse' ? (

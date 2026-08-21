@@ -1,24 +1,43 @@
-import { useEffect, useState } from 'react'
-import { Check, ChevronDown, Plus, Shield, ShieldCheck, Trash2, Users2, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronDown, LayoutGrid, Plus, Shield, ShieldCheck, Trash2, Users2, X } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { useAccessStore } from '../store/useAccessStore'
-import { PERMISSION_ACTION_LABEL_FA, SCOPE_LEVEL_LABEL_FA, SCOPE_LEVELS, type ModuleKeyRef, type ScopeLevel } from '../rbacTypes'
+import { PERMISSION_ACTION_LABEL_FA, SCOPE_LEVEL_LABEL_FA, SCOPE_LEVELS, type RastaModule, type ScopeLevel } from '../rbacTypes'
+import { ModuleAccessMatrixSection } from '../components/ModuleAccessMatrixSection'
 
-const MODULE_ORDER: ModuleKeyRef[] = ['risk', 'issues', 'pipepulse', 'reporting', 'admin']
-const MODULE_LABEL_FA: Record<ModuleKeyRef, string> = {
-  risk: 'مدیریت ریسک',
-  issues: 'مدیریت مسائل',
-  pipepulse: 'PipePulse',
-  reporting: 'گزارش‌گیری',
-  admin: 'مدیریت کاربران',
+// rasta_modules is the source of truth now (fetched from the DB, covers every real module
+// including ones added after this page was first built — Competency, Portfolio Management,
+// Finance, Material Supply, Pipeline Digital Twin). This is just a display-order preference;
+// anything not listed here still shows up, appended at the end.
+const MODULE_ORDER_PREFERENCE = [
+  'risk',
+  'issues',
+  'pipepulse',
+  'reporting',
+  'executive',
+  'finance',
+  'material',
+  'pipelinedigitaltwin',
+  'competency',
+  'admin',
+]
+
+export function orderModules(modules: RastaModule[]): RastaModule[] {
+  return [...modules].sort((a, b) => {
+    const ia = MODULE_ORDER_PREFERENCE.indexOf(a.key)
+    const ib = MODULE_ORDER_PREFERENCE.indexOf(b.key)
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+  })
 }
 
-type SubTab = 'roles' | 'users'
+type SubTab = 'modules' | 'roles' | 'users'
 
 export function RolesPermissionsPage() {
-  const [subTab, setSubTab] = useState<SubTab>('roles')
+  const [subTab, setSubTab] = useState<SubTab>('modules')
   const loaded = useAccessStore((s) => s.loaded)
   const fetchAll = useAccessStore((s) => s.fetchAll)
+  const modules = useAccessStore((s) => s.modules)
+  const orderedModules = useMemo(() => orderModules(modules), [modules])
 
   useEffect(() => {
     if (!loaded) fetchAll()
@@ -29,12 +48,19 @@ export function RolesPermissionsPage() {
       <div>
         <h2 className="text-base font-extrabold">نقش‌ها و دسترسی‌ها</h2>
         <p className="text-xs text-secondary">
-          مدل کنترل دسترسی مبتنی بر نقش (RBAC) — این صفحه فقط داده‌ها را تعریف می‌کند؛ اعمال آن روی ماژول‌های موجود (ریسک، مسائل، PipePulse)
-          مرحله بعدی و جداگانه‌ای است که هنوز انجام نشده.
+          کنترل دسترسی هر کاربر به هر یک از {orderedModules.length} محیط پلتفرم، به‌همراه مدل دقیق‌تر نقش/مجوز برای کنترل اقدامات درون هر ماژول.
         </p>
       </div>
 
-      <div className="flex items-center gap-1 rounded-xl border p-1 w-fit" style={{ borderColor: 'var(--border-soft)' }}>
+      <div className="flex flex-wrap items-center gap-1 rounded-xl border p-1 w-fit" style={{ borderColor: 'var(--border-soft)' }}>
+        <button
+          onClick={() => setSubTab('modules')}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+            subTab === 'modules' ? 'bg-brand-500/15 text-brand-300 font-medium' : 'text-secondary hover:bg-white/5'
+          }`}
+        >
+          <LayoutGrid size={13} /> دسترسی به محیط‌ها
+        </button>
         <button
           onClick={() => setSubTab('roles')}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
@@ -49,16 +75,22 @@ export function RolesPermissionsPage() {
             subTab === 'users' ? 'bg-brand-500/15 text-brand-300 font-medium' : 'text-secondary hover:bg-white/5'
           }`}
         >
-          <Users2 size={13} /> دسترسی کاربران
+          <Users2 size={13} /> نقش و محدوده پروژه کاربران
         </button>
       </div>
 
-      {subTab === 'roles' ? <RolesSection /> : <UserAccessSection />}
+      {subTab === 'modules' ? (
+        <ModuleAccessMatrixSection orderedModules={orderedModules} />
+      ) : subTab === 'roles' ? (
+        <RolesSection orderedModules={orderedModules} />
+      ) : (
+        <UserAccessSection />
+      )}
     </div>
   )
 }
 
-function RolesSection() {
+function RolesSection({ orderedModules }: { orderedModules: RastaModule[] }) {
   const roles = useAccessStore((s) => s.roles)
   const permissions = useAccessStore((s) => s.permissions)
   const rolePermissions = useAccessStore((s) => s.rolePermissions)
@@ -72,7 +104,7 @@ function RolesSection() {
   const [newDescription, setNewDescription] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const permsByModule = MODULE_ORDER.map((mod) => ({ mod, perms: permissions.filter((p) => p.moduleKey === mod) }))
+  const permsByModule = orderedModules.map((mod) => ({ mod: mod.key, label: mod.labelFa, perms: permissions.filter((p) => p.moduleKey === mod.key) }))
 
   return (
     <div className="space-y-3">
@@ -162,9 +194,9 @@ function RolesSection() {
 
                 {isOpen && (
                   <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: 'var(--border-soft)' }}>
-                    {permsByModule.map(({ mod, perms }) => (
+                    {permsByModule.map(({ mod, label, perms }) => (
                       <div key={mod}>
-                        <p className="mb-1.5 text-[11px] font-bold text-secondary">{MODULE_LABEL_FA[mod]}</p>
+                        <p className="mb-1.5 text-[11px] font-bold text-secondary">{label}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {perms.map((perm) => {
                             const isGranted = granted.has(perm.id)

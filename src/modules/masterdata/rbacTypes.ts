@@ -1,4 +1,14 @@
-export type ModuleKeyRef = 'risk' | 'issues' | 'pipepulse' | 'reporting' | 'admin'
+export type ModuleKeyRef =
+  | 'risk'
+  | 'issues'
+  | 'pipepulse'
+  | 'reporting'
+  | 'executive'
+  | 'finance'
+  | 'material'
+  | 'pipelinedigitaltwin'
+  | 'competency'
+  | 'admin'
 
 export interface RastaModule {
   key: ModuleKeyRef
@@ -116,4 +126,15 @@ export interface UnmappedSourceProject {
   sourceModule: MappingSourceModule
   sourceProjectId: string
   name: string
+}
+
+/**
+ * An explicit per-user × per-module access override. No row for a (user, module) pair means the
+ * user has access — this table only ever needs to record a DENIAL, so every existing and future
+ * user starts with full access and an admin narrows it module by module.
+ */
+export interface UserModuleAccess {
+  userId: string
+  moduleKey: ModuleKeyRef
+  hasAccess: boolean
 }

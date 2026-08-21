@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
 import { useModuleStore } from './useModuleStore'
+import { useModuleAccessStore } from './useModuleAccessStore'
 
 export interface Profile {
   id: string
@@ -116,9 +117,11 @@ supabase.auth.onAuthStateChange((_event, session) => {
     useModuleStore.getState().exitToHub()
     useAuthStore.setState({ profileLoading: true })
     loadProfile(session.user.id)
+    useModuleAccessStore.getState().fetchAccess()
   } else if (!session) {
     useModuleStore.getState().exitToHub()
     useAuthStore.setState({ profile: null, profileLoading: false })
+    useModuleAccessStore.getState().reset()
   }
 })
 
@@ -129,6 +132,7 @@ supabase.auth
     if (data.session?.user) {
       useAuthStore.setState({ profileLoading: true })
       loadProfile(data.session.user.id)
+      useModuleAccessStore.getState().fetchAccess()
     }
   })
   .catch(() => {

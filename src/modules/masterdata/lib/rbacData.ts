@@ -10,6 +10,7 @@ import type {
   RastaProjectRole,
   RastaRole,
   ScopeLevel,
+  UserModuleAccess,
   UserProjectScope,
 } from '../rbacTypes'
 
@@ -77,6 +78,16 @@ export function userProjectScopeToRow(userId: string, s: { scopeLevel: ScopeLeve
     program_id: s.scopeLevel === 'program' ? s.programId || null : null,
     project_id: s.scopeLevel === 'project' ? s.projectId || null : null,
   }
+}
+
+interface UserModuleAccessRow {
+  user_id: string
+  module_key: string
+  has_access: boolean
+}
+
+export function userModuleAccessFromRow(r: UserModuleAccessRow): UserModuleAccess {
+  return { userId: r.user_id, moduleKey: r.module_key as ModuleKeyRef, hasAccess: r.has_access }
 }
 
 interface RastaProjectRoleRow {

@@ -4,6 +4,7 @@ import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
   MappingSourceModule,
+  ModuleKeyRef,
   ProjectMapping,
   ProjectRoleAssignment,
   RastaModule,
@@ -11,6 +12,7 @@ import type {
   RastaProjectRole,
   RastaRole,
   ScopeLevel,
+  UserModuleAccess,
   UserProjectScope,
 } from '../rbacTypes'
 import {
@@ -20,6 +22,7 @@ import {
   rastaPermissionFromRow,
   rastaProjectRoleFromRow,
   rastaRoleFromRow,
+  userModuleAccessFromRow,
   userProjectScopeFromRow,
   userProjectScopeToRow,
 } from '../lib/rbacData'
@@ -45,6 +48,8 @@ interface AccessState {
   /** user_id -> role_id[] */
   userRoles: Record<string, string[]>
   userScopes: UserProjectScope[]
+  /** Explicit deny rows only — absence of a row for a (user, module) pair means access is granted. */
+  moduleAccess: UserModuleAccess[]
   projectRoles: RastaProjectRole[]
   projectRoleAssignments: ProjectRoleAssignment[]
   projectMappings: ProjectMapping[]
@@ -62,6 +67,9 @@ interface AccessState {
   setUserScope: (userId: string, scope: { scopeLevel: ScopeLevel; portfolioId?: string | null; programId?: string | null; projectId?: string | null }) => Promise<void>
   clearUserScope: (scopeId: string, userId: string) => Promise<void>
 
+  /** true = grant (remove any deny row); false = restrict (upsert an explicit deny row). */
+  setUserModuleAccess: (userId: string, moduleKey: ModuleKeyRef, hasAccess: boolean) => Promise<void>
+
   assignProjectRole: (projectId: string, userId: string, projectRoleId: string) => Promise<void>
   removeProjectRoleAssignment: (id: string) => Promise<void>
 
@@ -77,6 +85,7 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
   rolePermissions: {},
   userRoles: {},
   userScopes: [],
+  moduleAccess: [],
   projectRoles: [],
   projectRoleAssignments: [],
   projectMappings: [],
@@ -93,6 +102,7 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
       { data: rolePerms, error: e4 },
       { data: userRoles, error: e5 },
       { data: userScopes, error: e6 },
+      { data: moduleAccess, error: e6b },
       { data: projectRoles, error: e7 },
       { data: assignments, error: e8 },
       { data: mappings, error: e9 },
@@ -106,6 +116,7 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
       supabase.from('rasta_role_permissions').select('role_id, permission_id'),
       supabase.from('rasta_user_roles').select('user_id, role_id'),
       supabase.from('rasta_user_project_scope').select('*'),
+      supabase.from('rasta_user_module_access').select('*'),
       supabase.from('rasta_project_roles').select('*').order('name'),
       supabase.from('rasta_project_role_assignments').select('*'),
       supabase.from('rasta_project_mappings').select('*'),
@@ -113,7 +124,7 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
       supabase.from('rm_projects').select('id, name'),
       supabase.from('im_projects').select('id, name'),
     ])
-    if (reportError('بارگذاری دسترسی‌ها', e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11 ?? e12)) {
+    if (reportError('بارگذاری دسترسی‌ها', e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e6b ?? e7 ?? e8 ?? e9 ?? e10 ?? e11 ?? e12)) {
       set({ loading: false })
       return
     }
@@ -143,6 +154,7 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
       rolePermissions,
       userRoles: userRolesMap,
       userScopes: (userScopes ?? []).map(userProjectScopeFromRow),
+      moduleAccess: (moduleAccess ?? []).map(userModuleAccessFromRow),
       projectRoles: (projectRoles ?? []).map(rastaProjectRoleFromRow),
       projectRoleAssignments: (assignments ?? []).map(projectRoleAssignmentFromRow),
       projectMappings: (mappings ?? []).map(projectMappingFromRow),
@@ -202,6 +214,22 @@ export const useAccessStore = create<AccessState>()((set, get) => ({
     const { error } = await supabase.from('rasta_user_project_scope').delete().eq('id', scopeId)
     if (reportError('حذف محدوده دسترسی', error)) return
     set((s) => ({ userScopes: s.userScopes.filter((sc) => !(sc.id === scopeId && sc.userId === userId)) }))
+  },
+
+  setUserModuleAccess: async (userId, moduleKey, hasAccess) => {
+    if (hasAccess) {
+      const { error } = await supabase.from('rasta_user_module_access').delete().eq('user_id', userId).eq('module_key', moduleKey)
+      if (reportError('اعطای دسترسی به محیط', error)) return
+      set((s) => ({ moduleAccess: s.moduleAccess.filter((a) => !(a.userId === userId && a.moduleKey === moduleKey)) }))
+    } else {
+      const { error } = await supabase
+        .from('rasta_user_module_access')
+        .upsert({ user_id: userId, module_key: moduleKey, has_access: false }, { onConflict: 'user_id,module_key' })
+      if (reportError('محدودسازی دسترسی به محیط', error)) return
+      set((s) => ({
+        moduleAccess: [...s.moduleAccess.filter((a) => !(a.userId === userId && a.moduleKey === moduleKey)), { userId, moduleKey, hasAccess: false }],
+      }))
+    }
   },
 
   assignProjectRole: async (projectId, userId, projectRoleId) => {

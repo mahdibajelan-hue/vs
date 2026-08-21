@@ -3803,3 +3803,80 @@ returns table (
 $$ language sql security definer stable;
 
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 17. RASTA Access Control — real module gating (completes section 13, which
+--     was deliberately left non-enforcing). Two gaps fixed here:
+--
+--     1. rasta_modules was missing 4 real modules (executive/finance/material/
+--        pipelinedigitaltwin) added since section 13 was written, and the
+--        one-time action seed for rasta_permissions never re-ran for those or
+--        for 'competency' (added later, above) — re-running it here is a
+--        no-op for modules it already covered, thanks to on conflict do nothing.
+--
+--     2. A new, deliberately simple per-user × per-module access switch:
+--        rasta_user_module_access. This is NOT a replacement for the
+--        roles/permissions/scope model above (still there, unused by the
+--        app, untouched) — it's a separate, minimal boolean gate that
+--        actually IS consulted by the client now (ModuleHub + RootApp),
+--        because "can this user even open this module" needed to be a fact
+--        the app can check, not just data an admin screen can edit.
+--
+--        Design: NO ROW = full access. An admin restricts a user by
+--        inserting an explicit has_access=false row; removing that row (or
+--        setting it back to true) restores access. This means every
+--        existing user, and every future new user, keeps full access to
+--        every module by default with zero migration/backfill needed —
+--        access only narrows when an admin explicitly acts.
+-- ----------------------------------------------------------------------------
+
+insert into rasta_modules (key, label_fa) values
+  ('executive', 'مدیریت سبد پروژه‌ها'),
+  ('finance', 'مدیریت مالی پروژه'),
+  ('material', 'مدیریت تامین کالا'),
+  ('pipelinedigitaltwin', 'دوقلوی دیجیتال خط لوله')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+on conflict (module_key, action) do nothing;
+
+create table if not exists rasta_user_module_access (
+  user_id uuid not null references profiles (id) on delete cascade,
+  module_key text not null references rasta_modules (key) on delete cascade,
+  has_access boolean not null default true,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, module_key)
+);
+
+alter table rasta_user_module_access enable row level security;
+drop policy if exists "rasta_user_module_access_select_self_or_admin" on rasta_user_module_access;
+create policy "rasta_user_module_access_select_self_or_admin" on rasta_user_module_access
+  for select using (is_admin_user() or user_id = auth.uid());
+drop policy if exists "rasta_user_module_access_write_admin" on rasta_user_module_access;
+create policy "rasta_user_module_access_write_admin" on rasta_user_module_access
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create index if not exists idx_rasta_user_module_access_user on rasta_user_module_access (user_id);
+
+-- Admins always get every active module (never lockable via this switch, so an admin can never
+-- accidentally lock themselves — or another admin — out of the platform).
+drop function if exists rasta_my_accessible_modules();
+create or replace function rasta_my_accessible_modules()
+returns table (module_key text) as $$
+  select m.key
+  from rasta_modules m
+  where m.is_active
+    and (
+      is_admin_user()
+      or not exists (
+        select 1 from rasta_user_module_access a
+        where a.user_id = auth.uid() and a.module_key = m.key and a.has_access = false
+      )
+    );
+$$ language sql security definer stable;
+
+grant execute on function rasta_my_accessible_modules() to authenticated;

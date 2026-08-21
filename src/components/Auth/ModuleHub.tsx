@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
+import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
 import { SignOutButton } from './SignOutButton'
 
 const GOLD = '#c9a227'
@@ -123,6 +124,8 @@ const MODULES: ModuleDef[] = [
 export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<number | undefined>(undefined)
+  const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
+  const visibleModules = useMemo(() => MODULES.filter((m) => hasModuleAccess(accessibleModules, m.key)), [accessibleModules])
 
   const handleSelect = (m: ModuleDef) => {
     if (m.status === 'active') {
@@ -191,7 +194,7 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
         </div>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {MODULES.map((m, i) => (
+          {visibleModules.map((m, i) => (
             <ModuleCard key={m.key} module={m} index={i} onSelect={() => handleSelect(m)} />
           ))}
         </div>
