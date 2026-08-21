@@ -1,0 +1,101 @@
+import { useEffect, useState } from 'react'
+import { Award, Loader2, UserCircle2 } from 'lucide-react'
+import { useCompetencyStore } from './store/useCompetencyStore'
+import { useAuthStore } from '../../store/useAuthStore'
+import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { AssessmentsListPage } from './pages/AssessmentsListPage'
+import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
+import { ProfileForm } from './components/ProfileForm'
+
+export const COMPETENCY_ACCENT = '#a855f7'
+
+type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: string }
+
+/**
+ * Competency Assessment — structured interview/scoring tool for evaluating gas transmission
+ * pipeline construction project manager candidates across 8 weighted competency domains plus a
+ * closing capstone scenario (see lib/competencyModel.ts), with multi-interviewer panel scoring,
+ * candidate self-service profile intake, and a radar-chart report per candidate.
+ */
+export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
+  const loading = useCompetencyStore((s) => s.loading)
+  const fetchAll = useCompetencyStore((s) => s.fetchAll)
+  const createAssessment = useCompetencyStore((s) => s.createAssessment)
+  const myProfile = useAuthStore((s) => s.profile)
+
+  const [view, setView] = useState<View>({ name: 'list' })
+
+  useEffect(() => {
+    fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+        <Loader2 size={24} className="animate-spin" style={{ color: COMPETENCY_ACCENT }} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="comp-shell flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: `${COMPETENCY_ACCENT}55`, background: `${COMPETENCY_ACCENT}1a` }}>
+            <Award size={18} style={{ color: COMPETENCY_ACCENT }} />
+          </div>
+          <div className="hidden leading-tight sm:block">
+            <p className="text-sm font-extrabold">ارزیابی شایستگی</p>
+            <p className="text-[10px] text-muted" dir="ltr">
+              Competency Assessment
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {myProfile && (
+            <div
+              className="flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs sm:px-3"
+              style={{ borderColor: `${COMPETENCY_ACCENT}40`, background: `${COMPETENCY_ACCENT}14` }}
+            >
+              <UserCircle2 size={14} style={{ color: COMPETENCY_ACCENT }} />
+              <span className="hidden font-bold text-primary sm:inline">{myProfile.fullName}</span>
+              {myProfile.positionTitle && <span className="hidden text-[10px] text-muted lg:inline">— {myProfile.positionTitle}</span>}
+            </div>
+          )}
+          {view.name !== 'list' && (
+            <button
+              onClick={() => setView({ name: 'list' })}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3"
+            >
+              <Award size={13} /> <span className="hidden sm:inline">فهرست ارزیابی‌ها</span>
+            </button>
+          )}
+          <ModuleHeaderActions onExitToHub={onExitToHub} />
+        </div>
+      </header>
+
+      <StorageErrorBanner />
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
+        {view.name === 'list' && <AssessmentsListPage onOpen={(id) => setView({ name: 'assessment', id })} onNew={() => setView({ name: 'new' })} />}
+
+        {view.name === 'new' && (
+          <div className="mx-auto max-w-3xl">
+            <ProfileForm
+              submitLabel="ثبت مشخصات و شروع مصاحبه"
+              onSubmit={async (profile) => {
+                const id = await createAssessment(profile)
+                if (id) setView({ name: 'assessment', id })
+              }}
+            />
+          </div>
+        )}
+
+        {view.name === 'assessment' && <AssessmentWizardPage assessmentId={view.id} onDone={() => setView({ name: 'list' })} />}
+      </div>
+    </div>
+  )
+}

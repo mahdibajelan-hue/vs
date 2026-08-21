@@ -1,0 +1,139 @@
+import type { Project } from '../types'
+import { STATUS_COLOR, STATUS_LABEL_FA, APPROVAL_LABEL_FA, ACTIVITY_LABEL_FA } from '../types'
+import { computeAllProgress } from './progress'
+import { serializeColoredSvg } from './svg'
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Renders `el` to a PDF. Orientation defaults to whatever matches the captured content's own
+ * aspect ratio (a tall stacked dashboard gets portrait pages, a wide one-pager gets landscape)
+ * instead of always forcing landscape, which squished tall reports into a sliver in the middle
+ * of a wide page.
+ *
+ * By default, content taller than one page is split across multiple pages rather than shrunk to
+ * fit, so nothing becomes illegibly small — this is right for long, scrolling reports. Pass
+ * `fitToOnePage: true` for content that was authored to be a single page (a candidate summary, a
+ * one-pager): the whole capture is scaled down (preserving aspect ratio, never stretched to fill
+ * the page unevenly) to fit within the page's printable area and centered, instead of always
+ * stretching to the page's full width and paginating whatever doesn't fit — which is what
+ * produced pages whose blank margin or overflow didn't match the content's actual proportions.
+ */
+export async function exportElementToPdf(
+  el: HTMLElement,
+  filename: string,
+  options?: { orientation?: 'portrait' | 'landscape'; backgroundColor?: string; fitToOnePage?: boolean; marginMm?: number },
+) {
+  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+    import('html2canvas-pro'),
+    import('jspdf'),
+  ])
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    backgroundColor: options?.backgroundColor || getComputedStyle(document.body).getPropertyValue('--bg-panel-solid') || '#ffffff',
+    useCORS: true,
+  })
+  const imgData = canvas.toDataURL('image/png')
+  const orientation = options?.orientation ?? (canvas.height > canvas.width ? 'portrait' : 'landscape')
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+
+  if (options?.fitToOnePage) {
+    const margin = options.marginMm ?? 8
+    const maxWidth = pageWidth - margin * 2
+    const maxHeight = pageHeight - margin * 2
+    const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+    const imgWidth = canvas.width * scale
+    const imgHeight = canvas.height * scale
+    const x = (pageWidth - imgWidth) / 2
+    const y = (pageHeight - imgHeight) / 2
+    pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight)
+    pdf.save(filename)
+    return
+  }
+
+  const imgWidth = pageWidth
+  const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+  let heightLeft = imgHeight
+  let position = 0
+  pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+  heightLeft -= pageHeight
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight
+    pdf.addPage()
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+  }
+  pdf.save(filename)
+}
+
+export function exportColoredSvg(project: Project, filename: string) {
+  if (!project.svgRaw) return
+  const progressMap = computeAllProgress(project)
+  const colorMap = new Map<string, string>()
+  for (const line of project.lines) {
+    const p = progressMap.get(line.id)
+    const color = STATUS_COLOR[p?.status ?? line.status]
+    for (const elementId of line.svgElementIds) colorMap.set(elementId, color)
+  }
+  const svg = serializeColoredSvg(project.svgRaw, colorMap)
+  downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)
+}
+
+export async function exportProjectToExcel(project: Project, filename: string) {
+  const XLSX = await import('xlsx')
+  const progressMap = computeAllProgress(project)
+  const wb = XLSX.utils.book_new()
+
+  const summaryRows = project.lines.map((line) => {
+    const p = progressMap.get(line.id)!
+    return {
+      'شناسه خط': line.svgElementId,
+      'سایز': line.size,
+      'اسپک': line.spec,
+      'سرویس': line.service,
+      'پیمانکار': line.contractor,
+      'متراژ برنامه (m)': line.plannedLength,
+      'متراژ اجرا شده (m)': p.lengthDone,
+      'تعداد سرجوش برنامه': line.totalWelds,
+      'تعداد سرجوش اجرا شده': p.weldsDone,
+      'درصد پیشرفت': p.percent,
+      'وضعیت': STATUS_LABEL_FA[p.status],
+      'آخرین فعالیت': p.lastActivity ?? '-',
+    }
+  })
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows)
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'خلاصه خطوط')
+
+  const logRows = [...project.logs]
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map((log) => {
+      const line = project.lines.find((l) => l.id === log.lineId)
+      return {
+        'تاریخ': log.date,
+        'شناسه خط': line?.svgElementId ?? '-',
+        'متراژ (m)': log.lengthDone,
+        'تعداد سرجوش': log.weldCount,
+        'فعالیت': ACTIVITY_LABEL_FA[log.activity],
+        'پیمانکار': log.contractor,
+        'توضیحات': log.notes,
+        'علت تاخیر': log.delayReason,
+        'وضعیت تایید': APPROVAL_LABEL_FA[log.approvalStatus],
+      }
+    })
+  const logSheet = XLSX.utils.json_to_sheet(logRows)
+  XLSX.utils.book_append_sheet(wb, logSheet, 'گزارش روزانه')
+
+  XLSX.writeFile(wb, filename)
+}

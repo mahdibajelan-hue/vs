@@ -27,6 +27,10 @@ jobs:
           GH_PAGES: 'true'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # actions/deploy-pages (the GitHub Pages Deployments API) has repeatedly gotten stuck
+      # "queued" and timed out for this repo, so every prior deploy silently never shipped.
+      # This classic branch-based method (push the built dist/ to gh-pages, Pages configured
+      # to "Deploy from a branch") bypasses that API entirely and is far more reliable.
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

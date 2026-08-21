@@ -1,0 +1,199 @@
+/*
+ * Design identity: "EPC ledger control tower" — this module is where a project's financial
+ * officer reconciles budgets, contracts and payment certificates the way an engineering firm
+ * reconciles drawings: precisely, formally, on the record. Deliberately NOT a fintech-SaaS look
+ * (no neon cyan, no floating gradient blobs, no pill-badge chrome) — instead: ink + brass + a
+ * faint drafting-grid, hairline rules, and an official "stamp" motif for verified/paid states
+ * (mirrors the mohr/امضا every certificate in this domain actually carries). Scoped independently
+ * from the app-wide --bg-panel-solid tokens (same convention as issues.css's .im-root).
+ */
+
+.fin-shell {
+  /* Ink surfaces (dark) */
+  --fin-bg: #0b1220;
+  --fin-sidebar-bg: #0a0f1c;
+  --fin-sidebar-border: rgba(201, 166, 84, 0.14);
+  --fin-topbar-bg: rgba(11, 18, 32, 0.78);
+  --fin-card-bg: #131c2e;
+  --fin-card-border: rgba(201, 166, 84, 0.14);
+  --fin-card-shadow: 0 14px 32px rgba(2, 5, 12, 0.5);
+  --fin-divider: rgba(201, 166, 84, 0.14);
+  --fin-grid-line: rgba(201, 166, 84, 0.055);
+
+  /* Ink + paper text */
+  --fin-text: #ece7d9;
+  --fin-text-secondary: #a8a496;
+  --fin-text-muted: #6f6c60;
+  --fin-nav-text: #c9c4b3;
+  --fin-nav-text-muted: #726f62;
+  --fin-nav-active-bg: rgba(201, 166, 84, 0.14);
+  --fin-nav-active-text: #f3ecd8;
+
+  /* Signature accent (brand + primary action) */
+  --fin-brass: #c9a654;
+  --fin-brass-deep: #9c7c33;
+  --fin-on-brass: #16110a;
+
+  /* Semantic ledger tones */
+  --fin-good: #4c8f83;
+  --fin-warn: #c69249;
+  --fin-bad: #c15f42;
+  --fin-info: #64809f;
+  --fin-tertiary: #9b7fac;
+
+  background: var(--fin-bg);
+  background-image:
+    linear-gradient(var(--fin-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--fin-grid-line) 1px, transparent 1px),
+    radial-gradient(ellipse 900px 500px at 85% -10%, rgba(201, 166, 84, 0.07), transparent 60%);
+  background-size: 56px 56px, 56px 56px, 100% 100%;
+  color: var(--fin-nav-text);
+}
+
+.fin-shell.fin-light {
+  --fin-bg: #eeeade;
+  --fin-grid-line: rgba(27, 35, 51, 0.045);
+  --fin-card-bg: #fffdf7;
+  --fin-card-border: rgba(27, 35, 51, 0.1);
+  --fin-card-shadow: 0 4px 16px rgba(27, 35, 51, 0.07);
+  --fin-divider: rgba(27, 35, 51, 0.09);
+
+  --fin-text: #1b2333;
+  --fin-text-secondary: #5b5f6a;
+  --fin-text-muted: #8b8a7d;
+
+  --fin-good: #3e7c74;
+  --fin-warn: #b8863b;
+  --fin-bad: #b5573a;
+  --fin-info: #5c7290;
+  --fin-tertiary: #8b6e9c;
+}
+
+.fin-card {
+  background: var(--fin-card-bg);
+  border: 1px solid var(--fin-card-border);
+  border-radius: 0.85rem;
+  box-shadow: var(--fin-card-shadow);
+  color: var(--fin-text);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fin-text {
+  color: var(--fin-text);
+}
+.fin-text-secondary {
+  color: var(--fin-text-secondary);
+}
+.fin-text-muted {
+  color: var(--fin-text-muted);
+}
+
+/* fa-IR digits render poorly in the app-wide monospace (.num) font — Vazirmatn (the module's own
+   Persian sans) has proper Persian-digit glyphs, so every number inside the module overrides it. */
+.fin-shell .num {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ledger-column header: small-caps letterspaced eyebrow + hairline rule, replacing bold card
+   titles — the same device a bound ledger uses at the top of every column. */
+.fin-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--fin-text-secondary);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--fin-divider);
+}
+
+.fin-input {
+  border-radius: 0.5rem;
+  border: 1px solid var(--fin-card-border);
+  background: var(--fin-card-bg);
+  color: var(--fin-text);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.2s ease;
+}
+.fin-input:focus {
+  border-color: var(--fin-brass);
+  box-shadow: 0 0 0 3px rgba(201, 166, 84, 0.18);
+}
+.fin-input option {
+  color: #1b2333;
+  background: #fffdf7;
+}
+
+.fin-nav-item {
+  position: relative;
+  color: var(--fin-nav-text-muted);
+  border-inline-start: 2px solid transparent;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.fin-nav-item:hover {
+  background: rgba(201, 166, 84, 0.06);
+  color: var(--fin-nav-text);
+}
+.fin-nav-item.is-active {
+  background: var(--fin-nav-active-bg);
+  color: var(--fin-nav-active-text);
+  border-inline-start-color: var(--fin-brass);
+}
+
+/* Small elegant KPI/metric card — hover lift only, colors come from --fin-card-* tokens above. */
+.fin-metric-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.fin-metric-card:hover {
+  transform: translateY(-1px);
+}
+
+/* Signature element: the official stamp (مهر) — used wherever a record has been formally
+ * certified, paid, or verified. Double ring + letterspaced label + a slight rotation, as if
+ * physically pressed onto the page. Tone-driven so it works for good/warn/bad/info/neutral. */
+.fin-stamp {
+  --stamp-tone: var(--fin-good);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border: 1.5px solid var(--stamp-tone);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--stamp-tone) 22%, transparent);
+  color: var(--stamp-tone);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  transform: rotate(-2deg);
+  white-space: nowrap;
+}
+.fin-stamp-tone-good {
+  --stamp-tone: var(--fin-good);
+}
+.fin-stamp-tone-warn {
+  --stamp-tone: var(--fin-warn);
+}
+.fin-stamp-tone-bad {
+  --stamp-tone: var(--fin-bad);
+}
+.fin-stamp-tone-info {
+  --stamp-tone: var(--fin-info);
+}
+.fin-stamp-tone-neutral {
+  --stamp-tone: var(--fin-text-muted);
+}
+.fin-stamp-tone-tertiary {
+  --stamp-tone: var(--fin-tertiary);
+}
+
+/* Hero figure: the single top-line number a level's dashboard leads with. */
+.fin-hero-figure {
+  font-family: 'Noto Naskh Arabic', var(--font-sans);
+  font-weight: 700;
+  font-feature-settings: 'tnum' 1;
+}
