@@ -1,6 +1,7 @@
 import type {
-  EstAssumptions, EstCashFlowPoint, EstFullInputs, EstProjectDraft, EstResults, EstSectionResult,
-  OnshoreSpec, OffshoreSpec, CoatingSpec, CompressorSpec, StationUnitSpec, TelecomScadaSpec,
+  EstAssumptions, EstCashFlowPoint, EstFullInputs, EstLongLeadItem, EstProjectDraft, EstResults,
+  EstSectionResult, EstSensitivityItem, OnshoreSpec, OffshoreSpec, CoatingSpec, CompressorSpec,
+  StationUnitSpec, TelecomScadaSpec,
 } from '../types'
 
 /* ---------------------------------------------------------------------------
@@ -285,7 +286,7 @@ export const LIFECYCLE_PHASE_LABEL: Record<string, string> = {
   execution: 'اجرا و راه‌اندازی',
 }
 
-export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFullInputs {
+export function buildDefaultInputs(assumptions?: EstAssumptions | null, project?: EstProjectDraft): EstFullInputs {
   if (assumptions) {
     return {
       overhead: { ...assumptions.overhead },
@@ -303,6 +304,7 @@ export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFull
         telecom: { ...assumptions.specs.telecom },
       },
       risks: defaultRisks(),
+      longLeadItems: defaultLongLeadItems(project),
     }
   }
   return {
@@ -321,6 +323,7 @@ export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFull
       telecom: { ...DEFAULT_TELECOM },
     },
     risks: defaultRisks(),
+    longLeadItems: defaultLongLeadItems(project),
   }
 }
 
@@ -352,4 +355,65 @@ export function defaultRisks(): EstFullInputs['risks'] {
     { id: 'r5', title: 'افت عملکرد یا تأخیر پیمانکار EPC', category: 'contractor', likelihood: 2, impact: 4, mitigation: 'ارزیابی فنی-مالی دقیق پیمانکاران در مناقصه' },
     { id: 'r6', title: 'محدودیت فصلی/آب‌وهوایی در دسترسی به مسیر', category: 'weather', likelihood: 3, impact: 2, mitigation: 'زمان‌بندی عملیات با لحاظ فصول مناسب اجرا' },
   ]
+}
+
+/** Seed long-lead items only for the sections the project actually has — an offshore-only
+ * project has no reason to see a compressor lead time it will never order. Lead times are typical
+ * industry ranges, editable per project like everything else parametric in this module. */
+export function defaultLongLeadItems(project?: EstProjectDraft): EstLongLeadItem[] {
+  const items: EstLongLeadItem[] = []
+  if (project?.hasOnshore || project?.hasOffshore) {
+    items.push({ id: 'l1', title: 'لوله فولادی و پوشش ضدخوردگی', leadTimeMonths: 7, notes: 'سفارش نورد و پوشش‌دهی لوله در حجم بالا؛ زودتر از سایر اقلام باید نهایی شود.' })
+  }
+  if (project?.hasCompressorStation) {
+    items.push({ id: 'l2', title: 'کمپرسور و درایو (توربین گازی/الکتروموتور)', leadTimeMonths: 16, notes: 'معمولاً طولانی‌ترین قلم تدارکاتی پروژه؛ سفارش باید هم‌زمان با شروع طراحی پایه آغاز شود.' })
+  }
+  if ((project?.hasOnshore || project?.hasOffshore) || project?.tieInCount) {
+    items.push({ id: 'l3', title: 'شیرآلات با کلاس فشار بالا', leadTimeMonths: 9, notes: 'شیرهای بین‌راهی، انشعاب و ایستگاه‌های فرستنده/گیرنده توپک.' })
+  }
+  if (project?.hasTelecomScada) {
+    items.push({ id: 'l4', title: 'تجهیزات مخابرات و اسکادا', leadTimeMonths: 6, notes: 'شامل تجهیزات فیبر نوری، RTU و مرکز کنترل.' })
+  }
+  if (project?.hasOffshore) {
+    items.push({ id: 'l5', title: 'رزرو شناور خط‌گذار (Lay Barge)', leadTimeMonths: 11, notes: 'رزرو شناورهای تخصصی خط‌گذاری دریایی معمولاً باید ماه‌ها پیش از شروع اجرا انجام شود.' })
+  }
+  return items
+}
+
+/** ±15% swing applied to each driver, one at a time, to build a tornado/sensitivity chart — the
+ * standard "one-at-a-time" sensitivity method for an early-stage estimate. */
+export const SENSITIVITY_PCT = 0.15
+
+function withMutation(inputs: EstFullInputs, mutate: (draft: EstFullInputs) => void): EstFullInputs {
+  const draft: EstFullInputs = JSON.parse(JSON.stringify(inputs))
+  mutate(draft)
+  return draft
+}
+
+export function computeSensitivity(project: EstProjectDraft, inputs: EstFullInputs): EstSensitivityItem[] {
+  const items: EstSensitivityItem[] = []
+
+  function addDriver(key: string, label: string, condition: boolean, mutate: (draft: EstFullInputs, factor: number) => void) {
+    if (!condition) return
+    const lowInputs = withMutation(inputs, (d) => mutate(d, 1 - SENSITIVITY_PCT))
+    const highInputs = withMutation(inputs, (d) => mutate(d, 1 + SENSITIVITY_PCT))
+    const lowGrand = computeEstimate(project, lowInputs).grand
+    const highGrand = computeEstimate(project, highInputs).grand
+    items.push({
+      key, label,
+      lowGrandUsd: Math.min(lowGrand, highGrand),
+      highGrandUsd: Math.max(lowGrand, highGrand),
+      swingUsd: Math.abs(highGrand - lowGrand),
+    })
+  }
+
+  addDriver('onshoreSteel', 'قیمت فولاد خط خشکی', !!project.hasOnshore, (d, f) => { d.specs.onshore.steelUsdPerTon *= f })
+  addDriver('offshoreSteel', 'قیمت فولاد خط دریایی', !!project.hasOffshore, (d, f) => { d.specs.offshore.steelUsdPerTon *= f })
+  addDriver('terrain', 'ضریب توپوگرافی', !!project.hasOnshore, (d, f) => { d.specs.onshore.terrain *= f })
+  addDriver('row', 'هزینه تملک اراضی', !!project.hasOnshore, (d, f) => { d.specs.onshore.rowCostRialPerKm *= f })
+  addDriver('coating', 'نرخ پوشش لوله', !!(project.hasOnshore || project.hasOffshore), (d, f) => { d.specs.coating.usdPerKm *= f })
+  addDriver('fx', 'نرخ ارز (ریال/دلار)', true, (d, f) => { d.overhead.fxRialPerUsd *= f })
+  addDriver('contingency', 'پیش‌بینی‌نشده', true, (d, f) => { d.overhead.contingency *= f })
+
+  return items.sort((a, b) => b.swingUsd - a.swingUsd)
 }

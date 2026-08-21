@@ -1,5 +1,6 @@
 import { formatJalali } from '../../../lib/jalali'
 import type { EstFullInputs, EstProject, EstResults } from '../types'
+import { computeSensitivity, SENSITIVITY_PCT } from '../lib/calc'
 import { SECTION_COLOR, STATUS, fmtEUR, fmtRial, toFa } from '../lib/theme'
 
 /**
@@ -48,6 +49,11 @@ export function EstimatorPrintReport({
     const k = (Object.keys(STATUS) as (keyof typeof STATUS)[]).find((key) => STATUS[key] === band.color)!
     riskCounts[k]++
   }
+
+  const sensitivity = computeSensitivity(project, inputs).slice(0, 4)
+  const maxSwing = Math.max(1, ...sensitivity.map((s) => s.swingUsd))
+  const longLeadTop = [...inputs.longLeadItems].sort((a, b) => b.leadTimeMonths - a.leadTimeMonths).slice(0, 4)
+  const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
 
   const lifecyclePhases = [
     { label: 'انتخاب مشاور طراح', months: inputs.lifecycle.consultantSelectionMonths, color: '#94A3B8' },
@@ -174,6 +180,49 @@ export function EstimatorPrintReport({
             <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9.5, color: '#475569' }}>
               <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: p.color }} />
               {p.label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, marginTop: 18 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>اقلام بلندمدت‌تأمین (Long Lead Items)</div>
+          <p style={{ fontSize: 9, color: MUTED, lineHeight: 1.6, marginBottom: 6 }}>
+            اقلامی که تحویل آن‌ها آن‌قدر طول می‌کشد که خودشان زمان کل پروژه را تعیین می‌کنند و باید هم‌زمان با طراحی سفارش داده شوند.
+          </p>
+          {longLeadTop.length === 0 ? (
+            <p style={{ fontSize: 9.5, color: MUTED }}>قلمی ثبت نشده است.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+              <tbody>
+                {longLeadTop.map((it) => {
+                  const atRisk = it.leadTimeMonths > designWindow
+                  return (
+                    <tr key={it.id} style={{ borderBottom: `1px solid ${LINE}` }}>
+                      <td style={{ padding: '2.5px 4px' }}>{it.title || '—'}</td>
+                      <td style={{ textAlign: 'left', padding: '2.5px 4px', fontWeight: 700, color: atRisk ? STATUS.critical : STATUS.good, fontVariantNumeric: 'tabular-nums' }}>
+                        {toFa(it.leadTimeMonths)} ماه
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>تحلیل حساسیت (Sensitivity)</div>
+          <p style={{ fontSize: 9, color: MUTED, lineHeight: 1.6, marginBottom: 6 }}>
+            اثر تغییر {toFa(Math.round(SENSITIVITY_PCT * 100))}٪ هر فرضیه (به‌تنهایی) بر جمع کل — هر چه میله بلندتر، آن فرضیه حساس‌تر است.
+          </p>
+          {sensitivity.map((s) => (
+            <div key={s.key} style={{ marginBottom: 5 }}>
+              <div style={{ fontSize: 9.5, color: '#475569', marginBottom: 2 }}>{s.label}</div>
+              <div style={{ height: 7, background: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(s.swingUsd / maxSwing) * 100}%`, background: '#3987e5', borderRadius: 4 }} />
+              </div>
             </div>
           ))}
         </div>

@@ -42,7 +42,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (!loadingAssumptions) setInputs(buildDefaultInputs(assumptions))
+    if (!loadingAssumptions) setInputs(buildDefaultInputs(assumptions, currentProject ?? undefined))
     setTab('specs')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId])

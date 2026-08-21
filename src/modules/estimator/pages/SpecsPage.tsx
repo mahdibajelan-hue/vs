@@ -1,5 +1,5 @@
 import { Calculator, Trash2, Plus } from 'lucide-react'
-import type { EstFullInputs, EstProject, EstRisk } from '../types'
+import type { EstFullInputs, EstLongLeadItem, EstProject, EstRisk } from '../types'
 import { computeAutoStationCounts } from '../lib/calc'
 import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2, toFa } from '../lib/theme'
 import { Field, Section } from '../components/ui'
@@ -35,6 +35,17 @@ export function SpecsPage({
   }
   function removeRisk(id: string) {
     patch((d) => ({ ...d, risks: d.risks.filter((r) => r.id !== id) }))
+  }
+
+  function addLongLead() {
+    const item: EstLongLeadItem = { id: `l${Date.now()}`, title: '', leadTimeMonths: 6, notes: '' }
+    patch((d) => ({ ...d, longLeadItems: [...d.longLeadItems, item] }))
+  }
+  function updateLongLead(id: string, patchFields: Partial<EstLongLeadItem>) {
+    patch((d) => ({ ...d, longLeadItems: d.longLeadItems.map((it) => (it.id === id ? { ...it, ...patchFields } : it)) }))
+  }
+  function removeLongLead(id: string) {
+    patch((d) => ({ ...d, longLeadItems: d.longLeadItems.filter((it) => it.id !== id) }))
   }
 
   const hasPipeline = project.hasOnshore || project.hasOffshore
@@ -215,6 +226,46 @@ export function SpecsPage({
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, epcContractorSelectionMonths: v } }))} />
               <Field label="اجرا و راه‌اندازی" unit="ماه" value={inputs.lifecycle.executionMonths}
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, executionMonths: v } }))} />
+            </div>
+          </Section>
+
+          <Section title={`اقلام بلندمدت‌تأمین / Long Lead Items (${inputs.longLeadItems.length})`}>
+            <p className="text-[10px] mb-2 leading-relaxed" style={{ color: MUTED_FG }}>
+              اقلامی که سفارش و تحویل آن‌ها زمان زیادی می‌برد و باید خیلی زودتر از شروع اجرا آغاز شود؛ اگر مدت تأمین از مجموع «انتخاب مشاور + طراحی پایه» بیشتر باشد، سفارش باید همان ابتدای طراحی آغاز شود وگرنه اجرای پروژه عقب می‌افتد.
+            </p>
+            <div className="space-y-2">
+              {inputs.longLeadItems.map((it) => {
+                const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
+                const atRisk = it.leadTimeMonths > designWindow
+                return (
+                  <div key={it.id} className="rounded-lg p-2.5" style={{ border: `1px solid ${atRisk ? '#d03b3b' : BORDER}` }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <input value={it.title} onChange={(e) => updateLongLead(it.id, { title: e.target.value })}
+                        placeholder="نام قلم" className="est-input flex-1 rounded-md px-2 py-1 text-xs"
+                        style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }} />
+                      <input type="number" min={0} value={it.leadTimeMonths}
+                        onChange={(e) => updateLongLead(it.id, { leadTimeMonths: Math.max(0, Number(e.target.value) || 0) })}
+                        className="est-input est-mono w-16 rounded-md px-2 py-1 text-xs text-center"
+                        style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK, direction: 'ltr' }} />
+                      <span className="text-[10px]" style={{ color: MUTED_FG }}>ماه</span>
+                      <button onClick={() => removeLongLead(it.id)} className="shrink-0" style={{ color: MUTED_FG }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                    <input value={it.notes} onChange={(e) => updateLongLead(it.id, { notes: e.target.value })}
+                      placeholder="توضیحات" className="est-input w-full rounded-md px-2 py-1 text-[11px]"
+                      style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }} />
+                    {atRisk && (
+                      <p className="text-[10px] mt-1.5" style={{ color: '#d03b3b' }}>
+                        مدت تأمین ({toFa(it.leadTimeMonths)} ماه) از دوره مشاور+طراحی پایه ({toFa(designWindow)} ماه) بیشتر است — سفارش باید زودتر آغاز شود.
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+              <button onClick={addLongLead} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: MUTED_FG }}>
+                <Plus size={13} /> افزودن قلم بلندمدت‌تأمین
+              </button>
             </div>
           </Section>
 

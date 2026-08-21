@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, LabelList, Legend,
+  ResponsiveContainer, Cell, LabelList, Legend, ReferenceLine,
 } from 'recharts'
 import { Check, Copy, FileDown, Save } from 'lucide-react'
 import { exportElementToPdf } from '../../../lib/export'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { computeEstimate, buildCashFlowTimeline } from '../lib/calc'
+import { computeEstimate, buildCashFlowTimeline, computeSensitivity, SENSITIVITY_PCT } from '../lib/calc'
 import {
   BORDER, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, GRID, INK, INK_SOFT, MUTED_FG,
   SAFETY, SECTION_COLOR, STATUS, SURFACE, SURFACE_2, TOOLTIP_ITEM_STYLE, TOOLTIP_LABEL_STYLE,
@@ -41,6 +41,7 @@ export function ResultsPage({
 }) {
   const results = useMemo(() => computeEstimate(project, inputs), [project, inputs])
   const cashFlow = useMemo(() => buildCashFlowTimeline(inputs, results), [inputs, results])
+  const sensitivity = useMemo(() => computeSensitivity(project, inputs), [project, inputs])
   const [copied, setCopied] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
@@ -295,6 +296,77 @@ export function ResultsPage({
           </div>
           <div className="text-xs mt-3" style={{ color: MUTED_FG }}>
             هزینه پایه محاسبات (دلار آمریکا، بر اساس جداول مرجع): <span className="est-mono" style={{ color: INK_SOFT }}>{fmtUSD(results.grand)}</span>
+          </div>
+        </Card>
+
+        {/* Long-lead items */}
+        <Card>
+          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>اقلام بلندمدت‌تأمین (Long Lead Items)</h2>
+          <p className="text-[11px] leading-relaxed mb-3" style={{ color: MUTED_FG }}>
+            اقلام بلندمدت‌تأمین، تجهیزات یا موادی هستند که فاصله سفارش تا تحویل آن‌ها آن‌قدر طولانی است که خودشان می‌توانند تعیین‌کننده زمان‌بندی کل پروژه باشند، نه عملیات اجرایی.
+            اگر سفارش این اقلام دیر آغاز شود، حتی با اجرای سریع بقیه پروژه، تاریخ راه‌اندازی نهایی عقب می‌افتد؛ به همین دلیل باید معمولاً هم‌زمان با طراحی پایه سفارش داده شوند.
+          </p>
+          {inputs.longLeadItems.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED_FG }}>قلمی برای این پروژه ثبت نشده است.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" style={{ minWidth: 460 }}>
+                <thead>
+                  <tr className="text-xs" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED_FG }}>
+                    <th className="text-right py-1.5 font-medium">قلم</th>
+                    <th className="text-center py-1.5 font-medium">مدت تأمین</th>
+                    <th className="text-right py-1.5 font-medium">توضیحات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...inputs.longLeadItems].sort((a, b) => b.leadTimeMonths - a.leadTimeMonths).map((it) => {
+                    const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
+                    const atRisk = it.leadTimeMonths > designWindow
+                    return (
+                      <tr key={it.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                        <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>{it.title || '—'}</td>
+                        <td className="py-1.5 text-center">
+                          <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white est-mono" style={{ background: atRisk ? STATUS.critical : STATUS.good }}>
+                            {toFa(it.leadTimeMonths)} ماه
+                          </span>
+                        </td>
+                        <td className="py-1.5 text-xs" style={{ color: MUTED_FG }}>{it.notes || '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* Sensitivity analysis */}
+        <Card>
+          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>تحلیل حساسیت برآورد (Sensitivity Analysis)</h2>
+          <p className="text-[11px] leading-relaxed mb-3" style={{ color: MUTED_FG }}>
+            این نمودار — که به آن «تورنادو» هم گفته می‌شود — نشان می‌دهد اگر هر یک از فرضیات زیر به‌تنهایی {toFa(Math.round(SENSITIVITY_PCT * 100))}٪ کمتر یا بیشتر شود (و بقیه فرضیات ثابت بمانند)، جمع کل برآورد چقدر تغییر می‌کند.
+            هر چه میله یک ردیف بلندتر باشد، آن فرضیه برای دقت برآورد نهایی حساس‌تر است و باید با دقت بیشتری راستی‌آزمایی شود.
+          </p>
+          <div dir="ltr">
+            <ResponsiveContainer width="100%" height={Math.max(160, sensitivity.length * 34)}>
+              <BarChart data={sensitivity.map((s) => ({
+                key: s.key, name: s.label,
+                base: toEur(s.lowGrandUsd), range: toEur(s.highGrandUsd - s.lowGrandUsd),
+              }))} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={GRID} />
+                <XAxis type="number" tickFormatter={(v) => fmtEURm(v)} tick={{ fontSize: 11, fill: MUTED_FG }} domain={['dataMin', 'dataMax']} />
+                <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: INK_SOFT }} />
+                <Tooltip
+                  formatter={(v, key) => (key === 'range' ? fmtEUR(Number(v)) + ' نوسان' : null)}
+                  contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                />
+                <ReferenceLine x={toEur(results.grand)} stroke={SAFETY} strokeDasharray="4 4" label={{ value: 'برآورد پایه', fontSize: 10, fill: SAFETY, position: 'insideTopLeft' }} />
+                <Bar dataKey="base" stackId="tornado" fill="transparent" isAnimationActive={false} />
+                <Bar dataKey="range" stackId="tornado" radius={[3, 3, 3, 3]} animationDuration={600}>
+                  {sensitivity.map((s) => (<Cell key={s.key} fill="#3987e5" />))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
 

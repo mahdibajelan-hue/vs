@@ -140,11 +140,32 @@ export interface EstRisk {
   mitigation: string
 }
 
+/** A key procurement item whose lead time can drive the schedule more than construction itself —
+ * ordering must start early enough (usually during design) that it's ready before execution needs
+ * it. */
+export interface EstLongLeadItem {
+  id: string
+  title: string
+  leadTimeMonths: number
+  notes: string
+}
+
 export interface EstFullInputs {
   overhead: EstOverheadInputs
   lifecycle: EstLifecycleInputs
   specs: EstSectionSpecs
   risks: EstRisk[]
+  longLeadItems: EstLongLeadItem[]
+}
+
+/** One line of a tornado/sensitivity chart: how much the grand total swings when this single
+ * assumption moves ±SENSITIVITY_PCT from its base value, holding everything else fixed. */
+export interface EstSensitivityItem {
+  key: string
+  label: string
+  lowGrandUsd: number
+  highGrandUsd: number
+  swingUsd: number
 }
 
 /** Ministry-guideline-sourced default assumptions — the org-wide baseline every new calculation
