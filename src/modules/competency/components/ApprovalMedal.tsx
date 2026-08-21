@@ -4,7 +4,7 @@
  * certified-PM medallion, so no extra caption text is layered on top of it.
  */
 export function ApprovalMedal({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
-  const width = size === 'lg' ? 22 : 18
+  const width = size === 'lg' ? 18 : 14
 
   return (
     <img
