@@ -43,6 +43,7 @@ export interface CompAssessmentRow {
   pm_certification_score: number | null
   self_service_token: string
   self_service_status: string
+  results_share_token: string
   reviewed_by: string | null
   reviewed_at: string | null
   is_approved: boolean
@@ -84,6 +85,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     pmCertificationScore: r.pm_certification_score,
     selfServiceToken: r.self_service_token,
     selfServiceStatus: r.self_service_status as SelfServiceStatus,
+    resultsShareToken: r.results_share_token,
     reviewedBy: r.reviewed_by,
     reviewedAt: r.reviewed_at,
     isApproved: r.is_approved,

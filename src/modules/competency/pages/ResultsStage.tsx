@@ -5,11 +5,14 @@ import {
   Briefcase,
   BookOpen,
   CheckCircle2,
+  Copy,
   Download,
+  Globe,
   GraduationCap,
   Mail,
   MessageSquareText,
   Printer,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   TrendingDown,
@@ -29,6 +32,7 @@ import {
   computeOverallPercent,
   domainFlags,
   maturityBand,
+  tierColor,
 } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
@@ -36,19 +40,11 @@ interface ResultsStageProps {
   assessment: CompetencyAssessment
 }
 
-/** Tiered color for a 0-100 score — used to make domain bars and score chips read at a glance instead of every value looking identically purple. */
-function tierColor(percent: number | null): string {
-  if (percent == null) return '#6b7280'
-  if (percent >= 80) return '#34d399'
-  if (percent >= 60) return '#a78bfa'
-  if (percent >= 40) return '#fbbf24'
-  return '#f87171'
-}
-
 /** The final report: a professional candidate card, radar chart, maturity band, strengths/weaknesses, and position recommendations — all on one printable/exportable page. */
 export function ResultsStage({ assessment }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
+  const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
@@ -56,6 +52,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const printRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [settingApproval, setSettingApproval] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const domainScores = computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
@@ -177,6 +174,8 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
     setSettingApproval(false)
   }
 
+  const resultsShareUrl = `${window.location.origin}${window.location.pathname}?results=${assessment.resultsShareToken}`
+
   const handleSend = () => {
     const subject = encodeURIComponent(`نتیجه مصاحبه ارزیابی شایستگی — ${assessment.candidateName}`)
     const body = encodeURIComponent(
@@ -223,6 +222,37 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
         >
           <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید صلاحیت'}
         </button>
+      </div>
+
+      <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
+        <p className="flex items-center gap-1.5 text-sm font-bold">
+          <Globe size={14} className="text-purple-300" /> لینک عمومی نتایج
+        </p>
+        <p className="text-[11px] leading-5 text-muted">
+          این لینک را برای هر کسی ارسال کنید تا بدون ورود به سامانه، فقط همین بخش نتایج را به‌صورت آنلاین ببیند — بدون نام مصاحبه‌گران و بدون سایر اطلاعات نامزد.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input readOnly value={resultsShareUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(resultsShareUrl)
+              setLinkCopied(true)
+              setTimeout(() => setLinkCopied(false), 2000)
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+          >
+            <Copy size={12} /> {linkCopied ? 'کپی شد' : 'کپی لینک'}
+          </button>
+          <button
+            type="button"
+            onClick={() => regenerateResultsShareLink(assessment.id)}
+            title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+          >
+            <RefreshCw size={12} /> لینک جدید
+          </button>
+        </div>
       </div>
 
       {/* Off-screen, light-mode print/PDF template — kept out of view (print-only) so the on-screen

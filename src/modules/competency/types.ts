@@ -95,6 +95,8 @@ export interface CompetencyAssessment {
   pmCertificationScore: number | null
   selfServiceToken: string
   selfServiceStatus: SelfServiceStatus
+  /** Separate, unguessable token for the public "view results online" link — see comp_public_results_get in schema.sql. Never the same token as selfServiceToken. */
+  resultsShareToken: string
   reviewedBy: string | null
   reviewedAt: string | null
   /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */

@@ -270,6 +270,15 @@ export function domainFlags(domainScores: DomainScore[]): { strengths: DomainSco
   }
 }
 
+/** Tiered color for a 0-100 score — used on the results/public-results pages so domain bars and score chips read at a glance instead of every value looking identically purple. */
+export function tierColor(percent: number | null): string {
+  if (percent == null) return '#6b7280'
+  if (percent >= 80) return '#34d399'
+  if (percent >= 60) return '#a78bfa'
+  if (percent >= 40) return '#fbbf24'
+  return '#f87171'
+}
+
 /** @deprecated kept for the short on-card label; prefer maturityBand for the full guidance text. */
 export function overallRatingLabel(percent: number | null): string {
   return maturityBand(percent).label

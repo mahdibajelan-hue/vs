@@ -161,6 +161,7 @@ interface CompetencyState {
   regenerateSelfServiceLink: (id: string) => Promise<void>
   markSelfServiceSent: (id: string) => Promise<void>
   markReviewed: (id: string) => Promise<void>
+  regenerateResultsShareLink: (id: string) => Promise<void>
 
   fetchPanelists: (assessmentId: string) => Promise<void>
   addPanelist: (assessmentId: string, userId: string, isLead: boolean) => Promise<void>
@@ -244,6 +245,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       pmCertificationScore: null,
       selfServiceToken: crypto.randomUUID(),
       selfServiceStatus: 'not_sent',
+      resultsShareToken: crypto.randomUUID(),
       reviewedBy: null,
       reviewedAt: null,
       isApproved: false,
@@ -393,6 +395,13 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     const { error } = await supabase.from('comp_assessments').update({ self_service_status: 'reviewed', reviewed_by: uid, reviewed_at: now }).eq('id', id)
     if (reportError('ثبت بررسی مدارک', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, selfServiceStatus: 'reviewed', reviewedBy: uid, reviewedAt: now } : a)) })
+  },
+
+  regenerateResultsShareLink: async (id) => {
+    const token = crypto.randomUUID()
+    const { error } = await supabase.from('comp_assessments').update({ results_share_token: token }).eq('id', id)
+    if (reportError('صدور لینک عمومی جدید', error)) return
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, resultsShareToken: token } : a)) })
   },
 
   fetchPanelists: async (assessmentId) => {

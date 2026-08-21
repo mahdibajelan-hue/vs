@@ -15,6 +15,7 @@ import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
+import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -41,6 +42,11 @@ export function RootApp() {
   // auth-gated rendering below, since it must never require a RASTA login.
   const candidateToken = new URLSearchParams(window.location.search).get('candidate')
   if (candidateToken) return <CandidateSelfServicePage token={candidateToken} />
+
+  // Public "view results online" link (?results=<token>) — same idea, but for sharing a read-only
+  // results report with anyone holding the link, never requiring a RASTA login either.
+  const resultsToken = new URLSearchParams(window.location.search).get('results')
+  if (resultsToken) return <PublicResultsPage token={resultsToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (

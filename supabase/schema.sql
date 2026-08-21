@@ -3755,3 +3755,51 @@ create policy "comp_docs_write_candidate" on storage.objects
 insert into rasta_modules (key, label_fa) values
   ('competency', 'ارزیابی شایستگی')
 on conflict (key) do nothing;
+
+-- ----------------------------------------------------------------------------
+-- Public results link: a second, separate unguessable token (results_share_token,
+-- never self_service_token) lets the interview lead send a read-only "view results
+-- online" link to anyone — HR, a stakeholder, the candidate — without a RASTA
+-- login. Kept as its own token so a leaked results link can never be used to
+-- submit/overwrite the candidate's self-service profile, and vice versa.
+--
+-- comp_public_results_get is the ONLY way that link can read anything, and it
+-- deliberately returns just the scored result: no interviewer/panelist identity
+-- (comp_panelists and comp_panelist_scores are never touched here — the panel
+-- roster and each panelist's own scoring pass stay staff-only) and no candidate
+-- contact/personal-profile fields (phone, email, national id, employer,
+-- education, certifications, photo). Granting execute to anon therefore cannot
+-- be used to read anything beyond one candidate's result, given that exact link.
+-- ----------------------------------------------------------------------------
+
+alter table comp_assessments add column if not exists results_share_token uuid not null default gen_random_uuid();
+create unique index if not exists idx_comp_assessments_results_share_token on comp_assessments (results_share_token);
+
+drop function if exists comp_public_results_get(uuid);
+create or replace function comp_public_results_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  interview_date date,
+  status text,
+  answers jsonb,
+  capstone_score int,
+  capstone_note text,
+  education_score numeric,
+  experience_score numeric,
+  pm_training_score numeric,
+  pm_certification_score numeric,
+  is_approved boolean,
+  strengths text,
+  development_areas text
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.interview_date, a.status,
+         a.answers, a.capstone_score, a.capstone_note,
+         a.education_score, a.experience_score, a.pm_training_score, a.pm_certification_score,
+         a.is_approved, a.strengths, a.development_areas
+  from comp_assessments a
+  where a.results_share_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function comp_public_results_get(uuid) to anon, authenticated;
