@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from 'recharts'
@@ -18,6 +18,33 @@ const TEAL = '#2A8C82'
 const BURNT = '#B44711'
 const PAPER = '#F3F5F7'
 const LINE = '#D8DEE4'
+/** Text on secondary/supporting content — standardized rather than picked ad hoc per element. */
+const MUTED_FG = '#475569'
+
+/** One fixed color per cost category, keyed by row id rather than array position — so the CBS
+ * table's left-border accent and the chart's bar color stay linked to the same category even
+ * after the chart itself is re-sorted by magnitude. */
+const ROW_COLOR: Record<string, string> = {
+  pipe: STEEL,
+  valves: '#2E6C8E',
+  linework: TEAL,
+  crossing: '#3E9C90',
+  test: SAFETY,
+  row: '#C98A00',
+  hse: BURNT,
+}
+
+const TOOLTIP_STYLE: CSSProperties = {
+  background: STEEL_DARK,
+  border: 'none',
+  borderRadius: 8,
+  color: '#fff',
+  fontSize: 12,
+  padding: '8px 12px',
+  boxShadow: '0 8px 24px -8px rgba(15,47,65,0.45)',
+}
+const TOOLTIP_ITEM_STYLE: CSSProperties = { color: SAFETY, fontWeight: 600 }
+const TOOLTIP_LABEL_STYLE: CSSProperties = { color: '#fff', marginBottom: 2 }
 
 const fmtUSD = (n: number) => '$' + Math.round(n).toLocaleString('en-US')
 const fmtUSDm = (n: number) => (n / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 1 }) + 'M'
@@ -111,7 +138,7 @@ function Field({
         className="est-input w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-mono text-right transition-shadow"
         style={{ direction: 'ltr', textAlign: 'left' }}
       />
-      {hint && <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{hint}</div>}
+      {hint && <div className="text-[10px] mt-0.5 leading-relaxed" style={{ color: MUTED_FG, opacity: 0.75 }}>{hint}</div>}
     </label>
   )
 }
@@ -218,10 +245,12 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   const tomanBn = (usd: number) => (usd * p.fx) / 1_000_000_000
 
-  const cbsChartData = base.rows.map((r) => ({
-    name: r.chartLabel,
-    value: r.total,
-  }))
+  // Sorted descending by value (chart best-practice for category-comparison bar charts) — color
+  // stays keyed to the category itself via ROW_COLOR, so it still matches that row's accent in
+  // the CBS table below even though the two are no longer in the same order.
+  const cbsChartData = [...base.rows]
+    .sort((a, b) => b.total - a.total)
+    .map((r) => ({ key: r.key, name: r.chartLabel, value: r.total }))
 
   function resetAll() {
     setP({ ...DEFAULTS })
@@ -241,8 +270,6 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
     })
   }
 
-  const barColors = [STEEL, '#2E6C8E', TEAL, '#3E9C90', SAFETY, '#C98A00', BURNT]
-
   const scenarioLabels: Record<ScenarioKey, string> = {
     steel: 'قیمت فولاد',
     terrain: 'ضریب توپوگرافی',
@@ -258,7 +285,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
         .est-font { font-family: 'Vazirmatn', Tahoma, Arial, sans-serif; }
-        .est-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+        .est-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
         .est-input:focus { outline: none; box-shadow: 0 0 0 2px ${SAFETY}; }
 
         @keyframes est-hazard-move {
@@ -433,7 +460,8 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
           {/* CBS Table */}
           <div className="est-card bg-white rounded-xl border border-slate-200 p-5 print-card est-fade-in" style={{ animationDelay: '60ms' }}>
             <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>ساختار شکست هزینه (CBS)</h2>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: 480 }}>
               <thead>
                 <tr className="text-slate-500 text-xs border-b" style={{ borderColor: LINE }}>
                   <th className="text-right py-1.5 font-medium">شرح</th>
@@ -443,8 +471,8 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {base.rows.map((r, i) => (
-                  <tr key={r.key} className="border-b" style={{ borderColor: LINE, borderRight: `3px solid ${barColors[i % barColors.length]}` }}>
+                {base.rows.map((r) => (
+                  <tr key={r.key} className="border-b" style={{ borderColor: LINE, borderRight: `3px solid ${ROW_COLOR[r.key]}` }}>
                     <td className="py-1.5 pr-2">{r.label}</td>
                     <td className="text-left est-mono text-slate-600">{fmtUSD(r.perKm)}</td>
                     <td className="text-left est-mono">{fmtUSD(r.total)}</td>
@@ -477,6 +505,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                 </tr>
               </tbody>
             </table>
+            </div>
             <div className="text-xs text-slate-400 mt-3">
               هزینه هر کیلومتر (میانگین): <span className="est-mono">{fmtUSD(base.perKm)}</span>
             </div>
@@ -501,9 +530,15 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                   tick={{ fontSize: 11 }}
                   tickFormatter={(v: string) => (v.length > 14 ? v.slice(0, 13) + '…' : v)}
                 />
-                <Tooltip formatter={(v) => fmtUSD(Number(v))} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} animationDuration={700} animationEasing="ease-out">
-                  {cbsChartData.map((_, i) => (<Cell key={i} fill={barColors[i % barColors.length]} />))}
+                <Tooltip
+                  formatter={(v) => fmtUSD(Number(v))}
+                  contentStyle={TOOLTIP_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  cursor={{ fill: 'rgba(15,47,65,0.04)' }}
+                />
+                <Bar dataKey="value" name="هزینه مستقیم" radius={[0, 4, 4, 0]} animationDuration={700} animationEasing="ease-out">
+                  {cbsChartData.map((d) => (<Cell key={d.key} fill={ROW_COLOR[d.key]} />))}
                   <LabelList dataKey="value" position="right" formatter={(v) => fmtUSDm(Number(v))} style={{ fontSize: 11, fill: INK }} />
                 </Bar>
               </BarChart>
@@ -519,13 +554,21 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={LINE} />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => fmtUSDm(v)} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => fmtUSD(Number(v))} labelFormatter={(l, d) => (d?.[0]?.payload as { desc?: string } | undefined)?.desc || l} />
-                <Bar dataKey="usd" radius={[4, 4, 0, 0]} animationDuration={700} animationEasing="ease-out">
+                <Tooltip
+                  formatter={(v) => fmtUSD(Number(v))}
+                  labelFormatter={(l, d) => (d?.[0]?.payload as { desc?: string } | undefined)?.desc || l}
+                  contentStyle={TOOLTIP_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  cursor={{ fill: 'rgba(15,47,65,0.04)' }}
+                />
+                <Bar dataKey="usd" name="هزینه" radius={[4, 4, 0, 0]} animationDuration={700} animationEasing="ease-out">
                   {cashFlow.map((_, i) => (<Cell key={i} fill={i % 2 === 0 ? STEEL : '#2E6C8E'} />))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <table className="w-full text-xs mt-2">
+            <div className="overflow-x-auto">
+            <table className="w-full text-xs mt-2" style={{ minWidth: 420 }}>
               <tbody>
                 {cashFlow.map((c) => (
                   <tr key={c.name} className="border-b" style={{ borderColor: LINE }}>
@@ -537,12 +580,14 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Sensitivity */}
           <div className="est-card bg-white rounded-xl border border-slate-200 p-5 print-card est-fade-in" style={{ animationDelay: '210ms' }}>
             <h2 className="font-bold mb-3" style={{ color: STEEL_DARK }}>تحلیل حساسیت — سناریوها</h2>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: 420 }}>
               <thead>
                 <tr className="text-slate-500 text-xs border-b" style={{ borderColor: LINE }}>
                   <th className="text-right py-1.5 font-medium">سناریو</th>
@@ -572,6 +617,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="text-[11px] text-slate-400 leading-relaxed px-1 pb-6">
