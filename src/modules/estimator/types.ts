@@ -9,6 +9,7 @@
 export type EstSectionKey =
   | 'onshore'
   | 'offshore'
+  | 'coating'
   | 'compressor'
   | 'launcher'
   | 'receiver'
@@ -22,10 +23,7 @@ export interface EstProject {
   hasOnshore: boolean
   hasOffshore: boolean
   hasCompressorStation: boolean
-  launcherCount: number
-  receiverCount: number
   tieInCount: number
-  blockValveCount: number
   hasTelecomScada: boolean
   createdBy: string | null
   createdAt: string
@@ -37,10 +35,7 @@ export interface EstProjectDraft {
   hasOnshore: boolean
   hasOffshore: boolean
   hasCompressorStation: boolean
-  launcherCount: number
-  receiverCount: number
   tieInCount: number
-  blockValveCount: number
   hasTelecomScada: boolean
 }
 
@@ -53,9 +48,11 @@ export interface OnshoreSpec {
   linework: number
   crossing: number
   test: number
-  row: number
   hse: number
   terrain: number
+  /** Land acquisition/ROW cost — entered by the user directly in Rial (not USD), since it varies
+   * by local land price far more than any of the other per-km rates. */
+  rowCostRialPerKm: number
 }
 
 export interface OffshoreSpec {
@@ -70,6 +67,10 @@ export interface OffshoreSpec {
   generalServicesPct: number
 }
 
+export interface CoatingSpec {
+  usdPerKm: number
+}
+
 export interface CompressorSpec {
   stationCount: number
   ratedPowerMwPerStation: number
@@ -81,6 +82,16 @@ export interface StationUnitSpec {
   unitCostUsd: number
 }
 
+/** Launcher/receiver/block-valve station counts, either entered directly or derived from
+ * pipeline length: a launcher+receiver pair every 100km (rebuilt at each 100km mark), and a
+ * block-valve station every interior 25km that isn't already a launcher/receiver point. */
+export interface StationsAutoSpec {
+  mode: 'manual' | 'auto'
+  manualLauncherCount: number
+  manualReceiverCount: number
+  manualBlockValveCount: number
+}
+
 export interface TelecomScadaSpec {
   mode: 'perKm' | 'lumpSum'
   perKmUsd: number
@@ -90,7 +101,9 @@ export interface TelecomScadaSpec {
 export interface EstSectionSpecs {
   onshore: OnshoreSpec
   offshore: OffshoreSpec
+  coating: CoatingSpec
   compressor: CompressorSpec
+  stations: StationsAutoSpec
   launcher: StationUnitSpec
   receiver: StationUnitSpec
   tieIn: StationUnitSpec

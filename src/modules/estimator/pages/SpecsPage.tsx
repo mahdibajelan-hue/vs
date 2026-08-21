@@ -1,6 +1,7 @@
 import { Calculator, Trash2, Plus } from 'lucide-react'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2 } from '../lib/theme'
+import { computeAutoStationCounts } from '../lib/calc'
+import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2, toFa } from '../lib/theme'
 import { Field, Section } from '../components/ui'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
@@ -36,12 +37,16 @@ export function SpecsPage({
     patch((d) => ({ ...d, risks: d.risks.filter((r) => r.id !== id) }))
   }
 
+  const hasPipeline = project.hasOnshore || project.hasOffshore
+  const totalLengthKm = (project.hasOnshore ? inputs.specs.onshore.lengthKm : 0) + (project.hasOffshore ? inputs.specs.offshore.lengthKm : 0)
+  const autoStations = computeAutoStationCounts(totalLengthKm)
+
   return (
     <div className="h-full overflow-y-auto est-font">
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
         <div>
           <p className="text-sm font-bold" style={{ color: INK }}>۲. مشخصات و آپشن‌های هر بخش</p>
-          <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در تعریف پروژه «{project.name}» فعال شده‌اند نمایش داده می‌شوند</p>
+          <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در تعریف پروژه «{project.name}» فعال شده‌اند نمایش داده می‌شوند. نرخ‌های واحد از بخش تنظیمات خوانده می‌شوند.</p>
         </div>
 
         <div className="est-card rounded-2xl px-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -54,22 +59,13 @@ export function SpecsPage({
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, diameterIn: v } } }))} />
                 <Field label="ضخامت جداره" unit="میلی‌متر" value={inputs.specs.onshore.wtMm} step={0.5}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, wtMm: v } } }))} />
-                <Field label="قیمت فولاد" unit="$/تن" value={inputs.specs.onshore.steelUsdPerTon} step={10}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, steelUsdPerTon: v } } }))} />
-                <Field label="عملیات اجرایی خطی" unit="$/km" value={inputs.specs.onshore.linework} step={5000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, linework: v } } }))} />
-                <Field label="عبور از موانع (HDD)" unit="$/km" value={inputs.specs.onshore.crossing} step={1000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, crossing: v } } }))} />
-                <Field label="تست هیدرواستاتیک" unit="$/km" value={inputs.specs.onshore.test} step={1000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, test: v } } }))} />
-                <Field label="تملک اراضی (ROW)" unit="$/km" value={inputs.specs.onshore.row} step={1000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, row: v } } }))} />
-                <Field label="HSE و محیط‌زیست" unit="$/km" value={inputs.specs.onshore.hse} step={500}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, hse: v } } }))} />
                 <Field label="ضریب توپوگرافی" value={inputs.specs.onshore.terrain} step={0.05}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, terrain: v } } }))}
                   hint="۱٫۰ مسطح — ۱٫۲ تا ۱٫۴ ترکیبی — ۱٫۵ تا ۱٫۸ کوهستانی" />
               </div>
+              <Field label="هزینه تملک و تحصیل اراضی" unit="ریال/کیلومتر" value={inputs.specs.onshore.rowCostRialPerKm} step={1_000_000_000}
+                onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, rowCostRialPerKm: v } } }))}
+                hint="چون قیمت زمین از پروژه‌ای به پروژه دیگر کاملاً متفاوت است، این مقدار را خودتان به ریال وارد کنید. مقدار پیشنهادی در تنظیمات فقط یک مبنای اولیه است." />
             </Section>
           )}
 
@@ -82,16 +78,9 @@ export function SpecsPage({
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, diameterIn: v } } }))} />
                 <Field label="ضخامت جداره" unit="میلی‌متر" value={inputs.specs.offshore.wtMm} step={0.5}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, wtMm: v } } }))} />
-                <Field label="قیمت فولاد" unit="$/تن" value={inputs.specs.offshore.steelUsdPerTon} step={10}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, steelUsdPerTon: v } } }))} />
-                <Field label="عملیات مدفون‌سازی/خط‌گذاری" unit="$/km" value={inputs.specs.offshore.layingUsdPerKm} step={10000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, layingUsdPerKm: v } } }))} />
-                <Field label="بسیج/جمع‌آوری شناور (Mob/Demob)" unit="$" value={inputs.specs.offshore.mobDemobUsd} step={100000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, mobDemobUsd: v } } }))} />
                 <Field label="ضریب آب کم‌عمق" value={inputs.specs.offshore.shallowWaterSurchargePct} step={0.01}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, shallowWaterSurchargePct: v } } }))} />
-                <Field label="خدمات عمومی پروژه" value={inputs.specs.offshore.generalServicesPct} step={0.01}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, generalServicesPct: v } } }))} />
+                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, shallowWaterSurchargePct: v } } }))}
+                  hint="۰ برای آب عمیق (بدون دشواری اجرایی) — ۰٫۰۵ تا ۰٫۱۰ برای آب کم‌عمق ساحلی — ۰٫۱۵ تا ۰٫۲۵ برای مناطق بسیار کم‌عمق/جزر و مدی با دشواری اجرای بالا" />
               </div>
             </Section>
           )}
@@ -120,31 +109,57 @@ export function SpecsPage({
             </Section>
           )}
 
-          {project.launcherCount > 0 && (
-            <Section title={`ایستگاه‌های لانچر (${project.launcherCount} عدد)`} accent={SECTION_COLOR.launcher}>
-              <Field label="هزینه واحد هر ایستگاه لانچر" unit="$" value={inputs.specs.launcher.unitCostUsd} step={5000}
-                onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, launcher: { ...d.specs.launcher, unitCostUsd: v } } }))}
-                hint="برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت" />
+          {hasPipeline && (
+            <Section title="ایستگاه‌های فرستنده/گیرنده توپک و شیر بین‌راهی" accent={SECTION_COLOR.launcher} defaultOpen>
+              <div className="flex gap-2 mb-2">
+                {(['auto', 'manual'] as const).map((m) => (
+                  <button key={m} type="button"
+                    onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, mode: m } } }))}
+                    className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                    style={segButtonStyle(inputs.specs.stations.mode === m)}>
+                    {m === 'auto' ? 'محاسبه خودکار بر اساس طول خط' : 'ورود دستی تعداد'}
+                  </button>
+                ))}
+              </div>
+
+              {inputs.specs.stations.mode === 'auto' ? (
+                <div className="rounded-lg p-3 mb-3 text-xs" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }}>
+                  <p className="leading-relaxed mb-2" style={{ color: MUTED_FG }}>
+                    فرض: هر ۱۰۰ کیلومتر یک‌بار ایستگاه فرستنده و گیرنده توپک احداث می‌شود و در فاصله‌های میانی هر ۲۵ کیلومتر یک ایستگاه شیر بین‌راهی پیش‌بینی می‌شود.
+                  </p>
+                  <div className="flex flex-wrap gap-3 est-mono">
+                    <span>فرستنده توپک: <b style={{ color: INK }}>{toFa(autoStations.launcher)}</b></span>
+                    <span>گیرنده توپک: <b style={{ color: INK }}>{toFa(autoStations.receiver)}</b></span>
+                    <span>شیر بین‌راهی: <b style={{ color: INK }}>{toFa(autoStations.blockValve)}</b></span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-x-2 mb-3">
+                  <Field label="تعداد فرستنده توپک" value={inputs.specs.stations.manualLauncherCount}
+                    onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, manualLauncherCount: Math.max(0, Math.round(v)) } } }))} />
+                  <Field label="تعداد گیرنده توپک" value={inputs.specs.stations.manualReceiverCount}
+                    onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, manualReceiverCount: Math.max(0, Math.round(v)) } } }))} />
+                  <Field label="تعداد شیر بین‌راهی" value={inputs.specs.stations.manualBlockValveCount}
+                    onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, manualBlockValveCount: Math.max(0, Math.round(v)) } } }))} />
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-x-2">
+                <Field label="هزینه واحد فرستنده توپک" unit="$" value={inputs.specs.launcher.unitCostUsd} step={5000}
+                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, launcher: { ...d.specs.launcher, unitCostUsd: v } } }))} />
+                <Field label="هزینه واحد گیرنده توپک" unit="$" value={inputs.specs.receiver.unitCostUsd} step={5000}
+                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, receiver: { ...d.specs.receiver, unitCostUsd: v } } }))} />
+                <Field label="هزینه واحد شیر بین‌راهی" unit="$" value={inputs.specs.blockValve.unitCostUsd} step={5000}
+                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, blockValve: { ...d.specs.blockValve, unitCostUsd: v } } }))} />
+              </div>
+              <p className="text-[10px] mt-2" style={{ color: MUTED_FG }}>برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت</p>
             </Section>
           )}
-          {project.receiverCount > 0 && (
-            <Section title={`ایستگاه‌های رسیور (${project.receiverCount} عدد)`} accent={SECTION_COLOR.receiver}>
-              <Field label="هزینه واحد هر ایستگاه رسیور" unit="$" value={inputs.specs.receiver.unitCostUsd} step={5000}
-                onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, receiver: { ...d.specs.receiver, unitCostUsd: v } } }))}
-                hint="برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت" />
-            </Section>
-          )}
+
           {project.tieInCount > 0 && (
             <Section title={`ایستگاه‌های انشعاب (${project.tieInCount} عدد)`} accent={SECTION_COLOR.tieIn}>
               <Field label="هزینه واحد هر ایستگاه انشعاب" unit="$" value={inputs.specs.tieIn.unitCostUsd} step={5000}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, tieIn: { ...d.specs.tieIn, unitCostUsd: v } } }))}
-                hint="برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت" />
-            </Section>
-          )}
-          {project.blockValveCount > 0 && (
-            <Section title={`ایستگاه‌های شیر بین‌راهی (${project.blockValveCount} عدد)`} accent={SECTION_COLOR.blockValve}>
-              <Field label="هزینه واحد هر ایستگاه شیر بین‌راهی" unit="$" value={inputs.specs.blockValve.unitCostUsd} step={5000}
-                onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, blockValve: { ...d.specs.blockValve, unitCostUsd: v } } }))}
                 hint="برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت" />
             </Section>
           )}

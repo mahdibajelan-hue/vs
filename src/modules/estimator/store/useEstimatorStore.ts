@@ -95,10 +95,7 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
         has_onshore: draft.hasOnshore,
         has_offshore: draft.hasOffshore,
         has_compressor_station: draft.hasCompressorStation,
-        launcher_count: draft.launcherCount,
-        receiver_count: draft.receiverCount,
         tie_in_count: draft.tieInCount,
-        block_valve_count: draft.blockValveCount,
         has_telecom_scada: draft.hasTelecomScada,
       })
       .select('*')

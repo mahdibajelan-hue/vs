@@ -1,6 +1,6 @@
 import type {
   EstAssumptions, EstCashFlowPoint, EstFullInputs, EstProjectDraft, EstResults, EstSectionResult,
-  OnshoreSpec, OffshoreSpec, CompressorSpec, StationUnitSpec, TelecomScadaSpec,
+  OnshoreSpec, OffshoreSpec, CoatingSpec, CompressorSpec, StationUnitSpec, TelecomScadaSpec,
 } from '../types'
 
 /* ---------------------------------------------------------------------------
@@ -9,9 +9,12 @@ import type {
  * Onshore/offshore pipeline sections follow the category-percentage structure of the National
  * Iranian Oil Company's official cost-estimation guideline ("راهنمای برآورد هزینه طرح‌ها و
  * پروژه‌ها — فصل احداث خطوط لوله دریا و خشکی"): direct cost is built from a handful of
- * per-km rates the user can override, exactly like the guideline breaks total cost down by
- * category (Material / Construction / Engineering / Test & Commissioning for onshore; an
- * equivalent split with Offshore Construction and Mobilization/Demobilization for offshore).
+ * per-km rates, exactly like the guideline breaks total cost down by category (Material /
+ * Construction / Engineering / Test & Commissioning for onshore; an equivalent split with
+ * Offshore Construction and Mobilization/Demobilization for offshore). Every rate except land
+ * acquisition is an org-wide admin-set assumption (est_assumptions) rather than a per-project
+ * input — land acquisition varies by local price far more than any other line, so it stays a
+ * direct, per-project Rial entry (see OnshoreSpec.rowCostRialPerKm).
  *
  * The compressor/pressure-boosting section uses the guideline's own quantitative formulas
  * (Chapter 4 of the same guideline series, "احداث تلمبه‌خانه‌های نفت و ایستگاه‌های تقویت فشار
@@ -20,13 +23,13 @@ import type {
  * of total station cost (Table 4-8 shows this near 25-30% for large single-unit stations) — this
  * keeps the number sourced from the guideline's real cost curve rather than inventing one.
  *
- * Launcher/receiver/tie-in/block-valve stations and telecom & SCADA are OUTSIDE the scope of
- * both uploaded guideline chapters (which explicitly restrict themselves to pipeline segments
- * and to pump/compressor stations only) — those five sections use parametric per-unit cost
- * defaults instead, clearly labeled in the UI as engineering estimates rather than guideline
- * figures, and are fully editable. All defaults below are the *fallback* seed values — once an
- * admin sets org-wide assumptions (est_assumptions), new calculations seed from those instead;
- * see buildDefaultInputs.
+ * Pipe coating, launcher/receiver/tie-in/block-valve stations, and telecom & SCADA are OUTSIDE
+ * the scope of both uploaded guideline chapters (which explicitly restrict themselves to
+ * pipeline segments and to pump/compressor stations only) — those sections use parametric
+ * per-unit cost defaults instead, clearly labeled in the UI as engineering estimates rather than
+ * guideline figures. All defaults below are the *fallback* seed values — once an admin sets
+ * org-wide assumptions (est_assumptions), new calculations seed from those instead; see
+ * buildDefaultInputs.
  * ------------------------------------------------------------------------- */
 
 export const DEFAULT_ONSHORE: OnshoreSpec = {
@@ -38,9 +41,9 @@ export const DEFAULT_ONSHORE: OnshoreSpec = {
   linework: 320000,
   crossing: 40000,
   test: 15000,
-  row: 30000,
   hse: 8000,
   terrain: 1.35,
+  rowCostRialPerKm: 18_000_000_000,
 }
 
 export const DEFAULT_OFFSHORE: OffshoreSpec = {
@@ -55,6 +58,8 @@ export const DEFAULT_OFFSHORE: OffshoreSpec = {
   generalServicesPct: 0.05,
 }
 
+export const DEFAULT_COATING: CoatingSpec = { usdPerKm: 35_000 }
+
 export const DEFAULT_COMPRESSOR: CompressorSpec = {
   stationCount: 1,
   ratedPowerMwPerStation: 10,
@@ -65,6 +70,7 @@ export const DEFAULT_LAUNCHER: StationUnitSpec = { count: 1, unitCostUsd: 220_00
 export const DEFAULT_RECEIVER: StationUnitSpec = { count: 1, unitCostUsd: 200_000 }
 export const DEFAULT_TIE_IN: StationUnitSpec = { count: 1, unitCostUsd: 120_000 }
 export const DEFAULT_BLOCK_VALVE: StationUnitSpec = { count: 1, unitCostUsd: 90_000 }
+export const DEFAULT_STATIONS = { mode: 'auto' as const, manualLauncherCount: 1, manualReceiverCount: 1, manualBlockValveCount: 0 }
 export const DEFAULT_TELECOM: TelecomScadaSpec = { mode: 'perKm', perKmUsd: 8_000, lumpSumUsd: 900_000 }
 
 /** Typical durations for an EPC pipeline project's pre-construction lifecycle, in months —
@@ -85,11 +91,11 @@ export function pipeWeightKgPerM(diameterIn: number, wtMm: number, density: numb
   return Math.PI * (diameterIn * 0.0254) * (wtMm / 1000) * density
 }
 
-function calcOnshore(s: OnshoreSpec): EstSectionResult {
+function calcOnshore(s: OnshoreSpec, rialPerUsd: number): EstSectionResult {
   const weight = pipeWeightKgPerM(s.diameterIn, s.wtMm, s.density)
   const pipeCostPerKm = weight * s.steelUsdPerTon
-  const perKm =
-    pipeCostPerKm + s.linework * s.terrain + s.crossing * s.terrain + s.test + s.row + s.hse
+  const rowUsdPerKm = rialPerUsd > 0 ? s.rowCostRialPerKm / rialPerUsd : 0
+  const perKm = pipeCostPerKm + s.linework * s.terrain + s.crossing * s.terrain + s.test + s.hse + rowUsdPerKm
   return {
     key: 'onshore', label: 'خط لوله خشکی', chartLabel: 'خط لوله خشکی',
     totalUsd: perKm * s.lengthKm,
@@ -105,6 +111,13 @@ function calcOffshore(s: OffshoreSpec): EstSectionResult {
   return {
     key: 'offshore', label: 'خط لوله دریایی', chartLabel: 'خط لوله دریایی',
     totalUsd: withGeneralServices + s.mobDemobUsd,
+  }
+}
+
+function calcCoating(s: CoatingSpec, totalLengthKm: number): EstSectionResult {
+  return {
+    key: 'coating', label: 'پوشش خطوط لوله', chartLabel: 'پوشش لوله',
+    totalUsd: s.usdPerKm * totalLengthKm, note: 'برآورد مهندسی-پارامتریک (خارج از محدوده راهنمای رسمی)',
   }
 }
 
@@ -157,17 +170,44 @@ function calcTelecom(s: TelecomScadaSpec, totalLengthKm: number): EstSectionResu
   }
 }
 
+/** Launcher/receiver stations are rebuilt every 100km of pipeline (one launcher opening each
+ * 100km segment, one receiver closing it); block-valve stations sit at every interior 25km mark
+ * that isn't already a launcher/receiver point. A 100km project: 1 launcher (km 0), block valves
+ * at km 25/50/75 (3), 1 receiver (km 100). Used only in "auto" station-count mode. */
+export function computeAutoStationCounts(totalLengthKm: number) {
+  if (totalLengthKm <= 0) return { launcher: 0, receiver: 0, blockValve: 0 }
+  const segments = Math.ceil(totalLengthKm / 100)
+  let blockValve = 0
+  let remaining = totalLengthKm
+  for (let i = 0; i < segments; i++) {
+    const segLen = Math.min(100, remaining)
+    blockValve += Math.max(0, Math.ceil(segLen / 25) - 1)
+    remaining -= segLen
+  }
+  return { launcher: segments, receiver: segments, blockValve }
+}
+
 export function computeEstimate(project: EstProjectDraft, inputs: EstFullInputs): EstResults {
   const sections: EstSectionResult[] = []
   const totalLengthKm = (project.hasOnshore ? inputs.specs.onshore.lengthKm : 0) + (project.hasOffshore ? inputs.specs.offshore.lengthKm : 0)
+  const hasPipeline = project.hasOnshore || project.hasOffshore
 
-  if (project.hasOnshore) sections.push(calcOnshore(inputs.specs.onshore))
+  if (project.hasOnshore) sections.push(calcOnshore(inputs.specs.onshore, inputs.overhead.fxRialPerUsd))
   if (project.hasOffshore) sections.push(calcOffshore(inputs.specs.offshore))
+  if (hasPipeline) sections.push(calcCoating(inputs.specs.coating, totalLengthKm))
   if (project.hasCompressorStation) sections.push(calcCompressor(inputs.specs.compressor))
-  if (project.launcherCount > 0) sections.push(calcUnitStation('launcher', 'ایستگاه لانچر', { ...inputs.specs.launcher, count: project.launcherCount }))
-  if (project.receiverCount > 0) sections.push(calcUnitStation('receiver', 'ایستگاه رسیور', { ...inputs.specs.receiver, count: project.receiverCount }))
+
+  if (hasPipeline) {
+    const st = inputs.specs.stations
+    const auto = st.mode === 'auto' ? computeAutoStationCounts(totalLengthKm) : null
+    const launcherCount = auto ? auto.launcher : st.manualLauncherCount
+    const receiverCount = auto ? auto.receiver : st.manualReceiverCount
+    const blockValveCount = auto ? auto.blockValve : st.manualBlockValveCount
+    if (launcherCount > 0) sections.push(calcUnitStation('launcher', 'ایستگاه فرستنده توپک', { ...inputs.specs.launcher, count: launcherCount }))
+    if (receiverCount > 0) sections.push(calcUnitStation('receiver', 'ایستگاه گیرنده توپک', { ...inputs.specs.receiver, count: receiverCount }))
+    if (blockValveCount > 0) sections.push(calcUnitStation('blockValve', 'ایستگاه شیر بین‌راهی', { ...inputs.specs.blockValve, count: blockValveCount }))
+  }
   if (project.tieInCount > 0) sections.push(calcUnitStation('tieIn', 'ایستگاه انشعاب', { ...inputs.specs.tieIn, count: project.tieInCount }))
-  if (project.blockValveCount > 0) sections.push(calcUnitStation('blockValve', 'ایستگاه شیر بین‌راهی', { ...inputs.specs.blockValve, count: project.blockValveCount }))
   if (project.hasTelecomScada) sections.push(calcTelecom(inputs.specs.telecom, totalLengthKm))
 
   const direct = sections.reduce((sum, s) => sum + s.totalUsd, 0)
@@ -253,7 +293,9 @@ export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFull
       specs: {
         onshore: { ...assumptions.specs.onshore },
         offshore: { ...assumptions.specs.offshore },
+        coating: { ...assumptions.specs.coating },
         compressor: { ...assumptions.specs.compressor },
+        stations: { ...DEFAULT_STATIONS },
         launcher: { ...assumptions.specs.launcher },
         receiver: { ...assumptions.specs.receiver },
         tieIn: { ...assumptions.specs.tieIn },
@@ -269,7 +311,9 @@ export function buildDefaultInputs(assumptions?: EstAssumptions | null): EstFull
     specs: {
       onshore: { ...DEFAULT_ONSHORE },
       offshore: { ...DEFAULT_OFFSHORE },
+      coating: { ...DEFAULT_COATING },
       compressor: { ...DEFAULT_COMPRESSOR },
+      stations: { ...DEFAULT_STATIONS },
       launcher: { ...DEFAULT_LAUNCHER },
       receiver: { ...DEFAULT_RECEIVER },
       tieIn: { ...DEFAULT_TIE_IN },
@@ -287,7 +331,9 @@ export function buildDefaultAssumptions(): EstAssumptions {
     specs: {
       onshore: { ...DEFAULT_ONSHORE },
       offshore: { ...DEFAULT_OFFSHORE },
+      coating: { ...DEFAULT_COATING },
       compressor: { ...DEFAULT_COMPRESSOR },
+      stations: { ...DEFAULT_STATIONS },
       launcher: { ...DEFAULT_LAUNCHER },
       receiver: { ...DEFAULT_RECEIVER },
       tieIn: { ...DEFAULT_TIE_IN },

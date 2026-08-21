@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Anchor, Calculator, GitBranch, Plus, Radio, Trash2, Waves, Wind } from 'lucide-react'
+import { Calculator, GitBranch, Plus, Radio, Trash2, Waves, Wind, Workflow } from 'lucide-react'
 import { useEstimatorStore } from '../store/useEstimatorStore'
 import type { EstProjectDraft } from '../types'
 import { BORDER, INK, MUTED_FG, SAFETY, SURFACE, SURFACE_2 } from '../lib/theme'
@@ -10,10 +10,7 @@ const EMPTY_DRAFT: EstProjectDraft = {
   hasOnshore: true,
   hasOffshore: false,
   hasCompressorStation: false,
-  launcherCount: 0,
-  receiverCount: 0,
   tieInCount: 0,
-  blockValveCount: 0,
   hasTelecomScada: true,
 }
 
@@ -78,13 +75,10 @@ export function ProjectListPage() {
             </div>
             <Toggle label="ایستگاه تقویت فشار دارد؟" value={draft.hasCompressorStation} onChange={set('hasCompressorStation')} hint="کمپرسور گازی یا الکتریکی" />
             <Toggle label="مخابرات و اسکادا دارد؟" value={draft.hasTelecomScada} onChange={set('hasTelecomScada')} />
-
-            <div className="grid grid-cols-2 gap-x-3 pt-1">
-              <CountField label="تعداد ایستگاه لانچر" value={draft.launcherCount} onChange={set('launcherCount')} />
-              <CountField label="تعداد ایستگاه رسیور" value={draft.receiverCount} onChange={set('receiverCount')} />
-              <CountField label="تعداد ایستگاه انشعاب" value={draft.tieInCount} onChange={set('tieInCount')} />
-              <CountField label="تعداد ایستگاه شیر بین‌راهی" value={draft.blockValveCount} onChange={set('blockValveCount')} />
-            </div>
+            <CountField label="تعداد ایستگاه انشعاب" value={draft.tieInCount} onChange={set('tieInCount')} />
+            <p className="text-[10px]" style={{ color: MUTED_FG }}>
+              تعداد ایستگاه‌های فرستنده/گیرنده توپک و شیر بین‌راهی در مرحله بعد (مشخصات پروژه) به‌صورت دستی یا خودکار تعیین می‌شود.
+            </p>
 
             {error && <p className="text-xs pt-1" style={{ color: '#e66767' }}>{error}</p>}
             <div className="flex justify-end gap-2 pt-3">
@@ -120,9 +114,7 @@ export function ProjectListPage() {
                   {p.hasOffshore && <Badge icon={<Waves size={11} />} label="دریایی" />}
                   {p.hasCompressorStation && <Badge icon={<Wind size={11} />} label="تقویت فشار" />}
                   {p.hasTelecomScada && <Badge icon={<Radio size={11} />} label="مخابرات/اسکادا" />}
-                  {p.launcherCount + p.receiverCount + p.tieInCount + p.blockValveCount > 0 && (
-                    <Badge icon={<Anchor size={11} />} label={`${p.launcherCount + p.receiverCount + p.tieInCount + p.blockValveCount} ایستگاه جانبی`} />
-                  )}
+                  {p.tieInCount > 0 && <Badge icon={<Workflow size={11} />} label={`${p.tieInCount} ایستگاه انشعاب`} />}
                 </div>
               </button>
               <button

@@ -8,11 +8,12 @@ import { exportElementToPdf } from '../../../lib/export'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
 import { computeEstimate, buildCashFlowTimeline } from '../lib/calc'
 import {
-  BG, BORDER, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, GRID, INK, INK_SOFT, MUTED_FG,
+  BORDER, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, GRID, INK, INK_SOFT, MUTED_FG,
   SAFETY, SECTION_COLOR, STATUS, SURFACE, SURFACE_2, TOOLTIP_ITEM_STYLE, TOOLTIP_LABEL_STYLE,
   TOOLTIP_STYLE, toFa,
 } from '../lib/theme'
 import { Card } from '../components/ui'
+import { EstimatorPrintReport } from '../components/EstimatorPrintReport'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
   fx: 'ارزی', procurement: 'تأمین کالا', geotechnical: 'ژئوتکنیک', schedule: 'زمان‌بندی',
@@ -42,6 +43,7 @@ export function ResultsPage({
   const cashFlow = useMemo(() => buildCashFlowTimeline(inputs, results), [inputs, results])
   const [copied, setCopied] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
+  const printRef = useRef<HTMLDivElement>(null)
 
   const eurRate = inputs.overhead.fxEurPerUsd
   const rialRate = inputs.overhead.fxRialPerUsd
@@ -91,12 +93,18 @@ export function ResultsPage({
   }
 
   async function exportPdf() {
-    if (!reportRef.current) return
-    await exportElementToPdf(reportRef.current, `estimate-${project.name}.pdf`, { backgroundColor: BG })
+    if (!printRef.current) return
+    await exportElementToPdf(printRef.current, `estimate-${project.name}.pdf`, {
+      orientation: 'portrait', backgroundColor: '#ffffff', fitToOnePage: true,
+    })
   }
 
   return (
     <div className="h-full overflow-y-auto est-font">
+      <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
+        <EstimatorPrintReport project={project} inputs={inputs} results={results} totalMonths={totalMonths} />
+      </div>
+
       <div ref={reportRef} className="mx-auto max-w-4xl px-4 py-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 no-print">
           <div>
@@ -292,43 +300,41 @@ export function ResultsPage({
 
         {/* Risk heat map */}
         <Card>
-          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>نقشه حرارتی ریسک‌های پروژه</h2>
-          <div className="flex gap-3">
-            <div className="flex flex-col justify-between items-center text-[10px] py-2" style={{ color: MUTED_FG }}>
-              <span className="[writing-mode:vertical-rl] rotate-180">شدت اثر ←</span>
-            </div>
-            <div className="flex-1 overflow-x-auto">
-              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(5, minmax(44px, 1fr))', direction: 'ltr' }}>
+          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>ریسک‌های پروژه</h2>
+          <div className="flex flex-wrap items-start gap-4 mb-2">
+            <div className="shrink-0">
+              <p className="text-[10px] mb-1" style={{ color: MUTED_FG }}>نقشه حرارتی (احتمال × اثر)</p>
+              <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(5, 18px)', direction: 'ltr' }}>
                 {heatGrid.flat().map((cell) => {
                   const band = riskBand(cell.score)
                   return (
                     <div
                       key={`${cell.likelihood}-${cell.impact}`}
                       title={cell.risks.map((r) => r.title || 'ریسک بی‌نام').join('، ') || 'بدون ریسک'}
-                      className="aspect-square rounded-md flex items-center justify-center text-sm font-bold transition-transform hover:scale-105"
-                      style={{ background: cell.count > 0 ? band.color : SURFACE_2, color: cell.count > 0 ? '#fff' : MUTED_FG, opacity: cell.count > 0 ? 1 : 0.5 }}
+                      className="flex items-center justify-center rounded-[3px] text-[9px] font-bold"
+                      style={{ width: 18, height: 18, background: cell.count > 0 ? band.color : SURFACE_2, color: cell.count > 0 ? '#fff' : MUTED_FG, opacity: cell.count > 0 ? 1 : 0.5 }}
                     >
                       {cell.count > 0 ? toFa(cell.count) : ''}
                     </div>
                   )
                 })}
               </div>
-              <div className="flex justify-between text-[10px] mt-1.5" style={{ color: MUTED_FG, direction: 'ltr' }}>
-                <span>احتمال کم ←</span>
-                <span>→ احتمال زیاد</span>
+              <div className="flex justify-between text-[8px] mt-1" style={{ color: MUTED_FG, direction: 'ltr', width: 5 * 18 + 4 * 2 }}>
+                <span>کم</span>
+                <span>زیاد</span>
               </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-3 mt-4">
-            {(['good', 'warning', 'serious', 'critical'] as const).map((k) => (
-              <div key={k} className="flex items-center gap-1.5 text-[11px]" style={{ color: INK_SOFT }}>
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS[k] }} />
-                {k === 'good' ? 'کم' : k === 'warning' ? 'متوسط' : k === 'serious' ? 'بالا' : 'بحرانی'}
-              </div>
-            ))}
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-4">
+              {(['good', 'warning', 'serious', 'critical'] as const).map((k) => (
+                <div key={k} className="flex items-center gap-1.5 text-[11px]" style={{ color: INK_SOFT }}>
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: STATUS[k] }} />
+                  {k === 'good' ? 'کم' : k === 'warning' ? 'متوسط' : k === 'serious' ? 'بالا' : 'بحرانی'}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="overflow-x-auto mt-4">
+          <div className="overflow-x-auto mt-3">
             <table className="w-full text-sm" style={{ minWidth: 480 }}>
               <thead>
                 <tr className="text-xs" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED_FG }}>
@@ -360,7 +366,7 @@ export function ResultsPage({
         </Card>
 
         <div className="text-[11px] leading-relaxed px-1 pb-6" style={{ color: MUTED_FG }}>
-          توجه: نرخ‌های واحد خطوط لوله بر مبنای ساختار هزینه راهنمای برآورد وزارت نفت است و برای ایستگاه‌های لانچر، رسیور، انشعاب، شیر بین‌راهی و مخابرات/اسکادا — که خارج از محدوده راهنمای رسمی هستند — از برآورد مهندسی-پارامتریک استفاده شده است.
+          توجه: نرخ‌های واحد خطوط لوله و ایستگاه تقویت فشار بر مبنای ساختار هزینه راهنمای برآورد وزارت نفت است و برای پوشش لوله، ایستگاه‌های فرستنده/گیرنده توپک، انشعاب، شیر بین‌راهی و مخابرات/اسکادا — که خارج از محدوده راهنمای رسمی هستند — از برآورد مهندسی-پارامتریک استفاده شده است.
           پیش از ارائه نهایی و تصمیم‌گیری سرمایه‌گذاری، با فهرست‌بهای مصوب و استعلام بازار روز راستی‌آزمایی شوند.
         </div>
       </div>

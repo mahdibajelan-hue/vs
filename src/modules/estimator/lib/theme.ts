@@ -17,9 +17,11 @@ export const MUTED_FG = '#7C8DA3'
 export const GRID = '#1E2C3D'
 export const SAFETY = '#F2B705'
 
-/** Reference categorical order — validated (all 8 checks PASS) against `SURFACE` above via the
- * dataviz skill's validator. Order carries the CVD-safety guarantee; do not reorder. */
-export const CATEGORICAL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#189818', '#9085e9', '#e66767']
+/** Reference categorical order — validated (all checks PASS) against `SURFACE` above via the
+ * dataviz skill's validator. Order carries the CVD-safety guarantee; the first 8 are the skill's
+ * own reference order (do not reorder them). The 9th (coating) was appended and re-validated
+ * against the full set rather than picked by eye. */
+export const CATEGORICAL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#189818', '#9085e9', '#e66767', '#5b8fd6']
 
 export const SECTION_COLOR: Record<string, string> = {
   onshore: CATEGORICAL[0],
@@ -30,6 +32,7 @@ export const SECTION_COLOR: Record<string, string> = {
   tieIn: CATEGORICAL[5],
   blockValve: CATEGORICAL[6],
   telecom: CATEGORICAL[7],
+  coating: CATEGORICAL[8],
 }
 
 /** Reserved status/risk-band colors — never reused as a chart series, per the dataviz skill's

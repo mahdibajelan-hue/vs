@@ -6,10 +6,7 @@ export interface EstProjectRow {
   has_onshore: boolean
   has_offshore: boolean
   has_compressor_station: boolean
-  launcher_count: number
-  receiver_count: number
   tie_in_count: number
-  block_valve_count: number
   has_telecom_scada: boolean
   created_by: string | null
   created_at: string
@@ -23,10 +20,7 @@ export function estProjectFromRow(r: EstProjectRow): EstProject {
     hasOnshore: r.has_onshore,
     hasOffshore: r.has_offshore,
     hasCompressorStation: r.has_compressor_station,
-    launcherCount: r.launcher_count,
-    receiverCount: r.receiver_count,
     tieInCount: r.tie_in_count,
-    blockValveCount: r.block_valve_count,
     hasTelecomScada: r.has_telecom_scada,
     createdBy: r.created_by,
     createdAt: r.created_at,
