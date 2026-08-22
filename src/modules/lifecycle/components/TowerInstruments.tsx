@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronDown, HardHat, Lock, ShieldCheck, ShieldQuestion, ShieldX } from 'lucide-react'
+import { Fragment, useState } from 'react'
+import { ChevronDown, HardHat, Lock, Ruler, ShieldCheck, ShieldQuestion, ShieldX, ShoppingCart } from 'lucide-react'
 import type { StageReadiness } from '../lib/readiness'
 import {
   GATE_STATUS_LABEL_FA, HEALTH_DIMENSION_LABEL_FA, HEALTH_STATUS_LABEL_FA, STAGE_LABEL_FA,
@@ -104,6 +104,14 @@ function GateGlyph({ status, color }: { status: GateStatus; color: string }) {
  * already there. */
 const EPC_STAGE_KEYS: StageKey[] = ['engineering', 'procurement', 'execution']
 
+/** One glyph per phase in the seal's node track — a drafting tool, a cart, a hard hat, joined by
+ * a brass wire. The point is to make "three phases, one gate" legible before anyone reads text. */
+const EPC_NODE_ICON: Partial<Record<StageKey, React.ReactNode>> = {
+  engineering: <Ruler size={8.5} />,
+  procurement: <ShoppingCart size={8.5} />,
+  execution: <HardHat size={8.5} />,
+}
+
 /**
  * Gates as a ladder — the EPC trio folded into one expandable row.
  *
@@ -168,16 +176,29 @@ export function GateLadder({
         <li key="epc">
           <button
             onClick={() => setEpcOpen((v) => !v)}
-            className="plc-gate-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-right"
+            className="plc-gate-row plc-epc-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2.5 text-right"
             style={{
-              borderColor: epcIsCurrent ? 'rgba(56,189,248,0.4)' : 'var(--border-soft)',
-              background: epcIsCurrent ? 'rgba(56,189,248,0.06)' : undefined,
+              borderColor: epcIsCurrent
+                ? 'color-mix(in srgb, var(--plc-amber) 55%, transparent)'
+                : 'color-mix(in srgb, var(--plc-amber) 32%, var(--border-soft))',
+              background:
+                'linear-gradient(135deg, color-mix(in srgb, var(--plc-amber) ' + (epcIsCurrent ? '18%' : '10%') + ', transparent), transparent 65%)',
             }}
           >
-            <HardHat size={13} style={{ color: epcTone }} />
+            <span className="plc-epc-track" dir="ltr" style={{ width: epcPresentKeys.length * 15 + (epcPresentKeys.length - 1) * 5 }}>
+              {epcPresentKeys.map((k, i) => (
+                <Fragment key={k}>
+                  <span className="plc-epc-node">{EPC_NODE_ICON[k]}</span>
+                  {i < epcPresentKeys.length - 1 && <span className="plc-epc-wire" />}
+                </Fragment>
+              ))}
+            </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11px] font-bold">گیت EPC</span>
-              <span className="block truncate text-[9px] text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate text-[11px] font-bold">گیت EPC</span>
+                <span className="plc-epc-badge">یکپارچه</span>
+              </span>
+              <span className="mt-0.5 block truncate text-[9px] text-muted">
                 {epcPresentKeys.map((k) => STAGE_LABEL_FA[k]).join(' · ')}
               </span>
             </span>
@@ -191,12 +212,11 @@ export function GateLadder({
                 </span>
               )}
             </span>
-            <ChevronDown size={13} className="shrink-0 text-muted transition-transform"
-              style={{ transform: epcOpen ? 'rotate(180deg)' : undefined }} />
+            <ChevronDown size={13} className="shrink-0 transition-transform" style={{ color: 'var(--plc-amber)', transform: epcOpen ? 'rotate(180deg)' : undefined }} />
           </button>
 
           {epcOpen && (
-            <ul className="mt-1 space-y-1 border-e-2 pe-0 ps-3" style={{ borderColor: 'rgba(56,189,248,0.25)', marginInlineEnd: 6 }}>
+            <ul className="mt-1 space-y-1 border-e-2 pe-0 ps-3" style={{ borderColor: 'color-mix(in srgb, var(--plc-amber) 35%, transparent)', marginInlineEnd: 6 }}>
               {epcPresentKeys.map((k) => {
                 const g = epcGates.find((gate) => gate.stageKey === k)
                 const r = epcReadiness.find((x) => x.stageKey === k)
@@ -283,8 +303,8 @@ function SubGateRow({ stageKey, gateName, status, blockers, isCurrent, onOpenSta
         onClick={() => onOpenStage(stageKey)}
         className="plc-gate-row flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-right"
         style={{
-          borderColor: isCurrent ? 'rgba(56,189,248,0.35)' : 'var(--border-soft)',
-          background: isCurrent ? 'rgba(56,189,248,0.05)' : 'rgba(255,255,255,0.015)',
+          borderColor: isCurrent ? 'color-mix(in srgb, var(--plc-amber) 40%, transparent)' : 'var(--border-soft)',
+          background: isCurrent ? 'color-mix(in srgb, var(--plc-amber) 8%, transparent)' : 'rgba(255,255,255,0.015)',
         }}
       >
         <GateGlyph status={status} color={tone} />

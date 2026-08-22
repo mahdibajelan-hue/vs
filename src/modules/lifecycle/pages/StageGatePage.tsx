@@ -127,9 +127,21 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
         </TowerTile>
 
         {/* ── Gate ──────────────────────────────────────────────────── */}
-        <TowerTile span={4} icon={<ShieldCheck size={13} />} eyebrow="Gate" title={gate?.name ?? 'گیت این مرحله'}>
+        <TowerTile
+          span={4}
+          icon={<ShieldCheck size={13} />}
+          eyebrow="Gate"
+          title={gate?.name ?? 'گیت این مرحله'}
+          accent={['engineering', 'procurement', 'execution'].includes(stageKey) ? 'var(--plc-amber)' : undefined}
+        >
           {!gate ? (
-            <EmptyState message="این مرحله گیت رسمی ندارد" />
+            <EmptyState
+              message={
+                ['engineering', 'procurement'].includes(stageKey)
+                  ? 'این مرحله ذیل گیت EPC در برج کنترل تصمیم‌گیری می‌شود'
+                  : 'این مرحله گیت رسمی ندارد'
+              }
+            />
           ) : (
             <>
               <div className="mb-3 flex flex-wrap items-center gap-2">

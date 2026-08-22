@@ -1038,3 +1038,125 @@ body {
     transform: none;
   }
 }
+
+/* ==========================================================================
+   Control Tower — instrument-panel identity.
+
+   Two accents, not one: cyan stays the telemetry colour (live data, gates,
+   gauges — everything that already carried it). Brass/amber is new and
+   spent in exactly one place, the EPC seal below, so it registers as a
+   signature rather than a second theme colour competing with the first.
+   ========================================================================== */
+
+:root {
+  --plc-cyan: #38bdf8;
+  --plc-amber: #f0a836;
+  --plc-amber-deep: #b6741a;
+}
+
+/* Canvas texture — a faint drafting grid under the bento so the page reads
+   as a panel with depth instead of a flat rectangle of --bg-app. Scoped to
+   the module's scroll container, not body, so it never leaks elsewhere. */
+.plc-canvas {
+  background-image:
+    radial-gradient(120% 50% at 50% -12%, rgba(56, 189, 248, 0.07), transparent 62%),
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+}
+
+:root[data-theme="light"] .plc-canvas {
+  background-image:
+    radial-gradient(120% 50% at 50% -12%, rgba(14, 165, 233, 0.06), transparent 62%),
+    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+}
+
+/* Label-plate eyebrow — a small tick before the caption, like a nameplate
+   on a physical instrument. Colour defaults to cyan; a tile can override
+   with --plc-tick (the Gates tile sets amber, tying it to the EPC seal). */
+.plc-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plc-eyebrow::before {
+  content: '';
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+  background: var(--plc-tick, var(--plc-cyan));
+}
+
+/* Instrument-readout numerals — every bare figure on the tower switches to
+   the monospace face already loaded for data tables, so the big numbers
+   read as a control-room readout rather than body type blown up large. */
+.plc-figure,
+.plc-stat-value {
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
+/* --- EPC seal --------------------------------------------------------------
+   Engineering, procurement and execution run as one contracting package.
+   The ladder row has to look fused, not merely collapsible — three nodes
+   joined by a brass rail under one bracket, the way a single-line diagram
+   draws a ganged breaker. "One gate, three phases" reads before anyone
+   taps the chevron. */
+
+.plc-epc-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.plc-epc-node {
+  display: flex;
+  height: 15px;
+  width: 15px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--plc-amber) 16%, transparent);
+  color: var(--plc-amber);
+}
+
+.plc-epc-wire {
+  height: 2px;
+  min-width: 5px;
+  flex: 1;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--plc-amber), color-mix(in srgb, var(--plc-amber) 35%, transparent));
+}
+
+.plc-epc-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1.5px 8px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #2b1706;
+  background: linear-gradient(135deg, #ffd28a, var(--plc-amber));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+
+@keyframes plc-epc-glow {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--plc-amber) 30%, transparent) inset, 0 0 0 rgba(240, 168, 54, 0); }
+  50%      { box-shadow: 0 0 0 1px color-mix(in srgb, var(--plc-amber) 45%, transparent) inset, 0 0 16px rgba(240, 168, 54, 0.16); }
+}
+
+.plc-epc-row {
+  animation: plc-epc-glow 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plc-epc-row {
+    animation: none !important;
+  }
+}

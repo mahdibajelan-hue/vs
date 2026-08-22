@@ -113,7 +113,7 @@ export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
 
       <StorageErrorBanner />
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="plc-canvas min-h-0 flex-1 overflow-y-auto">
         {view.kind === 'portfolio' ? (
           <PortfolioDashboardPage onOpenProject={openProject} />
         ) : view.kind === 'templates' ? (

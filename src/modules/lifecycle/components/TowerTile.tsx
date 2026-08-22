@@ -11,7 +11,7 @@ import { STATUS_COLOR } from './ui'
  * much of the twelve columns a thing deserves.
  */
 export function TowerTile({
-  children, span = 4, title, eyebrow, icon, action, variant = 'base', edge, className = '', delay = 0,
+  children, span = 4, title, eyebrow, icon, action, variant = 'base', edge, accent, className = '', delay = 0,
 }: {
   children: ReactNode
   /** Columns out of 12 on desktop; every tile collapses to full width under 1024px. */
@@ -25,6 +25,9 @@ export function TowerTile({
   variant?: 'base' | 'raised' | 'verdict'
   /** Status hairline down the leading edge — use only where status is the point. */
   edge?: HealthStatus
+  /** Eyebrow tick + icon-badge colour. Defaults to the module's cyan telemetry accent; pass the
+   * amber token for a tile whose subject IS the EPC seal, so the two visually tie together. */
+  accent?: string
   className?: string
   delay?: number
 }) {
@@ -38,6 +41,7 @@ export function TowerTile({
         gridColumn: `span ${span}`,
         animationDelay: `${delay}ms`,
         ...(edge ? ({ '--plc-edge': STATUS_COLOR[edge] } as React.CSSProperties) : {}),
+        ...(accent ? ({ '--plc-tick': accent } as React.CSSProperties) : {}),
       }}
     >
       {(title || eyebrow || action) && (
@@ -46,7 +50,7 @@ export function TowerTile({
             {icon && (
               <span
                 className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
-                style={{ background: 'rgba(56,189,248,0.10)', color: '#7dd3fc' }}
+                style={{ background: `color-mix(in srgb, ${accent ?? '#38bdf8'} 14%, transparent)`, color: accent ?? '#7dd3fc' }}
               >
                 {icon}
               </span>

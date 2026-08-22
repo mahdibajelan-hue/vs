@@ -158,6 +158,7 @@ export function ControlTowerPage({
           title="نردبان گیت‌ها"
           icon={<ShieldCheck size={13} />}
           delay={160}
+          accent="var(--plc-amber)"
           edge={analysis.blockedGateCount > 0 ? 'red' : undefined}
         >
           <GateLadder
