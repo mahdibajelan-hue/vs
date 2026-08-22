@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, Calculator, CheckCircle2, Clock3, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, Calculator, CheckCircle2, Clock3, GitBranch, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
@@ -117,6 +117,16 @@ const MODULES: ModuleDef[] = [
     bullets: ['ساختار شکست هزینه (CBS) و تحلیل حساسیت', 'زمان‌بندی فصلی جریان نقدی و خروجی گزارش'],
     icon: Calculator,
     accent: '#F2B705',
+    status: 'active',
+  },
+  {
+    key: 'lifecycle',
+    title: 'چرخه عمر و برج کنترل',
+    englishTag: 'Project Lifecycle & Control Tower',
+    teaser: 'وضعیت واقعی پروژه‌ها در سه سطح سبد، طرح و پروژه',
+    bullets: ['مراحل و گیت‌های چرخه عمر با سنجش آمادگی عبور', 'Milestone، هشدار زودهنگام و موارد نیازمند توجه مدیریت'],
+    icon: GitBranch,
+    accent: '#38bdf8',
     status: 'active',
   },
   {

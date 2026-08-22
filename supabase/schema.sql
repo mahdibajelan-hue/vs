@@ -3990,3 +3990,434 @@ create policy "est_assumptions_write_admin" on est_assumptions
 
 drop trigger if exists trg_set_updated_at on est_assumptions;
 create trigger trg_set_updated_at before update on est_assumptions for each row execute function set_updated_at_and_by();
+
+-- ============================================================================
+-- 21. Project Lifecycle & Control Tower — stage/gate governance, master-plan
+--     alignment, milestone tracking, readiness/health scoring and early warning
+--     across the Portfolio -> Program(طرح/Plan) -> Project hierarchy.
+--
+--     DELIBERATELY NOT DUPLICATED (see the audit that preceded this section):
+--       * The three-level hierarchy already exists as portfolios -> programs ->
+--         master_projects. "Plan" in the request is the existing
+--         `programs` (labelled «طرح» throughout the UI); no parallel hierarchy is
+--         created here and every plc_* row hangs off master_projects.id.
+--       * Actions already exist as rasta_actions (owner/due/priority/status/
+--         source + risk and issue links). Rather than a second action table this
+--         section only ADDS two nullable link columns to it, so the Reporting
+--         module's Decision Center and this module's Control Tower read and write
+--         the same action rows.
+--       * Risk and Issue stay in rm_* / im_* and are reached through
+--         rasta_project_mappings, exactly like every other module does.
+--
+--     master_projects.status (idea/planning/executing/...) is intentionally left
+--     alone: it is a coarse label other modules already read. The governed stage —
+--     the one with gates, readiness and an audit trail — lives in
+--     plc_project_lifecycle.current_stage_key so neither concept fights the other.
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 21a. Template engine — an admin defines stages/gates/checklists once per
+--      project type ("Pipeline EPC", "Station", "Building"), and instantiating a
+--      template onto a project copies them into the plc_project_* tables. Copying
+--      rather than referencing is deliberate: editing a template must never
+--      retroactively rewrite the governance record of a project already running.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  project_type text not null default '',
+  is_default boolean not null default false,
+  is_active boolean not null default true,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_templates enable row level security;
+drop policy if exists "plc_templates_select_authenticated" on plc_templates;
+create policy "plc_templates_select_authenticated" on plc_templates
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_templates_write_admin" on plc_templates;
+create policy "plc_templates_write_admin" on plc_templates
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists plc_template_stages (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references plc_templates (id) on delete cascade,
+  stage_key text not null,
+  name_fa text not null,
+  name_en text not null default '',
+  sequence smallint not null default 0,
+  typical_duration_months numeric,
+  gate_name text not null default '',
+  gate_readiness_threshold smallint not null default 100 check (gate_readiness_threshold between 0 and 100),
+  created_at timestamptz not null default now(),
+  unique (template_id, stage_key)
+);
+
+alter table plc_template_stages enable row level security;
+drop policy if exists "plc_template_stages_select_authenticated" on plc_template_stages;
+create policy "plc_template_stages_select_authenticated" on plc_template_stages
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_template_stages_write_admin" on plc_template_stages;
+create policy "plc_template_stages_write_admin" on plc_template_stages
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists plc_template_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  template_stage_id uuid not null references plc_template_stages (id) on delete cascade,
+  category text not null default 'general',
+  title text not null,
+  is_mandatory boolean not null default true,
+  requires_document boolean not null default false,
+  requires_approval boolean not null default false,
+  guidance text not null default '',
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table plc_template_checklist_items enable row level security;
+drop policy if exists "plc_template_checklist_select_authenticated" on plc_template_checklist_items;
+create policy "plc_template_checklist_select_authenticated" on plc_template_checklist_items
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_template_checklist_write_admin" on plc_template_checklist_items;
+create policy "plc_template_checklist_write_admin" on plc_template_checklist_items
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- ---------------------------------------------------------------------------
+-- 21b. Per-project lifecycle state.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_project_lifecycle (
+  project_id uuid primary key references master_projects (id) on delete cascade,
+  template_id uuid references plc_templates (id) on delete set null,
+  current_stage_key text not null default 'idea',
+  stage_entered_at date,
+  -- Overall health is normally derived from plc_health_scores; an authorised
+  -- manager may override it, but only with a reason recorded alongside.
+  health_override text check (health_override in ('green', 'yellow', 'red', 'black')),
+  health_override_reason text not null default '',
+  health_override_by uuid references profiles (id),
+  health_override_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_project_lifecycle enable row level security;
+drop policy if exists "plc_project_lifecycle_select_authenticated" on plc_project_lifecycle;
+create policy "plc_project_lifecycle_select_authenticated" on plc_project_lifecycle
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_lifecycle_write_authenticated" on plc_project_lifecycle;
+create policy "plc_project_lifecycle_write_authenticated" on plc_project_lifecycle
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_project_stages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  name_fa text not null,
+  sequence smallint not null default 0,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'skipped')),
+  planned_start date,
+  planned_finish date,
+  actual_start date,
+  actual_finish date,
+  forecast_finish date,
+  progress smallint not null default 0 check (progress between 0 and 100),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, stage_key)
+);
+
+alter table plc_project_stages enable row level security;
+drop policy if exists "plc_project_stages_select_authenticated" on plc_project_stages;
+create policy "plc_project_stages_select_authenticated" on plc_project_stages
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_stages_write_authenticated" on plc_project_stages;
+create policy "plc_project_stages_write_authenticated" on plc_project_stages
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- A gate is the controlled exit from a stage. Readiness % is computed by the
+-- client engine from the checklist, but the *decision* (approved/rejected) and
+-- any override of an unmet requirement are stored here so they survive a
+-- recalculation and remain auditable.
+create table if not exists plc_project_gates (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  name text not null,
+  gate_owner_id uuid references profiles (id),
+  readiness_threshold smallint not null default 100 check (readiness_threshold between 0 and 100),
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'ready', 'approved', 'rejected', 'blocked')),
+  approval_date date,
+  approved_by uuid references profiles (id),
+  comments text not null default '',
+  -- Override = passing a gate whose mandatory requirements are not all met.
+  -- Never allowed silently: user, timestamp and reason are all required by the UI
+  -- and kept here as the permanent record.
+  override_by uuid references profiles (id),
+  override_reason text not null default '',
+  override_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, stage_key)
+);
+
+alter table plc_project_gates enable row level security;
+drop policy if exists "plc_project_gates_select_authenticated" on plc_project_gates;
+create policy "plc_project_gates_select_authenticated" on plc_project_gates
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_gates_write_authenticated" on plc_project_gates;
+create policy "plc_project_gates_write_authenticated" on plc_project_gates
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  category text not null default 'general',
+  title text not null,
+  is_mandatory boolean not null default true,
+  requires_document boolean not null default false,
+  requires_approval boolean not null default false,
+  responsible_id uuid references profiles (id),
+  due_date date,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'waived')),
+  completion_date date,
+  evidence_url text not null default '',
+  evidence_label text not null default '',
+  comment text not null default '',
+  guidance text not null default '',
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_checklist_items enable row level security;
+drop policy if exists "plc_checklist_items_select_authenticated" on plc_checklist_items;
+create policy "plc_checklist_items_select_authenticated" on plc_checklist_items
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_checklist_items_write_authenticated" on plc_checklist_items;
+create policy "plc_checklist_items_write_authenticated" on plc_checklist_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_checklist_project_stage on plc_checklist_items (project_id, stage_key);
+
+-- ---------------------------------------------------------------------------
+-- 21c. Master plan — activities and milestones with the baseline / forecast /
+--      actual triad the whole variance story rests on.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_activities (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  wbs_code text not null default '',
+  name text not null,
+  stage_key text not null default '',
+  baseline_start date,
+  baseline_finish date,
+  forecast_start date,
+  forecast_finish date,
+  actual_start date,
+  actual_finish date,
+  progress smallint not null default 0 check (progress between 0 and 100),
+  owner_id uuid references profiles (id),
+  is_critical boolean not null default false,
+  depends_on_id uuid references plc_activities (id) on delete set null,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'on_hold')),
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_activities enable row level security;
+drop policy if exists "plc_activities_select_authenticated" on plc_activities;
+create policy "plc_activities_select_authenticated" on plc_activities
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_activities_write_authenticated" on plc_activities;
+create policy "plc_activities_write_authenticated" on plc_activities
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_activities_project on plc_activities (project_id, sequence);
+
+create table if not exists plc_milestones (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  name text not null,
+  milestone_type text not null default 'project' check (milestone_type in ('contractual', 'project', 'gate', 'payment', 'regulatory', 'external')),
+  stage_key text not null default '',
+  baseline_date date,
+  forecast_date date,
+  actual_date date,
+  is_critical boolean not null default false,
+  owner_id uuid references profiles (id),
+  depends_on_id uuid references plc_milestones (id) on delete set null,
+  status text not null default 'on_track' check (status in ('achieved', 'on_track', 'at_risk', 'delayed', 'blocked')),
+  evidence_url text not null default '',
+  evidence_label text not null default '',
+  comments text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_milestones enable row level security;
+drop policy if exists "plc_milestones_select_authenticated" on plc_milestones;
+create policy "plc_milestones_select_authenticated" on plc_milestones
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_milestones_write_authenticated" on plc_milestones;
+create policy "plc_milestones_write_authenticated" on plc_milestones
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_milestones_project on plc_milestones (project_id);
+
+-- Every forecast_date change is appended here. This is what makes drift
+-- detectable: a milestone sitting at "+5 days" is a variance, but one that went
+-- +5 -> +8 -> +12 -> +17 over four reporting cycles is a trend, and only the
+-- trend justifies an early warning.
+create table if not exists plc_milestone_forecast_history (
+  id uuid primary key default gen_random_uuid(),
+  milestone_id uuid not null references plc_milestones (id) on delete cascade,
+  forecast_date date,
+  variance_days integer not null default 0,
+  note text not null default '',
+  recorded_by uuid references profiles (id) default auth.uid(),
+  recorded_at timestamptz not null default now()
+);
+
+alter table plc_milestone_forecast_history enable row level security;
+drop policy if exists "plc_ms_history_select_authenticated" on plc_milestone_forecast_history;
+create policy "plc_ms_history_select_authenticated" on plc_milestone_forecast_history
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_ms_history_insert_authenticated" on plc_milestone_forecast_history;
+create policy "plc_ms_history_insert_authenticated" on plc_milestone_forecast_history
+  for insert with check (auth.uid() is not null);
+
+create index if not exists idx_plc_ms_history_milestone on plc_milestone_forecast_history (milestone_id, recorded_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 21d. Health, warnings, audit.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_health_scores (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  dimension text not null check (dimension in (
+    'schedule', 'cost', 'engineering', 'procurement', 'construction',
+    'quality', 'hse', 'risk', 'contract', 'cashflow'
+  )),
+  score smallint not null default 100 check (score between 0 and 100),
+  status text not null default 'green' check (status in ('green', 'yellow', 'red', 'black')),
+  trend text not null default 'flat' check (trend in ('improving', 'flat', 'worsening')),
+  explanation text not null default '',
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  unique (project_id, dimension)
+);
+
+alter table plc_health_scores enable row level security;
+drop policy if exists "plc_health_select_authenticated" on plc_health_scores;
+create policy "plc_health_select_authenticated" on plc_health_scores
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_health_write_authenticated" on plc_health_scores;
+create policy "plc_health_write_authenticated" on plc_health_scores
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_early_warnings (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  trigger_key text not null,
+  severity text not null default 'medium' check (severity in ('low', 'medium', 'high', 'critical')),
+  title text not null,
+  detail text not null default '',
+  responsible_id uuid references profiles (id),
+  required_action text not null default '',
+  status text not null default 'open' check (status in ('open', 'acknowledged', 'resolved', 'dismissed')),
+  related_milestone_id uuid references plc_milestones (id) on delete set null,
+  detected_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_early_warnings enable row level security;
+drop policy if exists "plc_warnings_select_authenticated" on plc_early_warnings;
+create policy "plc_warnings_select_authenticated" on plc_early_warnings
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_warnings_write_authenticated" on plc_early_warnings;
+create policy "plc_warnings_write_authenticated" on plc_early_warnings
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_warnings_project on plc_early_warnings (project_id, status);
+
+-- Governance events only (stage moves, gate decisions, baseline/forecast edits,
+-- health overrides) — not a generic row-diff log. Append-only by policy: there is
+-- no update or delete policy, so even an admin cannot rewrite the trail.
+create table if not exists plc_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  entity_type text not null,
+  entity_id uuid,
+  event text not null,
+  field text not null default '',
+  old_value text not null default '',
+  new_value text not null default '',
+  reason text not null default '',
+  changed_by uuid references profiles (id) default auth.uid(),
+  changed_at timestamptz not null default now()
+);
+
+alter table plc_audit_log enable row level security;
+drop policy if exists "plc_audit_select_authenticated" on plc_audit_log;
+create policy "plc_audit_select_authenticated" on plc_audit_log
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_audit_insert_authenticated" on plc_audit_log;
+create policy "plc_audit_insert_authenticated" on plc_audit_log
+  for insert with check (auth.uid() is not null);
+
+create index if not exists idx_plc_audit_project on plc_audit_log (project_id, changed_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 21e. Integration with the EXISTING action table rather than a second one.
+-- ---------------------------------------------------------------------------
+
+alter table rasta_actions add column if not exists related_milestone_id uuid references plc_milestones (id) on delete set null;
+alter table rasta_actions add column if not exists related_gate_id uuid references plc_project_gates (id) on delete set null;
+alter table rasta_actions add column if not exists completion_pct smallint not null default 0 check (completion_pct between 0 and 100);
+alter table rasta_actions add column if not exists closed_date date;
+
+-- 'lifecycle' joins the existing source list so a Control Tower action is
+-- distinguishable from one raised in the Decision Center.
+alter table rasta_actions drop constraint if exists rasta_actions_source_check;
+alter table rasta_actions add constraint rasta_actions_source_check
+  check (source in ('risk', 'issue', 'decision', 'management_report', 'lifecycle', 'milestone', 'gate'));
+
+-- The module registry row + its permission set (the cross-join re-seed in
+-- section 17 covers the actions once the module key exists).
+insert into rasta_modules (key, label_fa) values
+  ('lifecycle', 'چرخه عمر و برج کنترل پروژه')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+on conflict (module_key, action) do nothing;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'plc_templates', 'plc_project_lifecycle', 'plc_project_stages', 'plc_project_gates',
+    'plc_checklist_items', 'plc_activities', 'plc_milestones', 'plc_health_scores', 'plc_early_warnings'
+  ] loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
+  end loop;
+end $$;
