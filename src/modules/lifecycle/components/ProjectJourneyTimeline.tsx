@@ -1,11 +1,20 @@
 import { useMemo } from 'react'
-import { Check, Diamond, MapPin } from 'lucide-react'
+import { Check, Diamond, Layers, MapPin } from 'lucide-react'
 import { deriveMilestoneStatus } from '../lib/milestones'
 import {
   MILESTONE_STATUS_LABEL_FA, STAGE_LABEL_EN, STAGE_LABEL_FA,
   type GateStatus, type Milestone, type ProjectGate, type ProjectStage, type StageKey,
 } from '../types'
 import { STATUS_COLOR, fa, faNum } from './ui'
+
+/** Same trio the gate ladder folds into one "گیت EPC" row — the rail has to tell the identical
+ * story, or a manager reading both sees three stages merge in one place and stay apart in the
+ * other. A run of these, wherever it falls in the sequence, collapses into one rail node. */
+const EPC_STAGE_KEYS: StageKey[] = ['engineering', 'procurement', 'execution']
+
+type RailNode =
+  | { kind: 'single'; stage: ProjectStage }
+  | { kind: 'epc'; stages: ProjectStage[] }
 
 /**
  * The project journey — "where is this project, right now?"
@@ -39,15 +48,35 @@ export function ProjectJourneyTimeline({
   onSelectStage?: (stageKey: string) => void
 }) {
   const ordered = useMemo(() => [...stages].sort((a, b) => a.sequence - b.sequence), [stages])
-  const currentIndex = ordered.findIndex((s) => s.stageKey === currentStageKey)
-  const total = ordered.length
+  const realCurrentIndex = ordered.findIndex((s) => s.stageKey === currentStageKey)
+
+  // The rail draws one node per governance checkpoint, not one per stage — a run of consecutive
+  // EPC-package stages collapses into a single node, same as the gate ladder's "گیت EPC" row.
+  const displayNodes = useMemo(() => {
+    const nodes: RailNode[] = []
+    for (const s of ordered) {
+      if (EPC_STAGE_KEYS.includes(s.stageKey as StageKey)) {
+        const last = nodes[nodes.length - 1]
+        if (last && last.kind === 'epc') last.stages.push(s)
+        else nodes.push({ kind: 'epc', stages: [s] })
+      } else {
+        nodes.push({ kind: 'single', stage: s })
+      }
+    }
+    return nodes
+  }, [ordered])
+
+  const currentIndex = displayNodes.findIndex((n) =>
+    n.kind === 'single' ? n.stage.stageKey === currentStageKey : n.stages.some((s) => s.stageKey === currentStageKey),
+  )
+  const total = displayNodes.length
 
   // The rail is filled to the CENTRE of the current node: the project has arrived here, it has
   // not passed through. Filling to the far edge would silently claim the stage is finished.
   const fillPct = total <= 1 ? 0 : currentIndex < 0 ? 0 : (currentIndex / (total - 1)) * 100
 
   const passedGates = ordered.filter(
-    (s, i) => i < Math.max(currentIndex, 0) && (gateStatuses.get(s.stageKey) ?? 'not_started') === 'approved',
+    (s, i) => i < Math.max(realCurrentIndex, 0) && (gateStatuses.get(s.stageKey) ?? 'not_started') === 'approved',
   ).length
   const totalGates = gates.length
   const daysInStage = stageEnteredAt ? daysSince(stageEnteredAt) : null
@@ -87,34 +116,47 @@ export function ProjectJourneyTimeline({
           />
 
           <ol className="relative flex items-start">
-            {ordered.map((stage, i) => {
+            {displayNodes.map((node, i) => {
               const isCurrent = i === currentIndex
               const isPast = currentIndex >= 0 && i < currentIndex
-              const gate = gates.find((g) => g.stageKey === stage.stageKey)
+              const isEpc = node.kind === 'epc'
+              const nodeStageKeys = isEpc ? node.stages.map((s) => s.stageKey) : [node.stage.stageKey]
+              const gate = gates.find((g) => nodeStageKeys.includes(g.stageKey))
               const gStatus = gate ? gateStatuses.get(gate.stageKey) ?? gate.status : null
-              const stageMs = milestones.filter((m) => m.stageKey === stage.stageKey)
+              const stageMs = milestones.filter((m) => nodeStageKeys.includes(m.stageKey))
+              const label = isEpc ? 'گیت EPC' : node.stage.nameFa || STAGE_LABEL_FA[node.stage.stageKey as StageKey] || node.stage.stageKey
+              const tooltip = isEpc
+                ? `گیت EPC — ${node.stages.map((s) => STAGE_LABEL_FA[s.stageKey as StageKey] ?? s.stageKey).join(' · ')}`
+                : `${STAGE_LABEL_FA[node.stage.stageKey as StageKey] ?? node.stage.stageKey} — ${STAGE_LABEL_EN[node.stage.stageKey as StageKey] ?? ''}`
+              const targetKey = isEpc
+                ? (node.stages.find((s) => s.stageKey === currentStageKey) ?? node.stages[0])?.stageKey
+                : node.stage.stageKey
+              const ring = isEpc ? 'var(--plc-amber)' : '#38bdf8'
 
               return (
                 <li
-                  key={stage.stageKey}
+                  key={isEpc ? `epc-${node.stages[0]?.stageKey}` : node.stage.stageKey}
                   className="plc-node-in relative flex flex-1 flex-col items-center px-1"
                   style={{ animationDelay: `${i * 45}ms` }}
                 >
                   {/* "you are here" beacon, tethered to the node below it */}
                   {isCurrent && (
                     <div className="pointer-events-none absolute -top-8 flex flex-col items-center">
-                      <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-sky-500 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-lg shadow-sky-500/30">
+                      <span
+                        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-extrabold text-white shadow-lg"
+                        style={{ background: isEpc ? 'var(--plc-amber-deep)' : '#0ea5e9', boxShadow: `0 4px 12px ${isEpc ? 'rgba(180,116,26,0.35)' : 'rgba(14,165,233,0.3)'}` }}
+                      >
                         <MapPin size={9} /> اینجا هستیم
                       </span>
-                      <span className="h-3 w-px bg-sky-400/60" />
+                      <span className="h-3 w-px" style={{ background: isEpc ? 'color-mix(in srgb, var(--plc-amber) 60%, transparent)' : 'rgba(56,189,248,0.6)' }} />
                     </div>
                   )}
 
                   <button
                     type="button"
-                    onClick={() => onSelectStage?.(stage.stageKey)}
+                    onClick={() => targetKey && onSelectStage?.(targetKey)}
                     disabled={!onSelectStage}
-                    title={`${STAGE_LABEL_FA[stage.stageKey as StageKey] ?? stage.stageKey} — ${STAGE_LABEL_EN[stage.stageKey as StageKey] ?? ''}`}
+                    title={tooltip}
                     className="plc-node-btn group flex w-full flex-col items-center"
                     style={{ cursor: onSelectStage ? 'pointer' : 'default' }}
                   >
@@ -122,21 +164,27 @@ export function ProjectJourneyTimeline({
                     <span className="relative flex h-[30px] w-[30px] items-center justify-center">
                       {isCurrent && (
                         <>
-                          <span className="plc-beacon-ring absolute inset-0 rounded-full border-2 border-sky-400" />
-                          <span className="plc-beacon-ring plc-beacon-ring-2 absolute inset-0 rounded-full border-2 border-sky-400" />
+                          <span className="plc-beacon-ring absolute inset-0 rounded-full border-2" style={{ borderColor: ring }} />
+                          <span className="plc-beacon-ring plc-beacon-ring-2 absolute inset-0 rounded-full border-2" style={{ borderColor: ring }} />
                         </>
                       )}
                       <span
                         className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 text-[10px] font-extrabold transition-colors"
                         style={
                           isCurrent
-                            ? { borderColor: '#38bdf8', background: '#0ea5e9', color: '#fff', boxShadow: '0 0 0 4px rgba(56,189,248,0.16)' }
+                            ? isEpc
+                              ? { borderColor: 'var(--plc-amber)', background: 'var(--plc-amber-deep)', color: '#fff', boxShadow: '0 0 0 4px color-mix(in srgb, var(--plc-amber) 22%, transparent)' }
+                              : { borderColor: '#38bdf8', background: '#0ea5e9', color: '#fff', boxShadow: '0 0 0 4px rgba(56,189,248,0.16)' }
                             : isPast
-                              ? { borderColor: 'rgba(56,189,248,0.55)', background: 'rgba(56,189,248,0.16)', color: '#7dd3fc' }
-                              : { borderColor: 'var(--border-soft)', background: 'var(--bg-app)', color: 'var(--text-muted)' }
+                              ? isEpc
+                                ? { borderColor: 'color-mix(in srgb, var(--plc-amber) 55%, transparent)', background: 'color-mix(in srgb, var(--plc-amber) 16%, transparent)', color: 'var(--plc-amber)' }
+                                : { borderColor: 'rgba(56,189,248,0.55)', background: 'rgba(56,189,248,0.16)', color: '#7dd3fc' }
+                              : isEpc
+                                ? { borderColor: 'color-mix(in srgb, var(--plc-amber) 38%, var(--border-soft))', background: 'var(--bg-app)', color: 'var(--plc-amber)' }
+                                : { borderColor: 'var(--border-soft)', background: 'var(--bg-app)', color: 'var(--text-muted)' }
                         }
                       >
-                        {isPast ? <Check size={13} strokeWidth={3} /> : faNum(i + 1)}
+                        {isPast ? <Check size={13} strokeWidth={3} /> : isEpc ? <Layers size={13} /> : faNum(i + 1)}
                       </span>
                     </span>
 
@@ -164,8 +212,9 @@ export function ProjectJourneyTimeline({
                       className={`mt-1 line-clamp-2 text-center text-[10px] leading-tight ${
                         isCurrent ? 'font-extrabold text-primary' : isPast ? 'font-medium text-secondary' : 'text-muted'
                       }`}
+                      style={isEpc && !isCurrent && !isPast ? { color: 'var(--plc-amber)' } : undefined}
                     >
-                      {stage.nameFa || STAGE_LABEL_FA[stage.stageKey as StageKey] || stage.stageKey}
+                      {label}
                     </span>
 
                     {/* milestone load per stage — density, not detail */}
