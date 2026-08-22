@@ -1,22 +1,72 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, Layers, Network } from 'lucide-react'
+import {
+  AlertTriangle, Bell, ChevronLeft, CircleCheckBig, ClipboardList, Flag, Layers, Lock, Network, X,
+} from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useLifecycleStore } from '../store/useLifecycleStore'
 import { buildLifecycleRollup, summariseProject, aggregate, type ProjectSummary, type RollupTotals } from '../lib/portfolioRollup'
-import { HEALTH_STATUS_LABEL_FA, STAGE_LABEL_FA, type StageKey } from '../types'
-import { Bar, Card, EmptyState, Kpi, StatusDot, STATUS_COLOR, faNum, faVariance } from '../components/ui'
+import { HEALTH_STATUS_LABEL_FA, STAGE_LABEL_FA, type HealthStatus, type StageKey } from '../types'
+import { HealthMixDonut, ReadinessComparisonBars, type ReadinessDatum } from '../components/PortfolioCharts'
+import { StatSlicer } from '../components/StatSlicer'
+import { TowerTile } from '../components/TowerTile'
+import { Bar, EmptyState, StatusDot, STATUS_COLOR, STATUS_TEXT_COLOR, faNum, faVariance } from '../components/ui'
 
 /**
- * Portfolio → Plan(«طرح») → Project drill-down.
+ * Portfolio → Plan(«طرح») → Project drill-down — rebuilt as a live report rather than a printout.
  *
- * One page rather than three: the level being viewed changes what the KPI strip aggregates and
- * what the table lists, but a manager stays in the same place and keeps their bearings. The
- * breadcrumb is the only navigation.
+ * The stat cards from the previous version were read-only facts sitting above an unrelated table.
+ * Here every count is also a filter: click "تأخیرکرده" and the table narrows to delayed projects
+ * and every other card re-renders around that slice — the property that makes a Power BI report
+ * feel alive instead of static. The readiness bar chart changes SHAPE with the breadcrumb, not
+ * just its numbers, so drilling down reads as moving through a real report rather than paging a
+ * flat list.
  */
 type Level =
   | { kind: 'portfolio' }
   | { kind: 'plan'; portfolioId: string }
   | { kind: 'project'; portfolioId: string; programId: string | null }
+
+type ActiveFilter =
+  | { kind: 'health'; value: HealthStatus }
+  | { kind: 'criticalMilestones' }
+  | { kind: 'overdueActions' }
+  | { kind: 'attention' }
+  | null
+
+function matchesFilter(s: ProjectSummary, filter: ActiveFilter): boolean {
+  if (!filter) return true
+  if (filter.kind === 'health') return s.health === filter.value
+  if (filter.kind === 'criticalMilestones') return s.criticalMilestonesDelayed > 0
+  if (filter.kind === 'overdueActions') return s.overdueActions > 0
+  return s.attentionCount > 0
+}
+
+/** This page's own vocabulary for the four health buckets — "در مسیر / در معرض ریسک / تأخیرکرده /
+ * مسدود" reads better for a portfolio rollup than the canonical per-project labels
+ * (HEALTH_STATUS_LABEL_FA: "سالم / در معرض ریسک / بحرانی / مسدود") that the project table's own
+ * «سلامت» column still uses. The chip must echo whichever label the user actually clicked, so it
+ * stays in this vocabulary rather than the canonical one — otherwise clicking a card captioned
+ * "تأخیرکرده" would confirm the filter as "بحرانی", which reads as a different thing entirely. */
+const PORTFOLIO_HEALTH_LABEL_FA: Record<HealthStatus, string> = {
+  green: 'در مسیر', yellow: 'در معرض ریسک', red: 'تأخیرکرده', black: 'مسدود',
+}
+
+function filterLabel(filter: ActiveFilter): string {
+  if (!filter) return ''
+  if (filter.kind === 'health') return PORTFOLIO_HEALTH_LABEL_FA[filter.value]
+  if (filter.kind === 'criticalMilestones') return 'دارای Milestone بحرانی تأخیرکرده'
+  if (filter.kind === 'overdueActions') return 'دارای اقدام معوق'
+  return 'نیازمند توجه مدیریت'
+}
+
+/** Worst-dimension colour for an aggregate — the same "worst wins, not average" rule the health
+ * engine uses per project, applied here to a group of projects. */
+function toneFromTotals(t: RollupTotals): HealthStatus {
+  if (t.blocked > 0) return 'black'
+  if (t.delayed > 0) return 'red'
+  if (t.atRisk > 0) return 'yellow'
+  return 'green'
+}
 
 export function PortfolioDashboardPage({ onOpenProject }: { onOpenProject: (projectId: string) => void }) {
   const portfolios = useMasterDataStore((s) => s.portfolios)
@@ -32,6 +82,14 @@ export function PortfolioDashboardPage({ onOpenProject }: { onOpenProject: (proj
   const loading = useLifecycleStore((s) => s.loadingPortfolio)
 
   const [level, setLevel] = useState<Level>({ kind: 'portfolio' })
+  // Persists across drill-downs on purpose, like a Power BI slicer: narrowing to "تأخیرکرده" at
+  // the portfolio level and then drilling into one portfolio keeps only its delayed projects
+  // in view, until explicitly cleared.
+  const [filter, setFilter] = useState<ActiveFilter>(null)
+
+  function toggleFilter(next: NonNullable<ActiveFilter>) {
+    setFilter((prev) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? null : next))
+  }
 
   const summaries = useMemo<ProjectSummary[]>(() => {
     const byProject = <T extends { projectId: string }>(list: T[], id: string) => list.filter((x) => x.projectId === id)
@@ -64,34 +122,74 @@ export function PortfolioDashboardPage({ onOpenProject }: { onOpenProject: (proj
       ? activePortfolio?.programs.find((p) => p.program.id === level.programId)
       : null
 
-  /* Which projects the table shows, and which totals the KPI strip reflects. */
-  let listed: ProjectSummary[] = []
+  /* Which projects the table shows (unfiltered) and which totals the KPI strip reflects — totals
+     stay unfiltered so the cards always describe "this level", with the filter shown as a slice
+     taken out of them rather than replacing them. */
+  let levelProjects: ProjectSummary[] = []
   let totals: RollupTotals
   if (level.kind === 'portfolio') {
-    listed = summaries
+    levelProjects = summaries
     totals = aggregate(summaries)
   } else if (level.kind === 'plan' && activePortfolio) {
-    listed = [...activePortfolio.programs.flatMap((p) => p.projects), ...activePortfolio.directProjects]
+    levelProjects = [...activePortfolio.programs.flatMap((p) => p.projects), ...activePortfolio.directProjects]
     totals = activePortfolio.totals
   } else if (activeProgram) {
-    listed = activeProgram.projects
+    levelProjects = activeProgram.projects
     totals = activeProgram.totals
   } else {
-    listed = activePortfolio?.directProjects ?? []
-    totals = aggregate(listed)
+    levelProjects = activePortfolio?.directProjects ?? []
+    totals = aggregate(levelProjects)
+  }
+
+  const listed = levelProjects.filter((s) => matchesFilter(s, filter))
+
+  /* The comparison chart's shape follows the breadcrumb: one bar per portfolio, then per plan,
+     then per project — never per-project data squeezed under a portfolio-level label. */
+  const readinessData: ReadinessDatum[] =
+    level.kind === 'portfolio'
+      ? tree.map((pf) => ({
+          id: pf.portfolio.id, name: pf.portfolio.name, value: pf.totals.averageReadiness,
+          status: toneFromTotals(pf.totals), blocked: pf.totals.blocked > 0,
+        }))
+      : level.kind === 'plan' && activePortfolio
+        ? [
+            ...activePortfolio.programs.map((pg) => ({
+              id: pg.program.id, name: pg.program.name, value: pg.totals.averageReadiness,
+              status: toneFromTotals(pg.totals), blocked: pg.totals.blocked > 0,
+            })),
+            ...(activePortfolio.directProjects.length > 0
+              ? [{
+                  id: '__direct__', name: 'بدون طرح', value: aggregate(activePortfolio.directProjects).averageReadiness,
+                  status: toneFromTotals(aggregate(activePortfolio.directProjects)), blocked: false,
+                }]
+              : []),
+          ]
+        : [...levelProjects]
+            .sort((a, b) => a.readiness - b.readiness)
+            .slice(0, 10)
+            .map((s) => ({
+              id: s.masterProjectId, name: s.project.officialName, value: s.readiness,
+              status: s.health, blocked: s.blockedGates,
+            }))
+
+  function onSelectReadinessBar(id: string) {
+    if (level.kind === 'portfolio') setLevel({ kind: 'plan', portfolioId: id })
+    else if (level.kind === 'plan' && id !== '__direct__') {
+      setLevel({ kind: 'project', portfolioId: level.portfolioId, programId: id })
+    } else if (level.kind === 'project') onOpenProject(id)
   }
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4">
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1 text-[11px] text-muted">
-        <button onClick={() => setLevel({ kind: 'portfolio' })} className="hover:text-primary">همه سبدها</button>
+      <nav className="flex flex-wrap items-center gap-1 text-[12px] text-muted">
+        <button onClick={() => setLevel({ kind: 'portfolio' })} className="transition-colors hover:text-primary">همه سبدها</button>
         {activePortfolio && (
           <>
-            <ChevronLeft size={11} />
+            <ChevronLeft size={12} />
             <button
               onClick={() => setLevel({ kind: 'plan', portfolioId: activePortfolio.portfolio.id })}
-              className="hover:text-primary"
+              className="transition-colors hover:text-primary"
             >
               {activePortfolio.portfolio.name}
             </button>
@@ -99,172 +197,271 @@ export function PortfolioDashboardPage({ onOpenProject }: { onOpenProject: (proj
         )}
         {activeProgram && (
           <>
-            <ChevronLeft size={11} />
-            <span className="text-primary">{activeProgram.program.name}</span>
+            <ChevronLeft size={12} />
+            <span className="font-bold text-primary">{activeProgram.program.name}</span>
           </>
         )}
       </nav>
 
-      {/* KPI strip — identical metric set at every level, which is what makes drilling down
-          feel like zooming rather than jumping between unrelated reports. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="تعداد پروژه" value={faNum(totals.projects)} />
-        <Kpi label="در مسیر" value={faNum(totals.onTrack)} status="green" />
-        <Kpi label="در معرض ریسک" value={faNum(totals.atRisk)} status="yellow" />
-        <Kpi label="تأخیرکرده" value={faNum(totals.delayed)} status="red" />
-        <Kpi label="مسدود" value={faNum(totals.blocked)} status="black" />
-        <Kpi label="میانگین آمادگی" value={`${faNum(totals.averageReadiness)}٪`} />
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Kpi label="Milestone بحرانی تأخیرکرده" value={faNum(totals.criticalMilestonesDelayed)}
-          status={totals.criticalMilestonesDelayed > 0 ? 'red' : 'green'} />
-        <Kpi label="کل Milestone تأخیرکرده" value={faNum(totals.milestonesDelayed)} />
-        <Kpi label="اقدام بحرانی معوق" value={faNum(totals.criticalOverdueActions)}
-          status={totals.criticalOverdueActions > 0 ? 'red' : 'green'} />
-        <Kpi label="پروژه نیازمند توجه" value={faNum(totals.needingAttention)}
-          status={totals.needingAttention > 0 ? 'yellow' : 'green'} />
-      </div>
+      <div className="plc-bento">
+        {/* ── Health mix + slicers ─────────────────────────────────── */}
+        <TowerTile span={4} variant="raised" title="ترکیب سلامت پروژه‌ها">
+          <HealthMixDonut totals={totals} />
+        </TowerTile>
 
-      {/* Portfolio level: one row per portfolio, click to drill in */}
-      {level.kind === 'portfolio' && (
-        <Card title="سبدهای پروژه">
-          <ul className="space-y-2">
-            {tree.map((pf) => (
-              <li key={pf.portfolio.id}>
-                <button
+        <div className="grid gap-2" style={{ gridColumn: 'span 8' }}>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <StatSlicer
+              icon={<CircleCheckBig size={15} />} label="در مسیر" tone="green"
+              value={faNum(totals.onTrack)}
+              active={filter?.kind === 'health' && filter.value === 'green'}
+              onClick={() => toggleFilter({ kind: 'health', value: 'green' })}
+            />
+            <StatSlicer
+              icon={<AlertTriangle size={15} />} label="در معرض ریسک" tone="yellow"
+              value={faNum(totals.atRisk)}
+              active={filter?.kind === 'health' && filter.value === 'yellow'}
+              onClick={() => toggleFilter({ kind: 'health', value: 'yellow' })}
+            />
+            <StatSlicer
+              icon={<AlertTriangle size={15} />} label="تأخیرکرده" tone="red"
+              value={faNum(totals.delayed)}
+              active={filter?.kind === 'health' && filter.value === 'red'}
+              onClick={() => toggleFilter({ kind: 'health', value: 'red' })}
+            />
+            <StatSlicer
+              icon={<Lock size={15} />} label="مسدود" tone="black"
+              value={faNum(totals.blocked)}
+              active={filter?.kind === 'health' && filter.value === 'black'}
+              onClick={() => toggleFilter({ kind: 'health', value: 'black' })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <ReadinessStat totals={totals} />
+            <StatSlicer
+              icon={<Flag size={15} />} label="Milestone بحرانی تأخیرکرده"
+              tone={totals.criticalMilestonesDelayed > 0 ? 'red' : 'green'}
+              value={faNum(totals.criticalMilestonesDelayed)}
+              sub={totals.criticalMilestonesDelayed === 0 ? 'موردی نیست' : undefined}
+              active={filter?.kind === 'criticalMilestones'}
+              onClick={() => toggleFilter({ kind: 'criticalMilestones' })}
+            />
+            <StatSlicer
+              icon={<ClipboardList size={15} />} label="اقدام بحرانی معوق"
+              tone={totals.criticalOverdueActions > 0 ? 'red' : 'green'}
+              value={faNum(totals.criticalOverdueActions)}
+              sub={totals.criticalOverdueActions === 0 ? 'موردی نیست' : undefined}
+              active={filter?.kind === 'overdueActions'}
+              onClick={() => toggleFilter({ kind: 'overdueActions' })}
+            />
+            <StatSlicer
+              icon={<Bell size={15} />} label="پروژه نیازمند توجه"
+              tone={totals.needingAttention > 0 ? 'yellow' : 'green'}
+              value={faNum(totals.needingAttention)}
+              sub={totals.needingAttention === 0 ? 'موردی نیست' : undefined}
+              active={filter?.kind === 'attention'}
+              onClick={() => toggleFilter({ kind: 'attention' })}
+            />
+          </div>
+        </div>
+
+        {/* ── Readiness comparison — shape follows the breadcrumb ─────── */}
+        <TowerTile
+          span={12}
+          eyebrow="Readiness comparison"
+          title={
+            level.kind === 'portfolio' ? 'مقایسه آمادگی سبدها'
+            : level.kind === 'plan' ? `مقایسه آمادگی طرح‌های سبد «${activePortfolio?.portfolio.name}»`
+            : 'ضعیف‌ترین پروژه‌ها از نظر آمادگی'
+          }
+        >
+          <ReadinessComparisonBars data={readinessData} onSelect={onSelectReadinessBar} />
+          <p className="plc-stat-sub">
+            {level.kind === 'project'
+              ? 'برای مشاهده برج کنترل پروژه، روی میله کلیک کنید.'
+              : 'برای ورود به سطح بعد، روی میله کلیک کنید.'}
+          </p>
+        </TowerTile>
+
+        {/* ── Portfolio level: one card per portfolio ─────────────────── */}
+        {level.kind === 'portfolio' && (
+          <TowerTile span={12} title="سبدهای پروژه">
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {tree.map((pf) => (
+                <RollupCard
+                  key={pf.portfolio.id}
+                  icon={<Layers size={15} />}
+                  name={pf.portfolio.name}
+                  meta={`${faNum(pf.programs.length)} طرح · ${faNum(pf.totals.projects)} پروژه`}
+                  totals={pf.totals}
                   onClick={() => setLevel({ kind: 'plan', portfolioId: pf.portfolio.id })}
-                  className="w-full rounded-lg border p-3 text-right transition-colors hover:bg-white/[0.03]"
-                  style={{ borderColor: 'var(--border-soft)' }}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Layers size={14} className="text-muted" />
-                      <span className="text-sm font-bold">{pf.portfolio.name}</span>
-                      <span className="text-[10px] text-muted">
-                        {faNum(pf.programs.length)} طرح · {faNum(pf.totals.projects)} پروژه
-                      </span>
-                    </div>
-                    <ChevronLeft size={14} className="text-muted" />
-                  </div>
-                  <HealthDistribution totals={pf.totals} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {/* Plan level: one row per plan within the portfolio */}
-      {level.kind === 'plan' && activePortfolio && (
-        <Card title={`طرح‌های سبد «${activePortfolio.portfolio.name}»`}>
-          {activePortfolio.programs.length === 0 && activePortfolio.directProjects.length === 0 ? (
-            <EmptyState message="طرح یا پروژه‌ای در این سبد ثبت نشده است" />
-          ) : (
-            <ul className="space-y-2">
-              {activePortfolio.programs.map((pg) => (
-                <li key={pg.program.id}>
-                  <button
-                    onClick={() => setLevel({ kind: 'project', portfolioId: activePortfolio.portfolio.id, programId: pg.program.id })}
-                    className="w-full rounded-lg border p-3 text-right transition-colors hover:bg-white/[0.03]"
-                    style={{ borderColor: 'var(--border-soft)' }}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Network size={14} className="text-muted" />
-                        <span className="text-sm font-bold">{pg.program.name}</span>
-                        <span className="text-[10px] text-muted">{faNum(pg.totals.projects)} پروژه</span>
-                      </div>
-                      <ChevronLeft size={14} className="text-muted" />
-                    </div>
-                    <HealthDistribution totals={pg.totals} />
-                  </button>
-                </li>
+                />
               ))}
             </ul>
-          )}
-        </Card>
-      )}
-
-      {/* Project table — always present, scoped to whatever level is open */}
-      <Card title={`پروژه‌ها (${faNum(listed.length)})`}>
-        {listed.length === 0 ? (
-          <EmptyState message="پروژه‌ای در این سطح ثبت نشده است" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs" style={{ minWidth: 720 }}>
-              <thead>
-                <tr className="border-b text-[10px] text-muted" style={{ borderColor: 'var(--border-soft)' }}>
-                  <th className="py-2 text-right font-medium">پروژه</th>
-                  <th className="py-2 text-right font-medium">مرحله</th>
-                  <th className="py-2 text-center font-medium">سلامت</th>
-                  <th className="py-2 text-center font-medium">آمادگی</th>
-                  <th className="py-2 text-center font-medium">Milestone تأخیر</th>
-                  <th className="py-2 text-center font-medium">اقدام معوق</th>
-                  <th className="py-2 text-center font-medium">انحراف پیش‌بینی</th>
-                  <th className="py-2 text-right font-medium">مهم‌ترین موضوع</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...listed]
-                  // Worst first: a portfolio manager's eye should land on the problem, not on
-                  // whichever project happens to be alphabetically first.
-                  .sort((a, b) => b.criticalMilestonesDelayed - a.criticalMilestonesDelayed || b.attentionCount - a.attentionCount)
-                  .map((s) => (
-                    <tr
-                      key={s.masterProjectId}
-                      onClick={() => onOpenProject(s.masterProjectId)}
-                      className="cursor-pointer border-b transition-colors hover:bg-white/[0.03]"
-                      style={{ borderColor: 'var(--border-soft)' }}
-                    >
-                      <td className="py-2 pl-2">
-                        <div className="flex items-center gap-1.5">
-                          <StatusDot status={s.health} size={7} />
-                          <span className="font-medium">{s.project.officialName}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 text-[10px] text-muted">
-                        {STAGE_LABEL_FA[s.currentStageKey as StageKey] ?? s.currentStageKey ?? '—'}
-                      </td>
-                      <td className="py-2 text-center text-[10px]" style={{ color: STATUS_COLOR[s.health] }}>
-                        {HEALTH_STATUS_LABEL_FA[s.health]}
-                      </td>
-                      <td className="py-2">
-                        <div className="mx-auto w-16">
-                          <Bar percent={s.readiness} blocked={s.blockedGates} />
-                          <div className="mt-0.5 text-center text-[9px] text-muted">{faNum(s.readiness)}٪</div>
-                        </div>
-                      </td>
-                      <td className="py-2 text-center">
-                        {s.criticalMilestonesDelayed > 0 ? (
-                          <span className="font-bold" style={{ color: STATUS_COLOR.red }}>
-                            {faNum(s.criticalMilestonesDelayed)} بحرانی
-                          </span>
-                        ) : s.milestonesDelayed > 0 ? (
-                          <span style={{ color: STATUS_COLOR.yellow }}>{faNum(s.milestonesDelayed)}</span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-center">
-                        {s.overdueActions > 0
-                          ? <span style={{ color: s.criticalOverdueActions > 0 ? STATUS_COLOR.red : STATUS_COLOR.yellow }}>{faNum(s.overdueActions)}</span>
-                          : <span className="text-muted">—</span>}
-                      </td>
-                      <td className="py-2 text-center text-[10px]"
-                        style={{ color: (s.forecastVarianceDays ?? 0) > 0 ? STATUS_COLOR.red : undefined }}>
-                        {faVariance(s.forecastVarianceDays)}
-                      </td>
-                      <td className="py-2 pr-2 text-[10px] text-muted">
-                        <span className="line-clamp-1">{s.topAttention ?? '—'}</span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          </TowerTile>
         )}
-      </Card>
+
+        {/* ── Plan level: one card per plan within the portfolio ──────── */}
+        {level.kind === 'plan' && activePortfolio && (
+          <TowerTile span={12} title={`طرح‌های سبد «${activePortfolio.portfolio.name}»`}>
+            {activePortfolio.programs.length === 0 && activePortfolio.directProjects.length === 0 ? (
+              <EmptyState message="طرح یا پروژه‌ای در این سبد ثبت نشده است" />
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {activePortfolio.programs.map((pg) => (
+                  <RollupCard
+                    key={pg.program.id}
+                    icon={<Network size={15} />}
+                    name={pg.program.name}
+                    meta={`${faNum(pg.totals.projects)} پروژه`}
+                    totals={pg.totals}
+                    onClick={() => setLevel({ kind: 'project', portfolioId: activePortfolio.portfolio.id, programId: pg.program.id })}
+                  />
+                ))}
+              </ul>
+            )}
+          </TowerTile>
+        )}
+
+        {/* ── Project table — always present, scoped to the open level ── */}
+        <TowerTile
+          span={12}
+          title={filter ? `پروژه‌ها (${faNum(listed.length)} از ${faNum(levelProjects.length)})` : `پروژه‌ها (${faNum(listed.length)})`}
+          action={
+            filter && (
+              <button
+                onClick={() => setFilter(null)}
+                className="plc-filter-chip flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-white/5"
+                style={{ borderColor: 'rgba(56,189,248,0.4)', color: '#7dd3fc' }}
+              >
+                پالایش: {filterLabel(filter)} <X size={12} />
+              </button>
+            )
+          }
+        >
+          {listed.length === 0 ? (
+            <EmptyState message={filter ? 'پروژه‌ای مطابق این پالایش در این سطح نیست' : 'پروژه‌ای در این سطح ثبت نشده است'} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ minWidth: 760 }}>
+                <thead>
+                  <tr className="border-b text-[12px] font-bold text-secondary" style={{ borderColor: 'var(--border-soft)' }}>
+                    <th className="py-2.5 text-right">پروژه</th>
+                    <th className="py-2.5 text-right">مرحله</th>
+                    <th className="py-2.5 text-center">سلامت</th>
+                    <th className="py-2.5 text-center">آمادگی</th>
+                    <th className="py-2.5 text-center">Milestone تأخیر</th>
+                    <th className="py-2.5 text-center">اقدام معوق</th>
+                    <th className="py-2.5 text-center">انحراف پیش‌بینی</th>
+                    <th className="py-2.5 text-right">مهم‌ترین موضوع</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...listed]
+                    // Worst first: a portfolio manager's eye should land on the problem, not on
+                    // whichever project happens to be alphabetically first.
+                    .sort((a, b) => b.criticalMilestonesDelayed - a.criticalMilestonesDelayed || b.attentionCount - a.attentionCount)
+                    .map((s) => (
+                      <tr
+                        key={s.masterProjectId}
+                        onClick={() => onOpenProject(s.masterProjectId)}
+                        className="cursor-pointer border-b transition-colors hover:bg-white/[0.03]"
+                        style={{ borderColor: 'var(--border-soft)' }}
+                      >
+                        <td className="py-2.5 pl-2 plc-body-text">
+                          <div className="flex items-center gap-1.5">
+                            <StatusDot status={s.health} size={8} />
+                            <span className="font-bold">{s.project.officialName}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 text-[12px] text-muted">
+                          {STAGE_LABEL_FA[s.currentStageKey as StageKey] ?? s.currentStageKey ?? '—'}
+                        </td>
+                        <td className="py-2.5 text-center text-[12px] font-bold" style={{ color: STATUS_TEXT_COLOR[s.health] }}>
+                          {HEALTH_STATUS_LABEL_FA[s.health]}
+                        </td>
+                        <td className="py-2.5">
+                          <div className="mx-auto w-20">
+                            <Bar percent={s.readiness} blocked={s.blockedGates} />
+                            <div className="plc-num mt-1 text-center text-[11px] text-muted">{faNum(s.readiness)}٪</div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 text-center text-[12px]">
+                          {s.criticalMilestonesDelayed > 0 ? (
+                            <span className="font-bold" style={{ color: STATUS_TEXT_COLOR.red }}>
+                              {faNum(s.criticalMilestonesDelayed)} بحرانی
+                            </span>
+                          ) : s.milestonesDelayed > 0 ? (
+                            <span style={{ color: STATUS_TEXT_COLOR.yellow }}>{faNum(s.milestonesDelayed)}</span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 text-center text-[12px]">
+                          {s.overdueActions > 0
+                            ? <span style={{ color: s.criticalOverdueActions > 0 ? STATUS_TEXT_COLOR.red : STATUS_TEXT_COLOR.yellow }}>{faNum(s.overdueActions)}</span>
+                            : <span className="text-muted">—</span>}
+                        </td>
+                        <td className="py-2.5 text-center text-[12px]"
+                          style={{ color: (s.forecastVarianceDays ?? 0) > 0 ? STATUS_TEXT_COLOR.red : undefined }}>
+                          {faVariance(s.forecastVarianceDays)}
+                        </td>
+                        <td className="py-2.5 pr-2 text-[12px] text-muted">
+                          <span className="line-clamp-1">{s.topAttention ?? '—'}</span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TowerTile>
+      </div>
     </div>
+  )
+}
+
+/** Average readiness, plain — an average has no single project to filter by, so unlike its
+ * neighbours this tile stays a display, not a slicer. */
+function ReadinessStat({ totals }: { totals: RollupTotals }) {
+  const tone = totals.averageReadiness >= 80 ? 'green' : totals.averageReadiness >= 50 ? 'yellow' : 'red'
+  return (
+    <div className="plc-tile flex flex-col justify-between gap-2" style={{ padding: '14px 16px' }}>
+      <span className="plc-stat-label">میانگین آمادگی</span>
+      <span className="plc-stat-value" style={{ color: STATUS_TEXT_COLOR[tone] }}>{faNum(totals.averageReadiness)}٪</span>
+      <Bar percent={totals.averageReadiness} status={tone} />
+    </div>
+  )
+}
+
+/** A portfolio or plan card, restyled as a bento tile: bigger type, a hover lift, and the health
+ * distribution stated in words as well as colour underneath the bar. */
+function RollupCard({ icon, name, meta, totals, onClick }: {
+  icon: React.ReactNode
+  name: string
+  meta: string
+  totals: RollupTotals
+  onClick: () => void
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="plc-tile plc-slicer w-full text-right"
+        style={{ '--plc-slicer-tone': STATUS_TEXT_COLOR[toneFromTotals(totals)] } as React.CSSProperties}
+      >
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-muted">{icon}</span>
+            <span className="truncate text-[14px] font-extrabold">{name}</span>
+          </div>
+          <ChevronLeft size={15} className="shrink-0 text-muted" />
+        </div>
+        <p className="plc-stat-sub mb-2">{meta}</p>
+        <HealthDistribution totals={totals} />
+      </button>
+    </li>
   )
 }
 
@@ -279,17 +476,17 @@ function HealthDistribution({ totals }: { totals: RollupTotals }) {
   ]
   return (
     <>
-      <div className="flex h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-soft)' }} dir="ltr">
+      <div className="flex h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-soft)' }} dir="ltr">
         {segments.map((s) => s.count > 0 && (
           <div key={s.key} style={{ width: `${(s.count / total) * 100}%`, background: s.color }} />
         ))}
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-2 text-[9px] text-muted">
+      <div className="mt-1.5 flex flex-wrap gap-x-2.5 gap-y-1 text-[11px] text-muted">
         <span>در مسیر {faNum(totals.onTrack)}</span>
         <span>در معرض ریسک {faNum(totals.atRisk)}</span>
         <span>تأخیرکرده {faNum(totals.delayed)}</span>
         {totals.blocked > 0 && <span>مسدود {faNum(totals.blocked)}</span>}
-        <span>· میانگین آمادگی {faNum(totals.averageReadiness)}٪</span>
+        <span>· آمادگی {faNum(totals.averageReadiness)}٪</span>
       </div>
     </>
   )

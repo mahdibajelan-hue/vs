@@ -130,8 +130,10 @@ export function Card({ children, className = '', title, action }: {
   )
 }
 
-/** A single headline number. Kept deliberately plain — the portfolio page has many of these and
- * they must read as a row of facts, not a wall of decorated tiles. */
+/** A single headline number. Kept deliberately plain — several pages have rows of these and
+ * they must read as a row of facts, not a wall of decorated tiles. Sizes follow the module's
+ * plc-stat-* scale (12px label, ~24px value) rather than the 10px/18px this used to run at —
+ * legible at a glance was the point users kept losing at the smaller sizes. */
 export function Kpi({ label, value, sub, status }: {
   label: string
   value: ReactNode
@@ -142,12 +144,12 @@ export function Kpi({ label, value, sub, status }: {
     <div className="rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--border-soft)' }}>
       <div className="mb-1 flex items-center gap-1.5">
         {status && <StatusDot status={status} size={7} />}
-        <span className="text-[10px] text-muted">{label}</span>
+        <span className="plc-stat-label">{label}</span>
       </div>
-      <div className="text-lg font-extrabold leading-none" style={status ? { color: STATUS_TEXT_COLOR[status] } : undefined}>
+      <div className="plc-stat-value" style={status ? { color: STATUS_TEXT_COLOR[status] } : undefined}>
         {value}
       </div>
-      {sub && <div className="mt-1 text-[10px] text-muted">{sub}</div>}
+      {sub && <div className="plc-stat-sub mt-1">{sub}</div>}
     </div>
   )
 }
