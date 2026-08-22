@@ -16,6 +16,22 @@ export const STATUS_COLOR: Record<HealthStatus, string> = {
   black: '#334155',
 }
 
+/**
+ * The same statuses, tuned for TEXT on the dark app surface.
+ *
+ * STATUS_COLOR is a fill palette — it is measured against white type sitting on top of it. Used
+ * the other way round, as a foreground on `--bg-app`, two of its members fail WCAG AA: `black`
+ * (#334155) lands near 1.6:1 and effectively disappears, and `red` (#d03b3b) sits around 3.4:1.
+ * Anything that paints a status onto *type* uses this map instead; dots, pills and bars keep
+ * STATUS_COLOR.
+ */
+export const STATUS_TEXT_COLOR: Record<HealthStatus, string> = {
+  green: '#22c55e',
+  yellow: '#fab219',
+  red: '#f87171',
+  black: '#94a3b8',
+}
+
 export const SEVERITY_COLOR: Record<WarningSeverity, string> = {
   critical: '#d03b3b',
   high: '#ec835a',
@@ -23,22 +39,44 @@ export const SEVERITY_COLOR: Record<WarningSeverity, string> = {
   low: '#64748b',
 }
 
-/** Dates are Shamsi everywhere in the UI (spec §22); the database keeps ISO/Gregorian. */
+/** Dates are Shamsi everywhere in the UI (spec §22); the database keeps ISO/Gregorian.
+ *
+ * Digits are converted here rather than in the shared formatJalali(), which other modules call
+ * and which must keep returning Latin digits for exports and machine-readable output. */
 export function fa(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return formatJalali(iso.slice(0, 10)) || '—'
+  const j = formatJalali(iso.slice(0, 10))
+  return j ? faNum(j) : '—'
 }
 
 export function faNum(n: number | string): string {
   return String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])
 }
 
-/** Signed day count, e.g. "+۱۷ روز" / "−۳ روز". */
+/**
+ * Persian digits inside a sentence the engines built.
+ *
+ * The warning and attention engines interpolate raw numbers into Persian prose ("۵۲ → ۵۸ → ۶۱
+ * روز"), which then reads half-Latin next to the rest of the page. Blanket faNum() would also
+ * mangle Latin identifiers that legitimately contain digits — gate names like "G4", spec
+ * references like "ISO14001" — so only digit runs with no Latin letter on either side are
+ * converted.
+ */
+export function faText(s: string): string {
+  return s.replace(/(^|[^A-Za-z0-9])(\d+)(?![A-Za-z0-9])/g, (_m, pre: string, num: string) => pre + faNum(num))
+}
+
+/**
+ * Day variance in words, never as a signed number.
+ *
+ * A leading "+" or "−" on a Persian numeral is a bidi trap: the sign is neutral-direction, so
+ * the renderer flips it to the far side and "+۴۹ روز" comes out looking like "۴۹۰ روز" — an
+ * order-of-magnitude misread of a schedule slip. Words carry the sign unambiguously.
+ */
 export function faVariance(days: number | null): string {
   if (days === null) return '—'
   if (days === 0) return 'بدون انحراف'
-  const sign = days > 0 ? '+' : '−'
-  return `${sign}${faNum(Math.abs(days))} روز`
+  return days > 0 ? `${faNum(days)} روز تأخیر` : `${faNum(Math.abs(days))} روز جلوتر`
 }
 
 export function StatusDot({ status, size = 8 }: { status: HealthStatus; size?: number }) {
@@ -106,7 +144,7 @@ export function Kpi({ label, value, sub, status }: {
         {status && <StatusDot status={status} size={7} />}
         <span className="text-[10px] text-muted">{label}</span>
       </div>
-      <div className="text-lg font-extrabold leading-none" style={status ? { color: STATUS_COLOR[status] } : undefined}>
+      <div className="text-lg font-extrabold leading-none" style={status ? { color: STATUS_TEXT_COLOR[status] } : undefined}>
         {value}
       </div>
       {sub && <div className="mt-1 text-[10px] text-muted">{sub}</div>}

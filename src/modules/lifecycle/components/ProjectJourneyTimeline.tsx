@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Check, Diamond, MapPin } from 'lucide-react'
 import { deriveMilestoneStatus } from '../lib/milestones'
 import {
-  GATE_STATUS_LABEL_FA, MILESTONE_STATUS_LABEL_FA, STAGE_LABEL_EN, STAGE_LABEL_FA,
+  MILESTONE_STATUS_LABEL_FA, STAGE_LABEL_EN, STAGE_LABEL_FA,
   type GateStatus, type Milestone, type ProjectGate, type ProjectStage, type StageKey,
 } from '../types'
 import { STATUS_COLOR, fa, faNum } from './ui'
@@ -51,47 +51,21 @@ export function ProjectJourneyTimeline({
   ).length
   const totalGates = gates.length
   const daysInStage = stageEnteredAt ? daysSince(stageEnteredAt) : null
-  const nextGate = currentIndex >= 0 ? gates.find((g) => g.stageKey === currentStageKey) : undefined
-  const nextGateStatus = nextGate ? gateStatuses.get(nextGate.stageKey) ?? nextGate.status : null
-
   return (
-    <div className="plc-hero rounded-2xl border p-4 sm:p-5" style={{ borderColor: 'var(--border-soft)' }}>
-      {/* Headline */}
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-muted" dir="ltr">Project Journey</p>
-          <h2 className="text-lg font-extrabold leading-tight">
-            پروژه هم‌اکنون در مرحله{' '}
-            <span className="text-sky-400">
-              {ordered[currentIndex]?.nameFa || STAGE_LABEL_FA[currentStageKey as StageKey] || '—'}
-            </span>{' '}
-            است
-          </h2>
-          {/* Chips, not a run-on sentence: mixing Persian words with Latin-ordered digits in one
-              line lets the bidi algorithm merge adjacent numbers into nonsense. */}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <MetaChip>گام {faNum(currentIndex + 1)} از {faNum(total)}</MetaChip>
-            {daysInStage !== null && <MetaChip>{faNum(daysInStage)} روز در این مرحله</MetaChip>}
-            {totalGates > 0 && <MetaChip>{faNum(passedGates)} از {faNum(totalGates)} گیت تصویب‌شده</MetaChip>}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-stretch overflow-hidden rounded-xl border"
-          style={{ borderColor: 'var(--border-soft)', background: 'rgba(255,255,255,0.02)' }}>
-          <JourneyStat label="پیشرفت چرخه" value={`${faNum(Math.round(fillPct))}٪`} />
-          {nextGate && (
-            <JourneyStat
-              label="گیت پیش‌رو"
-              value={nextGate.name}
-              divider
-              tone={
-                nextGateStatus === 'blocked' || nextGateStatus === 'rejected' ? STATUS_COLOR.red
-                : nextGateStatus === 'ready' || nextGateStatus === 'approved' ? STATUS_COLOR.green
-                : STATUS_COLOR.yellow
-              }
-              sub={nextGateStatus ? GATE_STATUS_LABEL_FA[nextGateStatus] : undefined}
-            />
-          )}
+    <div className="plc-tile plc-tile-raised plc-hero">
+      {/* Header, kept deliberately thin.
+          The verdict tile above already states which stage the project is in and which gate is
+          shut, and the gate ladder lists the gates — so repeating either here would be the third
+          telling of the same fact. All that is left is the eyebrow and the counts the rail itself
+          cannot show. Chips rather than one sentence: mixing Persian words with adjacent numerals
+          on a single line lets the bidi algorithm run them together into nonsense. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="plc-eyebrow" dir="ltr">Project journey</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <MetaChip>گام {faNum(currentIndex + 1)} از {faNum(total)}</MetaChip>
+          {daysInStage !== null && <MetaChip>{faNum(daysInStage)} روز در این مرحله</MetaChip>}
+          {totalGates > 0 && <MetaChip>{faNum(passedGates)} از {faNum(totalGates)} گیت تصویب‌شده</MetaChip>}
+          <MetaChip>پیشرفت چرخه {faNum(Math.round(fillPct))}٪</MetaChip>
         </div>
       </div>
 
@@ -389,23 +363,6 @@ function MetaChip({ children }: { children: React.ReactNode }) {
       style={{ borderColor: 'var(--border-soft)', background: 'rgba(255,255,255,0.02)' }}>
       {children}
     </span>
-  )
-}
-
-function JourneyStat({ label, value, sub, tone, divider }: {
-  label: string; value: string; sub?: string; tone?: string; divider?: boolean
-}) {
-  return (
-    <div
-      className="px-3 py-2"
-      style={divider ? { borderInlineStartWidth: 1, borderInlineStartStyle: 'solid', borderColor: 'var(--border-soft)' } : undefined}
-    >
-      <div className="text-[9px] text-muted">{label}</div>
-      <div className="plc-num max-w-[170px] truncate text-sm font-extrabold" style={tone ? { color: tone } : undefined}>
-        {value}
-      </div>
-      {sub && <div className="text-[9px] text-muted">{sub}</div>}
-    </div>
   )
 }
 

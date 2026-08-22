@@ -9,7 +9,7 @@ import {
   PRE_PROJECT_CATEGORIES, STAGE_LABEL_FA, isChecklistOverdue,
   type ChecklistCategory, type ChecklistItem, type ChecklistStatus, type StageKey,
 } from '../types'
-import { Bar, Card, EmptyState, StatusDot, STATUS_COLOR, fa, faNum } from '../components/ui'
+import { Bar, Card, EmptyState, StatusDot, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum } from '../components/ui'
 import { EvidencePanel } from '../components/EvidencePanel'
 
 /**
@@ -91,7 +91,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
         {/* The rule that matters: % never opens a gate, blockers do. */}
         {readiness && readiness.blockers.length > 0 && (
           <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${STATUS_COLOR.red}55`, background: `${STATUS_COLOR.red}0d` }}>
-            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold" style={{ color: STATUS_COLOR.red }}>
+            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold" style={{ color: STATUS_TEXT_COLOR.red }}>
               <ShieldAlert size={13} /> این مرحله آماده عبور نیست
             </p>
             <p className="mb-2 text-[10px] leading-relaxed text-muted">
@@ -127,7 +127,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                   <Bar percent={pct} blocked={missingMandatory > 0} />
                   <p className="mt-1 text-[9px] text-muted">
                     {faNum(done)} از {faNum(catItems.length)}
-                    {missingMandatory > 0 && <span style={{ color: STATUS_COLOR.red }}> · {faNum(missingMandatory)} الزامی ناقص</span>}
+                    {missingMandatory > 0 && <span style={{ color: STATUS_TEXT_COLOR.red }}> · {faNum(missingMandatory)} الزامی ناقص</span>}
                   </p>
                 </div>
               )
@@ -204,13 +204,13 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                               )}
                               <div className="mt-1 flex flex-wrap gap-2 text-[9px] text-muted">
                                 {item.dueDate && (
-                                  <span style={overdue ? { color: STATUS_COLOR.red } : undefined}>
+                                  <span style={overdue ? { color: STATUS_TEXT_COLOR.red } : undefined}>
                                     سررسید {fa(item.dueDate)}{overdue && ' (گذشته)'}
                                   </span>
                                 )}
                                 {item.completionDate && <span>تکمیل {fa(item.completionDate)}</span>}
                                 {missingDoc && done && (
-                                  <span style={{ color: STATUS_COLOR.yellow }}>این بند بدون مدرک تکمیل شده است</span>
+                                  <span style={{ color: STATUS_TEXT_COLOR.yellow }}>این بند بدون مدرک تکمیل شده است</span>
                                 )}
                               </div>
                             </div>
@@ -274,7 +274,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
 
           {gate.overrideBy && (
             <div className="mb-3 rounded-lg border p-2.5" style={{ borderColor: `${STATUS_COLOR.yellow}55`, background: `${STATUS_COLOR.yellow}0d` }}>
-              <p className="text-[11px] font-bold" style={{ color: STATUS_COLOR.yellow }}>
+              <p className="text-[11px] font-bold" style={{ color: STATUS_TEXT_COLOR.yellow }}>
                 این گیت با Override تصویب شده است
               </p>
               <p className="mt-0.5 text-[10px] text-muted">دلیل ثبت‌شده: {gate.overrideReason || '—'}</p>
@@ -367,7 +367,7 @@ function MiniStat({ label, value, danger }: { label: string; value: string; dang
   return (
     <div className="rounded-lg border px-2.5 py-2" style={{ borderColor: 'var(--border-soft)' }}>
       <div className="text-[9px] text-muted">{label}</div>
-      <div className="text-sm font-extrabold" style={danger ? { color: STATUS_COLOR.red } : undefined}>{value}</div>
+      <div className="text-sm font-extrabold" style={danger ? { color: STATUS_TEXT_COLOR.red } : undefined}>{value}</div>
     </div>
   )
 }

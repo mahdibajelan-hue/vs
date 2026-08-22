@@ -1,28 +1,26 @@
 import { useMemo } from 'react'
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell,
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { deriveMilestoneStatus } from '../lib/milestones'
 import type { DerivedHealth } from '../lib/health'
 import type { StageReadiness } from '../lib/readiness'
 import {
-  HEALTH_DIMENSION_LABEL_FA, MILESTONE_STATUS_LABEL_FA, STAGE_LABEL_FA,
-  type Milestone, type MilestoneForecastPoint, type MilestoneStatus, type StageKey,
+  HEALTH_DIMENSION_LABEL_FA, STAGE_LABEL_FA,
+  type Milestone, type MilestoneForecastPoint, type StageKey,
 } from '../types'
 import { STATUS_COLOR, faNum } from './ui'
 
 /**
- * The Control Tower's charts. Four different shapes because they answer four different shapes of
+ * The Control Tower's charts. Different shapes because they answer different shapes of
  * question, not for variety's sake:
  *
  *   radar  — is the project balanced, or is one dimension dragging everything down?
  *   bars   — which stages are actually finished, and where does readiness fall off a cliff?
- *   donut  — what is the composition of the milestone book right now?
  *   area   — is delay growing over time, i.e. is this a trend or a one-off slip?
  *
- * All four are wrapped in dir="ltr": Recharts positions its axes from a left-to-right assumption,
+ * All are wrapped in dir="ltr": Recharts positions its axes from a left-to-right assumption,
  * and an RTL parent mirrors the plot away from its labels.
  */
 
@@ -131,73 +129,6 @@ export function StageReadinessBars({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ donut */
-
-const MS_COLOR: Record<MilestoneStatus, string> = {
-  achieved: STATUS_COLOR.green,
-  on_track: '#38bdf8',
-  at_risk: STATUS_COLOR.yellow,
-  delayed: STATUS_COLOR.red,
-  blocked: STATUS_COLOR.black,
-}
-
-/** Composition of the milestone book. The centre carries the number that matters — how many are
- * already achieved — so the donut is not just a coloured ring. */
-export function MilestoneDonut({ milestones }: { milestones: Milestone[] }) {
-  const { data, achieved, total } = useMemo(() => {
-    const counts = new Map<MilestoneStatus, number>()
-    for (const m of milestones) {
-      const s = deriveMilestoneStatus(m)
-      counts.set(s, (counts.get(s) ?? 0) + 1)
-    }
-    return {
-      data: [...counts.entries()].map(([status, value]) => ({
-        name: MILESTONE_STATUS_LABEL_FA[status],
-        value,
-        status,
-      })),
-      achieved: counts.get('achieved') ?? 0,
-      total: milestones.length,
-    }
-  }, [milestones])
-
-  if (total === 0) return <p className="py-10 text-center text-[11px] text-muted">Milestoneای ثبت نشده است</p>
-
-  return (
-    <div className="relative" dir="ltr" style={{ width: '100%', height: 230 }}>
-      <ResponsiveContainer>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            innerRadius="58%"
-            outerRadius="82%"
-            paddingAngle={2}
-            stroke="none"
-            isAnimationActive
-            animationDuration={800}
-          >
-            {data.map((d) => <Cell key={d.status} fill={MS_COLOR[d.status]} />)}
-          </Pie>
-          <Tooltip {...TOOLTIP_STYLE} formatter={(v, n) => [`${faNum(Number(v))} مورد`, String(n)]} />
-          <Legend
-            verticalAlign="bottom"
-            height={28}
-            formatter={(v) => <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{v}</span>}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="pointer-events-none absolute inset-x-0 top-[38%] -translate-y-1/2 text-center" dir="rtl">
-        <div className="plc-num text-xl font-extrabold" style={{ color: STATUS_COLOR.green }}>
-          {faNum(achieved)}
-        </div>
-        <div className="text-[9px] text-muted">محقق‌شده از {faNum(total)}</div>
-      </div>
     </div>
   )
 }
