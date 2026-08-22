@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, Check, Lock, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, Lock, MessageSquareText, Paperclip, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useLifecycleStore } from '../store/useLifecycleStore'
 import { useProjectAnalysis } from '../lib/useProjectAnalysis'
@@ -10,6 +10,7 @@ import {
   type ChecklistCategory, type ChecklistItem, type ChecklistStatus, type StageKey,
 } from '../types'
 import { Bar, Card, EmptyState, StatusDot, STATUS_COLOR, fa, faNum } from '../components/ui'
+import { EvidencePanel } from '../components/EvidencePanel'
 
 /**
  * Stage detail: the checklist that determines readiness, and the gate that consumes it.
@@ -32,6 +33,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
   const [gateComment, setGateComment] = useState('')
   const [overrideMode, setOverrideMode] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
+  const [openEvidence, setOpenEvidence] = useState<string | null>(null)
 
   const readiness = analysis.readiness.find((r) => r.stageKey === stageKey)
   const gate = bundle.gates.find((g) => g.stageKey === stageKey)
@@ -152,11 +154,19 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                     {catItems.map((item) => {
                       const overdue = isChecklistOverdue(item)
                       const done = item.status === 'completed' || item.status === 'waived'
+                      const missingDoc = item.requiresDocument && !item.evidenceUrl
+                      const expanded = openEvidence === item.id
                       return (
                         <li
                           key={item.id}
-                          className="rounded-lg border px-2.5 py-2"
-                          style={{ borderColor: overdue ? `${STATUS_COLOR.red}55` : 'var(--border-soft)' }}
+                          className="rounded-lg border px-2.5 py-2 transition-colors"
+                          style={{
+                            borderColor: overdue
+                              ? `${STATUS_COLOR.red}55`
+                              : missingDoc && done
+                                ? `${STATUS_COLOR.yellow}55`
+                                : 'var(--border-soft)',
+                          }}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
@@ -169,13 +179,29 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                     style={{ background: 'var(--border-soft)' }}>الزامی</span>
                                 )}
                                 {item.requiresDocument && (
-                                  <span className="text-[8px] text-muted">نیازمند مدرک</span>
+                                  <span
+                                    className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[8px] font-bold"
+                                    style={
+                                      item.evidenceUrl
+                                        ? { background: `${STATUS_COLOR.green}22`, color: STATUS_COLOR.green }
+                                        : { background: `${STATUS_COLOR.yellow}22`, color: STATUS_COLOR.yellow }
+                                    }
+                                  >
+                                    <Paperclip size={8} />
+                                    {item.evidenceUrl ? 'مدرک پیوست شد' : 'نیازمند مدرک'}
+                                  </span>
                                 )}
                                 {item.requiresApproval && (
                                   <span className="text-[8px] text-muted">نیازمند تأیید</span>
                                 )}
                               </div>
                               {item.guidance && <p className="mt-0.5 text-[9px] leading-relaxed text-muted">{item.guidance}</p>}
+                              {item.comment && !expanded && (
+                                <p className="mt-1 flex items-start gap-1 text-[9px] leading-relaxed text-secondary">
+                                  <MessageSquareText size={9} className="mt-0.5 shrink-0 text-muted" />
+                                  {item.comment}
+                                </p>
+                              )}
                               <div className="mt-1 flex flex-wrap gap-2 text-[9px] text-muted">
                                 {item.dueDate && (
                                   <span style={overdue ? { color: STATUS_COLOR.red } : undefined}>
@@ -183,13 +209,26 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                   </span>
                                 )}
                                 {item.completionDate && <span>تکمیل {fa(item.completionDate)}</span>}
-                                {item.requiresDocument && !item.evidenceUrl && item.status === 'completed' && (
-                                  <span style={{ color: STATUS_COLOR.yellow }}>مدرک پیوست نشده</span>
+                                {missingDoc && done && (
+                                  <span style={{ color: STATUS_COLOR.yellow }}>این بند بدون مدرک تکمیل شده است</span>
                                 )}
                               </div>
                             </div>
 
                             <div className="flex shrink-0 items-center gap-1">
+                              {/* The upload entry point sits on the item itself, so "where do I attach it?" never needs asking. */}
+                              <button
+                                onClick={() => setOpenEvidence(expanded ? null : item.id)}
+                                title="بارگذاری مدرک و ثبت توضیح"
+                                className="flex items-center gap-0.5 rounded-md border px-1.5 py-1 text-[9px] transition-colors hover:border-sky-400/60 hover:text-sky-400"
+                                style={{
+                                  borderColor: missingDoc ? `${STATUS_COLOR.yellow}66` : 'var(--border-soft)',
+                                  color: missingDoc ? STATUS_COLOR.yellow : undefined,
+                                }}
+                              >
+                                <Paperclip size={10} />
+                                <ChevronDown size={9} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                              </button>
                               <select
                                 value={item.status}
                                 onChange={(e) => setStatus(item, e.target.value as ChecklistStatus)}
@@ -202,6 +241,8 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                               </select>
                             </div>
                           </div>
+
+                          {expanded && <EvidencePanel item={item} onClose={() => setOpenEvidence(null)} />}
                         </li>
                       )
                     })}

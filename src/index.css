@@ -664,3 +664,154 @@ body {
     box-shadow: none !important;
   }
 }
+
+/* ==========================================================================
+   Project Lifecycle & Control Tower — motion and surface layer.
+
+   Everything here is prefixed `plc-`. Colour still carries status only: the
+   gradients below encode PROGRESS along the lifecycle rail (neutral slate →
+   module accent), never health. Health stays on the dots and pills.
+   ========================================================================== */
+
+/* --- the journey rail ---------------------------------------------------- */
+
+.plc-rail-track {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.24));
+}
+
+.plc-rail-fill {
+  background: linear-gradient(270deg, #0ea5e9 0%, #38bdf8 55%, #7dd3fc 100%);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Faint travelling sheen so the rail reads as a live system, not a static bar. */
+.plc-rail-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  background-size: 180px 100%;
+  background-repeat: no-repeat;
+  animation: plc-sheen 3.4s linear infinite;
+}
+
+@keyframes plc-sheen {
+  0% { background-position: -180px 0; }
+  100% { background-position: calc(100% + 180px) 0; }
+}
+
+/* --- the "you are here" beacon ------------------------------------------- */
+
+.plc-beacon-ring {
+  animation: plc-beacon 2.4s cubic-bezier(0.25, 0.6, 0.35, 1) infinite;
+}
+
+.plc-beacon-ring-2 {
+  animation-delay: 1.2s;
+}
+
+@keyframes plc-beacon {
+  0%   { transform: scale(0.75); opacity: 0.75; }
+  70%  { transform: scale(2.1);  opacity: 0; }
+  100% { transform: scale(2.1);  opacity: 0; }
+}
+
+/* --- staggered node entrance --------------------------------------------- */
+
+.plc-node-in {
+  animation: plc-node-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes plc-node-in {
+  from { opacity: 0; transform: translateY(9px) scale(0.9); }
+  to   { opacity: 1; transform: none; }
+}
+
+.plc-node-btn {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.plc-node-btn:hover {
+  transform: translateY(-3px);
+}
+
+/* --- card entrance for the Control Tower sections ------------------------ */
+
+.plc-rise {
+  animation: plc-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes plc-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- hero surface -------------------------------------------------------- */
+
+.plc-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.plc-hero::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -55%;
+  inset-inline-end: -12%;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Numeric readouts in the tower are tabular so columns of figures line up. */
+.plc-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* --- schedule ribbon ----------------------------------------------------- */
+
+.plc-ribbon-baseline {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.30), rgba(148, 163, 184, 0.18));
+}
+
+.plc-ribbon-elapsed {
+  background: linear-gradient(270deg, rgba(14, 165, 233, 0.85), rgba(56, 189, 248, 0.55));
+}
+
+.plc-ribbon-overrun {
+  background: repeating-linear-gradient(45deg, rgba(208, 59, 59, 0.85) 0 5px, rgba(208, 59, 59, 0.45) 5px 10px);
+}
+
+.plc-today-line {
+  animation: plc-today-glow 3s ease-in-out infinite;
+}
+
+@keyframes plc-today-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(250, 178, 25, 0); }
+  50%      { box-shadow: 0 0 10px rgba(250, 178, 25, 0.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plc-rail-fill::after,
+  .plc-beacon-ring,
+  .plc-node-in,
+  .plc-rise,
+  .plc-today-line {
+    animation: none !important;
+  }
+  .plc-node-in,
+  .plc-rise {
+    opacity: 1;
+    transform: none;
+  }
+  .plc-rail-fill,
+  .plc-node-btn {
+    transition-duration: 1ms !important;
+  }
+}

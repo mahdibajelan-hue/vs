@@ -4421,3 +4421,35 @@ begin
     execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 21f. Evidence storage for checklist items that carry requires_document.
+--
+--      Mirrors the finance-docs bucket, with one deliberate difference: write is
+--      authenticated rather than admin-only. A checklist item is completed by the
+--      project member who did the work, not by an administrator, so gating upload
+--      on is_admin_user() would leave the mandatory-evidence gap it is meant to
+--      close. Read stays authenticated-only — these are internal governance
+--      records, never public. Objects are keyed `${projectId}/${uuid}.${ext}`.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('plc-docs', 'plc-docs', false)
+on conflict (id) do nothing;
+
+drop policy if exists "plc_docs_read_authenticated" on storage.objects;
+create policy "plc_docs_read_authenticated" on storage.objects
+  for select using (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+drop policy if exists "plc_docs_write_authenticated" on storage.objects;
+create policy "plc_docs_write_authenticated" on storage.objects
+  for insert with check (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+drop policy if exists "plc_docs_update_authenticated" on storage.objects;
+create policy "plc_docs_update_authenticated" on storage.objects
+  for update using (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+-- Delete stays admin-only: evidence backing an approved gate is part of the
+-- audit trail, so removing it is a governance act, not routine housekeeping.
+drop policy if exists "plc_docs_delete_admin" on storage.objects;
+create policy "plc_docs_delete_admin" on storage.objects
+  for delete using (bucket_id = 'plc-docs' and is_admin_user());
