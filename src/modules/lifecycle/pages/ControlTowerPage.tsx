@@ -1,4 +1,7 @@
-import { AlertTriangle, ArrowLeft, CalendarClock, ChevronLeft, Flag, ShieldAlert, Target } from 'lucide-react'
+import {
+  Activity, AlertTriangle, ArrowLeft, BarChart3, Bell, CalendarClock, ChevronLeft, Flag,
+  Gauge, HeartPulse, ShieldAlert, ShieldCheck, Target, TrendingUp,
+} from 'lucide-react'
 import type { MasterProject } from '../../masterdata/types'
 import { useLifecycleStore } from '../store/useLifecycleStore'
 import { useProjectAnalysis } from '../lib/useProjectAnalysis'
@@ -143,6 +146,7 @@ export function ControlTowerPage({
           span={3}
           eyebrow="Mandatory items"
           title={`بندهای الزامی مرحله «${stageLabel}»`}
+          icon={<Target size={13} />}
           delay={120}
         >
           <ReadinessWaffle readiness={analysis.currentReadiness} />
@@ -152,6 +156,7 @@ export function ControlTowerPage({
           span={4}
           eyebrow="Gates"
           title="نردبان گیت‌ها"
+          icon={<ShieldCheck size={13} />}
           delay={160}
           edge={analysis.blockedGateCount > 0 ? 'red' : undefined}
         >
@@ -160,11 +165,12 @@ export function ControlTowerPage({
             gateStatuses={analysis.gateStatuses}
             readiness={analysis.readiness}
             currentStageKey={currentStageKey}
+            stageOrder={stageOrder}
             onOpenStage={onOpenStage}
           />
         </TowerTile>
 
-        <TowerTile span={5} eyebrow="Management attention" title="نیازمند توجه مدیریت" delay={200}>
+        <TowerTile span={5} eyebrow="Management attention" title="نیازمند توجه مدیریت" icon={<Bell size={13} />} delay={200}>
           {analysis.attention.length === 0 ? (
             <EmptyState message="موردی که نیاز به دخالت فوری مدیریت داشته باشد شناسایی نشد" />
           ) : (
@@ -203,21 +209,21 @@ export function ControlTowerPage({
         </TowerTile>
 
         {/* ── Row 4 — the analytics ────────────────────────────────── */}
-        <TowerTile span={4} eyebrow="Balance" title="توازن سلامت پروژه" delay={240}>
+        <TowerTile span={4} eyebrow="Balance" title="توازن سلامت پروژه" icon={<Activity size={13} />} delay={240}>
           <HealthRadar health={analysis.health} />
           <p className="text-[9px] leading-relaxed text-muted">
             شکل نامتوازن یعنی یک بُعد کل پروژه را پایین می‌کشد.
           </p>
         </TowerTile>
 
-        <TowerTile span={4} eyebrow="Readiness by stage" title="آمادگی مراحل چرخه عمر" delay={280}>
+        <TowerTile span={4} eyebrow="Readiness by stage" title="آمادگی مراحل چرخه عمر" icon={<BarChart3 size={13} />} delay={280}>
           <StageReadinessBars readiness={analysis.readiness} stageOrder={stageOrder} />
           <p className="text-[9px] leading-relaxed text-muted">
             میله خاکستری = مرحله دارای مانع؛ درصد بالا در آن به معنی نزدیک‌بودن به تصویب نیست.
           </p>
         </TowerTile>
 
-        <TowerTile span={4} eyebrow="Forecast drift" title="روند رانش پیش‌بینی" delay={320}>
+        <TowerTile span={4} eyebrow="Forecast drift" title="روند رانش پیش‌بینی" icon={<TrendingUp size={13} />} delay={320}>
           <DriftTrendChart history={bundle.forecastHistory} milestones={bundle.milestones} />
           <p className="text-[9px] leading-relaxed text-muted">
             یک جابه‌جایی تاریخ رویداد است؛ منحنی صعودی، روند.
@@ -229,6 +235,7 @@ export function ControlTowerPage({
           span={7}
           eyebrow="Milestones at risk"
           title="Milestoneهای در معرض تأخیر"
+          icon={<Flag size={13} />}
           delay={360}
           edge={analysis.milestoneKpis.criticalDelayed > 0 ? 'red' : undefined}
           action={
@@ -271,7 +278,7 @@ export function ControlTowerPage({
           )}
         </TowerTile>
 
-        <TowerTile span={5} eyebrow="Schedule & actions" title="شاخص‌های کلیدی" delay={400}>
+        <TowerTile span={5} eyebrow="Schedule & actions" title="شاخص‌های کلیدی" icon={<Gauge size={13} />} delay={400}>
           <div className="grid grid-cols-2 gap-2">
             <Metric label="اتمام Baseline" value={fa(analysis.baselineFinish)} />
             <Metric
@@ -303,7 +310,7 @@ export function ControlTowerPage({
         </TowerTile>
 
         {/* ── Row 6 — the ten dimensions, compact ──────────────────── */}
-        <TowerTile span={12} eyebrow="Health dimensions" title="سلامت به تفکیک بُعد" delay={440}>
+        <TowerTile span={12} eyebrow="Health dimensions" title="سلامت به تفکیک بُعد" icon={<HeartPulse size={13} />} delay={440}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {analysis.health.map((h) => (
               <div

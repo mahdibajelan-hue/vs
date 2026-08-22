@@ -60,8 +60,9 @@ export function HealthRadar({ health }: { health: DerivedHealth[] }) {
             dataKey="score"
             stroke="#38bdf8"
             fill="#38bdf8"
-            fillOpacity={0.28}
+            fillOpacity={0.32}
             strokeWidth={2}
+            dot={{ r: 3, fill: '#0ea5e9', stroke: '#e0f2fe', strokeWidth: 1.5 }}
             isAnimationActive
             animationDuration={900}
           />

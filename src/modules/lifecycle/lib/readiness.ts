@@ -14,6 +14,8 @@ export interface ReadinessBlocker {
   kind: 'mandatory_checklist' | 'missing_document' | 'missing_approval' | 'milestone_not_achieved' | 'critical_issue' | 'critical_risk' | 'overdue_item'
   label: string
   detail: string
+  /** Raw ISO date, present only for `overdue_item` — UI formats it (Jalali, Persian digits) at render time. */
+  dueDate?: string | null
 }
 
 export interface StageReadiness {
@@ -83,7 +85,7 @@ export function computeStageReadiness(
   const overdue = stageItems.filter((i) => isChecklistOverdue(i, today))
   for (const item of overdue) {
     if (item.isMandatory) {
-      blockers.push({ kind: 'overdue_item', label: item.title, detail: `سررسید گذشته (${item.dueDate})` })
+      blockers.push({ kind: 'overdue_item', label: item.title, detail: 'سررسید گذشته', dueDate: item.dueDate })
     }
   }
 

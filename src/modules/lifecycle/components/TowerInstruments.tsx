@@ -1,4 +1,5 @@
-import { Lock, ShieldCheck, ShieldQuestion, ShieldX } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, HardHat, Lock, ShieldCheck, ShieldQuestion, ShieldX } from 'lucide-react'
 import type { StageReadiness } from '../lib/readiness'
 import {
   GATE_STATUS_LABEL_FA, HEALTH_DIMENSION_LABEL_FA, HEALTH_STATUS_LABEL_FA, STAGE_LABEL_FA,
@@ -95,67 +96,216 @@ function GateGlyph({ status, color }: { status: GateStatus; color: string }) {
   return <ShieldQuestion {...p} />
 }
 
+/** Engineering, procurement and execution run as one contracting package in an EPC delivery
+ * model — the ladder folds them into a single "گیت EPC" row so the list reads as governance
+ * checkpoints, not an inventory of every stage. Neither engineering nor procurement carries its
+ * own gate in the default template (only execution's "تکمیل مکانیکی" does), so this row is the
+ * only checkpoint that ever existed for the design/buy phase — not a re-labelling of one that was
+ * already there. */
+const EPC_STAGE_KEYS: StageKey[] = ['engineering', 'procurement', 'execution']
+
 /**
- * The five gates as a ladder.
+ * Gates as a ladder — the EPC trio folded into one expandable row.
  *
  * A gate in this domain behaves like a valve: open or shut, never 40% open. So it gets a list
  * with a hard verdict per row and the blocker count that keeps it shut — not a progress bar,
- * which would imply the wrong physics.
+ * which would imply the wrong physics. The EPC row states the worst of the three sub-phases and
+ * expands in place to name which one; clicking a sub-row still goes to that phase's own checklist
+ * and gate, same as every other row.
  */
 export function GateLadder({
-  gates, gateStatuses, readiness, currentStageKey, onOpenStage,
+  gates, gateStatuses, readiness, currentStageKey, stageOrder, onOpenStage,
 }: {
   gates: ProjectGate[]
   gateStatuses: Map<string, GateStatus>
   readiness: StageReadiness[]
   currentStageKey: string
+  /** Full stage sequence (all 11 keys) — used only to place the synthetic EPC row at the right
+   * position among the real gates, and to know which of the three EPC phases actually exist for
+   * this project's template. */
+  stageOrder: string[]
   onOpenStage: (stageKey: string) => void
 }) {
-  if (gates.length === 0) {
+  const [epcOpen, setEpcOpen] = useState(() => EPC_STAGE_KEYS.includes(currentStageKey as StageKey))
+
+  const epcPresentKeys = EPC_STAGE_KEYS.filter((k) => stageOrder.includes(k))
+  const otherGates = gates.filter((g) => !EPC_STAGE_KEYS.includes(g.stageKey as StageKey))
+
+  if (gates.length === 0 && epcPresentKeys.length === 0) {
     return <p className="py-8 text-center text-[11px] text-muted">گیتی برای این پروژه تعریف نشده است</p>
   }
 
-  return (
-    <ul className="space-y-1">
-      {gates.map((gate) => {
-        const status = gateStatuses.get(gate.stageKey) ?? gate.status
-        const tone = GATE_TONE[status]
-        const r = readiness.find((x) => x.stageKey === gate.stageKey)
-        const blockers = r?.blockers.length ?? 0
-        const isCurrent = gate.stageKey === currentStageKey
+  type Row = { sortIndex: number; render: () => React.ReactNode }
+  const rows: Row[] = otherGates.map((gate) => ({
+    sortIndex: stageOrder.indexOf(gate.stageKey),
+    render: () => <GateRow key={gate.id} gate={gate} status={gateStatuses.get(gate.stageKey) ?? gate.status}
+      blockers={readiness.find((r) => r.stageKey === gate.stageKey)?.blockers.length ?? 0}
+      isCurrent={gate.stageKey === currentStageKey} onOpenStage={onOpenStage} />,
+  }))
 
-        return (
-          <li key={gate.id}>
-            <button
-              onClick={() => onOpenStage(gate.stageKey)}
-              className="plc-gate-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-right"
-              style={{
-                borderColor: isCurrent ? 'rgba(56,189,248,0.4)' : 'var(--border-soft)',
-                background: isCurrent ? 'rgba(56,189,248,0.06)' : undefined,
-              }}
-            >
-              <GateGlyph status={status} color={tone} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[11px] font-bold">{gate.name}</span>
-                <span className="block truncate text-[9px] text-muted">
-                  {STAGE_LABEL_FA[gate.stageKey as StageKey] ?? gate.stageKey}
-                </span>
+  if (epcPresentKeys.length > 0) {
+    const epcReadiness = readiness.filter((r) => epcPresentKeys.includes(r.stageKey as StageKey))
+    const epcGates = gates.filter((g) => epcPresentKeys.includes(g.stageKey as StageKey))
+    const epcBlockers = epcReadiness.reduce((n, r) => n + r.blockers.length, 0)
+    const epcAnyBlocked = epcGates.some((g) => {
+      const s = gateStatuses.get(g.stageKey) ?? g.status
+      return s === 'blocked' || s === 'rejected'
+    })
+    const epcAllApproved = epcGates.length > 0 && epcGates.every((g) => (gateStatuses.get(g.stageKey) ?? g.status) === 'approved')
+    const epcStatus: GateStatus =
+      epcAnyBlocked ? 'blocked'
+      : epcBlockers > 0 ? 'in_progress'
+      : epcAllApproved ? 'approved'
+      : epcReadiness.length > 0 && epcReadiness.every((r) => r.isReady) ? 'ready'
+      : epcReadiness.some((r) => r.percent > 0) ? 'in_progress'
+      : 'not_started'
+    const epcTone = GATE_TONE[epcStatus]
+    const epcIsCurrent = EPC_STAGE_KEYS.includes(currentStageKey as StageKey)
+
+    rows.push({
+      sortIndex: Math.min(...epcPresentKeys.map((k) => stageOrder.indexOf(k)).filter((i) => i >= 0)),
+      render: () => (
+        <li key="epc">
+          <button
+            onClick={() => setEpcOpen((v) => !v)}
+            className="plc-gate-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-right"
+            style={{
+              borderColor: epcIsCurrent ? 'rgba(56,189,248,0.4)' : 'var(--border-soft)',
+              background: epcIsCurrent ? 'rgba(56,189,248,0.06)' : undefined,
+            }}
+          >
+            <HardHat size={13} style={{ color: epcTone }} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[11px] font-bold">گیت EPC</span>
+              <span className="block truncate text-[9px] text-muted">
+                {epcPresentKeys.map((k) => STAGE_LABEL_FA[k]).join(' · ')}
               </span>
-              <span className="shrink-0 text-left">
-                <span className="block text-[10px] font-extrabold" style={{ color: tone }}>
-                  {GATE_STATUS_LABEL_FA[status]}
-                </span>
-                {blockers > 0 && (
-                  <span className="flex items-center justify-end gap-0.5 text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>
-                    <Lock size={8} /> {faNum(blockers)} مانع
-                  </span>
-                )}
+            </span>
+            <span className="shrink-0 text-left">
+              <span className="block text-[10px] font-extrabold" style={{ color: epcTone }}>
+                {GATE_STATUS_LABEL_FA[epcStatus]}
               </span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+              {epcBlockers > 0 && (
+                <span className="flex items-center justify-end gap-0.5 text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+                  <Lock size={8} /> {faNum(epcBlockers)} مانع
+                </span>
+              )}
+            </span>
+            <ChevronDown size={13} className="shrink-0 text-muted transition-transform"
+              style={{ transform: epcOpen ? 'rotate(180deg)' : undefined }} />
+          </button>
+
+          {epcOpen && (
+            <ul className="mt-1 space-y-1 border-e-2 pe-0 ps-3" style={{ borderColor: 'rgba(56,189,248,0.25)', marginInlineEnd: 6 }}>
+              {epcPresentKeys.map((k) => {
+                const g = epcGates.find((gate) => gate.stageKey === k)
+                const r = epcReadiness.find((x) => x.stageKey === k)
+                const status: GateStatus = g
+                  ? gateStatuses.get(g.stageKey) ?? g.status
+                  : r?.isReady ? 'ready' : r && r.percent > 0 ? 'in_progress' : 'not_started'
+                return (
+                  <SubGateRow
+                    key={k}
+                    stageKey={k}
+                    gateName={g?.name ?? null}
+                    status={status}
+                    blockers={r?.blockers.length ?? 0}
+                    isCurrent={k === currentStageKey}
+                    onOpenStage={onOpenStage}
+                  />
+                )
+              })}
+            </ul>
+          )}
+        </li>
+      ),
+    })
+  }
+
+  return <ul className="space-y-1">{rows.sort((a, b) => a.sortIndex - b.sortIndex).map((r) => r.render())}</ul>
+}
+
+function GateRow({ gate, status, blockers, isCurrent, onOpenStage }: {
+  gate: ProjectGate
+  status: GateStatus
+  blockers: number
+  isCurrent: boolean
+  onOpenStage: (stageKey: string) => void
+}) {
+  const tone = GATE_TONE[status]
+  return (
+    <li>
+      <button
+        onClick={() => onOpenStage(gate.stageKey)}
+        className="plc-gate-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-right"
+        style={{
+          borderColor: isCurrent ? 'rgba(56,189,248,0.4)' : 'var(--border-soft)',
+          background: isCurrent ? 'rgba(56,189,248,0.06)' : undefined,
+        }}
+      >
+        <GateGlyph status={status} color={tone} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11px] font-bold">{gate.name}</span>
+          <span className="block truncate text-[9px] text-muted">
+            {STAGE_LABEL_FA[gate.stageKey as StageKey] ?? gate.stageKey}
+          </span>
+        </span>
+        <span className="shrink-0 text-left">
+          <span className="block text-[10px] font-extrabold" style={{ color: tone }}>
+            {GATE_STATUS_LABEL_FA[status]}
+          </span>
+          {blockers > 0 && (
+            <span className="flex items-center justify-end gap-0.5 text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+              <Lock size={8} /> {faNum(blockers)} مانع
+            </span>
+          )}
+        </span>
+      </button>
+    </li>
+  )
+}
+
+/** A sub-phase row inside the expanded EPC group. Same information as a full gate row, quieter
+ * styling, and it opens the real StageGatePage for that phase — the EPC row is a lens onto the
+ * three real stages, never a fourth record of its own. */
+function SubGateRow({ stageKey, gateName, status, blockers, isCurrent, onOpenStage }: {
+  stageKey: string
+  gateName: string | null
+  status: GateStatus
+  blockers: number
+  isCurrent: boolean
+  onOpenStage: (stageKey: string) => void
+}) {
+  const tone = GATE_TONE[status]
+  return (
+    <li>
+      <button
+        onClick={() => onOpenStage(stageKey)}
+        className="plc-gate-row flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-right"
+        style={{
+          borderColor: isCurrent ? 'rgba(56,189,248,0.35)' : 'var(--border-soft)',
+          background: isCurrent ? 'rgba(56,189,248,0.05)' : 'rgba(255,255,255,0.015)',
+        }}
+      >
+        <GateGlyph status={status} color={tone} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[10px] font-bold">
+            {STAGE_LABEL_FA[stageKey as StageKey] ?? stageKey}
+          </span>
+          {gateName && <span className="block truncate text-[9px] text-muted">{gateName}</span>}
+        </span>
+        <span className="shrink-0 text-left">
+          <span className="block text-[9px] font-extrabold" style={{ color: tone }}>
+            {GATE_STATUS_LABEL_FA[status]}
+          </span>
+          {blockers > 0 && (
+            <span className="flex items-center justify-end gap-0.5 text-[8px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+              <Lock size={7} /> {faNum(blockers)}
+            </span>
+          )}
+        </span>
+      </button>
+    </li>
   )
 }
 
