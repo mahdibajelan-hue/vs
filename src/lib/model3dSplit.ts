@@ -60,6 +60,22 @@ export interface SplitStats {
    * is a fused export, not a picking bug. */
   biggestPartName: string
   biggestPartTriangles: number
+  /** Every selectable mesh name in the loaded model, used to drop links that name a mesh which no
+   * longer exists — a pre-split parent name, for instance. */
+  meshNames: string[]
+}
+
+/**
+ * Keeps only the names that still exist in the loaded model.
+ *
+ * A link saved before mesh splitting names a whole parent mesh that has since been replaced by its
+ * `{parent}#k` components. Carrying such a name into the selection editor selects nothing
+ * meaningful and, worse, used to highlight the parent's entire run — so it is dropped and the user
+ * re-picks. The stored link itself is untouched until they save.
+ */
+export function pruneToExistingMeshes(names: string[], existing: string[]): string[] {
+  const set = new Set(existing)
+  return names.filter((n) => set.has(n))
 }
 
 /**
@@ -197,6 +213,7 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
     elapsedMs: 0,
     biggestPartName: '',
     biggestPartTriangles: 0,
+    meshNames: [],
   }
 
   const notePart = (name: string, triangles: number) => {
@@ -319,6 +336,11 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
     stats.meshesAfter += replacements.length
     stats.largestSplit = Math.max(stats.largestSplit, replacements.length)
   }
+
+  // Re-walked after all replacements so the list reflects the final, selectable scene.
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh) stats.meshNames.push(child.name)
+  })
 
   stats.elapsedMs = Math.round(performance.now() - started)
   return stats

@@ -9,7 +9,7 @@ import { canEdit } from '../lib/permissions'
 import { getProjectModel3dSignedUrl } from '../lib/model3dStorage'
 import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
-import type { SplitStats } from '../lib/model3dSplit'
+import { pruneToExistingMeshes, type SplitStats } from '../lib/model3dSplit'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
 import { WeldMap2D } from '../components/Model3D/WeldMap2D'
 import { JointInfoCard } from '../components/Model3D/JointInfoCard'
@@ -110,6 +110,7 @@ export function Model3DPage({ project }: { project: Project }) {
     setPendingJointPosition(null)
     setMeshSelectionTarget(null)
     setSelectedMeshNames([])
+    setDroppedMeshLinks(0)
   }
 
   const startPlaceJoint = () => {
@@ -142,18 +143,32 @@ export function Model3DPage({ project }: { project: Project }) {
     el.style.top = `${pos.y}px`
   }, [])
 
+  /**
+   * Links saved before mesh splitting existed name a whole parent mesh that has since been
+   * replaced by its components. Carrying such a name into the editor made the parent's entire
+   * pipe run appear selected, which is exactly the problem splitting was meant to fix — so stale
+   * names are dropped here and the user re-picks. `droppedMeshLinks` drives the notice explaining
+   * why the selection came back empty.
+   */
+  const [droppedMeshLinks, setDroppedMeshLinks] = useState(0)
+
+  const openMeshSelection = (stored: string[]) => {
+    const usable = splitStats ? pruneToExistingMeshes(stored, splitStats.meshNames) : stored
+    setDroppedMeshLinks(stored.length - usable.length)
+    setSelectedMeshNames(usable)
+    setViewerMode('selectMeshes')
+  }
+
   const startSpoolLink = (lineId: string, startJointId: string, endJointId: string, existing?: Spool | null) => {
     setPageView('3d')
     setMeshSelectionTarget({ kind: 'spool', lineId, startJointId, endJointId, spoolId: existing?.id })
-    setSelectedMeshNames(existing?.meshObjectNames ?? [])
-    setViewerMode('selectMeshes')
+    openMeshSelection(existing?.meshObjectNames ?? [])
   }
 
   const startEquipmentLink = (equipment: Equipment3D) => {
     setPageView('3d')
     setMeshSelectionTarget({ kind: 'equipment', equipmentId: equipment.id })
-    setSelectedMeshNames(equipment.meshObjectNames)
-    setViewerMode('selectMeshes')
+    openMeshSelection(equipment.meshObjectNames)
   }
 
   const confirmMeshSelection = async () => {
@@ -492,6 +507,14 @@ export function Model3DPage({ project }: { project: Project }) {
                       )}
                     </span>
                     <div className="flex shrink-0 gap-2">
+                      {selectedMeshNames.length > 0 && (
+                        <button
+                          onClick={() => setSelectedMeshNames([])}
+                          className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10"
+                        >
+                          پاک‌کردن انتخاب
+                        </button>
+                      )}
                       <button onClick={resetInteraction} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">
                         انصراف
                       </button>
@@ -503,6 +526,12 @@ export function Model3DPage({ project }: { project: Project }) {
                       </button>
                     </div>
                   </div>
+                  {droppedMeshLinks > 0 && (
+                    <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-amber-200">
+                      پیوند قبلی این مورد روی کل مش ذخیره شده بود (پیش از تفکیک مدل) و دیگر به یک جزء مشخص اشاره نمی‌کند،
+                      بنابراین کنار گذاشته شد. حالا روی همان لوله‌ای که می‌خواهید کلیک کنید و «تایید» بزنید.
+                    </p>
+                  )}
                   {selectedMeshNames.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 overflow-y-auto border-t border-white/10 pt-2">
                       {selectedMeshNames.map((name) => (

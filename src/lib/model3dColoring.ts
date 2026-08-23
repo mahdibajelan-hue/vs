@@ -44,7 +44,15 @@ export function meshColor(map: Map<string, string>, meshName: string): string | 
   return map.get(meshName) ?? map.get(baseMeshName(meshName))
 }
 
-/** True when `meshName` — or the parent it was split from — appears in the selected set. */
+/**
+ * True only when `meshName` is itself selected.
+ *
+ * Deliberately NOT tolerant of base names, unlike meshColor(). A link saved before splitting
+ * existed names the whole parent mesh, and matching that name against every `{parent}#k` child
+ * lit up an entire pipe run the moment the editor opened — indistinguishable from the
+ * whole-run-selection bug splitting was meant to fix. Stale parent names are dropped when the
+ * editor opens instead (see pruneToExistingMeshes), so selection here can stay exact.
+ */
 export function isMeshSelected(selected: Set<string>, meshName: string): boolean {
-  return selected.has(meshName) || selected.has(baseMeshName(meshName))
+  return selected.has(meshName)
 }
