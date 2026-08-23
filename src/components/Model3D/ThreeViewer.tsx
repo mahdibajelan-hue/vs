@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import type { Equipment3D, Joint, Point3D, Spool } from '../../types'
 import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, isMeshSelected, meshColor, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
 import { splitMergedMeshes, type SplitStats } from '../../lib/model3dSplit'
+import { cutMeshesAtJoints, type JointCutStats } from '../../lib/model3dJointCut'
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
@@ -164,6 +165,8 @@ interface ThreeViewerProps {
   /** Reports how the loaded model was broken into selectable parts — surfaced in the UI so a model
    * whose solids stayed fused is visible rather than just feeling broken. */
   onSplitStats?: (stats: SplitStats) => void
+  /** Reports how many spool spans the weld-based cut recovered from fused runs. */
+  onJointCutStats?: (stats: JointCutStats) => void
 }
 
 /**
@@ -188,6 +191,7 @@ export function ThreeViewer({
   selectedJointId = null,
   onJointScreenPosition,
   onSplitStats,
+  onJointCutStats,
 }: ThreeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
@@ -200,10 +204,22 @@ export function ThreeViewer({
   // Kept fresh via this cheap effect so the click handler and animate loop (bound once per model
   // load) always see the latest mode/callbacks/selection without needing to re-bind — editing
   // props never triggers a reload.
-  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats })
+  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints })
   useEffect(() => {
-    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats }
-  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats])
+    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints }
+  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints])
+
+  /**
+   * Which welds define the cut. The model is reloaded when this changes, because cutting is
+   * destructive — re-deriving the parts from a fresh load is honest, where incremental surgery on
+   * already-cut geometry would drift. Only placed joints matter; editing a joint's metadata does
+   * not move a cut line and so must not trigger a reload.
+   */
+  const jointCutKey = joints
+    .filter((j) => j.position)
+    .map((j) => `${j.lineId}:${j.sequenceNumber}:${j.position!.x},${j.position!.y},${j.position!.z}`)
+    .sort()
+    .join('|')
 
   useEffect(() => {
     const container = containerRef.current
@@ -335,10 +351,24 @@ export function ThreeViewer({
         // until it is broken into its individual solids a click can only ever select the entire
         // run. Each component then needs its own material clone to be coloured independently.
         const stats = splitMergedMeshes(object)
+
+        // Second pass, for runs the first cannot touch: a pipe authored as one continuous welded
+        // surface has no internal boundary to find, so it is divided at the welds the user has
+        // already placed instead. Runs before materials are cloned, like the split above, so every
+        // resulting part colours independently.
+        scene.add(object)
+        const jointStats = cutMeshesAtJoints(object, liveRef.current.joints)
+        if (jointStats.partsCreated > 0) {
+          stats.meshesAfter += jointStats.partsCreated - jointStats.meshesCut
+          stats.meshNames = []
+          object.traverse((child) => {
+            if (child instanceof THREE.Mesh) stats.meshNames.push(child.name)
+          })
+        }
         liveRef.current.onSplitStats?.(stats)
+        liveRef.current.onJointCutStats?.(jointStats)
 
         prepareMaterialsForColoring(object)
-        scene.add(object)
         objectRef.current = object
 
         const fitDistance = 24
@@ -386,11 +416,12 @@ export function ThreeViewer({
       objectRef.current = null
       markersGroupRef.current = null
     }
-    // joints/equipment3d/spools/mode/selectedMeshNames/callbacks intentionally excluded: this
-    // effect only (re)loads the model itself on url change — see the coloring effect below for
-    // how progress edits get reflected without a reload.
+    // equipment3d/spools/mode/selectedMeshNames/callbacks intentionally excluded: this effect
+    // only (re)loads the model itself — see the coloring effect below for how progress edits get
+    // reflected without a reload. jointCutKey IS a dependency because the weld cut is baked into
+    // the geometry at load, so moving or adding a weld has to rebuild the parts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url])
+  }, [url, jointCutKey])
 
   // Recolors meshes and rebuilds joint markers whenever the underlying progress data, the
   // interaction mode, or the in-progress mesh selection changes — independent of the (expensive)

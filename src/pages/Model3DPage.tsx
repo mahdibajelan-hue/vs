@@ -10,6 +10,7 @@ import { getProjectModel3dSignedUrl } from '../lib/model3dStorage'
 import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
 import { pruneToExistingMeshes, type SplitStats } from '../lib/model3dSplit'
+import type { JointCutStats } from '../lib/model3dJointCut'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
 import { WeldMap2D } from '../components/Model3D/WeldMap2D'
 import { JointInfoCard } from '../components/Model3D/JointInfoCard'
@@ -68,6 +69,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [meshSelectionTarget, setMeshSelectionTarget] = useState<MeshSelectionTarget | null>(null)
   const [selectedMeshNames, setSelectedMeshNames] = useState<string[]>([])
   const [splitStats, setSplitStats] = useState<SplitStats | null>(null)
+  const [jointCutStats, setJointCutStats] = useState<JointCutStats | null>(null)
   const [selectedJointId, setSelectedJointId] = useState<string | null>(null)
   const jointPanelRef = useRef<HTMLDivElement>(null)
 
@@ -456,6 +458,7 @@ export function Model3DPage({ project }: { project: Project }) {
                 selectedJointId={selectedJointId}
                 onJointScreenPosition={handleJointScreenPosition}
                 onSplitStats={setSplitStats}
+                onJointCutStats={setJointCutStats}
               />
 
               {/* Always on screen, not only while linking: how finely the file could be broken up
@@ -469,6 +472,9 @@ export function Model3DPage({ project }: { project: Project }) {
                   {splitStats.meshesSplit > 0 && <> ← {splitStats.meshesAfter.toLocaleString('fa-IR')}</>}
                   {' · '}بزرگ‌ترین: {splitStats.biggestPartTriangles.toLocaleString('fa-IR')} مثلث
                   {splitStats.skipped > 0 && <> · {splitStats.skipped.toLocaleString('fa-IR')} جزء تفکیک‌نشده</>}
+                  {jointCutStats && jointCutStats.segmentsCut > 0 && (
+                    <> · برش بر اساس سرجوش: {jointCutStats.segmentsCut.toLocaleString('fa-IR')} اسپول</>
+                  )}
                 </div>
               )}
 
