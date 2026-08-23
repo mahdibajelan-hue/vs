@@ -256,6 +256,35 @@ export function ThreeViewer({
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
+    // Panning moves the target by the exact on-screen drag distance instead of sliding along the
+    // ground plane — with the ground plane a drag near the horizon barely moves anything while a
+    // drag over it flies past the cursor, which is what "locks" panning felt like.
+    controls.screenSpacePanning = true
+    controls.panSpeed = 1.4
+    controls.rotateSpeed = 0.9
+    controls.zoomSpeed = 1.1
+    // The model is always normalized to a ~20-unit bounding box (see the loader below), so a fixed
+    // range is safe: it stops the camera dollying through the model (near-zero distance degenerates
+    // the controls) or drifting out to a distance where scroll-to-zoom stops visibly doing anything.
+    controls.minDistance = 1
+    controls.maxDistance = 400
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+
+    // Right-drag is the pan gesture, but without this the browser's own context menu opens on
+    // release and eats the next click — which reads exactly like "panning doesn't work, it just
+    // rotates." Shift+left-drag is added as a second, keyboard-only way to pan for anyone on a
+    // trackpad or a monitor where a clean right-click-drag is awkward.
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+    renderer.domElement.addEventListener('contextmenu', handleContextMenu)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') controls.mouseButtons.LEFT = THREE.MOUSE.PAN
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
 
     let frameId = 0
     let disposed = false
@@ -403,6 +432,9 @@ export function ThreeViewer({
       resizeObserver.disconnect()
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
       renderer.domElement.removeEventListener('pointerup', handlePointerUp)
+      renderer.domElement.removeEventListener('contextmenu', handleContextMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
       controls.dispose()
       renderer.dispose()
       scene.traverse((obj) => {
@@ -434,7 +466,14 @@ export function ThreeViewer({
   }, [modelReady, joints, equipment3d, spools, mode, selectedMeshNames, selectedJointId])
 
   return (
-    <div ref={containerRef} className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}>
+    <div
+      ref={containerRef}
+      className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}
+      // Without this, a touchscreen hands one/two-finger drags to the browser's own page-zoom and
+      // scroll before OrbitControls sees them, which is exactly what "only rotates, won't pan"
+      // looks like on touch: rotation still works (it doesn't scroll the page), panning doesn't.
+      style={{ touchAction: 'none' }}
+    >
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <Loader2 size={26} className="animate-spin text-brand-400" />
@@ -442,6 +481,14 @@ export function ThreeViewer({
       )}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 p-6 text-center text-sm text-red-300">{error}</div>
+      )}
+      {modelReady && !error && (
+        <div
+          className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/70 backdrop-blur-sm"
+          dir="rtl"
+        >
+          چرخش: کلیک چپ و بکشید · جابه‌جایی خطی: کلیک راست (یا Shift+کلیک چپ) و بکشید · زوم: چرخ ماوس
+        </div>
       )}
     </div>
   )

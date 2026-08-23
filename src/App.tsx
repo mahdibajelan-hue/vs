@@ -204,7 +204,12 @@ function App() {
                     </div>
                   }
                 >
-                  <Model3DPage project={currentProject} />
+                  {/* Keyed on project id: switching between stations without leaving this tab
+                      otherwise reuses the same component instance, and stale selection/mesh-link
+                      state from the previous station's model would leak into the new one. Keying
+                      forces a clean remount per station, so at most one model is ever loading and
+                      it always starts from a blank slate. */}
+                  <Model3DPage key={currentProject.id} project={currentProject} />
                 </Suspense>
               )}
             </>
