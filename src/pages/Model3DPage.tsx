@@ -443,6 +443,20 @@ export function Model3DPage({ project }: { project: Project }) {
                 onSplitStats={setSplitStats}
               />
 
+              {/* Always on screen, not only while linking: how finely the file could be broken up
+                  is the single fact that explains whether clicking one pipe is even possible. */}
+              {splitStats && (
+                <div
+                  className="pointer-events-none absolute right-3 top-3 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/80 backdrop-blur-sm"
+                  dir="rtl"
+                >
+                  اجزای مدل: {splitStats.meshesBefore.toLocaleString('fa-IR')}
+                  {splitStats.meshesSplit > 0 && <> ← {splitStats.meshesAfter.toLocaleString('fa-IR')}</>}
+                  {' · '}بزرگ‌ترین: {splitStats.biggestPartTriangles.toLocaleString('fa-IR')} مثلث
+                  {splitStats.skipped > 0 && <> · {splitStats.skipped.toLocaleString('fa-IR')} جزء تفکیک‌نشده</>}
+                </div>
+              )}
+
               {selectedJoint && (
                 <div ref={jointPanelRef} className="absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+12px)]" style={{ left: 0, top: 0, visibility: 'hidden' }}>
                   <JointInfoCard
@@ -472,6 +486,8 @@ export function Model3DPage({ project }: { project: Project }) {
                           {splitStats.meshesSplit > 0
                             ? `مدل تفکیک شد: ${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء → ${splitStats.meshesAfter.toLocaleString('fa-IR')} جزء قابل انتخاب`
                             : `${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء — اجزای این فایل در خروجی به هم جوش خورده‌اند و بیش از این قابل تفکیک نیستند`}
+                          {' · '}
+                          بزرگ‌ترین جزء: {splitStats.biggestPartTriangles.toLocaleString('fa-IR')} مثلث
                         </span>
                       )}
                     </span>

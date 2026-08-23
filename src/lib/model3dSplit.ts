@@ -55,22 +55,28 @@ export interface SplitStats {
   skipped: number
   triangles: number
   elapsedMs: number
+  /** Name and triangle count of the biggest single part left after splitting. When a model refuses
+   * to separate, this is the number that says so — one part holding most of the model's triangles
+   * is a fused export, not a picking bug. */
+  biggestPartName: string
+  biggestPartTriangles: number
 }
 
 /**
- * Above this many vertices in a single mesh, welding + union-find costs more than the interaction
- * it buys. Such a mesh is left intact and counted in `skipped` so the UI can say so.
+ * Safety valve only. A whole station export routinely lands in the millions of vertices, and a
+ * mesh skipped here is a mesh the user still cannot select into — so the budget is set high enough
+ * that skipping is genuinely exceptional, and `skipped` is surfaced in the UI when it happens.
  */
-const MAX_VERTICES_PER_MESH = 1_500_000
+const MAX_VERTICES_PER_MESH = 6_000_000
 
 /** Positions are welded on an exact quantised match — see the under-split note in the file header. */
 const QUANT = 10_000
 
 /**
- * Packs an ordered vertex-id pair into one numeric edge key. 2^22 keeps the product inside the
+ * Packs an ordered vertex-id pair into one numeric edge key. 2^23 keeps the product inside the
  * exact-integer range of a double for every mesh under MAX_VERTICES_PER_MESH.
  */
-const EDGE_KEY_STRIDE = 4_194_304
+const EDGE_KEY_STRIDE = 8_388_608
 
 class UnionFind {
   private parent: Int32Array
@@ -107,17 +113,42 @@ class UnionFind {
 function buildWeldedIds(position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Int32Array {
   const count = position.count
   const ids = new Int32Array(count)
-  const lookup = new Map<string, number>()
+
+  // Quantised coordinates are kept in typed arrays and bucketed by a numeric spatial hash rather
+  // than a string-keyed Map: at CAD scale (millions of vertices) string keys cost hundreds of MB
+  // and are what previously forced a low vertex budget.
+  const qx = new Int32Array(count)
+  const qy = new Int32Array(count)
+  const qz = new Int32Array(count)
+  for (let i = 0; i < count; i++) {
+    qx[i] = Math.round(position.getX(i) * QUANT)
+    qy[i] = Math.round(position.getY(i) * QUANT)
+    qz[i] = Math.round(position.getZ(i) * QUANT)
+  }
+
+  const buckets = new Map<number, number[]>()
   let next = 0
   for (let i = 0; i < count; i++) {
-    const key = `${Math.round(position.getX(i) * QUANT)},${Math.round(position.getY(i) * QUANT)},${Math.round(position.getZ(i) * QUANT)}`
-    const existing = lookup.get(key)
-    if (existing === undefined) {
-      lookup.set(key, next)
-      ids[i] = next
-      next++
+    const hash = (Math.imul(qx[i], 73856093) ^ Math.imul(qy[i], 19349663) ^ Math.imul(qz[i], 83492791)) | 0
+    const bucket = buckets.get(hash)
+    if (bucket === undefined) {
+      buckets.set(hash, [i])
+      ids[i] = next++
+      continue
+    }
+    // Hash collisions are possible, so membership is confirmed on the exact quantised triple.
+    let found = -1
+    for (const j of bucket) {
+      if (qx[j] === qx[i] && qy[j] === qy[i] && qz[j] === qz[i]) {
+        found = ids[j]
+        break
+      }
+    }
+    if (found === -1) {
+      bucket.push(i)
+      ids[i] = next++
     } else {
-      ids[i] = existing
+      ids[i] = found
     }
   }
   return ids
@@ -164,6 +195,15 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
     skipped: 0,
     triangles: 0,
     elapsedMs: 0,
+    biggestPartName: '',
+    biggestPartTriangles: 0,
+  }
+
+  const notePart = (name: string, triangles: number) => {
+    if (triangles > stats.biggestPartTriangles) {
+      stats.biggestPartTriangles = triangles
+      stats.biggestPartName = name
+    }
   }
 
   // Collected up-front: the traversal must not observe meshes added while it is running.
@@ -184,8 +224,10 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
     // Only non-indexed geometry is handled here: that is what FBXLoader produces, and supporting
     // both paths would mean two connectivity implementations to keep honest.
     if (geometry.index || position.count % 3 !== 0) {
+      const tris = (geometry.index?.count ?? position.count) / 3
       stats.meshesAfter++
-      stats.triangles += (geometry.index?.count ?? position.count) / 3
+      stats.triangles += tris
+      notePart(mesh.name, tris)
       continue
     }
 
@@ -195,6 +237,7 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
     if (position.count > MAX_VERTICES_PER_MESH) {
       stats.skipped++
       stats.meshesAfter++
+      notePart(mesh.name, triangleCount)
       continue
     }
 
@@ -231,6 +274,7 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
 
     if (byRoot.size <= 1) {
       stats.meshesAfter++
+      notePart(mesh.name, triangleCount)
       continue
     }
 
@@ -261,6 +305,7 @@ export function splitMergedMeshes(root: THREE.Object3D): SplitStats {
       sub.position.copy(mesh.position)
       sub.quaternion.copy(mesh.quaternion)
       sub.scale.copy(mesh.scale)
+      notePart(sub.name, component.triangleStarts.length)
       return sub
     })
 
