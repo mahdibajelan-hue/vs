@@ -9,6 +9,7 @@ import { canEdit } from '../lib/permissions'
 import { getProjectModel3dSignedUrl } from '../lib/model3dStorage'
 import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
+import type { SplitStats } from '../lib/model3dSplit'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
 import { WeldMap2D } from '../components/Model3D/WeldMap2D'
 import { JointInfoCard } from '../components/Model3D/JointInfoCard'
@@ -66,6 +67,7 @@ export function Model3DPage({ project }: { project: Project }) {
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
   const [meshSelectionTarget, setMeshSelectionTarget] = useState<MeshSelectionTarget | null>(null)
   const [selectedMeshNames, setSelectedMeshNames] = useState<string[]>([])
+  const [splitStats, setSplitStats] = useState<SplitStats | null>(null)
   const [selectedJointId, setSelectedJointId] = useState<string | null>(null)
   const jointPanelRef = useRef<HTMLDivElement>(null)
 
@@ -438,6 +440,7 @@ export function Model3DPage({ project }: { project: Project }) {
                 onJointClick={setSelectedJointId}
                 selectedJointId={selectedJointId}
                 onJointScreenPosition={handleJointScreenPosition}
+                onSplitStats={setSplitStats}
               />
 
               {selectedJoint && (
@@ -459,8 +462,18 @@ export function Model3DPage({ project }: { project: Project }) {
               {viewerMode === 'selectMeshes' && (
                 <div className="absolute inset-x-3 bottom-3 flex max-h-[55%] flex-col gap-2 rounded-xl bg-black/75 p-3 backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-white">
+                    <span className="min-w-0 text-xs text-white">
                       {selectedMeshNames.length.toLocaleString('fa-IR')} جزء انتخاب شد — روی اجزای مدل کلیک کنید تا انتخاب/لغو شود
+                      {/* Whether a click can land on a single pipe depends entirely on how the
+                          exporter merged the file, so the outcome is stated instead of leaving a
+                          fused model looking like a broken app. */}
+                      {splitStats && (
+                        <span className="mt-0.5 block text-[10px] text-white/60">
+                          {splitStats.meshesSplit > 0
+                            ? `مدل تفکیک شد: ${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء → ${splitStats.meshesAfter.toLocaleString('fa-IR')} جزء قابل انتخاب`
+                            : `${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء — اجزای این فایل در خروجی به هم جوش خورده‌اند و بیش از این قابل تفکیک نیستند`}
+                        </span>
+                      )}
                     </span>
                     <div className="flex shrink-0 gap-2">
                       <button onClick={resetInteraction} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">

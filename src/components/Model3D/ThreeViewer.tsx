@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { Loader2 } from 'lucide-react'
 import type { Equipment3D, Joint, Point3D, Spool } from '../../types'
-import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
+import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, isMeshSelected, meshColor, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
+import { splitMergedMeshes, type SplitStats } from '../../lib/model3dSplit'
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
@@ -45,8 +46,8 @@ function applyMeshColoring(root: THREE.Object3D, colorMap: Map<string, string>, 
   const selectedSet = new Set(selectedMeshNames)
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    const isSelected = mode === 'selectMeshes' && selectedSet.has(child.name)
-    const completeColor = colorMap.get(child.name)
+    const isSelected = mode === 'selectMeshes' && isMeshSelected(selectedSet, child.name)
+    const completeColor = meshColor(colorMap, child.name)
     forEachMaterial(child, (mat) => {
       if (!mat.color) return
       if (isSelected) {
@@ -160,6 +161,9 @@ interface ThreeViewerProps {
   /** id of the joint whose detail panel is open — its marker is highlighted, and its live screen position is reported every frame via onJointScreenPosition so the caller can anchor a panel to it. */
   selectedJointId?: string | null
   onJointScreenPosition?: (pos: { x: number; y: number } | null) => void
+  /** Reports how the loaded model was broken into selectable parts — surfaced in the UI so a model
+   * whose solids stayed fused is visible rather than just feeling broken. */
+  onSplitStats?: (stats: SplitStats) => void
 }
 
 /**
@@ -183,6 +187,7 @@ export function ThreeViewer({
   onJointClick,
   selectedJointId = null,
   onJointScreenPosition,
+  onSplitStats,
 }: ThreeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
@@ -195,10 +200,10 @@ export function ThreeViewer({
   // Kept fresh via this cheap effect so the click handler and animate loop (bound once per model
   // load) always see the latest mode/callbacks/selection without needing to re-bind — editing
   // props never triggers a reload.
-  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition })
+  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats })
   useEffect(() => {
-    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition }
-  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition])
+    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats }
+  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats])
 
   useEffect(() => {
     const container = containerRef.current
@@ -325,6 +330,12 @@ export function ThreeViewer({
         const scale = 20 / maxDim
         object.scale.setScalar(scale)
         object.position.sub(center.multiplyScalar(scale))
+
+        // Split BEFORE cloning materials: CAD exporters merge a whole pipe run into one mesh, and
+        // until it is broken into its individual solids a click can only ever select the entire
+        // run. Each component then needs its own material clone to be coloured independently.
+        const stats = splitMergedMeshes(object)
+        liveRef.current.onSplitStats?.(stats)
 
         prepareMaterialsForColoring(object)
         scene.add(object)
