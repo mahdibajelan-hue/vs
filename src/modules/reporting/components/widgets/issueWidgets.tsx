@@ -1,6 +1,6 @@
 import { computeIssueMetrics, type IssueMetrics } from '../../../issues/lib/issueAnalytics'
 import { isIssueOpen, isIssueOverdue, isoDiffDays, todayIso } from '../../../issues/lib/issueRing'
-import { IM_PRIORITY_COLOR, IM_PRIORITY_LABEL_FA, type ImIssue } from '../../../issues/types'
+import { IM_PRIORITY_COLOR, IM_PRIORITY_LABEL_FA, IM_STATUS_LABEL_FA, type ImIssue } from '../../../issues/types'
 import type { WidgetDefinition } from '../../lib/widgetTypes'
 import { EmptyWidgetState, ToneBadge, UnmappedNotice } from '../ui'
 
@@ -117,6 +117,55 @@ export const issueAgingWidget: WidgetDefinition<AgingBucket[] | null> = {
             </div>
           )
         })}
+      </div>
+    )
+  },
+}
+
+interface LifecycleIssueSummary {
+  items: ImIssue[]
+  openCount: number
+}
+
+/** Issues that didn't start in Issue Management at all — they were raised automatically from an
+ * overdue Control Tower action (see rasta_convert_action_to_issue in schema.sql section 21g).
+ * Surfaces them as their own report so management can see how much of the issue backlog is
+ * actually schedule slippage bleeding out of the lifecycle module, not manually reported problems. */
+export const issueLifecycleOriginWidget: WidgetDefinition<LifecycleIssueSummary | null> = {
+  id: 'issue-lifecycle-origin',
+  label: 'مسائل ایجادشده از برج کنترل',
+  category: 'issue',
+  description: 'مسائلی که به‌صورت خودکار از یک اقدام دیرکردشده در چرخه عمر پروژه ایجاد شده‌اند',
+  defaultReportTypes: ['weekly', 'monthly', 'management'],
+  compute: ({ bundle }) => {
+    if (!bundle.issues) return null
+    const items = bundle.issues.issues.filter((i) => i.source === 'lifecycle_action')
+    return { items, openCount: items.filter(isIssueOpen).length }
+  },
+  Render: ({ data }) => {
+    if (data === null) return <UnmappedNotice moduleLabel="مدیریت مسائل" />
+    if (data.items.length === 0) return <EmptyWidgetState text="تاکنون هیچ مسئله‌ای از برج کنترل ایجاد نشده است" />
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] text-secondary">
+          <span className="font-extrabold text-primary">{data.items.length}</span> مسئله از اقدامات دیرکردشده ایجاد شده — {data.openCount} مورد هنوز باز است
+        </p>
+        <div className="space-y-1.5">
+          {data.items.slice(0, 6).map((issue) => (
+            <div key={issue.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5">
+              <p className="min-w-0 truncate text-xs font-medium">{issue.title}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {isIssueOverdue(issue) && <ToneBadge tone="critical" label="معوق" />}
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: IM_PRIORITY_COLOR[issue.priority] }}>
+                  {IM_PRIORITY_LABEL_FA[issue.priority]}
+                </span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+                  {IM_STATUS_LABEL_FA[issue.status]}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   },

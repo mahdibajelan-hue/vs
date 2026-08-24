@@ -4,7 +4,7 @@ import { computeStageReadiness, deriveGateStatus, averageReadiness, type StageRe
 import { computeHealth, computeOverallHealth, type DerivedHealth, type OverallHealth } from './health'
 import { computeMilestoneKpis, computeScheduleVariance, baselineCompletion, forecastCompletion, daysBetween, type MilestoneKpis, type ScheduleVariance } from './milestones'
 import { computeWarnings, computeManagementAttention, type AttentionItem, type ComputedWarning } from './earlyWarning'
-import { isActionOverdue, type GateStatus } from '../types'
+import { isActionOverdue, type GateStatus, type LifecycleAction } from '../types'
 
 /** One place that runs every engine over a project bundle, so the Control Tower, the dashboards
  * and the reports can never disagree about a project's numbers. */
@@ -26,6 +26,7 @@ export interface ProjectAnalysis {
   forecastVarianceDays: number | null
   openActions: number
   overdueActions: number
+  overdueActionsList: LifecycleAction[]
   criticalOverdueActions: number
   actionCompletionRate: number
 }
@@ -115,6 +116,7 @@ export function analyseProject(
     forecastVarianceDays: daysBetween(baselineFinish, forecastFinish),
     openActions: openActions.length,
     overdueActions: overdue.length,
+    overdueActionsList: overdue,
     criticalOverdueActions: overdue.filter((a) => a.priority === 'critical').length,
     actionCompletionRate: bundle.actions.length === 0 ? 0 : Math.round((closed.length / bundle.actions.length) * 100),
   }

@@ -1,8 +1,9 @@
 import {
-  Activity, AlertTriangle, ArrowLeft, BarChart3, Bell, CalendarClock, ChevronLeft, Flag,
+  Activity, AlertOctagon, AlertTriangle, ArrowLeft, BarChart3, Bell, CalendarClock, ChevronLeft, Flag,
   Gauge, HeartPulse, ShieldAlert, ShieldCheck, Target, TrendingUp,
 } from 'lucide-react'
 import type { MasterProject } from '../../masterdata/types'
+import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useLifecycleStore } from '../store/useLifecycleStore'
 import { useProjectAnalysis } from '../lib/useProjectAnalysis'
 import { deriveMilestoneStatus, milestoneVariance } from '../lib/milestones'
@@ -16,6 +17,7 @@ import { DriftTrendChart, HealthRadar, StageReadinessBars } from '../components/
 import { GateLadder, HealthGauge, ReadinessWaffle } from '../components/TowerInstruments'
 import { TowerTile } from '../components/TowerTile'
 import { VerdictTile, buildVerdict } from '../components/VerdictTile'
+import { OverdueActionsIssuePanel } from '../components/OverdueActionsIssuePanel'
 import { Card, EmptyState, SeverityPill, StatusDot, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum, faText, faVariance } from '../components/ui'
 
 /**
@@ -41,6 +43,8 @@ export function ControlTowerPage({
 }) {
   const bundle = useLifecycleStore((s) => s.bundle)
   const loading = useLifecycleStore((s) => s.loadingProject)
+  const selectProject = useLifecycleStore((s) => s.selectProject)
+  const users = useMasterDataStore((s) => s.users)
   const analysis = useProjectAnalysis(bundle)
 
   const currentStageKey = bundle.lifecycle?.currentStageKey ?? ''
@@ -309,6 +313,25 @@ export function ControlTowerPage({
             />
           </div>
         </TowerTile>
+
+        {/* ── Row 5b — overdue actions, convertible to Issue Management right here ── */}
+        {analysis.overdueActionsList.length > 0 && (
+          <TowerTile
+            span={12}
+            eyebrow="Overdue actions"
+            title="اقدامات دیرکردشده — تبدیل به Issue"
+            icon={<AlertOctagon size={13} />}
+            delay={420}
+            edge="red"
+          >
+            <OverdueActionsIssuePanel
+              masterProjectId={project.id}
+              actions={analysis.overdueActionsList}
+              users={users}
+              onConverted={() => selectProject(project.id)}
+            />
+          </TowerTile>
+        )}
 
         {/* ── Row 6 — the ten dimensions, compact ──────────────────── */}
         <TowerTile span={12} eyebrow="Health dimensions" title="سلامت به تفکیک بُعد" icon={<HeartPulse size={13} />} delay={440}>

@@ -4453,3 +4453,89 @@ create policy "plc_docs_update_authenticated" on storage.objects
 drop policy if exists "plc_docs_delete_admin" on storage.objects;
 create policy "plc_docs_delete_admin" on storage.objects
   for delete using (bucket_id = 'plc-docs' and is_admin_user());
+
+-- ---------------------------------------------------------------------------
+-- 21g. Control Tower -> Issue Management bridge. An overdue rasta_actions row
+--      (raised in the lifecycle module, e.g. an overdue checklist/gate action)
+--      can be converted, in place, into a real im_issues row in the project's
+--      mapped Issue Management project — carrying its own pursuer + deadline
+--      chosen at conversion time, rather than the action's original owner/due
+--      date. im_issues.related_action_id points back so the Control Tower can
+--      show "already converted" and avoid duplicate conversions; rasta_actions
+--      already had related_issue_id (section 17c) so the link is bidirectional.
+-- ---------------------------------------------------------------------------
+
+alter table im_issues add column if not exists source text not null default 'manual';
+alter table im_issues drop constraint if exists im_issues_source_check;
+alter table im_issues add constraint im_issues_source_check
+  check (source in ('manual', 'lifecycle_action'));
+
+alter table im_issues add column if not exists related_action_id uuid references rasta_actions (id) on delete set null;
+
+create index if not exists idx_im_issues_related_action on im_issues (related_action_id) where related_action_id is not null;
+
+-- SECURITY DEFINER: an ordinary Control Tower user is very unlikely to also be
+-- an im_issues project member (im_issues_insert_member requires
+-- im_is_project_member), so a plain client-side insert would be denied by RLS
+-- for exactly the users this feature is for. The function re-checks access to
+-- the *master* project itself (same helper the rest of section 17c/21 uses)
+-- before writing, so it never becomes an open door.
+create or replace function rasta_convert_action_to_issue(
+  p_action_id uuid,
+  p_pursuer_id uuid,
+  p_deadline_days smallint default 3
+)
+returns uuid as $$
+declare
+  v_action rasta_actions%rowtype;
+  v_im_project_id uuid;
+  v_issue_id uuid;
+begin
+  select * into v_action from rasta_actions where id = p_action_id;
+  if not found then
+    raise exception 'action not found';
+  end if;
+
+  if not rasta_user_can_access_master_project(v_action.master_project_id) then
+    raise exception 'not authorized for this project';
+  end if;
+
+  if v_action.related_issue_id is not null then
+    raise exception 'action already converted to an issue';
+  end if;
+
+  select source_project_id into v_im_project_id
+  from rasta_project_mappings
+  where master_project_id = v_action.master_project_id
+    and source_module = 'issues'
+    and status = 'confirmed'
+  limit 1;
+
+  if v_im_project_id is null then
+    raise exception 'no confirmed Issue Management project is linked to this project yet';
+  end if;
+
+  if p_deadline_days is null or p_deadline_days <= 0 then
+    p_deadline_days := 3;
+  end if;
+
+  insert into im_issues (project_id, title, description, pursuer_id, priority, deadline_days, status, created_by, source, related_action_id)
+  values (
+    v_im_project_id,
+    v_action.title,
+    'ایجاد شده خودکار از یک اقدام دیرکرد شده در برج کنترل پروژه.',
+    p_pursuer_id,
+    v_action.priority,
+    p_deadline_days,
+    'open',
+    auth.uid(),
+    'lifecycle_action',
+    p_action_id
+  )
+  returning id into v_issue_id;
+
+  update rasta_actions set related_issue_id = v_issue_id, updated_at = now() where id = p_action_id;
+
+  return v_issue_id;
+end;
+$$ language plpgsql security definer set search_path = public;
