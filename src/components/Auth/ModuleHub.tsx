@@ -1,8 +1,16 @@
-import { useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Award, Banknote, BarChart3, Briefcase, Calculator, CheckCircle2, Clock3, GitBranch, Package, Route, ShieldAlert, Sparkles, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AlertTriangle, ArrowLeft, Award, Banknote, Briefcase, BarChart3, Calculator, CheckCircle2,
+  Clock3, GitBranch, Package, Radar, Route, ShieldAlert, Sparkles, Users,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
+import { useMasterDataStore } from '../../modules/masterdata/store/useMasterDataStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
+import { useLifecycleStore } from '../../modules/lifecycle/store/useLifecycleStore'
+import { DEFAULT_STAGE_ORDER, STAGE_LABEL_FA, type StageKey } from '../../modules/lifecycle/types'
+import { ContextSwitcher } from '../../modules/masterdata/components/ContextSwitcher'
 import { SignOutButton } from './SignOutButton'
 
 const GOLD = '#c9a227'
@@ -141,11 +149,67 @@ const MODULES: ModuleDef[] = [
   },
 ]
 
+const MODULE_BY_KEY = new Map(MODULES.map((m) => [m.key, m]))
+
+/**
+ * Phase-1 static curated table (spec decision: manual table, not computed relevance) — which
+ * modules genuinely have work to do at each lifecycle stage. Only Finance and Material are
+ * mapped: they're the two modules with a real masterProjectId link AND a natural per-stage
+ * workload (see the 12-module connectivity audit — the other 9 modules are either cross-cutting
+ * utilities that don't vary by stage, or not yet linked to a master project at all).
+ */
+const STAGE_MODULE_MAP: Record<StageKey, ModuleKey[]> = {
+  idea: [],
+  pre_project: [],
+  initiation: [],
+  planning: ['finance'],
+  engineering: ['material'],
+  procurement: ['material', 'finance'],
+  execution: ['material', 'finance'],
+  commissioning: ['finance'],
+  handover: ['finance'],
+  close_out: ['finance'],
+  lessons_learned: [],
+}
+
+/** Always-visible cross-cutting utilities — not stage-specific by nature, so never highlighted or hidden. */
+const CROSS_CUTTING: ModuleKey[] = ['reporting', 'executive', 'admin']
+
+/** Not yet linked to a master project (no masterProjectId / confirmed mapping) — stay in a fixed
+ * sidebar, reachable regardless of which project or stage is selected, never stage-highlighted. */
+const FIXED_SIDEBAR: ModuleKey[] = ['risk', 'issues', 'pipepulse', 'competency', 'estimator', 'pipelinedigitaltwin']
+
 export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<number | undefined>(undefined)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
-  const visibleModules = useMemo(() => MODULES.filter((m) => hasModuleAccess(accessibleModules, m.key)), [accessibleModules])
+
+  const mdLoaded = useMasterDataStore((s) => s.loaded)
+  const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
+  const masterProjects = useMasterDataStore((s) => s.projects)
+  const allLifecycles = useLifecycleStore((s) => s.allLifecycles)
+  const fetchPortfolioWide = useLifecycleStore((s) => s.fetchPortfolioWide)
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+
+  useEffect(() => {
+    if (!mdLoaded) fetchMasterData()
+    fetchPortfolioWide()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const selectedProject = useMemo(() => masterProjects.find((p) => p.id === contextProjectId) ?? null, [masterProjects, contextProjectId])
+  const currentStageKey = useMemo(() => {
+    if (!selectedProject) return null
+    return allLifecycles.find((l) => l.projectId === selectedProject.id)?.currentStageKey ?? null
+  }, [allLifecycles, selectedProject])
+
+  const highlighted = useMemo(() => new Set(currentStageKey ? (STAGE_MODULE_MAP[currentStageKey as StageKey] ?? []) : []), [currentStageKey])
+
+  const isVisible = (key: ModuleKey) => hasModuleAccess(accessibleModules, key)
+  const stageModules = (['finance', 'material'] as ModuleKey[]).filter(isVisible)
+  const crossCuttingModules = CROSS_CUTTING.filter(isVisible)
+  const sidebarModules = FIXED_SIDEBAR.filter(isVisible)
+  const lifecycleVisible = isVisible('lifecycle')
 
   const handleSelect = (m: ModuleDef) => {
     if (m.status === 'active') {
@@ -205,18 +269,98 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
       </header>
 
       <main className="relative z-10 mx-auto max-w-7xl px-6 py-10 sm:px-10">
-        <div className="hub-fade-in mb-10 text-center" style={{ animationDelay: '80ms' }}>
+        <div className="hub-fade-in mb-8 text-center" style={{ animationDelay: '80ms' }}>
           <h1 className="text-3xl font-extrabold sm:text-4xl">پلتفرم یکپارچه مدیریت و کنترل پروژه</h1>
           <p className="eyebrow-en mt-2" dir="ltr">
             Unified Project Management & Control Platform
           </p>
-          <p className="mt-3 text-sm text-secondary">یک ماژول را برای ورود انتخاب کنید</p>
+          <p className="mt-3 text-sm text-secondary">یک پروژه را انتخاب کنید تا مراحل و ماژول‌های مرتبط آن نمایان شود</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleModules.map((m, i) => (
-            <ModuleCard key={m.key} module={m} index={i} onSelect={() => handleSelect(m)} />
-          ))}
+        <div className="hub-fade-in mb-8 flex justify-center" style={{ animationDelay: '120ms' }}>
+          <ContextSwitcher />
+        </div>
+
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* ── Main column: stage bar + lifecycle hero + stage-mapped/cross-cutting modules ── */}
+          <div className="min-w-0 flex-1 space-y-6">
+            <StageBar project={selectedProject} currentStageKey={currentStageKey} />
+
+            {lifecycleVisible && (
+              <button
+                onClick={() => onEnterModule('lifecycle')}
+                className="hub-grid-card hub-fade-in group flex w-full items-center gap-4 rounded-2xl border p-5 text-right"
+                style={{ borderColor: 'color-mix(in srgb, var(--plc-amber, #f0a836) 40%, var(--border-soft))', animationDelay: '160ms' }}
+              >
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-300 group-hover:scale-110"
+                  style={{ background: 'color-mix(in srgb, var(--plc-amber, #f0a836) 14%, transparent)', borderColor: 'color-mix(in srgb, var(--plc-amber, #f0a836) 40%, transparent)' }}
+                >
+                  <Radar size={22} style={{ color: 'var(--plc-amber, #f0a836)' }} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-extrabold">ورود به برج کنترل پروژه</p>
+                  <p className="mt-0.5 text-xs text-secondary">
+                    {selectedProject
+                      ? currentStageKey
+                        ? `«${selectedProject.officialName}» اکنون در مرحله «${STAGE_LABEL_FA[currentStageKey as StageKey]}» است`
+                        : `«${selectedProject.officialName}» هنوز در چرخه عمر تعریف نشده است`
+                      : 'مراحل، گیت‌ها، Milestone و هشدارهای زودهنگام همه پروژه‌ها'}
+                  </p>
+                </div>
+                <ArrowLeft size={16} className="shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" style={{ color: 'var(--plc-amber, #f0a836)' }} />
+              </button>
+            )}
+
+            {stageModules.length > 0 && (
+              <section>
+                <SectionLabel
+                  text={selectedProject && currentStageKey ? `کار این مرحله (${STAGE_LABEL_FA[currentStageKey as StageKey]})` : 'ماژول‌های وابسته به مرحله'}
+                  hint={!selectedProject ? 'با انتخاب پروژه، ماژول مرتبط با مرحله فعلی برجسته می‌شود' : undefined}
+                />
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  {stageModules.map((key, i) => {
+                    const m = MODULE_BY_KEY.get(key)!
+                    return (
+                      <ModuleCard
+                        key={m.key}
+                        module={m}
+                        index={i}
+                        onSelect={() => handleSelect(m)}
+                        emphasize={highlighted.has(m.key)}
+                        tag={highlighted.has(m.key) ? 'کار در این مرحله' : undefined}
+                      />
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {crossCuttingModules.length > 0 && (
+              <section>
+                <SectionLabel text="ابزارهای همیشه در دسترس" hint="مستقل از مرحله پروژه" />
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  {crossCuttingModules.map((key, i) => {
+                    const m = MODULE_BY_KEY.get(key)!
+                    return <ModuleCard key={m.key} module={m} index={i} onSelect={() => handleSelect(m)} />
+                  })}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ── Fixed sidebar: modules not yet linked to master data, unaffected by stage/project ── */}
+          {sidebarModules.length > 0 && (
+            <aside className="hub-fade-in w-full shrink-0 lg:w-72" style={{ animationDelay: '200ms' }}>
+              <SectionLabel text="ابزارهای مستقل" hint="پروژه اختصاصی هر ماژول را داخل خودش انتخاب کنید" />
+              <div className="space-y-2.5">
+                {sidebarModules.map((key) => {
+                  const m = MODULE_BY_KEY.get(key)!
+                  return <SidebarModuleCard key={m.key} module={m} onSelect={() => handleSelect(m)} />
+                })}
+              </div>
+            </aside>
+          )}
         </div>
 
         <p className="hub-fade-in mt-12 text-center text-[11px] text-muted" style={{ animationDelay: '500ms' }}>
@@ -236,14 +380,78 @@ export function ModuleHub({ onEnterModule }: { onEnterModule: (key: ModuleKey) =
   )
 }
 
-function ModuleCard({ module: m, index, onSelect }: { module: ModuleDef; index: number; onSelect: () => void }) {
+function SectionLabel({ text, hint }: { text: string; hint?: string }) {
+  return (
+    <div className="mb-3 flex items-baseline gap-2">
+      <h2 className="text-sm font-bold text-secondary">{text}</h2>
+      {hint && <span className="text-[10px] text-muted">{hint}</span>}
+    </div>
+  )
+}
+
+function StageBar({ project, currentStageKey }: { project: { officialName: string } | null; currentStageKey: string | null }) {
+  const currentIndex = currentStageKey ? DEFAULT_STAGE_ORDER.indexOf(currentStageKey as StageKey) : -1
+
+  return (
+    <div className="hub-fade-in glass-panel rounded-2xl border p-4" style={{ borderColor: 'var(--border-soft)', animationDelay: '140ms' }}>
+      {!project ? (
+        <p className="py-2 text-center text-[11px] text-muted">
+          برای مشاهده مراحل چرخه عمر و برجسته‌شدن ماژول‌های مرتبط، یک پروژه از بالا انتخاب کنید
+        </p>
+      ) : (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {DEFAULT_STAGE_ORDER.map((stageKey, i) => {
+            const isCurrent = i === currentIndex
+            const isPast = currentIndex >= 0 && i < currentIndex
+            const relevantModules = STAGE_MODULE_MAP[stageKey]
+            return (
+              <div key={stageKey} className="flex shrink-0 items-center gap-1.5">
+                <div
+                  className="flex flex-col items-center gap-1 rounded-xl border px-2.5 py-1.5"
+                  style={{
+                    borderColor: isCurrent ? 'var(--plc-amber, #f0a836)' : 'var(--border-soft)',
+                    background: isCurrent ? 'color-mix(in srgb, var(--plc-amber, #f0a836) 12%, transparent)' : isPast ? 'color-mix(in srgb, var(--border-soft) 60%, transparent)' : 'transparent',
+                    opacity: isPast || isCurrent ? 1 : 0.55,
+                  }}
+                >
+                  <span className="whitespace-nowrap text-[10px] font-bold" style={{ color: isCurrent ? 'var(--plc-amber, #f0a836)' : undefined }}>
+                    {STAGE_LABEL_FA[stageKey]}
+                  </span>
+                  {relevantModules.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      {relevantModules.map((mk) => (
+                        <span key={mk} className="h-1.5 w-1.5 rounded-full" style={{ background: MODULE_BY_KEY.get(mk)?.accent }} title={MODULE_BY_KEY.get(mk)?.title} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {i < DEFAULT_STAGE_ORDER.length - 1 && <div className="h-px w-3 shrink-0" style={{ background: 'var(--border-soft)' }} />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModuleCard({
+  module: m, index, onSelect, emphasize, tag,
+}: {
+  module: ModuleDef
+  index: number
+  onSelect: () => void
+  emphasize?: boolean
+  tag?: string
+}) {
   const Icon = m.icon
   return (
     <button
       onClick={onSelect}
-      className="hub-grid-card hub-fade-in glass-panel group flex flex-col rounded-[1.25rem] border p-5 text-right"
+      className="hub-grid-card hub-fade-in group flex flex-col rounded-[1.25rem] border p-5 text-right"
       style={{
-        borderColor: 'var(--border-soft)',
+        borderColor: emphasize ? 'color-mix(in srgb, var(--plc-amber, #f0a836) 55%, var(--border-soft))' : 'var(--border-soft)',
+        boxShadow: emphasize ? '0 0 0 1px color-mix(in srgb, var(--plc-amber, #f0a836) 30%, transparent) inset' : undefined,
         animationDelay: `${120 + index * 70}ms`,
         // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
         '--card-accent': m.accent,
@@ -258,7 +466,14 @@ function ModuleCard({ module: m, index, onSelect }: { module: ModuleDef; index: 
         >
           <Icon size={22} style={{ color: m.accent }} />
         </div>
-        {m.status === 'active' ? (
+        {tag ? (
+          <span
+            className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+            style={{ borderColor: 'color-mix(in srgb, var(--plc-amber, #f0a836) 45%, transparent)', color: 'var(--plc-amber, #f0a836)', background: 'color-mix(in srgb, var(--plc-amber, #f0a836) 10%, transparent)' }}
+          >
+            {tag}
+          </span>
+        ) : m.status === 'active' ? (
           <span className="flex items-center gap-1 rounded-full border border-green-400/40 bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-300">
             <CheckCircle2 size={10} /> فعال
           </span>
@@ -289,6 +504,37 @@ function ModuleCard({ module: m, index, onSelect }: { module: ModuleDef; index: 
         {m.status === 'active' ? 'ورود به ماژول' : 'مشاهده جزئیات'}
         <ArrowLeft size={14} className="transition-transform duration-300 group-hover:-translate-x-0.5" />
       </div>
+    </button>
+  )
+}
+
+/** Compact card for the fixed sidebar — icon, title and an arrow, no bullets — so six modules fit
+ * comfortably in a narrow persistent column regardless of which project/stage is active. */
+function SidebarModuleCard({ module: m, onSelect }: { module: ModuleDef; onSelect: () => void }) {
+  const Icon = m.icon
+  return (
+    <button
+      onClick={onSelect}
+      className="hub-grid-card group flex w-full items-center gap-3 rounded-xl border p-3 text-right"
+      style={{
+        borderColor: 'var(--border-soft)',
+        // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
+        '--card-accent': m.accent,
+      }}
+    >
+      <div
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-transform duration-300 group-hover:scale-110"
+        style={{ background: `${m.accent}1a`, borderColor: `${m.accent}44` }}
+      >
+        <Icon size={17} style={{ color: m.accent }} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[12.5px] font-bold" style={{ fontFamily: m.key === 'pipepulse' ? "'Montserrat', sans-serif" : undefined }}>
+          {m.title}
+        </p>
+        <p className="truncate text-[10px] text-muted">{m.teaser}</p>
+      </div>
+      <ArrowLeft size={13} className="shrink-0 text-muted transition-transform duration-300 group-hover:-translate-x-0.5" />
     </button>
   )
 }
