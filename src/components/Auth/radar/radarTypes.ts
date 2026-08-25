@@ -56,6 +56,11 @@ export interface RadarKpi {
   progressActual: number
   cpi: number
   spi: number
+  /** Quality performance index (0-100) shown on the Quality Performance ring. */
+  qualityPct: number
+  /** Cost performance ring value (0-100) and its signed delta caption, e.g. 92% / +3%. */
+  costPerformancePct: number
+  costVariancePct: number
   activeRisks: number
   activeRisksHigh: number
   openIssues: number
@@ -247,6 +252,9 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
   const progressActual = Math.max(20, progressPlanned - Math.round(rand() * 15))
   const cpi = Math.round((0.85 + rand() * 0.25) * 100) / 100
   const spi = Math.round((0.75 + rand() * 0.25) * 100) / 100
+  const qualityPct = Math.round(65 + rand() * 30)
+  const costPerformancePct = Math.round(80 + rand() * 20)
+  const costVariancePct = Math.round(rand() * 12) - 4
 
   const signalCount = 6 + Math.floor(rand() * 6)
   const signals: RadarSignal[] = Array.from({ length: signalCount }, (_, i) => {
@@ -303,6 +311,9 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
       progressActual,
       cpi,
       spi,
+      qualityPct,
+      costPerformancePct,
+      costVariancePct,
       activeRisks: 6 + Math.floor(rand() * 10),
       activeRisksHigh: 1 + Math.floor(rand() * 5),
       openIssues: 3 + Math.floor(rand() * 8),
@@ -349,6 +360,9 @@ export const DEFAULT_RADAR_DATA: RadarData = {
     progressActual: 64,
     cpi: 0.92,
     spi: 0.87,
+    qualityPct: 85,
+    costPerformancePct: 92,
+    costVariancePct: 3,
     activeRisks: 12,
     activeRisksHigh: 4,
     openIssues: 7,

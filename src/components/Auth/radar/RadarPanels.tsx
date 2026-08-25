@@ -27,7 +27,18 @@ function useCountUp(value: number, durationMs = 700): number {
   return display
 }
 
-function RingGauge({ pct, size = 56, stroke = 5, color, label }: { pct: number; size?: number; stroke?: number; color: string; label?: string }) {
+function RingGauge({
+  pct, size = 56, stroke = 5, color, unit, sub,
+}: {
+  pct: number
+  size?: number
+  stroke?: number
+  color: string
+  /** Appended right after the number, inline (e.g. "٪"). */
+  unit?: string
+  /** Small caption line below the number (e.g. "READINESS"). */
+  sub?: string
+}) {
   const animated = useCountUp(pct)
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
@@ -42,8 +53,8 @@ function RingGauge({ pct, size = 56, stroke = 5, color, label }: { pct: number; 
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num text-sm font-extrabold">{toFa(Math.round(animated))}</span>
-        {label && <span className="text-[8px] text-muted">{label}</span>}
+        <span className="num text-sm font-extrabold">{toFa(Math.round(animated))}{unit}</span>
+        {sub && <span className="text-[8px] text-muted">{sub}</span>}
       </div>
     </div>
   )
@@ -57,48 +68,83 @@ function Panel({ children, className = '' }: { children: React.ReactNode; classN
   )
 }
 
-function PanelTitle({ text, hint }: { text: string; hint?: string }) {
+function PanelTitle({ text, hint, action }: { text: string; hint?: string; action?: string }) {
   return (
     <div className="mb-2 flex items-baseline justify-between">
       <h3 className="text-[10px] font-bold tracking-wide text-muted">{text}</h3>
-      {hint && <span className="text-[9px] text-muted">{hint}</span>}
+      {action ? (
+        <span className="cursor-default text-[9px] font-bold" style={{ color: 'var(--radar-cyan)' }}>{action}</span>
+      ) : hint ? (
+        <span className="text-[9px] text-muted">{hint}</span>
+      ) : null}
     </div>
   )
 }
 
-export function KpiRingCard({ title, pct, color, sub }: { title: string; pct: number; color: string; sub: string }) {
+/** Ring + big highlighted number/delta + status caption, e.g. "78 /100 → 78 GOOD" for project
+ * health or "64% → -8% BEHIND" for schedule performance — matches the four-card performance
+ * strip from the reference layout (Project/Time/Cost/Quality Performance). */
+export function PerformanceRingCard({
+  title, titleEn, pct, ringUnit, ringSub, color, bigValue, bigValueColor, caption, captionColor,
+}: {
+  title: string
+  titleEn: string
+  pct: number
+  ringUnit?: string
+  ringSub?: string
+  color: string
+  bigValue: string
+  bigValueColor: string
+  caption?: string
+  captionColor?: string
+}) {
   return (
-    <Panel className="flex items-center gap-3">
-      <RingGauge pct={pct} color={color} />
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold text-muted">{title}</p>
-        <p className="text-[11px] text-secondary">{sub}</p>
+    <Panel>
+      <PanelTitle text={title} hint={titleEn} />
+      <div className="flex items-center gap-3">
+        <RingGauge pct={pct} color={color} size={60} stroke={6} unit={ringUnit} sub={ringSub} />
+        <div className="min-w-0">
+          <p className="num text-2xl font-extrabold leading-tight" style={{ color: bigValueColor }}>{bigValue}</p>
+          {caption && <p className="text-[10px] font-bold tracking-wide" style={{ color: captionColor }}>{caption}</p>}
+        </div>
       </div>
     </Panel>
   )
 }
 
-export function KpiStatRow({
-  icon: Icon, label, value, sub, color,
+/** Icon-circle + big number + severity-count pill, stacked vertically beside the radar — matches
+ * the reference's Active Risks / Open Issues / Delayed Activities / Pending Changes / Upcoming
+ * Milestones column. */
+export function SignalStatCard({
+  icon: Icon, label, labelEn, value, badge, badgeColor, color,
 }: {
   icon: LucideIcon
   label: string
+  labelEn: string
   value: number
-  sub?: string
+  badge?: string
+  badgeColor?: string
   color: string
 }) {
   const animated = useCountUp(value, 600)
   return (
-    <Panel className="flex items-center gap-2.5 !p-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `color-mix(in srgb, ${color} 16%, transparent)` }}>
-        <Icon size={15} style={{ color }} />
+    <div className="flex items-center gap-3 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-soft)' }}>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
+        <Icon size={17} style={{ color }} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-bold text-muted">{label}</p>
-        <p className="num text-base font-extrabold leading-tight">{toFa(Math.round(animated))}</p>
+        <p className="truncate text-[9px] font-bold tracking-wide text-muted">{label}</p>
+        <div className="flex items-center gap-2">
+          <span className="num text-xl font-extrabold leading-none" style={{ color }}>{toFa(Math.round(animated))}</span>
+          {badge && (
+            <span className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold" style={{ borderColor: `color-mix(in srgb, ${badgeColor} 55%, transparent)`, color: badgeColor }}>
+              {badge}
+            </span>
+          )}
+        </div>
       </div>
-      {sub && <span className="shrink-0 text-[9px] text-muted">{sub}</span>}
-    </Panel>
+      <span className="eyebrow-en shrink-0 text-[8px] text-muted" dir="ltr">{labelEn}</span>
+    </div>
   )
 }
 
@@ -172,29 +218,69 @@ export function LifecyclePanel({
   return floating ? <div className="p-1">{body}</div> : <Panel>{body}</Panel>
 }
 
-export function NextGatePanel({ gate }: { gate: RadarGate }) {
+export function NextGatePanel({ gate, stages }: { gate: RadarGate; stages: RadarLifecycleStage[] }) {
   return (
     <Panel>
       <PanelTitle text="گیت بعدی" hint="NEXT GATE" />
-      <p className="mb-3 text-sm font-extrabold" style={{ color: 'var(--radar-amber)' }}>{gate.name}</p>
-      <div className="flex items-center gap-4">
-        <RingGauge pct={gate.readinessPct} color="var(--radar-green)" size={72} stroke={6} label="آماده" />
-        <div className="grid flex-1 grid-cols-2 gap-2 text-[10.5px]">
-          <Stat label="پیش‌نیاز" value={gate.prerequisites} />
-          <Stat label="تایید شده" value={gate.passed} color="var(--radar-green)" />
-          <Stat label="در انتظار" value={gate.pending} color="var(--radar-amber)" />
-          <Stat label="رد شده" value={gate.failed} color="#ef4444" />
+      <p className="mb-3 text-sm font-extrabold">{gate.name}</p>
+      <div className="flex items-center gap-3">
+        <div className="grid flex-1 grid-cols-4 gap-1.5">
+          <GateStatBox label="پیش‌نیاز" value={gate.prerequisites} />
+          <GateStatBox label="تایید شده" value={gate.passed} color="var(--radar-green)" />
+          <GateStatBox label="در انتظار" value={gate.pending} color="var(--radar-amber)" />
+          <GateStatBox label="رد شده" value={gate.failed} color="#ef4444" />
         </div>
+        <RingGauge pct={gate.readinessPct} color="var(--radar-green)" size={68} stroke={6} unit="٪" sub="آمادگی" />
       </div>
+      <GateStageStepper stages={stages} />
     </Panel>
   )
 }
 
-function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
+function GateStatBox({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div>
-      <p className="num text-sm font-extrabold" style={{ color }}>{toFa(value)}</p>
-      <p className="text-muted">{label}</p>
+    <div className="rounded-xl border px-1.5 py-2 text-center" style={{ borderColor: 'var(--border-soft)' }}>
+      <p className="num text-lg font-extrabold leading-tight" style={{ color }}>{toFa(value)}</p>
+      <p className="mt-0.5 truncate text-[8px] font-bold tracking-wide text-muted">{label}</p>
+    </div>
+  )
+}
+
+/** Horizontal stage roadmap under the gate stats — same done/current/upcoming semantics as the
+ * vertical LifecyclePanel timeline, rendered as a connected dot-and-line strip. */
+function GateStageStepper({ stages }: { stages: RadarLifecycleStage[] }) {
+  return (
+    <div className="relative mt-5">
+      <div className="absolute inset-x-1 top-[7px] h-px" style={{ background: 'var(--border-soft)' }} />
+      <div className="relative grid items-start" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
+        {stages.map((s) => (
+          <div key={s.key} className="flex min-w-0 flex-col items-center gap-1.5 px-px">
+            {s.state === 'done' ? (
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: 'var(--radar-green)' }} />
+            ) : s.state === 'current' ? (
+              <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                <span className="absolute h-2.5 w-2.5 rounded-full" style={{ background: 'var(--radar-cyan)', boxShadow: '0 0 10px 3px color-mix(in srgb, var(--radar-cyan) 70%, transparent)' }} />
+                <span className="absolute h-4 w-4 rounded-full border" style={{ borderColor: 'var(--radar-cyan)' }} />
+              </span>
+            ) : (
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full border" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)' }} />
+            )}
+            <span
+              className="block w-full text-center text-[6.5px] font-bold leading-[1.15] text-muted"
+              dir="ltr"
+              style={{
+                fontFamily: "'Montserrat', sans-serif",
+                textTransform: 'uppercase',
+                letterSpacing: '0.01em',
+                overflowWrap: 'anywhere',
+                color: s.state === 'current' ? 'var(--radar-cyan)' : undefined,
+              }}
+            >
+              {s.labelEn}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -277,21 +363,20 @@ export function ContractPanel({ contract }: { contract: ContractSummary }) {
   ]
   return (
     <Panel>
-      <PanelTitle text="خلاصه قرارداد" hint="CONTRACT SUMMARY" />
-      <div className="mb-3 flex items-center gap-3">
-        <RingGauge pct={contract.paidPct} color="var(--radar-cyan)" size={56} label="پرداخت" />
-        <p className="text-[11px] text-secondary">
-          <span className="num text-base font-extrabold" style={{ color: 'var(--radar-cyan)' }}>{toFa(contract.paidPct)}٪</span> از ارزش قرارداد پرداخت شده
-        </p>
+      <PanelTitle text="خلاصه قرارداد" action="مشاهده جزئیات" />
+      <div className="flex items-start gap-3">
+        <ul className="min-w-0 flex-1 space-y-1.5 text-[11px]">
+          {rows.map((r) => (
+            <li key={r.label} className="flex items-center justify-between border-t pt-1.5 first:border-t-0 first:pt-0" style={{ borderColor: 'var(--border-soft)' }}>
+              <span className="text-muted">{r.label}</span>
+              <span className="num font-bold" style={{ color: r.color }}>{r.value}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
+          <RingGauge pct={contract.paidPct} color="var(--radar-cyan)" size={80} stroke={7} unit="٪" sub="پرداخت‌شده" />
+        </div>
       </div>
-      <ul className="space-y-1.5 text-[11px]">
-        {rows.map((r) => (
-          <li key={r.label} className="flex items-center justify-between border-t pt-1.5 first:border-t-0 first:pt-0" style={{ borderColor: 'var(--border-soft)' }}>
-            <span className="text-muted">{r.label}</span>
-            <span className="num font-bold" style={{ color: r.color }}>{r.value}</span>
-          </li>
-        ))}
-      </ul>
     </Panel>
   )
 }

@@ -12,7 +12,7 @@ import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
-import { CriticalSignalsPanel, ContractPanel, EpcPanel, KpiRingCard, KpiStatRow, LifecyclePanel, NextGatePanel } from './RadarPanels'
+import { CriticalSignalsPanel, ContractPanel, EpcPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_FA, STATUS_COLOR, STATUS_LABEL_FA, buildMockRadarData, toFa,
   type SignalCategory,
@@ -124,8 +124,22 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const statusColor = STATUS_COLOR[data.status]
   const displayName = selectedProject ? selectedProject.officialName : data.projectName
 
+  // Performance-strip derived values (Project/Time/Cost/Quality Performance cards)
+  const healthCaption = data.kpi.health >= 85 ? 'عالی' : data.kpi.health >= 70 ? 'خوب' : data.kpi.health >= 50 ? 'متوسط' : 'ضعیف'
+  const healthColor = data.kpi.health >= 70 ? 'var(--radar-green)' : data.kpi.health >= 50 ? 'var(--radar-amber)' : '#ef4444'
+  const timeVariance = data.kpi.progressActual - data.kpi.progressPlanned
+  const timeColor = timeVariance < 0 ? 'var(--radar-amber)' : 'var(--radar-green)'
+  const timeCaption = timeVariance < 0 ? 'عقب از برنامه' : timeVariance > 0 ? 'جلوتر از برنامه' : 'مطابق برنامه'
+  const costColor = data.kpi.costVariancePct >= 0 ? 'var(--radar-green)' : 'var(--radar-amber)'
+  const costCaption = data.kpi.costVariancePct >= 0 ? 'صرفه در بودجه' : 'بیش از بودجه'
+  const qualityColor = data.kpi.qualityPct >= 70 ? 'var(--radar-green)' : 'var(--radar-amber)'
+  const qualityCaption = data.kpi.qualityPct >= 85 ? 'عالی' : data.kpi.qualityPct >= 70 ? 'خوب' : 'متوسط'
+
   return (
     <div className="relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
+      {/* Reserves space for the floating sidebar instead of letting it overlap the content
+          (the sidebar itself is `position: fixed`, so it takes no layout space on its own). */}
+      <div className="transition-[margin] duration-300" style={{ marginInlineStart: sidebarOpen ? '16rem' : 0 }}>
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2.5">
@@ -258,19 +272,39 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           </div>
         </div>
 
-        {/* Main grid: KPI rings | Radar | Lifecycle */}
+        {/* Main grid: performance rings | Radar + risk/issue stack + Lifecycle */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           <div className="grid grid-cols-2 gap-3 lg:col-span-1 lg:grid-cols-1">
-            <KpiRingCard title="سلامت پروژه" pct={data.kpi.health} color="var(--radar-green)" sub={data.kpi.health >= 70 ? 'GOOD' : data.kpi.health >= 50 ? 'FAIR' : 'POOR'} />
-            <KpiRingCard title="پیشرفت پروژه" pct={data.kpi.progressActual} color="var(--radar-cyan)" sub={`برنامه ${toFa(data.kpi.progressPlanned)}٪ · واریانس ${toFa(data.kpi.progressActual - data.kpi.progressPlanned)}٪`} />
-            <KpiRingCard title="عملکرد هزینه" pct={Math.round(data.kpi.cpi * 100)} color="var(--radar-amber)" sub={`CPI ${toFa(data.kpi.cpi.toFixed(2))}`} />
-            <KpiRingCard title="عملکرد زمان" pct={Math.round(data.kpi.spi * 100)} color="#ef4444" sub={`SPI ${toFa(data.kpi.spi.toFixed(2))}`} />
+            <PerformanceRingCard
+              title="سلامت پروژه" titleEn="PROJECT HEALTH"
+              pct={data.kpi.health} color={healthColor} ringSub="از ۱۰۰"
+              bigValue={toFa(data.kpi.health)} bigValueColor="var(--text-primary)"
+              caption={healthCaption} captionColor={healthColor}
+            />
+            <PerformanceRingCard
+              title="عملکرد زمان" titleEn="TIME PERFORMANCE"
+              pct={data.kpi.progressActual} color={timeColor} ringUnit="٪"
+              bigValue={`${timeVariance > 0 ? '+' : ''}${toFa(timeVariance)}٪`} bigValueColor={timeColor}
+              caption={timeCaption} captionColor={timeColor}
+            />
+            <PerformanceRingCard
+              title="عملکرد هزینه" titleEn="COST PERFORMANCE"
+              pct={data.kpi.costPerformancePct} color={costColor} ringUnit="٪"
+              bigValue={`${data.kpi.costVariancePct > 0 ? '+' : ''}${toFa(data.kpi.costVariancePct)}٪`} bigValueColor={costColor}
+              caption={costCaption} captionColor={costColor}
+            />
+            <PerformanceRingCard
+              title="عملکرد کیفیت" titleEn="QUALITY PERFORMANCE"
+              pct={data.kpi.qualityPct} color={qualityColor} ringUnit="٪"
+              bigValue={qualityCaption} bigValueColor={qualityColor}
+            />
           </div>
 
           <div className="lg:col-span-3">
             {/* One shared dark scope surface — Lifecycle floats beside the radar on the same
                 background/border instead of sitting in its own separate boxed panel, so it reads
-                as part of the radar view rather than an adjacent card. */}
+                as part of the radar view rather than an adjacent card. The risk/issue/delay stack
+                sits between the two, matching the reference layout. */}
             <div
               className="radar-stage-shell relative overflow-hidden rounded-3xl border p-4 sm:p-6"
               style={{ borderColor: 'var(--radar-grid)', background: 'var(--radar-bg)' }}
@@ -278,6 +312,13 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
                 <div className="min-w-0 lg:flex-1">
                   <RadarDisplay signals={visibleSignals} dimmed={scanning} />
+                </div>
+                <div className="flex flex-col gap-2 lg:w-56 lg:shrink-0">
+                  <SignalStatCard icon={ShieldAlert} label="ریسک‌های فعال" labelEn="ACTIVE RISKS" value={data.kpi.activeRisks} badge={`${toFa(data.kpi.activeRisksHigh)} بالا`} badgeColor="#e74c3c" color="#e74c3c" />
+                  <SignalStatCard icon={Activity} label="مسائل باز" labelEn="OPEN ISSUES" value={data.kpi.openIssues} badge={`${toFa(data.kpi.openIssuesHigh)} بالا`} badgeColor="#a78bfa" color="#a78bfa" />
+                  <SignalStatCard icon={Clock3} label="فعالیت‌های معوق" labelEn="DELAYED ACTIVITIES" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
+                  <SignalStatCard icon={RefreshCw} label="تغییرات در انتظار" labelEn="PENDING CHANGES" value={data.kpi.pendingChanges} color="#38bdf8" />
+                  <SignalStatCard icon={CheckCircle2} label="نقاط عطف پیش‌رو" labelEn="UPCOMING MILESTONES" value={data.kpi.upcomingMilestones} badge="۳۰ روز آینده" badgeColor="var(--radar-green)" color="var(--radar-green)" />
                 </div>
                 <div className="lg:w-64 lg:shrink-0 lg:border-s lg:ps-5" style={{ borderColor: 'var(--radar-grid)' }}>
                   <LifecyclePanel
@@ -287,13 +328,6 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
                   />
                 </div>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-                <KpiStatRow icon={ShieldAlert} label="ریسک فعال" value={data.kpi.activeRisks} sub={`${toFa(data.kpi.activeRisksHigh)} بالا`} color="#e74c3c" />
-                <KpiStatRow icon={Activity} label="مسئله باز" value={data.kpi.openIssues} sub={`${toFa(data.kpi.openIssuesHigh)} بالا`} color="#a78bfa" />
-                <KpiStatRow icon={Clock3} label="فعالیت معوق" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
-                <KpiStatRow icon={RefreshCw} label="تغییر در انتظار" value={data.kpi.pendingChanges} color="#f59e0b" />
-                <KpiStatRow icon={CheckCircle2} label="نقطه عطف پیش‌رو" value={data.kpi.upcomingMilestones} sub="۳۰ روز آینده" color="var(--radar-green)" />
-              </div>
             </div>
           </div>
         </div>
@@ -301,7 +335,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         {/* Bottom row: signals, gate, contract, epc */}
         <div className={`mt-4 grid grid-cols-1 gap-4 ${data.epc ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
           <CriticalSignalsPanel signals={data.signals} />
-          <NextGatePanel gate={data.nextGate} />
+          <NextGatePanel gate={data.nextGate} stages={data.lifecycle} />
           <ContractPanel contract={data.contract} />
           {data.epc && <EpcPanel dims={data.epc} />}
         </div>
@@ -316,6 +350,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           </span>
         </div>
       </main>
+      </div>
 
       {/* ── Floating sidebar (all breakpoints) — docked to the visual right edge, which in this
           RTL app is `inset-inline-start` (inline-end resolves to the LEFT under dir="rtl"). ── */}
