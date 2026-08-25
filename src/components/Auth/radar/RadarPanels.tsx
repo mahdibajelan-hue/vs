@@ -105,7 +105,7 @@ export function PerformanceRingCard({
   captionColor?: string
 }) {
   return (
-    <Panel>
+    <div className="p-1">
       <PanelTitle text={title} />
       <div className="flex items-center gap-4">
         <RingGauge pct={pct} color={color} size={64} stroke={6} unit={ringUnit} sub={ringSub} />
@@ -114,7 +114,7 @@ export function PerformanceRingCard({
           {caption && <p className="mt-1.5 text-[10px] font-bold tracking-wide" style={{ color: captionColor }}>{caption}</p>}
         </div>
       </div>
-    </Panel>
+    </div>
   )
 }
 
@@ -133,10 +133,10 @@ export function SignalStatCard({
 }) {
   const animated = useCountUp(value, 600)
   return (
-    <div className="rounded-xl border p-2.5" style={{ borderColor: 'var(--border-soft)' }}>
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
-          <Icon size={14} style={{ color }} />
+    <div className="p-1.5">
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
+          <Icon size={22} style={{ color }} />
         </div>
         <p className="truncate text-[9px] font-bold tracking-wide text-muted">{label}</p>
       </div>
@@ -157,7 +157,7 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
   return (
-    <Panel className="flex h-full flex-col">
+    <div className="flex h-full flex-col p-1">
       <PanelTitle text="LIFECYCLE PROGRESS" />
       <div className="mb-4 flex justify-center">
         <RingGauge
@@ -216,7 +216,7 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
           )
         })}
       </ol>
-    </Panel>
+    </div>
   )
 }
 

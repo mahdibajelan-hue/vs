@@ -363,7 +363,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           insetInlineStart: 0,
           background: 'var(--bg-panel-solid)',
           borderColor: 'var(--border-soft)',
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
         }}
       >
         <div className="mb-3 flex items-center justify-between px-1">
