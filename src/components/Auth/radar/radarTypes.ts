@@ -72,6 +72,8 @@ export interface RadarLifecycleStage {
   label: string
   labelEn: string
   state: StageState
+  /** Mock planned/actual date for this stage, shown in the timeline's hover tooltip. */
+  dateFa: string
 }
 
 /** The 9-stage sequence from the Project Radar brief — a display-level concept for this hero
@@ -223,6 +225,16 @@ function pick<T>(arr: T[], i: number): T {
   return arr[i % arr.length]
 }
 
+/** Not a real Jalali calendar conversion — just a plausible-looking, monotonically increasing
+ * mock date per stage index, since this is display-only for the timeline hover tooltip. */
+function mockStageDateFa(baseYear: number, baseMonth: number, offsetMonths: number): string {
+  const totalMonths = baseMonth - 1 + offsetMonths
+  const year = baseYear + Math.floor(totalMonths / 12)
+  const month = (totalMonths % 12) + 1
+  const day = 1 + ((offsetMonths * 7) % 27)
+  return toFa(`${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`)
+}
+
 /** Deterministic mock generator: `seed` is any stable string (project id, or a fixed default key
  * for the "no project selected yet" state) so the same input always renders the same radar. */
 export function buildMockRadarData(seed: string, projectName: string, projectIdCode: string): RadarData {
@@ -255,9 +267,12 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
   })
 
   const currentStageIndex = Math.min(8, Math.floor(rand() * 6) + 2)
-  const lifecycle: RadarLifecycleStage[] = STAGE_DEFS.map((s, i) => ({
+  const baseYear = 1401 + Math.floor(rand() * 2)
+  const baseMonth = 1 + Math.floor(rand() * 6)
+  const lifecycle: RadarLifecycleStage[] = STAGE_DEFS.map((s, i): RadarLifecycleStage => ({
     ...s,
     state: i < currentStageIndex ? 'done' : i === currentStageIndex ? 'current' : 'upcoming',
+    dateFa: mockStageDateFa(baseYear, baseMonth, i * (2 + Math.floor(rand() * 3))),
   }))
   const currentStageKey = STAGE_DEFS[currentStageIndex].key
 
@@ -353,7 +368,11 @@ export const DEFAULT_RADAR_DATA: RadarData = {
     { id: 'sig-7', category: 'contract', severity: 'low', title: 'وضعیت صورت‌وضعیت', subject: 'IPC شماره ۱۴', detail: 'در انتظار تایید', impact: 'تاخیر احتمالی در جریان نقدی پیمانکار', rootCause: 'در صف بررسی مالی', recommendedAction: 'پیگیری تایید نزد واحد مالی', angle: 250, radius: 0.8 },
     { id: 'sig-8', category: 'issue', severity: 'high', title: 'عدم انطباق کیفی', subject: 'بازرسی جوش خط ۰۸', detail: '۴ مورد NCR', impact: 'نیازمند تعمیر پیش از تست هیدرواستاتیک', rootCause: 'انحراف از رویه جوشکاری تاییدشده', recommendedAction: 'بازآموزی جوشکار و تعمیر مطابق NCR', angle: 335, radius: 0.38 },
   ],
-  lifecycle: STAGE_DEFS.map((s, i) => ({ ...s, state: i < 5 ? 'done' : i === 5 ? 'current' : 'upcoming' })),
+  lifecycle: STAGE_DEFS.map((s, i): RadarLifecycleStage => ({
+    ...s,
+    state: i < 5 ? 'done' : i === 5 ? 'current' : 'upcoming',
+    dateFa: mockStageDateFa(1401, 4, i * 3),
+  })),
   currentStageLabel: 'EPC',
   nextGate: { name: 'انجماد طراحی (Design Freeze)', prerequisites: 12, passed: 8, pending: 2, failed: 2, readinessPct: 67 },
   epc: [

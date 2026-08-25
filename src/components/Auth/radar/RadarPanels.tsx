@@ -104,32 +104,59 @@ export function KpiStatRow({
 
 export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleStage[]; overallPct: number }) {
   const current = stages.find((s) => s.state === 'current')
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   return (
     <Panel>
       <PanelTitle text="مسیر چرخه عمر پروژه" hint="LIFECYCLE" />
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-4 flex items-center gap-3">
         <RingGauge pct={overallPct} color="var(--radar-green)" size={64} stroke={6} />
         <div>
           <p className="text-xs font-extrabold">{current?.label ?? '—'}</p>
           <p className="eyebrow-en text-[9px]" dir="ltr">{current?.labelEn}</p>
         </div>
       </div>
-      <ul className="space-y-1.5">
-        {stages.map((s) => (
-          <li key={s.key} className="flex items-center gap-2">
-            {s.state === 'done' ? (
-              <CheckCircle2 size={13} style={{ color: 'var(--radar-green)' }} />
-            ) : s.state === 'current' ? (
-              <Circle size={13} className="animate-pulse" style={{ color: 'var(--radar-amber)' }} fill="var(--radar-amber)" />
-            ) : (
-              <Circle size={13} className="text-muted" />
-            )}
-            <span className={`text-[11px] ${s.state === 'current' ? 'font-extrabold' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}>
-              {s.label}
-            </span>
-          </li>
-        ))}
-      </ul>
+
+      {/* Vertical timeline: one continuous rail with a dot per stage; hovering a stage floats its
+          mock date next to the dot, matching the request for a date-on-hover interaction. */}
+      <ol className="relative">
+        <div className="absolute bottom-2 top-2 w-px" style={{ insetInlineStart: '5px', background: 'var(--border-soft)' }} />
+        {stages.map((s) => {
+          const isHovered = hoveredKey === s.key
+          return (
+            <li
+              key={s.key}
+              className="relative flex items-start gap-3 py-1.5"
+              onMouseEnter={() => setHoveredKey(s.key)}
+              onMouseLeave={() => setHoveredKey((v) => (v === s.key ? null : v))}
+            >
+              <span className="relative z-10 mt-0.5 shrink-0">
+                {s.state === 'done' ? (
+                  <CheckCircle2 size={11} style={{ color: 'var(--radar-green)' }} />
+                ) : s.state === 'current' ? (
+                  <Circle size={11} className="animate-pulse" style={{ color: 'var(--radar-amber)' }} fill="var(--radar-amber)" />
+                ) : (
+                  <Circle size={11} className="text-muted" style={{ background: 'var(--bg-panel-solid)', borderRadius: '999px' }} />
+                )}
+              </span>
+              <span className={`cursor-default text-[11px] ${s.state === 'current' ? 'font-extrabold' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}>
+                {s.label}
+              </span>
+
+              {isHovered && (
+                <span
+                  className="radar-callout pointer-events-none absolute z-20 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold shadow-xl"
+                  style={{
+                    insetInlineStart: 0, bottom: '100%', marginBottom: '4px',
+                    borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', color: 'var(--text-primary)',
+                  }}
+                >
+                  {s.dateFa}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ol>
     </Panel>
   )
 }
