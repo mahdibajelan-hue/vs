@@ -1246,3 +1246,27 @@ body {
     animation: none !important;
   }
 }
+
+/* ===== Project Control Center — command-center launchpad background =====
+   A single-tone accent glow + faint grid, not the multi-color blurred blobs the earlier hub used
+   — the brief explicitly asked for one technological accent color and no heavy gradients. */
+
+.launchpad-texture {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 900px 480px at 50% -10%, color-mix(in srgb, var(--radar-green) 7%, transparent), transparent 60%),
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+  mask-image: radial-gradient(circle at 50% 0%, black, transparent 78%);
+}
+:root[data-theme="light"] .launchpad-texture {
+  background:
+    radial-gradient(ellipse 900px 480px at 50% -10%, color-mix(in srgb, var(--radar-green) 10%, transparent), transparent 60%),
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+}
