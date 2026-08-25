@@ -9,8 +9,9 @@ export interface ModuleCardProps {
   description: string
   icon: LucideIcon
   accent: string
-  /** The flagship entry — Project Radar. Rendered noticeably bigger and centered above the
-   * regular grid by ModuleLaunchpad, not just accent-bordered like the others. */
+  /** The flagship entry — Project Radar. Same footprint as every other card (all six sit in one
+   * equal-size grid), but filled with a vivid accent wash + glow instead of the neutral dark
+   * background, so it reads as the centerpiece by color, not by size. */
   hero?: boolean
   /** English micro-CTA shown only on the hero card (e.g. "ENTER PROJECT RADAR"). */
   cta?: string
@@ -41,50 +42,72 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
       disabled={locked}
       onClick={locked ? undefined : onSelect}
       onMouseMove={locked ? undefined : trackSpotlight}
-      className={`hub-grid-card group flex w-full flex-col rounded-2xl border text-right ${hero ? 'p-8' : 'p-3.5'} ${
+      className={`hub-grid-card group flex h-full w-full flex-col rounded-2xl border p-3.5 text-right ${
         locked ? 'pointer-events-none opacity-55 grayscale-[0.4]' : ''
       }`}
       style={{
-        borderColor: hero ? 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))' : 'var(--border-soft)',
-        boxShadow: hero ? '0 0 40px color-mix(in srgb, var(--radar-green) 10%, transparent)' : undefined,
+        background: hero
+          ? `linear-gradient(160deg, color-mix(in srgb, ${accent} 40%, var(--bg-panel-solid)), color-mix(in srgb, ${accent} 12%, var(--bg-panel-solid)))`
+          : undefined,
+        borderColor: hero ? accent : 'var(--border-soft)',
+        boxShadow: hero ? `0 0 56px color-mix(in srgb, ${accent} 55%, transparent)` : undefined,
         // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
         '--card-accent': accent,
       }}
     >
-      <div className="hub-grid-card-glow" style={{ background: accent }} />
+      {!hero && <div className="hub-grid-card-glow" style={{ background: accent }} />}
 
       <div className="relative z-10 flex items-start justify-between gap-2">
-        <span className={`font-mono font-bold tracking-[0.18em] ${hero ? 'text-xs' : 'text-[10px]'}`} dir="ltr" style={{ color: accent }}>
+        <span
+          className="font-mono text-[10px] font-bold tracking-[0.18em]"
+          dir="ltr"
+          style={{ color: hero ? '#031008' : accent, opacity: hero ? 0.75 : 1 }}
+        >
           {number}
         </span>
         {visual ?? (
           <div
-            className={`flex shrink-0 items-center justify-center rounded-lg border transition-transform duration-300 group-hover:scale-110 ${hero ? 'h-16 w-16' : 'h-9 w-9'}`}
-            style={{ background: `color-mix(in srgb, ${accent} 14%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 35%, transparent)` }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-transform duration-300 group-hover:scale-110"
+            style={
+              hero
+                ? { background: accent, borderColor: accent }
+                : { background: `color-mix(in srgb, ${accent} 14%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 35%, transparent)` }
+            }
           >
-            <Icon size={hero ? 28 : 16} style={{ color: accent }} />
+            <Icon size={16} style={{ color: hero ? '#031008' : accent }} />
           </div>
         )}
       </div>
 
-      <p className={`relative z-10 font-extrabold ${hero ? 'mt-5 text-2xl' : 'mt-3 text-sm'}`}>{title}</p>
-      <p className={`eyebrow-en relative z-10 ${hero ? 'mt-1 text-[11px]' : 'mt-0.5 text-[9px]'}`} dir="ltr">
+      <p className="relative z-10 mt-3 text-sm font-extrabold" style={{ color: hero ? '#031008' : undefined }}>
+        {title}
+      </p>
+      <p className="eyebrow-en relative z-10 mt-0.5 text-[9px]" dir="ltr" style={{ color: hero ? 'color-mix(in srgb, #031008 70%, transparent)' : undefined }}>
         {englishTag}
       </p>
-      <p className={`relative z-10 flex-1 text-secondary ${hero ? 'mt-3 text-[13px] leading-6' : 'mt-2 line-clamp-2 text-[11px] leading-5'}`}>{description}</p>
+      <p
+        className="relative z-10 mt-2 line-clamp-2 flex-1 text-[11px] leading-5"
+        style={{ color: hero ? 'color-mix(in srgb, #031008 85%, transparent)' : 'var(--text-secondary)' }}
+      >
+        {description}
+      </p>
 
-      <div className={`relative z-10 flex items-center justify-between gap-2 ${hero ? 'mt-6' : 'mt-3'}`}>
+      <div className="relative z-10 mt-3 flex items-center justify-between gap-2">
         {cta && !locked ? (
-          <span className="font-bold tracking-wide text-[10px]" dir="ltr" style={{ color: accent }}>
+          <span className="text-[10px] font-bold tracking-wide" dir="ltr" style={{ color: hero ? '#031008' : accent }}>
             {cta}
           </span>
         ) : (
           <span />
         )}
         {locked ? (
-          <Lock size={hero ? 16 : 13} className="shrink-0 text-muted" />
+          <Lock size={13} className="shrink-0 text-muted" />
         ) : (
-          <ArrowRight size={hero ? 18 : 14} className="shrink-0 transition-transform duration-300 group-hover:translate-x-1" style={{ color: accent }} />
+          <ArrowRight
+            size={14}
+            className="shrink-0 transition-transform duration-300 group-hover:translate-x-1"
+            style={{ color: hero ? '#031008' : accent }}
+          />
         )}
       </div>
     </button>

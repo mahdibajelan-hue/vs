@@ -13,7 +13,7 @@ export function ProjectRadarCard({ onSelect, locked }: { onSelect: () => void; l
       accent="var(--radar-green)"
       hero
       cta="ENTER PROJECT RADAR →"
-      visual={<RadarMiniVisual size={64} />}
+      visual={<RadarMiniVisual size={36} />}
       locked={locked}
       onSelect={onSelect}
     />

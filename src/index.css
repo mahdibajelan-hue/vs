@@ -1225,14 +1225,35 @@ body {
 }
 
 @keyframes radar-signal-pulse {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-green)) 60%, transparent); }
-  18%  { box-shadow: 0 0 0 9px color-mix(in srgb, var(--pulse-color, var(--radar-green)) 0%, transparent); }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0%   { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-green)) 65%, transparent); }
+  8%   { transform: translate(-50%, -50%) scale(1.6);  filter: brightness(2.2); box-shadow: 0 0 0 14px color-mix(in srgb, var(--pulse-color, var(--radar-green)) 40%, transparent); }
+  30%  { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.3); box-shadow: 0 0 0 5px transparent; }
+  100% { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 transparent; }
 }
 .radar-signal {
   animation-name: radar-signal-pulse;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
+}
+.radar-signal:hover,
+.radar-signal:focus-visible {
+  filter: brightness(1.8);
+}
+
+@keyframes heartbeat-scroll-regular {
+  to { transform: translateX(-180px); }
+}
+@keyframes heartbeat-scroll-critical {
+  0%   { transform: translateX(0); }
+  38%  { transform: translateX(-70px); }
+  52%  { transform: translateX(-70px); }
+  100% { transform: translateX(-180px); }
+}
+.heartbeat-scroll.is-regular {
+  animation: heartbeat-scroll-regular 1.8s linear infinite;
+}
+.heartbeat-scroll.is-critical {
+  animation: heartbeat-scroll-critical 0.9s cubic-bezier(0.7, 0, 0.3, 1) infinite;
 }
 
 @keyframes radar-center-pulse {
@@ -1264,7 +1285,8 @@ body {
   .radar-sweep,
   .radar-signal,
   .radar-center-dot,
-  .radar-live-dot {
+  .radar-live-dot,
+  .heartbeat-scroll {
     animation: none !important;
   }
 }
@@ -1291,4 +1313,30 @@ body {
     linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: auto, 44px 44px, 44px 44px;
+}
+
+/* Launchpad module grid — Radar sits in the middle of the top row, flanked by two cards, with the
+   remaining three below it, so it reads as the surrounded centerpiece once there's room for three
+   columns. Below that breakpoint cards just stack in DOM order (Radar first). All six cells are
+   the same size — only ModuleCard's own `hero` color treatment marks Radar as different. */
+.launchpad-module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .launchpad-module-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .launchpad-module-grid {
+    grid-template-areas: 'a radar b' 'c d e';
+  }
+  .launchpad-module-grid .area-a { grid-area: a; }
+  .launchpad-module-grid .area-radar { grid-area: radar; }
+  .launchpad-module-grid .area-b { grid-area: b; }
+  .launchpad-module-grid .area-c { grid-area: c; }
+  .launchpad-module-grid .area-d { grid-area: d; }
+  .launchpad-module-grid .area-e { grid-area: e; }
 }

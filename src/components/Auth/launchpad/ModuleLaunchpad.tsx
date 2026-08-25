@@ -12,17 +12,17 @@ import { UserManagementCard } from './cards/UserManagementCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => ReactElement
 
-/** Every launchpad entry point, in display order. New modules (Procurement, Document
- * Management, ...) are added here as one more `{ key, Card }` entry — no other part of the page
- * changes. Project Radar has no RBAC gate (it's always the entry point, not one of the
- * `hasModuleAccess`-checked ones) so it's kept out of the filtered list below, and it renders as
- * its own bigger, centered hero card rather than a grid tile. */
-const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent }[] = [
-  { key: 'executive', Card: PortfolioManagementCard },
-  { key: 'reporting', Card: SmartAnalyticsCard },
-  { key: 'competency', Card: TechnicalCompetencyCard },
-  { key: 'estimator', Card: ProjectEstimationCard },
-  { key: 'admin', Card: UserManagementCard },
+/** Every launchpad entry point. Project Radar has no RBAC gate (it's always the entry point, not
+ * one of the `hasModuleAccess`-checked ones), so it's kept out of the filtered list and placed
+ * explicitly in the grid's `radar` area (see `.launchpad-module-grid` in index.css) — the other
+ * five fill areas a/b/c/d/e around it in this order. New modules are added here as one more
+ * `{ key, Card, area }` entry (pick any still-open area). */
+const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] = [
+  { key: 'executive', Card: PortfolioManagementCard, area: 'area-a' },
+  { key: 'reporting', Card: SmartAnalyticsCard, area: 'area-b' },
+  { key: 'competency', Card: TechnicalCompetencyCard, area: 'area-c' },
+  { key: 'estimator', Card: ProjectEstimationCard, area: 'area-d' },
+  { key: 'admin', Card: UserManagementCard, area: 'area-e' },
 ]
 
 export function ModuleLaunchpad({ onSelect }: { onSelect: (key: 'radar' | ModuleKey) => void }) {
@@ -39,13 +39,12 @@ export function ModuleLaunchpad({ onSelect }: { onSelect: (key: 'radar' | Module
 
       {locked && <LoginCard />}
 
-      <div className="hub-fade-in mx-auto mb-6 max-w-md" style={{ animationDelay: '140ms' }}>
-        <ProjectRadarCard onSelect={() => onSelect('radar')} locked={locked} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {visibleModules.map(({ key, Card }, i) => (
-          <div key={key} className="hub-fade-in" style={{ animationDelay: `${200 + i * 50}ms` }}>
+      <div className="launchpad-module-grid">
+        <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>
+          <ProjectRadarCard onSelect={() => onSelect('radar')} locked={locked} />
+        </div>
+        {visibleModules.map(({ key, Card, area }, i) => (
+          <div key={key} className={`hub-fade-in ${area}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
             <Card onSelect={() => onSelect(key)} locked={locked} />
           </div>
         ))}

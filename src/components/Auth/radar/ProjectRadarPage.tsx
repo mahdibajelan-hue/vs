@@ -10,6 +10,7 @@ import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleA
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { SignOutButton } from '../SignOutButton'
+import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, EpcPanel, KpiRingCard, KpiStatRow, LifecyclePanel, NextGatePanel } from './RadarPanels'
 import {
@@ -214,6 +215,8 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           </div>
 
           <SignOutButton className="flex h-9 items-center gap-1.5 rounded-xl border border-red-400/25 px-3 text-[11px] text-red-300 hover:bg-red-500/10 transition-colors" />
+
+          <HeartbeatBar status={data.status} color={statusColor} />
         </div>
       </header>
 
@@ -264,19 +267,34 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
             <KpiRingCard title="عملکرد زمان" pct={Math.round(data.kpi.spi * 100)} color="#ef4444" sub={`SPI ${toFa(data.kpi.spi.toFixed(2))}`} />
           </div>
 
-          <div className="lg:col-span-2">
-            <RadarDisplay signals={visibleSignals} dimmed={scanning} />
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <KpiStatRow icon={ShieldAlert} label="ریسک فعال" value={data.kpi.activeRisks} sub={`${toFa(data.kpi.activeRisksHigh)} بالا`} color="#e74c3c" />
-              <KpiStatRow icon={Activity} label="مسئله باز" value={data.kpi.openIssues} sub={`${toFa(data.kpi.openIssuesHigh)} بالا`} color="#a78bfa" />
-              <KpiStatRow icon={Clock3} label="فعالیت معوق" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
-              <KpiStatRow icon={RefreshCw} label="تغییر در انتظار" value={data.kpi.pendingChanges} color="#f59e0b" />
-              <KpiStatRow icon={CheckCircle2} label="نقطه عطف پیش‌رو" value={data.kpi.upcomingMilestones} sub="۳۰ روز آینده" color="var(--radar-green)" />
+          <div className="lg:col-span-3">
+            {/* One shared dark scope surface — Lifecycle floats beside the radar on the same
+                background/border instead of sitting in its own separate boxed panel, so it reads
+                as part of the radar view rather than an adjacent card. */}
+            <div
+              className="radar-stage-shell relative overflow-hidden rounded-3xl border p-4 sm:p-6"
+              style={{ borderColor: 'var(--radar-grid)', background: 'var(--radar-bg)' }}
+            >
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                <div className="min-w-0 lg:flex-1">
+                  <RadarDisplay signals={visibleSignals} dimmed={scanning} />
+                </div>
+                <div className="lg:w-64 lg:shrink-0 lg:border-s lg:ps-5" style={{ borderColor: 'var(--radar-grid)' }}>
+                  <LifecyclePanel
+                    stages={data.lifecycle}
+                    overallPct={Math.round((data.lifecycle.filter((s) => s.state === 'done').length / data.lifecycle.length) * 100)}
+                    floating
+                  />
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                <KpiStatRow icon={ShieldAlert} label="ریسک فعال" value={data.kpi.activeRisks} sub={`${toFa(data.kpi.activeRisksHigh)} بالا`} color="#e74c3c" />
+                <KpiStatRow icon={Activity} label="مسئله باز" value={data.kpi.openIssues} sub={`${toFa(data.kpi.openIssuesHigh)} بالا`} color="#a78bfa" />
+                <KpiStatRow icon={Clock3} label="فعالیت معوق" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
+                <KpiStatRow icon={RefreshCw} label="تغییر در انتظار" value={data.kpi.pendingChanges} color="#f59e0b" />
+                <KpiStatRow icon={CheckCircle2} label="نقطه عطف پیش‌رو" value={data.kpi.upcomingMilestones} sub="۳۰ روز آینده" color="var(--radar-green)" />
+              </div>
             </div>
-          </div>
-
-          <div className="lg:col-span-1">
-            <LifecyclePanel stages={data.lifecycle} overallPct={Math.round((data.lifecycle.filter((s) => s.state === 'done').length / data.lifecycle.length) * 100)} />
           </div>
         </div>
 

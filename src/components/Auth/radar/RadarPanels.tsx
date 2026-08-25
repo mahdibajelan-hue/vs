@@ -102,11 +102,20 @@ export function KpiStatRow({
   )
 }
 
-export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleStage[]; overallPct: number }) {
+export function LifecyclePanel({
+  stages, overallPct, floating,
+}: {
+  stages: RadarLifecycleStage[]
+  overallPct: number
+  /** Renders borderless/transparent so it blends directly into the radar's own dark scope
+   * surface instead of reading as a separate boxed panel next to it. */
+  floating?: boolean
+}) {
   const current = stages.find((s) => s.state === 'current')
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
-  return (
-    <Panel>
+
+  const body = (
+    <>
       <PanelTitle text="مسیر چرخه عمر پروژه" hint="LIFECYCLE" />
       <div className="mb-4 flex items-center gap-3">
         <RingGauge pct={overallPct} color="var(--radar-green)" size={64} stroke={6} />
@@ -157,8 +166,10 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
           )
         })}
       </ol>
-    </Panel>
+    </>
   )
+
+  return floating ? <div className="p-1">{body}</div> : <Panel>{body}</Panel>
 }
 
 export function NextGatePanel({ gate }: { gate: RadarGate }) {

@@ -47,7 +47,11 @@ export function LoginCard() {
       className={`hub-fade-in glass-panel mx-auto mb-8 w-full max-w-sm rounded-2xl border p-6 transition-colors duration-300 ${
         status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''
       }`}
-      style={{ borderColor: 'var(--border-soft)', animationDelay: '40ms' }}
+      style={{
+        borderColor: status === 'idle' ? 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))' : 'var(--border-soft)',
+        boxShadow: status === 'idle' ? '0 0 44px color-mix(in srgb, var(--radar-green) 16%, transparent)' : undefined,
+        animationDelay: '40ms',
+      }}
     >
       {status === 'success' ? (
         <div className="flex flex-col items-center gap-2 py-3 text-center">
@@ -60,7 +64,7 @@ export function LoginCard() {
       ) : (
         <>
           <div className="mb-4 flex items-center justify-center gap-1.5">
-            <BadgeCheck size={14} className="text-brand-400" />
+            <BadgeCheck size={14} style={{ color: 'var(--radar-green)' }} />
             <p className="text-sm font-bold">ورود به سامانه</p>
           </div>
           <div className="space-y-3">
@@ -75,7 +79,7 @@ export function LoginCard() {
                   onChange={(e) => setEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && submit()}
                   disabled={status === 'submitting'}
-                  className="input pl-9"
+                  className="input pl-9 focus:!border-[color:var(--radar-green)]"
                   placeholder="person@example.com"
                   dir="ltr"
                   autoFocus
@@ -111,7 +115,8 @@ export function LoginCard() {
             <button
               onClick={submit}
               disabled={status === 'submitting'}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-400 disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-black transition-transform hover:scale-[1.02] disabled:opacity-60"
+              style={{ background: 'linear-gradient(90deg, var(--radar-green), var(--radar-cyan))' }}
             >
               {status === 'submitting' ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={15} />}
               {status === 'submitting' ? 'در حال بررسی...' : 'ورود'}
