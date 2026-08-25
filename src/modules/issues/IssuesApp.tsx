@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { fetchModuleProjectMappings } from '../masterdata/lib/hierarchyRollup'
 import { useIssuesStore } from './store/useIssuesStore'
 import { useIssuesMembersStore } from './store/useIssuesMembersStore'
 import { DashboardPage } from './pages/DashboardPage'
@@ -43,6 +45,21 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Arrived here from Project Radar with a project already in context: open straight into that
+  // project's issue list instead of the dashboard.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  useEffect(() => {
+    if (!contextProjectId) return
+    fetchModuleProjectMappings('issues').then((map) => {
+      const resolved = map.get(contextProjectId)
+      if (resolved) {
+        setProjectFilter(resolved)
+        setTab('projects')
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

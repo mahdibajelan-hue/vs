@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { LevelBreadcrumb } from '../masterdata/components/LevelBreadcrumb'
 import { useHierarchyPath } from '../masterdata/lib/useHierarchyPath'
+import { fetchModuleProjectMappings } from '../masterdata/lib/hierarchyRollup'
 import { useRiskStore } from './store/useRiskStore'
 import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
@@ -32,6 +34,18 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     fetchProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Arrived here from Project Radar with a project already in context: jump straight to that
+  // project's risk register instead of making the user find it again in the picker.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  useEffect(() => {
+    if (!contextProjectId) return
+    fetchModuleProjectMappings('risk').then((map) => {
+      const resolved = map.get(contextProjectId)
+      if (resolved) selectProject(resolved)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

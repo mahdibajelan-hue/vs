@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -133,6 +134,10 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
 
+  // Arrived here from Project Radar with a project already in context (Finance uses
+  // masterProjectId directly, no mapping table needed).
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     if (!financeLoaded) fetchFinance()
@@ -140,8 +145,10 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) setProjectId(projects[0].id)
-  }, [projects, projectId])
+    if (projects.length === 0 || projectId) return
+    const preferred = contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id
+    setProjectId(preferred)
+  }, [projects, projectId, contextProjectId])
 
   const toggleFinTheme = () => {
     const next = !finLight

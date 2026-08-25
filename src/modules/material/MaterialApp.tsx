@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ClipboardCheck, Factory, GitBranch, LayoutDashboard, Loader2, Package, ShoppingCart, Truck, Warehouse } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMaterialStore } from './store/useMaterialStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -46,6 +47,10 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('dashboard')
 
+  // Arrived here from Project Radar with a project already in context (Material uses
+  // masterProjectId directly, no mapping table needed).
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     if (!materialLoaded) fetchMaterial()
@@ -53,8 +58,10 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) setProjectId(projects[0].id)
-  }, [projects, projectId])
+    if (projects.length === 0 || projectId) return
+    const preferred = contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id
+    setProjectId(preferred)
+  }, [projects, projectId, contextProjectId])
 
   if ((masterDataLoading && !masterDataLoaded) || (!materialLoaded && !masterDataLoaded)) {
     return (

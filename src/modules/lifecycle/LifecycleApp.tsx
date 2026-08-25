@@ -3,6 +3,7 @@ import { GitBranch, LayoutDashboard, Loader2, Settings2, Target } from 'lucide-r
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useLifecycleStore } from './store/useLifecycleStore'
 import { PortfolioDashboardPage } from './pages/PortfolioDashboardPage'
@@ -40,6 +41,14 @@ export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
     await selectProject(projectId)
     setView({ kind: 'tower', projectId })
   }
+
+  // Arrived here from Project Radar with a project already in context (Lifecycle uses
+  // masterProjectId directly, no mapping table needed): open straight into its Control Tower.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  useEffect(() => {
+    if (contextProjectId) openProject(contextProjectId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const activeProject =
     view.kind !== 'portfolio' && view.kind !== 'templates'
