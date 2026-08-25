@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2, ChevronDown,
   ChevronsRight, Clock3, FileText, GitBranch, Package, Radar as RadarIcon, RefreshCw, Route,
-  ShieldAlert, ShieldCheck, Sparkles,
+  ShieldAlert, ShieldCheck, Sparkles, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../../store/useModuleStore'
@@ -12,9 +12,9 @@ import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
-import { CriticalSignalsPanel, ContractPanel, EpcPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
+import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
 import {
-  DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_FA, STATUS_COLOR, STATUS_LABEL_FA, buildMockRadarData, toFa,
+  DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type SignalCategory,
 } from './radarTypes'
 
@@ -26,21 +26,20 @@ interface NavItem {
   id: string
   moduleKey: ModuleKey | null
   title: string
-  englishTag: string
   icon: LucideIcon
   accent: string
   badge?: number
 }
 
 const CATEGORY_FILTERS: { key: SignalCategory | 'all'; label: string }[] = [
-  { key: 'all', label: 'همه' },
-  { key: 'risk', label: SIGNAL_CATEGORY_LABEL_FA.risk },
-  { key: 'issue', label: SIGNAL_CATEGORY_LABEL_FA.issue },
-  { key: 'delay', label: SIGNAL_CATEGORY_LABEL_FA.delay },
-  { key: 'change', label: SIGNAL_CATEGORY_LABEL_FA.change },
-  { key: 'contract', label: SIGNAL_CATEGORY_LABEL_FA.contract },
-  { key: 'gate', label: SIGNAL_CATEGORY_LABEL_FA.gate },
-  { key: 'milestone', label: SIGNAL_CATEGORY_LABEL_FA.milestone },
+  { key: 'all', label: 'All' },
+  { key: 'risk', label: SIGNAL_CATEGORY_LABEL_EN.risk },
+  { key: 'issue', label: SIGNAL_CATEGORY_LABEL_EN.issue },
+  { key: 'delay', label: SIGNAL_CATEGORY_LABEL_EN.delay },
+  { key: 'change', label: SIGNAL_CATEGORY_LABEL_EN.change },
+  { key: 'contract', label: SIGNAL_CATEGORY_LABEL_EN.contract },
+  { key: 'gate', label: SIGNAL_CATEGORY_LABEL_EN.gate },
+  { key: 'milestone', label: SIGNAL_CATEGORY_LABEL_EN.milestone },
 ]
 
 const SCAN_DURATION_MS = 1400
@@ -97,23 +96,23 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const isVisible = (key: ModuleKey) => hasModuleAccess(accessibleModules, key)
 
   const ALL_NAV_ITEMS: NavItem[] = [
-    { id: 'lifecycle-nav', moduleKey: 'lifecycle', title: 'راهبر چرخه عمر', englishTag: 'Lifecycle Navigator', icon: GitBranch, accent: 'var(--radar-cyan)' },
-    { id: 'epc-tower', moduleKey: 'lifecycle', title: 'برج کنترل EPC', englishTag: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
-    { id: 'risk', moduleKey: 'risk', title: 'مدیریت ریسک', englishTag: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
-    { id: 'issue', moduleKey: 'issues', title: 'مدیریت مسائل', englishTag: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
-    { id: 'change', moduleKey: null, title: 'مدیریت تغییرات', englishTag: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges },
-    { id: 'finance', moduleKey: 'finance', title: 'مدیریت مالی', englishTag: 'Financial Management', icon: Banknote, accent: '#10b981' },
-    { id: 'contract', moduleKey: 'finance', title: 'مدیریت قرارداد', englishTag: 'Contract Control', icon: FileText, accent: '#10b981' },
-    { id: 'material', moduleKey: 'material', title: 'تامین کالا', englishTag: 'Material Supply', icon: Package, accent: '#f59e0b' },
-    { id: 'pipepulse', moduleKey: 'pipepulse', title: 'PipePulse', englishTag: 'Piping Progress', icon: Sparkles, accent: '#0ea5e9' },
-    { id: 'twin', moduleKey: 'pipelinedigitaltwin', title: 'دوقلوی دیجیتال', englishTag: 'Digital Twin', icon: Route, accent: '#38bdf8' },
-    { id: 'docs', moduleKey: null, title: 'مرکز اسناد', englishTag: 'Document Center', icon: FileText, accent: '#64748b' },
+    { id: 'lifecycle-nav', moduleKey: 'lifecycle', title: 'Lifecycle Navigator', icon: GitBranch, accent: 'var(--radar-cyan)' },
+    { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
+    { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
+    { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
+    { id: 'change', moduleKey: null, title: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges },
+    { id: 'finance', moduleKey: 'finance', title: 'Financial Management', icon: Banknote, accent: '#10b981' },
+    { id: 'contract', moduleKey: 'finance', title: 'Contract Control', icon: FileText, accent: '#10b981' },
+    { id: 'material', moduleKey: 'material', title: 'Material Supply', icon: Package, accent: '#f59e0b' },
+    { id: 'pipepulse', moduleKey: 'pipepulse', title: 'PipePulse', icon: Sparkles, accent: '#0ea5e9' },
+    { id: 'twin', moduleKey: 'pipelinedigitaltwin', title: 'Digital Twin', icon: Route, accent: '#38bdf8' },
+    { id: 'docs', moduleKey: null, title: 'Document Center', icon: FileText, accent: '#64748b' },
   ]
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((n) => n.moduleKey === null || isVisible(n.moduleKey))
 
   const handleNavClick = (item: NavItem) => {
     if (!item.moduleKey) {
-      setNotice(`«${item.title}» به‌زودی راه‌اندازی می‌شود`)
+      setNotice(`"${item.title}" is coming soon`)
       window.clearTimeout(noticeTimer.current)
       noticeTimer.current = window.setTimeout(() => setNotice(null), 2600)
       return
@@ -122,41 +121,42 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   }
 
   const statusColor = STATUS_COLOR[data.status]
-  const displayName = selectedProject ? selectedProject.officialName : data.projectName
+  const displayName = selectedProject ? selectedProject.officialName : (data.projectNameEn ?? data.projectName)
 
   // Performance-strip derived values (Project/Time/Cost/Quality Performance cards)
-  const healthCaption = data.kpi.health >= 85 ? 'عالی' : data.kpi.health >= 70 ? 'خوب' : data.kpi.health >= 50 ? 'متوسط' : 'ضعیف'
+  const healthCaption = data.kpi.health >= 85 ? 'EXCELLENT' : data.kpi.health >= 70 ? 'GOOD' : data.kpi.health >= 50 ? 'FAIR' : 'POOR'
   const healthColor = data.kpi.health >= 70 ? 'var(--radar-green)' : data.kpi.health >= 50 ? 'var(--radar-amber)' : '#ef4444'
   const timeVariance = data.kpi.progressActual - data.kpi.progressPlanned
   const timeColor = timeVariance < 0 ? 'var(--radar-amber)' : 'var(--radar-green)'
-  const timeCaption = timeVariance < 0 ? 'عقب از برنامه' : timeVariance > 0 ? 'جلوتر از برنامه' : 'مطابق برنامه'
+  const timeCaption = timeVariance < 0 ? 'BEHIND' : timeVariance > 0 ? 'AHEAD' : 'ON SCHEDULE'
   const costColor = data.kpi.costVariancePct >= 0 ? 'var(--radar-green)' : 'var(--radar-amber)'
-  const costCaption = data.kpi.costVariancePct >= 0 ? 'صرفه در بودجه' : 'بیش از بودجه'
+  const costCaption = data.kpi.costVariancePct >= 0 ? 'AHEAD' : 'OVER BUDGET'
   const qualityColor = data.kpi.qualityPct >= 70 ? 'var(--radar-green)' : 'var(--radar-amber)'
-  const qualityCaption = data.kpi.qualityPct >= 85 ? 'عالی' : data.kpi.qualityPct >= 70 ? 'خوب' : 'متوسط'
+  const qualityCaption = data.kpi.qualityPct >= 85 ? 'EXCELLENT' : data.kpi.qualityPct >= 70 ? 'GOOD' : 'FAIR'
 
   return (
-    <div className="relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
+    <div dir="ltr" className="radar-en relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
       {/* Reserves space for the floating sidebar instead of letting it overlap the content
           (the sidebar itself is `position: fixed`, so it takes no layout space on its own). */}
       <div className="transition-[margin] duration-300" style={{ marginInlineStart: sidebarOpen ? '16rem' : 0 }}>
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2.5">
+          <HeartbeatBar status={data.status} color={statusColor} />
           <button
             onClick={onBack}
-            title="بازگشت به ماژول‌ها"
+            title="Back to Modules"
             className="flex h-10 w-10 items-center justify-center rounded-xl border transition-colors hover:bg-white/5"
             style={{ borderColor: 'var(--border-soft)' }}
           >
-            <ArrowRight size={16} />
+            <ArrowRight size={16} className="rotate-180" />
           </button>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border" style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 40%, transparent)', background: 'color-mix(in srgb, var(--radar-green) 10%, transparent)' }}>
             <RadarIcon size={19} style={{ color: 'var(--radar-green)' }} />
           </div>
           <div className="leading-tight">
             <p className="text-base font-extrabold tracking-wide">PROJECT RADAR</p>
-            <p className="eyebrow-en text-[9px] text-muted" dir="ltr">Live Project Intelligence</p>
+            <p className="text-[9px] font-bold tracking-wide text-muted">LIVE PROJECT INTELLIGENCE</p>
           </div>
         </div>
 
@@ -169,7 +169,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
             {displayName}
             <ChevronDown size={12} className="text-muted" />
           </button>
-          <span className="hidden text-muted sm:inline">شناسه:</span>
+          <span className="hidden text-muted sm:inline">ID:</span>
           <span className="num hidden font-bold sm:inline">{data.projectIdCode}</span>
           {projectPickerOpen && (
             <div
@@ -178,15 +178,15 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
             >
               <button
                 onClick={() => { setContextProject(null); setProjectPickerOpen(false) }}
-                className="block w-full rounded-lg px-2.5 py-1.5 text-right text-[11px] hover:bg-white/5"
+                className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/5"
               >
-                نمای پیش‌فرض (نمونه)
+                Default View (Sample)
               </button>
               {masterProjects.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => { setContextProject(p.id); setProjectPickerOpen(false) }}
-                  className="block w-full truncate rounded-lg px-2.5 py-1.5 text-right text-[11px] hover:bg-white/5"
+                  className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/5"
                 >
                   {p.officialName}
                 </button>
@@ -199,154 +199,157 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           <button
             onClick={runScan}
             disabled={scanning}
-            className="flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[11px] font-bold disabled:opacity-70"
+            className="flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide disabled:opacity-70"
             style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))', color: 'var(--radar-green)' }}
           >
             <RadarIcon size={14} className={scanning ? 'animate-spin' : ''} />
-            {scanning ? `در حال اسکن... ${toFa(Math.round(scanProgress))}٪` : 'RADAR SCAN'}
+            {scanning ? `SCANNING... ${Math.round(scanProgress)}%` : 'RADAR SCAN'}
+            <Activity size={12} className="opacity-60" />
+            <X size={12} className="opacity-60" />
           </button>
 
           <div className="relative">
             <button onClick={() => setNotifOpen((v) => !v)} className="relative flex h-9 w-9 items-center justify-center rounded-xl border" style={{ borderColor: 'var(--border-soft)' }}>
               <Bell size={15} />
               {data.kpi.activeRisksHigh + data.kpi.openIssuesHigh > 0 && (
-                <span className="absolute -top-1 -left-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                  {toFa(data.kpi.activeRisksHigh + data.kpi.openIssuesHigh)}
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  {data.kpi.activeRisksHigh + data.kpi.openIssuesHigh}
                 </span>
               )}
             </button>
             {notifOpen && (
               <div className="absolute top-full z-30 mt-2 w-72 rounded-xl border p-2 shadow-2xl" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', insetInlineEnd: 0 }}>
-                <p className="mb-1.5 px-1.5 text-[10px] font-bold text-muted">هشدارهای با اولویت بالا</p>
+                <p className="mb-1.5 px-1.5 text-[10px] font-bold text-muted">HIGH-PRIORITY ALERTS</p>
                 {data.signals.filter((s) => s.severity === 'critical' || s.severity === 'high').slice(0, 5).map((s) => (
                   <div key={s.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[11px] hover:bg-white/5">
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: s.severity === 'critical' ? '#ef4444' : 'var(--radar-amber)' }} />
-                    <span className="truncate">{s.title}</span>
+                    <span className="truncate">{s.titleEn}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <SignOutButton className="flex h-9 items-center gap-1.5 rounded-xl border border-red-400/25 px-3 text-[11px] text-red-300 hover:bg-red-500/10 transition-colors" />
-
-          <HeartbeatBar status={data.status} color={statusColor} />
+          <SignOutButton
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-red-400/25 px-3 text-[11px] text-red-300 hover:bg-red-500/10 transition-colors"
+            title="Sign out and return to login"
+          >
+            Sign Out
+          </SignOutButton>
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 p-4 sm:p-6">
+      <main className="min-w-0 flex-1 p-4 ps-10 sm:p-6 sm:ps-12">
         {/* Bold project title — the page's real headline, distinct from the compact switcher above */}
         <div className="hub-fade-in mb-5">
           <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ background: 'linear-gradient(90deg, var(--text-primary), var(--radar-green))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {displayName}
           </h1>
           <p className="num mt-1 text-xs text-muted">
-            {data.projectIdCode} · گزارش {data.reportDateFa}
+            {data.projectIdCode} · Report {data.reportDateEn}
           </p>
         </div>
 
-        {/* Status + scan filters */}
+        {/* Status + radar-mode toggle + scan filters */}
         <div className="hub-fade-in mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="text-[10px] font-bold text-muted">PROJECT STATUS</span>
             <span className="flex items-center gap-1.5 text-sm font-extrabold" style={{ color: statusColor }}>
               <span className="radar-live-dot h-2 w-2 rounded-full" style={{ background: statusColor }} />
-              {STATUS_LABEL_FA[data.status].toUpperCase()}
+              {STATUS_LABEL_EN[data.status]}
             </span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORY_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setCategoryFilter(f.key)}
-                className="rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors"
-                style={{
-                  borderColor: categoryFilter === f.key ? 'var(--radar-green)' : 'var(--border-soft)',
-                  color: categoryFilter === f.key ? 'var(--radar-green)' : undefined,
-                  background: categoryFilter === f.key ? 'color-mix(in srgb, var(--radar-green) 10%, transparent)' : undefined,
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2.5">
+            <span className="text-[10px] font-bold text-muted">RADAR MODE</span>
+            <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold" style={{ borderColor: 'var(--border-soft)', color: 'var(--radar-green)' }}>
+              LIVE SCAN
+              <span className="radar-live-dot h-2 w-2 rounded-full" style={{ background: 'var(--radar-green)' }} />
+            </span>
           </div>
         </div>
 
-        {/* Main grid: performance rings | Radar + risk/issue stack + Lifecycle */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          <div className="grid grid-cols-2 gap-3 lg:col-span-1 lg:grid-cols-1">
+        <div className="hub-fade-in mb-4 flex flex-wrap gap-1.5">
+          {CATEGORY_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setCategoryFilter(f.key)}
+              className="rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors"
+              style={{
+                borderColor: categoryFilter === f.key ? 'var(--radar-green)' : 'var(--border-soft)',
+                color: categoryFilter === f.key ? 'var(--radar-green)' : undefined,
+                background: categoryFilter === f.key ? 'color-mix(in srgb, var(--radar-green) 10%, transparent)' : undefined,
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Main grid: performance rings | Radar | risk/issue stack | Lifecycle — four siblings so
+            the radar (the hero element) gets the lion's share of the width instead of competing
+            with the lifecycle card inside a shared, narrower wrapper. */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_290px] xl:items-stretch">
+          <div className="flex flex-col gap-3">
             <PerformanceRingCard
-              title="سلامت پروژه" titleEn="PROJECT HEALTH"
-              pct={data.kpi.health} color={healthColor} ringSub="از ۱۰۰"
-              bigValue={toFa(data.kpi.health)} bigValueColor="var(--text-primary)"
+              title="PROJECT HEALTH"
+              pct={data.kpi.health} color={healthColor} ringSub="/100"
+              bigValue={String(data.kpi.health)} bigValueColor="var(--text-primary)"
               caption={healthCaption} captionColor={healthColor}
             />
             <PerformanceRingCard
-              title="عملکرد زمان" titleEn="TIME PERFORMANCE"
-              pct={data.kpi.progressActual} color={timeColor} ringUnit="٪"
-              bigValue={`${timeVariance > 0 ? '+' : ''}${toFa(timeVariance)}٪`} bigValueColor={timeColor}
+              title="TIME PERFORMANCE"
+              pct={data.kpi.progressActual} color={timeColor} ringUnit="%"
+              bigValue={`${timeVariance > 0 ? '+' : ''}${timeVariance}%`} bigValueColor={timeColor}
               caption={timeCaption} captionColor={timeColor}
             />
             <PerformanceRingCard
-              title="عملکرد هزینه" titleEn="COST PERFORMANCE"
-              pct={data.kpi.costPerformancePct} color={costColor} ringUnit="٪"
-              bigValue={`${data.kpi.costVariancePct > 0 ? '+' : ''}${toFa(data.kpi.costVariancePct)}٪`} bigValueColor={costColor}
+              title="COST PERFORMANCE"
+              pct={data.kpi.costPerformancePct} color={costColor} ringUnit="%"
+              bigValue={`${data.kpi.costVariancePct > 0 ? '+' : ''}${data.kpi.costVariancePct}%`} bigValueColor={costColor}
               caption={costCaption} captionColor={costColor}
             />
             <PerformanceRingCard
-              title="عملکرد کیفیت" titleEn="QUALITY PERFORMANCE"
-              pct={data.kpi.qualityPct} color={qualityColor} ringUnit="٪"
+              title="QUALITY PERFORMANCE"
+              pct={data.kpi.qualityPct} color={qualityColor} ringUnit="%"
               bigValue={qualityCaption} bigValueColor={qualityColor}
             />
           </div>
 
-          <div className="lg:col-span-3">
-            {/* One shared dark scope surface — Lifecycle floats beside the radar on the same
-                background/border instead of sitting in its own separate boxed panel, so it reads
-                as part of the radar view rather than an adjacent card. The risk/issue/delay stack
-                sits between the two, matching the reference layout. */}
-            <div
-              className="radar-stage-shell relative overflow-hidden rounded-3xl border p-4 sm:p-6"
-              style={{ borderColor: 'var(--radar-grid)', background: 'var(--radar-bg)' }}
-            >
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-                <div className="min-w-0 lg:flex-1">
-                  <RadarDisplay signals={visibleSignals} dimmed={scanning} />
-                </div>
-                <div className="flex flex-col gap-2 lg:w-56 lg:shrink-0">
-                  <SignalStatCard icon={ShieldAlert} label="ریسک‌های فعال" labelEn="ACTIVE RISKS" value={data.kpi.activeRisks} badge={`${toFa(data.kpi.activeRisksHigh)} بالا`} badgeColor="#e74c3c" color="#e74c3c" />
-                  <SignalStatCard icon={Activity} label="مسائل باز" labelEn="OPEN ISSUES" value={data.kpi.openIssues} badge={`${toFa(data.kpi.openIssuesHigh)} بالا`} badgeColor="#a78bfa" color="#a78bfa" />
-                  <SignalStatCard icon={Clock3} label="فعالیت‌های معوق" labelEn="DELAYED ACTIVITIES" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
-                  <SignalStatCard icon={RefreshCw} label="تغییرات در انتظار" labelEn="PENDING CHANGES" value={data.kpi.pendingChanges} color="#38bdf8" />
-                  <SignalStatCard icon={CheckCircle2} label="نقاط عطف پیش‌رو" labelEn="UPCOMING MILESTONES" value={data.kpi.upcomingMilestones} badge="۳۰ روز آینده" badgeColor="var(--radar-green)" color="var(--radar-green)" />
-                </div>
-                <div className="lg:w-64 lg:shrink-0 lg:border-s lg:ps-5" style={{ borderColor: 'var(--radar-grid)' }}>
-                  <LifecyclePanel
-                    stages={data.lifecycle}
-                    overallPct={Math.round((data.lifecycle.filter((s) => s.state === 'done').length / data.lifecycle.length) * 100)}
-                    floating
-                  />
-                </div>
-              </div>
-            </div>
+          <div
+            className="relative flex items-center justify-center overflow-hidden rounded-3xl border p-4 sm:p-6"
+            style={{ borderColor: 'var(--radar-grid)', background: 'var(--radar-bg)' }}
+          >
+            <RadarDisplay signals={visibleSignals} dimmed={scanning} />
           </div>
+
+          <div className="flex flex-col gap-2">
+            <SignalStatCard icon={ShieldAlert} label="ACTIVE RISKS" value={data.kpi.activeRisks} badge={`HIGH ${data.kpi.activeRisksHigh}`} badgeColor="#e74c3c" color="#e74c3c" />
+            <SignalStatCard icon={Activity} label="OPEN ISSUES" value={data.kpi.openIssues} badge={`HIGH ${data.kpi.openIssuesHigh}`} badgeColor="#a78bfa" color="#a78bfa" />
+            <SignalStatCard icon={Clock3} label="DELAYED ACTIVITIES" value={data.kpi.delayedActivities} color="var(--radar-amber)" />
+            <SignalStatCard icon={RefreshCw} label="PENDING CHANGES" value={data.kpi.pendingChanges} color="#38bdf8" />
+            <SignalStatCard icon={CheckCircle2} label="UPCOMING MILESTONES" value={data.kpi.upcomingMilestones} badge="NEXT 30 DAYS" badgeColor="var(--radar-green)" color="var(--radar-green)" />
+          </div>
+
+          <LifecyclePanel
+            stages={data.lifecycle}
+            overallPct={Math.round((data.lifecycle.filter((s) => s.state === 'done').length / data.lifecycle.length) * 100)}
+          />
         </div>
 
-        {/* Bottom row: signals, gate, contract, epc */}
-        <div className={`mt-4 grid grid-cols-1 gap-4 ${data.epc ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
+        {/* Bottom row: critical signals | next gate | contract summary */}
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_2.3fr_1.5fr]">
           <CriticalSignalsPanel signals={data.signals} />
           <NextGatePanel gate={data.nextGate} stages={data.lifecycle} />
           <ContractPanel contract={data.contract} />
-          {data.epc && <EpcPanel dims={data.epc} />}
         </div>
 
         {/* Footer status bar */}
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-[10px] text-muted" style={{ borderColor: 'var(--border-soft)' }}>
-          <span>منبع داده: نمونه (Mock) — آماده اتصال به API</span>
-          <span className="num">پروژه‌ها: {toFa(masterProjects.length || 1)}</span>
+          <span>DATA SOURCE: SAMPLE (MOCK) — READY FOR API CONNECTION</span>
+          <span className="num">PROJECTS: {masterProjects.length || 1}</span>
           <span className="flex items-center gap-1.5">
             <span className="radar-live-dot h-1.5 w-1.5 rounded-full" style={{ background: 'var(--radar-green)' }} />
-            اتصال زنده
+            LIVE CONNECTION
           </span>
         </div>
       </main>
@@ -364,9 +367,9 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         }}
       >
         <div className="mb-3 flex items-center justify-between px-1">
-          <p className="text-[10px] font-bold text-muted">ماژول‌های این پروژه</p>
-          <button onClick={() => setSidebarOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/5" title="مخفی کردن منو">
-            <ChevronsRight size={14} className="text-muted" />
+          <p className="text-[10px] font-bold text-muted">PROJECT MODULES</p>
+          <button onClick={() => setSidebarOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/5" title="Hide Menu">
+            <ChevronsRight size={14} className="rotate-180 text-muted" />
           </button>
         </div>
         <div className="flex flex-col gap-1">
@@ -385,9 +388,9 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           background: 'var(--bg-panel-solid)',
           borderColor: 'var(--border-soft)',
         }}
-        title={sidebarOpen ? 'مخفی کردن منو' : 'نمایش منو'}
+        title={sidebarOpen ? 'Hide Menu' : 'Show Menu'}
       >
-        <ChevronsRight size={14} className="text-muted transition-transform duration-300" style={{ transform: sidebarOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} />
+        <ChevronsRight size={14} className="text-muted transition-transform duration-300" style={{ transform: sidebarOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
       </button>
 
       {notice && (
@@ -403,7 +406,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         <button
           className="fixed inset-0 z-20 cursor-default"
           onClick={() => { setProjectPickerOpen(false); setNotifOpen(false) }}
-          aria-label="بستن"
+          aria-label="Close"
         />
       )}
     </div>
@@ -414,12 +417,12 @@ function SidebarButton({ item, onClick }: { item: NavItem; onClick: () => void }
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-right text-[12px] font-bold transition-colors hover:bg-white/5"
+      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] font-bold transition-colors hover:bg-white/5"
     >
       <item.icon size={15} style={{ color: item.accent }} />
       <span className="min-w-0 flex-1 truncate">{item.title}</span>
       {item.badge !== undefined && item.badge > 0 && (
-        <span className="num rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-bold">{toFa(item.badge)}</span>
+        <span className="num rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-bold">{item.badge}</span>
       )}
     </button>
   )

@@ -1209,6 +1209,12 @@ body {
   --radar-grid-text: rgba(15, 23, 42, 0.35);
 }
 
+/* Project Radar renders in English/LTR regardless of the app's own Persian/RTL default, matching
+   the reference dashboard's own typography (Montserrat) instead of the Vazirmatn body font. */
+.radar-en {
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+}
+
 .radar-scope {
   background: radial-gradient(circle at center, color-mix(in srgb, var(--radar-green) 4%, var(--radar-bg)) 0%, var(--radar-bg) 70%);
   border-radius: 50%;

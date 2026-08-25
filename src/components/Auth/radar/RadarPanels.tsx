@@ -1,10 +1,15 @@
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Circle, CircleAlert, Clock, RefreshCw, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  SEVERITY_COLOR, SEVERITY_LABEL_FA, toFa, faMoney,
+  SEVERITY_COLOR, SEVERITY_LABEL_EN,
   type ContractSummary, type EpcDimension, type RadarGate, type RadarLifecycleStage, type RadarSignal,
 } from './radarTypes'
+
+function money(n: number): string {
+  return n.toLocaleString('en-US')
+}
 
 /** Counts up from 0 to `value` once on mount/value-change — the one JS-driven animation in this
  * feature; everything else (sweep, pulse, glow) is pure CSS. */
@@ -28,16 +33,18 @@ function useCountUp(value: number, durationMs = 700): number {
 }
 
 function RingGauge({
-  pct, size = 56, stroke = 5, color, unit, sub,
+  pct, size = 56, stroke = 5, color, unit, sub, center,
 }: {
   pct: number
   size?: number
   stroke?: number
   color: string
-  /** Appended right after the number, inline (e.g. "٪"). */
+  /** Appended right after the number, inline (e.g. "%"). */
   unit?: string
   /** Small caption line below the number (e.g. "READINESS"). */
   sub?: string
+  /** Fully custom center content, overriding the default number/unit/sub display. */
+  center?: ReactNode
 }) {
   const animated = useCountUp(pct)
   const r = (size - stroke) / 2
@@ -53,8 +60,12 @@ function RingGauge({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num text-sm font-extrabold">{toFa(Math.round(animated))}{unit}</span>
-        {sub && <span className="text-[8px] text-muted">{sub}</span>}
+        {center ?? (
+          <>
+            <span className="num text-sm font-extrabold">{Math.round(animated)}{unit}</span>
+            {sub && <span className="text-[8px] font-bold tracking-wide text-muted">{sub}</span>}
+          </>
+        )}
       </div>
     </div>
   )
@@ -68,15 +79,11 @@ function Panel({ children, className = '' }: { children: React.ReactNode; classN
   )
 }
 
-function PanelTitle({ text, hint, action }: { text: string; hint?: string; action?: string }) {
+function PanelTitle({ text, action }: { text: string; action?: string }) {
   return (
-    <div className="mb-2 flex items-baseline justify-between">
-      <h3 className="text-[10px] font-bold tracking-wide text-muted">{text}</h3>
-      {action ? (
-        <span className="cursor-default text-[9px] font-bold" style={{ color: 'var(--radar-cyan)' }}>{action}</span>
-      ) : hint ? (
-        <span className="text-[9px] text-muted">{hint}</span>
-      ) : null}
+    <div className="mb-2.5 flex items-baseline justify-between">
+      <h3 className="text-[11px] font-bold tracking-wide text-muted">{text}</h3>
+      {action && <span className="cursor-default text-[9px] font-bold" style={{ color: 'var(--radar-cyan)' }}>{action}</span>}
     </div>
   )
 }
@@ -85,10 +92,9 @@ function PanelTitle({ text, hint, action }: { text: string; hint?: string; actio
  * health or "64% → -8% BEHIND" for schedule performance — matches the four-card performance
  * strip from the reference layout (Project/Time/Cost/Quality Performance). */
 export function PerformanceRingCard({
-  title, titleEn, pct, ringUnit, ringSub, color, bigValue, bigValueColor, caption, captionColor,
+  title, pct, ringUnit, ringSub, color, bigValue, bigValueColor, caption, captionColor,
 }: {
   title: string
-  titleEn: string
   pct: number
   ringUnit?: string
   ringSub?: string
@@ -100,12 +106,12 @@ export function PerformanceRingCard({
 }) {
   return (
     <Panel>
-      <PanelTitle text={title} hint={titleEn} />
-      <div className="flex items-center gap-3">
-        <RingGauge pct={pct} color={color} size={60} stroke={6} unit={ringUnit} sub={ringSub} />
-        <div className="min-w-0">
-          <p className="num text-2xl font-extrabold leading-tight" style={{ color: bigValueColor }}>{bigValue}</p>
-          {caption && <p className="text-[10px] font-bold tracking-wide" style={{ color: captionColor }}>{caption}</p>}
+      <PanelTitle text={title} />
+      <div className="flex items-center gap-4">
+        <RingGauge pct={pct} color={color} size={64} stroke={6} unit={ringUnit} sub={ringSub} />
+        <div className="min-w-0 flex-1">
+          <p className="num text-lg font-extrabold leading-tight" style={{ color: bigValueColor, overflowWrap: 'break-word' }}>{bigValue}</p>
+          {caption && <p className="mt-1.5 text-[10px] font-bold tracking-wide" style={{ color: captionColor }}>{caption}</p>}
         </div>
       </div>
     </Panel>
@@ -116,11 +122,10 @@ export function PerformanceRingCard({
  * the reference's Active Risks / Open Issues / Delayed Activities / Pending Changes / Upcoming
  * Milestones column. */
 export function SignalStatCard({
-  icon: Icon, label, labelEn, value, badge, badgeColor, color,
+  icon: Icon, label, value, badge, badgeColor, color,
 }: {
   icon: LucideIcon
   label: string
-  labelEn: string
   value: number
   badge?: string
   badgeColor?: string
@@ -128,52 +133,48 @@ export function SignalStatCard({
 }) {
   const animated = useCountUp(value, 600)
   return (
-    <div className="flex items-center gap-3 rounded-xl border p-2.5" style={{ borderColor: 'var(--border-soft)' }}>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
-        <Icon size={17} style={{ color }} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[9px] font-bold tracking-wide text-muted">{label}</p>
-        <div className="flex items-center gap-2">
-          <span className="num text-xl font-extrabold leading-none" style={{ color }}>{toFa(Math.round(animated))}</span>
-          {badge && (
-            <span className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold" style={{ borderColor: `color-mix(in srgb, ${badgeColor} 55%, transparent)`, color: badgeColor }}>
-              {badge}
-            </span>
-          )}
+    <div className="rounded-xl border p-2.5" style={{ borderColor: 'var(--border-soft)' }}>
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
+          <Icon size={14} style={{ color }} />
         </div>
+        <p className="truncate text-[9px] font-bold tracking-wide text-muted">{label}</p>
       </div>
-      <span className="eyebrow-en shrink-0 text-[8px] text-muted" dir="ltr">{labelEn}</span>
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="num text-xl font-extrabold leading-none" style={{ color }}>{Math.round(animated)}</span>
+        {badge && (
+          <span className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold" style={{ borderColor: `color-mix(in srgb, ${badgeColor} 55%, transparent)`, color: badgeColor }}>
+            {badge}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
 
-export function LifecyclePanel({
-  stages, overallPct, floating,
-}: {
-  stages: RadarLifecycleStage[]
-  overallPct: number
-  /** Renders borderless/transparent so it blends directly into the radar's own dark scope
-   * surface instead of reading as a separate boxed panel next to it. */
-  floating?: boolean
-}) {
+export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleStage[]; overallPct: number }) {
   const current = stages.find((s) => s.state === 'current')
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
-  const body = (
-    <>
-      <PanelTitle text="مسیر چرخه عمر پروژه" hint="LIFECYCLE" />
-      <div className="mb-4 flex items-center gap-3">
-        <RingGauge pct={overallPct} color="var(--radar-green)" size={64} stroke={6} />
-        <div>
-          <p className="text-xs font-extrabold">{current?.label ?? '—'}</p>
-          <p className="eyebrow-en text-[9px]" dir="ltr">{current?.labelEn}</p>
-        </div>
+  return (
+    <Panel className="flex h-full flex-col">
+      <PanelTitle text="LIFECYCLE PROGRESS" />
+      <div className="mb-4 flex justify-center">
+        <RingGauge
+          pct={overallPct} color="var(--radar-green)" size={104} stroke={7}
+          center={
+            <div className="flex flex-col items-center justify-center leading-tight">
+              <span className="text-sm font-extrabold">{current?.labelEn ?? '—'}</span>
+              <span className="mt-0.5 text-[7px] font-bold tracking-wide text-muted">EXECUTION</span>
+              <span className="num mt-0.5 text-lg font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
+            </div>
+          }
+        />
       </div>
 
       {/* Vertical timeline: one continuous rail with a dot per stage; hovering a stage floats its
           mock date next to the dot, matching the request for a date-on-hover interaction. */}
-      <ol className="relative">
+      <ol className="relative flex-1">
         <div className="absolute bottom-2 top-2 w-px" style={{ insetInlineStart: '5px', background: 'var(--border-soft)' }} />
         {stages.map((s) => {
           const isHovered = hoveredKey === s.key
@@ -193,8 +194,11 @@ export function LifecyclePanel({
                   <Circle size={11} className="text-muted" style={{ background: 'var(--bg-panel-solid)', borderRadius: '999px' }} />
                 )}
               </span>
-              <span className={`cursor-default text-[11px] ${s.state === 'current' ? 'font-extrabold' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}>
-                {s.label}
+              <span
+                className={`cursor-default text-[11px] font-bold uppercase tracking-wide ${s.state === 'current' ? '' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}
+                style={{ color: s.state === 'current' ? 'var(--radar-amber)' : undefined }}
+              >
+                {s.labelEn}
               </span>
 
               {isHovered && (
@@ -212,25 +216,23 @@ export function LifecyclePanel({
           )
         })}
       </ol>
-    </>
+    </Panel>
   )
-
-  return floating ? <div className="p-1">{body}</div> : <Panel>{body}</Panel>
 }
 
 export function NextGatePanel({ gate, stages }: { gate: RadarGate; stages: RadarLifecycleStage[] }) {
   return (
     <Panel>
-      <PanelTitle text="گیت بعدی" hint="NEXT GATE" />
-      <p className="mb-3 text-sm font-extrabold">{gate.name}</p>
+      <PanelTitle text="NEXT GATE" />
+      <p className="mb-3 text-lg font-extrabold">{gate.nameEn}</p>
       <div className="flex items-center gap-3">
-        <div className="grid flex-1 grid-cols-4 gap-1.5">
-          <GateStatBox label="پیش‌نیاز" value={gate.prerequisites} />
-          <GateStatBox label="تایید شده" value={gate.passed} color="var(--radar-green)" />
-          <GateStatBox label="در انتظار" value={gate.pending} color="var(--radar-amber)" />
-          <GateStatBox label="رد شده" value={gate.failed} color="#ef4444" />
+        <div className="grid flex-1 grid-cols-4 gap-2">
+          <GateStatBox label="PREREQUISITES" value={gate.prerequisites} />
+          <GateStatBox label="PASSED" value={gate.passed} color="var(--radar-green)" />
+          <GateStatBox label="PENDING" value={gate.pending} color="var(--radar-amber)" />
+          <GateStatBox label="FAILED" value={gate.failed} color="#ef4444" />
         </div>
-        <RingGauge pct={gate.readinessPct} color="var(--radar-green)" size={68} stroke={6} unit="٪" sub="آمادگی" />
+        <RingGauge pct={gate.readinessPct} color="var(--radar-green)" size={72} stroke={6} unit="%" sub="READINESS" />
       </div>
       <GateStageStepper stages={stages} />
     </Panel>
@@ -239,9 +241,9 @@ export function NextGatePanel({ gate, stages }: { gate: RadarGate; stages: Radar
 
 function GateStatBox({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div className="rounded-xl border px-1.5 py-2 text-center" style={{ borderColor: 'var(--border-soft)' }}>
-      <p className="num text-lg font-extrabold leading-tight" style={{ color }}>{toFa(value)}</p>
-      <p className="mt-0.5 truncate text-[8px] font-bold tracking-wide text-muted">{label}</p>
+    <div className="rounded-xl border px-1.5 py-2.5 text-center" style={{ borderColor: 'var(--border-soft)' }}>
+      <p className="num text-xl font-extrabold leading-tight" style={{ color }}>{value}</p>
+      <p className="mt-1 truncate text-[7.5px] font-bold tracking-wide text-muted">{label}</p>
     </div>
   )
 }
@@ -291,27 +293,26 @@ export function CriticalSignalsPanel({ signals, onSelect }: { signals: RadarSign
     .slice(0, 5)
   return (
     <Panel>
-      <PanelTitle text="۵ سیگنال بحرانی برتر" hint="TOP 5 CRITICAL SIGNALS" />
+      <PanelTitle text="TOP 5 CRITICAL SIGNALS" action="VIEW ALL" />
       <ul className="space-y-1.5">
-        {top5.map((s, i) => (
+        {top5.map((s) => (
           <li key={s.id}>
             <button
               onClick={() => onSelect?.(s)}
-              className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-right transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-white/5"
             >
-              <span className="num w-4 shrink-0 text-[10px] text-muted">{toFa(i + 1)}</span>
               {(() => {
                 const Icon = signalIcon(s)
                 return <Icon size={13} className="shrink-0" style={{ color: SEVERITY_COLOR[s.severity] }} />
               })()}
-              <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{s.title}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{s.titleEn}</span>
               <span
                 className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
                 style={{ background: `color-mix(in srgb, ${SEVERITY_COLOR[s.severity]} 18%, transparent)`, color: SEVERITY_COLOR[s.severity] }}
               >
-                {SEVERITY_LABEL_FA[s.severity]}
+                {SEVERITY_LABEL_EN[s.severity]}
               </span>
-              <span className="num shrink-0 text-[10px] text-muted">{s.detail}</span>
+              <span className="num shrink-0 text-[10px] text-muted">{s.detailEn}</span>
             </button>
           </li>
         ))}
@@ -330,13 +331,12 @@ function signalIcon(s: RadarSignal): LucideIcon {
 export function EpcPanel({ dims }: { dims: EpcDimension[] }) {
   return (
     <Panel>
-      <PanelTitle text="برج کنترل EPC" hint="سه بُعد یک مرحله، نه سه ماژول جدا" />
+      <PanelTitle text="EPC COMMAND CENTER" />
       <div className="space-y-3">
         {dims.map((d) => (
           <div key={d.key}>
             <div className="mb-1 flex items-center justify-between text-[11px]">
-              <span className="font-bold">{d.label}</span>
-              <span className="eyebrow-en text-muted" dir="ltr">{d.labelEn}</span>
+              <span className="font-bold uppercase tracking-wide">{d.labelEn}</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--border-soft)' }}>
               <div
@@ -344,7 +344,7 @@ export function EpcPanel({ dims }: { dims: EpcDimension[] }) {
                 style={{ width: `${d.pct}%`, background: 'linear-gradient(90deg, var(--radar-cyan), var(--radar-green))' }}
               />
             </div>
-            <p className="num mt-1 text-left text-[10px] text-muted" dir="ltr">{toFa(d.pct)}٪</p>
+            <p className="num mt-1 text-right text-[10px] text-muted">{d.pct}%</p>
           </div>
         ))}
       </div>
@@ -354,16 +354,16 @@ export function EpcPanel({ dims }: { dims: EpcDimension[] }) {
 
 export function ContractPanel({ contract }: { contract: ContractSummary }) {
   const rows: { label: string; value: string; color?: string }[] = [
-    { label: 'ارزش قرارداد', value: `${contract.currency}${faMoney(contract.contractValue)}M` },
-    { label: 'تغییرات تاییدشده', value: `${contract.currency}${faMoney(contract.approvedChanges)}M` },
-    { label: 'ادعاها (Claims)', value: `${contract.currency}${faMoney(contract.claims)}M`, color: 'var(--radar-amber)' },
-    { label: 'ادعای تمدید زمان', value: `${toFa(contract.eotClaimsDays)} روز`, color: 'var(--radar-amber)' },
-    { label: 'پرداخت‌شده', value: `${contract.currency}${faMoney(contract.paid)}M`, color: 'var(--radar-green)' },
-    { label: 'حسن انجام کار', value: `${contract.currency}${faMoney(contract.retention)}M` },
+    { label: 'CONTRACT VALUE', value: `${contract.currency}${money(contract.contractValue)}M` },
+    { label: 'APPROVED CHANGES', value: `${contract.currency}${money(contract.approvedChanges)}M` },
+    { label: 'CLAIMS', value: `${contract.currency}${money(contract.claims)}M`, color: 'var(--radar-amber)' },
+    { label: 'EOT CLAIMS', value: `${contract.eotClaimsDays} Days`, color: 'var(--radar-amber)' },
+    { label: 'PAYMENTS', value: `${contract.currency}${money(contract.paid)}M`, color: 'var(--radar-green)' },
+    { label: 'RETENTION', value: `${contract.currency}${money(contract.retention)}M` },
   ]
   return (
     <Panel>
-      <PanelTitle text="خلاصه قرارداد" action="مشاهده جزئیات" />
+      <PanelTitle text="CONTRACT SUMMARY" action="VIEW DETAILS" />
       <div className="flex items-start gap-3">
         <ul className="min-w-0 flex-1 space-y-1.5 text-[11px]">
           {rows.map((r) => (
@@ -374,7 +374,7 @@ export function ContractPanel({ contract }: { contract: ContractSummary }) {
           ))}
         </ul>
         <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
-          <RingGauge pct={contract.paidPct} color="var(--radar-cyan)" size={80} stroke={7} unit="٪" sub="پرداخت‌شده" />
+          <RingGauge pct={contract.paidPct} color="var(--radar-cyan)" size={84} stroke={7} unit="%" sub="PAID" />
         </div>
       </div>
     </Panel>

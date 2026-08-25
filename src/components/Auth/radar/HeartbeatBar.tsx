@@ -37,7 +37,7 @@ export function HeartbeatBar({ status, color }: { status: ProjectRadarStatus; co
   const critical = status === 'critical'
   const path = critical ? CRITICAL_PATH : REGULAR_PATH
   return (
-    <div className="flex items-center gap-1.5" style={{ color }} title="نبض سلامت پروژه">
+    <div className="flex items-center gap-1.5" style={{ color }} title="Project Health Pulse">
       <svg viewBox={`0 0 ${TILE_W * 2} ${TILE_H}`} preserveAspectRatio="none" className="block h-6 w-24 sm:w-28" aria-hidden="true">
         <g className={`heartbeat-scroll ${critical ? 'is-critical' : 'is-regular'}`}>
           <Strip path={path} dx={0} />

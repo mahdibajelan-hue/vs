@@ -20,6 +20,12 @@ export interface RadarSignal {
   impact: string
   rootCause: string
   recommendedAction: string
+  titleEn: string
+  subjectEn: string
+  detailEn: string
+  impactEn: string
+  rootCauseEn: string
+  recommendedActionEn: string
   /** Compass degrees, 0 = top, clockwise. */
   angle: number
   /** 0-1 fraction of the radar radius; lower = closer to center = more urgent. */
@@ -36,11 +42,28 @@ export const SIGNAL_CATEGORY_LABEL_FA: Record<SignalCategory, string> = {
   gate: 'گیت',
 }
 
+export const SIGNAL_CATEGORY_LABEL_EN: Record<SignalCategory, string> = {
+  risk: 'Risk',
+  issue: 'Issue',
+  delay: 'Delay',
+  change: 'Change',
+  milestone: 'Milestone',
+  contract: 'Contract',
+  gate: 'Gate',
+}
+
 export const SEVERITY_LABEL_FA: Record<SignalSeverity, string> = {
   critical: 'بحرانی',
   high: 'بالا',
   medium: 'متوسط',
   low: 'کم',
+}
+
+export const SEVERITY_LABEL_EN: Record<SignalSeverity, string> = {
+  critical: 'CRITICAL',
+  high: 'HIGH',
+  medium: 'MEDIUM',
+  low: 'LOW',
 }
 
 export const SEVERITY_COLOR: Record<SignalSeverity, string> = {
@@ -98,6 +121,7 @@ const STAGE_DEFS: { key: string; label: string; labelEn: string }[] = [
 
 export interface RadarGate {
   name: string
+  nameEn: string
   prerequisites: number
   passed: number
   pending: number
@@ -125,8 +149,12 @@ export interface ContractSummary {
 
 export interface RadarData {
   projectName: string
+  /** English display name used on this page's English-mode header; falls back to `projectName`
+   * when a real (Persian-named) project is selected. */
+  projectNameEn?: string
   projectIdCode: string
   reportDateFa: string
+  reportDateEn: string
   status: ProjectRadarStatus
   kpi: RadarKpi
   signals: RadarSignal[]
@@ -142,6 +170,13 @@ export const STATUS_LABEL_FA: Record<ProjectRadarStatus, string> = {
   attention: 'نیازمند توجه',
   at_risk: 'در معرض خطر',
   critical: 'بحرانی',
+}
+
+export const STATUS_LABEL_EN: Record<ProjectRadarStatus, string> = {
+  nominal: 'NOMINAL',
+  attention: 'ATTENTION',
+  at_risk: 'AT RISK',
+  critical: 'CRITICAL',
 }
 
 export const STATUS_COLOR: Record<ProjectRadarStatus, string> = {
@@ -183,46 +218,73 @@ const SIGNAL_TEMPLATES: Omit<RadarSignal, 'id' | 'angle' | 'radius'>[] = [
     category: 'risk', severity: 'critical', title: 'تاخیر تدارکات', subject: 'بسته کمپرسور CP-04', detail: '+۱۸ روز',
     impact: 'شروع عملیات ساخت را به تعویق می‌اندازد', rootCause: 'تاخیر تامین‌کننده در تحویل مواد اولیه',
     recommendedAction: 'پیگیری فوری با تامین‌کننده و بررسی گزینه Expedite',
+    titleEn: 'Procurement Delay - CP-04', subjectEn: 'Compressor Package CP-04', detailEn: '+18 Days',
+    impactEn: 'Delays the start of construction activities', rootCauseEn: 'Supplier delay in raw-material delivery',
+    recommendedActionEn: 'Escalate with supplier immediately and evaluate expedite options',
   },
   {
     category: 'issue', severity: 'high', title: 'مدارک IFC مهندسی عقب‌افتاده', subject: '۱۲ مدرک', detail: '۱۲ مدرک',
     impact: 'شروع ساخت اسکلت فلزی را مسدود می‌کند', rootCause: 'بار کاری بالای تیم مهندسی در این هفته',
     recommendedAction: 'تخصیص منابع اضافی به تیم مهندسی برای تکمیل مدارک',
+    titleEn: 'Engineering IFC Overdue', subjectEn: '12 Documents', detailEn: '12 Docs',
+    impactEn: 'Blocks the start of structural steel fabrication', rootCauseEn: 'Engineering team overloaded this week',
+    recommendedActionEn: 'Assign extra resources to the engineering team to close out documents',
   },
   {
     category: 'change', severity: 'high', title: 'ادعای تمدید زمان پیمانکار', subject: 'EOT Claim', detail: '+۲۱ روز',
     impact: 'در صورت تایید، تاریخ خاتمه قرارداد را جابجا می‌کند', rootCause: 'تاخیرهای غیرمترقبه گزارش‌شده توسط پیمانکار',
     recommendedAction: 'بررسی مستندات ادعا توسط واحد کنترل قرارداد',
+    titleEn: 'Contractor EOT Claim', subjectEn: 'EOT Claim', detailEn: '+21 Days',
+    impactEn: 'If approved, shifts the contract completion date', rootCauseEn: 'Unforeseen delays reported by the contractor',
+    recommendedActionEn: 'Contract control unit to review claim documentation',
   },
   {
     category: 'delay', severity: 'medium', title: 'کسری متریال', subject: 'اسپول لوله', detail: '۳ نوع کالا',
     impact: 'ریسک توقف فعالیت‌های نصب در دو هفته آینده', rootCause: 'عدم تطابق MTO با موجودی انبار',
     recommendedAction: 'خرید اضطراری یا جابجایی موجودی از پروژه‌های دیگر',
+    titleEn: 'Material Shortage - Pipe Spool', subjectEn: 'Pipe Spool', detailEn: '3 Item Types',
+    impactEn: 'Risk of halting installation activities within two weeks', rootCauseEn: 'MTO mismatch against warehouse inventory',
+    recommendedActionEn: 'Emergency purchase or transfer stock from other projects',
   },
   {
     category: 'delay', severity: 'medium', title: 'بهره‌وری اجرا', subject: 'فعالیت‌های ساخت', detail: '−۱۵٪',
     impact: 'روند تکمیل فعالیت‌های بحرانی را کند می‌کند', rootCause: 'کمبود نیروی ماهر در سایت',
     recommendedAction: 'بازنگری برنامه نیروی انسانی با پیمانکار اجرایی',
+    titleEn: 'Construction Productivity', subjectEn: 'Construction Activities', detailEn: '-15%',
+    impactEn: 'Slows the completion rate of critical-path activities', rootCauseEn: 'Skilled-labor shortage on site',
+    recommendedActionEn: 'Review manpower plan with the construction contractor',
   },
   {
     category: 'gate', severity: 'medium', title: 'گیت طراحی', subject: 'Design Freeze', detail: '۶۷٪ آماده',
     impact: 'ورود به مرحله تدارکات را مشروط می‌کند', rootCause: '۲ پیش‌نیاز هنوز تایید نشده',
     recommendedAction: 'پیگیری تایید نهایی مدارک باقی‌مانده گیت',
+    titleEn: 'Design Gate', subjectEn: 'Design Freeze', detailEn: '67% Ready',
+    impactEn: 'Gates entry into the procurement phase', rootCauseEn: '2 prerequisites still pending approval',
+    recommendedActionEn: 'Chase final sign-off on the remaining gate documents',
   },
   {
     category: 'milestone', severity: 'low', title: 'نقطه عطف پیش‌رو', subject: 'تکمیل مکانیکی فاز ۱', detail: '۳۰ روز مانده',
     impact: 'نقطه کنترلی کلیدی برای گزارش پیشرفت پروژه', rootCause: '—',
     recommendedAction: 'آماده‌سازی مستندات پیش از موعد مقرر',
+    titleEn: 'Upcoming Milestone', subjectEn: 'Phase 1 Mechanical Completion', detailEn: '30 Days Left',
+    impactEn: 'Key control point for project progress reporting', rootCauseEn: '—',
+    recommendedActionEn: 'Prepare documentation ahead of the due date',
   },
   {
     category: 'contract', severity: 'low', title: 'وضعیت صورت‌وضعیت', subject: 'IPC شماره ۱۴', detail: 'در انتظار تایید',
     impact: 'تاخیر احتمالی در جریان نقدی پیمانکار', rootCause: 'در صف بررسی مالی',
     recommendedAction: 'پیگیری تایید نزد واحد مالی',
+    titleEn: 'Payment Certificate Status', subjectEn: 'IPC No. 14', detailEn: 'Pending Approval',
+    impactEn: 'Possible delay to the contractor cash flow', rootCauseEn: 'Queued for finance review',
+    recommendedActionEn: 'Follow up approval with the finance department',
   },
   {
     category: 'issue', severity: 'medium', title: 'عدم انطباق کیفی', subject: 'بازرسی جوش خط ۰۸', detail: '۴ مورد NCR',
     impact: 'نیازمند تعمیر پیش از تست هیدرواستاتیک', rootCause: 'انحراف از رویه جوشکاری تاییدشده',
     recommendedAction: 'بازآموزی جوشکار و تعمیر مطابق NCR',
+    titleEn: 'Quality Non-conformance', subjectEn: 'Line 08 Weld Inspection', detailEn: '4 NCRs',
+    impactEn: 'Requires repair before hydrostatic testing', rootCauseEn: 'Deviation from the approved welding procedure',
+    recommendedActionEn: 'Retrain welder and repair per NCR disposition',
   },
 ]
 
@@ -304,6 +366,7 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
     projectName,
     projectIdCode,
     reportDateFa: '۱۴۰۳/۰۲/۲۸ - ۱۰:۳۰',
+    reportDateEn: '1403/02/28 - 10:30',
     status,
     kpi: {
       health,
@@ -327,6 +390,7 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
     currentStageLabel: STAGE_DEFS[currentStageIndex].label,
     nextGate: {
       name: 'انجماد طراحی (Design Freeze)',
+      nameEn: 'Design Freeze',
       prerequisites,
       passed,
       pending,
@@ -351,8 +415,10 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
  * brief's own walkthrough numbers 1:1, so first load always looks intentional, not empty. */
 export const DEFAULT_RADAR_DATA: RadarData = {
   projectName: 'پالایشگاه گاز ایران',
+  projectNameEn: 'Iran Gas Treating Plant',
   projectIdCode: 'IGTP-1402',
   reportDateFa: '۱۴۰۳/۰۲/۲۸ - ۱۰:۳۰',
+  reportDateEn: '1403/02/28 - 10:30',
   status: 'at_risk',
   kpi: {
     health: 78,
@@ -372,15 +438,15 @@ export const DEFAULT_RADAR_DATA: RadarData = {
     upcomingMilestones: 4,
   },
   signals: [
-    { id: 'sig-0', category: 'risk', severity: 'critical', title: 'تاخیر تدارکات', subject: 'بسته کمپرسور CP-04', detail: '+۱۸ روز', impact: 'شروع عملیات ساخت را به تعویق می‌اندازد', rootCause: 'تاخیر تامین‌کننده در تحویل مواد اولیه', recommendedAction: 'پیگیری فوری با تامین‌کننده و بررسی گزینه Expedite', angle: 95, radius: 0.28 },
-    { id: 'sig-1', category: 'issue', severity: 'high', title: 'مدارک IFC مهندسی عقب‌افتاده', subject: '۱۲ مدرک', detail: '۱۲ مدرک', impact: 'شروع ساخت اسکلت فلزی را مسدود می‌کند', rootCause: 'بار کاری بالای تیم مهندسی در این هفته', recommendedAction: 'تخصیص منابع اضافی به تیم مهندسی برای تکمیل مدارک', angle: 20, radius: 0.42 },
-    { id: 'sig-2', category: 'change', severity: 'high', title: 'ادعای تمدید زمان پیمانکار', subject: 'EOT Claim', detail: '+۲۱ روز', impact: 'در صورت تایید، تاریخ خاتمه قرارداد را جابجا می‌کند', rootCause: 'تاخیرهای غیرمترقبه گزارش‌شده توسط پیمانکار', recommendedAction: 'بررسی مستندات ادعا توسط واحد کنترل قرارداد', angle: 130, radius: 0.5 },
-    { id: 'sig-3', category: 'delay', severity: 'medium', title: 'کسری متریال', subject: 'اسپول لوله', detail: '۳ نوع کالا', impact: 'ریسک توقف فعالیت‌های نصب در دو هفته آینده', rootCause: 'عدم تطابق MTO با موجودی انبار', recommendedAction: 'خرید اضطراری یا جابجایی موجودی از پروژه‌های دیگر', angle: 205, radius: 0.62 },
-    { id: 'sig-4', category: 'delay', severity: 'medium', title: 'بهره‌وری اجرا', subject: 'فعالیت‌های ساخت', detail: '−۱۵٪', impact: 'روند تکمیل فعالیت‌های بحرانی را کند می‌کند', rootCause: 'کمبود نیروی ماهر در سایت', recommendedAction: 'بازنگری برنامه نیروی انسانی با پیمانکار اجرایی', angle: 155, radius: 0.7 },
-    { id: 'sig-5', category: 'gate', severity: 'medium', title: 'گیت طراحی', subject: 'Design Freeze', detail: '۶۷٪ آماده', impact: 'ورود به مرحله تدارکات را مشروط می‌کند', rootCause: '۲ پیش‌نیاز هنوز تایید نشده', recommendedAction: 'پیگیری تایید نهایی مدارک باقی‌مانده گیت', angle: 75, radius: 0.58 },
-    { id: 'sig-6', category: 'milestone', severity: 'low', title: 'نقطه عطف پیش‌رو', subject: 'تکمیل مکانیکی فاز ۱', detail: '۳۰ روز مانده', impact: 'نقطه کنترلی کلیدی برای گزارش پیشرفت پروژه', rootCause: '—', recommendedAction: 'آماده‌سازی مستندات پیش از موعد مقرر', angle: 300, radius: 0.85 },
-    { id: 'sig-7', category: 'contract', severity: 'low', title: 'وضعیت صورت‌وضعیت', subject: 'IPC شماره ۱۴', detail: 'در انتظار تایید', impact: 'تاخیر احتمالی در جریان نقدی پیمانکار', rootCause: 'در صف بررسی مالی', recommendedAction: 'پیگیری تایید نزد واحد مالی', angle: 250, radius: 0.8 },
-    { id: 'sig-8', category: 'issue', severity: 'high', title: 'عدم انطباق کیفی', subject: 'بازرسی جوش خط ۰۸', detail: '۴ مورد NCR', impact: 'نیازمند تعمیر پیش از تست هیدرواستاتیک', rootCause: 'انحراف از رویه جوشکاری تاییدشده', recommendedAction: 'بازآموزی جوشکار و تعمیر مطابق NCR', angle: 335, radius: 0.38 },
+    { id: 'sig-0', category: 'risk', severity: 'critical', title: 'تاخیر تدارکات', subject: 'بسته کمپرسور CP-04', detail: '+۱۸ روز', impact: 'شروع عملیات ساخت را به تعویق می‌اندازد', rootCause: 'تاخیر تامین‌کننده در تحویل مواد اولیه', recommendedAction: 'پیگیری فوری با تامین‌کننده و بررسی گزینه Expedite', titleEn: 'Procurement Delay - CP-04', subjectEn: 'Compressor Package CP-04', detailEn: '+18 Days', impactEn: 'Delays the start of construction activities', rootCauseEn: 'Supplier delay in raw-material delivery', recommendedActionEn: 'Escalate with supplier immediately and evaluate expedite options', angle: 95, radius: 0.28 },
+    { id: 'sig-1', category: 'issue', severity: 'high', title: 'مدارک IFC مهندسی عقب‌افتاده', subject: '۱۲ مدرک', detail: '۱۲ مدرک', impact: 'شروع ساخت اسکلت فلزی را مسدود می‌کند', rootCause: 'بار کاری بالای تیم مهندسی در این هفته', recommendedAction: 'تخصیص منابع اضافی به تیم مهندسی برای تکمیل مدارک', titleEn: 'Engineering IFC Overdue', subjectEn: '12 Documents', detailEn: '12 Docs', impactEn: 'Blocks the start of structural steel fabrication', rootCauseEn: 'Engineering team overloaded this week', recommendedActionEn: 'Assign extra resources to the engineering team to close out documents', angle: 20, radius: 0.42 },
+    { id: 'sig-2', category: 'change', severity: 'high', title: 'ادعای تمدید زمان پیمانکار', subject: 'EOT Claim', detail: '+۲۱ روز', impact: 'در صورت تایید، تاریخ خاتمه قرارداد را جابجا می‌کند', rootCause: 'تاخیرهای غیرمترقبه گزارش‌شده توسط پیمانکار', recommendedAction: 'بررسی مستندات ادعا توسط واحد کنترل قرارداد', titleEn: 'Contractor EOT Claim', subjectEn: 'EOT Claim', detailEn: '+21 Days', impactEn: 'If approved, shifts the contract completion date', rootCauseEn: 'Unforeseen delays reported by the contractor', recommendedActionEn: 'Contract control unit to review claim documentation', angle: 130, radius: 0.5 },
+    { id: 'sig-3', category: 'delay', severity: 'medium', title: 'کسری متریال', subject: 'اسپول لوله', detail: '۳ نوع کالا', impact: 'ریسک توقف فعالیت‌های نصب در دو هفته آینده', rootCause: 'عدم تطابق MTO با موجودی انبار', recommendedAction: 'خرید اضطراری یا جابجایی موجودی از پروژه‌های دیگر', titleEn: 'Material Shortage - Pipe Spool', subjectEn: 'Pipe Spool', detailEn: '3 Item Types', impactEn: 'Risk of halting installation activities within two weeks', rootCauseEn: 'MTO mismatch against warehouse inventory', recommendedActionEn: 'Emergency purchase or transfer stock from other projects', angle: 205, radius: 0.62 },
+    { id: 'sig-4', category: 'delay', severity: 'medium', title: 'بهره‌وری اجرا', subject: 'فعالیت‌های ساخت', detail: '−۱۵٪', impact: 'روند تکمیل فعالیت‌های بحرانی را کند می‌کند', rootCause: 'کمبود نیروی ماهر در سایت', recommendedAction: 'بازنگری برنامه نیروی انسانی با پیمانکار اجرایی', titleEn: 'Construction Productivity', subjectEn: 'Construction Activities', detailEn: '-15%', impactEn: 'Slows the completion rate of critical-path activities', rootCauseEn: 'Skilled-labor shortage on site', recommendedActionEn: 'Review manpower plan with the construction contractor', angle: 155, radius: 0.7 },
+    { id: 'sig-5', category: 'gate', severity: 'medium', title: 'گیت طراحی', subject: 'Design Freeze', detail: '۶۷٪ آماده', impact: 'ورود به مرحله تدارکات را مشروط می‌کند', rootCause: '۲ پیش‌نیاز هنوز تایید نشده', recommendedAction: 'پیگیری تایید نهایی مدارک باقی‌مانده گیت', titleEn: 'Design Gate', subjectEn: 'Design Freeze', detailEn: '67% Ready', impactEn: 'Gates entry into the procurement phase', rootCauseEn: '2 prerequisites still pending approval', recommendedActionEn: 'Chase final sign-off on the remaining gate documents', angle: 75, radius: 0.58 },
+    { id: 'sig-6', category: 'milestone', severity: 'low', title: 'نقطه عطف پیش‌رو', subject: 'تکمیل مکانیکی فاز ۱', detail: '۳۰ روز مانده', impact: 'نقطه کنترلی کلیدی برای گزارش پیشرفت پروژه', rootCause: '—', recommendedAction: 'آماده‌سازی مستندات پیش از موعد مقرر', titleEn: 'Upcoming Milestone', subjectEn: 'Phase 1 Mechanical Completion', detailEn: '30 Days Left', impactEn: 'Key control point for project progress reporting', rootCauseEn: '—', recommendedActionEn: 'Prepare documentation ahead of the due date', angle: 300, radius: 0.85 },
+    { id: 'sig-7', category: 'contract', severity: 'low', title: 'وضعیت صورت‌وضعیت', subject: 'IPC شماره ۱۴', detail: 'در انتظار تایید', impact: 'تاخیر احتمالی در جریان نقدی پیمانکار', rootCause: 'در صف بررسی مالی', recommendedAction: 'پیگیری تایید نزد واحد مالی', titleEn: 'Payment Certificate Status', subjectEn: 'IPC No. 14', detailEn: 'Pending Approval', impactEn: 'Possible delay to the contractor cash flow', rootCauseEn: 'Queued for finance review', recommendedActionEn: 'Follow up approval with the finance department', angle: 250, radius: 0.8 },
+    { id: 'sig-8', category: 'issue', severity: 'high', title: 'عدم انطباق کیفی', subject: 'بازرسی جوش خط ۰۸', detail: '۴ مورد NCR', impact: 'نیازمند تعمیر پیش از تست هیدرواستاتیک', rootCause: 'انحراف از رویه جوشکاری تاییدشده', recommendedAction: 'بازآموزی جوشکار و تعمیر مطابق NCR', titleEn: 'Quality Non-conformance', subjectEn: 'Line 08 Weld Inspection', detailEn: '4 NCRs', impactEn: 'Requires repair before hydrostatic testing', rootCauseEn: 'Deviation from the approved welding procedure', recommendedActionEn: 'Retrain welder and repair per NCR disposition', angle: 335, radius: 0.38 },
   ],
   lifecycle: STAGE_DEFS.map((s, i): RadarLifecycleStage => ({
     ...s,
@@ -388,7 +454,7 @@ export const DEFAULT_RADAR_DATA: RadarData = {
     dateFa: mockStageDateFa(1401, 4, i * 3),
   })),
   currentStageLabel: 'EPC',
-  nextGate: { name: 'انجماد طراحی (Design Freeze)', prerequisites: 12, passed: 8, pending: 2, failed: 2, readinessPct: 67 },
+  nextGate: { name: 'انجماد طراحی (Design Freeze)', nameEn: 'Design Freeze', prerequisites: 12, passed: 8, pending: 2, failed: 2, readinessPct: 67 },
   epc: [
     { key: 'engineering', label: 'مهندسی', labelEn: 'Engineering', pct: 62 },
     { key: 'procurement', label: 'تدارکات', labelEn: 'Procurement', pct: 41 },
