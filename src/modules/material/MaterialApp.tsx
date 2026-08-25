@@ -48,8 +48,10 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [tab, setTab] = useState<Tab>('dashboard')
 
   // Arrived here from Project Radar with a project already in context (Material uses
-  // masterProjectId directly, no mapping table needed).
+  // masterProjectId directly, no mapping table needed) — stay locked to it and hide the project
+  // switcher so there's no way to wander to another project's data.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
@@ -59,8 +61,12 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     if (projects.length === 0 || projectId) return
-    const preferred = contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id
-    setProjectId(preferred)
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
+      setProjectId(contextProjectId)
+      setLockedToProject(true)
+    } else {
+      setProjectId(projects[0].id)
+    }
   }, [projects, projectId, contextProjectId])
 
   if ((masterDataLoading && !masterDataLoaded) || (!materialLoaded && !masterDataLoaded)) {
@@ -85,6 +91,9 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
             </p>
           </div>
           <span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
+          {lockedToProject ? (
+            <span className="truncate text-xs font-bold text-secondary">{projects.find((p) => p.id === projectId)?.officialName}</span>
+          ) : (
           <select
             value={projectId ?? ''}
             onChange={(e) => setProjectId(e.target.value || null)}
@@ -97,6 +106,7 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
               </option>
             ))}
           </select>
+          )}
         </div>
 
         <nav className="order-3 hidden w-full items-center gap-1 overflow-x-auto rounded-full border border-white/10 bg-white/[0.03] p-1 lg:order-none lg:flex lg:w-auto">

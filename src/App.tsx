@@ -83,13 +83,18 @@ function App() {
   }, [isAuthed, fetchProjects, selectProject])
 
   // Arrived here from Project Radar with a project already in context: switch straight to that
-  // project's PipePulse station instead of leaving whichever one was last open.
+  // project's PipePulse station instead of leaving whichever one was last open, and stay locked
+  // to it — hide the project list/switcher and the cross-project portfolio view.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
   useEffect(() => {
     if (!contextProjectId) return
     fetchModuleProjectMappings('pipepulse').then((map) => {
       const resolved = map.get(contextProjectId)
-      if (resolved) selectProject(resolved)
+      if (resolved) {
+        selectProject(resolved)
+        setLockedToProject(true)
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -184,6 +189,7 @@ function App() {
         onNewProject={() => setShowNewProject(true)}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
+        locked={lockedToProject}
       />
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar project={currentProject} title={PAGE_TITLE[page]} onMenuClick={() => setMobileSidebarOpen(true)} />

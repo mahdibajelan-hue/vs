@@ -43,10 +43,15 @@ export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   // Arrived here from Project Radar with a project already in context (Lifecycle uses
-  // masterProjectId directly, no mapping table needed): open straight into its Control Tower.
+  // masterProjectId directly, no mapping table needed): open straight into its Control Tower and
+  // stay locked to it — hide the "سبد پروژه‌ها" tab so there's no way back to the portfolio list.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
   useEffect(() => {
-    if (contextProjectId) openProject(contextProjectId)
+    if (contextProjectId) {
+      openProject(contextProjectId)
+      setLockedToProject(true)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -83,12 +88,14 @@ export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
 
         <nav className="order-3 hidden w-full items-center gap-1 rounded-lg bg-white/[0.04] p-1 sm:order-none sm:flex sm:w-auto">
-          <TabButton
-            active={view.kind === 'portfolio'}
-            onClick={() => { selectProject(null); setView({ kind: 'portfolio' }) }}
-            icon={<LayoutDashboard size={13} />}
-            label="سبد پروژه‌ها"
-          />
+          {!lockedToProject && (
+            <TabButton
+              active={view.kind === 'portfolio'}
+              onClick={() => { selectProject(null); setView({ kind: 'portfolio' }) }}
+              icon={<LayoutDashboard size={13} />}
+              label="سبد پروژه‌ها"
+            />
+          )}
           {activeProject && (
             <>
               <TabButton

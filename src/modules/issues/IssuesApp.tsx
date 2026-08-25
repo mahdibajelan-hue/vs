@@ -49,8 +49,11 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   // Arrived here from Project Radar with a project already in context: open straight into that
-  // project's issue list instead of the dashboard.
+  // project's issue list instead of the dashboard, and stay locked to it — hide every
+  // cross-project view (dashboard, all-issues list, report, portfolio rollup) so there's no way
+  // to wander back to a list of other projects.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
   useEffect(() => {
     if (!contextProjectId) return
     fetchModuleProjectMappings('issues').then((map) => {
@@ -58,10 +61,13 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
       if (resolved) {
         setProjectFilter(resolved)
         setTab('projects')
+        setLockedToProject(true)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const visibleNav = lockedToProject ? NAV.filter((n) => n.id === 'projects' || n.id === 'about') : NAV
 
   useEffect(() => {
     for (const p of projects) {
@@ -91,7 +97,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
           <nav className="im-grid" style={{ gap: 2 }}>
-            {NAV.map((n) => (
+            {visibleNav.map((n) => (
               <button key={n.id} className={`im-nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
                 <n.icon size={18} />
                 <span>{n.label}</span>

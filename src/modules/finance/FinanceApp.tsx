@@ -135,8 +135,11 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
 
   // Arrived here from Project Radar with a project already in context (Finance uses
-  // masterProjectId directly, no mapping table needed).
+  // masterProjectId directly, no mapping table needed) — stay locked to it: hide the
+  // portfolio/program/project browse tabs and the cross-project dashboard, landing straight on
+  // this project's contracts instead.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
@@ -146,9 +149,16 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     if (projects.length === 0 || projectId) return
-    const preferred = contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id
-    setProjectId(preferred)
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
+      setProjectId(contextProjectId)
+      setLockedToProject(true)
+      setTab('contracts')
+    } else {
+      setProjectId(projects[0].id)
+    }
   }, [projects, projectId, contextProjectId])
+
+  const visibleNav = lockedToProject ? NAV.filter((n) => PROJECT_SCOPED_TABS.has(n.id)) : NAV
 
   const toggleFinTheme = () => {
     const next = !finLight
@@ -208,7 +218,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {visibleNav.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => {
@@ -251,7 +261,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {PROJECT_SCOPED_TABS.has(tab) && (
+            {PROJECT_SCOPED_TABS.has(tab) && !lockedToProject && (
               <select
                 value={projectId ?? ''}
                 onChange={(e) => setProjectId(e.target.value || null)}
