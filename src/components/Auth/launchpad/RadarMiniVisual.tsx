@@ -11,7 +11,7 @@ const SWEEP_SECONDS = 4.5
  * as "this is the radar" at a glance without importing the real (SVG-ring-heavy) component. */
 export function RadarMiniVisual() {
   return (
-    <div className="radar-scope relative h-14 w-14 shrink-0 overflow-hidden rounded-full" aria-hidden="true">
+    <div className="radar-scope relative h-9 w-9 shrink-0 overflow-hidden rounded-full" aria-hidden="true">
       <div
         className="radar-sweep pointer-events-none absolute inset-0 overflow-hidden rounded-full"
         style={{ animationDuration: `${SWEEP_SECONDS}s` }}

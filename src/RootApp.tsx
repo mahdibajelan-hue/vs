@@ -4,7 +4,7 @@ import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
-import { LoginScreen, Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
+import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
@@ -26,10 +26,10 @@ const PipelineDigitalTwinApp = lazy(() =>
 )
 
 /**
- * Top-level flow: authenticate once (single shared account across every module), THEN show the
- * module hub — not the other way around. Previously each module wrapped itself in its own
- * AuthGate, so the hub appeared before login and only prompted for credentials once a module was
- * picked; since it's really one global Supabase session, that just meant an extra detour.
+ * Top-level flow: one shared account across every module, authenticated inline on the launchpad
+ * itself — there's no separate login screen. ModuleHub renders unconditionally on both sides of
+ * isAuthed; before sign-in its module cards are just locked previews, and entering credentials in
+ * its header unlocks them in place.
  */
 export function RootApp() {
   const authLoading = useAuthStore((s) => s.authLoading)
@@ -60,7 +60,10 @@ export function RootApp() {
     )
   }
 
-  if (!isAuthed) return <LoginScreen />
+  // Sign-in is inline on the launchpad itself (Header's login form) rather than a separate
+  // screen — ModuleHub renders the same page either way, just with module cards locked until
+  // isAuthed flips.
+  if (!isAuthed) return <ModuleHub onEnterModule={enterModule} />
 
   if (profile && !profile.profileCompleted) {
     return (
