@@ -1160,3 +1160,89 @@ body {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Project Radar — mission control identity (RASTA home screen).
+
+   One signature color (neon green) carries the "live system" feeling; cyan
+   and amber stay supporting accents already used elsewhere (brand-400,
+   plc-amber) so this doesn't introduce a third unrelated palette. Severity
+   colors on signals are the one place red/amber/yellow/cyan appear together,
+   and that's meaningful (it's the whole point of a severity legend), not
+   decoration.
+   ========================================================================== */
+
+:root {
+  --radar-bg: #050810;
+  --radar-green: #22ff9e;
+  --radar-cyan: #38bdf8;
+  --radar-amber: #f0a836;
+  --radar-grid: rgba(34, 255, 158, 0.16);
+  --radar-grid-text: rgba(148, 214, 184, 0.55);
+}
+
+:root[data-theme="light"] {
+  --radar-bg: #eef2f7;
+  --radar-grid: rgba(15, 23, 42, 0.12);
+  --radar-grid-text: rgba(15, 23, 42, 0.35);
+}
+
+.radar-scope {
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--radar-green) 4%, var(--radar-bg)) 0%, var(--radar-bg) 70%);
+  border-radius: 50%;
+  border: 1px solid var(--radar-grid);
+}
+
+@keyframes radar-sweep-rotate {
+  to { transform: rotate(360deg); }
+}
+.radar-sweep {
+  animation-name: radar-sweep-rotate;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes radar-signal-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-green)) 60%, transparent); }
+  18%  { box-shadow: 0 0 0 9px color-mix(in srgb, var(--pulse-color, var(--radar-green)) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.radar-signal {
+  animation-name: radar-signal-pulse;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes radar-center-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--radar-green) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
+}
+.radar-center-dot {
+  animation: radar-center-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes radar-callout-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.radar-callout {
+  animation: radar-callout-in 0.16s ease-out;
+}
+
+@keyframes radar-live-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--radar-green) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.radar-live-dot {
+  animation: radar-live-pulse 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep,
+  .radar-signal,
+  .radar-center-dot,
+  .radar-live-dot {
+    animation: none !important;
+  }
+}
