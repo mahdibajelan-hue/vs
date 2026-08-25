@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Bell, KeyRound, Loader2, Search, Settings, UserCircle2 } from 'lucide-react'
+import { Bell, Search, Settings, UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
 
@@ -16,73 +16,8 @@ function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) 
   )
 }
 
-type Status = 'idle' | 'submitting' | 'error'
-
-/** Compact inline sign-in — no separate login screen. Submitting here is what unlocks the
- * module cards below (see ModuleLaunchpad's `locked = !isAuthed`); success needs no navigation
- * or transition, isAuthed just flips and the rest of the page reacts. */
-function InlineLoginForm() {
-  const signIn = useAuthStore((s) => s.signIn)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [status, setStatus] = useState<Status>('idle')
-  const [error, setError] = useState('')
-
-  const submit = async () => {
-    if (status === 'submitting') return
-    setError('')
-    if (!email.trim() || !password) {
-      setError('ایمیل و رمز عبور را وارد کنید')
-      setStatus('error')
-      return
-    }
-    setStatus('submitting')
-    const res = await signIn(email.trim(), password)
-    if (!res.ok) {
-      setError(res.error ?? 'ورود ناموفق بود')
-      setStatus('error')
-    }
-    // On success isAuthed flips via the store and this form unmounts on its own.
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1.5">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          disabled={status === 'submitting'}
-          placeholder="ایمیل"
-          dir="ltr"
-          className="input h-9 w-32 !py-0 text-xs sm:w-40"
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          disabled={status === 'submitting'}
-          placeholder="رمز عبور"
-          dir="ltr"
-          className="input h-9 w-28 !py-0 text-xs"
-        />
-        <button
-          onClick={submit}
-          disabled={status === 'submitting'}
-          title="ورود"
-          aria-label="ورود"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white transition-colors hover:bg-brand-400 disabled:opacity-60"
-        >
-          {status === 'submitting' ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
-        </button>
-      </div>
-      {error && <p className="text-[10px] text-red-400">{error}</p>}
-    </div>
-  )
-}
-
+/** Sign-in itself lives on the page as LoginCard, not here — the header just switches between a
+ * quiet "signed out" state (brand only) and the full authed toolbar once isAuthed flips. */
 export function Header() {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const currentUser = useAuthStore((s) => s.currentUser())
@@ -112,9 +47,7 @@ export function Header() {
         </div>
       </div>
 
-      {!isAuthed ? (
-        <InlineLoginForm />
-      ) : (
+      {isAuthed && (
         <div className="flex items-center gap-1 sm:gap-2">
           <span
             className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-bold tracking-wide sm:flex"

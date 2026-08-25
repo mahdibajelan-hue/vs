@@ -3,7 +3,7 @@ import type { ModuleKey } from '../../../store/useModuleStore'
 import { ProjectRadarPage } from '../radar/ProjectRadarPage'
 import { Header } from './Header'
 import { ModuleLaunchpad } from './ModuleLaunchpad'
-import { SignatureBlock } from './SignatureBlock'
+import { AboutCard } from './AboutCard'
 import { Footer } from './Footer'
 
 /**
@@ -34,9 +34,11 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
     <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip" style={{ background: 'var(--bg-app)' }}>
       <div className="launchpad-texture" aria-hidden="true" />
       <Header />
-      <div className="flex flex-1 flex-col justify-center">
+      <div className="flex flex-1 flex-col justify-center gap-8 py-6">
         <ModuleLaunchpad onSelect={handleSelect} />
-        <SignatureBlock />
+        <div className="px-6 sm:px-10">
+          <AboutCard />
+        </div>
       </div>
       <Footer />
     </div>
