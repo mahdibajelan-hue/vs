@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ModuleKey } from '../../../store/useModuleStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { ProjectRadarPage } from '../radar/ProjectRadarPage'
 import { Header } from './Header'
 import { ModuleLaunchpad } from './ModuleLaunchpad'
@@ -17,6 +18,7 @@ import { Footer } from './Footer'
  */
 export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const [radarOpen, setRadarOpen] = useState(false)
+  const isAuthed = useAuthStore((s) => s.isAuthed)
 
   if (radarOpen) {
     return <ProjectRadarPage onBack={() => setRadarOpen(false)} onEnterModule={onEnterModule} />
@@ -36,9 +38,11 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
       <Header />
       <div className="flex flex-1 flex-col justify-center gap-8 py-6">
         <ModuleLaunchpad onSelect={handleSelect} />
-        <div className="px-6 sm:px-10">
-          <AboutCard />
-        </div>
+        {!isAuthed && (
+          <div className="px-6 sm:px-10">
+            <AboutCard />
+          </div>
+        )}
       </div>
       <Footer />
     </div>

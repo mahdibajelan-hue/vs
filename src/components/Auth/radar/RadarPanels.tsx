@@ -161,12 +161,12 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
       <PanelTitle text="LIFECYCLE PROGRESS" />
       <div className="mb-4 flex justify-center">
         <RingGauge
-          pct={overallPct} color="var(--radar-green)" size={104} stroke={7}
+          pct={overallPct} color="var(--radar-green)" size={92} stroke={6}
           center={
             <div className="flex flex-col items-center justify-center leading-tight">
-              <span className="text-sm font-extrabold">{current?.labelEn ?? '—'}</span>
-              <span className="mt-0.5 text-[7px] font-bold tracking-wide text-muted">EXECUTION</span>
-              <span className="num mt-0.5 text-lg font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
+              <span className="text-[13px] font-extrabold">{current?.labelEn ?? '—'}</span>
+              <span className="mt-0.5 text-[6.5px] font-bold tracking-wide text-muted">EXECUTION</span>
+              <span className="num mt-0.5 text-base font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
             </div>
           }
         />

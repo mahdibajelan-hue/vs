@@ -3,10 +3,11 @@ import { AlertTriangle, CircleAlert, Clock, FileText, Flag, RefreshCw, ShieldChe
 import type { LucideIcon } from 'lucide-react'
 import {
   SEVERITY_COLOR, SEVERITY_LABEL_FA, SIGNAL_CATEGORY_LABEL_FA,
-  type RadarSignal, type SignalCategory,
+  type RadarSignal, type SignalCategory, type SignalSeverity,
 } from './radarTypes'
 
 const SWEEP_SECONDS = 8
+const LEGEND_SEVERITIES: SignalSeverity[] = ['critical', 'high', 'medium', 'low']
 
 const CATEGORY_ICON: Record<SignalCategory, LucideIcon> = {
   risk: AlertTriangle,
@@ -167,6 +168,22 @@ export function RadarDisplay({
           </div>
         </div>
       )}
+
+      {/* Very small severity legend, tucked in a corner — the marker's distance from center is
+          what actually encodes severity (see the radius bands in radarTypes.ts), this is just a
+          reminder of what each color means. */}
+      <div
+        dir="rtl"
+        className="pointer-events-none absolute bottom-2 left-2 z-10 flex flex-col gap-0.5 rounded-md border px-1.5 py-1"
+        style={{ borderColor: 'var(--radar-grid)', background: 'color-mix(in srgb, var(--radar-bg) 75%, transparent)' }}
+      >
+        {LEGEND_SEVERITIES.map((sev) => (
+          <span key={sev} className="flex items-center gap-1 text-[7px] font-bold" style={{ color: SEVERITY_COLOR[sev] }}>
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEVERITY_COLOR[sev] }} />
+            {SEVERITY_LABEL_FA[sev]}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

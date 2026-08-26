@@ -149,9 +149,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
   return (
     <div dir="ltr" className="radar-en relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
+      <div className="radar-page-texture" aria-hidden="true" />
       {/* Reserves space for the floating sidebar instead of letting it overlap the content
           (the sidebar itself is `position: fixed`, so it takes no layout space on its own). */}
-      <div className="transition-[margin] duration-300" style={{ marginInlineStart: isDesktop && sidebarOpen ? '16rem' : 0 }}>
+      <div className="relative z-10 transition-[margin] duration-300" style={{ marginInlineStart: isDesktop && sidebarOpen ? '16rem' : 0 }}>
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2.5">
@@ -305,7 +306,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         {/* Main grid: performance rings | Radar | risk/issue stack | Lifecycle — four siblings so
             the radar (the hero element) gets the lion's share of the width instead of competing
             with the lifecycle card inside a shared, narrower wrapper. */}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_290px] xl:items-stretch">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_220px] xl:items-stretch">
           <div className="flex flex-col gap-3">
             <PerformanceRingCard
               title="PROJECT HEALTH"

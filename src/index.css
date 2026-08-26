@@ -1221,6 +1221,40 @@ body {
   border: 1px solid var(--radar-grid);
 }
 
+/* Faint concentric rings + diagonal spokes behind the whole Radar page, echoing the radar
+   widget's own grid so the page reads as one continuous "scope" rather than a plain dark
+   background with a radar circle floating on top. Purely decorative, so it sits behind
+   everything and never intercepts clicks. */
+.radar-page-texture {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(
+      circle at 62% 38%,
+      color-mix(in srgb, var(--radar-green) 10%, transparent) 0px,
+      color-mix(in srgb, var(--radar-green) 10%, transparent) 1px,
+      transparent 1px,
+      transparent 90px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--radar-green) 8%, transparent) 0px,
+      color-mix(in srgb, var(--radar-green) 8%, transparent) 1px,
+      transparent 1px,
+      transparent 140px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--radar-green) 8%, transparent) 0px,
+      color-mix(in srgb, var(--radar-green) 8%, transparent) 1px,
+      transparent 1px,
+      transparent 140px
+    );
+  mask-image: radial-gradient(circle at 62% 38%, black 0%, transparent 72%);
+}
+
 @keyframes radar-sweep-rotate {
   to { transform: rotate(360deg); }
 }
