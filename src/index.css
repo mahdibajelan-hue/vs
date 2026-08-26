@@ -1256,10 +1256,10 @@ body {
   100% { transform: translateX(-180px); }
 }
 .heartbeat-scroll.is-regular {
-  animation: heartbeat-scroll-regular 1.8s linear infinite;
+  animation: heartbeat-scroll-regular 3.2s linear infinite;
 }
 .heartbeat-scroll.is-critical {
-  animation: heartbeat-scroll-critical 0.9s cubic-bezier(0.7, 0, 0.3, 1) infinite;
+  animation: heartbeat-scroll-critical 1.7s cubic-bezier(0.7, 0, 0.3, 1) infinite;
 }
 
 @keyframes radar-center-pulse {

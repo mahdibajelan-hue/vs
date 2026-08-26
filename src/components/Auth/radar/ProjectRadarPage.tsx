@@ -72,7 +72,20 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
+  // closed so the radar itself isn't squeezed into a sliver on a phone screen.
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
+  const [sidebarOpen, setSidebarOpen] = useState(isDesktop)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => {
+      setIsDesktop(e.matches)
+      setSidebarOpen(e.matches)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const runScan = () => {
     if (scanning) return
@@ -138,11 +151,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     <div dir="ltr" className="radar-en relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
       {/* Reserves space for the floating sidebar instead of letting it overlap the content
           (the sidebar itself is `position: fixed`, so it takes no layout space on its own). */}
-      <div className="transition-[margin] duration-300" style={{ marginInlineStart: sidebarOpen ? '16rem' : 0 }}>
+      <div className="transition-[margin] duration-300" style={{ marginInlineStart: isDesktop && sidebarOpen ? '16rem' : 0 }}>
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2.5">
-          <HeartbeatBar status={data.status} color={statusColor} />
           <button
             onClick={onBack}
             title="Back to Modules"
@@ -196,17 +208,22 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={runScan}
-            disabled={scanning}
-            className="flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide disabled:opacity-70"
-            style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))', color: 'var(--radar-green)' }}
-          >
-            <RadarIcon size={14} className={scanning ? 'animate-spin' : ''} />
-            {scanning ? `SCANNING... ${Math.round(scanProgress)}%` : 'RADAR SCAN'}
-            <Activity size={12} className="opacity-60" />
-            <X size={12} className="opacity-60" />
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={runScan}
+              disabled={scanning}
+              className="flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide disabled:opacity-70"
+              style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))', color: 'var(--radar-green)' }}
+            >
+              <RadarIcon size={14} className={scanning ? 'animate-spin' : ''} />
+              {scanning ? `SCANNING... ${Math.round(scanProgress)}%` : 'RADAR SCAN'}
+              <span className="hidden items-center gap-2 sm:flex">
+                <Activity size={12} className="opacity-60" />
+                <X size={12} className="opacity-60" />
+              </span>
+            </button>
+            <HeartbeatBar status={data.status} color={statusColor} />
+          </div>
 
           <div className="relative">
             <button onClick={() => setNotifOpen((v) => !v)} className="relative flex h-9 w-9 items-center justify-center rounded-xl border" style={{ borderColor: 'var(--border-soft)' }}>
@@ -400,6 +417,15 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
             {notice}
           </span>
         </div>
+      )}
+
+      {/* On mobile the sidebar overlays instead of pushing content, so tapping outside it closes it. */}
+      {sidebarOpen && !isDesktop && (
+        <button
+          className="fixed inset-0 z-30 cursor-default bg-black/50"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close menu"
+        />
       )}
 
       {(projectPickerOpen || notifOpen) && (

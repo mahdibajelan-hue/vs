@@ -5,11 +5,12 @@ const TILE_H = 30
 const REPEATS = 3
 const STRIP_W = TILE_W * REPEATS
 
-/** One steady spike per tile — a regular, strong beat. */
-const REGULAR_PATH = 'M0 15 L14 15 L18 5 L22 15 L26 23 L30 15 L60 15'
-/** Two short, unevenly-spaced spikes with an actual gap in the stroke (the `M` mid-path starts a
- * new sub-path) — reads as a literally broken, non-continuous line rather than just "faster". */
-const CRITICAL_PATH = 'M0 15 L8 15 L10 9 L12 21 L14 15 L30 15 M35 15 L37 10 L39 15 L60 15'
+/** A tall primary spike followed by a shorter secondary one per tile — reads as an actual
+ * heartbeat ("lub-dub") rather than a single symmetric blip. */
+const REGULAR_PATH = 'M0 15 L9 15 L13 2 L17 15 L25 15 L29 10 L33 15 L60 15'
+/** Same tall/short pair, but with an actual gap in the stroke (the `M` mid-path starts a new
+ * sub-path) — reads as a literally broken, non-continuous line rather than just "faster". */
+const CRITICAL_PATH = 'M0 15 L6 15 L9 3 L12 15 L20 15 M24 15 L26 11 L28 15 L60 15'
 
 function Strip({ path, dx }: { path: string; dx: number }) {
   return (

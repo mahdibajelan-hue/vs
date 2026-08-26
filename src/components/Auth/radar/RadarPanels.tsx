@@ -225,8 +225,8 @@ export function NextGatePanel({ gate, stages }: { gate: RadarGate; stages: Radar
     <Panel>
       <PanelTitle text="NEXT GATE" />
       <p className="mb-3 text-lg font-extrabold">{gate.nameEn}</p>
-      <div className="flex items-center gap-3">
-        <div className="grid flex-1 grid-cols-4 gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
           <GateStatBox label="PREREQUISITES" value={gate.prerequisites} />
           <GateStatBox label="PASSED" value={gate.passed} color="var(--radar-green)" />
           <GateStatBox label="PENDING" value={gate.pending} color="var(--radar-amber)" />
@@ -252,36 +252,38 @@ function GateStatBox({ label, value, color }: { label: string; value: number; co
  * vertical LifecyclePanel timeline, rendered as a connected dot-and-line strip. */
 function GateStageStepper({ stages }: { stages: RadarLifecycleStage[] }) {
   return (
-    <div className="relative mt-5">
-      <div className="absolute inset-x-1 top-[7px] h-px" style={{ background: 'var(--border-soft)' }} />
-      <div className="relative grid items-start" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
-        {stages.map((s) => (
-          <div key={s.key} className="flex min-w-0 flex-col items-center gap-1.5 px-px">
-            {s.state === 'done' ? (
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: 'var(--radar-green)' }} />
-            ) : s.state === 'current' ? (
-              <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
-                <span className="absolute h-2.5 w-2.5 rounded-full" style={{ background: 'var(--radar-cyan)', boxShadow: '0 0 10px 3px color-mix(in srgb, var(--radar-cyan) 70%, transparent)' }} />
-                <span className="absolute h-4 w-4 rounded-full border" style={{ borderColor: 'var(--radar-cyan)' }} />
+    <div className="mt-5 overflow-x-auto">
+      <div className="relative" style={{ minWidth: `${stages.length * 46}px` }}>
+        <div className="absolute inset-x-1 top-[7px] h-px" style={{ background: 'var(--border-soft)' }} />
+        <div className="relative grid items-start" style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}>
+          {stages.map((s) => (
+            <div key={s.key} className="flex min-w-0 flex-col items-center gap-1.5 px-px">
+              {s.state === 'done' ? (
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: 'var(--radar-green)' }} />
+              ) : s.state === 'current' ? (
+                <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                  <span className="absolute h-2.5 w-2.5 rounded-full" style={{ background: 'var(--radar-cyan)', boxShadow: '0 0 10px 3px color-mix(in srgb, var(--radar-cyan) 70%, transparent)' }} />
+                  <span className="absolute h-4 w-4 rounded-full border" style={{ borderColor: 'var(--radar-cyan)' }} />
+                </span>
+              ) : (
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full border" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)' }} />
+              )}
+              <span
+                className="block w-full text-center text-[6.5px] font-bold leading-[1.15] text-muted"
+                dir="ltr"
+                style={{
+                  fontFamily: "'Montserrat', sans-serif",
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.01em',
+                  overflowWrap: 'anywhere',
+                  color: s.state === 'current' ? 'var(--radar-cyan)' : undefined,
+                }}
+              >
+                {s.labelEn}
               </span>
-            ) : (
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full border" style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)' }} />
-            )}
-            <span
-              className="block w-full text-center text-[6.5px] font-bold leading-[1.15] text-muted"
-              dir="ltr"
-              style={{
-                fontFamily: "'Montserrat', sans-serif",
-                textTransform: 'uppercase',
-                letterSpacing: '0.01em',
-                overflowWrap: 'anywhere',
-                color: s.state === 'current' ? 'var(--radar-cyan)' : undefined,
-              }}
-            >
-              {s.labelEn}
-            </span>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

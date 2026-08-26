@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { AlertTriangle, CircleAlert, Clock, FileText, Flag, RefreshCw, ShieldCheck, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  SEVERITY_COLOR, SEVERITY_LABEL_EN, SIGNAL_CATEGORY_LABEL_EN,
+  SEVERITY_COLOR, SEVERITY_LABEL_FA, SIGNAL_CATEGORY_LABEL_FA,
   type RadarSignal, type SignalCategory,
 } from './radarTypes'
 
@@ -114,16 +114,17 @@ export function RadarDisplay({
               animationDelay: `${delay}s`,
               zIndex: isHovered || selected?.id === signal.id ? 20 : 10,
             }}
-            aria-label={`${SIGNAL_CATEGORY_LABEL_EN[signal.category]}: ${signal.titleEn}`}
+            aria-label={`${SIGNAL_CATEGORY_LABEL_FA[signal.category]}: ${signal.title}`}
           >
             <Icon size={12} style={{ color }} />
 
             {isHovered && selected?.id !== signal.id && (
               <span
+                dir="rtl"
                 className="pointer-events-none absolute bottom-full mb-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold"
                 style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', color: 'var(--text-primary)' }}
               >
-                {signal.titleEn} · {signal.subjectEn}
+                {signal.title} · {signal.subject}
               </span>
             )}
           </button>
@@ -133,7 +134,8 @@ export function RadarDisplay({
       {/* Detail callout for the selected signal */}
       {selected && selectedPoint && (
         <div
-          className="radar-callout absolute z-30 w-60 max-w-[85vw] rounded-2xl border p-3.5 text-left"
+          dir="rtl"
+          className="radar-callout absolute z-30 w-60 max-w-[85vw] rounded-2xl border p-3.5 text-right"
           style={{
             left: `${Math.min(78, Math.max(4, selectedPoint.x))}%`,
             top: `${Math.min(70, Math.max(4, selectedPoint.y))}%`,
@@ -148,19 +150,19 @@ export function RadarDisplay({
               className="rounded-full px-2 py-0.5 text-[10px] font-extrabold"
               style={{ background: `color-mix(in srgb, ${SEVERITY_COLOR[selected.severity]} 18%, transparent)`, color: SEVERITY_COLOR[selected.severity] }}
             >
-              {SIGNAL_CATEGORY_LABEL_EN[selected.category]} · {SEVERITY_LABEL_EN[selected.severity]}
+              {SIGNAL_CATEGORY_LABEL_FA[selected.category]} · {SEVERITY_LABEL_FA[selected.severity]}
             </span>
             <button onClick={() => setSelected(null)} className="text-muted hover:text-primary">
               <X size={14} />
             </button>
           </div>
-          <p className="text-[13px] font-extrabold">{selected.titleEn}</p>
-          <p className="mt-0.5 text-[11px] text-secondary">{selected.subjectEn} · {selected.detailEn}</p>
+          <p className="text-[13px] font-extrabold">{selected.title}</p>
+          <p className="mt-0.5 text-[11px] text-secondary">{selected.subject} · {selected.detail}</p>
           <div className="mt-2.5 space-y-1.5 border-t pt-2.5 text-[10.5px] leading-5" style={{ borderColor: 'var(--border-soft)' }}>
-            <p><span className="text-muted">Root Cause: </span>{selected.rootCauseEn}</p>
-            <p><span className="text-muted">Impact: </span>{selected.impactEn}</p>
+            <p><span className="text-muted">علت ریشه‌ای: </span>{selected.rootCause}</p>
+            <p><span className="text-muted">تاثیر: </span>{selected.impact}</p>
             <p className="font-bold" style={{ color: 'var(--radar-green)' }}>
-              Recommended Action: {selected.recommendedActionEn}
+              اقدام پیشنهادی: {selected.recommendedAction}
             </p>
           </div>
         </div>

@@ -36,6 +36,23 @@ function trackSpotlight(e: MouseEvent<HTMLElement>) {
  * added later without touching this primitive — but the elevate/glow/spotlight/arrow behavior and
  * the locked-preview treatment stay identical across all of them. */
 export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+  // Before sign-in: only the bare icon shows (no title/description/border/background box) — the
+  // full card treatment appears once the user is authenticated.
+  if (locked) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3" title={title}>
+        {visual ?? (
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ background: `color-mix(in srgb, ${accent} 14%, transparent)` }}
+          >
+            <Icon size={26} style={{ color: accent }} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <button
       type="button"
