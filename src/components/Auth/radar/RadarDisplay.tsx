@@ -47,9 +47,19 @@ export function RadarDisplay({
     <div className="radar-scope relative mx-auto aspect-square w-full max-w-[620px]">
       {/* Static rings, spokes and degree labels */}
       <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
-        {RINGS.map((r) => (
-          <circle key={r} cx="50" cy="50" r={r * 46} fill="none" stroke="var(--radar-grid)" strokeWidth="0.25" />
-        ))}
+        {RINGS.map((r, i) => {
+          /* The two outermost rings get a thin, saturated neon-green stroke with a glow — the
+             radar's own "housing" edge — while the inner two stay the faint grid color. */
+          const isOuter = i < 2
+          return (
+            <circle
+              key={r} cx="50" cy="50" r={r * 46} fill="none"
+              stroke={isOuter ? 'var(--radar-green)' : 'var(--radar-grid)'}
+              strokeWidth={isOuter ? 0.35 : 0.25}
+              style={isOuter ? { filter: 'drop-shadow(0 0 1.5px var(--radar-green)) drop-shadow(0 0 3px var(--radar-green))' } : undefined}
+            />
+          )
+        })}
         {DEGREE_MARKS.map((deg) => {
           const rad = (deg * Math.PI) / 180
           const x2 = 50 + 46 * Math.sin(rad)

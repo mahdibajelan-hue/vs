@@ -1321,11 +1321,27 @@ body {
   animation: radar-live-pulse 1.8s ease-out infinite;
 }
 
+/* Small heart icon next to PROJECT STATUS — a quick systole/diastole double-thump rather than a
+   plain symmetric pulse, so it reads as an actual heartbeat, matching the ECG strip beside it. */
+@keyframes radar-heart-beat {
+  0%, 100% { transform: scale(1); }
+  15%      { transform: scale(1.35); }
+  30%      { transform: scale(1); }
+  45%      { transform: scale(1.2); }
+  60%      { transform: scale(1); }
+}
+.radar-heart-beat {
+  display: inline-flex;
+  transform-origin: center;
+  animation: radar-heart-beat 1.1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .radar-sweep,
   .radar-signal,
   .radar-center-dot,
   .radar-live-dot,
+  .radar-heart-beat,
   .heartbeat-scroll {
     animation: none !important;
   }

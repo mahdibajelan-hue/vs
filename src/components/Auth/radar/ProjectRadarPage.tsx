@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
-  ChevronsRight, Clock3, FileText, GitBranch, Package, Radar as RadarIcon, RefreshCw, Route,
+  ChevronsRight, Clock3, FileText, GitBranch, Heart, Package, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -229,22 +229,19 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-1">
-            <button
-              onClick={runScan}
-              disabled={scanning}
-              className="flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide disabled:opacity-70"
-              style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))', color: 'var(--radar-green)' }}
-            >
-              <RadarIcon size={14} className={scanning ? 'animate-spin' : ''} />
-              {scanning ? `SCANNING... ${Math.round(scanProgress)}%` : 'RADAR SCAN'}
-              <span className="hidden items-center gap-2 sm:flex">
-                <Activity size={12} className="opacity-60" />
-                <X size={12} className="opacity-60" />
-              </span>
-            </button>
-            <HeartbeatBar status={data.status} color={statusColor} />
-          </div>
+          <button
+            onClick={runScan}
+            disabled={scanning}
+            className="flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide disabled:opacity-70"
+            style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))', color: 'var(--radar-green)' }}
+          >
+            <RadarIcon size={14} className={scanning ? 'animate-spin' : ''} />
+            {scanning ? `SCANNING... ${Math.round(scanProgress)}%` : 'RADAR SCAN'}
+            <span className="hidden items-center gap-2 sm:flex">
+              <Activity size={12} className="opacity-60" />
+              <X size={12} className="opacity-60" />
+            </span>
+          </button>
 
           <div className="relative">
             <button onClick={() => setNotifOpen((v) => !v)} className="relative flex h-9 w-9 items-center justify-center rounded-xl border" style={{ borderColor: 'var(--border-soft)' }}>
@@ -293,9 +290,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           <div className="flex items-center gap-2.5">
             <span className="text-[10px] font-bold text-muted">PROJECT STATUS</span>
             <span className="flex items-center gap-1.5 text-sm font-extrabold" style={{ color: statusColor }}>
-              <span className="radar-live-dot h-2 w-2 rounded-full" style={{ background: statusColor }} />
+              <Heart size={13} className="radar-heart-beat" style={{ color: statusColor, fill: statusColor }} />
               {STATUS_LABEL_EN[data.status]}
             </span>
+            <HeartbeatBar status={data.status} color={statusColor} />
           </div>
           <div className="flex items-center gap-2.5">
             <span className="text-[10px] font-bold text-muted">RADAR MODE</span>
@@ -353,10 +351,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
             />
           </div>
 
-          <div
-            className="relative flex items-center justify-center overflow-hidden rounded-3xl border p-4 sm:p-6"
-            style={{ borderColor: 'var(--radar-grid)', background: 'var(--radar-bg)' }}
-          >
+          <div className="relative flex items-center justify-center p-4 sm:p-6">
             <RadarDisplay signals={visibleSignals} dimmed={scanning} />
           </div>
 
@@ -370,7 +365,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
           <LifecyclePanel
             stages={data.lifecycle}
-            overallPct={Math.round((data.lifecycle.filter((s) => s.state === 'done').length / data.lifecycle.length) * 100)}
+            overallPct={Math.round(data.lifecycle.reduce((sum, s) => sum + s.progressPct, 0) / data.lifecycle.length)}
           />
         </div>
 

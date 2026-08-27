@@ -102,6 +102,11 @@ export interface RadarLifecycleStage {
   state: StageState
   /** Mock planned/actual date for this stage, shown in the timeline's hover tooltip. */
   dateFa: string
+  /** This stage's own completion (0-100) — 100 once done, 0 while still upcoming, and somewhere
+   * in between for the currently active stage. Averaging this across every stage (not just
+   * counting how many are marked "done") is what drives the master-plan-weighted overall
+   * progress ring, as opposed to the current stage's own ring showing just this one value. */
+  progressPct: number
 }
 
 /** The 9-stage sequence from the Project Radar brief — a display-level concept for this hero
@@ -339,11 +344,15 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
   const currentStageIndex = Math.min(8, Math.floor(rand() * 6) + 2)
   const baseYear = 1401 + Math.floor(rand() * 2)
   const baseMonth = 1 + Math.floor(rand() * 6)
-  const lifecycle: RadarLifecycleStage[] = STAGE_DEFS.map((s, i): RadarLifecycleStage => ({
-    ...s,
-    state: i < currentStageIndex ? 'done' : i === currentStageIndex ? 'current' : 'upcoming',
-    dateFa: mockStageDateFa(baseYear, baseMonth, i * (2 + Math.floor(rand() * 3))),
-  }))
+  const lifecycle: RadarLifecycleStage[] = STAGE_DEFS.map((s, i): RadarLifecycleStage => {
+    const state: StageState = i < currentStageIndex ? 'done' : i === currentStageIndex ? 'current' : 'upcoming'
+    return {
+      ...s,
+      state,
+      dateFa: mockStageDateFa(baseYear, baseMonth, i * (2 + Math.floor(rand() * 3))),
+      progressPct: state === 'done' ? 100 : state === 'upcoming' ? 0 : Math.round(20 + rand() * 65),
+    }
+  })
   const currentStageKey = STAGE_DEFS[currentStageIndex].key
 
   const passed = 4 + Math.floor(rand() * 8)
@@ -452,6 +461,7 @@ export const DEFAULT_RADAR_DATA: RadarData = {
     ...s,
     state: i < 5 ? 'done' : i === 5 ? 'current' : 'upcoming',
     dateFa: mockStageDateFa(1401, 4, i * 3),
+    progressPct: i < 5 ? 100 : i === 5 ? 45 : 0,
   })),
   currentStageLabel: 'EPC',
   nextGate: { name: 'انجماد طراحی (Design Freeze)', nameEn: 'Design Freeze', prerequisites: 12, passed: 8, pending: 2, failed: 2, readinessPct: 67 },
