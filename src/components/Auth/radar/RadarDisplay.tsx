@@ -47,25 +47,36 @@ export function RadarDisplay({
     <div className="radar-scope relative mx-auto aspect-square w-full max-w-[620px]">
       {/* Static rings, spokes and degree labels */}
       <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
+        <defs>
+          {/* Spokes glow brightest right at the center and fade toward the rim — a proper
+              radar-console crosshair instead of flat, uniform lines. */}
+          <radialGradient id="radar-spoke-fade" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="46">
+            <stop offset="0%" stopColor="var(--radar-green)" stopOpacity="0.9" />
+            <stop offset="35%" stopColor="var(--radar-green)" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="var(--radar-green)" stopOpacity="0.08" />
+          </radialGradient>
+        </defs>
         {RINGS.map((r, i) => {
-          /* The two outermost rings get a thin, saturated neon-green stroke with a glow — the
-             radar's own "housing" edge — while the inner two stay the faint grid color. */
+          /* The two outermost rings get a thick, saturated neon-green stroke with a strong glow
+             — the radar's own "housing" edge — while the inner two stay the faint grid color. */
           const isOuter = i < 2
           return (
             <circle
               key={r} cx="50" cy="50" r={r * 46} fill="none"
               stroke={isOuter ? 'var(--radar-green)' : 'var(--radar-grid)'}
-              strokeWidth={isOuter ? 0.35 : 0.25}
-              style={isOuter ? { filter: 'drop-shadow(0 0 1.5px var(--radar-green)) drop-shadow(0 0 3px var(--radar-green))' } : undefined}
+              strokeWidth={isOuter ? 0.55 : 0.25}
+              style={isOuter ? { filter: 'drop-shadow(0 0 1px var(--radar-green)) drop-shadow(0 0 2.5px var(--radar-green)) drop-shadow(0 0 5px var(--radar-green))' } : undefined}
             />
           )
         })}
-        {DEGREE_MARKS.map((deg) => {
-          const rad = (deg * Math.PI) / 180
-          const x2 = 50 + 46 * Math.sin(rad)
-          const y2 = 50 - 46 * Math.cos(rad)
-          return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke="var(--radar-grid)" strokeWidth="0.2" />
-        })}
+        <g style={{ filter: 'drop-shadow(0 0 1px var(--radar-green))' }}>
+          {DEGREE_MARKS.map((deg) => {
+            const rad = (deg * Math.PI) / 180
+            const x2 = 50 + 46 * Math.sin(rad)
+            const y2 = 50 - 46 * Math.cos(rad)
+            return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke="url(#radar-spoke-fade)" strokeWidth="0.25" />
+          })}
+        </g>
       </svg>
 
       {/* Degree labels, HTML so text stays crisp at any zoom */}

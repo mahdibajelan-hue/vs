@@ -55,6 +55,7 @@ function RingTicks({ size, count = 24 }: { size: number; count?: number }) {
 
 function RingGauge({
   pct, size = 56, stroke = 5, color, unit, sub, center,
+  innerPct, innerColor, innerStroke,
 }: {
   pct: number
   size?: number
@@ -66,11 +67,23 @@ function RingGauge({
   sub?: string
   /** Fully custom center content, overriding the default number/unit/sub display. */
   center?: ReactNode
+  /** Optional second, smaller ring nested inside the main one — e.g. the current phase's own
+   * progress drawn inside the overall master-plan progress ring. Omit for a plain single ring. */
+  innerPct?: number
+  innerColor?: string
+  innerStroke?: number
 }) {
   const animated = useCountUp(pct)
+  const innerAnimated = useCountUp(innerPct ?? 0)
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const offset = c * (1 - Math.min(100, Math.max(0, animated)) / 100)
+
+  const hasInner = innerPct !== undefined
+  const iStroke = innerStroke ?? Math.max(3, stroke - 2)
+  const iR = Math.max(0, r - stroke / 2 - iStroke / 2 - 3)
+  const iC = 2 * Math.PI * iR
+  const iOffset = iC * (1 - Math.min(100, Math.max(0, innerAnimated)) / 100)
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -83,6 +96,15 @@ function RingGauge({
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.2s linear' }}
         />
+        {hasInner && (
+          <>
+            <circle cx={size / 2} cy={size / 2} r={iR} fill="none" stroke="var(--border-soft)" strokeWidth={iStroke} opacity={0.6} />
+            <circle
+              cx={size / 2} cy={size / 2} r={iR} fill="none" stroke={innerColor ?? color} strokeWidth={iStroke} strokeLinecap="round"
+              strokeDasharray={iC} strokeDashoffset={iOffset} style={{ transition: 'stroke-dashoffset 0.2s linear' }}
+            />
+          </>
+        )}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {center ?? (
@@ -185,15 +207,23 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
     <div className="flex h-full flex-col p-1">
       <PanelTitle text="LIFECYCLE PROGRESS" />
       <div className="mb-4 flex justify-center">
-        {/* Overall project progress, averaged across every stage's own completion (the
-            master-plan view) rather than a naive done/undone stage count. */}
+        {/* Outer ring: overall project progress averaged across every stage's own completion (the
+            master-plan view). Inner ring: just the current stage's own progress — the two read
+            together instead of the ring only ever being able to show one number. */}
         <RingGauge
-          pct={overallPct} color="var(--radar-green)" size={92} stroke={7}
+          pct={overallPct} color="var(--radar-green)" size={100} stroke={7}
+          innerPct={current?.progressPct} innerColor="var(--radar-amber)" innerStroke={5}
           center={
-            <div className="flex flex-col items-center justify-center leading-tight">
-              <span className="text-[13px] font-extrabold">{current?.labelEn ?? '—'}</span>
-              <span className="mt-0.5 text-[7px] font-bold tracking-wide text-muted">EXECUTION</span>
-              <span className="num mt-0.5 text-lg font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
+            <div className="flex flex-col items-center justify-center leading-none">
+              <span className="text-[11px] font-extrabold">{current?.labelEn ?? '—'}</span>
+              <span className="num mt-1 text-[15px] font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
+              <span className="mt-0.5 text-[6px] font-bold tracking-wide text-muted">OVERALL</span>
+              {current && (
+                <span className="num mt-1 flex items-center gap-0.5 text-[9px] font-extrabold" style={{ color: 'var(--radar-amber)' }}>
+                  {Math.round(current.progressPct)}%
+                  <span className="text-[5.5px] font-bold tracking-wide text-muted">PHASE</span>
+                </span>
+              )}
             </div>
           }
         />

@@ -1264,6 +1264,20 @@ body {
   animation-iteration-count: infinite;
 }
 
+/* Each signal marker lights up as the rotating sweep passes over it — animationDelay is set
+   per-marker (proportional to its angle) so the pulses fire in sync with the actual sweep line,
+   not just at random. */
+@keyframes radar-signal-pulse {
+  0%   { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-green)) 65%, transparent); }
+  8%   { transform: translate(-50%, -50%) scale(1.6);  filter: brightness(2.2); box-shadow: 0 0 0 14px color-mix(in srgb, var(--pulse-color, var(--radar-green)) 40%, transparent); }
+  30%  { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.3); box-shadow: 0 0 0 5px transparent; }
+  100% { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 transparent; }
+}
+.radar-signal {
+  animation-name: radar-signal-pulse;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
 .radar-signal:hover,
 .radar-signal:focus-visible {
   filter: brightness(1.8);
@@ -1310,6 +1324,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .radar-sweep,
+  .radar-signal,
   .radar-heart-beat,
   .heartbeat-scroll {
     animation: none !important;
