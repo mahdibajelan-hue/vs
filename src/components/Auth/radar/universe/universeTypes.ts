@@ -197,6 +197,21 @@ export interface ProjectIntelligenceInsight {
   relatedCode?: string
 }
 
+export interface UniverseStats {
+  totalRisks: number
+  totalRisksDelta: number
+  totalIssues: number
+  totalIssuesDelta: number
+  openActions: number
+  openActionsDelta: number
+  dueThisWeek: number
+  dueThisWeekDelta: number
+  overdue: number
+  overdueDelta: number
+  resolved30d: number
+  resolved30dDelta: number
+}
+
 export interface UniverseReport {
   id: string
   title: string
@@ -211,6 +226,7 @@ export interface UniverseData {
   eventChains: EventChain[]
   beacons: EventBeacon[]
   insights: ProjectIntelligenceInsight[]
+  stats: UniverseStats
   reports: UniverseReport[]
 }
 
@@ -439,6 +455,20 @@ export function buildMockUniverseData(seed: string): UniverseData {
     eventChains,
     beacons,
     insights,
+    stats: {
+      totalRisks: 20 + Math.floor(rand() * 20),
+      totalRisksDelta: 3 + Math.floor(rand() * 8),
+      totalIssues: 12 + Math.floor(rand() * 15),
+      totalIssuesDelta: 2 + Math.floor(rand() * 6),
+      openActions: 10 + Math.floor(rand() * 15),
+      openActionsDelta: 1 + Math.floor(rand() * 5),
+      dueThisWeek: 3 + Math.floor(rand() * 8),
+      dueThisWeekDelta: Math.floor(rand() * 4),
+      overdue: 2 + Math.floor(rand() * 8),
+      overdueDelta: Math.floor(rand() * 4),
+      resolved30d: 8 + Math.floor(rand() * 12),
+      resolved30dDelta: 2 + Math.floor(rand() * 6),
+    },
     reports: [
       { id: 'rep-risk-register', title: 'Risk Register' },
       { id: 'rep-issue-register', title: 'Issue Register' },

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { AlertTriangle, CircleAlert, Pause, Play, ZoomIn, ZoomOut } from 'lucide-react'
+import { Activity, Pause, Play, ZoomIn, ZoomOut } from 'lucide-react'
 import {
   ISSUE_COLOR, ORBIT_ZONES, SEVERITY_COLOR, lerp, radiusFracForScore,
   type EventBeacon, type IssueUniverseNode, type RiskUniverseNode, type UniverseSeverity,
@@ -13,7 +13,7 @@ export type UniverseSelection = { type: 'risk' | 'issue'; id: string } | null
 function angleFor(id: string, index: number, total: number, offset = 0): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  const jitter = (h % 24) - 12
+  const jitter = (h % 10) - 5
   return (index / Math.max(1, total)) * 360 + jitter + offset
 }
 
@@ -117,24 +117,28 @@ export function UniverseCanvas({
     [issues, hiddenSeverities, showIssues, timeline],
   )
 
+  /** Risks and issues share ONE angular ordering (not two independent rings) so every visible
+   * object gets a guaranteed minimum angular gap from every other — the single biggest lever
+   * against overlapping always-on labels when the field is dense. */
+  const totalVisible = visibleRisks.length + visibleIssues.length
   const riskPoints = useMemo(
     () =>
       visibleRisks.map((r, i) => {
-        const angle = angleFor(r.id, i, visibleRisks.length)
+        const angle = angleFor(r.id, i, totalVisible)
         const score = timeline ? r.scoreHistory[Math.min(activeIndex, r.scoreHistory.length - 1)] ?? r.criticality : r.criticality
         const radiusFrac = radiusFracForScore(score)
         return { risk: r, angle, score, radiusFrac, ...orbitPoint(angle, radiusFrac) }
       }),
-    [visibleRisks, timeline, activeIndex],
+    [visibleRisks, totalVisible, timeline, activeIndex],
   )
   const issuePoints = useMemo(
     () =>
       visibleIssues.map((iss, i) => {
-        const angle = angleFor(iss.id, i, visibleIssues.length, 40)
+        const angle = angleFor(iss.id, visibleRisks.length + i, totalVisible)
         const radiusFrac = radiusFracForScore(iss.escalation)
         return { issue: iss, angle, radiusFrac, ...orbitPoint(angle, radiusFrac) }
       }),
-    [visibleIssues],
+    [visibleIssues, visibleRisks.length, totalVisible],
   )
 
   const pointById = useMemo(() => {
@@ -308,24 +312,24 @@ export function UniverseCanvas({
                   } as CSSProperties}
                   aria-label={`${risk.code}: ${risk.title}`}
                 >
-                  <AlertTriangle size={Math.max(9, sizePct * 1.1)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
+                  <Activity size={Math.max(8, sizePct * 0.95)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
                 </button>
                 <div
-                  className="pointer-events-none absolute whitespace-nowrap rounded-md px-1.5 py-1"
+                  className="pointer-events-none absolute whitespace-nowrap rounded px-1 py-0.5"
                   style={{
-                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 132,
-                    background: 'color-mix(in srgb, var(--bg-app) 78%, transparent)',
+                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 104,
+                    background: 'color-mix(in srgb, var(--bg-app) 82%, transparent)',
                     border: '1px solid color-mix(in srgb, var(--border-soft) 80%, transparent)',
                   }}
                 >
-                  <p className="overflow-hidden text-ellipsis text-[9.5px] font-extrabold leading-tight" style={{ color }}>
+                  <p className="overflow-hidden text-ellipsis text-[7.5px] font-extrabold leading-tight" style={{ color }}>
                     {risk.code} <span className="font-semibold text-secondary">{risk.title}</span>
                   </p>
                   <div className="mt-0.5 flex items-center gap-1" style={{ justifyContent: x < 50 ? 'flex-start' : 'flex-end' }}>
-                    <span className="rounded px-1 py-[1px] text-[7px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color }}>
+                    <span className="rounded px-1 py-[1px] text-[5.5px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color }}>
                       {risk.severity}
                     </span>
-                    <span className="num text-[7.5px] text-muted">{risk.windowLabel}</span>
+                    <span className="num text-[6px] text-muted">{risk.windowLabel}</span>
                   </div>
                 </div>
               </div>
@@ -362,25 +366,25 @@ export function UniverseCanvas({
                       boxShadow: `0 0 ${isSelected ? 12 : 7}px ${isSelected ? 2.5 : 1.2}px color-mix(in srgb, ${ISSUE_COLOR} 55%, transparent)`,
                     }}
                   >
-                    <CircleAlert size={Math.max(8, sizePct * 0.9)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
+                    <Activity size={Math.max(7, sizePct * 0.8)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
                   </div>
                 </button>
                 <div
-                  className="pointer-events-none absolute whitespace-nowrap rounded-md px-1.5 py-1"
+                  className="pointer-events-none absolute whitespace-nowrap rounded px-1 py-0.5"
                   style={{
-                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 132,
-                    background: 'color-mix(in srgb, var(--bg-app) 78%, transparent)',
+                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 104,
+                    background: 'color-mix(in srgb, var(--bg-app) 82%, transparent)',
                     border: '1px solid color-mix(in srgb, var(--border-soft) 80%, transparent)',
                   }}
                 >
-                  <p className="overflow-hidden text-ellipsis text-[9.5px] font-extrabold leading-tight" style={{ color: ISSUE_COLOR }}>
+                  <p className="overflow-hidden text-ellipsis text-[7.5px] font-extrabold leading-tight" style={{ color: ISSUE_COLOR }}>
                     {issue.code} <span className="font-semibold text-secondary">{issue.title}</span>
                   </p>
                   <div className="mt-0.5 flex items-center gap-1" style={{ justifyContent: x < 50 ? 'flex-start' : 'flex-end' }}>
-                    <span className="rounded px-1 py-[1px] text-[7px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${ISSUE_COLOR} 22%, transparent)`, color: ISSUE_COLOR }}>
+                    <span className="rounded px-1 py-[1px] text-[5.5px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${ISSUE_COLOR} 22%, transparent)`, color: ISSUE_COLOR }}>
                       Issue
                     </span>
-                    <span className="num text-[7.5px] text-muted">{issue.agingDays}d</span>
+                    <span className="num text-[6px] text-muted">{issue.agingDays}d</span>
                   </div>
                 </div>
               </div>
