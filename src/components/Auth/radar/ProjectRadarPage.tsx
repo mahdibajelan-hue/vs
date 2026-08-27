@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2, ChevronDown,
+  Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
   ChevronsRight, Clock3, FileText, GitBranch, Package, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
 } from 'lucide-react'
@@ -52,8 +52,12 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const masterProjects = useMasterDataStore((s) => s.projects)
-  const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const setContextProject = useProjectContextStore((s) => s.setProject)
+  const masterPortfolios = useMasterDataStore((s) => s.portfolios)
+  const masterPrograms = useMasterDataStore((s) => s.programs)
+  const {
+    portfolioId: contextPortfolioId, programId: contextProgramId, projectId: contextProjectId,
+    setPortfolio: setContextPortfolio, setProgram: setContextProgram, setProject: setContextProject,
+  } = useProjectContextStore()
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -61,6 +65,16 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   }, [])
 
   const selectedProject = useMemo(() => masterProjects.find((p) => p.id === contextProjectId) ?? null, [masterProjects, contextProjectId])
+
+  // Portfolio → Program → Project cascade for the picker below — each level narrows the next,
+  // same pattern as the global ContextSwitcher (masterdata module), reused here so the Radar's
+  // own picker stays in sync with the shared project context that Risk/Issue/Finance/... read.
+  const programOptions = contextPortfolioId ? masterPrograms.filter((p) => p.portfolioId === contextPortfolioId) : masterPrograms
+  const projectOptions = contextProgramId
+    ? masterProjects.filter((p) => p.programId === contextProgramId)
+    : contextPortfolioId
+      ? masterProjects.filter((p) => p.portfolioId === contextPortfolioId)
+      : masterProjects
 
   const data = useMemo(() => {
     if (!selectedProject) return DEFAULT_RADAR_DATA
@@ -71,7 +85,6 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const [scanProgress, setScanProgress] = useState(100)
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
   // closed so the radar itself isn't squeezed into a sliver on a phone screen.
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -173,39 +186,46 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           </div>
         </div>
 
-        <div className="relative flex items-center gap-2 text-[11px]">
-          <button
-            onClick={() => setProjectPickerOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-bold"
+        <div dir="rtl" className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <select
+            value={contextPortfolioId ?? ''}
+            onChange={(e) => setContextPortfolio(e.target.value || null)}
+            className="input max-w-[9.5rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none"
             style={{ borderColor: 'var(--border-soft)' }}
           >
-            {displayName}
-            <ChevronDown size={12} className="text-muted" />
-          </button>
-          <span className="hidden text-muted sm:inline">ID:</span>
-          <span className="num hidden font-bold sm:inline">{data.projectIdCode}</span>
-          {projectPickerOpen && (
-            <div
-              className="absolute top-full z-30 mt-2 max-h-72 w-64 overflow-y-auto rounded-xl border p-1.5 shadow-2xl"
-              style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', insetInlineStart: 0 }}
-            >
-              <button
-                onClick={() => { setContextProject(null); setProjectPickerOpen(false) }}
-                className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/5"
-              >
-                Default View (Sample)
-              </button>
-              {masterProjects.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => { setContextProject(p.id); setProjectPickerOpen(false) }}
-                  className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[11px] hover:bg-white/5"
-                >
-                  {p.officialName}
-                </button>
-              ))}
-            </div>
-          )}
+            <option value="">سبد پروژه: همه</option>
+            {masterPortfolios.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={contextProgramId ?? ''}
+            onChange={(e) => setContextProgram(e.target.value || null)}
+            disabled={programOptions.length === 0}
+            className="input max-w-[9.5rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none disabled:opacity-40"
+            style={{ borderColor: 'var(--border-soft)' }}
+          >
+            <option value="">طرح: همه</option>
+            {programOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={contextProjectId ?? ''}
+            onChange={(e) => setContextProject(e.target.value || null)}
+            className="input max-w-[11rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none"
+            style={{ borderColor: 'var(--radar-green)', color: 'var(--radar-green)' }}
+          >
+            <option value="">پروژه: نمونه پیش‌فرض</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.officialName}</option>
+            ))}
+          </select>
+
+          <span dir="ltr" className="hidden text-muted sm:inline">ID:</span>
+          <span dir="ltr" className="num hidden font-bold sm:inline">{data.projectIdCode}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -429,10 +449,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         />
       )}
 
-      {(projectPickerOpen || notifOpen) && (
+      {notifOpen && (
         <button
           className="fixed inset-0 z-20 cursor-default"
-          onClick={() => { setProjectPickerOpen(false); setNotifOpen(false) }}
+          onClick={() => setNotifOpen(false)}
           aria-label="Close"
         />
       )}
