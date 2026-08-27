@@ -20,7 +20,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'portfolio', label: 'گزارش پورتفولیو/طرح', icon: Network },
 ]
 
-export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -97,7 +97,7 @@ export function ReportingApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <StorageErrorBanner />

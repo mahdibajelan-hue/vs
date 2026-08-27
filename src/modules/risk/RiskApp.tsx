@@ -17,7 +17,7 @@ import { RiskIntelligencePage } from './pages/RiskIntelligencePage'
 
 type Tab = 'dashboard' | 'register' | 'portfolio' | 'intelligence'
 
-export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
   const projects = useRiskStore((s) => s.projects)
   const currentProjectId = useRiskStore((s) => s.currentProjectId)
@@ -149,7 +149,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {currentUser && <span className="hidden text-xs text-secondary lg:inline">{currentUser.fullName || currentUser.email}</span>}
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 

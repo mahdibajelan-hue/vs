@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import type { ModuleKey } from '../../../store/useModuleStore'
+import { useModuleStore, type ModuleKey } from '../../../store/useModuleStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { ProjectRadarPage } from '../radar/ProjectRadarPage'
 import { Header } from './Header'
@@ -17,16 +16,18 @@ import { Footer } from './Footer'
  * ModuleLaunchpad's REGULAR_MODULES list); picking it opens ProjectRadarPage in its place.
  */
 export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
-  const [radarOpen, setRadarOpen] = useState(false)
+  const radarOpen = useModuleStore((s) => s.radarOpen)
+  const openRadar = useModuleStore((s) => s.openRadar)
+  const closeRadar = useModuleStore((s) => s.closeRadar)
   const isAuthed = useAuthStore((s) => s.isAuthed)
 
   if (radarOpen) {
-    return <ProjectRadarPage onBack={() => setRadarOpen(false)} onEnterModule={onEnterModule} />
+    return <ProjectRadarPage onBack={closeRadar} onEnterModule={onEnterModule} />
   }
 
   const handleSelect = (key: 'radar' | ModuleKey) => {
     if (key === 'radar') {
-      setRadarOpen(true)
+      openRadar()
       return
     }
     onEnterModule(key)

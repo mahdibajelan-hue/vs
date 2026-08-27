@@ -15,7 +15,7 @@ import { SettingsPage } from './pages/SettingsPage'
 
 type Tab = 'specs' | 'results' | 'history' | 'settings'
 
-export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function EstimatorApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const profile = useAuthStore((s) => s.profile)
   const currentProject = useEstimatorStore((s) => s.currentProject)
   const currentProjectId = useEstimatorStore((s) => s.currentProjectId)
@@ -124,7 +124,7 @@ export function EstimatorApp({ onExitToHub }: { onExitToHub: () => void }) {
           </button>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 

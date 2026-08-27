@@ -5,12 +5,13 @@ const TILE_H = 30
 const REPEATS = 3
 const STRIP_W = TILE_W * REPEATS
 
-/** A tall primary spike followed by a shorter secondary one per tile — reads as an actual
- * heartbeat ("lub-dub") rather than a single symmetric blip. */
-const REGULAR_PATH = 'M0 15 L9 15 L13 2 L17 15 L25 15 L29 10 L33 15 L60 15'
-/** Same tall/short pair, but with an actual gap in the stroke (the `M` mid-path starts a new
- * sub-path) — reads as a literally broken, non-continuous line rather than just "faster". */
-const CRITICAL_PATH = 'M0 15 L6 15 L9 3 L12 15 L20 15 M24 15 L26 11 L28 15 L60 15'
+/** A real PQRST complex — small P bump, sharp Q/R/S spike, rounded T bump — then a long flat
+ * isoelectric stretch with two small trailing blips before the next beat, matching an actual
+ * hospital ECG trace rather than a single symmetric blip. */
+const REGULAR_PATH = 'M0 15 L10 15 L12 12 L14 15 L16 15 L18 18 L20 2 L22 19 L24 15 L28 15 L30 11 L33 15 L44 15 L46 13 L48 15 L50 15 L52 13.5 L54 15 L60 15'
+/** Same PQRST shape, but compressed with an actual gap in the stroke (the `M` mid-path starts a
+ * new sub-path) — reads as a literally broken, non-continuous line rather than just "faster". */
+const CRITICAL_PATH = 'M0 15 L6 15 L8 13 L10 15 L12 17 L14 3 L16 18 L18 15 L22 15 M26 15 L28 12 L30 15 L60 15'
 
 function Strip({ path, dx }: { path: string; dx: number }) {
   return (

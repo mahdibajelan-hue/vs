@@ -114,7 +114,7 @@ const FIN_THEME_KEY = 'rasta-finance-theme'
  * Financial Management — owner-side budget/contract/payment control. Deliberately not
  * accounting: no general ledger, no P&L, no contractor internal cost (see schema.sql section 19).
  */
-export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -244,7 +244,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
           <div className="mt-3">
-            <ModuleHeaderActions onExitToHub={onExitToHub} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
       </aside>

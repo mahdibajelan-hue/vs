@@ -1264,17 +1264,6 @@ body {
   animation-iteration-count: infinite;
 }
 
-@keyframes radar-signal-pulse {
-  0%   { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-green)) 65%, transparent); }
-  8%   { transform: translate(-50%, -50%) scale(1.6);  filter: brightness(2.2); box-shadow: 0 0 0 14px color-mix(in srgb, var(--pulse-color, var(--radar-green)) 40%, transparent); }
-  30%  { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.3); box-shadow: 0 0 0 5px transparent; }
-  100% { transform: translate(-50%, -50%) scale(1);    filter: brightness(1);   box-shadow: 0 0 0 0 transparent; }
-}
-.radar-signal {
-  animation-name: radar-signal-pulse;
-  animation-timing-function: ease-out;
-  animation-iteration-count: infinite;
-}
 .radar-signal:hover,
 .radar-signal:focus-visible {
   filter: brightness(1.8);
@@ -1296,29 +1285,12 @@ body {
   animation: heartbeat-scroll-critical 1.7s cubic-bezier(0.7, 0, 0.3, 1) infinite;
 }
 
-@keyframes radar-center-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--radar-green) 55%, transparent); }
-  50%      { box-shadow: 0 0 0 6px transparent; }
-}
-.radar-center-dot {
-  animation: radar-center-pulse 2.2s ease-in-out infinite;
-}
-
 @keyframes radar-callout-in {
   from { opacity: 0; transform: translateY(4px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .radar-callout {
   animation: radar-callout-in 0.16s ease-out;
-}
-
-@keyframes radar-live-pulse {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--radar-green) 55%, transparent); }
-  70%  { box-shadow: 0 0 0 6px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
-.radar-live-dot {
-  animation: radar-live-pulse 1.8s ease-out infinite;
 }
 
 /* Small heart icon next to PROJECT STATUS — a quick systole/diastole double-thump rather than a
@@ -1338,9 +1310,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .radar-sweep,
-  .radar-signal,
-  .radar-center-dot,
-  .radar-live-dot,
   .radar-heart-beat,
   .heartbeat-scroll {
     animation: none !important;

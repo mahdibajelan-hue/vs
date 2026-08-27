@@ -19,7 +19,7 @@ type View =
   | { kind: 'milestones'; projectId: string }
   | { kind: 'templates' }
 
-export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const profile = useAuthStore((s) => s.profile)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const projects = useMasterDataStore((s) => s.projects)
@@ -123,7 +123,7 @@ export function LifecycleApp({ onExitToHub }: { onExitToHub: () => void }) {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 

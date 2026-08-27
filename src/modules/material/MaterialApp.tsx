@@ -36,7 +36,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
  * the central entity; every stage-quantity below it is derived from a transaction table,
  * never a stored/duplicated field (see schema.sql section 20 and materialCalc.ts).
  */
-export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -123,7 +123,7 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <StorageErrorBanner />

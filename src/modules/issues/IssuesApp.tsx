@@ -31,7 +31,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
-export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
   const loading = useIssuesStore((s) => s.loading)
   const projects = useIssuesStore((s) => s.projects)
@@ -81,7 +81,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
   return (
     <div className="im-root">
       <div className="im-mobile-topbar">
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         <div className="im-brand-name" style={{ fontSize: 14 }}>
           رصد
         </div>
@@ -112,7 +112,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
               </div>
             </div>
             <div className="mt-2">
-              <ModuleHeaderActions onExitToHub={onExitToHub} />
+              <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
             </div>
           </div>
         </aside>

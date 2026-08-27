@@ -39,6 +39,7 @@ export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
+  const backToRadar = useModuleStore((s) => s.backToRadar)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
@@ -98,23 +99,23 @@ export function RootApp() {
   return activeModule === 'pipepulse' ? (
     <App />
   ) : activeModule === 'risk' ? (
-    <RiskApp onExitToHub={exitToHub} />
+    <RiskApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'issues' ? (
-    <IssuesApp onExitToHub={exitToHub} />
+    <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'reporting' ? (
-    <ReportingApp onExitToHub={exitToHub} />
+    <ReportingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'executive' ? (
-    <ExecutiveApp onExitToHub={exitToHub} />
+    <ExecutiveApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'finance' ? (
-    <FinanceApp onExitToHub={exitToHub} />
+    <FinanceApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'material' ? (
-    <MaterialApp onExitToHub={exitToHub} />
+    <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
-    <CompetencyApp onExitToHub={exitToHub} />
+    <CompetencyApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'estimator' ? (
-    <EstimatorApp onExitToHub={exitToHub} />
+    <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (
-    <LifecycleApp onExitToHub={exitToHub} />
+    <LifecycleApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pipelinedigitaltwin' ? (
     <Suspense
       fallback={
@@ -123,9 +124,9 @@ export function RootApp() {
         </div>
       }
     >
-      <PipelineDigitalTwinApp onExitToHub={exitToHub} />
+      <PipelineDigitalTwinApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
     </Suspense>
   ) : (
-    <AdminApp onExitToHub={exitToHub} />
+    <AdminApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   )
 }
