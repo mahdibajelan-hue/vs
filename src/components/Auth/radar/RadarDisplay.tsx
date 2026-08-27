@@ -19,7 +19,11 @@ const CATEGORY_ICON: Record<SignalCategory, LucideIcon> = {
   gate: ShieldCheck,
 }
 
-const RINGS = [1, 0.75, 0.5, 0.25]
+/** 12 concentric rings instead of the old 4: the outermost is green, the one right beneath it is
+ * blue — deliberately close together rather than spread across the whole field — and the
+ * remaining 10 are thin, faint grid lines filling the rest of the radius down toward the center. */
+const RING_COUNT = 12
+const RINGS = Array.from({ length: RING_COUNT }, (_, i) => 1 - (i * 0.92) / (RING_COUNT - 1))
 const DEGREE_MARKS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 
 function polarToPercent(angle: number, radius: number) {
@@ -68,7 +72,7 @@ export function RadarDisplay({
             <circle
               key={r} cx="50" cy="50" r={r * 46} fill="none"
               stroke={stroke}
-              strokeWidth={accented ? 0.3 : 0.25}
+              strokeWidth={accented ? 0.3 : 0.15}
               style={accented ? { filter: `drop-shadow(0 0 1.5px ${stroke})` } : undefined}
             />
           )
@@ -104,7 +108,10 @@ export function RadarDisplay({
       >
         <div
           className="absolute inset-0"
-          style={{ background: 'conic-gradient(from 0deg, color-mix(in srgb, var(--radar-green) 38%, transparent), transparent 34deg, transparent 360deg)' }}
+          style={{
+            background: 'conic-gradient(from 0deg, color-mix(in srgb, var(--radar-green) 70%, transparent), color-mix(in srgb, var(--radar-green) 30%, transparent) 14deg, transparent 34deg, transparent 360deg)',
+            filter: 'brightness(1.4) saturate(1.3)',
+          }}
         />
       </div>
 
