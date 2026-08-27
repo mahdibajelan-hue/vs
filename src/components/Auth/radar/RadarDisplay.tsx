@@ -48,33 +48,37 @@ export function RadarDisplay({
       {/* Static rings, spokes and degree labels */}
       <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
         <defs>
-          {/* Spokes glow brightest right at the center and fade toward the rim — a proper
-              radar-console crosshair instead of flat, uniform lines. */}
+          {/* Spokes glow faintly right at the center and fade almost fully out toward the rim —
+              a thin console crosshair, not a bright beam. */}
           <radialGradient id="radar-spoke-fade" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="46">
-            <stop offset="0%" stopColor="var(--radar-green)" stopOpacity="0.9" />
-            <stop offset="35%" stopColor="var(--radar-green)" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="var(--radar-green)" stopOpacity="0.08" />
+            <stop offset="0%" stopColor="var(--radar-green)" stopOpacity="0.55" />
+            <stop offset="35%" stopColor="var(--radar-green)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="var(--radar-green)" stopOpacity="0.05" />
           </radialGradient>
         </defs>
         {RINGS.map((r, i) => {
-          /* The two outermost rings get a thick, saturated neon-green stroke with a strong glow
-             — the radar's own "housing" edge — while the inner two stay the faint grid color. */
-          const isOuter = i < 2
+          /* Only the outermost ring is green, the second is blue — both a thin, subtle stroke
+             with a soft single-layer glow instead of the old thick triple-glow neon edge. The
+             inner two rings stay the faint grid color, unchanged. */
+          const isOutermost = i === 0
+          const isSecond = i === 1
+          const stroke = isOutermost ? 'var(--radar-green)' : isSecond ? 'var(--radar-cyan)' : 'var(--radar-grid)'
+          const accented = isOutermost || isSecond
           return (
             <circle
               key={r} cx="50" cy="50" r={r * 46} fill="none"
-              stroke={isOuter ? 'var(--radar-green)' : 'var(--radar-grid)'}
-              strokeWidth={isOuter ? 0.55 : 0.25}
-              style={isOuter ? { filter: 'drop-shadow(0 0 1px var(--radar-green)) drop-shadow(0 0 2.5px var(--radar-green)) drop-shadow(0 0 5px var(--radar-green))' } : undefined}
+              stroke={stroke}
+              strokeWidth={accented ? 0.3 : 0.25}
+              style={accented ? { filter: `drop-shadow(0 0 1.5px ${stroke})` } : undefined}
             />
           )
         })}
-        <g style={{ filter: 'drop-shadow(0 0 1px var(--radar-green))' }}>
+        <g style={{ filter: 'drop-shadow(0 0 0.5px var(--radar-green))' }}>
           {DEGREE_MARKS.map((deg) => {
             const rad = (deg * Math.PI) / 180
             const x2 = 50 + 46 * Math.sin(rad)
             const y2 = 50 - 46 * Math.cos(rad)
-            return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke="url(#radar-spoke-fade)" strokeWidth="0.25" />
+            return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke="url(#radar-spoke-fade)" strokeWidth="0.15" />
           })}
         </g>
       </svg>

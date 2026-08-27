@@ -165,9 +165,10 @@ export function PerformanceRingCard({
   )
 }
 
-/** Icon-circle + big number + severity-count pill, stacked vertically beside the radar — matches
- * the reference's Active Risks / Open Issues / Delayed Activities / Pending Changes / Upcoming
- * Milestones column. */
+/** Icon-circle + big number + severity-count sublabel inside a bordered card, matching the
+ * reference's Active Risks / Open Issues / Delayed Activities / Pending Changes / Upcoming
+ * Milestones column: label on top, icon circle on the left with the number and "HIGH n"
+ * sublabel stacked to its right. */
 export function SignalStatCard({
   icon: Icon, label, value, badge, badgeColor, color,
 }: {
@@ -180,20 +181,20 @@ export function SignalStatCard({
 }) {
   const animated = useCountUp(value, 600)
   return (
-    <div className="p-1.5">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
-          <Icon size={22} style={{ color }} />
+    <div className="glass-panel rounded-2xl border p-3" style={{ borderColor: 'var(--border-soft)' }}>
+      <p className="mb-2 truncate text-[10px] font-bold tracking-wide text-muted">{label}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}>
+          <Icon size={18} style={{ color }} />
         </div>
-        <p className="truncate text-[9px] font-bold tracking-wide text-muted">{label}</p>
-      </div>
-      <div className="mt-1.5 flex items-center gap-2">
-        <span className="num text-xl font-extrabold leading-none" style={{ color }}>{Math.round(animated)}</span>
-        {badge && (
-          <span className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold" style={{ borderColor: `color-mix(in srgb, ${badgeColor} 55%, transparent)`, color: badgeColor }}>
-            {badge}
-          </span>
-        )}
+        <div className="flex min-w-0 flex-col justify-center leading-none">
+          <span className="num text-2xl font-extrabold leading-none" style={{ color }}>{Math.round(animated)}</span>
+          {badge && (
+            <span className="num mt-1 truncate text-[10px] font-bold" style={{ color: badgeColor }}>
+              {badge}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -209,19 +210,20 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
       <div className="mb-4 flex justify-center">
         {/* Outer ring: overall project progress averaged across every stage's own completion (the
             master-plan view). Inner ring: just the current stage's own progress — the two read
-            together instead of the ring only ever being able to show one number. */}
+            together instead of the ring only ever being able to show one number. Sized down to
+            fit the narrower column this panel now occupies. */}
         <RingGauge
-          pct={overallPct} color="var(--radar-green)" size={100} stroke={7}
-          innerPct={current?.progressPct} innerColor="var(--radar-amber)" innerStroke={5}
+          pct={overallPct} color="var(--radar-green)" size={82} stroke={6}
+          innerPct={current?.progressPct} innerColor="var(--radar-amber)" innerStroke={4}
           center={
             <div className="flex flex-col items-center justify-center leading-none">
-              <span className="text-[11px] font-extrabold">{current?.labelEn ?? '—'}</span>
-              <span className="num mt-1 text-[15px] font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
-              <span className="mt-0.5 text-[6px] font-bold tracking-wide text-muted">OVERALL</span>
+              <span className="text-[9.5px] font-extrabold">{current?.labelEn ?? '—'}</span>
+              <span className="num mt-1 text-[13px] font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
+              <span className="mt-0.5 text-[5.5px] font-bold tracking-wide text-muted">OVERALL</span>
               {current && (
-                <span className="num mt-1 flex items-center gap-0.5 text-[9px] font-extrabold" style={{ color: 'var(--radar-amber)' }}>
+                <span className="num mt-1 flex items-center gap-0.5 text-[8px] font-extrabold" style={{ color: 'var(--radar-amber)' }}>
                   {Math.round(current.progressPct)}%
-                  <span className="text-[5.5px] font-bold tracking-wide text-muted">PHASE</span>
+                  <span className="text-[5px] font-bold tracking-wide text-muted">PHASE</span>
                 </span>
               )}
             </div>
@@ -253,7 +255,7 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
                 )}
               </span>
               <span
-                className={`cursor-default text-[11px] font-bold uppercase tracking-wide ${s.state === 'current' ? '' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}
+                className={`min-w-0 cursor-default truncate text-[10px] font-bold uppercase tracking-wide ${s.state === 'current' ? '' : s.state === 'upcoming' ? 'text-muted' : 'text-secondary'}`}
                 style={{ color: s.state === 'current' ? 'var(--radar-amber)' : undefined }}
               >
                 {s.labelEn}

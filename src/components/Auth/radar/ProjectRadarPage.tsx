@@ -300,32 +300,34 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
       </header>
 
       <main className="min-w-0 flex-1 p-4 ps-10 sm:p-6 sm:ps-12">
-        {/* Bold project title — the page's real headline, distinct from the compact switcher above */}
-        <div className="hub-fade-in mb-5">
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ background: 'linear-gradient(90deg, var(--text-primary), var(--radar-green))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {displayName}
-          </h1>
-          <p className="num mt-1 text-xs text-muted">
-            {data.projectIdCode} · Report {data.reportDateEn}
-          </p>
-        </div>
-
-        {/* Status + radar-mode toggle + scan filters */}
-        <div className="hub-fade-in mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[10px] font-bold text-muted">PROJECT STATUS</span>
-            <span className="flex items-center gap-1.5 text-sm font-extrabold" style={{ color: statusColor }}>
-              <Heart size={13} className="radar-heart-beat" style={{ color: statusColor, fill: statusColor }} />
-              {STATUS_LABEL_EN[data.status]}
-            </span>
-            <HeartbeatBar status={data.status} color={statusColor} />
+        {/* Bold project title, with the Project Status + Radar Mode indicators pulled up beside it
+            (previously a separate row below) so the wide empty space next to the headline on
+            desktop gets used instead of left blank. */}
+        <div className="hub-fade-in mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ background: 'linear-gradient(90deg, var(--text-primary), var(--radar-green))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {displayName}
+            </h1>
+            <p className="num mt-1 text-xs text-muted">
+              {data.projectIdCode} · Report {data.reportDateEn}
+            </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-[10px] font-bold text-muted">RADAR MODE</span>
-            <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold" style={{ borderColor: 'var(--border-soft)', color: 'var(--radar-green)' }}>
-              LIVE SCAN
-              <span className="radar-live-dot h-2 w-2 rounded-full" style={{ background: 'var(--radar-green)' }} />
-            </span>
+          <div className="flex flex-wrap items-center gap-4 pt-1">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-bold text-muted">PROJECT STATUS</span>
+              <span className="flex items-center gap-1.5 text-sm font-extrabold" style={{ color: statusColor }}>
+                <Heart size={13} className="radar-heart-beat" style={{ color: statusColor, fill: statusColor }} />
+                {STATUS_LABEL_EN[data.status]}
+              </span>
+              <HeartbeatBar status={data.status} color={statusColor} />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-bold text-muted">RADAR MODE</span>
+              <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold" style={{ borderColor: 'var(--border-soft)', color: 'var(--radar-green)' }}>
+                LIVE SCAN
+                <span className="radar-live-dot h-2 w-2 rounded-full" style={{ background: 'var(--radar-green)' }} />
+              </span>
+            </div>
           </div>
         </div>
 
@@ -348,8 +350,9 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
         {/* Main grid: performance rings | Radar | risk/issue stack | Lifecycle — four siblings so
             the radar (the hero element) gets the lion's share of the width instead of competing
-            with the lifecycle card inside a shared, narrower wrapper. */}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_220px] xl:items-stretch">
+            with the lifecycle card inside a shared, narrower wrapper. Lifecycle sits in the
+            rightmost column, narrowed down so the radar column gets the extra space. */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_168px] xl:items-stretch">
           <div className="flex flex-col gap-3">
             <PerformanceRingCard
               title="PROJECT HEALTH"
