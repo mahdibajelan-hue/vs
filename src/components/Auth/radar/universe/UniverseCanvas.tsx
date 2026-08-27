@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowDownRight, ArrowUpRight, Minus, Pause, Play, ZoomIn, ZoomOut } from 'lucide-react'
+import { AlertTriangle, CircleAlert, Pause, Play, ZoomIn, ZoomOut } from 'lucide-react'
 import {
   ISSUE_COLOR, ORBIT_ZONES, SEVERITY_COLOR, lerp, radiusFracForScore,
   type EventBeacon, type IssueUniverseNode, type RiskUniverseNode, type UniverseSeverity,
@@ -39,7 +39,23 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-const TrendIcon = { up: ArrowUpRight, down: ArrowDownRight, flat: Minus } as const
+/** A fixed, deterministic field of faint background stars — purely cosmetic, generated once with
+ * a tiny linear-congruential PRNG so it never needs to depend on project data. */
+function useStarfield(count = 70) {
+  return useMemo(() => {
+    let s = 42
+    const rand = () => {
+      s = (s * 1103515245 + 12345) & 0x7fffffff
+      return (s % 10000) / 10000
+    }
+    return Array.from({ length: count }, () => ({
+      x: rand() * 100,
+      y: rand() * 100,
+      r: 0.15 + rand() * 0.35,
+      opacity: 0.15 + rand() * 0.55,
+    }))
+  }, [count])
+}
 
 interface UniverseCanvasProps {
   projectCode: string
@@ -59,16 +75,17 @@ interface UniverseCanvasProps {
 /**
  * The Universe canvas: Project Core at the exact center, risks and issues as physically-orbiting
  * objects (distance encodes score, size encodes exposure/impact, pulse speed encodes velocity),
- * and short-lived event beacons animating a traveling particle into whatever they just struck.
- * Shared between UNIVERSE (live) and TIMELINE (scrubbed history) modes.
+ * each riding its own tinted orbit ellipse, and short-lived event beacons animating a traveling
+ * particle into whatever they just struck. Shared between UNIVERSE (live) and TIMELINE (scrubbed
+ * history) modes.
  */
 export function UniverseCanvas({
   projectCode, risks, issues, beacons, timeline,
   hiddenSeverities, showIssues, showEvents, selected, onSelect,
 }: UniverseCanvasProps) {
   const reducedMotion = usePrefersReducedMotion()
+  const stars = useStarfield()
   const [zoom, setZoom] = useState(1)
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
 
@@ -127,8 +144,13 @@ export function UniverseCanvas({
     return m
   }, [riskPoints, issuePoints])
 
-  const selectedRiskPoint = selected?.type === 'risk' ? riskPoints.find((p) => p.risk.id === selected.id) : undefined
   const posTransition = reducedMotion ? 'none' : 'left 900ms cubic-bezier(.4,0,.2,1), top 900ms cubic-bezier(.4,0,.2,1)'
+  /** Right when the node sits on the left half of the canvas, left otherwise — keeps every
+   * always-on label pointing away from Project Core instead of running off the canvas edge. */
+  const labelStyle = (x: number, y: number): CSSProperties =>
+    x < 50
+      ? { left: `${x}%`, top: `${y}%`, transform: 'translate(15px, -50%)', textAlign: 'left' }
+      : { left: `${x}%`, top: `${y}%`, transform: 'translate(calc(-100% - 15px), -50%)', textAlign: 'right' }
 
   return (
     <div className="relative flex h-full flex-col">
@@ -138,23 +160,51 @@ export function UniverseCanvas({
           style={{ transform: `scale(${zoom})`, transformOrigin: 'center', transition: reducedMotion ? 'none' : 'transform 400ms ease' }}
         >
           <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-            {ORBIT_ZONES.map((z) => (
-              <ellipse
-                key={z.zone} cx="50" cy="50" rx={z.radiusFrac * 46} ry={z.radiusFrac * 46 * 0.52}
-                fill="none" stroke="var(--radar-grid)" strokeWidth="0.18" strokeDasharray="1 1.6" opacity={0.55}
-              />
+            {stars.map((s, i) => (
+              <circle key={`star-${i}`} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />
             ))}
-            {selectedRiskPoint && (
-              <ellipse
-                cx="50" cy="50" rx={selectedRiskPoint.radiusFrac * 46} ry={selectedRiskPoint.radiusFrac * 46 * 0.52}
-                fill="none" stroke={SEVERITY_COLOR[selectedRiskPoint.risk.severity]} strokeWidth="0.4" opacity={0.85}
-              />
-            )}
+
+            {/* Each object rides its own tinted orbit ellipse — a spirograph of individual paths
+                rather than a handful of shared rings, matching a real orbital field. */}
+            {riskPoints.map(({ risk, radiusFrac }) => {
+              const isSelected = selected?.type === 'risk' && selected.id === risk.id
+              return (
+                <ellipse
+                  key={`orbit-${risk.id}`} cx="50" cy="50" rx={radiusFrac * 46} ry={radiusFrac * 46 * 0.52}
+                  fill="none" stroke={SEVERITY_COLOR[risk.severity]}
+                  strokeWidth={isSelected ? 0.45 : 0.22} opacity={isSelected ? 0.85 : 0.4}
+                />
+              )
+            })}
+            {issuePoints.map(({ issue, radiusFrac }) => {
+              const isSelected = selected?.type === 'issue' && selected.id === issue.id
+              return (
+                <ellipse
+                  key={`orbit-${issue.id}`} cx="50" cy="50" rx={radiusFrac * 46} ry={radiusFrac * 46 * 0.52}
+                  fill="none" stroke={ISSUE_COLOR}
+                  strokeWidth={isSelected ? 0.45 : 0.22} opacity={isSelected ? 0.85 : 0.4}
+                />
+              )
+            })}
+
+            {/* Core light rays — a restrained lens-flare accent, not a full starburst. */}
+            {[20, 65, 140, 200].map((deg) => {
+              const rad = (deg * Math.PI) / 180
+              const len = 5.5
+              return (
+                <line
+                  key={`ray-${deg}`}
+                  x1={50 - Math.cos(rad) * 2} y1={50 - Math.sin(rad) * 2}
+                  x2={50 + Math.cos(rad) * len} y2={50 + Math.sin(rad) * len}
+                  stroke="white" strokeWidth="0.15" opacity={0.35} strokeLinecap="round"
+                />
+              )
+            })}
             {!reducedMotion && !timeline && [0, 1].map((i) => (
               <circle
-                key={i} cx="50" cy="50" r="9" fill="none" stroke="var(--radar-cyan)" strokeWidth="0.35"
+                key={i} cx="50" cy="50" r="10" fill="none" stroke="var(--radar-cyan)" strokeWidth="0.35"
                 className="universe-shockwave-ring-inline"
-                style={{ '--ring-r0': 9, '--ring-r1': 17, animationDuration: '3.6s', animationDelay: `${i * 1.8}s`, opacity: 0.35 } as CSSProperties}
+                style={{ '--ring-r0': 10, '--ring-r1': 19, animationDuration: '3.6s', animationDelay: `${i * 1.8}s`, opacity: 0.3 } as CSSProperties}
               />
             ))}
             {!timeline && visibleRisks.map((r, i) => {
@@ -221,56 +271,64 @@ export function UniverseCanvas({
             )
           })}
 
-          {/* Project Core */}
+          {/* Project Core — a bright glass-like sphere with a specular highlight, not a flat tint. */}
           <div
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full"
             style={{
-              width: '15%', height: '15%',
-              background: 'radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--radar-cyan) 50%, white 8%), color-mix(in srgb, var(--radar-cyan) 16%, #04070d) 72%)',
-              boxShadow: '0 0 26px 5px color-mix(in srgb, var(--radar-cyan) 40%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--radar-cyan) 55%, transparent)',
+              width: '21%', height: '21%',
+              background: 'radial-gradient(circle at 34% 28%, #eafcff 0%, #8fe3ff 16%, #29a6e8 42%, #0a5c99 68%, #041b33 100%)',
+              boxShadow: '0 0 3px 1px rgba(255,255,255,0.5), 0 0 34px 8px color-mix(in srgb, var(--radar-cyan) 55%, transparent), 0 0 70px 18px color-mix(in srgb, var(--radar-cyan) 25%, transparent)',
+              border: '1px solid rgba(255,255,255,0.35)',
               zIndex: 5,
             }}
           >
-            <span className="text-center text-[6.5px] font-extrabold leading-tight tracking-wide text-white">PROJECT<br />CORE</span>
-            <span className="num mt-0.5 text-[5.5px] font-bold text-muted">{projectCode}</span>
+            <span className="text-center text-[7.5px] font-extrabold leading-tight tracking-wide text-white" style={{ textShadow: '0 0 6px rgba(0,0,0,0.5)' }}>
+              PROJECT<br />CORE
+            </span>
+            <span className="num mt-0.5 text-[6px] font-bold text-white/80">{projectCode}</span>
           </div>
 
           {riskPoints.map(({ risk, x, y }) => {
             const color = SEVERITY_COLOR[risk.severity]
-            const sizePct = lerp(6, 11.5, risk.exposure / 100)
+            const sizePct = lerp(6.5, 12, risk.exposure / 100)
             const pulseDuration = lerp(2.8, 0.85, risk.velocity / 100)
-            const Trend = TrendIcon[risk.trend]
-            const isHovered = hoveredId === risk.id
             const isSelected = selected?.type === 'risk' && selected.id === risk.id
             return (
-              <button
-                key={risk.id}
-                onMouseEnter={() => setHoveredId(risk.id)}
-                onMouseLeave={() => setHoveredId((v) => (v === risk.id ? null : v))}
-                onClick={() => onSelect(isSelected ? null : { type: 'risk', id: risk.id })}
-                className="universe-node absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border transition-transform duration-200 hover:scale-110"
-                style={{
-                  left: `${x}%`, top: `${y}%`, width: `${sizePct}%`, aspectRatio: '1 / 1', transition: posTransition,
-                  borderColor: color,
-                  background: `color-mix(in srgb, ${color} ${isSelected ? 32 : 20}%, var(--radar-bg))`,
-                  boxShadow: isHovered || isSelected ? `0 0 0 5px color-mix(in srgb, ${color} 30%, transparent)` : undefined,
-                  '--pulse-color': color,
-                  animationDuration: `${pulseDuration}s`,
-                  zIndex: isHovered || isSelected ? 20 : 10,
-                } as CSSProperties}
-                aria-label={`${risk.code}: ${risk.title}`}
-              >
-                <span className="num text-[7px] font-extrabold" style={{ color }}>{risk.code}</span>
-                {isHovered && !isSelected && (
-                  <span
-                    className="pointer-events-none absolute bottom-full z-30 mb-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold"
-                    style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', color: 'var(--text-primary)' }}
-                  >
-                    {risk.code} · {risk.title} · <span style={{ color }}>{risk.severity.toUpperCase()}</span> · Exposure {risk.exposure} <Trend size={10} className="inline" style={{ color }} />
-                  </span>
-                )}
-              </button>
+              <div key={risk.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${x}%`, top: `${y}%`, transition: posTransition, zIndex: isSelected ? 20 : 10 }}>
+                <button
+                  onClick={() => onSelect(isSelected ? null : { type: 'risk', id: risk.id })}
+                  className="universe-node relative flex items-center justify-center rounded-full border transition-transform duration-200 hover:scale-110"
+                  style={{
+                    width: `${sizePct * 6}px`, height: `${sizePct * 6}px`,
+                    borderColor: 'rgba(255,255,255,0.4)',
+                    background: `radial-gradient(circle at 32% 26%, color-mix(in srgb, white 55%, ${color}) 0%, ${color} 48%, color-mix(in srgb, ${color} 55%, black) 100%)`,
+                    boxShadow: `0 0 ${isSelected ? 14 : 8}px ${isSelected ? 3 : 1.5}px color-mix(in srgb, ${color} 60%, transparent)`,
+                    '--pulse-color': color,
+                    animationDuration: `${pulseDuration}s`,
+                  } as CSSProperties}
+                  aria-label={`${risk.code}: ${risk.title}`}
+                >
+                  <AlertTriangle size={Math.max(9, sizePct * 1.1)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
+                </button>
+                <div
+                  className="pointer-events-none absolute whitespace-nowrap rounded-md px-1.5 py-1"
+                  style={{
+                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 132,
+                    background: 'color-mix(in srgb, var(--bg-app) 78%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--border-soft) 80%, transparent)',
+                  }}
+                >
+                  <p className="overflow-hidden text-ellipsis text-[9.5px] font-extrabold leading-tight" style={{ color }}>
+                    {risk.code} <span className="font-semibold text-secondary">{risk.title}</span>
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1" style={{ justifyContent: x < 50 ? 'flex-start' : 'flex-end' }}>
+                    <span className="rounded px-1 py-[1px] text-[7px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color }}>
+                      {risk.severity}
+                    </span>
+                    <span className="num text-[7.5px] text-muted">{risk.windowLabel}</span>
+                  </div>
+                </div>
+              </div>
             )
           })}
 
@@ -278,46 +336,54 @@ export function UniverseCanvas({
             const magnitude = lerp(3, 8, issue.escalation / 100)
             const speed = lerp(3.2, 1.1, issue.escalation / 100)
             const sizePct = lerp(4.5, 7.5, issue.escalation / 100)
-            const isHovered = hoveredId === issue.id
             const isSelected = selected?.type === 'issue' && selected.id === issue.id
             return (
-              <button
-                key={issue.id}
-                onMouseEnter={() => setHoveredId(issue.id)}
-                onMouseLeave={() => setHoveredId((v) => (v === issue.id ? null : v))}
-                onClick={() => onSelect(isSelected ? null : { type: 'issue', id: issue.id })}
-                className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                style={{ left: `${x}%`, top: `${y}%`, width: `${sizePct}%`, aspectRatio: '1 / 1', transition: posTransition, zIndex: isHovered || isSelected ? 20 : 8 }}
-                aria-label={`${issue.code}: ${issue.title}`}
-              >
-                <svg viewBox="-10 -10 20 20" className="absolute inset-0 h-[300%] w-[300%] overflow-visible">
-                  {!reducedMotion && [0, 1].map((i) => (
-                    <circle
-                      key={i} cx="0" cy="0" r="1" fill="none" stroke={ISSUE_COLOR} strokeWidth="0.5"
-                      className="universe-shockwave-ring-inline"
-                      style={{ '--ring-r0': 1, '--ring-r1': magnitude, animationDuration: `${speed}s`, animationDelay: `${i * (speed / 2)}s` } as CSSProperties}
-                    />
-                  ))}
-                </svg>
+              <div key={issue.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${x}%`, top: `${y}%`, transition: posTransition, zIndex: isSelected ? 20 : 8 }}>
+                <button
+                  onClick={() => onSelect(isSelected ? null : { type: 'issue', id: issue.id })}
+                  className="relative flex items-center justify-center transition-transform duration-200 hover:scale-110"
+                  style={{ width: `${sizePct * 6}px`, height: `${sizePct * 6}px` }}
+                  aria-label={`${issue.code}: ${issue.title}`}
+                >
+                  <svg viewBox="-10 -10 20 20" className="absolute inset-0 h-[300%] w-[300%] overflow-visible">
+                    {!reducedMotion && [0, 1].map((i) => (
+                      <circle
+                        key={i} cx="0" cy="0" r="1" fill="none" stroke={ISSUE_COLOR} strokeWidth="0.5"
+                        className="universe-shockwave-ring-inline"
+                        style={{ '--ring-r0': 1, '--ring-r1': magnitude, animationDuration: `${speed}s`, animationDelay: `${i * (speed / 2)}s` } as CSSProperties}
+                      />
+                    ))}
+                  </svg>
+                  <div
+                    className="relative flex h-full w-full items-center justify-center rounded-full border"
+                    style={{
+                      borderColor: 'rgba(255,255,255,0.4)',
+                      background: `radial-gradient(circle at 32% 26%, color-mix(in srgb, white 55%, ${ISSUE_COLOR}) 0%, ${ISSUE_COLOR} 48%, color-mix(in srgb, ${ISSUE_COLOR} 55%, black) 100%)`,
+                      boxShadow: `0 0 ${isSelected ? 12 : 7}px ${isSelected ? 2.5 : 1.2}px color-mix(in srgb, ${ISSUE_COLOR} 55%, transparent)`,
+                    }}
+                  >
+                    <CircleAlert size={Math.max(8, sizePct * 0.9)} color="white" style={{ filter: 'drop-shadow(0 0 1.5px rgba(0,0,0,0.65))' }} />
+                  </div>
+                </button>
                 <div
-                  className="relative flex h-full w-full items-center justify-center rounded-full border"
+                  className="pointer-events-none absolute whitespace-nowrap rounded-md px-1.5 py-1"
                   style={{
-                    borderColor: ISSUE_COLOR,
-                    background: `color-mix(in srgb, ${ISSUE_COLOR} ${isSelected ? 34 : 22}%, var(--radar-bg))`,
-                    boxShadow: isHovered || isSelected ? `0 0 0 4px color-mix(in srgb, ${ISSUE_COLOR} 30%, transparent)` : undefined,
+                    ...labelStyle(x, y), position: 'absolute', left: 0, top: '50%', maxWidth: 132,
+                    background: 'color-mix(in srgb, var(--bg-app) 78%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--border-soft) 80%, transparent)',
                   }}
                 >
-                  <span className="num text-[6px] font-extrabold" style={{ color: ISSUE_COLOR }}>{issue.code}</span>
+                  <p className="overflow-hidden text-ellipsis text-[9.5px] font-extrabold leading-tight" style={{ color: ISSUE_COLOR }}>
+                    {issue.code} <span className="font-semibold text-secondary">{issue.title}</span>
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1" style={{ justifyContent: x < 50 ? 'flex-start' : 'flex-end' }}>
+                    <span className="rounded px-1 py-[1px] text-[7px] font-extrabold uppercase" style={{ background: `color-mix(in srgb, ${ISSUE_COLOR} 22%, transparent)`, color: ISSUE_COLOR }}>
+                      Issue
+                    </span>
+                    <span className="num text-[7.5px] text-muted">{issue.agingDays}d</span>
+                  </div>
                 </div>
-                {isHovered && !isSelected && (
-                  <span
-                    className="pointer-events-none absolute bottom-full z-30 mb-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold"
-                    style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', color: 'var(--text-primary)' }}
-                  >
-                    {issue.code} · {issue.title} · <span style={{ color: ISSUE_COLOR }}>ISSUE</span> · Escalation {issue.escalation}
-                  </span>
-                )}
-              </button>
+              </div>
             )
           })}
         </div>
