@@ -118,27 +118,97 @@ export function UniverseCanvas({
   )
 
   /** Risks and issues share ONE angular ordering (not two independent rings) so every visible
-   * object gets a guaranteed minimum angular gap from every other — the single biggest lever
-   * against overlapping always-on labels when the field is dense. */
+   * object gets a guaranteed minimum angular gap from every other — a necessary starting point,
+   * but not sufficient on its own: near the core the same angular gap covers far less physical
+   * distance, so same-severity objects still pile up. */
   const totalVisible = visibleRisks.length + visibleIssues.length
-  const riskPoints = useMemo(
-    () =>
-      visibleRisks.map((r, i) => {
+
+  /** Real 2D collision resolution. Each node starts at its score-accurate (angle, radius)
+   * position, then a short pairwise-repulsion relaxation pushes any two nodes — or a node and
+   * Project Core — that are closer than their combined footprint (sphere + label clearance)
+   * apart, while a gentle spring pulls everything back toward its ideal spot each step. The net
+   * effect: nothing ever overlaps, yet a node's position still reads as "how close to Core" —
+   * it just isn't pinned to the exact pixel a 1D radius formula would have put it at. */
+  const CORE_RADIUS = 11
+  const placedPoints = useMemo(() => {
+    type Sim = { id: string; kind: 'risk' | 'issue'; x: number; y: number; idealX: number; idealY: number; angle: number; idealRadius: number; effR: number }
+    const sims: Sim[] = [
+      ...visibleRisks.map((r, i) => {
         const angle = angleFor(r.id, i, totalVisible)
         const score = timeline ? r.scoreHistory[Math.min(activeIndex, r.scoreHistory.length - 1)] ?? r.criticality : r.criticality
-        const radiusFrac = radiusFracForScore(score)
-        return { risk: r, angle, score, radiusFrac, ...orbitPoint(angle, radiusFrac) }
+        const idealRadius = radiusFracForScore(score)
+        const p = orbitPoint(angle, idealRadius)
+        const sizePct = lerp(6.5, 12, r.exposure / 100)
+        const effR = sizePct * 6 * 0.5 * 0.14 + 8.5
+        return { id: r.id, kind: 'risk' as const, x: p.x, y: p.y, idealX: p.x, idealY: p.y, angle, idealRadius, effR }
       }),
-    [visibleRisks, totalVisible, timeline, activeIndex],
+      ...visibleIssues.map((iss, i) => {
+        const angle = angleFor(iss.id, visibleRisks.length + i, totalVisible)
+        const idealRadius = radiusFracForScore(iss.escalation)
+        const p = orbitPoint(angle, idealRadius)
+        const sizePct = lerp(4.5, 7.5, iss.escalation / 100)
+        const effR = sizePct * 6 * 0.5 * 0.14 + 8.5
+        return { id: iss.id, kind: 'issue' as const, x: p.x, y: p.y, idealX: p.x, idealY: p.y, angle, idealRadius, effR }
+      }),
+    ]
+
+    for (let iter = 0; iter < 140; iter++) {
+      for (let i = 0; i < sims.length; i++) {
+        for (let j = i + 1; j < sims.length; j++) {
+          const a = sims[i]
+          const b = sims[j]
+          let dx = b.x - a.x
+          let dy = b.y - a.y
+          let dist = Math.hypot(dx, dy)
+          const minDist = a.effR + b.effR
+          if (dist < minDist) {
+            if (dist < 0.0001) {
+              dx = 0.01 * (i - j || 1)
+              dy = 0.01
+              dist = Math.hypot(dx, dy)
+            }
+            const push = (minDist - dist) / 2
+            const ux = dx / dist
+            const uy = dy / dist
+            a.x -= ux * push
+            a.y -= uy * push
+            b.x += ux * push
+            b.y += uy * push
+          }
+        }
+      }
+      for (const n of sims) {
+        const dx = n.x - 50
+        const dy = n.y - 50
+        const dist = Math.hypot(dx, dy)
+        const minDist = CORE_RADIUS + n.effR
+        if (dist < minDist && dist > 0.0001) {
+          const push = minDist - dist
+          n.x += (dx / dist) * push
+          n.y += (dy / dist) * push
+        }
+        n.x += (n.idealX - n.x) * 0.02
+        n.y += (n.idealY - n.y) * 0.02
+      }
+    }
+    return sims
+  }, [visibleRisks, visibleIssues, totalVisible, timeline, activeIndex])
+
+  const riskPoints = useMemo(
+    () =>
+      visibleRisks.map((r) => {
+        const p = placedPoints.find((s) => s.kind === 'risk' && s.id === r.id)!
+        return { risk: r, angle: p.angle, radiusFrac: p.idealRadius, x: p.x, y: p.y }
+      }),
+    [visibleRisks, placedPoints],
   )
   const issuePoints = useMemo(
     () =>
-      visibleIssues.map((iss, i) => {
-        const angle = angleFor(iss.id, visibleRisks.length + i, totalVisible)
-        const radiusFrac = radiusFracForScore(iss.escalation)
-        return { issue: iss, angle, radiusFrac, ...orbitPoint(angle, radiusFrac) }
+      visibleIssues.map((iss) => {
+        const p = placedPoints.find((s) => s.kind === 'issue' && s.id === iss.id)!
+        return { issue: iss, angle: p.angle, radiusFrac: p.idealRadius, x: p.x, y: p.y }
       }),
-    [visibleIssues, visibleRisks.length, totalVisible],
+    [visibleIssues, placedPoints],
   )
 
   const pointById = useMemo(() => {
@@ -211,17 +281,16 @@ export function UniverseCanvas({
                 style={{ '--ring-r0': 10, '--ring-r1': 19, animationDuration: '3.6s', animationDelay: `${i * 1.8}s`, opacity: 0.3 } as CSSProperties}
               />
             ))}
-            {!timeline && visibleRisks.map((r, i) => {
+            {!timeline && riskPoints.map(({ risk: r, x, y }) => {
               if (r.trend === 'flat') return null
-              const angle = angleFor(r.id, i, visibleRisks.length)
-              const inward = r.trend === 'up'
-              const cur = radiusFracForScore(r.criticality)
-              const target = inward ? Math.max(0.1, cur - 0.1) : Math.min(0.94, cur + 0.1)
-              const from = orbitPoint(angle, cur)
-              const to = orbitPoint(angle, target)
+              const dx = x - 50
+              const dy = y - 50
+              const dist = Math.hypot(dx, dy) || 1
+              const len = r.trend === 'up' ? -6 : 6
+              const to = { x: x + (dx / dist) * len, y: y + (dy / dist) * len }
               return (
                 <line
-                  key={`traj-${r.id}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                  key={`traj-${r.id}`} x1={x} y1={y} x2={to.x} y2={to.y}
                   stroke={SEVERITY_COLOR[r.severity]} strokeWidth="0.3" strokeDasharray="0.7 0.9" opacity={0.4}
                 />
               )
