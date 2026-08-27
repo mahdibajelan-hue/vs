@@ -23,6 +23,56 @@ export const SEVERITY_LABEL: Record<UniverseSeverity, string> = {
   low: 'Low',
 }
 
+/** Issues render in a distinct hue from risks so the two object families stay readable together
+ * on one canvas, per the brief's "visually distinct object families, same design language". */
+export const ISSUE_COLOR = '#a78bfa'
+
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * Math.min(1, Math.max(0, t))
+}
+
+/** The four concept zones risks/issues orbit through, outer (stable) to core (critical). Anchor
+ * points follow the brief's own example bands (30 -> outer, 50 -> mid, 70 -> inner, 90 -> core). */
+export type OrbitZone = 'outer' | 'mid' | 'inner' | 'core'
+
+export const ORBIT_ZONES: { zone: OrbitZone; label: string; radiusFrac: number }[] = [
+  { zone: 'outer', label: 'OUTER · STABLE', radiusFrac: 0.92 },
+  { zone: 'mid', label: 'MID · MONITORING', radiusFrac: 0.68 },
+  { zone: 'inner', label: 'INNER · ACTIVE RESPONSE', radiusFrac: 0.44 },
+  { zone: 'core', label: 'CORE · IMMEDIATE', radiusFrac: 0.22 },
+]
+
+export function zoneForScore(score: number): OrbitZone {
+  if (score >= 80) return 'core'
+  if (score >= 60) return 'inner'
+  if (score >= 40) return 'mid'
+  return 'outer'
+}
+
+/** Score (0-100) -> orbital distance from Project Core, as a fraction of the canvas radius.
+ * A small piecewise-linear table gives a smoother, more deliberate spread than a single lerp. */
+const RADIUS_ANCHORS: [number, number][] = [
+  [0, 0.94], [30, 0.86], [50, 0.66], [70, 0.42], [90, 0.2], [100, 0.14],
+]
+export function radiusFracForScore(score: number): number {
+  const s = Math.min(100, Math.max(0, score))
+  for (let i = 0; i < RADIUS_ANCHORS.length - 1; i++) {
+    const [s0, r0] = RADIUS_ANCHORS[i]
+    const [s1, r1] = RADIUS_ANCHORS[i + 1]
+    if (s >= s0 && s <= s1) return lerp(r0, r1, (s - s0) / (s1 - s0))
+  }
+  return RADIUS_ANCHORS[RADIUS_ANCHORS.length - 1][1]
+}
+
+export interface ImpactDimensions {
+  time: number
+  cost: number
+  scope: number
+  quality: number
+  procurement: number
+  contract: number
+}
+
 /** One risk as a gravity object in the Risk Universe: exposure drives its size, criticality pulls
  * it toward the core, velocity drives how fast it pulses, and trend hints at where it's heading. */
 export interface RiskUniverseNode {
@@ -33,7 +83,7 @@ export interface RiskUniverseNode {
   severity: UniverseSeverity
   /** 0-100 — drives node size. */
   exposure: number
-  /** 0-100 — higher pulls the node closer to Project Core. */
+  /** 0-100 — higher pulls the node closer to Project Core; this IS the orbital score. */
   criticality: number
   /** 0-100 — drives pulse speed; a fast-pulsing risk is accelerating. */
   velocity: number
@@ -42,6 +92,12 @@ export interface RiskUniverseNode {
   /** Probability (0-1) this risk converts into an issue, per Project Intelligence. */
   conversionProbability: number
   relatedIssueIds: string[]
+  /** Historical criticality trajectory (oldest -> newest, last entry === criticality) — the data
+   * TIMELINE mode plays back to show the risk physically moving toward/away from Project Core. */
+  scoreHistory: number[]
+  /** What wave this risk would create across the project if left unmanaged — feeds IMPACT mode
+   * when a Risk (rather than an Issue) is the selected source. */
+  impact: ImpactDimensions
 }
 
 /** One issue as a shockwave source: impact drives wave amplitude, escalation drives how fast the
@@ -53,8 +109,8 @@ export interface IssueUniverseNode {
   severity: UniverseSeverity
   agingDays: number
   /** 0-100 per dimension — how hard this issue is hitting each area. */
-  impact: { time: number; cost: number; scope: number; quality: number; procurement: number; contract: number }
-  /** 0-100 — how fast the wave is still spreading. */
+  impact: ImpactDimensions
+  /** 0-100 — how fast the wave is still spreading; also pulls the issue's orbit inward. */
   escalation: number
   causedByRiskIds: string[]
 }
@@ -85,12 +141,33 @@ export const EVENT_KIND_COLOR: Record<EventKind, string> = {
 
 /** One causal chain, rendered as a connected strip of beacons: Event -> Trigger -> Risk -> Issue
  * -> Impact -> Action -> Decision -> Resolution. Real chains vary in length — not every event
- * has escalated all the way to a resolution yet. */
+ * has escalated all the way to a resolution yet. Kept as a secondary "Event Log" drawer rather
+ * than a primary canvas mode. */
 export interface EventChain {
   id: string
   title: string
   dateLabel: string
   steps: { kind: EventKind; label: string }[]
+}
+
+/** A temporary signal on the live canvas — never a permanent object. Each beacon animates a
+ * traveling-particle connection between two points: an Event appearing out in the field and
+ * striking a Risk, a Risk converting into an Issue, or an Issue radiating Impact in place. */
+export type BeaconKind = 'event-risk' | 'risk-issue' | 'issue-impact'
+
+export interface EventBeacon {
+  id: string
+  kind: BeaconKind
+  label: string
+  color: string
+  fromType: 'field' | 'risk' | 'issue'
+  fromId?: string
+  /** Used only when fromType === 'field' — a point out at the edge of the canvas. */
+  fromAngleDeg?: number
+  toType: 'risk' | 'issue'
+  toId: string
+  /** Seconds — staggers the beacons so they don't all fire in lockstep. */
+  delay: number
 }
 
 export type InsightKind = 'emerging_risk' | 'velocity' | 'conversion' | 'impact' | 'relationship' | 'recommendation'
@@ -120,21 +197,6 @@ export interface ProjectIntelligenceInsight {
   relatedCode?: string
 }
 
-export interface UniverseStats {
-  totalRisks: number
-  totalRisksDelta: number
-  totalIssues: number
-  totalIssuesDelta: number
-  openActions: number
-  openActionsDelta: number
-  dueThisWeek: number
-  dueThisWeekDelta: number
-  overdue: number
-  overdueDelta: number
-  resolved30d: number
-  resolved30dDelta: number
-}
-
 export interface UniverseReport {
   id: string
   title: string
@@ -147,8 +209,8 @@ export interface UniverseData {
   risks: RiskUniverseNode[]
   issues: IssueUniverseNode[]
   eventChains: EventChain[]
+  beacons: EventBeacon[]
   insights: ProjectIntelligenceInsight[]
-  stats: UniverseStats
   reports: UniverseReport[]
 }
 
@@ -199,6 +261,59 @@ function pick<T>(arr: T[], i: number): T {
   return arr[i % arr.length]
 }
 
+function buildImpact(rand: () => number): ImpactDimensions {
+  return {
+    time: Math.round(rand() * 100),
+    cost: Math.round(rand() * 100),
+    scope: Math.round(rand() * 100),
+    quality: Math.round(rand() * 100),
+    procurement: Math.round(rand() * 100),
+    contract: Math.round(rand() * 100),
+  }
+}
+
+/** A short random walk of past scores that lands exactly on `current` — this is what TIMELINE
+ * mode scrubs through to show the risk physically drifting toward/away from Project Core. */
+function buildScoreHistory(rand: () => number, current: number, points = 7): number[] {
+  const history: number[] = [current]
+  let v = current
+  for (let i = 1; i < points; i++) {
+    v = Math.min(97, Math.max(3, v + (rand() - 0.58) * 16))
+    history.unshift(Math.round(v))
+  }
+  history[history.length - 1] = current
+  return history
+}
+
+function deriveEventBeacons(risks: RiskUniverseNode[], issues: IssueUniverseNode[], rand: () => number): EventBeacon[] {
+  const beacons: EventBeacon[] = []
+  const fastestRisk = [...risks].sort((a, b) => b.velocity - a.velocity)[0]
+  if (fastestRisk) {
+    beacons.push({
+      id: 'beacon-event', kind: 'event-risk', label: 'New signal detected',
+      color: EVENT_KIND_COLOR.event, fromType: 'field', fromAngleDeg: rand() * 360,
+      toType: 'risk', toId: fastestRisk.id, delay: 0,
+    })
+  }
+  const issueWithCause = issues.find((i) => i.causedByRiskIds.length > 0)
+  if (issueWithCause) {
+    beacons.push({
+      id: 'beacon-conversion', kind: 'risk-issue', label: 'Risk converted to Issue',
+      color: ISSUE_COLOR, fromType: 'risk', fromId: issueWithCause.causedByRiskIds[0],
+      toType: 'issue', toId: issueWithCause.id, delay: 2.6,
+    })
+  }
+  const topIssue = [...issues].sort((a, b) => b.escalation - a.escalation)[0]
+  if (topIssue) {
+    beacons.push({
+      id: 'beacon-impact', kind: 'issue-impact', label: 'Impact propagating',
+      color: '#eab308', fromType: 'issue', fromId: topIssue.id,
+      toType: 'issue', toId: topIssue.id, delay: 5.2,
+    })
+  }
+  return beacons
+}
+
 export function buildMockUniverseData(seed: string): UniverseData {
   const rand = seededRandom(seed)
 
@@ -211,6 +326,7 @@ export function buildMockUniverseData(seed: string): UniverseData {
     const exposure = Math.round(40 + rand() * 60)
     const velocity = Math.round(rand() * 100)
     const windowDays = 7 + Math.floor(rand() * 40)
+    const roundedCriticality = Math.round(criticality)
     return {
       id: `risk-${i}`,
       code: t.code,
@@ -218,12 +334,14 @@ export function buildMockUniverseData(seed: string): UniverseData {
       category: t.category,
       severity,
       exposure,
-      criticality: Math.round(criticality),
+      criticality: roundedCriticality,
       velocity,
       trend: velocity > 60 ? 'up' : velocity < 30 ? 'down' : 'flat',
       windowLabel: `0-${windowDays}d`,
       conversionProbability: Math.round((criticality / 100) * (velocity / 100) * 100) / 100,
       relatedIssueIds: [],
+      scoreHistory: buildScoreHistory(rand, roundedCriticality),
+      impact: buildImpact(rand),
     }
   })
 
@@ -243,14 +361,7 @@ export function buildMockUniverseData(seed: string): UniverseData {
       title: t.title,
       severity,
       agingDays: 3 + Math.floor(rand() * 30),
-      impact: {
-        time: Math.round(rand() * 100),
-        cost: Math.round(rand() * 100),
-        scope: Math.round(rand() * 100),
-        quality: Math.round(rand() * 100),
-        procurement: Math.round(rand() * 100),
-        contract: Math.round(rand() * 100),
-      },
+      impact: buildImpact(rand),
       escalation: Math.round(rand() * 100),
       causedByRiskIds: causedBy,
     }
@@ -262,6 +373,8 @@ export function buildMockUniverseData(seed: string): UniverseData {
     dateLabel: `${1 + Math.floor(rand() * 27)} days ago`,
     steps: t.steps.map((kind) => ({ kind, label: EVENT_KIND_LABEL[kind] })),
   }))
+
+  const beacons = deriveEventBeacons(risks, issues, rand)
 
   const topRisk = [...risks].sort((a, b) => b.criticality - a.criticality)[0]
   const topIssue = [...issues].sort((a, b) => b.escalation - a.escalation)[0]
@@ -324,27 +437,16 @@ export function buildMockUniverseData(seed: string): UniverseData {
     risks,
     issues,
     eventChains,
+    beacons,
     insights,
-    stats: {
-      totalRisks: 20 + Math.floor(rand() * 20),
-      totalRisksDelta: 3 + Math.floor(rand() * 8),
-      totalIssues: 12 + Math.floor(rand() * 15),
-      totalIssuesDelta: 2 + Math.floor(rand() * 6),
-      openActions: 10 + Math.floor(rand() * 15),
-      openActionsDelta: 1 + Math.floor(rand() * 5),
-      dueThisWeek: 3 + Math.floor(rand() * 8),
-      dueThisWeekDelta: Math.floor(rand() * 4),
-      overdue: 2 + Math.floor(rand() * 8),
-      overdueDelta: Math.floor(rand() * 4),
-      resolved30d: 8 + Math.floor(rand() * 12),
-      resolved30dDelta: 2 + Math.floor(rand() * 6),
-    },
     reports: [
-      { id: 'rep-risk-register', title: 'Risk Register Report' },
-      { id: 'rep-issue-register', title: 'Issue Register Report' },
+      { id: 'rep-risk-register', title: 'Risk Register' },
+      { id: 'rep-issue-register', title: 'Issue Register' },
       { id: 'rep-risk-heatmap', title: 'Risk Heat Map' },
-      { id: 'rep-issue-aging', title: 'Issue Aging Report' },
-      { id: 'rep-action-tracker', title: 'Action Tracker Report' },
+      { id: 'rep-issue-aging', title: 'Issue Aging' },
+      { id: 'rep-risk-trend', title: 'Risk Trend' },
+      { id: 'rep-action-tracker', title: 'Action Tracker' },
+      { id: 'rep-management', title: 'Management Report' },
     ],
   }
 }

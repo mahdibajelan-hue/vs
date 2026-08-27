@@ -1362,6 +1362,37 @@ body {
   }
 }
 
+/* Parametrized ring used inline on the orbit canvas (Project Core gravity waves, per-issue
+   shockwaves) — sized per use via the --ring-r0/--ring-r1 custom properties rather than the
+   fixed 3->42 sweep above, which was built for the full-canvas Impact epicenter view. */
+@keyframes universe-shockwave-ring-inline {
+  0%   { r: var(--ring-r0, 1); opacity: 0.85; }
+  100% { r: var(--ring-r1, 8); opacity: 0; }
+}
+.universe-shockwave-ring-inline {
+  animation-name: universe-shockwave-ring-inline;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+
+/* Event beacons are temporary signals, not permanent objects — a brief appear/fade blip rather
+   than a steady pulse, so they read as something that just happened. */
+@keyframes universe-beacon-blip {
+  0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  10%, 30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  45%      { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+.universe-beacon-blip {
+  animation: universe-beacon-blip 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .universe-shockwave-ring-inline,
+  .universe-beacon-blip {
+    animation: none !important;
+  }
+}
+
 /* ===== Project Control Center — command-center launchpad background =====
    A single-tone accent glow + faint grid, not the multi-color blurred blobs the earlier hub used
    — the brief explicitly asked for one technological accent color and no heavy gradients. */
