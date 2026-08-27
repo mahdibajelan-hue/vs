@@ -202,31 +202,55 @@ function AddRiskIssueForm({ onClose }: { onClose: () => void }) {
 }
 
 function DetailDrawer({
-  selection, risks, onClose,
+  selection, risks, issues, onClose,
 }: {
   selection: UniverseSelection
   risks: RiskUniverseNode[]
+  issues: IssueUniverseNode[]
   onClose: () => void
 }) {
-  if (!selection || selection.type !== 'risk') return null
-  const risk = risks.find((r) => r.id === selection.id)
-  if (!risk) return null
-  const color = SEVERITY_COLOR[risk.severity]
+  if (!selection) return null
 
+  if (selection.type === 'risk') {
+    const risk = risks.find((r) => r.id === selection.id)
+    if (!risk) return null
+    const color = SEVERITY_COLOR[risk.severity]
+    return (
+      <div className="radar-callout absolute bottom-4 right-4 z-30 w-64 rounded-2xl border p-3.5" style={{ borderColor: color, background: 'color-mix(in srgb, var(--bg-panel-solid) 94%, transparent)', boxShadow: `0 0 24px color-mix(in srgb, ${color} 25%, transparent)` }}>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}>
+            {SEVERITY_LABEL[risk.severity]} RISK
+          </span>
+          <button onClick={onClose} className="text-muted hover:text-primary"><X size={14} /></button>
+        </div>
+        <p className="text-[13px] font-extrabold">{risk.code} — {risk.title}</p>
+        <div className="mt-2.5 space-y-1.5 border-t pt-2.5 text-[10.5px] leading-5" style={{ borderColor: 'var(--border-soft)' }}>
+          <p className="flex items-center justify-between"><span className="text-muted">Exposure</span><span className="num font-bold">{risk.exposure}/100</span></p>
+          <p className="flex items-center justify-between"><span className="text-muted">Criticality</span><span className="num font-bold">{risk.criticality}/100</span></p>
+          <p className="flex items-center justify-between"><span className="text-muted">Velocity</span><span className="num font-bold">{risk.velocity}/100</span></p>
+          <p className="font-bold" style={{ color: 'var(--radar-green)' }}>Issue conversion forecast: {Math.round(risk.conversionProbability * 100)}%</p>
+        </div>
+      </div>
+    )
+  }
+
+  const issue = issues.find((i) => i.id === selection.id)
+  if (!issue) return null
+  const color = ISSUE_COLOR
+  const causeCode = issue.causedByRiskIds.length > 0 ? risks.find((r) => r.id === issue.causedByRiskIds[0])?.code : undefined
   return (
     <div className="radar-callout absolute bottom-4 right-4 z-30 w-64 rounded-2xl border p-3.5" style={{ borderColor: color, background: 'color-mix(in srgb, var(--bg-panel-solid) 94%, transparent)', boxShadow: `0 0 24px color-mix(in srgb, ${color} 25%, transparent)` }}>
       <div className="mb-2 flex items-start justify-between gap-2">
         <span className="rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}>
-          {SEVERITY_LABEL[risk.severity]} RISK
+          {SEVERITY_LABEL[issue.severity]} ISSUE
         </span>
         <button onClick={onClose} className="text-muted hover:text-primary"><X size={14} /></button>
       </div>
-      <p className="text-[13px] font-extrabold">{risk.code} — {risk.title}</p>
+      <p className="text-[13px] font-extrabold">{issue.code} — {issue.title}</p>
       <div className="mt-2.5 space-y-1.5 border-t pt-2.5 text-[10.5px] leading-5" style={{ borderColor: 'var(--border-soft)' }}>
-        <p className="flex items-center justify-between"><span className="text-muted">Exposure</span><span className="num font-bold">{risk.exposure}/100</span></p>
-        <p className="flex items-center justify-between"><span className="text-muted">Criticality</span><span className="num font-bold">{risk.criticality}/100</span></p>
-        <p className="flex items-center justify-between"><span className="text-muted">Velocity</span><span className="num font-bold">{risk.velocity}/100</span></p>
-        <p className="font-bold" style={{ color: 'var(--radar-green)' }}>Issue conversion forecast: {Math.round(risk.conversionProbability * 100)}%</p>
+        <p className="flex items-center justify-between"><span className="text-muted">Aging</span><span className="num font-bold">{issue.agingDays} days</span></p>
+        <p className="flex items-center justify-between"><span className="text-muted">Escalation</span><span className="num font-bold">{issue.escalation}/100</span></p>
+        {causeCode && <p className="font-bold" style={{ color: 'var(--radar-cyan)' }}>Caused by: {causeCode}</p>}
       </div>
     </div>
   )
@@ -392,7 +416,7 @@ export function RiskIssueUniversePage({ projectName, seed, onBack }: { projectNa
                   issues={data.issues}
                   beacons={data.beacons}
                   hiddenSeverities={hiddenSeverities}
-                  showIssues={false}
+                  showIssues={true}
                   showEvents={false}
                   selected={selection}
                   onSelect={setSelection}
@@ -402,7 +426,7 @@ export function RiskIssueUniversePage({ projectName, seed, onBack }: { projectNa
                 <ImpactWaveView sources={issueImpactSources} selectedKey={issueImpactKey} onSelect={setIssueImpactKey} riskCodeById={riskCodeById} />
               )}
               {tab === 'event' && <EventStreamView chains={data.eventChains} />}
-              {tab === 'risk' && <DetailDrawer selection={selection} risks={data.risks} onClose={() => setSelection(null)} />}
+              {tab === 'risk' && <DetailDrawer selection={selection} risks={data.risks} issues={data.issues} onClose={() => setSelection(null)} />}
             </div>
           </div>
 

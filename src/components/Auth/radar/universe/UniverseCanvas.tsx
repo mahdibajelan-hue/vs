@@ -38,6 +38,14 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v))
 }
 
+/** Deterministic 0-1 value from a string id — used to stagger each issue's meteor cycle so they
+ * don't all streak toward Core in lockstep. */
+function hashUnit(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return (h % 1000) / 1000
+}
+
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -161,6 +169,66 @@ function BeaconLine({
           <animateMotion dur="2.4s" begin={`${delay}s`} repeatCount="indefinite" path={`M ${from.x},${from.y} L ${to.x},${to.y}`} />
         </circle>
       )}
+    </g>
+  )
+}
+
+/** An issue's "meteor" pass: the issue's own Planet stays put at its resting orbit position (still
+ * clickable), but on a repeating cycle a comet — a bright head plus a short fading tail — breaks
+ * away from that position, arcs inward, and burns up right at Project Core. Built from the same
+ * SVG-native `<animateMotion>` technique as BeaconLine: the motion holds at the path's start for
+ * most of the cycle (`REST_FRAC`) then races to the end during the last stretch, so it reads as a
+ * sudden streak rather than a constant orbit. More urgent issues (aging + escalation) streak more
+ * often, faster, and with a longer tail — the animation itself becomes a severity signal. */
+const METEOR_REST_FRAC = 0.8
+
+function IssueMeteor({ from, color, urgency, seed }: { from: { x: number; y: number }; color: string; urgency: number; seed: string }) {
+  const dur = lerp(16, 6.5, urgency)
+  const tailCount = Math.round(lerp(2, 4, urgency))
+  const baseDelay = hashUnit(seed) * dur
+  // A gentle perpendicular bow in the path (not a straight radial line) so the streak reads as an
+  // arcing meteor rather than a ball rolling to the center.
+  const mx = (from.x + 50) / 2 - (from.y - 50) * 0.18
+  const my = (from.y + 50) / 2 + (from.x - 50) * 0.18
+  const path = `M ${from.x},${from.y} Q ${mx},${my} 50,50`
+  const raceStart = METEOR_REST_FRAC
+  const dots = Array.from({ length: tailCount + 1 }, (_, i) => ({
+    isHead: i === 0,
+    r: i === 0 ? 1.3 : Math.max(0.25, 1.3 - i * 0.32),
+    peakOpacity: i === 0 ? 1 : Math.max(0.15, 0.65 - (i - 1) * 0.18),
+    lag: i * dur * (1 - raceStart) * 0.22,
+  }))
+  return (
+    <g>
+      {dots.map((d, i) => {
+        const begin = baseDelay + d.lag
+        const fadeIn = raceStart + (1 - raceStart) * 0.08
+        const fadeOutStart = raceStart + (1 - raceStart) * 0.82
+        return (
+          // opacity set explicitly to 0 (its SVG default is fully opaque) so the dot stays hidden
+          // during the delay before its first `begin` — otherwise every dot flashes, fully visible,
+          // at the canvas origin (animateMotion's un-animated base position) for a frame on load.
+          <circle key={i} r={d.r} fill={color} opacity={0}>
+            <animateMotion
+              path={path}
+              keyPoints={`0;0;1`}
+              keyTimes={`0;${raceStart};1`}
+              calcMode="linear"
+              dur={`${dur}s`}
+              begin={`${begin}s`}
+              repeatCount="indefinite"
+            />
+            <animate
+              attributeName="opacity"
+              values={`0;0;${d.peakOpacity};${d.peakOpacity};0`}
+              keyTimes={`0;${raceStart};${fadeIn};${fadeOutStart};1`}
+              dur={`${dur}s`}
+              begin={`${begin}s`}
+              repeatCount="indefinite"
+            />
+          </circle>
+        )
+      })}
     </g>
   )
 }
@@ -343,6 +411,14 @@ export function UniverseCanvas({
               })()
               : (b.fromId ? pointById.get(b.fromId) : undefined) ?? to
             return <BeaconLine key={b.id} from={from} to={to} color={b.color} delay={b.delay} reducedMotion={reducedMotion} />
+          })}
+
+          {/* Issues periodically break from their resting orbit position and streak toward Project
+              Core like a comet — see IssueMeteor. Skipped entirely under reduced motion, same as
+              every other looping animation in this scene. */}
+          {!timeline && !reducedMotion && issuePlacements.map(({ issue, left, top }) => {
+            const urgency = clamp(issue.escalation / 100 * 0.65 + Math.min(issue.agingDays, 30) / 30 * 0.35, 0, 1)
+            return <IssueMeteor key={`meteor-${issue.id}`} from={{ x: left, y: top }} color={ISSUE_COLOR} urgency={urgency} seed={issue.id} />
           })}
         </svg>
 
