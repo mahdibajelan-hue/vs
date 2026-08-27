@@ -20,10 +20,35 @@ const CATEGORY_ICON: Record<SignalCategory, LucideIcon> = {
 }
 
 /** 12 concentric rings instead of the old 4: the outermost is green, the one right beneath it is
- * blue — deliberately close together rather than spread across the whole field — and the
- * remaining 10 are thin, faint grid lines filling the rest of the radius down toward the center. */
-const RING_COUNT = 12
-const RINGS = Array.from({ length: RING_COUNT }, (_, i) => 1 - (i * 0.92) / (RING_COUNT - 1))
+ * blue-green — the two sit almost touching rather than spread across the field, and their colors
+ * are blended toward each other instead of a stark green/blue contrast — while the remaining 10
+ * are thin, faint grid lines filling the rest of the radius down toward the center. */
+const OUTER_RING = 1
+const SECOND_RING = 0.985
+const GRID_RING_COUNT = 10
+const GRID_RING_MIN = 0.08
+const RINGS = [
+  OUTER_RING,
+  SECOND_RING,
+  ...Array.from({ length: GRID_RING_COUNT }, (_, i) => {
+    const t = (i + 1) / GRID_RING_COUNT
+    return SECOND_RING - t * (SECOND_RING - GRID_RING_MIN)
+  }),
+]
+/** The second ring reads as "blue" but is mixed most of the way toward the outer ring's green so
+ * the pair feels like one close family of hues rather than two contrasting colors. */
+const RADAR_SECOND_RING_COLOR = 'color-mix(in srgb, var(--radar-cyan) 45%, var(--radar-green) 55%)'
+/** Uneven, patchy visibility across the faint grid rings — a few soft sectors dim out and back in
+ * — so the grid reads like a real radar console's phosphor persistence instead of a mechanically
+ * perfect stack of identical circles. */
+const RADAR_GRID_FADE_MASK = `conic-gradient(from 0deg,
+  white 0deg, white 55deg,
+  rgba(255,255,255,0.22) 68deg, rgba(255,255,255,0.22) 78deg,
+  white 90deg, white 195deg,
+  rgba(255,255,255,0.28) 208deg, rgba(255,255,255,0.28) 224deg,
+  white 236deg, white 292deg,
+  rgba(255,255,255,0.18) 303deg, rgba(255,255,255,0.18) 317deg,
+  white 330deg, white 360deg)`
 const DEGREE_MARKS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 
 function polarToPercent(angle: number, radius: number) {
@@ -60,23 +85,24 @@ export function RadarDisplay({
             <stop offset="100%" stopColor="var(--radar-green)" stopOpacity="0.05" />
           </radialGradient>
         </defs>
-        {RINGS.map((r, i) => {
-          /* Only the outermost ring is green, the second is blue — both a thin, subtle stroke
-             with a soft single-layer glow instead of the old thick triple-glow neon edge. The
-             inner two rings stay the faint grid color, unchanged. */
-          const isOutermost = i === 0
-          const isSecond = i === 1
-          const stroke = isOutermost ? 'var(--radar-green)' : isSecond ? 'var(--radar-cyan)' : 'var(--radar-grid)'
-          const accented = isOutermost || isSecond
-          return (
-            <circle
-              key={r} cx="50" cy="50" r={r * 46} fill="none"
-              stroke={stroke}
-              strokeWidth={accented ? 0.3 : 0.15}
-              style={accented ? { filter: `drop-shadow(0 0 1.5px ${stroke})` } : undefined}
-            />
-          )
-        })}
+        {/* Outer accent pair: green + a green-leaning blue, almost touching, always fully
+            visible — the radar's own "housing" edge. */}
+        {[
+          { r: RINGS[0], stroke: 'var(--radar-green)' },
+          { r: RINGS[1], stroke: RADAR_SECOND_RING_COLOR },
+        ].map(({ r, stroke }) => (
+          <circle
+            key={r} cx="50" cy="50" r={r * 46} fill="none"
+            stroke={stroke} strokeWidth={0.3}
+            style={{ filter: `drop-shadow(0 0 1.5px ${stroke})` }}
+          />
+        ))}
+        {/* Inner grid: thin, faint, and unevenly faded around the circumference. */}
+        <g style={{ maskImage: RADAR_GRID_FADE_MASK, WebkitMaskImage: RADAR_GRID_FADE_MASK }}>
+          {RINGS.slice(2).map((r) => (
+            <circle key={r} cx="50" cy="50" r={r * 46} fill="none" stroke="var(--radar-grid)" strokeWidth={0.15} />
+          ))}
+        </g>
         <g style={{ filter: 'drop-shadow(0 0 0.5px var(--radar-green))' }}>
           {DEGREE_MARKS.map((deg) => {
             const rad = (deg * Math.PI) / 180

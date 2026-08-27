@@ -346,9 +346,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
         {/* Main grid: performance rings | Radar | risk/issue stack | Lifecycle — four siblings so
             the radar (the hero element) gets the lion's share of the width instead of competing
-            with the lifecycle card inside a shared, narrower wrapper. Lifecycle sits in the
-            rightmost column, narrowed down so the radar column gets the extra space. */}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_190px_168px] xl:items-stretch">
+            with the lifecycle card inside a shared, narrower wrapper. The stat-card column (right
+            next to Lifecycle) and Lifecycle itself are both narrowed so the radar column gets the
+            extra space. */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[210px_minmax(0,1fr)_158px_168px] xl:items-stretch">
           <div className="flex flex-col gap-3">
             <PerformanceRingCard
               title="PROJECT HEALTH"
