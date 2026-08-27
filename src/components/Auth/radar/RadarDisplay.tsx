@@ -24,7 +24,7 @@ const CATEGORY_ICON: Record<SignalCategory, LucideIcon> = {
  * are blended toward each other instead of a stark green/blue contrast — while the remaining 10
  * are thin, faint grid lines filling the rest of the radius down toward the center. */
 const OUTER_RING = 1
-const SECOND_RING = 0.985
+const SECOND_RING = 0.92
 const GRID_RING_COUNT = 10
 const GRID_RING_MIN = 0.08
 const RINGS = [
@@ -37,7 +37,12 @@ const RINGS = [
 ]
 /** The second ring reads as "blue" but is mixed most of the way toward the outer ring's green so
  * the pair feels like one close family of hues rather than two contrasting colors. */
-const RADAR_SECOND_RING_COLOR = 'color-mix(in srgb, var(--radar-cyan) 45%, var(--radar-green) 55%)'
+/** A true, natural green (not the app-wide neon mint `--radar-green`, which reads too aqua/cyan
+ * for this specific console-screen look) plus a clearly distinct blue for the second ring —
+ * scoped to this component only, matching the reference radar screenshot's own palette. */
+const RADAR_RING_GREEN = '#2ecc71'
+const RADAR_RING_GREEN_BRIGHT = '#8ff5b3'
+const RADAR_RING_BLUE = '#38bdf8'
 /** Uneven, patchy visibility across the faint grid rings — a few soft sectors dim out and back in
  * — so the grid reads like a real radar console's phosphor persistence instead of a mechanically
  * perfect stack of identical circles. */
@@ -80,16 +85,16 @@ export function RadarDisplay({
           {/* Spokes glow faintly right at the center and fade almost fully out toward the rim —
               a thin console crosshair, not a bright beam. */}
           <radialGradient id="radar-spoke-fade" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="46">
-            <stop offset="0%" stopColor="var(--radar-green)" stopOpacity="0.55" />
-            <stop offset="35%" stopColor="var(--radar-green)" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="var(--radar-green)" stopOpacity="0.05" />
+            <stop offset="0%" stopColor={RADAR_RING_GREEN} stopOpacity="0.55" />
+            <stop offset="35%" stopColor={RADAR_RING_GREEN} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={RADAR_RING_GREEN} stopOpacity="0.05" />
           </radialGradient>
         </defs>
-        {/* Outer accent pair: green + a green-leaning blue, almost touching, always fully
-            visible — the radar's own "housing" edge. */}
+        {/* Outer accent pair: green + a clearly distinct blue, with a modest visible gap between
+            them — the radar's own "housing" edge. */}
         {[
-          { r: RINGS[0], stroke: 'var(--radar-green)' },
-          { r: RINGS[1], stroke: RADAR_SECOND_RING_COLOR },
+          { r: RINGS[0], stroke: RADAR_RING_GREEN },
+          { r: RINGS[1], stroke: RADAR_RING_BLUE },
         ].map(({ r, stroke }) => (
           <circle
             key={r} cx="50" cy="50" r={r * 46} fill="none"
@@ -103,7 +108,7 @@ export function RadarDisplay({
             <circle key={r} cx="50" cy="50" r={r * 46} fill="none" stroke="var(--radar-grid)" strokeWidth={0.15} />
           ))}
         </g>
-        <g style={{ filter: 'drop-shadow(0 0 0.5px var(--radar-green))' }}>
+        <g style={{ filter: `drop-shadow(0 0 0.5px ${RADAR_RING_GREEN})` }}>
           {DEGREE_MARKS.map((deg) => {
             const rad = (deg * Math.PI) / 180
             const x2 = 50 + 46 * Math.sin(rad)
@@ -135,14 +140,14 @@ export function RadarDisplay({
         <div
           className="absolute inset-0"
           style={{
-            background: 'conic-gradient(from 0deg, color-mix(in srgb, var(--radar-green) 70%, transparent), color-mix(in srgb, var(--radar-green) 30%, transparent) 14deg, transparent 34deg, transparent 360deg)',
-            filter: 'brightness(1.4) saturate(1.3)',
+            background: `conic-gradient(from 0deg, color-mix(in srgb, ${RADAR_RING_GREEN_BRIGHT} 85%, transparent), color-mix(in srgb, ${RADAR_RING_GREEN} 45%, transparent) 14deg, transparent 34deg, transparent 360deg)`,
+            filter: 'brightness(1.25) saturate(1.2)',
           }}
         />
       </div>
 
       {/* Center pulse */}
-      <div className="radar-center-dot absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ background: 'var(--radar-green)' }} />
+      <div className="radar-center-dot absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ background: RADAR_RING_GREEN_BRIGHT }} />
 
       {/* Signals */}
       {points.map(({ signal, x, y }) => {
