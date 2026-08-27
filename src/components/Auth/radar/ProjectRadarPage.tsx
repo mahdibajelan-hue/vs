@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
-  ChevronsRight, Clock3, FileText, GitBranch, Heart, Package, Radar as RadarIcon, RefreshCw, Route,
+  ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Package, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -13,6 +13,7 @@ import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
+import { RiskIssueUniversePage } from './universe/RiskIssueUniversePage'
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type SignalCategory,
@@ -29,6 +30,10 @@ interface NavItem {
   icon: LucideIcon
   accent: string
   badge?: number
+  /** Overrides the default moduleKey/toast behavior entirely — used for the Risk & Issue
+   * Universe entry, which swaps in a sibling view inside Radar itself rather than navigating
+   * to a separate top-level module. */
+  onClick?: () => void
 }
 
 const CATEGORY_FILTERS: { key: SignalCategory | 'all'; label: string }[] = [
@@ -85,6 +90,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const [scanProgress, setScanProgress] = useState(100)
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
+  const [universeOpen, setUniverseOpen] = useState(false)
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
   // closed so the radar itself isn't squeezed into a sliver on a phone screen.
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -126,6 +132,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
     { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
+    { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },
     { id: 'change', moduleKey: null, title: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges },
     { id: 'finance', moduleKey: 'finance', title: 'Financial Management', icon: Banknote, accent: '#10b981' },
     { id: 'contract', moduleKey: 'finance', title: 'Contract Control', icon: FileText, accent: '#10b981' },
@@ -137,6 +144,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((n) => n.moduleKey === null || isVisible(n.moduleKey))
 
   const handleNavClick = (item: NavItem) => {
+    if (item.onClick) {
+      item.onClick()
+      return
+    }
     if (!item.moduleKey) {
       setNotice(`"${item.title}" is coming soon`)
       window.clearTimeout(noticeTimer.current)
@@ -159,6 +170,16 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const costCaption = data.kpi.costVariancePct >= 0 ? 'AHEAD' : 'OVER BUDGET'
   const qualityColor = data.kpi.qualityPct >= 70 ? 'var(--radar-green)' : 'var(--radar-amber)'
   const qualityCaption = data.kpi.qualityPct >= 85 ? 'EXCELLENT' : data.kpi.qualityPct >= 70 ? 'GOOD' : 'FAIR'
+
+  if (universeOpen) {
+    return (
+      <RiskIssueUniversePage
+        projectName={displayName}
+        seed={selectedProject?.id ?? 'default'}
+        onBack={() => setUniverseOpen(false)}
+      />
+    )
+  }
 
   return (
     <div dir="ltr" className="radar-en relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>

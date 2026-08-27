@@ -1316,6 +1316,37 @@ body {
   }
 }
 
+/* ===== Risk, Issue & Event Universe =====
+   Pulse here is semantic (it encodes risk velocity / issue escalation), not decorative page
+   throb, so it stays even though the plain radar-signal/live-dot pulses above were removed. */
+@keyframes universe-node-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--radar-cyan)) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.universe-node {
+  animation-name: universe-node-pulse;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes universe-shockwave-ring {
+  0%   { r: 3; opacity: 0.9; }
+  100% { r: 42; opacity: 0; }
+}
+.universe-shockwave-ring {
+  animation-name: universe-shockwave-ring;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .universe-node,
+  .universe-shockwave-ring {
+    animation: none !important;
+  }
+}
+
 /* ===== Project Control Center — command-center launchpad background =====
    A single-tone accent glow + faint grid, not the multi-color blurred blobs the earlier hub used
    — the brief explicitly asked for one technological accent color and no heavy gradients. */
