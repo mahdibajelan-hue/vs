@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "@supabase/supabase-js": "^2.112.1",
     "@tailwindcss/vite": "^4.3.3",
     "cesium": "^1.144.0",

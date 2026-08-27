@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
   ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Package, Radar as RadarIcon, RefreshCw, Route,
@@ -13,7 +13,9 @@ import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
-import { RiskIssueUniversePage } from './universe/RiskIssueUniversePage'
+/** Lazy — the Risk Universe scene pulls in three.js/@react-three/fiber, which would otherwise
+ * bloat every visitor's initial bundle just to reach the rest of Project Radar. */
+const RiskIssueUniversePage = lazy(() => import('./universe/RiskIssueUniversePage').then((m) => ({ default: m.RiskIssueUniversePage })))
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type SignalCategory,
@@ -173,11 +175,13 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
   if (universeOpen) {
     return (
-      <RiskIssueUniversePage
-        projectName={displayName}
-        seed={selectedProject?.id ?? 'default'}
-        onBack={() => setUniverseOpen(false)}
-      />
+      <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', color: 'var(--text-muted)' }}>Loading Risk Universe…</div>}>
+        <RiskIssueUniversePage
+          projectName={displayName}
+          seed={selectedProject?.id ?? 'default'}
+          onBack={() => setUniverseOpen(false)}
+        />
+      </Suspense>
     )
   }
 
