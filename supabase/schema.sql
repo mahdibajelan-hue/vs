@@ -4539,3 +4539,77 @@ begin
   return v_issue_id;
 end;
 $$ language plpgsql security definer set search_path = public;
+
+-- =====================================================================
+-- Section 24: Change Management — the Project Radar sidebar's "Change
+-- Management" module. chg_change_requests keys on master_projects.id
+-- directly (same convention as fin_contracts/plc_* — no per-module
+-- project-space or mapping row needed).
+--
+-- Workflow: Contractor (پیمانکار) submits a change with time/cost impact →
+-- Consultant (مشاور) reviews and recommends/does-not-recommend → Employer
+-- decides (approve & communicate/ابلاغ, or reject). Decision authority is
+-- tiered by the CUMULATIVE cost impact this change would bring the project
+-- to, as a percent of the current contract value: up to 10% needs the
+-- "مجری" project role, up to 25% needs "مدیرعامل" — beyond 25% the change
+-- cannot be approved at all (hard ceiling). Two new project roles are
+-- added to the existing rasta_project_roles roster for this: an employer
+-- project role can already be assigned per-project via the existing
+-- Project Role Assignment UI, no new membership table needed.
+-- =====================================================================
+
+insert into rasta_project_roles (name, is_system) values
+  ('مجری', true),
+  ('مدیرعامل', true)
+on conflict (name) do nothing;
+
+create table if not exists chg_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  change_number text not null default '',
+  title text not null default '',
+  description text not null default '',
+  justification text not null default '',
+
+  -- Contractor-submitted impact (cost stored as a signed Rial amount — the
+  -- percent-of-contract-value figure is always derived at read time from
+  -- the contract's *current* value, so it never goes stale as amendments land).
+  time_impact_days integer not null default 0,
+  cost_impact_amount numeric not null default 0,
+  submitted_by uuid references profiles (id) default auth.uid(),
+  submitted_at timestamptz not null default now(),
+
+  -- Consultant review (مشاور) — a required checkpoint, not a veto: the
+  -- employer still makes the final call, informed by this recommendation.
+  consultant_decision text not null default 'pending' check (consultant_decision in ('pending', 'recommended', 'not_recommended')),
+  consultant_comment text not null default '',
+  consultant_reviewed_by uuid references profiles (id),
+  consultant_reviewed_at timestamptz,
+
+  -- Employer decision (کارفرما) — gated by required_approval_tier, computed
+  -- and re-validated client-side against live cumulative-approved totals.
+  required_approval_tier text not null default 'executor' check (required_approval_tier in ('executor', 'ceo', 'over_ceiling')),
+  employer_decision text not null default 'pending' check (employer_decision in ('pending', 'approved', 'rejected')),
+  employer_comment text not null default '',
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  communicated_at timestamptz,
+
+  status text not null default 'submitted' check (status in (
+    'submitted', 'pending_employer_decision', 'approved', 'rejected', 'over_ceiling_blocked'
+  )),
+
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+create trigger trg_set_updated_at before update on chg_change_requests for each row execute function set_updated_at_and_by();
+
+alter table chg_change_requests enable row level security;
+
+drop policy if exists "chg_change_requests_select_authenticated" on chg_change_requests;
+create policy "chg_change_requests_select_authenticated" on chg_change_requests for select using (auth.uid() is not null);
+drop policy if exists "chg_change_requests_write_admin" on chg_change_requests;
+create policy "chg_change_requests_write_admin" on chg_change_requests for all using (is_admin_user()) with check (is_admin_user());

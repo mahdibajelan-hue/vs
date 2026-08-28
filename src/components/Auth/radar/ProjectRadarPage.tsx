@@ -15,6 +15,7 @@ import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
 import { buildRadarData } from './radarLiveData'
 import { RiskIssueUniversePage } from './universe/RiskIssueUniversePage'
+import { ChangeManagementPage } from '../../../modules/changeManagement/pages/ChangeManagementPage'
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type RadarData, type SignalCategory,
@@ -107,6 +108,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
   const [universeOpen, setUniverseOpen] = useState(false)
+  const [changeMgmtOpen, setChangeMgmtOpen] = useState(false)
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
   // closed so the radar itself isn't squeezed into a sliver on a phone screen.
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -149,7 +151,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
     { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },
-    { id: 'change', moduleKey: null, title: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges },
+    { id: 'change', moduleKey: null, title: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges, onClick: () => setChangeMgmtOpen(true) },
     { id: 'finance', moduleKey: 'finance', title: 'Financial Management', icon: Banknote, accent: '#10b981' },
     { id: 'contract', moduleKey: 'finance', title: 'Contract Control', icon: FileText, accent: '#10b981' },
     { id: 'material', moduleKey: 'material', title: 'Material Supply', icon: Package, accent: '#f59e0b' },
@@ -193,6 +195,16 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         projectName={displayName}
         seed={selectedProject?.id ?? 'default'}
         onBack={() => setUniverseOpen(false)}
+      />
+    )
+  }
+
+  if (changeMgmtOpen) {
+    return (
+      <ChangeManagementPage
+        masterProjectId={selectedProject?.id ?? null}
+        projectName={displayName}
+        onBack={() => setChangeMgmtOpen(false)}
       />
     )
   }
