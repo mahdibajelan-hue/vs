@@ -13,10 +13,11 @@ import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
+import { buildRadarData } from './radarLiveData'
 import { RiskIssueUniversePage } from './universe/RiskIssueUniversePage'
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
-  type SignalCategory,
+  type RadarData, type SignalCategory,
 } from './radarTypes'
 
 /** Sidebar entries — the per-project operational modules named explicitly in the brief (Risk,
@@ -81,9 +82,24 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
       ? masterProjects.filter((p) => p.portfolioId === contextPortfolioId)
       : masterProjects
 
-  const data = useMemo(() => {
-    if (!selectedProject) return DEFAULT_RADAR_DATA
-    return buildMockRadarData(selectedProject.id, selectedProject.officialName, selectedProject.projectIdCode || selectedProject.projectCode)
+  // Shows the deterministic mock instantly (no loading flicker), then upgrades in place to live
+  // Risk/Issue data once fetchProjectIntelligence resolves — a project with no confirmed module
+  // mapping yet just keeps looking like the mock, same "unmapped" convention Reporting already uses.
+  const [data, setData] = useState<RadarData>(DEFAULT_RADAR_DATA)
+  useEffect(() => {
+    if (!selectedProject) {
+      setData(DEFAULT_RADAR_DATA)
+      return
+    }
+    const projectIdCode = selectedProject.projectIdCode || selectedProject.projectCode
+    setData(buildMockRadarData(selectedProject.id, selectedProject.officialName, projectIdCode))
+    let cancelled = false
+    buildRadarData(selectedProject.id, selectedProject.officialName, projectIdCode).then((live) => {
+      if (!cancelled) setData(live)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [selectedProject])
 
   const [scanning, setScanning] = useState(false)

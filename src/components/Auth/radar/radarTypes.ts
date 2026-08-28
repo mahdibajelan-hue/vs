@@ -297,6 +297,13 @@ function pick<T>(arr: T[], i: number): T {
   return arr[i % arr.length]
 }
 
+/** Radius band (0-1 fraction of the radar radius) a signal of a given severity is placed within —
+ * lower band = closer to center = more urgent. Shared with the live data adapter (radarLiveData.ts)
+ * so real risk/issue signals are positioned using the exact same convention as the mock ones. */
+export const SEVERITY_RADIUS_RANGE: Record<SignalSeverity, [number, number]> = {
+  critical: [0.16, 0.34], high: [0.34, 0.56], medium: [0.56, 0.76], low: [0.76, 0.92],
+}
+
 /** Not a real Jalali calendar conversion — just a plausible-looking, monotonically increasing
  * mock date per stage index, since this is display-only for the timeline hover tooltip. */
 function mockStageDateFa(baseYear: number, baseMonth: number, offsetMonths: number): string {
@@ -328,10 +335,7 @@ export function buildMockRadarData(seed: string, projectName: string, projectIdC
     const template = pick(SIGNAL_TEMPLATES, Math.floor(rand() * SIGNAL_TEMPLATES.length) + i)
     const severityRoll = rand()
     const severity: SignalSeverity = severityRoll < 0.15 ? 'critical' : severityRoll < 0.4 ? 'high' : severityRoll < 0.75 ? 'medium' : 'low'
-    const radiusBySeverity: Record<SignalSeverity, [number, number]> = {
-      critical: [0.16, 0.34], high: [0.34, 0.56], medium: [0.56, 0.76], low: [0.76, 0.92],
-    }
-    const [rMin, rMax] = radiusBySeverity[severity]
+    const [rMin, rMax] = SEVERITY_RADIUS_RANGE[severity]
     return {
       ...template,
       id: `sig-${i}`,
