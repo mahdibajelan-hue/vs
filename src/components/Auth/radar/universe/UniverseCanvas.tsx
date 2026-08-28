@@ -174,17 +174,21 @@ function BeaconLine({
 }
 
 /** An issue's "meteor" pass: the issue's own Planet stays put at its resting orbit position (still
- * clickable), but on a repeating cycle a comet — a bright head plus a short fading tail — breaks
- * away from that position, arcs inward, and burns up right at Project Core. Built from the same
- * SVG-native `<animateMotion>` technique as BeaconLine: the motion holds at the path's start for
- * most of the cycle (`REST_FRAC`) then races to the end during the last stretch, so it reads as a
- * sudden streak rather than a constant orbit. More urgent issues (aging + escalation) streak more
- * often, faster, and with a longer tail — the animation itself becomes a severity signal. */
+ * clickable), but on a repeating cycle a fiery comet — a white-hot head with a tapered flame tail,
+ * not a chain of fading dots — breaks away from that position, arcs inward, and burns up right at
+ * Project Core. Built from the same SVG-native `<animateMotion>` technique as BeaconLine: the
+ * motion holds at the path's start for most of the cycle (`REST_FRAC`) then races to the end
+ * during the last stretch, so it reads as a sudden streak rather than a constant orbit.
+ * `rotate="auto"` keeps the flame tail pointing back along the direction of travel the whole way,
+ * the way a real comet's tail trails behind it rather than sitting still. More urgent issues
+ * (aging + escalation) streak more often, faster, and with a longer/brighter tail — the animation
+ * itself becomes a severity signal. */
 const METEOR_REST_FRAC = 0.8
 
-function IssueMeteor({ from, color, urgency, seed }: { from: { x: number; y: number }; color: string; urgency: number; seed: string }) {
+function IssueMeteor({ from, urgency, seed }: { from: { x: number; y: number }; urgency: number; seed: string }) {
   const dur = lerp(16, 6.5, urgency)
-  const tailCount = Math.round(lerp(2, 4, urgency))
+  const headR = lerp(0.85, 1.4, urgency)
+  const tailLen = lerp(6, 11, urgency)
   const baseDelay = hashUnit(seed) * dur
   // A gentle perpendicular bow in the path (not a straight radial line) so the streak reads as an
   // arcing meteor rather than a ball rolling to the center.
@@ -192,43 +196,54 @@ function IssueMeteor({ from, color, urgency, seed }: { from: { x: number; y: num
   const my = (from.y + 50) / 2 + (from.x - 50) * 0.18
   const path = `M ${from.x},${from.y} Q ${mx},${my} 50,50`
   const raceStart = METEOR_REST_FRAC
-  const dots = Array.from({ length: tailCount + 1 }, (_, i) => ({
-    isHead: i === 0,
-    r: i === 0 ? 1.3 : Math.max(0.25, 1.3 - i * 0.32),
-    peakOpacity: i === 0 ? 1 : Math.max(0.15, 0.65 - (i - 1) * 0.18),
-    lag: i * dur * (1 - raceStart) * 0.22,
-  }))
+  const fadeIn = raceStart + (1 - raceStart) * 0.08
+  const fadeOutStart = raceStart + (1 - raceStart) * 0.82
+  const uid = seed.replace(/[^a-zA-Z0-9]/g, '')
+
   return (
-    <g>
-      {dots.map((d, i) => {
-        const begin = baseDelay + d.lag
-        const fadeIn = raceStart + (1 - raceStart) * 0.08
-        const fadeOutStart = raceStart + (1 - raceStart) * 0.82
-        return (
-          // opacity set explicitly to 0 (its SVG default is fully opaque) so the dot stays hidden
-          // during the delay before its first `begin` — otherwise every dot flashes, fully visible,
-          // at the canvas origin (animateMotion's un-animated base position) for a frame on load.
-          <circle key={i} r={d.r} fill={color} opacity={0}>
-            <animateMotion
-              path={path}
-              keyPoints={`0;0;1`}
-              keyTimes={`0;${raceStart};1`}
-              calcMode="linear"
-              dur={`${dur}s`}
-              begin={`${begin}s`}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values={`0;0;${d.peakOpacity};${d.peakOpacity};0`}
-              keyTimes={`0;${raceStart};${fadeIn};${fadeOutStart};1`}
-              dur={`${dur}s`}
-              begin={`${begin}s`}
-              repeatCount="indefinite"
-            />
-          </circle>
-        )
-      })}
+    // opacity set explicitly to 0 (its SVG default is fully opaque) so the comet stays hidden
+    // during the delay before its first `begin` — otherwise it flashes, fully visible, at the
+    // canvas origin (animateMotion's un-animated base position) for a frame on load.
+    <g opacity={0}>
+      <defs>
+        <radialGradient id={`meteor-head-${uid}`} cx="35%" cy="32%" r="68%">
+          <stop offset="0%" stopColor="#fffaf0" />
+          <stop offset="30%" stopColor="#ffd76b" />
+          <stop offset="62%" stopColor="#ff8a1e" />
+          <stop offset="100%" stopColor="#c62e00" />
+        </radialGradient>
+        <linearGradient id={`meteor-tail-${uid}`} x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stopColor="#ff5a00" stopOpacity="0" />
+          <stop offset="45%" stopColor="#ff8a1e" stopOpacity="0.45" />
+          <stop offset="80%" stopColor="#ffcf6b" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#fff3d6" stopOpacity="0.95" />
+        </linearGradient>
+      </defs>
+      {/* This inner group carries the motion — `rotate="auto"` orients it along the path's own
+          tangent, so the tail (drawn trailing in -x, local space) always points backward. */}
+      <g>
+        <animateMotion
+          path={path}
+          keyPoints="0;0;1"
+          keyTimes={`0;${raceStart};1`}
+          calcMode="linear"
+          rotate="auto"
+          dur={`${dur}s`}
+          begin={`${baseDelay}s`}
+          repeatCount="indefinite"
+        />
+        <ellipse cx={-tailLen / 2} cy="0" rx={tailLen / 2} ry={headR * 0.46} fill={`url(#meteor-tail-${uid})`} />
+        <circle r={headR * 2.1} fill={`url(#meteor-head-${uid})`} opacity="0.28" />
+        <circle r={headR} fill={`url(#meteor-head-${uid})`} />
+      </g>
+      <animate
+        attributeName="opacity"
+        values="0;0;1;1;0"
+        keyTimes={`0;${raceStart};${fadeIn};${fadeOutStart};1`}
+        dur={`${dur}s`}
+        begin={`${baseDelay}s`}
+        repeatCount="indefinite"
+      />
     </g>
   )
 }
@@ -418,7 +433,7 @@ export function UniverseCanvas({
               every other looping animation in this scene. */}
           {!timeline && !reducedMotion && issuePlacements.map(({ issue, left, top }) => {
             const urgency = clamp(issue.escalation / 100 * 0.65 + Math.min(issue.agingDays, 30) / 30 * 0.35, 0, 1)
-            return <IssueMeteor key={`meteor-${issue.id}`} from={{ x: left, y: top }} color={ISSUE_COLOR} urgency={urgency} seed={issue.id} />
+            return <IssueMeteor key={`meteor-${issue.id}`} from={{ x: left, y: top }} urgency={urgency} seed={issue.id} />
           })}
         </svg>
 
