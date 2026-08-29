@@ -1,7 +1,7 @@
 import { execOverviewWidget, execSCurveWidget } from '../components/widgets/executiveWidgets'
 import { progressLinesWidget, progressMilestonesWidget } from '../components/widgets/progressWidgets'
 import { riskDistributionWidget, riskHeatmapWidget, riskTopWidget } from '../components/widgets/riskWidgets'
-import { issueAgingWidget, issueClosureWidget, issueTopWidget } from '../components/widgets/issueWidgets'
+import { issueAgingWidget, issueClosureWidget, issueLifecycleOriginWidget, issueTopWidget } from '../components/widgets/issueWidgets'
 import { earlyWarningWidget, executiveInsightWidget, managementAttentionWidget, whatChangedWidget } from '../components/widgets/intelligenceWidgets'
 import { decisionsRequiredWidget, managementActionsWidget } from '../components/widgets/decisionWidgets'
 import type { ReportPayload, ReportType, WidgetCategory } from '../types'
@@ -22,6 +22,7 @@ export const WIDGET_REGISTRY: WidgetDefinition<any>[] = [
   issueTopWidget,
   issueClosureWidget,
   issueAgingWidget,
+  issueLifecycleOriginWidget,
   whatChangedWidget,
   earlyWarningWidget,
   managementAttentionWidget,
@@ -83,6 +84,7 @@ export const DEFAULT_PROFILE_WIDGETS: Record<ReportType, string[]> = {
     'issue-closure',
     'issue-aging',
     'issue-top',
+    'issue-lifecycle-origin',
     'intel-what-changed',
     'intel-early-warning',
     'intel-management-attention',
@@ -101,6 +103,7 @@ export const DEFAULT_PROFILE_WIDGETS: Record<ReportType, string[]> = {
     'issue-closure',
     'issue-aging',
     'issue-top',
+    'issue-lifecycle-origin',
     'intel-what-changed',
     'intel-management-attention',
     'intel-executive-insight',

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ClipboardCheck, Factory, GitBranch, LayoutDashboard, Loader2, Package, ShoppingCart, Truck, Warehouse } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMaterialStore } from './store/useMaterialStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -35,7 +36,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
  * the central entity; every stage-quantity below it is derived from a transaction table,
  * never a stored/duplicated field (see schema.sql section 20 and materialCalc.ts).
  */
-export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -46,6 +47,12 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('dashboard')
 
+  // Arrived here from Project Radar with a project already in context (Material uses
+  // masterProjectId directly, no mapping table needed) — stay locked to it and hide the project
+  // switcher so there's no way to wander to another project's data.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
+
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     if (!materialLoaded) fetchMaterial()
@@ -53,8 +60,14 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) setProjectId(projects[0].id)
-  }, [projects, projectId])
+    if (projects.length === 0 || projectId) return
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
+      setProjectId(contextProjectId)
+      setLockedToProject(true)
+    } else {
+      setProjectId(projects[0].id)
+    }
+  }, [projects, projectId, contextProjectId])
 
   if ((masterDataLoading && !masterDataLoaded) || (!materialLoaded && !masterDataLoaded)) {
     return (
@@ -78,6 +91,9 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
             </p>
           </div>
           <span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
+          {lockedToProject ? (
+            <span className="truncate text-xs font-bold text-secondary">{projects.find((p) => p.id === projectId)?.officialName}</span>
+          ) : (
           <select
             value={projectId ?? ''}
             onChange={(e) => setProjectId(e.target.value || null)}
@@ -90,6 +106,7 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
               </option>
             ))}
           </select>
+          )}
         </div>
 
         <nav className="order-3 hidden w-full items-center gap-1 overflow-x-auto rounded-full border border-white/10 bg-white/[0.03] p-1 lg:order-none lg:flex lg:w-auto">
@@ -106,7 +123,7 @@ export function MaterialApp({ onExitToHub }: { onExitToHub: () => void }) {
           ))}
         </nav>
 
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <StorageErrorBanner />

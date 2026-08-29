@@ -19,6 +19,8 @@ const MODULE_ORDER_PREFERENCE = [
   'material',
   'pipelinedigitaltwin',
   'competency',
+  'estimator',
+  'lifecycle',
   'admin',
 ]
 

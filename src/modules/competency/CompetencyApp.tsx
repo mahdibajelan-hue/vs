@@ -18,7 +18,7 @@ type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: strin
  * closing capstone scenario (see lib/competencyModel.ts), with multi-interviewer panel scoring,
  * candidate self-service profile intake, and a radar-chart report per candidate.
  */
-export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const loading = useCompetencyStore((s) => s.loading)
   const fetchAll = useCompetencyStore((s) => s.fetchAll)
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
@@ -73,7 +73,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
               <Award size={13} /> <span className="hidden sm:inline">فهرست ارزیابی‌ها</span>
             </button>
           )}
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 

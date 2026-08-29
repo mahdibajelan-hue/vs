@@ -9,6 +9,8 @@ import { canEdit } from '../lib/permissions'
 import { getProjectModel3dSignedUrl } from '../lib/model3dStorage'
 import { formatJalali } from '../lib/jalali'
 import { EQUIPMENT_COMPLETE_COLOR, SPOOL_COMPLETE_COLOR } from '../lib/model3dColoring'
+import { pruneToExistingMeshes, type SplitStats } from '../lib/model3dSplit'
+import type { JointCutStats } from '../lib/model3dJointCut'
 import { ThreeViewer, type ViewerMode } from '../components/Model3D/ThreeViewer'
 import { WeldMap2D } from '../components/Model3D/WeldMap2D'
 import { JointInfoCard } from '../components/Model3D/JointInfoCard'
@@ -66,6 +68,8 @@ export function Model3DPage({ project }: { project: Project }) {
   const [editingEquipment, setEditingEquipment] = useState<Equipment3D | 'new' | null>(null)
   const [meshSelectionTarget, setMeshSelectionTarget] = useState<MeshSelectionTarget | null>(null)
   const [selectedMeshNames, setSelectedMeshNames] = useState<string[]>([])
+  const [splitStats, setSplitStats] = useState<SplitStats | null>(null)
+  const [jointCutStats, setJointCutStats] = useState<JointCutStats | null>(null)
   const [selectedJointId, setSelectedJointId] = useState<string | null>(null)
   const jointPanelRef = useRef<HTMLDivElement>(null)
 
@@ -108,6 +112,7 @@ export function Model3DPage({ project }: { project: Project }) {
     setPendingJointPosition(null)
     setMeshSelectionTarget(null)
     setSelectedMeshNames([])
+    setDroppedMeshLinks(0)
   }
 
   const startPlaceJoint = () => {
@@ -140,18 +145,32 @@ export function Model3DPage({ project }: { project: Project }) {
     el.style.top = `${pos.y}px`
   }, [])
 
+  /**
+   * Links saved before mesh splitting existed name a whole parent mesh that has since been
+   * replaced by its components. Carrying such a name into the editor made the parent's entire
+   * pipe run appear selected, which is exactly the problem splitting was meant to fix — so stale
+   * names are dropped here and the user re-picks. `droppedMeshLinks` drives the notice explaining
+   * why the selection came back empty.
+   */
+  const [droppedMeshLinks, setDroppedMeshLinks] = useState(0)
+
+  const openMeshSelection = (stored: string[]) => {
+    const usable = splitStats ? pruneToExistingMeshes(stored, splitStats.meshNames) : stored
+    setDroppedMeshLinks(stored.length - usable.length)
+    setSelectedMeshNames(usable)
+    setViewerMode('selectMeshes')
+  }
+
   const startSpoolLink = (lineId: string, startJointId: string, endJointId: string, existing?: Spool | null) => {
     setPageView('3d')
     setMeshSelectionTarget({ kind: 'spool', lineId, startJointId, endJointId, spoolId: existing?.id })
-    setSelectedMeshNames(existing?.meshObjectNames ?? [])
-    setViewerMode('selectMeshes')
+    openMeshSelection(existing?.meshObjectNames ?? [])
   }
 
   const startEquipmentLink = (equipment: Equipment3D) => {
     setPageView('3d')
     setMeshSelectionTarget({ kind: 'equipment', equipmentId: equipment.id })
-    setSelectedMeshNames(equipment.meshObjectNames)
-    setViewerMode('selectMeshes')
+    openMeshSelection(equipment.meshObjectNames)
   }
 
   const confirmMeshSelection = async () => {
@@ -438,7 +457,26 @@ export function Model3DPage({ project }: { project: Project }) {
                 onJointClick={setSelectedJointId}
                 selectedJointId={selectedJointId}
                 onJointScreenPosition={handleJointScreenPosition}
+                onSplitStats={setSplitStats}
+                onJointCutStats={setJointCutStats}
               />
+
+              {/* Always on screen, not only while linking: how finely the file could be broken up
+                  is the single fact that explains whether clicking one pipe is even possible. */}
+              {splitStats && (
+                <div
+                  className="pointer-events-none absolute right-3 top-3 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/80 backdrop-blur-sm"
+                  dir="rtl"
+                >
+                  اجزای مدل: {splitStats.meshesBefore.toLocaleString('fa-IR')}
+                  {splitStats.meshesSplit > 0 && <> ← {splitStats.meshesAfter.toLocaleString('fa-IR')}</>}
+                  {' · '}بزرگ‌ترین: {splitStats.biggestPartTriangles.toLocaleString('fa-IR')} مثلث
+                  {splitStats.skipped > 0 && <> · {splitStats.skipped.toLocaleString('fa-IR')} جزء تفکیک‌نشده</>}
+                  {jointCutStats && jointCutStats.segmentsCut > 0 && (
+                    <> · برش بر اساس سرجوش: {jointCutStats.segmentsCut.toLocaleString('fa-IR')} اسپول</>
+                  )}
+                </div>
+              )}
 
               {selectedJoint && (
                 <div ref={jointPanelRef} className="absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+12px)]" style={{ left: 0, top: 0, visibility: 'hidden' }}>
@@ -459,10 +497,30 @@ export function Model3DPage({ project }: { project: Project }) {
               {viewerMode === 'selectMeshes' && (
                 <div className="absolute inset-x-3 bottom-3 flex max-h-[55%] flex-col gap-2 rounded-xl bg-black/75 p-3 backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-white">
+                    <span className="min-w-0 text-xs text-white">
                       {selectedMeshNames.length.toLocaleString('fa-IR')} جزء انتخاب شد — روی اجزای مدل کلیک کنید تا انتخاب/لغو شود
+                      {/* Whether a click can land on a single pipe depends entirely on how the
+                          exporter merged the file, so the outcome is stated instead of leaving a
+                          fused model looking like a broken app. */}
+                      {splitStats && (
+                        <span className="mt-0.5 block text-[10px] text-white/60">
+                          {splitStats.meshesSplit > 0
+                            ? `مدل تفکیک شد: ${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء → ${splitStats.meshesAfter.toLocaleString('fa-IR')} جزء قابل انتخاب`
+                            : `${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء — اجزای این فایل در خروجی به هم جوش خورده‌اند و بیش از این قابل تفکیک نیستند`}
+                          {' · '}
+                          بزرگ‌ترین جزء: {splitStats.biggestPartTriangles.toLocaleString('fa-IR')} مثلث
+                        </span>
+                      )}
                     </span>
                     <div className="flex shrink-0 gap-2">
+                      {selectedMeshNames.length > 0 && (
+                        <button
+                          onClick={() => setSelectedMeshNames([])}
+                          className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10"
+                        >
+                          پاک‌کردن انتخاب
+                        </button>
+                      )}
                       <button onClick={resetInteraction} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">
                         انصراف
                       </button>
@@ -474,6 +532,12 @@ export function Model3DPage({ project }: { project: Project }) {
                       </button>
                     </div>
                   </div>
+                  {droppedMeshLinks > 0 && (
+                    <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-amber-200">
+                      پیوند قبلی این مورد روی کل مش ذخیره شده بود (پیش از تفکیک مدل) و دیگر به یک جزء مشخص اشاره نمی‌کند،
+                      بنابراین کنار گذاشته شد. حالا روی همان لوله‌ای که می‌خواهید کلیک کنید و «تایید» بزنید.
+                    </p>
+                  )}
                   {selectedMeshNames.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 overflow-y-auto border-t border-white/10 pt-2">
                       {selectedMeshNames.map((name) => (
