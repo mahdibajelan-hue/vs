@@ -4605,6 +4605,7 @@ create table if not exists chg_change_requests (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists trg_set_updated_at on chg_change_requests;
 create trigger trg_set_updated_at before update on chg_change_requests for each row execute function set_updated_at_and_by();
 
 alter table chg_change_requests enable row level security;
