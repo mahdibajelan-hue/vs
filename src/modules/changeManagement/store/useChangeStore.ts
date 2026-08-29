@@ -3,10 +3,13 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import {
-  changeRequestFromRow, changeRequestToInsertRow, changeRequestToUpdateRow, documentFromRow, historyFromRow, stageReviewFromRow,
+  changeRequestFromRow, changeRequestToDraftEditRow, changeRequestToInsertRow, changeRequestToUpdateRow,
+  documentFromRow, historyFromRow, stageReviewFromRow,
 } from '../lib/changeData'
 import { seedDefaultImplementationActions } from '../lib/changeCalc'
-import { NEXT_STATUS_AFTER_STAGE, REVIEW_STAGE_LABEL_FA } from '../types'
+import {
+  NEXT_STATUS_AFTER_STAGE, PREV_STATUS_BEFORE_STAGE, REVIEW_STAGE_LABEL_FA, STAGE_DECISION_LABEL_FA, STAGE_FOR_REVIEW_STATUS,
+} from '../types'
 import type {
   AffectedDocument, ChangeDocument, ChangePriority, ChangeReasonCategory, ChangeRequest, ChangeStatus,
   ChangeTypeTag, CloseoutDocumentType, DocumentCategory, IdentifiedChangeRisk, ImpactLevel,
@@ -24,6 +27,15 @@ async function logHistory(changeRequestId: string, userId: string | null, roleLa
   await supabase.from('chg_history').insert({
     change_request_id: changeRequestId, user_id: userId, role_label: roleLabel, action, comment,
   })
+}
+
+/** Resets a stage's own review row back to 'pending' whenever the request lands on it (forward
+ * or sent back one stage) — otherwise a reviewer who already decided once in an earlier round
+ * would see their old decision and never get an actionable card again. */
+async function resetStageReview(changeRequestId: string, stage: ReviewStage) {
+  await supabase.from('chg_stage_reviews').upsert({
+    change_request_id: changeRequestId, stage, decision: 'pending', comment: '', decided_by: null, decided_at: null,
+  }, { onConflict: 'change_request_id,stage' })
 }
 
 const TERMINAL_STAGE_DECISIONS = new Set<StageReviewDecision>([
@@ -56,6 +68,19 @@ interface ChangeState {
     changeReasonCategories?: ChangeReasonCategory[]; changeReasonOther?: string
     affectedDocuments?: AffectedDocument[]; scopeChangeType?: ScopeChangeType | null; scopeEffectDescription?: string
   }, userId: string | null) => Promise<string | null>
+
+  updateDraft: (request: ChangeRequest, data: {
+    title: string; description: string; reasonForChange: string; priority: ChangePriority
+    proposedChangeAmount: number; originalDurationDays: number; proposedScheduleImpactDays: number
+    newRisksCount: number; scopeImpactLevel: ImpactLevel
+    projectCode: string; contractName: string; contractNumber: string; contractDate: string
+    projectPhase: ProjectPhase | null; requesterName: string; requesterOrganization: RequesterOrganization | null
+    changeTypes: ChangeTypeTag[]; currentSituationDescription: string
+    changeReasonCategories: ChangeReasonCategory[]; changeReasonOther: string
+    affectedDocuments: AffectedDocument[]; scopeChangeType: ScopeChangeType | null; scopeEffectDescription: string
+  }, userId: string | null) => Promise<void>
+
+  deleteChangeRequest: (request: ChangeRequest) => Promise<void>
 
   submitDraft: (request: ChangeRequest, userId: string | null) => Promise<void>
 
@@ -146,6 +171,25 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
     return inserted.id as string
   },
 
+  updateDraft: async (request, data, userId) => {
+    set({ saving: true })
+    const row = changeRequestToDraftEditRow(data)
+    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('ویرایش درخواست تغییر', error)) return
+    await logHistory(request.id, userId, 'پیمانکار', `پیش‌نویس درخواست تغییر ${request.crNumber} ویرایش شد`)
+    await get().fetchForProject(request.masterProjectId)
+    await get().fetchBundle(request.id)
+  },
+
+  deleteChangeRequest: async (request) => {
+    set({ saving: true })
+    const { error } = await supabase.from('chg_change_requests').delete().eq('id', request.id)
+    set({ saving: false })
+    if (reportError('حذف درخواست تغییر', error)) return
+    await get().fetchForProject(request.masterProjectId)
+  },
+
   submitDraft: async (request, userId) => {
     set({ saving: true })
     const { error } = await supabase.from('chg_change_requests').update({
@@ -153,6 +197,7 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
     }).eq('id', request.id)
     set({ saving: false })
     if (reportError('ثبت درخواست تغییر', error)) return
+    await resetStageReview(request.id, 'engineering')
     await logHistory(request.id, userId, 'پیمانکار', `درخواست تغییر ${request.crNumber} ثبت و برای بررسی مهندسی ارسال شد`)
     await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
   },
@@ -179,7 +224,9 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
     if (decision === 'rejected') {
       nextStatus = 'rejected'
     } else if (decision === 'request_revision' || decision === 'returned') {
-      nextStatus = 'draft'
+      // Sends the request back one stage — to the previous reviewer, or to the contractor's
+      // draft for Engineering (the first stage) — not all the way to draft from every stage.
+      nextStatus = PREV_STATUS_BEFORE_STAGE[stage]
     } else if (TERMINAL_STAGE_DECISIONS.has(decision)) {
       nextStatus = NEXT_STATUS_AFTER_STAGE[stage]
       if (stage === 'ccb') {
@@ -193,7 +240,12 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
     set({ saving: false })
     if (reportError('به‌روزرسانی وضعیت درخواست', statusError)) return
 
-    const actionLabel = `${REVIEW_STAGE_LABEL_FA[stage]} — تصمیم: ${decision}`
+    // Whichever review stage the request now lands on (forward or sent back) must show an
+    // actionable card, not a decision left over from an earlier round.
+    const landingStage = STAGE_FOR_REVIEW_STATUS[nextStatus]
+    if (landingStage && landingStage !== stage) await resetStageReview(request.id, landingStage)
+
+    const actionLabel = `${REVIEW_STAGE_LABEL_FA[stage]} — تصمیم: ${STAGE_DECISION_LABEL_FA[decision]}`
     await logHistory(request.id, userId, roleLabel, actionLabel, comment)
     await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
   },

@@ -4746,3 +4746,54 @@ alter table chg_stage_reviews add constraint chg_stage_reviews_decision_check ch
   'pending', 'approved', 'approved_with_conditions', 'approved_with_cost_revision',
   'approved_with_time_revision', 'suspended', 'rejected', 'request_revision', 'returned'
 ));
+
+-- =====================================================================
+-- Section 26: Change Management — real per-role write access.
+--
+-- Every chg_* write policy so far has been "is_admin_user() only" (an
+-- explicitly disclosed simplification from Section 24). In practice this
+-- meant a real مدیر مهندسی/مدیر برنامه‌ریزی/... who is not also a global
+-- admin saw fully-enabled decision buttons in the UI (app-layer role
+-- gating passed) but every click silently failed at the database (RLS
+-- denied it) — the "Engineering stage buttons don't work" bug. This
+-- section replaces the admin-only write policies with a helper that also
+-- recognizes anyone holding one of the Change Management project roles
+-- on that specific project, while keeping delete admin-only per request.
+-- =====================================================================
+
+create or replace function chg_can_write_project(target_project_id uuid)
+returns boolean as $$
+  select
+    is_admin_user()
+    or exists (
+      select 1
+      from rasta_project_role_assignments a
+      join rasta_project_roles r on r.id = a.project_role_id
+      where a.project_id = target_project_id
+        and a.user_id = auth.uid()
+        and r.name in (
+          'پیمانکار', 'مدیر مهندسی', 'مدیر برنامه‌ریزی و کنترل پروژه',
+          'مدیر امور پیمان', 'مدیر پروژه', 'عضو کمیته کنترل تغییرات', 'مجری'
+        )
+    );
+$$ language sql security definer stable;
+
+drop policy if exists "chg_change_requests_write_admin" on chg_change_requests;
+create policy "chg_change_requests_insert" on chg_change_requests for insert with check (chg_can_write_project(master_project_id));
+create policy "chg_change_requests_update" on chg_change_requests for update using (chg_can_write_project(master_project_id)) with check (chg_can_write_project(master_project_id));
+create policy "chg_change_requests_delete" on chg_change_requests for delete using (is_admin_user());
+
+drop policy if exists "chg_stage_reviews_write_admin" on chg_stage_reviews;
+create policy "chg_stage_reviews_write" on chg_stage_reviews for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+drop policy if exists "chg_documents_write_admin" on chg_documents;
+create policy "chg_documents_write" on chg_documents for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+drop policy if exists "chg_history_write_admin" on chg_history;
+create policy "chg_history_write" on chg_history for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));

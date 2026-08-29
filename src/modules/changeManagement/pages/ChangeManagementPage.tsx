@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   ArrowRight, Check, CheckCircle2, ClipboardList, FileText, Flag, Gauge, HardHat, ListChecks,
-  Package, Plus, ShieldAlert, ShieldCheck, Sparkles, X,
+  Package, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, X,
 } from 'lucide-react'
 import { formatJalali, todayJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -150,10 +150,11 @@ function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect }: {
 
       <main className="mx-auto max-w-5xl p-4 sm:p-6">
         {formOpen && (
-          <NewChangeDraftForm
+          <ChangeDraftForm
             contractValue={contractValue}
+            submitLabel="ذخیره پیش‌نویس"
             onCancel={() => setFormOpen(false)}
-            onCreate={async (data) => {
+            onSubmit={async (data) => {
               const id = await createDraft(masterProjectId, data, currentUser?.id ?? null)
               if (id) onSelect(id)
             }}
@@ -168,28 +169,67 @@ function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect }: {
         )}
 
         <div className="flex flex-col gap-2">
-          {requests.map((r) => {
-            const impact = computeChangeImpact(r)
-            return (
-              <button
-                key={r.id}
-                onClick={() => onSelect(r.id)}
-                className="chg-card glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-right hover:bg-white/5"
-                style={{ borderColor: 'var(--border-soft)' }}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="num shrink-0 text-[11px] font-bold text-muted">{r.crNumber}</span>
-                  <span className="min-w-0 truncate text-[13px] font-bold">{r.title || 'بدون عنوان'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="num text-[11px]" style={{ color: IMPACT_LEVEL_COLOR[impact.overallSeverity] }}>{IMPACT_LEVEL_LABEL_FA[impact.overallSeverity]}</span>
-                  <StatusPill color={CHANGE_STATUS_COLOR[r.status]} label={CHANGE_STATUS_LABEL_FA[r.status]} />
-                </div>
-              </button>
-            )
-          })}
+          {requests.map((r) => (
+            <ChangeRequestRow key={r.id} request={r} onSelect={() => onSelect(r.id)} />
+          ))}
         </div>
+
+        {requests.length > 0 && <ChangeListTotals requests={requests} />}
       </main>
+    </div>
+  )
+}
+
+function ChangeRequestRow({ request: r, onSelect }: { request: ChangeRequest; onSelect: () => void }) {
+  const isAdmin = useAuthStore((s) => s.currentUser()?.isAdmin) ?? false
+  const deleteChangeRequest = useChangeStore((s) => s.deleteChangeRequest)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const impact = computeChangeImpact(r)
+  return (
+    <div className="chg-card glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4" style={{ borderColor: 'var(--border-soft)' }}>
+      <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-3 text-right">
+        <span className="num shrink-0 text-[11px] font-bold text-muted">{r.crNumber}</span>
+        <span className="min-w-0 truncate text-[13px] font-bold">{r.title || 'بدون عنوان'}</span>
+      </button>
+      <div className="flex items-center gap-3">
+        <span className="num text-[11px]" style={{ color: IMPACT_LEVEL_COLOR[impact.overallSeverity] }}>{IMPACT_LEVEL_LABEL_FA[impact.overallSeverity]}</span>
+        <StatusPill color={CHANGE_STATUS_COLOR[r.status]} label={CHANGE_STATUS_LABEL_FA[r.status]} />
+        {isAdmin && (
+          confirmDelete ? (
+            <span className="flex items-center gap-1.5">
+              <button onClick={() => deleteChangeRequest(r)} className="text-[10.5px] font-bold text-red-400 hover:underline">تایید حذف</button>
+              <button onClick={() => setConfirmDelete(false)} className="text-[10.5px] text-muted hover:underline">انصراف</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} title="حذف" className="text-muted hover:text-red-400 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          )
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ChangeListTotals({ requests }: { requests: ChangeRequest[] }) {
+  const active = requests.filter((r) => r.status !== 'rejected')
+  const totalCost = active.reduce((sum, r) => sum + (r.approvedChangeAmount ?? r.proposedChangeAmount), 0)
+  const totalDays = active.reduce((sum, r) => sum + (r.approvedScheduleImpactDays ?? r.proposedScheduleImpactDays), 0)
+  const currency = requests[0]?.currency || 'IRR'
+  return (
+    <div className="chg-card glass-panel mt-3 grid grid-cols-1 gap-3 rounded-2xl border p-4 sm:grid-cols-3" style={{ borderColor: 'var(--border-soft)' }}>
+      <div className="text-center">
+        <p className="text-[9.5px] text-muted">تعداد کل تغییرات</p>
+        <p className="num text-lg font-extrabold" style={{ color: 'var(--chg-accent)' }}>{requests.length}</p>
+      </div>
+      <div className="text-center">
+        <p className="text-[9.5px] text-muted">مجموع اثر مالی (بدون موارد رد شده)</p>
+        <p className="num text-lg font-extrabold" style={{ color: totalCost >= 0 ? '#ef4444' : '#2ecc71' }}>{money(totalCost, currency)}</p>
+      </div>
+      <div className="text-center">
+        <p className="text-[9.5px] text-muted">مجموع اثر زمانی (بدون موارد رد شده)</p>
+        <p className="num text-lg font-extrabold" style={{ color: totalDays >= 0 ? '#ef4444' : '#2ecc71' }}>{totalDays > 0 ? '+' : ''}{totalDays} روز</p>
+      </div>
     </div>
   )
 }
@@ -205,10 +245,12 @@ function StatusPill({ color, label }: { color: string; label: string }) {
   )
 }
 
-function NewChangeDraftForm({ contractValue, onCancel, onCreate }: {
+function ChangeDraftForm({ contractValue, initial, submitLabel, onCancel, onSubmit }: {
   contractValue: number | null
+  initial?: ChangeRequest
+  submitLabel: string
   onCancel: () => void
-  onCreate: (data: {
+  onSubmit: (data: {
     title: string; description: string; reasonForChange: string; priority: ChangePriority
     currency: string; originalContractAmount: number; proposedChangeAmount: number
     originalDurationDays: number; proposedScheduleImpactDays: number
@@ -220,34 +262,36 @@ function NewChangeDraftForm({ contractValue, onCancel, onCreate }: {
     affectedDocuments: AffectedDocument[]; scopeChangeType: ScopeChangeType | null; scopeEffectDescription: string
   }) => void
 }) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [reasonForChange, setReasonForChange] = useState('')
-  const [priority, setPriority] = useState<ChangePriority>('medium')
-  const [proposedChangeAmount, setProposedChangeAmount] = useState(0)
-  const [originalDurationDays, setOriginalDurationDays] = useState(540)
-  const [proposedScheduleImpactDays, setProposedScheduleImpactDays] = useState(0)
-  const [newRisksCount, setNewRisksCount] = useState(0)
-  const [scopeImpactLevel, setScopeImpactLevel] = useState<ImpactLevel>('medium')
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [reasonForChange, setReasonForChange] = useState(initial?.reasonForChange ?? '')
+  const [priority, setPriority] = useState<ChangePriority>(initial?.priority ?? 'medium')
+  const [proposedChangeAmount, setProposedChangeAmount] = useState(initial?.proposedChangeAmount ?? 0)
+  const [originalDurationDays, setOriginalDurationDays] = useState(initial?.originalDurationDays ?? 540)
+  const [proposedScheduleImpactDays, setProposedScheduleImpactDays] = useState(initial?.proposedScheduleImpactDays ?? 0)
+  const [newRisksCount, setNewRisksCount] = useState(initial?.newRisksCount ?? 0)
+  const [scopeImpactLevel, setScopeImpactLevel] = useState<ImpactLevel>(initial?.scopeImpactLevel ?? 'medium')
 
-  const [projectCode, setProjectCode] = useState('')
-  const [contractName, setContractName] = useState('')
-  const [contractNumber, setContractNumber] = useState('')
-  const [contractDate, setContractDate] = useState('')
-  const [projectPhase, setProjectPhase] = useState<ProjectPhase | ''>('')
-  const [requesterName, setRequesterName] = useState('')
-  const [requesterOrganization, setRequesterOrganization] = useState<RequesterOrganization | ''>('')
-  const [changeTypes, setChangeTypes] = useState<ChangeTypeTag[]>([])
+  const [projectCode, setProjectCode] = useState(initial?.projectCode ?? '')
+  const [contractName, setContractName] = useState(initial?.contractName ?? '')
+  const [contractNumber, setContractNumber] = useState(initial?.contractNumber ?? '')
+  const [contractDate, setContractDate] = useState(initial?.contractDate ?? '')
+  const [projectPhase, setProjectPhase] = useState<ProjectPhase | ''>(initial?.projectPhase ?? '')
+  const [requesterName, setRequesterName] = useState(initial?.requesterName ?? '')
+  const [requesterOrganization, setRequesterOrganization] = useState<RequesterOrganization | ''>(initial?.requesterOrganization ?? '')
+  const [changeTypes, setChangeTypes] = useState<ChangeTypeTag[]>(initial?.changeTypes ?? [])
 
-  const [currentSituationDescription, setCurrentSituationDescription] = useState('')
-  const [changeReasonCategories, setChangeReasonCategories] = useState<ChangeReasonCategory[]>([])
-  const [changeReasonOther, setChangeReasonOther] = useState('')
-  const [affectedDocuments, setAffectedDocuments] = useState<AffectedDocument[]>([])
+  const [currentSituationDescription, setCurrentSituationDescription] = useState(initial?.currentSituationDescription ?? '')
+  const [changeReasonCategories, setChangeReasonCategories] = useState<ChangeReasonCategory[]>(initial?.changeReasonCategories ?? [])
+  const [changeReasonOther, setChangeReasonOther] = useState(initial?.changeReasonOther ?? '')
+  const [affectedDocuments, setAffectedDocuments] = useState<AffectedDocument[]>(initial?.affectedDocuments ?? [])
 
-  const [scopeChangeType, setScopeChangeType] = useState<ScopeChangeType | ''>('')
-  const [scopeEffectDescription, setScopeEffectDescription] = useState('')
+  const [scopeChangeType, setScopeChangeType] = useState<ScopeChangeType | ''>(initial?.scopeChangeType ?? '')
+  const [scopeEffectDescription, setScopeEffectDescription] = useState(initial?.scopeEffectDescription ?? '')
 
-  const originalContractAmount = contractValue ?? 0
+  // Editing a draft keeps its own snapshotted contract amount rather than re-deriving from the
+  // contract's current value, which may have moved since the request was first created.
+  const originalContractAmount = initial ? initial.originalContractAmount : (contractValue ?? 0)
   const costPct = originalContractAmount > 0 ? (proposedChangeAmount / originalContractAmount) * 100 : 0
   const schedulePct = originalDurationDays > 0 ? (proposedScheduleImpactDays / originalDurationDays) * 100 : 0
 
@@ -381,8 +425,8 @@ function NewChangeDraftForm({ contractValue, onCancel, onCreate }: {
         <button onClick={onCancel} className="rounded-xl border px-4 py-2 text-[12px] font-bold" style={{ borderColor: 'var(--border-soft)' }}>انصراف</button>
         <button
           disabled={!title.trim()}
-          onClick={() => onCreate({
-            title, description, reasonForChange, priority, currency: 'IRR',
+          onClick={() => onSubmit({
+            title, description, reasonForChange, priority, currency: initial?.currency ?? 'IRR',
             originalContractAmount, proposedChangeAmount, originalDurationDays, proposedScheduleImpactDays,
             newRisksCount, scopeImpactLevel,
             projectCode, contractName, contractNumber, contractDate,
@@ -392,7 +436,7 @@ function NewChangeDraftForm({ contractValue, onCancel, onCreate }: {
           })}
           className="chg-primary-btn rounded-xl px-4 py-2 text-[12px] font-bold text-white"
         >
-          ذخیره پیش‌نویس
+          {submitLabel}
         </button>
       </div>
     </div>
@@ -434,6 +478,8 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
   const fetchBundle = useChangeStore((s) => s.fetchBundle)
   const fetchForProject = useChangeStore((s) => s.fetchForProject)
   const submitDraft = useChangeStore((s) => s.submitDraft)
+  const updateDraft = useChangeStore((s) => s.updateDraft)
+  const deleteChangeRequest = useChangeStore((s) => s.deleteChangeRequest)
   const saveStageReview = useChangeStore((s) => s.saveStageReview)
   const addDocument = useChangeStore((s) => s.addDocument)
   const updateRiskRegister = useChangeStore((s) => s.updateRiskRegister)
@@ -446,6 +492,9 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
   const currentUser = useAuthStore((s) => s.currentUser())
 
   const [expandedStage, setExpandedStage] = useState<ChangeStatus | null>(null)
+  const [editingDraft, setEditingDraft] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const isAdmin = useAuthStore((s) => s.currentUser()?.isAdmin) ?? false
 
   useEffect(() => {
     fetchAccessAll()
@@ -498,11 +547,37 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
             <HeaderStat label="اولویت" value={CHANGE_PRIORITY_LABEL_FA[request.priority]} />
             <HeaderStat label="تاریخ" value={formatJalali(request.createdAt.slice(0, 10)) || `${todayJalali().jy}/${todayJalali().jm}/${todayJalali().jd}`} mono />
           </div>
+          {isAdmin && (
+            confirmDelete ? (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/40 px-2 py-1.5">
+                <span className="text-[11px] text-red-400">حذف این درخواست؟</span>
+                <button onClick={() => deleteChangeRequest(request).then(onBack)} className="text-[11px] font-bold text-red-400 hover:underline">تایید</button>
+                <button onClick={() => setConfirmDelete(false)} className="text-[11px] text-muted hover:underline">انصراف</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} title="حذف این درخواست" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-muted hover:border-red-400/40 hover:text-red-400 transition-colors" style={{ borderColor: 'var(--border-soft)' }}>
+                <Trash2 size={15} />
+              </button>
+            )
+          )}
         </div>
         <p className="mt-3 text-[15px] font-bold">{request.title}</p>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
+        {editingDraft && (
+          <ChangeDraftForm
+            contractValue={request.originalContractAmount}
+            initial={request}
+            submitLabel="ذخیره تغییرات"
+            onCancel={() => setEditingDraft(false)}
+            onSubmit={async (data) => {
+              await updateDraft(request, data, currentUser?.id ?? null)
+              setEditingDraft(false)
+            }}
+          />
+        )}
+
         {/* Approval timeline — spec §3 */}
         <ApprovalTimeline request={request} reviews={reviews} expanded={expandedStage} onToggle={setExpandedStage} />
 
@@ -513,7 +588,11 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
         <GeneralInfoCard request={request} />
 
         {/* Contractor proposal — spec §5, plus Word form §2/§3-1 */}
-        <ContractorProposalCard request={request} isContractor={isContractor} saving={saving} onSubmit={() => submitDraft(request, currentUser?.id ?? null)} />
+        <ContractorProposalCard
+          request={request} isContractor={isContractor} saving={saving}
+          onSubmit={() => submitDraft(request, currentUser?.id ?? null)}
+          onEdit={() => setEditingDraft(true)}
+        />
 
         {/* Stage review cards — spec §6-10 */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -749,14 +828,21 @@ function ValidationBanner({ color, text }: { color: string; text: string }) {
 // Contractor proposal — spec §5
 // ---------------------------------------------------------------------------
 
-function ContractorProposalCard({ request, isContractor, saving, onSubmit }: {
-  request: ChangeRequest; isContractor: boolean; saving: boolean; onSubmit: () => void
+function ContractorProposalCard({ request, isContractor, saving, onSubmit, onEdit }: {
+  request: ChangeRequest; isContractor: boolean; saving: boolean; onSubmit: () => void; onEdit: () => void
 }) {
   const costPct = contractChangePercent(request)
   const schedulePct = scheduleChangePercent(request)
   return (
     <div className="chg-card glass-panel rounded-2xl border p-4" style={{ borderColor: 'var(--border-soft)' }}>
-      <p className="mb-3 text-[12px] font-bold text-muted">اطلاعات و پیشنهاد پیمانکار — Contractor Change Proposal</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[12px] font-bold text-muted">اطلاعات و پیشنهاد پیمانکار — Contractor Change Proposal</p>
+        {request.status === 'draft' && isContractor && (
+          <button onClick={onEdit} className="flex items-center gap-1.5 text-[10.5px] font-bold" style={{ color: 'var(--chg-accent)' }}>
+            <Pencil size={12} /> ویرایش
+          </button>
+        )}
+      </div>
       {request.currentSituationDescription && <p className="mb-2 text-[11px] text-muted">وضعیت موجود: {request.currentSituationDescription}</p>}
       <p className="mb-3 text-[12px] text-secondary">{request.description || '—'}</p>
       {request.reasonForChange && <p className="mb-2 text-[11px] text-muted">دلیل: {request.reasonForChange}</p>}
@@ -916,7 +1002,7 @@ function StageReviewCard({ stage, request, review, canDecide, saving, onDecide, 
         <div className="mt-3">
           <textarea className="input w-full rounded-lg px-3 py-2 text-[12px]" rows={2} placeholder="نظر کارشناسی" value={comment} onChange={(e) => setComment(e.target.value)} />
           <div className="mt-2 flex flex-wrap justify-end gap-2">
-            <button disabled={saving} onClick={() => onDecide('request_revision', comment, details)} className="rounded-lg border px-3 py-1.5 text-[10.5px] font-bold" style={{ borderColor: '#f0a836', color: '#f0a836' }}>نیازمند بازنگری</button>
+            <button disabled={saving} onClick={() => onDecide('request_revision', comment, details)} className="rounded-lg border px-3 py-1.5 text-[10.5px] font-bold" style={{ borderColor: '#f0a836', color: '#f0a836' }}>بازگشت به مرحله قبل</button>
             <button disabled={saving} onClick={() => onDecide('rejected', comment, details)} className="rounded-lg border px-3 py-1.5 text-[10.5px] font-bold" style={{ borderColor: '#ef4444', color: '#ef4444' }}>رد</button>
             <button disabled={saving} onClick={() => onDecide('approved_with_conditions', comment, details)} className="rounded-lg border px-3 py-1.5 text-[10.5px] font-bold" style={{ borderColor: '#2ecc71', color: '#2ecc71' }}>تایید مشروط</button>
             <button disabled={saving} onClick={() => onDecide('approved', comment, details)} className="rounded-lg px-3 py-1.5 text-[10.5px] font-bold text-white" style={{ background: '#2ecc71' }}>تایید</button>

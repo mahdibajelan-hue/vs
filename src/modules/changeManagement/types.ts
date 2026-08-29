@@ -135,6 +135,28 @@ export const NEXT_STATUS_AFTER_STAGE: Record<ReviewStage, ChangeStatus> = {
   ccb: 'approved',
 }
 
+/** Which ChangeStatus a stage sends the request BACK to when it asks for a revision — one step
+ * back in the pipeline (to the previous reviewer, or to the contractor's draft for Engineering,
+ * the first stage), not all the way to draft from every stage. */
+export const PREV_STATUS_BEFORE_STAGE: Record<ReviewStage, ChangeStatus> = {
+  engineering: 'draft',
+  planning: 'engineering_review',
+  contract: 'planning_review',
+  pm: 'contract_review',
+  ccb: 'pm_review',
+}
+
+/** The review stage a given in-review ChangeStatus corresponds to — used to reset that stage's
+ * own decision back to 'pending' whenever the request lands on it, forward or backward, so its
+ * reviewer always sees an actionable card instead of a stale decision from an earlier round. */
+export const STAGE_FOR_REVIEW_STATUS: Partial<Record<ChangeStatus, ReviewStage>> = {
+  engineering_review: 'engineering',
+  planning_review: 'planning',
+  contract_review: 'contract',
+  pm_review: 'pm',
+  ccb_review: 'ccb',
+}
+
 export const CHANGE_ROLE_NAME = {
   contractor: 'پیمانکار',
   executor: 'مجری',

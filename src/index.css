@@ -235,13 +235,14 @@ body {
  * (dark, or light under [data-theme="light"]) is enough, but that's a single global attribute two
  * unrelated modules (PipePulse, Finance) flip via document.documentElement, and it leaks into every
  * other module's dropdowns for the rest of the session. These rules keep <option> text legible even
- * when a stray color-scheme value slips through.
- */
-.input option {
+ * when a stray color-scheme value slips through. Applied to every <option>, not just `.input`
+ * ones — the small unstyled <select> elements in User Management (role/project pickers) hit this
+ * exact bug: no explicit text color, so a leaked light popup rendered white-on-white. */
+select option {
   background: #170f24;
   color: #e5e9f0;
 }
-:root[data-theme="light"] .input option {
+:root[data-theme="light"] select option {
   background: #ffffff;
   color: #0f172a;
 }

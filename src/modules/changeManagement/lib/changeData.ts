@@ -166,6 +166,60 @@ export function changeRequestToInsertRow(masterProjectId: string, data: {
   }
 }
 
+/** Fields the contractor may still change while a request sits in 'draft' — everything the
+ * initial creation form captures except master_project_id/status, which never change on edit. */
+export function changeRequestToDraftEditRow(data: {
+  title: string
+  description: string
+  reasonForChange: string
+  priority: ChangePriority
+  proposedChangeAmount: number
+  originalDurationDays: number
+  proposedScheduleImpactDays: number
+  newRisksCount: number
+  scopeImpactLevel: ImpactLevel
+  projectCode: string
+  contractName: string
+  contractNumber: string
+  contractDate: string
+  projectPhase: ProjectPhase | null
+  requesterName: string
+  requesterOrganization: RequesterOrganization | null
+  changeTypes: ChangeTypeTag[]
+  currentSituationDescription: string
+  changeReasonCategories: ChangeReasonCategory[]
+  changeReasonOther: string
+  affectedDocuments: AffectedDocument[]
+  scopeChangeType: ScopeChangeType | null
+  scopeEffectDescription: string
+}) {
+  return {
+    title: data.title,
+    description: data.description,
+    reason_for_change: data.reasonForChange,
+    priority: data.priority,
+    proposed_change_amount: data.proposedChangeAmount,
+    original_duration_days: data.originalDurationDays,
+    proposed_schedule_impact_days: data.proposedScheduleImpactDays,
+    new_risks_count: data.newRisksCount,
+    scope_impact_level: data.scopeImpactLevel,
+    project_code: data.projectCode,
+    contract_name: data.contractName,
+    contract_number: data.contractNumber,
+    contract_date: data.contractDate,
+    project_phase: data.projectPhase,
+    requester_name: data.requesterName,
+    requester_organization: data.requesterOrganization,
+    change_types: data.changeTypes,
+    current_situation_description: data.currentSituationDescription,
+    change_reason_categories: data.changeReasonCategories,
+    change_reason_other: data.changeReasonOther,
+    affected_documents: data.affectedDocuments,
+    scope_change_type: data.scopeChangeType,
+    scope_effect_description: data.scopeEffectDescription,
+  }
+}
+
 export function changeRequestToUpdateRow(data: Partial<{
   identifiedRisks: IdentifiedChangeRisk[]
   requiresNewRiskRegisterEntry: boolean
