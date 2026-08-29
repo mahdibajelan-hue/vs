@@ -1,49 +1,79 @@
-import type { ApprovalTier, ChangeRequest } from '../types'
+import type { ChangeRequest, ImpactLevel } from '../types'
 
-export const EXECUTOR_CEILING_PCT = 10
-export const CEO_CEILING_PCT = 25
+export const HIGH_FINANCIAL_IMPACT_PCT = 5
+export const HIGH_SCHEDULE_IMPACT_PCT = 5
 
-/**
- * The tier that gates approval of one change: based not on the change's own size alone, but on
- * the *cumulative* percent of contract value the project would sit at if this change were
- * approved on top of everything already approved — matching the spec's "up to 10% با مجوز مجری،
- * تا ۲۵٪ با مجوز مدیرعامل، سقف ۲۵٪" as a running ceiling, not a per-change one.
- */
-export function computeApprovalTier(cumulativePercentIfApproved: number): ApprovalTier {
-  if (cumulativePercentIfApproved <= EXECUTOR_CEILING_PCT) return 'executor'
-  if (cumulativePercentIfApproved <= CEO_CEILING_PCT) return 'ceo'
-  return 'over_ceiling'
+/** Change % = Change Amount / Original Contract Amount × 100 (spec §4/§15). */
+export function contractChangePercent(request: Pick<ChangeRequest, 'proposedChangeAmount' | 'originalContractAmount'>): number {
+  return request.originalContractAmount > 0 ? (request.proposedChangeAmount / request.originalContractAmount) * 100 : 0
 }
 
-/** Sum of cost_impact_amount across every change already approved for this project — the
- * baseline a new change's cumulative percent is measured against. */
-export function priorApprovedTotal(requests: ChangeRequest[], excludeId?: string): number {
-  return requests
-    .filter((r) => r.status === 'approved' && r.id !== excludeId)
-    .reduce((sum, r) => sum + r.costImpactAmount, 0)
+/** New Contract Amount = Original + Approved Change (falls back to the proposed amount before
+ * a decision exists, so the preview always has a number to show). */
+export function newContractAmount(request: Pick<ChangeRequest, 'originalContractAmount' | 'proposedChangeAmount' | 'approvedChangeAmount'>): number {
+  const change = request.approvedChangeAmount ?? request.proposedChangeAmount
+  return request.originalContractAmount + change
 }
 
-export function percentOfContract(amount: number, contractValue: number): number {
-  return contractValue > 0 ? (amount / contractValue) * 100 : 0
+/** Schedule Change % = Schedule Impact Days / Original Project Duration × 100 (spec §7/§15). */
+export function scheduleChangePercent(request: Pick<ChangeRequest, 'proposedScheduleImpactDays' | 'originalDurationDays'>): number {
+  return request.originalDurationDays > 0 ? (request.proposedScheduleImpactDays / request.originalDurationDays) * 100 : 0
 }
 
-export interface ChangeTierPreview {
-  ownPercent: number
-  cumulativeApprovedPercent: number
-  cumulativeIfApprovedPercent: number
-  tier: ApprovalTier
+/** New Project Duration = Original + Approved Schedule Impact. */
+export function newProjectDuration(request: Pick<ChangeRequest, 'originalDurationDays' | 'proposedScheduleImpactDays' | 'approvedScheduleImpactDays'>): number {
+  const impact = request.approvedScheduleImpactDays ?? request.proposedScheduleImpactDays
+  return request.originalDurationDays + impact
 }
 
-/** Everything a review/decision screen needs to show and gate on for one change request. */
-export function previewTier(request: ChangeRequest, allRequests: ChangeRequest[], contractValue: number): ChangeTierPreview {
-  const priorTotal = priorApprovedTotal(allRequests, request.id)
-  const ownPercent = percentOfContract(request.costImpactAmount, contractValue)
-  const cumulativeApprovedPercent = percentOfContract(priorTotal, contractValue)
-  const cumulativeIfApprovedPercent = percentOfContract(priorTotal + request.costImpactAmount, contractValue)
+export interface ChangeImpactSummary {
+  costPercent: number
+  schedulePercent: number
+  riskLevel: ImpactLevel
+  scopeLevel: ImpactLevel
+  overallSeverity: ImpactLevel
+  highFinancialImpact: boolean
+  highScheduleImpact: boolean
+  isCritical: boolean
+  ccbReviewRequired: boolean
+}
+
+const IMPACT_RANK: Record<ImpactLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 }
+
+/** Risk severity from a simple new-risks count — informational until real Risk-module
+ * linkage exists (see module scoping notes): 0 -> low, 1-2 -> medium, 3+ -> high. */
+function riskLevelFromCount(count: number): ImpactLevel {
+  if (count >= 3) return 'high'
+  if (count >= 1) return 'medium'
+  return 'low'
+}
+
+/** Smart validation (spec §16): flags unusually large changes and recommends CCB review
+ * whenever either dimension crosses the threshold, or escalates to CRITICAL when both do. */
+export function computeChangeImpact(request: ChangeRequest): ChangeImpactSummary {
+  const costPercent = Math.abs(contractChangePercent(request))
+  const schedulePercent = Math.abs(scheduleChangePercent(request))
+  const highFinancialImpact = costPercent > HIGH_FINANCIAL_IMPACT_PCT
+  const highScheduleImpact = schedulePercent > HIGH_SCHEDULE_IMPACT_PCT
+  const isCritical = highFinancialImpact && highScheduleImpact
+  const riskLevel = riskLevelFromCount(request.newRisksCount)
+
+  let overallSeverity: ImpactLevel = 'low'
+  if (isCritical) overallSeverity = 'critical'
+  else if (highFinancialImpact || highScheduleImpact) overallSeverity = 'high'
+  else if (costPercent > 2 || schedulePercent > 2) overallSeverity = 'medium'
+  overallSeverity = IMPACT_RANK[request.scopeImpactLevel] > IMPACT_RANK[overallSeverity] ? request.scopeImpactLevel : overallSeverity
+  overallSeverity = IMPACT_RANK[riskLevel] > IMPACT_RANK[overallSeverity] ? riskLevel : overallSeverity
+
   return {
-    ownPercent,
-    cumulativeApprovedPercent,
-    cumulativeIfApprovedPercent,
-    tier: computeApprovalTier(cumulativeIfApprovedPercent),
+    costPercent,
+    schedulePercent,
+    riskLevel,
+    scopeLevel: request.scopeImpactLevel,
+    overallSeverity,
+    highFinancialImpact,
+    highScheduleImpact,
+    isCritical,
+    ccbReviewRequired: highFinancialImpact || highScheduleImpact,
   }
 }

@@ -4542,63 +4542,79 @@ $$ language plpgsql security definer set search_path = public;
 
 -- =====================================================================
 -- Section 24: Change Management — the Project Radar sidebar's "Change
--- Management" module. chg_change_requests keys on master_projects.id
--- directly (same convention as fin_contracts/plc_* — no per-module
--- project-space or mapping row needed).
+-- Management" module. Rebuilt (2026-08) into a full EPC change-control
+-- workflow: Draft -> Submitted -> Engineering Review -> Planning Review ->
+-- Contract Review -> PM Review -> CCB Approval -> Approved/Rejected ->
+-- Implementation -> Verification -> Closed. Tables key on
+-- master_projects.id directly (same convention as fin_contracts/plc_* —
+-- no per-module project-space or mapping row needed).
 --
--- Workflow: Contractor (پیمانکار) submits a change with time/cost impact →
--- Consultant (مشاور) reviews and recommends/does-not-recommend → Employer
--- decides (approve & communicate/ابلاغ, or reject). Decision authority is
--- tiered by the CUMULATIVE cost impact this change would bring the project
--- to, as a percent of the current contract value: up to 10% needs the
--- "مجری" project role, up to 25% needs "مدیرعامل" — beyond 25% the change
--- cannot be approved at all (hard ceiling). Two new project roles are
--- added to the existing rasta_project_roles roster for this: an employer
--- project role can already be assigned per-project via the existing
--- Project Role Assignment UI, no new membership table needed.
+-- chg_change_requests: the core record + contractor-submitted financial/
+--   schedule proposal. Percent-of-contract/duration figures are always
+--   derived at read time (never stored), so they can't go stale.
+-- chg_stage_reviews: one row per (change, stage) — the review/decision
+--   for Engineering, Planning, Contract, PM and CCB. Stage-specific fields
+--   (affected drawings, contractual basis, CCB meeting no., ...) live in
+--   `details` jsonb, same "shape varies by type" pattern the Risk module
+--   already uses for strategy_details, rather than dozens of nullable
+--   columns most rows would never use.
+-- chg_documents: lightweight document register (metadata only for now —
+--   file_url accepts a link/reference; binary upload is a later add-on,
+--   same storage-bucket pattern PLC's evidence upload already uses).
+-- chg_history: append-only activity log powering the Change History
+--   timeline — the application writes one row per submission/decision,
+--   mirroring the PLC module's own writeAudit() fire-and-forget pattern.
 -- =====================================================================
 
 insert into rasta_project_roles (name, is_system) values
   ('مجری', true),
-  ('مدیرعامل', true)
+  ('مدیرعامل', true),
+  ('مدیر مهندسی', true),
+  ('مدیر برنامه‌ریزی و کنترل پروژه', true),
+  ('مدیر امور پیمان', true),
+  ('عضو کمیته کنترل تغییرات', true)
 on conflict (name) do nothing;
 
-create table if not exists chg_change_requests (
+drop table if exists chg_history cascade;
+drop table if exists chg_documents cascade;
+drop table if exists chg_stage_reviews cascade;
+drop table if exists chg_change_requests cascade;
+
+create sequence if not exists chg_cr_seq;
+
+create table chg_change_requests (
   id uuid primary key default gen_random_uuid(),
   master_project_id uuid not null references master_projects (id) on delete cascade,
-  change_number text not null default '',
+  cr_number text not null default ('CR-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('chg_cr_seq')::text, 4, '0')),
   title text not null default '',
   description text not null default '',
-  justification text not null default '',
+  reason_for_change text not null default '',
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
 
-  -- Contractor-submitted impact (cost stored as a signed Rial amount — the
-  -- percent-of-contract-value figure is always derived at read time from
-  -- the contract's *current* value, so it never goes stale as amendments land).
-  time_impact_days integer not null default 0,
-  cost_impact_amount numeric not null default 0,
-  submitted_by uuid references profiles (id) default auth.uid(),
-  submitted_at timestamptz not null default now(),
+  -- Financial proposal (currency snapshotted at submission so the record's
+  -- own history never drifts if the linked contract's currency changes later).
+  currency text not null default 'IRR',
+  original_contract_amount numeric not null default 0,
+  proposed_change_amount numeric not null default 0,
+  approved_change_amount numeric,
 
-  -- Consultant review (مشاور) — a required checkpoint, not a veto: the
-  -- employer still makes the final call, informed by this recommendation.
-  consultant_decision text not null default 'pending' check (consultant_decision in ('pending', 'recommended', 'not_recommended')),
-  consultant_comment text not null default '',
-  consultant_reviewed_by uuid references profiles (id),
-  consultant_reviewed_at timestamptz,
+  -- Schedule proposal
+  original_duration_days integer not null default 0,
+  proposed_schedule_impact_days integer not null default 0,
+  approved_schedule_impact_days integer,
 
-  -- Employer decision (کارفرما) — gated by required_approval_tier, computed
-  -- and re-validated client-side against live cumulative-approved totals.
-  required_approval_tier text not null default 'executor' check (required_approval_tier in ('executor', 'ceo', 'over_ceiling')),
-  employer_decision text not null default 'pending' check (employer_decision in ('pending', 'approved', 'rejected')),
-  employer_comment text not null default '',
-  decided_by uuid references profiles (id),
-  decided_at timestamptz,
-  communicated_at timestamptz,
+  -- Risk / scope (new_risks_count is informational until real Risk-module
+  -- linkage is built — see the module's own scoping notes)
+  new_risks_count integer not null default 0,
+  scope_impact_level text not null default 'medium' check (scope_impact_level in ('low', 'medium', 'high', 'critical')),
 
-  status text not null default 'submitted' check (status in (
-    'submitted', 'pending_employer_decision', 'approved', 'rejected', 'over_ceiling_blocked'
+  status text not null default 'draft' check (status in (
+    'draft', 'submitted', 'engineering_review', 'planning_review', 'contract_review',
+    'pm_review', 'ccb_review', 'approved', 'rejected', 'implementation', 'verification', 'closed'
   )),
 
+  submitted_by uuid references profiles (id),
+  submitted_at timestamptz,
   created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now(),
   updated_by uuid references profiles (id),
@@ -4609,8 +4625,63 @@ drop trigger if exists trg_set_updated_at on chg_change_requests;
 create trigger trg_set_updated_at before update on chg_change_requests for each row execute function set_updated_at_and_by();
 
 alter table chg_change_requests enable row level security;
-
-drop policy if exists "chg_change_requests_select_authenticated" on chg_change_requests;
 create policy "chg_change_requests_select_authenticated" on chg_change_requests for select using (auth.uid() is not null);
-drop policy if exists "chg_change_requests_write_admin" on chg_change_requests;
 create policy "chg_change_requests_write_admin" on chg_change_requests for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_stage_reviews (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  stage text not null check (stage in ('engineering', 'planning', 'contract', 'pm', 'ccb')),
+  decision text not null default 'pending' check (decision in ('pending', 'approved', 'approved_with_conditions', 'rejected', 'request_revision', 'returned')),
+  responsible_user_id uuid references profiles (id),
+  reviewer_user_id uuid references profiles (id),
+  approver_user_id uuid references profiles (id),
+  comment text not null default '',
+  details jsonb not null default '{}'::jsonb,
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (change_request_id, stage)
+);
+
+drop trigger if exists trg_set_updated_at on chg_stage_reviews;
+create trigger trg_set_updated_at before update on chg_stage_reviews for each row execute function set_updated_at_and_by();
+
+alter table chg_stage_reviews enable row level security;
+create policy "chg_stage_reviews_select_authenticated" on chg_stage_reviews for select using (auth.uid() is not null);
+create policy "chg_stage_reviews_write_admin" on chg_stage_reviews for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_documents (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  category text not null default 'other' check (category in (
+    'contractor_proposal', 'technical', 'drawing', 'boq_mto', 'cost_breakdown',
+    'schedule_analysis', 'contract', 'correspondence', 'ccb_minutes', 'other'
+  )),
+  document_number text not null default '',
+  revision text not null default '',
+  file_name text not null default '',
+  file_url text not null default '',
+  approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'rejected')),
+  uploaded_by uuid references profiles (id) default auth.uid(),
+  uploaded_at timestamptz not null default now()
+);
+
+alter table chg_documents enable row level security;
+create policy "chg_documents_select_authenticated" on chg_documents for select using (auth.uid() is not null);
+create policy "chg_documents_write_admin" on chg_documents for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_history (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  user_id uuid references profiles (id) default auth.uid(),
+  role_label text not null default '',
+  action text not null default '',
+  comment text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table chg_history enable row level security;
+create policy "chg_history_select_authenticated" on chg_history for select using (auth.uid() is not null);
+create policy "chg_history_write_admin" on chg_history for all using (is_admin_user()) with check (is_admin_user());
