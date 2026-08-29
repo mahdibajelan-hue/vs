@@ -1,4 +1,4 @@
-import type { ChangeRequest, ContractReviewDetails, ImpactLevel, ImplementationAction } from '../types'
+import type { ChangeRequest, ContractReviewDetails, ImpactLevel, ImplementationAction, ReviewStage, StageReview } from '../types'
 
 export const HIGH_FINANCIAL_IMPACT_PCT = 5
 export const HIGH_SCHEDULE_IMPACT_PCT = 5
@@ -94,6 +94,49 @@ export function computeCostBreakdown(details: Pick<ContractReviewDetails,
   ].reduce((sum: number, v) => sum + (v ?? 0), 0)
   const totalDecrease = details.costDecreaseTotal ?? 0
   return { totalIncrease, totalDecrease, netEffect: totalIncrease - totalDecrease }
+}
+
+export interface StageDurationStat {
+  stage: ReviewStage
+  avgDays: number
+  minDays: number
+  maxDays: number
+  count: number
+}
+
+const REVIEW_STAGE_ORDER: ReviewStage[] = ['engineering', 'planning', 'contract', 'pm', 'ccb']
+
+/** Time-in-stage report: for each stage, how long it sat with that reviewer — decidedAt(stage)
+ * minus decidedAt(previous stage), or minus submittedAt for Engineering (the first stage).
+ * Only counts requests that actually reached a decision at that stage; requests still pending
+ * there don't skew the average with an unfinished duration. */
+export function computeStageDurations(requests: ChangeRequest[], allReviews: StageReview[]): StageDurationStat[] {
+  const samples: Record<ReviewStage, number[]> = { engineering: [], planning: [], contract: [], pm: [], ccb: [] }
+
+  for (const request of requests) {
+    const reviewsForRequest = allReviews.filter((r) => r.changeRequestId === request.id)
+    let prevTime = request.submittedAt ? new Date(request.submittedAt).getTime() : null
+    for (const stage of REVIEW_STAGE_ORDER) {
+      const review = reviewsForRequest.find((r) => r.stage === stage)
+      if (review?.decidedAt && prevTime != null) {
+        const days = (new Date(review.decidedAt).getTime() - prevTime) / 86400000
+        if (days >= 0) samples[stage].push(days)
+      }
+      if (review?.decidedAt) prevTime = new Date(review.decidedAt).getTime()
+    }
+  }
+
+  return REVIEW_STAGE_ORDER.map((stage) => {
+    const arr = samples[stage]
+    const avgDays = arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
+    return {
+      stage,
+      avgDays: Math.round(avgDays * 10) / 10,
+      minDays: arr.length ? Math.round(Math.min(...arr) * 10) / 10 : 0,
+      maxDays: arr.length ? Math.round(Math.max(...arr) * 10) / 10 : 0,
+      count: arr.length,
+    }
+  })
 }
 
 /** Section 10's 8 default implementation-action rows, seeded once when a request first enters

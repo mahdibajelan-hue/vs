@@ -1,13 +1,16 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
-  ArrowRight, Check, CheckCircle2, ClipboardList, FileText, Flag, Gauge, HardHat, ListChecks,
-  Package, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, X,
+  ArrowRight, BarChart3, Check, CheckCircle2, ClipboardList, Download, FileText, Flag, Gauge,
+  HardHat, ListChecks, Package, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, X,
 } from 'lucide-react'
 import { formatJalali, todayJalali } from '../../../lib/jalali'
+import { exportElementToPdf } from '../../../lib/export'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useAccessStore } from '../../masterdata/store/useAccessStore'
 import { useChangeStore } from '../store/useChangeStore'
 import { fetchCurrentContractValue } from '../lib/changeContract'
+import { ChangeRequestPrintReport } from '../components/ChangeRequestPrintReport'
+import { ChangeReportsPage } from './ChangeReportsPage'
 import {
   computeChangeImpact, computeCostBreakdown, contractChangePercent, newContractAmount, newProjectDuration, scheduleChangePercent,
 } from '../lib/changeCalc'
@@ -82,6 +85,8 @@ function statusIndex(status: ChangeStatus): number {
 
 export function ChangeManagementPage({ masterProjectId, projectName, onBack }: { masterProjectId: string | null; projectName: string; onBack: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [reportsOpen, setReportsOpen] = useState(false)
+  const requests = useChangeStore((s) => s.requests)
 
   if (!masterProjectId) {
     return (
@@ -94,18 +99,21 @@ export function ChangeManagementPage({ masterProjectId, projectName, onBack }: {
     )
   }
 
+  if (reportsOpen) {
+    return <ChangeReportsPage masterProjectId={masterProjectId} projectName={projectName} requests={requests} onBack={() => setReportsOpen(false)} />
+  }
   if (selectedId) {
     return <ChangeRequestDetail masterProjectId={masterProjectId} projectName={projectName} changeRequestId={selectedId} onBack={() => setSelectedId(null)} />
   }
-  return <ChangeRequestList masterProjectId={masterProjectId} projectName={projectName} onBack={onBack} onSelect={setSelectedId} />
+  return <ChangeRequestList masterProjectId={masterProjectId} projectName={projectName} onBack={onBack} onSelect={setSelectedId} onOpenReports={() => setReportsOpen(true)} />
 }
 
 // ---------------------------------------------------------------------------
 // List view
 // ---------------------------------------------------------------------------
 
-function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect }: {
-  masterProjectId: string; projectName: string; onBack: () => void; onSelect: (id: string) => void
+function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect, onOpenReports }: {
+  masterProjectId: string; projectName: string; onBack: () => void; onSelect: (id: string) => void; onOpenReports: () => void
 }) {
   const requests = useChangeStore((s) => s.requests)
   const loadingList = useChangeStore((s) => s.loadingList)
@@ -138,14 +146,23 @@ function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect }: {
             <p className="text-[11px] text-muted">{projectName}</p>
           </div>
         </div>
-        {isContractor && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setFormOpen(true)}
-            className="chg-primary-btn flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold text-white"
+            onClick={onOpenReports}
+            className="flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-bold hover:bg-white/5"
+            style={{ borderColor: 'var(--border-soft)', color: 'var(--chg-accent)' }}
           >
-            <Plus size={14} /> درخواست تغییر جدید
+            <BarChart3 size={14} /> گزارش‌ها
           </button>
-        )}
+          {isContractor && (
+            <button
+              onClick={() => setFormOpen(true)}
+              className="chg-primary-btn flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold text-white"
+            >
+              <Plus size={14} /> درخواست تغییر جدید
+            </button>
+          )}
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl p-4 sm:p-6">
@@ -495,6 +512,7 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
   const [editingDraft, setEditingDraft] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const isAdmin = useAuthStore((s) => s.currentUser()?.isAdmin) ?? false
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchAccessAll()
@@ -547,22 +565,38 @@ function ChangeRequestDetail({ masterProjectId, projectName, changeRequestId, on
             <HeaderStat label="اولویت" value={CHANGE_PRIORITY_LABEL_FA[request.priority]} />
             <HeaderStat label="تاریخ" value={formatJalali(request.createdAt.slice(0, 10)) || `${todayJalali().jy}/${todayJalali().jm}/${todayJalali().jd}`} mono />
           </div>
-          {isAdmin && (
-            confirmDelete ? (
-              <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-red-400/40 px-2 py-1.5">
-                <span className="text-[11px] text-red-400">حذف این درخواست؟</span>
-                <button onClick={() => deleteChangeRequest(request).then(onBack)} className="text-[11px] font-bold text-red-400 hover:underline">تایید</button>
-                <button onClick={() => setConfirmDelete(false)} className="text-[11px] text-muted hover:underline">انصراف</button>
-              </span>
-            ) : (
-              <button onClick={() => setConfirmDelete(true)} title="حذف این درخواست" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-muted hover:border-red-400/40 hover:text-red-400 transition-colors" style={{ borderColor: 'var(--border-soft)' }}>
-                <Trash2 size={15} />
-              </button>
-            )
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => printRef.current && exportElementToPdf(printRef.current, `${request.crNumber}.pdf`, { backgroundColor: '#ffffff' })}
+              title="دانلود گزارش PDF"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border text-muted hover:border-brand-400/40 hover:text-brand-400 transition-colors"
+              style={{ borderColor: 'var(--border-soft)' }}
+            >
+              <Download size={15} />
+            </button>
+            {isAdmin && (
+              confirmDelete ? (
+                <span className="flex items-center gap-1.5 rounded-lg border border-red-400/40 px-2 py-1.5">
+                  <span className="text-[11px] text-red-400">حذف این درخواست؟</span>
+                  <button onClick={() => deleteChangeRequest(request).then(onBack)} className="text-[11px] font-bold text-red-400 hover:underline">تایید</button>
+                  <button onClick={() => setConfirmDelete(false)} className="text-[11px] text-muted hover:underline">انصراف</button>
+                </span>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)} title="حذف این درخواست" className="flex h-10 w-10 items-center justify-center rounded-xl border text-muted hover:border-red-400/40 hover:text-red-400 transition-colors" style={{ borderColor: 'var(--border-soft)' }}>
+                  <Trash2 size={15} />
+                </button>
+              )
+            )}
+          </div>
         </div>
         <p className="mt-3 text-[15px] font-bold">{request.title}</p>
       </header>
+
+      <div className="comp-print-offscreen" aria-hidden="true">
+        <div ref={printRef}>
+          <ChangeRequestPrintReport request={request} reviews={reviews} documents={documents} history={history} projectName={projectName} />
+        </div>
+      </div>
 
       <main className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
         {editingDraft && (

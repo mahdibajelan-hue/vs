@@ -54,8 +54,12 @@ interface ChangeState {
   loadingBundle: boolean
   saving: boolean
 
+  allReviews: StageReview[]
+  loadingReports: boolean
+
   fetchForProject: (masterProjectId: string) => Promise<void>
   fetchBundle: (changeRequestId: string) => Promise<void>
+  fetchAllReviews: (masterProjectId: string) => Promise<void>
 
   createDraft: (masterProjectId: string, data: {
     title: string; description: string; reasonForChange: string; priority: ChangePriority
@@ -128,6 +132,9 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
   loadingBundle: false,
   saving: false,
 
+  allReviews: [],
+  loadingReports: false,
+
   fetchForProject: async (masterProjectId) => {
     set({ currentProjectId: masterProjectId, loadingList: true })
     const { data, error } = await supabase
@@ -158,6 +165,18 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
       history: ((hs.data ?? []) as any[]).map(historyFromRow),
       loadingBundle: false,
     })
+  },
+
+  fetchAllReviews: async (masterProjectId) => {
+    set({ loadingReports: true })
+    const { data, error } = await supabase
+      .from('chg_stage_reviews')
+      .select('*, chg_change_requests!inner(master_project_id)')
+      .eq('chg_change_requests.master_project_id', masterProjectId)
+    set({ loadingReports: false })
+    if (reportError('بارگذاری گزارش‌های تغییر', error)) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    set({ allReviews: ((data ?? []) as any[]).map(stageReviewFromRow) })
   },
 
   createDraft: async (masterProjectId, data, userId) => {
