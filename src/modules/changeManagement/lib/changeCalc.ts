@@ -1,4 +1,4 @@
-import type { ChangeRequest, ImpactLevel } from '../types'
+import type { ChangeRequest, ContractReviewDetails, ImpactLevel, ImplementationAction } from '../types'
 
 export const HIGH_FINANCIAL_IMPACT_PCT = 5
 export const HIGH_SCHEDULE_IMPACT_PCT = 5
@@ -76,4 +76,34 @@ export function computeChangeImpact(request: ChangeRequest): ChangeImpactSummary
     isCritical,
     ccbReviewRequired: highFinancialImpact || highScheduleImpact,
   }
+}
+
+export interface CostBreakdownSummary {
+  totalIncrease: number
+  totalDecrease: number
+  netEffect: number
+}
+
+/** Section 5's cost table — جمع افزایش/کاهش/اثر خالص are always derived live from the 7 line
+ * items + the manual decrease total, never stored, so they can't drift from the entered figures. */
+export function computeCostBreakdown(details: Pick<ContractReviewDetails,
+  'costEngineering' | 'costProcurement' | 'costConstruction' | 'costRework' | 'costOverhead' | 'costDelay' | 'costOther' | 'costDecreaseTotal'>): CostBreakdownSummary {
+  const totalIncrease = [
+    details.costEngineering, details.costProcurement, details.costConstruction,
+    details.costRework, details.costOverhead, details.costDelay, details.costOther,
+  ].reduce((sum: number, v) => sum + (v ?? 0), 0)
+  const totalDecrease = details.costDecreaseTotal ?? 0
+  return { totalIncrease, totalDecrease, netEffect: totalIncrease - totalDecrease }
+}
+
+/** Section 10's 8 default implementation-action rows, seeded once when a request first enters
+ * the 'implementation' status (see useChangeStore.startImplementation). */
+export function seedDefaultImplementationActions(): ImplementationAction[] {
+  const labels = [
+    'به‌روزرسانی طراحی', 'اصلاح مدارک', 'اصلاح برنامه زمان‌بندی', 'اصلاح بودجه / Forecast',
+    'ابلاغ به پیمانکار', 'اجرای تغییر', 'کنترل و تأیید اجرا', 'بستن Change Request',
+  ]
+  return labels.map((actionLabel, i) => ({
+    seq: i + 1, actionLabel, responsible: '', plannedStart: '', plannedEnd: '', status: 'pending' as const,
+  }))
 }

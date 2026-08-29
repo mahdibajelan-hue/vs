@@ -3,12 +3,15 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import {
-  changeRequestFromRow, changeRequestToInsertRow, documentFromRow, historyFromRow, stageReviewFromRow,
+  changeRequestFromRow, changeRequestToInsertRow, changeRequestToUpdateRow, documentFromRow, historyFromRow, stageReviewFromRow,
 } from '../lib/changeData'
+import { seedDefaultImplementationActions } from '../lib/changeCalc'
 import { NEXT_STATUS_AFTER_STAGE, REVIEW_STAGE_LABEL_FA } from '../types'
 import type {
-  ChangeDocument, ChangePriority, ChangeRequest, ChangeStatus, DocumentCategory,
-  ImpactLevel, ReviewStage, StageReview, StageReviewDecision, StageReviewDetails,
+  AffectedDocument, ChangeDocument, ChangePriority, ChangeReasonCategory, ChangeRequest, ChangeStatus,
+  ChangeTypeTag, CloseoutDocumentType, DocumentCategory, IdentifiedChangeRisk, ImpactLevel,
+  ImplementationAction, ProjectPhase, RequesterOrganization, ReviewStage, ScopeChangeType,
+  StageReview, StageReviewDecision, StageReviewDetails,
 } from '../types'
 
 function reportError(action: string, error: { message: string } | null): boolean {
@@ -23,7 +26,9 @@ async function logHistory(changeRequestId: string, userId: string | null, roleLa
   })
 }
 
-const TERMINAL_STAGE_DECISIONS = new Set<StageReviewDecision>(['approved', 'approved_with_conditions'])
+const TERMINAL_STAGE_DECISIONS = new Set<StageReviewDecision>([
+  'approved', 'approved_with_conditions', 'approved_with_cost_revision', 'approved_with_time_revision',
+])
 
 interface ChangeState {
   currentProjectId: string | null
@@ -45,6 +50,11 @@ interface ChangeState {
     currency: string; originalContractAmount: number; proposedChangeAmount: number
     originalDurationDays: number; proposedScheduleImpactDays: number
     newRisksCount: number; scopeImpactLevel: ImpactLevel
+    projectCode?: string; contractName?: string; contractNumber?: string; contractDate?: string
+    projectPhase?: ProjectPhase | null; requesterName?: string; requesterOrganization?: RequesterOrganization | null
+    changeTypes?: ChangeTypeTag[]; currentSituationDescription?: string
+    changeReasonCategories?: ChangeReasonCategory[]; changeReasonOther?: string
+    affectedDocuments?: AffectedDocument[]; scopeChangeType?: ScopeChangeType | null; scopeEffectDescription?: string
   }, userId: string | null) => Promise<string | null>
 
   submitDraft: (request: ChangeRequest, userId: string | null) => Promise<void>
@@ -55,6 +65,20 @@ interface ChangeState {
   ) => Promise<void>
 
   addDocument: (changeRequestId: string, data: { category: DocumentCategory; documentNumber: string; revision: string; fileName: string; fileUrl: string }, userId: string | null) => Promise<void>
+
+  updateRiskRegister: (
+    request: ChangeRequest, risks: IdentifiedChangeRisk[], requiresNewRiskRegisterEntry: boolean, createsNewIssue: boolean, userId: string | null,
+  ) => Promise<void>
+
+  startImplementation: (request: ChangeRequest, userId: string | null) => Promise<void>
+  updateImplementationActions: (request: ChangeRequest, actions: ImplementationAction[]) => Promise<void>
+  completeImplementation: (request: ChangeRequest, userId: string | null) => Promise<void>
+
+  finalizeCloseout: (request: ChangeRequest, data: {
+    implementedAsApproved: boolean; actualCostAmount: number | null; actualDelayDays: number | null
+    documentsUpdated: boolean; updatedDocumentTypes: CloseoutDocumentType[]
+    lessonLearnedRecorded: boolean; lessonLearnedNumber: string
+  }, userId: string | null) => Promise<void>
 }
 
 interface ChangeHistoryEntryLocal {
@@ -188,5 +212,54 @@ export const useChangeStore = create<ChangeState>()((set, get) => ({
     set({ saving: false })
     if (reportError('افزودن مستند', error)) return
     await get().fetchBundle(changeRequestId)
+  },
+
+  updateRiskRegister: async (request, risks, requiresNewRiskRegisterEntry, createsNewIssue, userId) => {
+    set({ saving: true })
+    const row = changeRequestToUpdateRow({ identifiedRisks: risks, requiresNewRiskRegisterEntry, createsNewIssue })
+    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('ثبت ریسک‌های تغییر', error)) return
+    await logHistory(request.id, userId, 'کنترل تغییرات', `فهرست ریسک‌های تغییر ${request.crNumber} به‌روزرسانی شد`)
+    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  },
+
+  startImplementation: async (request, userId) => {
+    set({ saving: true })
+    const actions = request.implementationActions.length > 0 ? request.implementationActions : seedDefaultImplementationActions()
+    const row = changeRequestToUpdateRow({ implementationActions: actions })
+    const { error } = await supabase.from('chg_change_requests').update({ ...row, status: 'implementation' }).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('شروع اجرای تغییر', error)) return
+    await logHistory(request.id, userId, 'مجری', `اجرای تغییر ${request.crNumber} آغاز شد`)
+    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  },
+
+  updateImplementationActions: async (request, actions) => {
+    set({ saving: true })
+    const row = changeRequestToUpdateRow({ implementationActions: actions })
+    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('به‌روزرسانی برنامه اجرا', error)) return
+    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  },
+
+  completeImplementation: async (request, userId) => {
+    set({ saving: true })
+    const { error } = await supabase.from('chg_change_requests').update({ status: 'verification' }).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('ثبت تکمیل اجرا', error)) return
+    await logHistory(request.id, userId, 'مجری', `اجرای تغییر ${request.crNumber} تکمیل و برای تأیید نهایی ارسال شد`)
+    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  },
+
+  finalizeCloseout: async (request, data, userId) => {
+    set({ saving: true })
+    const row = changeRequestToUpdateRow(data)
+    const { error } = await supabase.from('chg_change_requests').update({ ...row, status: 'closed' }).eq('id', request.id)
+    set({ saving: false })
+    if (reportError('بستن تغییر', error)) return
+    await logHistory(request.id, userId, 'مدیر پروژه', `پرونده تغییر ${request.crNumber} بسته شد`)
+    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
   },
 }))

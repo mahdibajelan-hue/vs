@@ -4685,3 +4685,64 @@ create table chg_history (
 alter table chg_history enable row level security;
 create policy "chg_history_select_authenticated" on chg_history for select using (auth.uid() is not null);
 create policy "chg_history_write_admin" on chg_history for all using (is_admin_user()) with check (is_admin_user());
+
+-- =====================================================================
+-- Section 25: Change Management — fields from the organization's own
+-- "فرم درخواست و مدیریت تغییر پروژه EPC" Word template that Section 24's
+-- first pass didn't yet capture: general/contract identification, change
+-- classification checkboxes, affected-document register, scope-change
+-- type, a change-level risk register mini-table, and closeout/lessons-
+-- learned facts. Purely additive (ADD COLUMN IF NOT EXISTS) — safe to
+-- re-run, no data loss for Section 24's tables.
+--
+-- The Word form's "امور مالی/کنترل هزینه" and "HSE/QAQC" reviewer blocks
+-- are NOT modeled as two more pipeline stages — that would mean a 7-stage
+-- workflow and a bigger UI/state-machine change than this pass covers.
+-- Cost-control fields are folded into the existing `contract` stage's
+-- `details` jsonb (it already owns financial entitlement/evaluation), and
+-- HSE/QAQC fields are folded into the existing `engineering` stage's
+-- `details` jsonb, each stage keeping its own single decision.
+-- =====================================================================
+
+alter table chg_change_requests add column if not exists project_code text not null default '';
+alter table chg_change_requests add column if not exists contract_name text not null default '';
+alter table chg_change_requests add column if not exists contract_number text not null default '';
+alter table chg_change_requests add column if not exists contract_date text not null default '';
+alter table chg_change_requests add column if not exists project_phase text check (project_phase in ('engineering', 'procurement', 'construction', 'commissioning'));
+alter table chg_change_requests add column if not exists requester_name text not null default '';
+alter table chg_change_requests add column if not exists requester_organization text check (requester_organization in ('employer', 'consultant', 'contractor', 'pm'));
+alter table chg_change_requests add column if not exists change_types text[] not null default '{}';
+
+alter table chg_change_requests add column if not exists current_situation_description text not null default '';
+alter table chg_change_requests add column if not exists change_reason_categories text[] not null default '{}';
+alter table chg_change_requests add column if not exists change_reason_other text not null default '';
+-- array of { docNumber, title, currentRevision, proposedRevision }
+alter table chg_change_requests add column if not exists affected_documents jsonb not null default '[]'::jsonb;
+
+alter table chg_change_requests add column if not exists scope_change_type text check (scope_change_type in ('none', 'increase', 'decrease', 'unchanged_modified'));
+alter table chg_change_requests add column if not exists scope_effect_description text not null default '';
+
+-- array of { description, probability, impact, controlAction }
+alter table chg_change_requests add column if not exists identified_risks jsonb not null default '[]'::jsonb;
+alter table chg_change_requests add column if not exists requires_new_risk_register_entry boolean not null default false;
+alter table chg_change_requests add column if not exists creates_new_issue boolean not null default false;
+
+-- array of { seq, actionLabel, responsible, plannedStart, plannedEnd, status }, seeded with the
+-- Word form's 8 default rows when a request first enters 'implementation' (app-layer, not a trigger).
+alter table chg_change_requests add column if not exists implementation_actions jsonb not null default '[]'::jsonb;
+
+alter table chg_change_requests add column if not exists implemented_as_approved boolean;
+alter table chg_change_requests add column if not exists actual_cost_amount numeric;
+alter table chg_change_requests add column if not exists actual_delay_days integer;
+alter table chg_change_requests add column if not exists documents_updated boolean;
+alter table chg_change_requests add column if not exists updated_document_types text[] not null default '{}';
+alter table chg_change_requests add column if not exists lesson_learned_recorded boolean;
+alter table chg_change_requests add column if not exists lesson_learned_number text not null default '';
+
+-- CCB gets 3 extra decision shades the Word form asks for (تصویب با اصلاح هزینه/زمان، تعلیق) —
+-- only the CCB card renders buttons for these, but the column-level check applies to every stage.
+alter table chg_stage_reviews drop constraint if exists chg_stage_reviews_decision_check;
+alter table chg_stage_reviews add constraint chg_stage_reviews_decision_check check (decision in (
+  'pending', 'approved', 'approved_with_conditions', 'approved_with_cost_revision',
+  'approved_with_time_revision', 'suspended', 'rejected', 'request_revision', 'returned'
+));
