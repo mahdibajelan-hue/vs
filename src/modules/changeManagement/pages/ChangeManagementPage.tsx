@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
   ArrowRight, BarChart3, Check, CheckCircle2, ClipboardList, Download, FileText, Flag, Gauge,
-  HardHat, ListChecks, Package, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2, X,
+  HardHat, ListChecks, Minus, Package, Pencil, Plus, ShieldAlert, ShieldCheck, Sparkles, Trash2,
+  TrendingDown, TrendingUp, X,
 } from 'lucide-react'
 import { formatJalali, todayJalali } from '../../../lib/jalali'
 import { exportElementToPdf } from '../../../lib/export'
@@ -135,13 +136,16 @@ function ChangeRequestList({ masterProjectId, projectName, onBack, onSelect, onO
 
   return (
     <div className="chg-scope min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
-        <div className="flex items-center gap-2.5">
+      <header className="chg-hero flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
           <button onClick={onBack} title="بازگشت" className="flex h-10 w-10 items-center justify-center rounded-xl border hover:bg-white/5" style={{ borderColor: 'var(--border-soft)' }}>
             <ArrowRight size={16} />
           </button>
+          <span className="chg-icon-badge" style={{ width: 38, height: 38, borderRadius: 12 }}>
+            <Sparkles size={18} />
+          </span>
           <div className="leading-tight">
-            <p className="chg-title-gradient text-base font-extrabold tracking-wide">مدیریت تغییرات</p>
+            <p className="chg-title-gradient text-lg font-extrabold tracking-wide">مدیریت تغییرات</p>
             <p className="text-[10px] font-bold tracking-wide text-muted">EPC CHANGE REQUEST &amp; CHANGE CONTROL</p>
             <p className="text-[11px] text-muted">{projectName}</p>
           </div>
@@ -202,14 +206,33 @@ function ChangeRequestRow({ request: r, onSelect }: { request: ChangeRequest; on
   const deleteChangeRequest = useChangeStore((s) => s.deleteChangeRequest)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const impact = computeChangeImpact(r)
+  const severityColor = IMPACT_LEVEL_COLOR[impact.overallSeverity]
   return (
-    <div className="chg-card glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4" style={{ borderColor: 'var(--border-soft)' }}>
+    <div
+      className="chg-card chg-list-row glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4"
+      style={{ borderColor: 'var(--border-soft)', ['--row-color' as string]: severityColor }}
+    >
       <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-3 text-right">
-        <span className="num shrink-0 text-[11px] font-bold text-muted">{r.crNumber}</span>
-        <span className="min-w-0 truncate text-[13px] font-bold">{r.title || 'بدون عنوان'}</span>
+        <span
+          className="num flex shrink-0 items-center justify-center rounded-lg px-2.5 py-1.5 text-[11px] font-extrabold"
+          style={{ background: `color-mix(in srgb, ${severityColor} 16%, transparent)`, color: severityColor }}
+        >
+          {r.crNumber}
+        </span>
+        <div className="min-w-0">
+          <p className="min-w-0 truncate text-[13.5px] font-bold">{r.title || 'بدون عنوان'}</p>
+          <p className="text-[10px] text-muted">{CHANGE_PRIORITY_LABEL_FA[r.priority]} · {IMPACT_LEVEL_LABEL_FA[impact.overallSeverity]}</p>
+        </div>
       </button>
-      <div className="flex items-center gap-3">
-        <span className="num text-[11px]" style={{ color: IMPACT_LEVEL_COLOR[impact.overallSeverity] }}>{IMPACT_LEVEL_LABEL_FA[impact.overallSeverity]}</span>
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
+        <div className="text-left">
+          <p className="num text-[11.5px] font-bold text-secondary">{money(r.approvedChangeAmount ?? r.proposedChangeAmount, r.currency)}</p>
+          <DeltaBadge percent={impact.costPercent} small />
+        </div>
+        <div className="text-left">
+          <p className="num text-[11.5px] font-bold text-secondary">{r.approvedScheduleImpactDays ?? r.proposedScheduleImpactDays} روز</p>
+          <DeltaBadge percent={impact.schedulePercent} small />
+        </div>
         <StatusPill color={CHANGE_STATUS_COLOR[r.status]} label={CHANGE_STATUS_LABEL_FA[r.status]} />
         {isAdmin && (
           confirmDelete ? (
@@ -233,19 +256,23 @@ function ChangeListTotals({ requests }: { requests: ChangeRequest[] }) {
   const totalCost = active.reduce((sum, r) => sum + (r.approvedChangeAmount ?? r.proposedChangeAmount), 0)
   const totalDays = active.reduce((sum, r) => sum + (r.approvedScheduleImpactDays ?? r.proposedScheduleImpactDays), 0)
   const currency = requests[0]?.currency || 'IRR'
+  const avgCostPct = active.length ? active.reduce((s, r) => s + Math.abs(contractChangePercent(r)), 0) / active.length : 0
+  const avgSchedulePct = active.length ? active.reduce((s, r) => s + Math.abs(scheduleChangePercent(r)), 0) / active.length : 0
   return (
-    <div className="chg-card glass-panel mt-3 grid grid-cols-1 gap-3 rounded-2xl border p-4 sm:grid-cols-3" style={{ borderColor: 'var(--border-soft)' }}>
-      <div className="text-center">
-        <p className="text-[9.5px] text-muted">تعداد کل تغییرات</p>
-        <p className="num text-lg font-extrabold" style={{ color: 'var(--chg-accent)' }}>{requests.length}</p>
+    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="chg-card chg-kpi-tile rounded-2xl border p-3.5" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: 'var(--chg-accent)' }}>
+        <p className="mb-1 flex items-center gap-1.5 text-[9.5px] font-bold tracking-wide text-muted"><span className="chg-icon-badge" style={{ width: 20, height: 20 }}><ClipboardList size={11} /></span> تعداد کل تغییرات</p>
+        <p className="num text-xl font-extrabold" style={{ color: 'var(--chg-accent)' }}>{requests.length}</p>
       </div>
-      <div className="text-center">
-        <p className="text-[9.5px] text-muted">مجموع اثر مالی (بدون موارد رد شده)</p>
-        <p className="num text-lg font-extrabold" style={{ color: totalCost >= 0 ? '#ef4444' : '#2ecc71' }}>{money(totalCost, currency)}</p>
+      <div className="chg-card chg-kpi-tile rounded-2xl border p-3.5" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: 'var(--chg-rose)' }}>
+        <p className="mb-1 flex items-center gap-1.5 text-[9.5px] font-bold tracking-wide text-muted"><span className="chg-icon-badge" style={{ width: 20, height: 20, color: 'var(--chg-rose)' }}><TrendingUp size={11} /></span> مجموع اثر مالی</p>
+        <p className="num text-xl font-extrabold" style={{ color: 'var(--chg-rose)' }}>{money(totalCost, currency)}</p>
+        <DeltaBadge percent={avgCostPct} small />
       </div>
-      <div className="text-center">
-        <p className="text-[9.5px] text-muted">مجموع اثر زمانی (بدون موارد رد شده)</p>
-        <p className="num text-lg font-extrabold" style={{ color: totalDays >= 0 ? '#ef4444' : '#2ecc71' }}>{totalDays > 0 ? '+' : ''}{totalDays} روز</p>
+      <div className="chg-card chg-kpi-tile rounded-2xl border p-3.5" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: 'var(--chg-amber)' }}>
+        <p className="mb-1 flex items-center gap-1.5 text-[9.5px] font-bold tracking-wide text-muted"><span className="chg-icon-badge" style={{ width: 20, height: 20, color: 'var(--chg-amber)' }}><Gauge size={11} /></span> مجموع اثر زمانی</p>
+        <p className="num text-xl font-extrabold" style={{ color: 'var(--chg-amber)' }}>{totalDays > 0 ? '+' : ''}{totalDays} روز</p>
+        <DeltaBadge percent={avgSchedulePct} small />
       </div>
     </div>
   )
@@ -258,6 +285,22 @@ function StatusPill({ color, label }: { color: string; label: string }) {
       style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color, ['--pill-color' as string]: color }}
     >
       {label}
+    </span>
+  )
+}
+
+/** Small ↑/↓ percent chip shown next to a cost or schedule figure — up (increase) is unfavorable
+ * (red), down is favorable (green), ~0 is neutral gray. Used everywhere a raw pct() value used to
+ * stand alone with no visual cue for direction. */
+function DeltaBadge({ percent, small }: { percent: number; small?: boolean }) {
+  const isUp = percent > 0.05
+  const isDown = percent < -0.05
+  const color = isUp ? '#ef4444' : isDown ? '#2ecc71' : 'var(--text-muted)'
+  const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
+  return (
+    <span className="chg-delta num" style={{ fontSize: small ? 9 : 10, ['--delta-color' as string]: color }}>
+      <Icon size={small ? 9 : 10} aria-hidden="true" />
+      {Math.abs(percent).toFixed(1)}٪
     </span>
   )
 }
@@ -819,10 +862,10 @@ function ImpactSummary({ request, impact }: { request: ChangeRequest; impact: Re
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard icon={Gauge} label="اثر مالی" sub="COST IMPACT" value={pct(animatedCost)} color={impact.highFinancialImpact ? '#ef4444' : '#2ecc71'} />
-        <KpiCard icon={Gauge} label="اثر زمانی" sub="TIME IMPACT" value={pct(animatedSchedule)} color={impact.highScheduleImpact ? '#ef4444' : '#2ecc71'} />
-        <KpiCard icon={ShieldAlert} label="ریسک" sub="RISK" value={IMPACT_LEVEL_LABEL_FA[impact.riskLevel]} color={IMPACT_LEVEL_COLOR[impact.riskLevel]} />
-        <KpiCard icon={ClipboardList} label="دامنه" sub="SCOPE" value={IMPACT_LEVEL_LABEL_FA[impact.scopeLevel]} color={IMPACT_LEVEL_COLOR[impact.scopeLevel]} />
+        <KpiCard icon={TrendingUp} label="اثر مالی" sub="COST IMPACT" value={pct(animatedCost)} color={impact.highFinancialImpact ? '#ef4444' : '#2ecc71'} tileColor="var(--chg-rose)" delta={impact.costPercent} />
+        <KpiCard icon={Gauge} label="اثر زمانی" sub="TIME IMPACT" value={pct(animatedSchedule)} color={impact.highScheduleImpact ? '#ef4444' : '#2ecc71'} tileColor="var(--chg-amber)" delta={impact.schedulePercent} />
+        <KpiCard icon={ShieldAlert} label="ریسک" sub="RISK" value={IMPACT_LEVEL_LABEL_FA[impact.riskLevel]} color={IMPACT_LEVEL_COLOR[impact.riskLevel]} tileColor="var(--chg-violet)" />
+        <KpiCard icon={ClipboardList} label="دامنه" sub="SCOPE" value={IMPACT_LEVEL_LABEL_FA[impact.scopeLevel]} color={IMPACT_LEVEL_COLOR[impact.scopeLevel]} tileColor="var(--chg-cyan)" />
       </div>
       {(impact.highFinancialImpact || impact.highScheduleImpact) && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -837,12 +880,17 @@ function ImpactSummary({ request, impact }: { request: ChangeRequest; impact: Re
   )
 }
 
-function KpiCard({ icon: Icon, label, sub, value, color }: { icon: typeof Gauge; label: string; sub: string; value: string; color: string }) {
+function KpiCard({ icon: Icon, label, sub, value, color, tileColor, delta }: {
+  icon: typeof Gauge; label: string; sub: string; value: string; color: string; tileColor?: string; delta?: number
+}) {
   return (
-    <div className="chg-card glass-panel rounded-2xl border p-3" style={{ borderColor: 'var(--border-soft)' }}>
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <Icon size={13} aria-hidden="true" style={{ color }} />
-        <span className="text-[9px] font-bold tracking-wide text-muted">{sub}</span>
+    <div className="chg-card chg-kpi-tile rounded-2xl border p-3" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: tileColor }}>
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Icon size={13} aria-hidden="true" style={{ color }} />
+          <span className="text-[9px] font-bold tracking-wide text-muted">{sub}</span>
+        </div>
+        {delta !== undefined && <DeltaBadge percent={delta} small />}
       </div>
       <p className="num text-lg font-extrabold" style={{ color }}>{value}</p>
       <p className="text-[10px] text-muted">{label}</p>
@@ -890,19 +938,19 @@ function ContractorProposalCard({ request, isContractor, saving, onSubmit, onEdi
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border p-3 text-[11px]" style={{ borderColor: 'var(--border-soft)' }}>
+        <div className="chg-card chg-kpi-tile rounded-xl border p-3 text-[11px]" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: 'var(--chg-rose)' }}>
           <p className="mb-2 text-[10px] font-bold tracking-wide text-muted">Financial</p>
           <div className="num space-y-1 text-muted">
             <p>قرارداد اصلی: {Math.round(request.originalContractAmount).toLocaleString('en-US')} {request.currency}</p>
-            <p style={{ color: costPct >= 0 ? '#2ecc71' : '#ef4444' }}>تغییر: {money(request.proposedChangeAmount, request.currency)} ({pct(costPct)})</p>
+            <p className="flex items-center gap-1.5">تغییر: {money(request.proposedChangeAmount, request.currency)} <DeltaBadge percent={costPct} small /></p>
             <p className="font-bold text-primary">قرارداد جدید: {Math.round(newContractAmount(request)).toLocaleString('en-US')} {request.currency}</p>
           </div>
         </div>
-        <div className="rounded-xl border p-3 text-[11px]" style={{ borderColor: 'var(--border-soft)' }}>
+        <div className="chg-card chg-kpi-tile rounded-xl border p-3 text-[11px]" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: 'var(--chg-amber)' }}>
           <p className="mb-2 text-[10px] font-bold tracking-wide text-muted">Schedule</p>
           <div className="num space-y-1 text-muted">
             <p>مدت اصلی: {request.originalDurationDays} روز</p>
-            <p style={{ color: schedulePct >= 0 ? '#2ecc71' : '#ef4444' }}>اثر: {request.proposedScheduleImpactDays > 0 ? '+' : ''}{request.proposedScheduleImpactDays} روز ({pct(schedulePct)})</p>
+            <p className="flex items-center gap-1.5">اثر: {request.proposedScheduleImpactDays > 0 ? '+' : ''}{request.proposedScheduleImpactDays} روز <DeltaBadge percent={schedulePct} small /></p>
             <p className="font-bold text-primary">مدت جدید: {newProjectDuration(request)} روز</p>
           </div>
         </div>

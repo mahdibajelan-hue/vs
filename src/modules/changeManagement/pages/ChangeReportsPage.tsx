@@ -82,10 +82,10 @@ export function ChangeReportsPage({ masterProjectId, projectName, requests, onBa
         {loadingReports && <p className="text-sm text-muted">در حال بارگذاری…</p>}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KpiTile icon={BarChart3} label="تعداد کل تغییرات" value={String(requests.length)} />
-          <KpiTile icon={TrendingUp} label="مجموع اثر مالی (این قرارداد)" value={money(totalCost, currency)} color={totalCost >= 0 ? '#ef4444' : '#2ecc71'} />
-          <KpiTile icon={Clock} label="مجموع اثر زمانی (این قرارداد)" value={`${totalDays > 0 ? '+' : ''}${totalDays} روز`} color={totalDays >= 0 ? '#ef4444' : '#2ecc71'} />
-          <KpiTile icon={PieChartIcon} label="میانگین کل چرخه بررسی" value={`${stageDurations.reduce((s, d) => s + d.avgDays, 0).toFixed(1)} روز`} />
+          <KpiTile icon={BarChart3} label="تعداد کل تغییرات" value={String(requests.length)} tileColor="var(--chg-accent)" />
+          <KpiTile icon={TrendingUp} label="مجموع اثر مالی (این قرارداد)" value={money(totalCost, currency)} color={totalCost >= 0 ? '#ef4444' : '#2ecc71'} tileColor="var(--chg-rose)" />
+          <KpiTile icon={Clock} label="مجموع اثر زمانی (این قرارداد)" value={`${totalDays > 0 ? '+' : ''}${totalDays} روز`} color={totalDays >= 0 ? '#ef4444' : '#2ecc71'} tileColor="var(--chg-amber)" />
+          <KpiTile icon={PieChartIcon} label="میانگین کل چرخه بررسی" value={`${stageDurations.reduce((s, d) => s + d.avgDays, 0).toFixed(1)} روز`} tileColor="var(--chg-violet)" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -194,13 +194,13 @@ function money(n: number, currency: string): string {
   return `${sign}${Math.round(n).toLocaleString('en-US')} ${currency}`
 }
 
-function KpiTile({ icon: Icon, label, value, color }: { icon: typeof Clock; label: string; value: string; color?: string }) {
+function KpiTile({ icon: Icon, label, value, color, tileColor }: { icon: typeof Clock; label: string; value: string; color?: string; tileColor?: string }) {
   return (
-    <div className="chg-card glass-panel rounded-2xl border p-3" style={{ borderColor: 'var(--border-soft)' }}>
+    <div className="chg-card chg-kpi-tile rounded-2xl border p-3" style={{ borderColor: 'var(--border-soft)', ['--tile-color' as string]: tileColor }}>
       <div className="mb-1.5 flex items-center gap-1.5">
-        <Icon size={13} aria-hidden="true" style={{ color: color ?? 'var(--chg-accent)' }} />
+        <Icon size={13} aria-hidden="true" style={{ color: color ?? tileColor ?? 'var(--chg-accent)' }} />
       </div>
-      <p className="num text-lg font-extrabold" style={{ color: color ?? undefined }}>{value}</p>
+      <p className="num text-lg font-extrabold" style={{ color: color ?? tileColor }}>{value}</p>
       <p className="text-[10px] text-muted">{label}</p>
     </div>
   )

@@ -1430,9 +1430,16 @@ select option {
   --chg-accent-strong: #6366f1;
   --chg-accent-soft: rgba(99, 102, 241, 0.14);
   --chg-accent-glow: rgba(99, 102, 241, 0.28);
+  --chg-rose: #fb7185;
+  --chg-amber: #fbbf24;
+  --chg-violet: #a78bfa;
+  --chg-cyan: #22d3ee;
+  --chg-emerald: #34d399;
   background-image:
-    radial-gradient(ellipse 820px 420px at 50% -8%, rgba(99, 102, 241, 0.10), transparent 62%),
-    radial-gradient(ellipse 640px 380px at 100% 100%, rgba(56, 189, 248, 0.05), transparent 60%);
+    radial-gradient(ellipse 760px 420px at 12% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
+    radial-gradient(ellipse 620px 380px at 92% 0%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(ellipse 680px 420px at 100% 100%, rgba(167, 139, 250, 0.07), transparent 62%),
+    radial-gradient(ellipse 520px 320px at 0% 90%, rgba(251, 191, 36, 0.05), transparent 60%);
 }
 :root[data-theme="light"] .chg-scope {
   --chg-accent: #4f46e5;
@@ -1442,7 +1449,8 @@ select option {
 }
 
 .chg-title-gradient {
-  background: linear-gradient(90deg, var(--text-primary) 0%, var(--chg-accent) 55%, var(--radar-cyan, #38bdf8) 100%);
+  background: linear-gradient(90deg, var(--text-primary) 0%, var(--chg-accent) 45%, var(--chg-cyan) 75%, var(--chg-violet) 100%);
+  background-size: 140% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1452,18 +1460,19 @@ select option {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
 }
 .chg-card::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--chg-accent-strong), var(--radar-cyan, #38bdf8));
+  background: linear-gradient(90deg, var(--chg-accent-strong), var(--chg-cyan));
   opacity: 0.85;
 }
 .chg-card:hover {
-  box-shadow: 0 10px 36px rgba(2, 6, 23, 0.32), 0 0 0 1px var(--chg-accent-soft);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.36), 0 0 0 1px var(--chg-accent-soft);
+  transform: translateY(-2px);
 }
 
 .chg-icon-badge {
@@ -1501,16 +1510,79 @@ select option {
 }
 
 .chg-primary-btn {
-  background: linear-gradient(135deg, var(--chg-accent-strong), color-mix(in srgb, var(--chg-accent-strong) 70%, #38bdf8));
+  background: linear-gradient(135deg, var(--chg-accent-strong), color-mix(in srgb, var(--chg-accent-strong) 70%, var(--chg-cyan)));
   box-shadow: 0 4px 16px var(--chg-accent-glow);
   transition: filter 0.15s ease, transform 0.15s ease;
 }
 .chg-primary-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(1.1);
   transform: translateY(-1px);
 }
 .chg-primary-btn:disabled {
   opacity: 0.5;
+}
+
+/* Hero header panel — a richer gradient-framed band instead of a plain border-bottom, so the
+   module opens with some visual weight instead of looking like an unstyled admin screen. */
+.chg-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--chg-accent-strong) 10%, transparent), transparent 55%),
+    linear-gradient(315deg, color-mix(in srgb, var(--chg-cyan) 7%, transparent), transparent 55%);
+  border-bottom: 1px solid var(--border-soft);
+}
+.chg-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--chg-rose), var(--chg-amber), var(--chg-emerald), var(--chg-cyan), var(--chg-violet));
+  opacity: 0.7;
+}
+
+/* List rows — a colored left rail (severity-coded via --row-color) plus a livelier hover than the
+   generic .chg-card, since this is the single most-scanned surface in the module. */
+.chg-list-row {
+  position: relative;
+  overflow: hidden;
+  border-inline-start: 3px solid color-mix(in srgb, var(--row-color, var(--chg-accent)) 70%, transparent);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+.chg-list-row:hover {
+  transform: translateX(-2px);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.3), inset 3px 0 0 0 var(--row-color, var(--chg-accent));
+  background: color-mix(in srgb, var(--row-color, var(--chg-accent)) 6%, transparent);
+}
+
+/* Delta badges — the small ↑/↓ percent chips next to a cost or schedule figure. */
+.chg-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--delta-color, var(--chg-accent)) 16%, transparent);
+  color: var(--delta-color, var(--chg-accent));
+}
+
+/* KPI tiles — each metric gets its own gradient tint (via --tile-color) instead of one flat glass
+   background repeated four times, so the summary row reads as genuinely colorful at a glance. */
+.chg-kpi-tile {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 160% 140% at 0% 0%, color-mix(in srgb, var(--tile-color, var(--chg-accent)) 14%, transparent), transparent 70%),
+    var(--bg-panel);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.chg-kpi-tile::before {
+  background: linear-gradient(90deg, var(--tile-color, var(--chg-accent-strong)), color-mix(in srgb, var(--tile-color, var(--chg-accent-strong)) 40%, var(--chg-cyan)));
+}
+.chg-kpi-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(2, 6, 23, 0.34), 0 0 0 1px color-mix(in srgb, var(--tile-color, var(--chg-accent)) 30%, transparent);
 }
 
 /* Launchpad module grid — Radar sits in the middle of the top row, flanked by two cards, with the
