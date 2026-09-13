@@ -1,24 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Award,
-  Briefcase,
+  Banknote,
+  BarChart3,
   BookOpen,
+  Briefcase,
+  Building2,
+  Calendar,
   CheckCircle2,
+  Compass,
   Copy,
   Download,
+  FileBarChart2,
   Globe,
   GraduationCap,
+  HardHat,
+  History,
+  LayoutDashboard,
+  ListChecks,
+  Lock,
   Mail,
   MessageSquareText,
+  Plus,
   Printer,
+  Puzzle,
   RefreshCw,
+  Settings,
   ShieldCheck,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
-  User,
+  Star,
+  Trophy,
+  Users,
+  Wrench,
 } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
@@ -43,17 +59,51 @@ import {
   ROLE_RECOMMENDATION_COLOR,
   ROLE_RECOMMENDATION_LABEL_FA,
 } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, type CompetencyAssessment } from '../types'
+import { JOB_ROLE_LABEL_FA, type CompetencyAssessment, type CompetencyDomainKey, type DomainScore } from '../types'
+
+// Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal
+// rather than imported to avoid a circular import back through CompetencyApp -> AssessmentWizardPage -> this file.
+const COMPETENCY_ACCENT = '#a855f7'
 
 interface ResultsStageProps {
   assessment: CompetencyAssessment
+  /** Sidebar navigation — all optional so this page still renders standalone if a caller doesn't wire them. */
+  onOpenList?: () => void
+  onOpenPanel?: () => void
+  onOpenQuestionBank?: () => void
+  onNew?: () => void
 }
 
-/** The final report: a professional candidate card, radar chart, maturity band, strengths/weaknesses, and position recommendations — all on one printable/exportable page. */
-export function ResultsStage({ assessment }: ResultsStageProps) {
+const PM_DOMAIN_ICON: Partial<Record<CompetencyDomainKey, typeof Compass>> = {
+  governance: Compass,
+  planning: Calendar,
+  cost: Banknote,
+  hse: HardHat,
+  quality: ShieldCheck,
+  changeRisk: AlertTriangle,
+  stakeholder: Users,
+  execution: Wrench,
+}
+
+const ROLE_BUCKET_ICON: Record<string, typeof Compass> = {
+  roleGeneral: Briefcase,
+  roleTechnical: GraduationCap,
+  roleScenario: Puzzle,
+  roleExperience: History,
+}
+
+const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
+
+/** The final report: a full-screen candidate dashboard — score ring, KPI tiles, radar with a peer
+ * benchmark overlay, comparison against top peers of the same role, an evaluation-stage timeline,
+ * and a closing recommendation banner — reachable from a right-hand sidebar (mirroring the rest of
+ * the RTL app: first flex child sits on the right).
+ */
+export function ResultsStage({ assessment, onOpenList, onOpenPanel, onOpenQuestionBank, onNew }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
+  const allAssessments = useCompetencyStore((s) => s.assessments)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
@@ -61,6 +111,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
+  const compareRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [settingApproval, setSettingApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -80,9 +131,77 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const completion = isPM ? computeCompletion(assessment.answers) : computeRoleCompletion(roleQuestions, assessment.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
   const roleRecommendation = isPM ? null : recommendationForRole(overall, domainScores)
+  const statusColor = isPM ? tierColor(overall) : ROLE_RECOMMENDATION_COLOR[roleRecommendation!.grade]
+  const statusLabel = isPM ? band.label : ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation!.grade]
+  const statusGuidance = isPM ? band.guidance : roleRecommendation!.reason || `امتیاز کلی ٪${overall ?? 0} — بدون نقص حیاتی در حوزه‌های ارزیابی‌شده.`
 
-  // The panel's contribution, kept alongside the lead's verdict rather than blended into it —
-  // the headline score on this report is the lead's final call, not an average of the three.
+  // Peers: other candidates evaluated for the same job role, used for the benchmark radar overlay,
+  // the comparison bar chart, and the rank card. Each peer's own domain scores are computed with the
+  // exact same function used above, over its own answers (and, for role-based assessments, its own
+  // selected questions) — never guessed or interpolated.
+  const peers = useMemo(() => {
+    return allAssessments
+      .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole)
+      .map((a) => {
+        const aRoleQuestions = isPM ? [] : questionsForAssessment(a, questionBank)
+        const aDomainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(aRoleQuestions, a.answers)
+        return { assessment: a, domainScores: aDomainScores, overall: computeOverallPercent(aDomainScores) }
+      })
+      .filter((p) => p.overall != null)
+      .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssessments, assessment.id, assessment.jobRole, questionBank, isPM])
+
+  const benchmarkScores: DomainScore[] | undefined =
+    peers.length > 0
+      ? domainScores.map((d, i) => {
+          const values = peers.map((p) => p.domainScores[i]?.percentScore).filter((v): v is number => typeof v === 'number')
+          const avg = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null
+          return { ...d, percentScore: avg }
+        })
+      : undefined
+
+  const allOveralls = [overall, ...peers.map((p) => p.overall)].filter((v): v is number => typeof v === 'number')
+  const rank = overall != null ? allOveralls.filter((v) => v > overall).length + 1 : null
+  const avgOverall = allOveralls.length > 0 ? Math.round(allOveralls.reduce((a, b) => a + b, 0) / allOveralls.length) : null
+  const maxOverall = allOveralls.length > 0 ? Math.max(...allOveralls) : null
+
+  const topPeers = peers.slice(0, 2)
+  const comparisonData = domainScores.map((d, i) => {
+    const row: Record<string, string | number> = { domain: d.domain.shortTitle, [assessment.candidateName]: d.percentScore ?? 0 }
+    topPeers.forEach((p) => {
+      row[p.assessment.candidateName] = p.domainScores[i]?.percentScore ?? 0
+    })
+    return row
+  })
+
+  const kpiTiles = domainScores.map((d) => ({
+    domain: d,
+    Icon: isPM ? PM_DOMAIN_ICON[d.domain.key as CompetencyDomainKey] ?? Compass : ROLE_BUCKET_ICON[d.domain.key] ?? Compass,
+  }))
+
+  const keyProjects = [...assessment.employmentHistory].slice(0, 3)
+
+  // Real, honest signals rather than fabricated dates: each step reflects something actually
+  // recorded on this assessment (submission, panel completion, final sign-off) — a step with no
+  // reliable date just shows its checkmark without one, instead of inventing a timestamp.
+  const submittedScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id && s.submittedAt)
+  const panelists = allPanelists.filter((p) => p.assessmentId === assessment.id)
+  const stages = [
+    { label: 'ثبت رزومه', done: true, date: assessment.createdAt },
+    { label: 'غربالگری اولیه', done: assessment.selfServiceStatus === 'submitted' || assessment.selfServiceStatus === 'reviewed', date: null as string | null },
+    { label: 'پاسخ به سؤالات', done: completion.percent === 100, date: assessment.interviewDate || null },
+    { label: 'امتیازدهی پنل', done: panelists.length > 0 && submittedScores.length === panelists.length, date: null as string | null },
+    { label: 'ثبت نهایی', done: assessment.status === 'completed', date: assessment.status === 'completed' ? assessment.reviewedAt || assessment.updatedAt : null },
+  ]
+
+  const qualificationChips = [
+    { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
+    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: assessment.experienceScore },
+    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: assessment.pmTrainingScore },
+    { label: 'صلاحیت حرفه‌ای', icon: Award, value: assessment.pmCertificationScore },
+  ]
+
   const panelSummary: PanelSummaryRow[] = allPanelists
     .filter((p) => p.assessmentId === assessment.id)
     .map((p) => {
@@ -94,22 +213,6 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       }
     })
 
-  const qualificationChips = [
-    { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
-    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: assessment.experienceScore },
-    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: assessment.pmTrainingScore },
-    { label: 'صلاحیت حرفه‌ای', icon: Award, value: assessment.pmCertificationScore },
-    { label: 'نتایج مصاحبه', icon: MessageSquareText, value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
-  ]
-
-  /**
-   * Prints the light-mode report on its own, inside a throwaway iframe.
-   *
-   * Calling window.print() on the app can't produce a usable page: the module shell paints its
-   * dark background through inline styles that print CSS can't reach, and the app's global @page
-   * rule is A4 landscape for the wide dashboards. The iframe starts from a blank document, so the
-   * report is the only thing on the paper and it gets its own portrait page box.
-   */
   const handlePrint = async () => {
     const node = printRef.current
     if (!node) return
@@ -139,21 +242,12 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 </style></head><body><div id="fit-wrap" style="margin:0 auto;overflow:hidden;">${node.innerHTML}</div></body></html>`)
     doc.close()
 
-    // Without waiting, Chrome snapshots the page before the webfont arrives and prints fallback
-    // glyphs with the wrong metrics.
     try {
       await doc.fonts?.ready
     } catch {
       /* fonts API unavailable — print with whatever is loaded */
     }
 
-    // The report is authored at a fixed 900px, sized for the PDF capture, without regard for
-    // whether that happens to fit one A4 page. Reflowing its width to the page (the previous
-    // approach) let the report's internal fixed-px columns overflow instead of shrinking, which is
-    // exactly the "page size doesn't match the text" symptom. Uniformly scaling the whole,
-    // unreflowed report down to fit the page's printable box — same idea as the PDF export's
-    // fitToOnePage — keeps every internal proportion intact and guarantees it never spills onto a
-    // second page.
     const wrap = doc.getElementById('fit-wrap')
     const reportEl = wrap?.firstElementChild as HTMLElement | undefined
     if (wrap && reportEl) {
@@ -171,8 +265,6 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 
     win.focus()
     win.print()
-    // Safari fires afterprint late (or not at all when the dialog is dismissed), so also sweep up
-    // on a timer; removing an already-removed node is a no-op.
     win.addEventListener('afterprint', () => frame.remove())
     setTimeout(() => frame.remove(), 60_000)
   }
@@ -200,273 +292,429 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const handleSend = () => {
     const subject = encodeURIComponent(`نتیجه مصاحبه ارزیابی شایستگی — ${assessment.candidateName}`)
     const body = encodeURIComponent(
-      `با سلام\n\nنتیجه ارزیابی شایستگی جناب/سرکار خانم ${assessment.candidateName}:\nامتیاز کلی: ${overall != null ? overall + '٪' : '—'}\nسطح بلوغ: ${band.label}\n\nبرای گزارش کامل، فایل PDF پیوست را مشاهده کنید.`,
+      `با سلام\n\nنتیجه ارزیابی شایستگی جناب/سرکار خانم ${assessment.candidateName}:\nامتیاز کلی: ${overall != null ? overall + '٪' : '—'}\nسطح: ${statusLabel}\n\nبرای گزارش کامل، فایل PDF پیوست را مشاهده کنید.`,
     )
     window.location.href = `mailto:${assessment.candidateEmail}?subject=${subject}&body=${body}`
   }
 
+  const navItems: { label: string; icon: typeof LayoutDashboard; onClick?: () => void; active?: boolean }[] = [
+    { label: 'داشبورد', icon: LayoutDashboard, active: true },
+    { label: 'لیست متقاضیان', icon: Users, onClick: onOpenList },
+    { label: 'فرآیند ارزیابی', icon: ListChecks, onClick: onOpenPanel },
+    { label: 'مقایسه کاندیدها', icon: BarChart3, onClick: () => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+    { label: 'گزارش‌های مدیریتی', icon: FileBarChart2 },
+    { label: 'کتابخانه سوالات', icon: BookOpen, onClick: onOpenQuestionBank },
+    { label: 'تنظیمات', icon: Settings },
+  ]
+
   return (
-    <div className="space-y-4">
-      <div className="no-print flex flex-wrap items-center justify-end gap-2">
-        <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
-          <Printer size={14} /> پرینت
-        </button>
-        <button
-          onClick={handlePdf}
-          disabled={exporting}
-          className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 disabled:opacity-50"
-        >
-          <Download size={14} /> {exporting ? 'در حال ساخت PDF…' : 'دانلود PDF'}
-        </button>
-        <button
-          onClick={handleSend}
-          disabled={!assessment.candidateEmail}
-          title={!assessment.candidateEmail ? 'ابتدا ایمیل نامزد را در بخش مشخصات ثبت کنید' : ''}
-          className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
-        >
-          <Mail size={14} /> ارسال به نامزد
-        </button>
-        {assessment.status !== 'completed' && (
-          <button
-            onClick={() => setStatus(assessment.id, 'completed')}
-            className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400"
-          >
-            <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
-          </button>
-        )}
-        <button
-          onClick={handleApprove}
-          disabled={settingApproval}
-          className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
-            assessment.isApproved ? 'border border-white/10 text-secondary hover:bg-white/5' : 'bg-emerald-500 text-white hover:bg-emerald-400'
-          }`}
-        >
-          <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید صلاحیت'}
-        </button>
-      </div>
-
-      <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
-        <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Globe size={14} className="text-purple-300" /> لینک عمومی نتایج
-        </p>
-        <p className="text-[11px] leading-5 text-muted">
-          این لینک را برای هر کسی ارسال کنید تا بدون ورود به سامانه، فقط همین بخش نتایج را به‌صورت آنلاین ببیند — بدون نام مصاحبه‌گران و بدون سایر اطلاعات نامزد.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <input readOnly value={resultsShareUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(resultsShareUrl)
-              setLinkCopied(true)
-              setTimeout(() => setLinkCopied(false), 2000)
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
-          >
-            <Copy size={12} /> {linkCopied ? 'کپی شد' : 'کپی لینک'}
-          </button>
-          <button
-            type="button"
-            onClick={() => regenerateResultsShareLink(assessment.id)}
-            title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
-          >
-            <RefreshCw size={12} /> لینک جدید
-          </button>
+    <div className="comp-results-dashboard fixed inset-0 z-40 flex" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+      {/* Sidebar — first flex child, so it lands on the right in this RTL app without any direction hacks. */}
+      <aside className="no-print flex w-14 shrink-0 flex-col gap-1 border-l border-white/10 bg-[#0b0f16] px-2 py-5 sm:w-56 sm:px-3">
+        <div className="mb-5 flex items-center gap-2 px-1 sm:px-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `${COMPETENCY_ACCENT}22`, color: COMPETENCY_ACCENT }}>
+            <Award size={16} />
+          </div>
+          <p className="hidden text-xs font-extrabold sm:block">ارزیابی شایستگی</p>
         </div>
-      </div>
-
-      {/* Off-screen, light-mode print/PDF template — kept out of view (print-only) so the on-screen
-          dark card above stays as-is, but window.print()/PDF export both target this instead, since
-          html2canvas captures literal colors and a dark background prints/exports poorly. */}
-      <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <CompetencyPrintReport assessment={assessment} panel={panelSummary} domainScoresOverride={isPM ? undefined : domainScores} roleRecommendation={roleRecommendation} />
-      </div>
-
-      <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
-        {/* Personnel card header */}
-        <div className="glass-panel relative overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
-            <div className="flex-1 text-center sm:text-right">
-              <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
-                {assessment.candidateName}
-                {assessment.isApproved && <ApprovalMedal />}
-              </p>
-              <p className="text-xs text-muted">{assessment.candidatePosition}</p>
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-secondary sm:justify-start">
-                {assessment.candidatePhone && <span dir="ltr">{assessment.candidatePhone}</span>}
-                {assessment.candidateEmail && <span dir="ltr">{assessment.candidateEmail}</span>}
-                <span>تاریخ مصاحبه: {formatJalali(assessment.interviewDate)}</span>
-              </div>
-            </div>
-            <div
-              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
-              style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+        <nav className="flex-1 space-y-1">
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              disabled={!item.active && !item.onClick}
+              onClick={item.onClick}
+              title={item.label}
+              className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors sm:px-3 ${
+                item.active ? 'bg-purple-500/20 text-purple-200' : item.onClick ? 'text-secondary hover:bg-white/5 hover:text-primary' : 'text-muted/50'
+              }`}
             >
-              <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
-                <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
-                  {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-                </p>
-                <p className="mt-0.5 text-[10px] font-bold">{band.label}</p>
-              </div>
+              <item.icon size={15} className="shrink-0" />
+              <span className="hidden flex-1 text-right sm:block">{item.label}</span>
+              {!item.active && !item.onClick && <Lock size={11} className="hidden opacity-60 sm:block" />}
+            </button>
+          ))}
+        </nav>
+        <p className="hidden px-2 text-[10px] text-muted sm:block">v1.0.0</p>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 overflow-y-auto">
+        <header className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0b0f16]/90 px-5 py-3.5 backdrop-blur">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-purple-300" />
+            <h1 className="text-sm font-extrabold">پنل ارزیابی متقاضیان {JOB_ROLE_LABEL_FA[assessment.jobRole]}</h1>
+          </div>
+          {onNew && (
+            <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
+              <Plus size={14} /> ارزیابی جدید
+            </button>
+          )}
+        </header>
+
+        <div className="space-y-4 p-4 sm:p-5">
+          {/* Toolbar */}
+          <div className="no-print flex flex-wrap items-center justify-end gap-2">
+            <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
+              <Printer size={14} /> پرینت
+            </button>
+            <button
+              onClick={handlePdf}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 disabled:opacity-50"
+            >
+              <Download size={14} /> {exporting ? 'در حال ساخت PDF…' : 'دانلود PDF'}
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={!assessment.candidateEmail}
+              title={!assessment.candidateEmail ? 'ابتدا ایمیل نامزد را در بخش مشخصات ثبت کنید' : ''}
+              className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+            >
+              <Mail size={14} /> ارسال به نامزد
+            </button>
+            {assessment.status !== 'completed' && (
+              <button
+                onClick={() => setStatus(assessment.id, 'completed')}
+                className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400"
+              >
+                <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
+              </button>
+            )}
+          </div>
+
+          <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <Globe size={14} className="text-purple-300" /> لینک عمومی نتایج
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input readOnly value={resultsShareUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(resultsShareUrl)
+                  setLinkCopied(true)
+                  setTimeout(() => setLinkCopied(false), 2000)
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+              >
+                <Copy size={12} /> {linkCopied ? 'کپی شد' : 'کپی لینک'}
+              </button>
+              <button
+                type="button"
+                onClick={() => regenerateResultsShareLink(assessment.id)}
+                title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+              >
+                <RefreshCw size={12} /> لینک جدید
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* Qualification scorecard (project-manager resume/certification scoring — role-based assessments show a recommendation card instead, below) */}
-        {isPM && (
-          <div className="glass-panel rounded-2xl p-4">
-            <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              {qualificationChips.map((c) => {
-                const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
-                return (
-                  <div
-                    key={c.label}
-                    className="relative overflow-hidden rounded-2xl border p-3.5 text-center transition-transform hover:-translate-y-0.5"
-                    style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
-                  >
-                    <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
-                    <p className="num text-2xl font-black leading-none" style={{ color }}>
-                      {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
-                      <span className="text-xs font-bold text-muted"> /۵</span>
+          <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
+            <CompetencyPrintReport assessment={assessment} panel={panelSummary} domainScoresOverride={isPM ? undefined : domainScores} roleRecommendation={roleRecommendation} />
+          </div>
+
+          <div ref={reportRef} className="space-y-4">
+            {/* Candidate header + score ring + status card */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_0.9fr_1fr]">
+              <div className="glass-panel flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row">
+                <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
+                <div className="flex-1 text-center sm:text-right">
+                  <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
+                    {assessment.candidateName}
+                    {assessment.isApproved && <ApprovalMedal />}
+                    {overall != null && overall >= 85 && <Star size={16} className="fill-amber-400 text-amber-400" />}
+                  </p>
+                  <p className="text-xs text-muted">متقاضی سمت: {assessment.candidatePosition || JOB_ROLE_LABEL_FA[assessment.jobRole]}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+                    {assessment.yearsExperienceTotal != null && (
+                      <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10.5px] text-secondary">{assessment.yearsExperienceTotal.toLocaleString('fa-IR')} سال سابقه</span>
+                    )}
+                    {assessment.certifications.slice(0, 2).map((c) => (
+                      <span key={c.id} className="rounded-full bg-purple-500/15 px-2.5 py-1 text-[10.5px] font-bold text-purple-200">
+                        {c.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel flex items-center justify-center rounded-2xl p-5">
+                <div
+                  className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
+                  style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+                >
+                  <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
+                    <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
+                      {overall != null ? overall.toLocaleString('fa-IR') : '—'}
                     </p>
-                    <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
+                    <p className="text-[10px] text-muted">از ۱۰۰</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel flex flex-col justify-between gap-3 rounded-2xl p-4" style={{ borderColor: `${statusColor}40` }}>
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+                    وضعیت: <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
+                  </p>
+                  <p className="text-base font-extrabold" style={{ color: statusColor }}>
+                    {statusLabel}
+                  </p>
+                  <p className="mt-1.5 line-clamp-3 text-[10.5px] leading-5 text-secondary">{statusGuidance}</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={handlePdf} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-500 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400">
+                    <Download size={12} /> گزارش کامل
+                  </button>
+                  <button
+                    onClick={() => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+                  >
+                    <BarChart3 size={12} /> مقایسه با سایرین
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI tiles */}
+            <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 ${kpiTiles.length > 4 ? 'lg:grid-cols-4' : ''}`}>
+              {kpiTiles.map(({ domain: d, Icon }) => {
+                const color = tierColor(d.percentScore)
+                return (
+                  <div key={d.domain.key} className="glass-panel rounded-2xl p-3.5">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
+                      <Icon size={13} style={{ color }} /> {d.domain.shortTitle}
+                    </div>
+                    <p className="num text-xl font-extrabold" style={{ color }}>
+                      {d.percentScore != null ? d.percentScore.toLocaleString('fa-IR') : '—'} <span className="text-[11px] font-bold text-muted">/۱۰۰</span>
+                    </p>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: color }} />
+                    </div>
                   </div>
                 )
               })}
             </div>
-          </div>
-        )}
 
-        {!isPM && roleRecommendation && (
-          <div className="glass-panel rounded-2xl p-4" style={{ borderColor: `${ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade]}40` }}>
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-sm font-extrabold">{JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی</p>
-              <span
-                className="rounded-full px-2.5 py-1 text-xs font-bold"
-                style={{ background: `${ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade]}1c`, color: ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade] }}
-              >
-                {ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}
-              </span>
-            </div>
-            {roleRecommendation.hasCriticalGap && (
-              <p className="mt-1 rounded-lg bg-red-500/10 p-2.5 text-[11px] leading-6 text-red-200">{roleRecommendation.reason}</p>
-            )}
-            <p className="mt-2 text-[11px] leading-5 text-muted">
-              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سؤال پاسخ داده‌شده — امتیاز بر اساس وزن‌دهی عمومی
-              ٪۲۰، تخصصی ٪۳۵، سناریو/حل‌مسئله ٪۳۰ و تجربه/قضاوت حرفه‌ای ٪۱۵ محاسبه شده است.
-            </p>
-          </div>
-        )}
-
-        {/* Radar + maturity guidance */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="glass-panel rounded-2xl p-4">
-            <p className="mb-2 text-xs font-bold">نمودار رادار بلوغ شایستگی</p>
-            <CompetencyRadarChart domainScores={domainScores} />
-            <p className="text-center text-[11px] text-muted">
-              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="glass-panel rounded-2xl p-4">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
-                <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
-              </p>
-              <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
-            </div>
-
-            {assessment.capstoneScore != null && (
-              <div className="glass-panel rounded-2xl p-4">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
-                  <AlertTriangle size={13} className="text-amber-300" /> امتیاز سناریوی پایانی (بحران چندوجهی)
-                </p>
-                <p className="num text-lg font-extrabold">{assessment.capstoneScore.toLocaleString('fa-IR')} / ۵</p>
-                {assessment.capstoneNote && <p className="mt-1 text-[11px] leading-5 text-secondary">{assessment.capstoneNote}</p>}
-              </div>
-            )}
-
-            {(strengths.length > 0 || weaknesses.length > 0) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
+            {/* Strengths / radar / rank */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.85fr_1.3fr_0.85fr]">
+              <div className="space-y-3">
                 {strengths.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)
+                  <div className="glass-panel rounded-2xl p-4">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-green-300">
+                      <Trophy size={13} /> نقاط قوت
                     </p>
-                    <p className="text-[11px] leading-6 text-secondary">{strengths.map((s) => s.domain.title).join('، ')}</p>
+                    <ul className="space-y-1.5">
+                      {strengths.map((s) => (
+                        <li key={s.domain.key} className="flex items-center gap-1.5 text-[11px] text-secondary">
+                          <CheckCircle2 size={12} className="shrink-0 text-green-400" /> {s.domain.title}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {weaknesses.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-300">
-                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)
+                  <div className="glass-panel rounded-2xl p-4">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                      <AlertTriangle size={13} /> نقاط قابل بهبود
                     </p>
-                    <p className="text-[11px] leading-6 text-secondary">{weaknesses.map((s) => s.domain.title).join('، ')}</p>
+                    <ul className="space-y-1.5">
+                      {weaknesses.map((s) => (
+                        <li key={s.domain.key} className="flex items-center gap-1.5 text-[11px] text-secondary">
+                          <AlertTriangle size={12} className="shrink-0 text-amber-400" /> {s.domain.title}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
-            )}
 
-            {(assessment.strengths || assessment.developmentAreas) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                <p className="text-[11px] font-bold text-purple-200">جمع‌بندی مسئول ارزیابی</p>
-                {assessment.strengths && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{assessment.strengths}</p>
-                  </div>
-                )}
-                {assessment.developmentAreas && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
-                      <TrendingDown size={12} /> زمینه‌های قابل بهبود
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{assessment.developmentAreas}</p>
-                  </div>
-                )}
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-2 text-center text-xs font-bold">نمودار شایستگی‌ها</p>
+                <CompetencyRadarChart domainScores={domainScores} benchmarkScores={benchmarkScores} />
+                <p className="text-center text-[11px] text-muted">
+                  {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
+                </p>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Domain breakdown */}
-        <div className="glass-panel space-y-2 rounded-2xl p-4">
-          <p className="mb-1 text-xs font-bold">امتیاز به تفکیک حوزه (با وزن)</p>
-          {domainScores.map((d) => (
-            <div key={d.domain.key} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-[11px] text-secondary">
-                {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
-              </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: tierColor(d.percentScore) }} />
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
+                  <Trophy size={13} className="text-amber-300" /> رتبه در میان متقاضیان
+                </p>
+                {rank != null ? (
+                  <>
+                    <p className="text-center">
+                      <span className="num text-3xl font-black text-purple-300">{rank.toLocaleString('fa-IR')}</span>
+                      <span className="num text-lg text-muted"> / {allOveralls.length.toLocaleString('fa-IR')}</span>
+                    </p>
+                    <p className="mb-3 text-center text-[10.5px] text-muted">رتبه این متقاضی از میان کل متقاضیان این شغل</p>
+                    <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-center">
+                      <div className="flex-1">
+                        <p className="num text-sm font-bold">{avgOverall?.toLocaleString('fa-IR') ?? '—'}</p>
+                        <p className="text-[10px] text-muted">میانگین کل</p>
+                      </div>
+                      <div className="flex-1">
+                        <p className="num text-sm font-bold text-emerald-300">{maxOverall?.toLocaleString('fa-IR') ?? '—'}</p>
+                        <p className="text-[10px] text-muted">بالاترین امتیاز</p>
+                      </div>
+                    </div>
+                    {overall != null && maxOverall != null && (
+                      <div className="mt-3">
+                        <div className="relative h-1.5 rounded-full bg-white/5">
+                          <div className="absolute inset-y-0 right-0 rounded-full bg-purple-500/40" style={{ width: `${maxOverall}%` }} />
+                          <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-[#0b0f16] bg-purple-400" style={{ right: `calc(${overall}% - 6px)` }} />
+                        </div>
+                        <div className="mt-1 flex justify-between text-[9px] text-muted">
+                          <span>۰</span>
+                          <span>۱۰۰</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="py-6 text-center text-[11px] text-muted">هنوز متقاضی دیگری با این شغل ثبت نشده — رتبه‌بندی پس از ثبت چند متقاضی دیگر نمایش داده می‌شود.</p>
+                )}
               </div>
-              <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
-                {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
-              </span>
             </div>
-          ))}
-        </div>
 
-        {panelSummary.length > 0 && (
-          <div className="glass-panel space-y-2 rounded-2xl p-4">
-            <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
-            {panelSummary.map((p) => (
-              <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
-                <span className="text-secondary">{p.name}</span>
-                <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
-                  {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
-                </span>
+            {/* Comparison vs top peers + key project history */}
+            <div ref={compareRef} className="grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 text-xs font-bold">مقایسه با سایر متقاضیان برتر</p>
+                {topPeers.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={comparisonData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="domain" tick={{ fill: '#9aa4b8', fontSize: 10 }} />
+                      <YAxis domain={[0, 100]} tick={{ fill: '#9aa4b8', fontSize: 10 }} />
+                      <Tooltip contentStyle={{ background: 'rgba(20,10,32,0.94)', border: `1px solid ${COMPETENCY_ACCENT}55`, borderRadius: 10, fontSize: 12 }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey={assessment.candidateName} fill={COMPETENCY_ACCENT} radius={[4, 4, 0, 0]} />
+                      {topPeers.map((p, i) => (
+                        <Bar key={p.assessment.id} dataKey={p.assessment.candidateName} fill={PEER_SERIES_COLORS[i]} radius={[4, 4, 0, 0]} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="py-10 text-center text-[11px] text-muted">هنوز متقاضی دیگری برای مقایسه در این شغل ثبت نشده است.</p>
+                )}
               </div>
-            ))}
-            <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ اعضای پنل نیست.</p>
+
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
+                  <Briefcase size={13} className="text-purple-300" /> سوابق کلیدی پروژه‌ها
+                </p>
+                {keyProjects.length > 0 ? (
+                  <div className="space-y-2">
+                    {keyProjects.map((p) => (
+                      <div key={p.id} className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-300">
+                          <Building2 size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] font-bold">{p.employer || '—'}</p>
+                          <p className="truncate text-[10px] text-muted">
+                            {p.position} {p.startDate && `— از ${formatJalali(p.startDate)}`}
+                          </p>
+                        </div>
+                        <CheckCircle2 size={14} className="shrink-0 text-green-400" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-[11px] text-muted">سابقه کاری ثبت‌شده‌ای موجود نیست.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Evaluation stages timeline */}
+            <div className="glass-panel rounded-2xl p-4">
+              <p className="mb-4 flex items-center gap-1.5 text-xs font-bold">
+                <ListChecks size={13} className="text-purple-300" /> مراحل ارزیابی
+              </p>
+              <div className="flex items-start justify-between overflow-x-auto pb-1">
+                {stages.map((s, i) => (
+                  <div key={s.label} className="flex flex-1 flex-col items-center gap-1.5 px-1 text-center">
+                    <div className="flex w-full items-center">
+                      <div className={`h-px flex-1 ${i === 0 ? 'opacity-0' : s.done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />
+                      <div
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${
+                          s.done ? 'border-emerald-400 bg-emerald-500/20 text-emerald-300' : 'border-white/15 text-muted'
+                        }`}
+                      >
+                        {s.done ? <CheckCircle2 size={14} /> : <span className="num text-[10px]">{i + 1}</span>}
+                      </div>
+                      <div className={`h-px flex-1 ${i === stages.length - 1 ? 'opacity-0' : stages[i + 1]?.done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />
+                    </div>
+                    <p className="text-[10.5px] font-bold">{s.label}</p>
+                    <p className="num text-[9.5px] text-muted">{s.date ? formatJalali(s.date) : s.done ? '' : 'در انتظار'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {isPM && qualificationChips.some((c) => c.value != null) && (
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {qualificationChips.map((c) => {
+                    const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+                    return (
+                      <div
+                        key={c.label}
+                        className="relative overflow-hidden rounded-2xl border p-3.5 text-center"
+                        style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
+                      >
+                        <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
+                        <p className="num text-2xl font-black leading-none" style={{ color }}>
+                          {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
+                          <span className="text-xs font-bold text-muted"> /۵</span>
+                        </p>
+                        <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {panelSummary.length > 0 && (
+              <div className="glass-panel space-y-2 rounded-2xl p-4">
+                <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
+                {panelSummary.map((p) => (
+                  <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
+                    <span className="text-secondary">{p.name}</span>
+                    <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
+                      {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ اعضای پنل نیست.</p>
+              </div>
+            )}
+
+            {/* Final recommendation banner */}
+            <div className="glass-panel flex flex-col items-start gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center" style={{ borderColor: `${statusColor}40` }}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${statusColor}1c`, color: statusColor }}>
+                <MessageSquareText size={18} />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-extrabold">جمع‌بندی و پیشنهاد</p>
+                <p className="mt-0.5 text-[11px] leading-6 text-secondary">{assessment.strengths || assessment.developmentAreas ? assessment.strengths : statusGuidance}</p>
+              </div>
+              <button
+                onClick={handleApprove}
+                disabled={settingApproval}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
+                  assessment.isApproved ? 'border border-white/10 text-secondary hover:bg-white/5' : 'bg-emerald-500 text-white hover:bg-emerald-400'
+                }`}
+              >
+                <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید و ارسال به مرحله بعد'}
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
@@ -484,7 +732,7 @@ function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
   return (
     <div className="relative shrink-0">
       <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
+        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Users size={28} className="text-muted" />}
       </div>
       {approved && (
         <span className="absolute -bottom-1.5 -left-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#0b0f16] bg-emerald-500 text-white shadow-lg">

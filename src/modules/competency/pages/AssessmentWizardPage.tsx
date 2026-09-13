@@ -26,6 +26,8 @@ const ROLE_SECTIONS: { key: string; label: string; types: QuestionType[] }[] = [
 interface AssessmentWizardPageProps {
   assessmentId: string
   onDone: () => void
+  onOpenQuestionBank?: () => void
+  onNew?: () => void
 }
 
 type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' | 'results'
@@ -50,7 +52,7 @@ const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qua
 const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
 /** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
-export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardPageProps) {
+export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank, onNew }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
@@ -114,6 +116,15 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   if (!assessment) {
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
+  }
+
+  // The results dashboard is a full-screen experience with its own right-hand sidebar (see
+  // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
+  // nesting inside it.
+  if (activeStage === 'results') {
+    return (
+      <ResultsStage assessment={assessment} onOpenList={onDone} onOpenPanel={() => setStage('panel')} onOpenQuestionBank={onOpenQuestionBank} onNew={onNew} />
+    )
   }
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
@@ -444,8 +455,6 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
       )}
 
       {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
-
-      {activeStage === 'results' && <ResultsStage assessment={assessment} />}
     </div>
   )
 }

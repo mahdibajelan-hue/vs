@@ -101,7 +101,14 @@ export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
           </div>
         )}
 
-        {view.name === 'assessment' && <AssessmentWizardPage assessmentId={view.id} onDone={() => setView({ name: 'list' })} />}
+        {view.name === 'assessment' && (
+          <AssessmentWizardPage
+            assessmentId={view.id}
+            onDone={() => setView({ name: 'list' })}
+            onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
+            onNew={() => setView({ name: 'new' })}
+          />
+        )}
 
         {view.name === 'questionBank' && <QuestionBankPage onBack={() => setView({ name: 'list' })} />}
       </div>
