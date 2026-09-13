@@ -7,6 +7,15 @@ export type CompetencyDomainKey =
   | 'changeRisk'
   | 'stakeholder'
   | 'execution'
+  // The 4 category "buckets" used to score every non-project-manager job role's DB-backed
+  // question bank (see roleCompetencyModel.ts) — added to this same union (rather than a
+  // parallel type) so DomainScore/computeOverallPercent/domainFlags/tierColor/
+  // CompetencyRadarChart all work unmodified for both the fixed PM rubric and the dynamic
+  // role question banks.
+  | 'roleGeneral'
+  | 'roleTechnical'
+  | 'roleScenario'
+  | 'roleExperience'
 
 export interface CompetencyDomain {
   key: CompetencyDomainKey
@@ -28,12 +37,114 @@ export interface CompetencyQuestion {
 export interface CompetencyAnswer {
   score: number | null
   note: string
+  /** The candidate's own recorded answer — written down by the evaluator before the reference
+   * answer is revealed (see RoleQuestionScoreCard). Optional and unused by the fixed
+   * project-manager rubric flow, which never shows/hides a reference answer. */
+  candidateAnswer?: string
 }
 
 export type CompetencyAnswers = Record<string, CompetencyAnswer>
 
 export type AssessmentStatus = 'draft' | 'completed'
 export type SelfServiceStatus = 'not_sent' | 'pending' | 'submitted' | 'reviewed'
+
+/**
+ * Every job whose competency is assessed. 'project_manager' is the original, fixed in-code rubric
+ * (competencyModel.ts) and must never be affected by the DB-backed question bank below — every
+ * other role draws its questions from comp_question_bank instead.
+ */
+export type JobRole =
+  | 'project_manager'
+  | 'welding_inspector'
+  | 'mechanical_piping_inspector'
+  | 'pipeline_inspector'
+  | 'coating_cp_inspector'
+  | 'radiography_interpreter'
+  | 'civil_engineer'
+  | 'project_control_specialist'
+  | 'hse_specialist'
+  | 'contracts_specialist'
+
+export const JOB_ROLE_LABEL_FA: Record<JobRole, string> = {
+  project_manager: 'مدیر پروژه',
+  welding_inspector: 'مهندس ناظر جوش',
+  mechanical_piping_inspector: 'مهندس ناظر مکانیکال و پایپینگ',
+  pipeline_inspector: 'مهندس ناظر Pipeline',
+  coating_cp_inspector: 'مهندس ناظر پوشش و حفاظت کاتدیک',
+  radiography_interpreter: 'مهندس مفسر فیلم‌های رادیوگرافی',
+  civil_engineer: 'مهندس Civil (مسیرسازی، حفاری و ابنیه)',
+  project_control_specialist: 'کارشناس کنترل پروژه',
+  hse_specialist: 'کارشناس HSE',
+  contracts_specialist: 'کارشناس بررسی صورت‌وضعیت و قراردادها',
+}
+
+export const JOB_ROLES: JobRole[] = [
+  'project_manager',
+  'welding_inspector',
+  'mechanical_piping_inspector',
+  'pipeline_inspector',
+  'coating_cp_inspector',
+  'radiography_interpreter',
+  'civil_engineer',
+  'project_control_specialist',
+  'hse_specialist',
+  'contracts_specialist',
+]
+
+/** Question type per spec — drives which of the 4 scoring buckets (see roleCompetencyModel.ts) a question counts toward. */
+export type QuestionType = 'GENERAL' | 'TECHNICAL' | 'SCENARIO' | 'PROBLEM_SOLVING' | 'EXPERIENCE_BASED' | 'CASE_STUDY' | 'IMAGE_BASED'
+
+export const QUESTION_TYPE_LABEL_FA: Record<QuestionType, string> = {
+  GENERAL: 'عمومی شغلی',
+  TECHNICAL: 'تخصصی',
+  SCENARIO: 'سناریومحور',
+  PROBLEM_SOLVING: 'حل مسئله',
+  EXPERIENCE_BASED: 'تجربه‌محور',
+  CASE_STUDY: 'مطالعه موردی',
+  IMAGE_BASED: 'تصویری',
+}
+
+export type QuestionDifficulty = 'L1' | 'L2' | 'L3' | 'L4'
+
+export const QUESTION_DIFFICULTY_LABEL_FA: Record<QuestionDifficulty, string> = {
+  L1: 'پایه (Basic)',
+  L2: 'کاربردی (Intermediate)',
+  L3: 'تحلیلی (Advanced)',
+  L4: 'خبره (Expert)',
+}
+
+export const QUESTION_DIFFICULTY_COLOR: Record<QuestionDifficulty, string> = {
+  L1: '#38bdf8',
+  L2: '#34d399',
+  L3: '#fbbf24',
+  L4: '#f87171',
+}
+
+/** One row of the DB-backed, multi-role question bank (comp_question_bank) — everything an admin
+ * can author/edit and everything an evaluator needs to score a candidate's answer without a fixed,
+ * versioned-in-code rubric like the Project Manager one. */
+export interface CompQuestionBankItem {
+  id: string
+  jobRole: JobRole
+  category: QuestionType
+  subCategory: string
+  difficulty: QuestionDifficulty
+  questionText: string
+  imageUrl: string
+  /** Short reference paragraph — never shown to the candidate, only to the evaluator, and only after the candidate's own answer has been recorded (see RoleQuestionScoreCard). */
+  referenceAnswer: string
+  keyPoints: string[]
+  excellentAnswerIndicators: string[]
+  commonMistakes: string[]
+  standardReference: string
+  scoreMin: number
+  scoreMax: number
+  evaluatorNoteRequired: boolean
+  active: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 export interface EducationEntry {
   id: string
@@ -66,6 +177,15 @@ export interface CertificationEntry {
 
 export interface CompetencyAssessment {
   id: string
+  /** Which question bank scores this candidate — 'project_manager' (the default, including every
+   * pre-existing row) keeps using the fixed in-code rubric untouched; every other role draws its
+   * questions from comp_question_bank via selectedQuestionIds below. */
+  jobRole: JobRole
+  /** The specific comp_question_bank row ids randomly assigned to this assessment (see
+   * useCompetencyStore.assignRandomQuestions) — frozen once set, so every panelist and the lead
+   * score the exact same question set and re-opening the assessment never reshuffles it. Unused
+   * (always []) for jobRole = 'project_manager'. */
+  selectedQuestionIds: string[]
   candidateName: string
   candidatePosition: string
   candidateNationalId: string

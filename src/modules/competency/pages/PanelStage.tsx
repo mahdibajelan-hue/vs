@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { CheckCircle2, Plus, Shuffle, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
+import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { JOB_ROLE_LABEL_FA } from '../types'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
+import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
 
@@ -35,19 +38,25 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const setMyPanelistAnswer = useCompetencyStore((s) => s.setMyPanelistAnswer)
   const setMyPanelistCapstone = useCompetencyStore((s) => s.setMyPanelistCapstone)
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
+  const questionBank = useCompetencyStore((s) => s.questionBank)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const assignRandomQuestions = useCompetencyStore((s) => s.assignRandomQuestions)
 
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const myPanelistRow = panelists.find((p) => p.userId === myId)
   const isLead = assessment?.createdBy === myId || isAdmin || myPanelistRow?.isLead === true
+  const isPM = isProjectManagerRole(assessment?.jobRole ?? 'project_manager')
 
   const [pickUserId, setPickUserId] = useState('')
   const [pickAsLead, setPickAsLead] = useState(false)
+  const [assigningQuestions, setAssigningQuestions] = useState(false)
 
   useEffect(() => {
     if (profiles.length === 0) fetchProfiles()
     fetchPanelists(assessmentId)
     fetchPanelistScores(assessmentId)
+    if (questionBank.length === 0) fetchQuestionBank()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId])
 
@@ -58,18 +67,23 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const PANEL_SIZE = 3
   const panelFull = panelists.length >= PANEL_SIZE
 
+  const roleQuestions = useMemo(() => (assessment && !isPM ? questionsForAssessment(assessment, questionBank) : []), [assessment, isPM, questionBank])
+
   const submittedScores = panelistScores.filter((p) => p.submittedAt)
   const averageDomainScores = useMemo(() => {
     if (submittedScores.length === 0) return null
-    return COMPETENCY_DOMAINS.map((domain) => {
+    const domains = isPM ? COMPETENCY_DOMAINS : computeCategoryScores(roleQuestions, {}).map((d) => d.domain)
+    return domains.map((domain) => {
       const values = submittedScores
-        .map((s) => computeDomainScores(s.answers).find((d) => d.domain.key === domain.key)?.percentScore)
+        .map((s) => (isPM ? computeDomainScores(s.answers) : computeCategoryScores(roleQuestions, s.answers)).find((d) => d.domain.key === domain.key)?.percentScore)
         .filter((v): v is number => typeof v === 'number')
       return { domain, avg: values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null, count: values.length }
     })
-  }, [submittedScores])
+  }, [submittedScores, isPM, roleQuestions])
 
-  const overallAverages = submittedScores.map((s) => computeOverallPercent(computeDomainScores(s.answers))).filter((v): v is number => typeof v === 'number')
+  const overallAverages = submittedScores
+    .map((s) => computeOverallPercent(isPM ? computeDomainScores(s.answers) : computeCategoryScores(roleQuestions, s.answers)))
+    .filter((v): v is number => typeof v === 'number')
   const overallAvg = overallAverages.length > 0 ? Math.round(overallAverages.reduce((a, b) => a + b, 0) / overallAverages.length) : null
 
   const capstoneAverages = submittedScores.map((s) => s.capstoneScore).filter((v): v is number => typeof v === 'number')
@@ -201,28 +215,65 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
             )}
           </div>
           <ScoringGuideBanner />
-          {COMPETENCY_DOMAINS.map((domain) => (
-            <div key={domain.key} className="glass-panel space-y-2.5 rounded-2xl p-3.5">
-              <p className="text-xs font-bold">{domain.title}</p>
-              {questionsForDomain(domain.key).map((q, i) => (
-                <QuestionScoreCard
-                  key={q.key}
-                  index={i}
-                  question={q}
-                  hint={domain.excellentAnswerHint}
-                  answer={myScore?.answers[q.key]}
-                  editable
-                  onChange={(score, note) => setMyPanelistAnswer(assessmentId, q.key, score, note)}
-                />
+          {isPM ? (
+            <>
+              {COMPETENCY_DOMAINS.map((domain) => (
+                <div key={domain.key} className="glass-panel space-y-2.5 rounded-2xl p-3.5">
+                  <p className="text-xs font-bold">{domain.title}</p>
+                  {questionsForDomain(domain.key).map((q, i) => (
+                    <QuestionScoreCard
+                      key={q.key}
+                      index={i}
+                      question={q}
+                      hint={domain.excellentAnswerHint}
+                      answer={myScore?.answers[q.key]}
+                      editable
+                      onChange={(score, note) => setMyPanelistAnswer(assessmentId, q.key, score, note)}
+                    />
+                  ))}
+                </div>
               ))}
+              <CapstoneCard
+                score={myScore?.capstoneScore ?? null}
+                note={myScore?.capstoneNote ?? ''}
+                editable
+                onChange={(score, note) => setMyPanelistCapstone(assessmentId, score, note)}
+              />
+            </>
+          ) : roleQuestions.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-5 text-center">
+              <p className="mb-3 text-xs text-secondary">
+                هنوز سؤالی برای این ارزیابی («{assessment ? JOB_ROLE_LABEL_FA[assessment.jobRole] : ''}») انتخاب نشده است.
+              </p>
+              {isLead ? (
+                <button
+                  disabled={assigningQuestions}
+                  onClick={async () => {
+                    if (!assessment) return
+                    setAssigningQuestions(true)
+                    await assignRandomQuestions(assessment.id, assessment.jobRole)
+                    setAssigningQuestions(false)
+                  }}
+                  className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50"
+                >
+                  <Shuffle size={13} /> {assigningQuestions ? 'در حال انتخاب…' : 'انتخاب تصادفی سؤالات'}
+                </button>
+              ) : (
+                <p className="text-[11px] text-muted">به مسئول ارزیابی اطلاع دهید تا سؤالات را انتخاب کند.</p>
+              )}
             </div>
-          ))}
-          <CapstoneCard
-            score={myScore?.capstoneScore ?? null}
-            note={myScore?.capstoneNote ?? ''}
-            editable
-            onChange={(score, note) => setMyPanelistCapstone(assessmentId, score, note)}
-          />
+          ) : (
+            roleQuestions.map((q, i) => (
+              <RoleQuestionScoreCard
+                key={q.id}
+                index={i}
+                question={q}
+                answer={myScore?.answers[q.id]}
+                editable
+                onChange={(score, note, candidateAnswer) => setMyPanelistAnswer(assessmentId, q.id, score, note, candidateAnswer)}
+              />
+            ))
+          )}
           <div className="flex items-center justify-end gap-2">
             {myScore?.submittedAt ? (
               <span className="flex items-center gap-1.5 rounded-xl bg-green-500/15 px-4 py-2 text-xs font-bold text-green-300">
@@ -249,7 +300,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
         )
       )}
 
-      {isLead && !amPanelist && (
+      {isLead && !amPanelist && isPM && (
         <p className="text-[11px] text-muted">
           سؤال پایانی سناریو («{CAPSTONE_QUESTION.text.slice(0, 40)}…») را در پایان مصاحبه بپرسید — امتیاز نهایی خودتان را در بخش «سوالات» ثبت کنید.
         </p>

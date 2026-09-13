@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
-import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
+import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CertificationEntry, type EducationEntry, type EmploymentEntry } from '../types'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
 
 const EMPTY: CandidateProfileInput = {
+  jobRole: 'project_manager',
   candidateName: '',
   candidatePosition: 'مدیر پروژه احداث خط لوله انتقال گاز',
   candidateNationalId: '',
@@ -98,6 +99,21 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
           </Field>
           {!candidateMode && (
             <>
+              <Field label="شغل مورد ارزیابی (بانک سؤالات)">
+                <select
+                  value={form.jobRole}
+                  disabled={!!initial}
+                  onChange={(e) => set('jobRole', e.target.value as CandidateProfileInput['jobRole'])}
+                  className="input disabled:opacity-60"
+                >
+                  {JOB_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {JOB_ROLE_LABEL_FA[role]}
+                    </option>
+                  ))}
+                </select>
+                {initial && <p className="mt-1 text-[10px] text-muted">شغل مورد ارزیابی پس از شروع مصاحبه قابل تغییر نیست.</p>}
+              </Field>
               <Field label="سمت مورد ارزیابی">
                 <input value={form.candidatePosition} onChange={(e) => set('candidatePosition', e.target.value)} className="input" />
               </Field>

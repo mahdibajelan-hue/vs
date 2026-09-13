@@ -34,7 +34,16 @@ import {
   maturityBand,
   tierColor,
 } from '../lib/competencyModel'
-import type { CompetencyAssessment } from '../types'
+import {
+  computeCategoryScores,
+  computeRoleCompletion,
+  isProjectManagerRole,
+  questionsForAssessment,
+  recommendationForRole,
+  ROLE_RECOMMENDATION_COLOR,
+  ROLE_RECOMMENDATION_LABEL_FA,
+} from '../lib/roleCompetencyModel'
+import { JOB_ROLE_LABEL_FA, type CompetencyAssessment } from '../types'
 
 interface ResultsStageProps {
   assessment: CompetencyAssessment
@@ -48,17 +57,29 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
+  const questionBank = useCompetencyStore((s) => s.questionBank)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [settingApproval, setSettingApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
-  const domainScores = computeDomainScores(assessment.answers)
+  useEffect(() => {
+    if (questionBank.length === 0) fetchQuestionBank()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const isPM = isProjectManagerRole(assessment.jobRole)
+  const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
+  const domainScoresFor = (answers: CompetencyAssessment['answers']) => (isPM ? computeDomainScores(answers) : computeCategoryScores(roleQuestions, answers))
+
+  const domainScores = domainScoresFor(assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(assessment.answers)
+  const completion = isPM ? computeCompletion(assessment.answers) : computeRoleCompletion(roleQuestions, assessment.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
+  const roleRecommendation = isPM ? null : recommendationForRole(overall, domainScores)
 
   // The panel's contribution, kept alongside the lead's verdict rather than blended into it —
   // the headline score on this report is the lead's final call, not an average of the three.
@@ -68,7 +89,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       const sheet = allPanelistScores.find((s) => s.assessmentId === assessment.id && s.panelistId === p.userId)
       return {
         name: profiles.find((pr) => pr.id === p.userId)?.fullName ?? 'داور',
-        overallPercent: sheet ? computeOverallPercent(computeDomainScores(sheet.answers)) : null,
+        overallPercent: sheet ? computeOverallPercent(domainScoresFor(sheet.answers)) : null,
         submitted: sheet?.submittedAt != null,
       }
     })
@@ -259,7 +280,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           dark card above stays as-is, but window.print()/PDF export both target this instead, since
           html2canvas captures literal colors and a dark background prints/exports poorly. */}
       <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <CompetencyPrintReport assessment={assessment} panel={panelSummary} />
+        <CompetencyPrintReport assessment={assessment} panel={panelSummary} domainScoresOverride={isPM ? undefined : domainScores} roleRecommendation={roleRecommendation} />
       </div>
 
       <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
@@ -293,29 +314,52 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           </div>
         </div>
 
-        {/* Qualification scorecard */}
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {qualificationChips.map((c) => {
-              const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
-              return (
-                <div
-                  key={c.label}
-                  className="relative overflow-hidden rounded-2xl border p-3.5 text-center transition-transform hover:-translate-y-0.5"
-                  style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
-                >
-                  <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
-                  <p className="num text-2xl font-black leading-none" style={{ color }}>
-                    {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
-                    <span className="text-xs font-bold text-muted"> /۵</span>
-                  </p>
-                  <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
-                </div>
-              )
-            })}
+        {/* Qualification scorecard (project-manager resume/certification scoring — role-based assessments show a recommendation card instead, below) */}
+        {isPM && (
+          <div className="glass-panel rounded-2xl p-4">
+            <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {qualificationChips.map((c) => {
+                const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+                return (
+                  <div
+                    key={c.label}
+                    className="relative overflow-hidden rounded-2xl border p-3.5 text-center transition-transform hover:-translate-y-0.5"
+                    style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
+                  >
+                    <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
+                    <p className="num text-2xl font-black leading-none" style={{ color }}>
+                      {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
+                      <span className="text-xs font-bold text-muted"> /۵</span>
+                    </p>
+                    <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isPM && roleRecommendation && (
+          <div className="glass-panel rounded-2xl p-4" style={{ borderColor: `${ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade]}40` }}>
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-sm font-extrabold">{JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی</p>
+              <span
+                className="rounded-full px-2.5 py-1 text-xs font-bold"
+                style={{ background: `${ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade]}1c`, color: ROLE_RECOMMENDATION_COLOR[roleRecommendation.grade] }}
+              >
+                {ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}
+              </span>
+            </div>
+            {roleRecommendation.hasCriticalGap && (
+              <p className="mt-1 rounded-lg bg-red-500/10 p-2.5 text-[11px] leading-6 text-red-200">{roleRecommendation.reason}</p>
+            )}
+            <p className="mt-2 text-[11px] leading-5 text-muted">
+              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سؤال پاسخ داده‌شده — امتیاز بر اساس وزن‌دهی عمومی
+              ٪۲۰، تخصصی ٪۳۵، سناریو/حل‌مسئله ٪۳۰ و تجربه/قضاوت حرفه‌ای ٪۱۵ محاسبه شده است.
+            </p>
+          </div>
+        )}
 
         {/* Radar + maturity guidance */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

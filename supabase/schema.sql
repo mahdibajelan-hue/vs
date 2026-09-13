@@ -4797,3 +4797,74 @@ drop policy if exists "chg_history_write_admin" on chg_history;
 create policy "chg_history_write" on chg_history for all
   using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
   with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+-- =====================================================================
+-- Section 27: Competency Assessment — multi-role question bank.
+--
+-- The module originally assessed exactly one job (مدیر پروژه) against a
+-- fixed, versioned-in-code rubric (competencyModel.ts) — deliberately kept
+-- untouched, including every existing comp_assessments row (job_role
+-- defaults to 'project_manager', so nothing pre-existing changes meaning).
+-- Every OTHER job role now draws its questions from this DB-backed bank
+-- instead: admin-authored via the Question Bank screen, activatable/
+-- deactivatable without deleting, each with a full reference-answer +
+-- scoring-rubric structure (never shown to the candidate, only to the
+-- evaluator, and only once the candidate's own answer is on record — see
+-- RoleQuestionScoreCard.tsx). comp_assessments gains job_role (which bank
+-- applies) and selected_question_ids (the specific rows randomly assigned
+-- to that one assessment, frozen once set so every panelist and the lead
+-- score the exact same question set).
+--
+-- The actual ~23-question-per-role seed content (welding, mechanical/
+-- piping, pipeline, coating/CP, radiography interpretation, civil,
+-- project control, HSE, contracts) lives in the companion file
+-- supabase/competency_question_bank_seed.sql, applied once after this
+-- section — kept separate so this main file doesn't balloon with a few
+-- hundred KB of question text.
+-- =====================================================================
+
+alter table comp_assessments add column if not exists job_role text not null default 'project_manager';
+alter table comp_assessments add column if not exists selected_question_ids jsonb not null default '[]'::jsonb;
+
+create table if not exists comp_question_bank (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  category text not null check (category in ('GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED')),
+  sub_category text not null default '',
+  difficulty text not null default 'L2' check (difficulty in ('L1', 'L2', 'L3', 'L4')),
+  question_text text not null,
+  image_url text not null default '',
+  -- Never shown to the candidate — only to the evaluator, and only after the candidate's own
+  -- answer has been recorded (client-enforced reveal gate; this table has no candidate-facing path).
+  reference_answer text not null default '',
+  key_points jsonb not null default '[]'::jsonb,
+  excellent_answer_indicators jsonb not null default '[]'::jsonb,
+  common_mistakes jsonb not null default '[]'::jsonb,
+  standard_reference text not null default '',
+  score_min int not null default 0,
+  score_max int not null default 5,
+  evaluator_note_required boolean not null default true,
+  active boolean not null default true,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_question_bank enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_question_bank;
+create trigger trg_set_updated_at before update on comp_question_bank
+  for each row execute function set_updated_at();
+
+-- Every authenticated user may read the bank (an evaluator needs the reference answer, not just
+-- admins) — only writing (author/edit/activate/delete) is admin-only, same pattern as
+-- rasta_modules/plc_templates above.
+drop policy if exists "comp_question_bank_select_authenticated" on comp_question_bank;
+create policy "comp_question_bank_select_authenticated" on comp_question_bank
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+create policy "comp_question_bank_write_admin" on comp_question_bank
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create index if not exists idx_comp_question_bank_role_category on comp_question_bank (job_role, category, active);

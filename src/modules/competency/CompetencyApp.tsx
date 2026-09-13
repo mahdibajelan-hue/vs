@@ -6,11 +6,12 @@ import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { AssessmentsListPage } from './pages/AssessmentsListPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
+import { QuestionBankPage } from './pages/QuestionBankPage'
 import { ProfileForm } from './components/ProfileForm'
 
 export const COMPETENCY_ACCENT = '#a855f7'
 
-type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: string }
+type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: string } | { name: 'questionBank' }
 
 /**
  * Competency Assessment — structured interview/scoring tool for evaluating gas transmission
@@ -80,7 +81,13 @@ export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
       <StorageErrorBanner />
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
-        {view.name === 'list' && <AssessmentsListPage onOpen={(id) => setView({ name: 'assessment', id })} onNew={() => setView({ name: 'new' })} />}
+        {view.name === 'list' && (
+          <AssessmentsListPage
+            onOpen={(id) => setView({ name: 'assessment', id })}
+            onNew={() => setView({ name: 'new' })}
+            onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
+          />
+        )}
 
         {view.name === 'new' && (
           <div className="mx-auto max-w-3xl">
@@ -95,6 +102,8 @@ export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
         )}
 
         {view.name === 'assessment' && <AssessmentWizardPage assessmentId={view.id} onDone={() => setView({ name: 'list' })} />}
+
+        {view.name === 'questionBank' && <QuestionBankPage onBack={() => setView({ name: 'list' })} />}
       </div>
     </div>
   )

@@ -8,13 +8,19 @@ import type {
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
+  CompQuestionBankItem,
   EducationEntry,
   EmploymentEntry,
+  JobRole,
+  QuestionDifficulty,
+  QuestionType,
   SelfServiceStatus,
 } from '../types'
 
 export interface CompAssessmentRow {
   id: string
+  job_role: string | null
+  selected_question_ids: string[] | null
   candidate_name: string
   candidate_position: string
   candidate_national_id: string
@@ -57,6 +63,8 @@ export interface CompAssessmentRow {
 export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessment {
   return {
     id: r.id,
+    jobRole: (r.job_role as JobRole | null) ?? 'project_manager',
+    selectedQuestionIds: r.selected_question_ids ?? [],
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
     candidateNationalId: r.candidate_national_id,
@@ -175,4 +183,50 @@ export interface ProfileLiteRow {
 
 export function profileLiteFromRow(r: ProfileLiteRow): CompProfileLite {
   return { id: r.id, email: r.email, fullName: r.full_name || r.email }
+}
+
+export interface CompQuestionBankRow {
+  id: string
+  job_role: string
+  category: string
+  sub_category: string
+  difficulty: string
+  question_text: string
+  image_url: string | null
+  reference_answer: string
+  key_points: string[] | null
+  excellent_answer_indicators: string[] | null
+  common_mistakes: string[] | null
+  standard_reference: string | null
+  score_min: number
+  score_max: number
+  evaluator_note_required: boolean
+  active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compQuestionBankFromRow(r: CompQuestionBankRow): CompQuestionBankItem {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    category: r.category as QuestionType,
+    subCategory: r.sub_category,
+    difficulty: r.difficulty as QuestionDifficulty,
+    questionText: r.question_text,
+    imageUrl: r.image_url ?? '',
+    referenceAnswer: r.reference_answer,
+    keyPoints: r.key_points ?? [],
+    excellentAnswerIndicators: r.excellent_answer_indicators ?? [],
+    commonMistakes: r.common_mistakes ?? [],
+    standardReference: r.standard_reference ?? '',
+    scoreMin: r.score_min,
+    scoreMax: r.score_max,
+    evaluatorNoteRequired: r.evaluator_note_required,
+    active: r.active,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
 }
