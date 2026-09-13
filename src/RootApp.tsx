@@ -4,7 +4,7 @@ import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
-import { LoginScreen, Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
+import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
@@ -15,6 +15,8 @@ import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
+import { EstimatorApp } from './modules/estimator/EstimatorApp'
+import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 
@@ -24,10 +26,10 @@ const PipelineDigitalTwinApp = lazy(() =>
 )
 
 /**
- * Top-level flow: authenticate once (single shared account across every module), THEN show the
- * module hub — not the other way around. Previously each module wrapped itself in its own
- * AuthGate, so the hub appeared before login and only prompted for credentials once a module was
- * picked; since it's really one global Supabase session, that just meant an extra detour.
+ * Top-level flow: one shared account across every module, authenticated inline on the launchpad
+ * itself — there's no separate login screen. ModuleHub renders unconditionally on both sides of
+ * isAuthed; before sign-in its module cards are just locked previews, and entering credentials in
+ * its header unlocks them in place.
  */
 export function RootApp() {
   const authLoading = useAuthStore((s) => s.authLoading)
@@ -37,6 +39,7 @@ export function RootApp() {
   const activeModule = useModuleStore((s) => s.activeModule)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
+  const backToRadar = useModuleStore((s) => s.backToRadar)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
@@ -58,7 +61,10 @@ export function RootApp() {
     )
   }
 
-  if (!isAuthed) return <LoginScreen />
+  // Sign-in is inline on the launchpad itself (Header's login form) rather than a separate
+  // screen — ModuleHub renders the same page either way, just with module cards locked until
+  // isAuthed flips.
+  if (!isAuthed) return <ModuleHub onEnterModule={enterModule} />
 
   if (profile && !profile.profileCompleted) {
     return (
@@ -93,19 +99,23 @@ export function RootApp() {
   return activeModule === 'pipepulse' ? (
     <App />
   ) : activeModule === 'risk' ? (
-    <RiskApp onExitToHub={exitToHub} />
+    <RiskApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'issues' ? (
-    <IssuesApp onExitToHub={exitToHub} />
+    <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'reporting' ? (
-    <ReportingApp onExitToHub={exitToHub} />
+    <ReportingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'executive' ? (
-    <ExecutiveApp onExitToHub={exitToHub} />
+    <ExecutiveApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'finance' ? (
-    <FinanceApp onExitToHub={exitToHub} />
+    <FinanceApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'material' ? (
-    <MaterialApp onExitToHub={exitToHub} />
+    <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
-    <CompetencyApp onExitToHub={exitToHub} />
+    <CompetencyApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'estimator' ? (
+    <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'lifecycle' ? (
+    <LifecycleApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pipelinedigitaltwin' ? (
     <Suspense
       fallback={
@@ -114,9 +124,9 @@ export function RootApp() {
         </div>
       }
     >
-      <PipelineDigitalTwinApp onExitToHub={exitToHub} />
+      <PipelineDigitalTwinApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
     </Suspense>
   ) : (
-    <AdminApp onExitToHub={exitToHub} />
+    <AdminApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   )
 }

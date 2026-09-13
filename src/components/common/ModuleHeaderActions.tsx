@@ -1,21 +1,30 @@
-import { Home } from 'lucide-react'
+import { Home, Radar } from 'lucide-react'
 import { SignOutButton } from '../Auth/SignOutButton'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
+  onBackToRadar: () => void
   className?: string
 }
 
 /**
- * The two buttons every module header ends with — back to the module hub, and sign out — were
- * each reimplemented ad hoc per module with drifting styles (rounded-lg vs rounded-full, icon-only
- * vs labeled, different positions/orders, some skipping the shared SignOutButton entirely). One
- * component now renders both, in the same order, style, and trailing position, everywhere a module
- * shell needs them, so a user recognizes them on sight regardless of which module they're in.
+ * The three buttons every module header ends with — back to Project Radar, back to the module
+ * hub, and sign out — were each reimplemented ad hoc per module with drifting styles (rounded-lg
+ * vs rounded-full, icon-only vs labeled, different positions/orders, some skipping the shared
+ * SignOutButton entirely). One component now renders all three, in the same order, style, and
+ * trailing position, everywhere a module shell needs them, so a user recognizes them on sight
+ * regardless of which module they're in.
  */
-export function ModuleHeaderActions({ onExitToHub, className = '' }: ModuleHeaderActionsProps) {
+export function ModuleHeaderActions({ onExitToHub, onBackToRadar, className = '' }: ModuleHeaderActionsProps) {
   return (
     <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
+      <button
+        onClick={onBackToRadar}
+        title="بازگشت به رادار"
+        className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
+      >
+        <Radar size={14} /> <span className="hidden sm:inline">بازگشت به رادار</span>
+      </button>
       <button
         onClick={onExitToHub}
         title="بازگشت به ماژول‌ها"

@@ -1,35 +1,75 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ClipboardList, Plus, Trash2, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
+import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
-import type { CompetencyAssessment } from '../types'
+import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CompetencyAssessment, type CompQuestionBankItem, type JobRole } from '../types'
 
 interface AssessmentsListPageProps {
   onOpen: (id: string) => void
   onNew: () => void
+  onOpenQuestionBank?: () => void
 }
 
-export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps) {
+export function AssessmentsListPage({ onOpen, onNew, onOpenQuestionBank }: AssessmentsListPageProps) {
   const assessments = useCompetencyStore((s) => s.assessments)
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
+  const questionBank = useCompetencyStore((s) => s.questionBank)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
+
+  useEffect(() => {
+    if (questionBank.length === 0) fetchQuestionBank()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const usedRoles = useMemo(() => JOB_ROLES.filter((r) => assessments.some((a) => a.jobRole === r)), [assessments])
+  const filteredAssessments = roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)
 
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-lg font-extrabold">مصاحبه‌ها و ارزیابی‌های شایستگی</p>
-          <p className="text-xs text-muted">ارزیابی شایستگی مدیران پروژه احداث خطوط لوله انتقال گاز</p>
+          <p className="text-xs text-muted">ارزیابی شایستگی مشاغل تخصصی پروژه‌های EPC خطوط انتقال گاز</p>
         </div>
-        <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
-          <Plus size={14} /> مصاحبه جدید
-        </button>
+        <div className="flex items-center gap-2">
+          {onOpenQuestionBank && (
+            <button onClick={onOpenQuestionBank} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 transition-colors">
+              بانک سؤالات
+            </button>
+          )}
+          <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
+            <Plus size={14} /> مصاحبه جدید
+          </button>
+        </div>
       </div>
 
-      {assessments.length === 0 ? (
+      {usedRoles.length > 1 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setRoleFilter('all')}
+            className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === 'all' ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+          >
+            همه مشاغل
+          </button>
+          {usedRoles.map((r) => (
+            <button
+              key={r}
+              onClick={() => setRoleFilter(r)}
+              className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === r ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+            >
+              {JOB_ROLE_LABEL_FA[r]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filteredAssessments.length === 0 ? (
         <div className="glass-panel flex flex-col items-center gap-2 rounded-2xl p-10 text-center">
           <ClipboardList size={28} className="text-muted" />
           <p className="text-sm text-secondary">هنوز مصاحبه‌ای ثبت نشده است.</p>
@@ -39,8 +79,8 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {assessments.map((a) => (
-            <CandidateCard key={a.id} assessment={a} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
+          {filteredAssessments.map((a) => (
+            <CandidateCard key={a.id} assessment={a} questionBank={questionBank} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
           ))}
         </div>
       )}
@@ -71,8 +111,19 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
   )
 }
 
-function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: CompetencyAssessment; onOpen: () => void; onDelete: () => void }) {
-  const domainScores = computeDomainScores(a.answers)
+function CandidateCard({
+  assessment: a,
+  questionBank,
+  onOpen,
+  onDelete,
+}: {
+  assessment: CompetencyAssessment
+  questionBank: CompQuestionBankItem[]
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  const isPM = isProjectManagerRole(a.jobRole)
+  const domainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(questionsForAssessment(a, questionBank), a.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
@@ -105,7 +156,7 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
         </div>
         <div className="min-w-0 w-full">
           <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
-          <p className="truncate text-[10px] text-muted">{a.candidatePosition}</p>
+          <p className="truncate text-[10px] text-muted">{a.candidatePosition || JOB_ROLE_LABEL_FA[a.jobRole]}</p>
         </div>
         <div className="mt-0.5 flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: tier }}>

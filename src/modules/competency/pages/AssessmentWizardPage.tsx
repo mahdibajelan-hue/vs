@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ArrowLeft, Pencil, User } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Pencil, Shuffle, User } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain } from '../lib/competencyModel'
+import { isProjectManagerRole, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { JOB_ROLE_LABEL_FA, type QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
+import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
 import { PanelStage } from './PanelStage'
@@ -13,9 +16,18 @@ import { QualificationStage } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
 import { formatJalali } from '../../../lib/jalali'
 
+const ROLE_SECTIONS: { key: string; label: string; types: QuestionType[] }[] = [
+  { key: 'roleGeneral', label: 'عمومی شغلی', types: ['GENERAL'] },
+  { key: 'roleTechnical', label: 'تخصصی', types: ['TECHNICAL'] },
+  { key: 'roleScenario', label: 'سناریو و حل مسئله', types: ['SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'IMAGE_BASED'] },
+  { key: 'roleExperience', label: 'تجربه و قضاوت حرفه‌ای', types: ['EXPERIENCE_BASED'] },
+]
+
 interface AssessmentWizardPageProps {
   assessmentId: string
   onDone: () => void
+  onOpenQuestionBank?: () => void
+  onNew?: () => void
 }
 
 type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' | 'results'
@@ -40,7 +52,7 @@ const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qua
 const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
 /** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
-export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardPageProps) {
+export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank, onNew }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
@@ -48,6 +60,9 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const fetchPanelists = useCompetencyStore((s) => s.fetchPanelists)
   const fetchPanelistScores = useCompetencyStore((s) => s.fetchPanelistScores)
   const fetchProfiles = useCompetencyStore((s) => s.fetchProfiles)
+  const questionBank = useCompetencyStore((s) => s.questionBank)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const assignRandomQuestions = useCompetencyStore((s) => s.assignRandomQuestions)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
@@ -57,11 +72,16 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   const [editingProfile, setEditingProfile] = useState(false)
   const [domainIndex, setDomainIndex] = useState(0)
+  const [roleSectionIndex, setRoleSectionIndex] = useState(0)
+  const [assigningQuestions, setAssigningQuestions] = useState(false)
+
+  const isPM = isProjectManagerRole(assessment?.jobRole ?? 'project_manager')
 
   useEffect(() => {
     fetchProfiles()
     fetchPanelists(assessmentId)
     fetchPanelistScores(assessmentId)
+    if (questionBank.length === 0) fetchQuestionBank()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId])
 
@@ -70,7 +90,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
-  const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
+  const stages = isLead ? (isPM ? LEAD_STAGES : LEAD_STAGES.filter((s) => s !== 'qualification')) : PANELIST_STAGES
   // Everyone lands on the interviewer panel first — profile is already filled in by the time this
   // page opens, and jumping straight to the final verdict skipped assembling the panel and
   // reviewing documents, which need to happen before there's anything to verdict on.
@@ -98,12 +118,28 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
   }
 
+  // The results dashboard is a full-screen experience with its own right-hand sidebar (see
+  // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
+  // nesting inside it.
+  if (activeStage === 'results') {
+    return (
+      <ResultsStage assessment={assessment} onOpenList={onDone} onOpenPanel={() => setStage('panel')} onOpenQuestionBank={onOpenQuestionBank} onNew={onNew} />
+    )
+  }
+
+  const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
+  const roleCompletion = computeRoleCompletion(roleQuestions, assessment.answers)
+  const currentRoleSection = ROLE_SECTIONS[roleSectionIndex]
+  const roleSectionQuestions = roleQuestions.filter((q) => (currentRoleSection.types as string[]).includes(q.category))
+  const isLastRoleSection = roleSectionIndex === ROLE_SECTIONS.length - 1
+
   const onCapstoneStep = domainIndex === COMPETENCY_DOMAINS.length
   const domain = onCapstoneStep ? null : COMPETENCY_DOMAINS[domainIndex]
   const questions = domain ? questionsForDomain(domain.key) : []
   const isLastDomain = domainIndex === COMPETENCY_DOMAINS.length - 1
 
   const profileInput: CandidateProfileInput = {
+    jobRole: assessment.jobRole,
     candidateName: assessment.candidateName,
     candidatePosition: assessment.candidatePosition,
     candidateNationalId: assessment.candidateNationalId,
@@ -255,7 +291,89 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
       {activeStage === 'documents' && <DocumentsStage assessment={assessment} isLead={isLead} />}
 
-      {activeStage === 'questions' && (
+      {activeStage === 'questions' && !isPM && (
+        <div className="space-y-3">
+          {roleQuestions.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-6 text-center">
+              <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{JOB_ROLE_LABEL_FA[assessment.jobRole]}») انتخاب نشده است.</p>
+              <button
+                disabled={assigningQuestions}
+                onClick={async () => {
+                  setAssigningQuestions(true)
+                  await assignRandomQuestions(assessment.id, assessment.jobRole)
+                  setAssigningQuestions(false)
+                }}
+                className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50"
+              >
+                <Shuffle size={13} /> {assigningQuestions ? 'در حال انتخاب…' : 'انتخاب تصادفی سؤالات از بانک سؤالات'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <ScoringGuideBanner />
+              <div className="glass-panel rounded-2xl p-3.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-bold">{currentRoleSection.label}</p>
+                  <span className="num text-[11px] text-muted">
+                    {roleCompletion.answered.toLocaleString('fa-IR')} از {roleCompletion.total.toLocaleString('fa-IR')} پاسخ داده‌شده
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {ROLE_SECTIONS.map((sec, i) => (
+                    <button
+                      key={sec.key}
+                      onClick={() => setRoleSectionIndex(i)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                        i === roleSectionIndex ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'
+                      }`}
+                    >
+                      {sec.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                {roleSectionQuestions.map((q, i) => (
+                  <RoleQuestionScoreCard
+                    key={q.id}
+                    index={i}
+                    question={q}
+                    answer={assessment.answers[q.id]}
+                    editable
+                    onChange={(score, note, candidateAnswer) => setAnswer(assessment.id, q.id, score, note, candidateAnswer)}
+                    panelVotes={panelVotesByQuestion.get(q.id)}
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <button
+                  disabled={roleSectionIndex === 0}
+                  onClick={() => setRoleSectionIndex((i) => Math.max(0, i - 1))}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-xs disabled:opacity-30"
+                >
+                  <ArrowRight size={13} /> قبل
+                </button>
+                {!isLastRoleSection ? (
+                  <button
+                    onClick={() => setRoleSectionIndex((i) => i + 1)}
+                    className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+                  >
+                    حوزه بعد <ArrowLeft size={13} />
+                  </button>
+                ) : (
+                  <button onClick={() => setStage('results')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+                    مشاهده نتیجه <ArrowLeft size={13} />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeStage === 'questions' && isPM && (
         <div className="space-y-3">
           <ScoringGuideBanner />
           {domain && (
@@ -337,8 +455,6 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
       )}
 
       {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
-
-      {activeStage === 'results' && <ResultsStage assessment={assessment} />}
     </div>
   )
 }

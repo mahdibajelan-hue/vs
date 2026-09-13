@@ -136,6 +136,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   }
 
   const initial: CandidateProfileInput = {
+    // Self-service never touches job_role (candidateMode hides the field and comp_self_service_submit
+    // below doesn't forward it) — the RPC row deliberately excludes it, so this value is unused.
+    jobRole: 'project_manager',
     candidateName: row.candidate_name,
     candidatePosition: row.candidate_position,
     candidateNationalId: row.candidate_national_id,

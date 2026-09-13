@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { LevelBreadcrumb } from '../masterdata/components/LevelBreadcrumb'
 import { useHierarchyPath } from '../masterdata/lib/useHierarchyPath'
+import { fetchModuleProjectMappings } from '../masterdata/lib/hierarchyRollup'
 import { useRiskStore } from './store/useRiskStore'
 import { useRiskMembersStore } from './store/useRiskMembersStore'
 import { ProjectListPage } from './pages/ProjectListPage'
@@ -15,7 +17,7 @@ import { RiskIntelligencePage } from './pages/RiskIntelligencePage'
 
 type Tab = 'dashboard' | 'register' | 'portfolio' | 'intelligence'
 
-export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
   const projects = useRiskStore((s) => s.projects)
   const currentProjectId = useRiskStore((s) => s.currentProjectId)
@@ -32,6 +34,24 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   useEffect(() => {
     fetchProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Arrived here from Project Radar with a project already in context: jump straight to that
+  // project's risk register instead of making the user find it again in the picker, and stay
+  // locked to it — hide the project switcher and the cross-project "سه‌سطحی" view so there's no
+  // way to wander back to a list of other projects.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
+  useEffect(() => {
+    if (!contextProjectId) return
+    fetchModuleProjectMappings('risk').then((map) => {
+      const resolved = map.get(contextProjectId)
+      if (resolved) {
+        selectProject(resolved)
+        setLockedToProject(true)
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -63,7 +83,7 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
               Risk Management
             </p>
           </div>
-          {projectDetail && (
+          {projectDetail && !lockedToProject && (
             <>
               <span className="mx-1 hidden h-5 w-px bg-white/10 sm:mx-2 sm:block" />
               <div className="relative min-w-0">
@@ -116,18 +136,20 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
               </button>
             </>
           )}
-          <button
-            onClick={() => setTab('portfolio')}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              tab === 'portfolio' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
-            }`}
-          >
-            <Network size={13} /> تحلیل سه‌سطحی
-          </button>
+          {!lockedToProject && (
+            <button
+              onClick={() => setTab('portfolio')}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                tab === 'portfolio' ? 'bg-red-500 text-white' : 'text-secondary hover:bg-white/5'
+              }`}
+            >
+              <Network size={13} /> تحلیل سه‌سطحی
+            </button>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {currentUser && <span className="hidden text-xs text-secondary lg:inline">{currentUser.fullName || currentUser.email}</span>}
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 
@@ -178,9 +200,11 @@ export function RiskApp({ onExitToHub }: { onExitToHub: () => void }) {
             </button>
           </>
         )}
-        <button onClick={() => setTab('portfolio')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'portfolio' ? 'text-red-400' : 'text-muted'}`}>
-          <Network size={17} /> سه‌سطحی
-        </button>
+        {!lockedToProject && (
+          <button onClick={() => setTab('portfolio')} className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10px] ${tab === 'portfolio' ? 'text-red-400' : 'text-muted'}`}>
+            <Network size={17} /> سه‌سطحی
+          </button>
+        )}
       </nav>
     </div>
   )

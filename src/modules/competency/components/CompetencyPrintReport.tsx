@@ -1,6 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
-import type { CompetencyAssessment, DomainScore } from '../types'
+import { isProjectManagerRole, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
+import { JOB_ROLE_LABEL_FA, type CompetencyAssessment, type DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -76,11 +77,24 @@ export interface PanelSummaryRow {
   submitted: boolean
 }
 
-export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: CompetencyAssessment; panel?: PanelSummaryRow[] }) {
-  const domainScores = computeDomainScores(assessment.answers)
+interface CompetencyPrintReportProps {
+  assessment: CompetencyAssessment
+  panel?: PanelSummaryRow[]
+  /** Pre-computed by ResultsStage for role-based (non project-manager) assessments — this
+   * component has no access to comp_question_bank itself, so it never recomputes these for a role
+   * assessment and falls back to the fixed PM rubric only when both are omitted. */
+  domainScoresOverride?: DomainScore[]
+  roleRecommendation?: RoleRecommendation | null
+}
+
+export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, roleRecommendation }: CompetencyPrintReportProps) {
+  const isPM = isProjectManagerRole(assessment.jobRole)
+  const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(assessment.answers)
+  const completion = isPM
+    ? computeCompletion(assessment.answers)
+    : { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const qualificationChips = [
@@ -147,17 +161,28 @@ export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: 
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>کارت امتیاز شایستگی</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          {qualificationChips.map((c) => (
-            <div key={c.label} style={{ border: `1px solid ${line}`, borderRadius: 8, padding: '8px 6px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: accent }}>{c.value != null ? c.value.toLocaleString('fa-IR') : '—'}</p>
-              <p style={{ margin: '2px 0 0', fontSize: 9, color: sub, lineHeight: 1.4 }}>{c.label}</p>
-            </div>
-          ))}
+      {isPM ? (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>کارت امتیاز شایستگی</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            {qualificationChips.map((c) => (
+              <div key={c.label} style={{ border: `1px solid ${line}`, borderRadius: 8, padding: '8px 6px', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: accent }}>{c.value != null ? c.value.toLocaleString('fa-IR') : '—'}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 9, color: sub, lineHeight: 1.4 }}>{c.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        roleRecommendation && (
+          <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800 }}>
+              {JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی: <span style={{ color: accent }}>{ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}</span>
+            </p>
+            {roleRecommendation.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, lineHeight: 1.7, color: '#b91c1c' }}>{roleRecommendation.reason}</p>}
+          </div>
+        )
+      )}
 
       <div style={{ display: 'flex', gap: 24, marginBottom: 20, alignItems: 'flex-start' }}>
         <div style={{ width: 366, flexShrink: 0 }}>

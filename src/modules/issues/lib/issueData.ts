@@ -1,4 +1,4 @@
-import type { ImIssue, ImIssuePriority, ImIssueStatus, ImProject } from '../types'
+import type { ImIssue, ImIssuePriority, ImIssueSource, ImIssueStatus, ImProject } from '../types'
 
 export interface ImProjectRow {
   id: string
@@ -28,6 +28,8 @@ export interface ImIssueRow {
   created_by: string | null
   created_at: string
   updated_at: string
+  source: string
+  related_action_id: string | null
 }
 
 export function imIssueFromRow(r: ImIssueRow): ImIssue {
@@ -47,6 +49,8 @@ export function imIssueFromRow(r: ImIssueRow): ImIssue {
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    source: (r.source as ImIssueSource) ?? 'manual',
+    relatedActionId: r.related_action_id,
   }
 }
 

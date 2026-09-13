@@ -12,19 +12,25 @@ import type {
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
+  CompQuestionBankItem,
   EducationEntry,
   EmploymentEntry,
+  JobRole,
+  QuestionDifficulty,
+  QuestionType,
 } from '../types'
 import {
   compAssessmentFromRow,
   compAttachmentFromRow,
   compPanelistFromRow,
   compPanelistScoreFromRow,
+  compQuestionBankFromRow,
   profileLiteFromRow,
   type CompAssessmentRow,
   type CompAttachmentRow,
   type CompPanelistRow,
   type CompPanelistScoreRow,
+  type CompQuestionBankRow,
   type ProfileLiteRow,
 } from '../lib/competencyData'
 import { uploadCompDoc } from '../lib/compStorage'
@@ -40,6 +46,7 @@ function currentUserId(): string | null {
 }
 
 export interface CandidateProfileInput {
+  jobRole: JobRole
   candidateName: string
   candidatePosition: string
   candidateNationalId: string
@@ -68,6 +75,7 @@ export interface QualificationScoresInput {
 
 function profileToRowPayload(profile: CandidateProfileInput) {
   return {
+    job_role: profile.jobRole,
     candidate_name: profile.candidateName,
     candidate_position: profile.candidatePosition,
     candidate_national_id: profile.candidateNationalId,
@@ -138,19 +146,55 @@ async function upsertMyPanelistScore(
   set({ panelistScores: [...get().panelistScores.filter((s) => !(s.assessmentId === assessmentId && s.panelistId === uid)), merged] })
 }
 
+export interface QuestionBankInput {
+  jobRole: JobRole
+  category: QuestionType
+  subCategory: string
+  difficulty: QuestionDifficulty
+  questionText: string
+  imageUrl: string
+  referenceAnswer: string
+  keyPoints: string[]
+  excellentAnswerIndicators: string[]
+  commonMistakes: string[]
+  standardReference: string
+  evaluatorNoteRequired: boolean
+  active: boolean
+}
+
+function questionBankToRowPayload(q: QuestionBankInput) {
+  return {
+    job_role: q.jobRole,
+    category: q.category,
+    sub_category: q.subCategory,
+    difficulty: q.difficulty,
+    question_text: q.questionText,
+    image_url: q.imageUrl,
+    reference_answer: q.referenceAnswer,
+    key_points: q.keyPoints,
+    excellent_answer_indicators: q.excellentAnswerIndicators,
+    common_mistakes: q.commonMistakes,
+    standard_reference: q.standardReference,
+    evaluator_note_required: q.evaluatorNoteRequired,
+    active: q.active,
+  }
+}
+
 interface CompetencyState {
   assessments: CompetencyAssessment[]
   profiles: CompProfileLite[]
   panelists: CompPanelist[]
   panelistScores: CompPanelistScore[]
   attachments: CompAttachment[]
+  questionBank: CompQuestionBankItem[]
+  loadingQuestionBank: boolean
   loading: boolean
 
   fetchAll: () => Promise<void>
   fetchProfiles: () => Promise<void>
   createAssessment: (profile: CandidateProfileInput) => Promise<string | null>
   updateProfile: (id: string, profile: CandidateProfileInput) => Promise<void>
-  setAnswer: (id: string, questionKey: string, score: number | null, note: string) => Promise<void>
+  setAnswer: (id: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
   setCapstone: (id: string, score: number | null, note: string) => Promise<void>
   setQualificationScores: (id: string, scores: QualificationScoresInput) => Promise<void>
   setStatus: (id: string, status: AssessmentStatus) => Promise<void>
@@ -170,13 +214,24 @@ interface CompetencyState {
   setPanelistLead: (assessmentId: string, panelistRowId: string) => Promise<void>
 
   fetchPanelistScores: (assessmentId: string) => Promise<void>
-  setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string) => Promise<void>
+  setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
   setMyPanelistCapstone: (assessmentId: string, score: number | null, note: string) => Promise<void>
   submitMyPanelistScore: (assessmentId: string) => Promise<void>
 
   fetchAttachments: (assessmentId: string) => Promise<void>
   addAttachment: (assessmentId: string, kind: AttachmentKind, file: File) => Promise<void>
   deleteAttachment: (id: string) => Promise<void>
+
+  fetchQuestionBank: () => Promise<void>
+  createQuestion: (input: QuestionBankInput) => Promise<void>
+  updateQuestion: (id: string, input: QuestionBankInput) => Promise<void>
+  setQuestionActive: (id: string, active: boolean) => Promise<void>
+  deleteQuestion: (id: string) => Promise<void>
+  /** Randomly assigns this assessment's fixed question set for its job role — 5 GENERAL, 9
+   * TECHNICAL, 5 SCENARIO/PROBLEM_SOLVING/CASE_STUDY/IMAGE_BASED, 4 EXPERIENCE_BASED (or every
+   * active question in a bucket that has fewer than the target count). Written once; re-running it
+   * on an assessment that already has a selection is a no-op from the UI (guarded by callers). */
+  assignRandomQuestions: (assessmentId: string, jobRole: JobRole) => Promise<void>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -185,6 +240,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   panelists: [],
   panelistScores: [],
   attachments: [],
+  questionBank: [],
+  loadingQuestionBank: false,
   loading: true,
 
   fetchAll: async () => {
@@ -217,6 +274,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('ثبت مشخصات نامزد', error)) return null
     const created: CompetencyAssessment = {
       id,
+      jobRole: profile.jobRole,
+      selectedQuestionIds: [],
       candidateName: profile.candidateName,
       candidatePosition: profile.candidatePosition,
       candidateNationalId: profile.candidateNationalId,
@@ -293,10 +352,11 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     })
   },
 
-  setAnswer: async (id, questionKey, score, note) => {
+  setAnswer: async (id, questionKey, score, note, candidateAnswer) => {
     const current = get().assessments.find((a) => a.id === id)
     if (!current) return
-    const nextAnswers = { ...current.answers, [questionKey]: { score, note } }
+    const entry = candidateAnswer !== undefined ? { score, note, candidateAnswer } : { score, note }
+    const nextAnswers = { ...current.answers, [questionKey]: entry }
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, answers: nextAnswers } : a)) })
     const { error } = await supabase.from('comp_assessments').update({ answers: nextAnswers }).eq('id', id)
     if (reportError('ثبت امتیاز پاسخ', error)) {
@@ -458,8 +518,9 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ panelistScores: [...get().panelistScores.filter((s) => s.assessmentId !== assessmentId), ...fetched] })
   },
 
-  setMyPanelistAnswer: async (assessmentId, questionKey, score, note) => {
-    const nextAnswers = (existing: CompPanelistScore | undefined) => ({ ...(existing?.answers ?? {}), [questionKey]: { score, note } })
+  setMyPanelistAnswer: async (assessmentId, questionKey, score, note, candidateAnswer) => {
+    const entry = candidateAnswer !== undefined ? { score, note, candidateAnswer } : { score, note }
+    const nextAnswers = (existing: CompPanelistScore | undefined) => ({ ...(existing?.answers ?? {}), [questionKey]: entry })
     await upsertMyPanelistScore(set, get, assessmentId, 'ثبت امتیاز داور', (existing) => ({
       row: { answers: nextAnswers(existing) },
       local: { answers: nextAnswers(existing) },
@@ -516,5 +577,115 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ attachments: previous.filter((a) => a.id !== id) })
     const { error } = await supabase.from('comp_attachments').delete().eq('id', id)
     if (reportError('حذف مدرک', error)) set({ attachments: previous })
+  },
+
+  fetchQuestionBank: async () => {
+    set({ loadingQuestionBank: true })
+    const { data, error } = await supabase.from('comp_question_bank').select('*').order('job_role').order('category').order('created_at')
+    if (reportError('بارگذاری بانک سؤالات', error)) {
+      set({ loadingQuestionBank: false })
+      return
+    }
+    set({ questionBank: ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow), loadingQuestionBank: false })
+  },
+
+  createQuestion: async (input) => {
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_question_bank').insert({ id, ...questionBankToRowPayload(input) })
+    if (reportError('ثبت سؤال جدید', error)) return
+    const created: CompQuestionBankItem = {
+      id,
+      jobRole: input.jobRole,
+      category: input.category,
+      subCategory: input.subCategory,
+      difficulty: input.difficulty,
+      questionText: input.questionText,
+      imageUrl: input.imageUrl,
+      referenceAnswer: input.referenceAnswer,
+      keyPoints: input.keyPoints,
+      excellentAnswerIndicators: input.excellentAnswerIndicators,
+      commonMistakes: input.commonMistakes,
+      standardReference: input.standardReference,
+      scoreMin: 0,
+      scoreMax: 5,
+      evaluatorNoteRequired: input.evaluatorNoteRequired,
+      active: input.active,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }
+    set({ questionBank: [created, ...get().questionBank] })
+  },
+
+  updateQuestion: async (id, input) => {
+    const previous = get().questionBank
+    const { error } = await supabase.from('comp_question_bank').update(questionBankToRowPayload(input)).eq('id', id)
+    if (reportError('ویرایش سؤال', error)) return
+    set({
+      questionBank: previous.map((q) =>
+        q.id === id
+          ? {
+              ...q,
+              jobRole: input.jobRole,
+              category: input.category,
+              subCategory: input.subCategory,
+              difficulty: input.difficulty,
+              questionText: input.questionText,
+              imageUrl: input.imageUrl,
+              referenceAnswer: input.referenceAnswer,
+              keyPoints: input.keyPoints,
+              excellentAnswerIndicators: input.excellentAnswerIndicators,
+              commonMistakes: input.commonMistakes,
+              standardReference: input.standardReference,
+              evaluatorNoteRequired: input.evaluatorNoteRequired,
+              active: input.active,
+              updatedAt: new Date().toISOString(),
+            }
+          : q,
+      ),
+    })
+  },
+
+  setQuestionActive: async (id, active) => {
+    const previous = get().questionBank
+    set({ questionBank: previous.map((q) => (q.id === id ? { ...q, active } : q)) })
+    const { error } = await supabase.from('comp_question_bank').update({ active }).eq('id', id)
+    if (reportError('تغییر وضعیت فعال‌بودن سؤال', error)) set({ questionBank: previous })
+  },
+
+  deleteQuestion: async (id) => {
+    const previous = get().questionBank
+    set({ questionBank: previous.filter((q) => q.id !== id) })
+    const { error } = await supabase.from('comp_question_bank').delete().eq('id', id)
+    if (reportError('حذف سؤال', error)) set({ questionBank: previous })
+  },
+
+  assignRandomQuestions: async (assessmentId, jobRole) => {
+    let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active)
+    if (bank.length === 0) {
+      const { data, error } = await supabase.from('comp_question_bank').select('*').eq('job_role', jobRole).eq('active', true)
+      if (reportError('بارگذاری بانک سؤالات', error)) return
+      bank = ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow)
+    }
+    const TARGET: Record<string, number> = { GENERAL: 5, TECHNICAL: 9, EXPERIENCE_BASED: 4 }
+    const SCENARIO_TYPES = new Set<QuestionType>(['SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'IMAGE_BASED'])
+    const pickRandom = (pool: CompQuestionBankItem[], n: number) => {
+      const shuffled = [...pool].sort(() => Math.random() - 0.5)
+      return shuffled.slice(0, n)
+    }
+    const general = pickRandom(bank.filter((q) => q.category === 'GENERAL'), TARGET.GENERAL)
+    const technical = pickRandom(bank.filter((q) => q.category === 'TECHNICAL'), TARGET.TECHNICAL)
+    const scenario = pickRandom(bank.filter((q) => SCENARIO_TYPES.has(q.category)), 5)
+    const experience = pickRandom(bank.filter((q) => q.category === 'EXPERIENCE_BASED'), TARGET.EXPERIENCE_BASED)
+    const selected = [...general, ...technical, ...scenario, ...experience].map((q) => q.id)
+    const current = get().assessments.find((a) => a.id === assessmentId)
+    if (!current) return
+    set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? { ...a, selectedQuestionIds: selected } : a)) })
+    const { error } = await supabase.from('comp_assessments').update({ selected_question_ids: selected }).eq('id', assessmentId)
+    if (reportError('انتخاب تصادفی سؤالات', error)) {
+      set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
+    }
   },
 }))

@@ -14,7 +14,7 @@ type Tab = 'users' | 'masterdata'
  * supabase/schema.sql section 12). Both are admin-only, mirroring RASTA's own Master Data
  * nav sketch which nests Users alongside Organizations/Portfolios/Programs/Projects.
  */
-export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const [tab, setTab] = useState<Tab>('users')
 
@@ -22,7 +22,7 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 p-8" style={{ background: 'var(--bg-app)' }}>
         <p className="text-sm text-muted">این بخش فقط برای ادمین سامانه در دسترس است.</p>
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </div>
     )
   }
@@ -34,7 +34,7 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
           <TabButton active={tab === 'users'} icon={Users} label="کاربران" onClick={() => setTab('users')} />
           <TabButton active={tab === 'masterdata'} icon={Database} label="داده‌های پایه" onClick={() => setTab('masterdata')} />
         </div>
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UnifiedAdminPage /> : <MasterDataApp />}</div>
