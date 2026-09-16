@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { GraduationCap, Briefcase, BookOpen, Award, MessageSquareText, ThumbsUp, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent, RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
+import { computeDomainScores, computeOverallPercent, questionsForPosition, RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
 interface QualificationStageProps {
@@ -15,8 +15,10 @@ const SCORE_OPTIONS = [0, 1, 2, 3, 4, 5]
 export function QualificationStage({ assessment }: QualificationStageProps) {
   const setQualificationScores = useCompetencyStore((s) => s.setQualificationScores)
   const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
+  const allQuestions = useCompetencyStore((s) => s.questions)
 
-  const domainScores = computeDomainScores(assessment.answers)
+  const questions = questionsForPosition(allQuestions, assessment.jobPositionId)
+  const domainScores = computeDomainScores(questions, assessment.answers)
   const overallPercent = computeOverallPercent(domainScores)
   const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
   const recommendedCoursesTaken = assessment.certifications.filter((c) => RECOMMENDED_PM_COURSES.includes(c.title.trim())).length

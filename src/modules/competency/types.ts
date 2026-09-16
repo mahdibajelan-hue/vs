@@ -19,10 +19,31 @@ export interface CompetencyDomain {
   excellentAnswerHint: string
 }
 
+/**
+ * A question row from the (now DB-backed, admin-growable) question bank — see comp_questions in
+ * schema.sql. `key` is the stable identifier used inside answers{}/panelist answers{} jsonb: it's
+ * legacy_key for the original hardcoded rubric (so historical scores keep resolving) or the row's
+ * own id for anything added since. `id` is always the real DB row id, needed to edit/retire it.
+ */
 export interface CompetencyQuestion {
   key: string
+  id: string
+  jobPositionId: string
   domain: CompetencyDomainKey
   text: string
+  /** Model/expected answer — shown to panelists and the lead/admin while scoring, never to the candidate. */
+  referenceAnswer: string
+  sortOrder: number
+  isActive: boolean
+}
+
+/** An interviewable job/role — see comp_job_positions in schema.sql. Admin-managed, grows over time. */
+export interface CompJobPosition {
+  id: string
+  title: string
+  sortOrder: number
+  isActive: boolean
+  createdAt: string
 }
 
 export interface CompetencyAnswer {
@@ -67,7 +88,9 @@ export interface CertificationEntry {
 export interface CompetencyAssessment {
   id: string
   candidateName: string
+  /** Kept in sync with jobPositionId's title at write time — lets every existing display site (cards, print report) keep reading a plain string, and still shows something sane for pre-migration rows that predate job_position_id. */
   candidatePosition: string
+  jobPositionId: string | null
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string

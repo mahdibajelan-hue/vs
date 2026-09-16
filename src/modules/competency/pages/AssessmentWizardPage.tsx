@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ArrowLeft, Pencil, User } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Briefcase, Calendar, Pencil, ShieldCheck, User } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain } from '../lib/competencyModel'
+import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain, questionsForPosition } from '../lib/competencyModel'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -51,6 +51,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
+  const allQuestions = useCompetencyStore((s) => s.questions)
   const myName = useAuthStore((s) => s.profile?.fullName)
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
@@ -77,7 +78,8 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
   const [stage, setStage] = useState<Stage | null>(null)
   const activeStage: Stage = stage && stages.includes(stage) ? stage : 'panel'
 
-  const completion = computeCompletion(assessment?.answers ?? {})
+  const myQuestions = questionsForPosition(allQuestions, assessment?.jobPositionId ?? null)
+  const completion = computeCompletion(myQuestions, assessment?.answers ?? {})
 
   // What each interviewer recorded, per question — the lead reads this while setting the final
   // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
@@ -100,12 +102,11 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   const onCapstoneStep = domainIndex === COMPETENCY_DOMAINS.length
   const domain = onCapstoneStep ? null : COMPETENCY_DOMAINS[domainIndex]
-  const questions = domain ? questionsForDomain(domain.key) : []
+  const questions = domain ? questionsForDomain(myQuestions, domain.key) : []
   const isLastDomain = domainIndex === COMPETENCY_DOMAINS.length - 1
 
   const profileInput: CandidateProfileInput = {
     candidateName: assessment.candidateName,
-    candidatePosition: assessment.candidatePosition,
     candidateNationalId: assessment.candidateNationalId,
     candidatePhone: assessment.candidatePhone,
     candidateEmail: assessment.candidateEmail,
@@ -125,35 +126,45 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] px-3.5 py-2.5">
-        <div className="flex items-center gap-1.5 text-xs text-secondary">
-          <User size={13} className="text-purple-300" />
-          <span className="font-bold text-primary">{myName ?? '—'}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
-            {isLead ? 'مسئول ارزیابی' : 'داور'}
-          </span>
+      {/* Sticky, not in normal scroll flow — the results stage in particular can run long
+          (radar chart, scorecard, domain breakdown, panel summary), and a nav bar that scrolls
+          away with the content means "بازگشت به فهرست" and the stage tabs are only reachable by
+          scrolling all the way back up. Pinning it here matches how the rest of the app's own
+          sidebar stays reachable at every scroll position. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-3 px-4 pb-3 pt-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6" style={{ background: 'var(--bg-app)' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] px-3.5 py-2.5">
+          <div className="flex items-center gap-1.5 text-xs text-secondary">
+            <User size={13} className="text-purple-300" />
+            <span className="font-bold text-primary">{myName ?? '—'}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
+              {isLead ? 'مسئول ارزیابی' : 'داور'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-secondary">
+            نامزد تحت ارزیابی: <span className="font-bold text-primary">{assessment.candidateName}</span>
+            <span className="text-muted">—</span>
+            <span className="text-secondary">{assessment.candidatePosition}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-secondary">
-          نامزد تحت ارزیابی: <span className="font-bold text-primary">{assessment.candidateName}</span>
-        </div>
-      </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <button onClick={onDone} className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary">
-          <ArrowRight size={14} /> بازگشت به فهرست
-        </button>
-        <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] p-1">
-          {stages.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStage(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${activeStage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
-            >
-              {STAGE_LABEL[s]}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button onClick={onDone} className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary">
+            <ArrowRight size={14} /> بازگشت به فهرست متقاضیان
+          </button>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {stages.map((s) => (
+              <button
+                key={s}
+                onClick={() => setStage(s)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${activeStage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
+              >
+                {STAGE_LABEL[s]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+      <div className="h-4" />
 
       {isLead && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2 text-[11px]">
@@ -191,7 +202,6 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             </div>
             <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
               <InfoRow label="نام و نام خانوادگی" value={assessment.candidateName} />
-              <InfoRow label="سمت مورد ارزیابی" value={assessment.candidatePosition} />
               <InfoRow label="کد ملی" value={assessment.candidateNationalId || '—'} />
               <InfoRow label="شماره تماس" value={assessment.candidatePhone || '—'} />
               <InfoRow label="ایمیل" value={assessment.candidateEmail || '—'} />
@@ -216,15 +226,34 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
             )}
             {assessment.employmentHistory.length > 0 && (
               <div>
-                <p className="mb-1 text-[11px] text-muted">سوابق شغلی و بیمه‌ای</p>
-                <ul className="space-y-0.5 text-xs text-secondary">
+                <p className="mb-1.5 text-[11px] text-muted">سوابق شغلی و بیمه‌ای</p>
+                <div className="space-y-2">
                   {assessment.employmentHistory.map((e) => (
-                    <li key={e.id}>
-                      {e.employer} — {e.position} ({formatJalali(e.startDate) || '—'} تا {formatJalali(e.endDate) || 'اکنون'})
-                      {e.insuranceMonths != null && ` — ${e.insuranceMonths} ماه بیمه`}
-                    </li>
+                    <div key={e.id} className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/15">
+                        <Briefcase size={14} className="text-purple-300" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <p className="text-xs font-bold text-primary">{e.position || '—'}</p>
+                          {e.isPipelineRole && <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[9px] font-bold text-purple-300">خط لوله</span>}
+                        </div>
+                        <p className="text-[11px] text-secondary">{e.employer}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted">
+                          <span className="num flex items-center gap-1">
+                            <Calendar size={11} /> {formatJalali(e.startDate) || '—'} تا {formatJalali(e.endDate) || 'اکنون'}
+                          </span>
+                          {e.insuranceMonths != null && (
+                            <span className="num flex items-center gap-1 text-emerald-300">
+                              <ShieldCheck size={11} /> {e.insuranceMonths.toLocaleString('fa-IR')} ماه بیمه
+                            </span>
+                          )}
+                        </div>
+                        {e.note && <p className="text-[10px] leading-5 text-muted">{e.note}</p>}
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
             {assessment.certifications.length > 0 && (
@@ -338,7 +367,7 @@ export function AssessmentWizardPage({ assessmentId, onDone }: AssessmentWizardP
 
       {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
 
-      {activeStage === 'results' && <ResultsStage assessment={assessment} />}
+      {activeStage === 'results' && <ResultsStage assessment={assessment} onBack={onDone} />}
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { BookOpen, ChevronDown } from 'lucide-react'
 import { SCORE_COLOR, SCORE_GUIDE, SCORE_LABELS_FA } from '../lib/competencyModel'
 import type { CompetencyAnswer, CompetencyQuestion } from '../types'
 
@@ -24,6 +26,7 @@ interface QuestionScoreCardProps {
 
 /** One interview question with a 0-5 score picker and an optional note — the interviewer reads the question aloud, listens to the candidate, then records the score here. */
 export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, panelVotes }: QuestionScoreCardProps) {
+  const [showReference, setShowReference] = useState(false)
   const score = answer?.score ?? null
   const note = answer?.note ?? ''
 
@@ -39,6 +42,24 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
         {question.text}
       </p>
       {hint && <p className="mt-1 text-[10.5px] leading-5 text-muted">راهنمای پاسخ ممتاز: {hint}</p>}
+
+      {question.referenceAnswer && (
+        <div className="mt-1.5">
+          <button
+            type="button"
+            onClick={() => setShowReference((v) => !v)}
+            className="flex items-center gap-1 text-[10.5px] font-bold text-emerald-300 hover:text-emerald-200"
+          >
+            <BookOpen size={11} /> {showReference ? 'پنهان کردن پاسخ مرجع' : 'نمایش پاسخ مرجع'}
+            <ChevronDown size={11} className={`transition-transform ${showReference ? 'rotate-180' : ''}`} />
+          </button>
+          {showReference && (
+            <p className="mt-1.5 rounded-lg border border-emerald-400/20 bg-emerald-500/[0.06] p-2.5 text-[10.5px] leading-6 text-secondary">
+              {question.referenceAnswer}
+            </p>
+          )}
+        </div>
+      )}
 
       {panelVotes && panelVotes.length > 0 && (
         <div className="mt-2.5 rounded-lg border border-purple-400/20 bg-purple-500/[0.06] p-2.5">

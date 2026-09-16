@@ -1,6 +1,6 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
-import type { CompetencyAssessment, DomainScore } from '../types'
+import type { CompetencyAssessment, CompetencyQuestion, DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -76,11 +76,19 @@ export interface PanelSummaryRow {
   submitted: boolean
 }
 
-export function CompetencyPrintReport({ assessment, panel = [] }: { assessment: CompetencyAssessment; panel?: PanelSummaryRow[] }) {
-  const domainScores = computeDomainScores(assessment.answers)
+export function CompetencyPrintReport({
+  assessment,
+  panel = [],
+  questions,
+}: {
+  assessment: CompetencyAssessment
+  panel?: PanelSummaryRow[]
+  questions: CompetencyQuestion[]
+}) {
+  const domainScores = computeDomainScores(questions, assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(assessment.answers)
+  const completion = computeCompletion(questions, assessment.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const qualificationChips = [

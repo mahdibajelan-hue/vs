@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ClipboardList, Plus, Trash2, User } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
+import { computeDomainScores, computeOverallPercent, maturityBand, questionsForPosition } from '../lib/competencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
@@ -14,8 +14,29 @@ interface AssessmentsListPageProps {
 
 export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps) {
   const assessments = useCompetencyStore((s) => s.assessments)
+  const allQuestions = useCompetencyStore((s) => s.questions)
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+
+  // Rank is inherently a comparison across everyone competing for the same job position, so it's
+  // computed once here across the full list rather than independently inside each card. Assessments
+  // with no score yet don't participate — they have no rank, not last place.
+  const rankById = useMemo(() => {
+    const byPosition = new Map<string | null, { id: string; overall: number }[]>()
+    assessments.forEach((a) => {
+      const overall = computeOverallPercent(computeDomainScores(questionsForPosition(allQuestions, a.jobPositionId), a.answers))
+      if (overall == null) return
+      const list = byPosition.get(a.jobPositionId) ?? []
+      list.push({ id: a.id, overall })
+      byPosition.set(a.jobPositionId, list)
+    })
+    const result = new Map<string, { rank: number; total: number }>()
+    byPosition.forEach((list) => {
+      const sorted = [...list].sort((x, y) => y.overall - x.overall)
+      sorted.forEach((item, i) => result.set(item.id, { rank: i + 1, total: sorted.length }))
+    })
+    return result
+  }, [assessments, allQuestions])
 
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6">
@@ -40,7 +61,7 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {assessments.map((a) => (
-            <CandidateCard key={a.id} assessment={a} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
+            <CandidateCard key={a.id} assessment={a} rank={rankById.get(a.id)} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
           ))}
         </div>
       )}
@@ -71,8 +92,19 @@ export function AssessmentsListPage({ onOpen, onNew }: AssessmentsListPageProps)
   )
 }
 
-function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: CompetencyAssessment; onOpen: () => void; onDelete: () => void }) {
-  const domainScores = computeDomainScores(a.answers)
+function CandidateCard({
+  assessment: a,
+  rank,
+  onOpen,
+  onDelete,
+}: {
+  assessment: CompetencyAssessment
+  rank?: { rank: number; total: number }
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  const allQuestions = useCompetencyStore((s) => s.questions)
+  const domainScores = computeDomainScores(questionsForPosition(allQuestions, a.jobPositionId), a.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
@@ -102,10 +134,27 @@ function CandidateCard({ assessment: a, onOpen, onDelete }: { assessment: Compet
               <ApprovalMedal size="sm" />
             </span>
           )}
+          {rank && rank.total > 1 && (
+            <span
+              title={`رتبه ${rank.rank} از ${rank.total} در بین متقاضیان این سمت شغلی`}
+              className={`absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9px] font-extrabold ${
+                rank.rank === 1 ? 'bg-amber-400 text-amber-950' : 'bg-purple-500 text-white'
+              }`}
+            >
+              {rank.rank.toLocaleString('fa-IR')}
+            </span>
+          )}
         </div>
         <div className="min-w-0 w-full">
           <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
-          <p className="truncate text-[10px] text-muted">{a.candidatePosition}</p>
+          <p className="flex items-center justify-center gap-1 truncate text-[10px] text-muted">
+            {a.candidatePosition}
+            {rank && rank.total > 1 && (
+              <span className="num shrink-0 font-bold text-purple-300">
+                (رتبه {rank.rank.toLocaleString('fa-IR')} از {rank.total.toLocaleString('fa-IR')})
+              </span>
+            )}
+          </p>
         </div>
         <div className="mt-0.5 flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: tier }}>

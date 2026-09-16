@@ -9,6 +9,9 @@ import type {
   CertificationEntry,
   CompAttachment,
   CompetencyAssessment,
+  CompetencyDomainKey,
+  CompetencyQuestion,
+  CompJobPosition,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
@@ -18,13 +21,17 @@ import type {
 import {
   compAssessmentFromRow,
   compAttachmentFromRow,
+  compJobPositionFromRow,
   compPanelistFromRow,
   compPanelistScoreFromRow,
+  compQuestionFromRow,
   profileLiteFromRow,
   type CompAssessmentRow,
   type CompAttachmentRow,
+  type CompJobPositionRow,
   type CompPanelistRow,
   type CompPanelistScoreRow,
+  type CompQuestionRow,
   type ProfileLiteRow,
 } from '../lib/competencyData'
 import { uploadCompDoc } from '../lib/compStorage'
@@ -41,7 +48,6 @@ function currentUserId(): string | null {
 
 export interface CandidateProfileInput {
   candidateName: string
-  candidatePosition: string
   candidateNationalId: string
   candidatePhone: string
   candidateEmail: string
@@ -69,7 +75,6 @@ export interface QualificationScoresInput {
 function profileToRowPayload(profile: CandidateProfileInput) {
   return {
     candidate_name: profile.candidateName,
-    candidate_position: profile.candidatePosition,
     candidate_national_id: profile.candidateNationalId,
     candidate_phone: profile.candidatePhone,
     candidate_email: profile.candidateEmail,
@@ -144,12 +149,22 @@ interface CompetencyState {
   panelists: CompPanelist[]
   panelistScores: CompPanelistScore[]
   attachments: CompAttachment[]
+  jobPositions: CompJobPosition[]
+  questions: CompetencyQuestion[]
   loading: boolean
 
   fetchAll: () => Promise<void>
   fetchProfiles: () => Promise<void>
-  createAssessment: (profile: CandidateProfileInput) => Promise<string | null>
+  createAssessment: (profile: CandidateProfileInput, jobPositionId: string) => Promise<string | null>
   updateProfile: (id: string, profile: CandidateProfileInput) => Promise<void>
+
+  /** Admin-only: grows the job-position list (item 4) — see comp_job_positions RLS. */
+  addJobPosition: (title: string) => Promise<void>
+  setJobPositionActive: (id: string, isActive: boolean) => Promise<void>
+  /** Admin-only: grows the question bank (item 3) — see comp_questions RLS. */
+  addQuestion: (jobPositionId: string, domain: CompetencyDomainKey, text: string, referenceAnswer: string) => Promise<void>
+  updateQuestion: (id: string, patch: { text?: string; referenceAnswer?: string }) => Promise<void>
+  setQuestionActive: (id: string, isActive: boolean) => Promise<void>
   setAnswer: (id: string, questionKey: string, score: number | null, note: string) => Promise<void>
   setCapstone: (id: string, score: number | null, note: string) => Promise<void>
   setQualificationScores: (id: string, scores: QualificationScoresInput) => Promise<void>
@@ -185,16 +200,27 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   panelists: [],
   panelistScores: [],
   attachments: [],
+  jobPositions: [],
+  questions: [],
   loading: true,
 
   fetchAll: async () => {
     set({ loading: true })
-    const { data, error } = await supabase.from('comp_assessments').select('*').order('created_at', { ascending: false })
-    if (reportError('بارگذاری ارزیابی‌ها', error)) {
+    const [assessmentsRes, positionsRes, questionsRes] = await Promise.all([
+      supabase.from('comp_assessments').select('*').order('created_at', { ascending: false }),
+      supabase.from('comp_job_positions').select('*').order('sort_order'),
+      supabase.from('comp_questions').select('*').order('sort_order'),
+    ])
+    if (reportError('بارگذاری ارزیابی‌ها', assessmentsRes.error) || reportError('بارگذاری فهرست مشاغل', positionsRes.error) || reportError('بارگذاری بانک سوالات', questionsRes.error)) {
       set({ loading: false })
       return
     }
-    set({ assessments: ((data ?? []) as CompAssessmentRow[]).map(compAssessmentFromRow), loading: false })
+    set({
+      assessments: ((assessmentsRes.data ?? []) as CompAssessmentRow[]).map(compAssessmentFromRow),
+      jobPositions: ((positionsRes.data ?? []) as CompJobPositionRow[]).map(compJobPositionFromRow),
+      questions: ((questionsRes.data ?? []) as CompQuestionRow[]).map(compQuestionFromRow),
+      loading: false,
+    })
   },
 
   fetchProfiles: async () => {
@@ -209,16 +235,20 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   // (and a manual follow-up SELECT) succeed. Instead we know every value we just wrote
   // (we sent it, or we generated it client-side), so we build/merge the local object
   // directly — this is also one fewer round trip.
-  createAssessment: async (profile) => {
+  createAssessment: async (profile, jobPositionId) => {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
     const uid = currentUserId()
-    const { error } = await supabase.from('comp_assessments').insert({ id, ...profileToRowPayload(profile), status: 'draft', answers: {} })
+    const positionTitle = get().jobPositions.find((p) => p.id === jobPositionId)?.title ?? ''
+    const { error } = await supabase
+      .from('comp_assessments')
+      .insert({ id, ...profileToRowPayload(profile), job_position_id: jobPositionId, candidate_position: positionTitle, status: 'draft', answers: {} })
     if (reportError('ثبت مشخصات نامزد', error)) return null
     const created: CompetencyAssessment = {
       id,
       candidateName: profile.candidateName,
-      candidatePosition: profile.candidatePosition,
+      candidatePosition: positionTitle,
+      jobPositionId,
       candidateNationalId: profile.candidateNationalId,
       candidatePhone: profile.candidatePhone,
       candidateEmail: profile.candidateEmail,
@@ -270,7 +300,6 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
           ? {
               ...a,
               candidateName: profile.candidateName,
-              candidatePosition: profile.candidatePosition,
               candidateNationalId: profile.candidateNationalId,
               candidatePhone: profile.candidatePhone,
               candidateEmail: profile.candidateEmail,
@@ -516,5 +545,60 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ attachments: previous.filter((a) => a.id !== id) })
     const { error } = await supabase.from('comp_attachments').delete().eq('id', id)
     if (reportError('حذف مدرک', error)) set({ attachments: previous })
+  },
+
+  addJobPosition: async (title) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    const id = crypto.randomUUID()
+    const sortOrder = get().jobPositions.length
+    const { error } = await supabase.from('comp_job_positions').insert({ id, title: trimmed, sort_order: sortOrder })
+    if (reportError('افزودن شغل جدید', error)) return
+    set({
+      jobPositions: [...get().jobPositions, { id, title: trimmed, sortOrder, isActive: true, createdAt: new Date().toISOString() }],
+    })
+  },
+
+  setJobPositionActive: async (id, isActive) => {
+    const { error } = await supabase.from('comp_job_positions').update({ is_active: isActive }).eq('id', id)
+    if (reportError('بروزرسانی شغل', error)) return
+    set({ jobPositions: get().jobPositions.map((p) => (p.id === id ? { ...p, isActive } : p)) })
+  },
+
+  addQuestion: async (jobPositionId, domain, text, referenceAnswer) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const id = crypto.randomUUID()
+    const sortOrder = get().questions.filter((q) => q.jobPositionId === jobPositionId && q.domain === domain).length
+    const { error } = await supabase
+      .from('comp_questions')
+      .insert({ id, job_position_id: jobPositionId, domain_key: domain, text: trimmed, reference_answer: referenceAnswer.trim(), sort_order: sortOrder })
+    if (reportError('افزودن سوال', error)) return
+    set({
+      questions: [
+        ...get().questions,
+        { key: id, id, jobPositionId, domain, text: trimmed, referenceAnswer: referenceAnswer.trim(), sortOrder, isActive: true },
+      ],
+    })
+  },
+
+  updateQuestion: async (id, patch) => {
+    const payload: Record<string, string> = {}
+    if (patch.text != null) payload.text = patch.text
+    if (patch.referenceAnswer != null) payload.reference_answer = patch.referenceAnswer
+    if (Object.keys(payload).length === 0) return
+    const { error } = await supabase.from('comp_questions').update(payload).eq('id', id)
+    if (reportError('ویرایش سوال', error)) return
+    set({
+      questions: get().questions.map((q) =>
+        q.id === id ? { ...q, text: patch.text ?? q.text, referenceAnswer: patch.referenceAnswer ?? q.referenceAnswer } : q,
+      ),
+    })
+  },
+
+  setQuestionActive: async (id, isActive) => {
+    const { error } = await supabase.from('comp_questions').update({ is_active: isActive }).eq('id', id)
+    if (reportError('بروزرسانی سوال', error)) return
+    set({ questions: get().questions.map((q) => (q.id === id ? { ...q, isActive } : q)) })
   },
 }))

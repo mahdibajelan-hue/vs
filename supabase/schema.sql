@@ -3647,12 +3647,14 @@ returns table (
   employment_history jsonb,
   certifications jsonb,
   notable_projects text,
-  self_service_status text
+  self_service_status text,
+  uploaded_kinds text[]
 ) as $$
   select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
          a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
          a.years_experience_total, a.years_experience_pipeline, a.current_employer,
-         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
+         coalesce((select array_agg(att.kind order by att.created_at) from comp_attachments att where att.assessment_id = a.id), array[]::text[]) as uploaded_kinds
   from comp_assessments a
   where a.self_service_token = p_token;
 $$ language sql security definer stable;
@@ -3741,9 +3743,14 @@ create policy "comp_docs_delete_staff" on storage.objects
     and comp_can_access_assessment(((storage.foldername(name))[1])::uuid)
   );
 
+-- Deliberately not restricted "to anon": the security boundary here is knowing the exact
+-- self_service_token in the path, not the caller's auth state. Scoping this to anon only meant an
+-- already-authenticated browser session (e.g. staff opening their own candidate link to test it,
+-- or a candidate who also happens to hold a RASTA account) got a silent RLS-denied upload instead
+-- of the same token check everyone else passes.
 drop policy if exists "comp_docs_write_candidate" on storage.objects;
 create policy "comp_docs_write_candidate" on storage.objects
-  for insert to anon with check (
+  for insert with check (
     bucket_id = 'comp-docs'
     and exists (
       select 1 from comp_assessments a
@@ -3781,6 +3788,7 @@ returns table (
   id uuid,
   candidate_name text,
   candidate_position text,
+  job_position_id uuid,
   interview_date date,
   status text,
   answers jsonb,
@@ -3794,7 +3802,7 @@ returns table (
   strengths text,
   development_areas text
 ) as $$
-  select a.id, a.candidate_name, a.candidate_position, a.interview_date, a.status,
+  select a.id, a.candidate_name, a.candidate_position, a.job_position_id, a.interview_date, a.status,
          a.answers, a.capstone_score, a.capstone_note,
          a.education_score, a.experience_score, a.pm_training_score, a.pm_certification_score,
          a.is_approved, a.strengths, a.development_areas
@@ -3880,3 +3888,183 @@ returns table (module_key text) as $$
 $$ language sql security definer stable;
 
 grant execute on function rasta_my_accessible_modules() to authenticated;
+
+-- ============================================================================
+-- 18. Competency module: job-position registry + growable question bank
+--     (Sept 2026 request). Previously the interview rubric was a single
+--     hardcoded question set (COMPETENCY_QUESTIONS in competencyModel.ts)
+--     covering exactly one role. This introduces:
+--       - comp_job_positions: an admin-managed list of job titles a
+--         candidate can be interviewed for.
+--       - comp_questions: the question bank itself, scoped to a job position
+--         + one of the existing 8 competency domains, with a per-question
+--         reference_answer (visible to panelists/lead/admin, never to the
+--         candidate) — admin can keep adding rows over time.
+--     The 8 domains themselves (weights, scoring rubric) stay a shared,
+--     versioned constant in code (COMPETENCY_DOMAINS) — only the question
+--     text/reference-answer content becomes data.
+-- ============================================================================
+
+create table if not exists comp_job_positions (
+  id uuid primary key default gen_random_uuid(),
+  title text not null unique,
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_job_positions enable row level security;
+
+-- Every competency-module user (panelist or lead) needs to read the position
+-- list to start/continue an interview; only an admin can add/rename/retire one.
+drop policy if exists "comp_job_positions_select" on comp_job_positions;
+create policy "comp_job_positions_select" on comp_job_positions
+  for select using (true);
+
+drop policy if exists "comp_job_positions_write" on comp_job_positions;
+create policy "comp_job_positions_write" on comp_job_positions
+  for all using (is_admin_user()) with check (is_admin_user());
+
+insert into comp_job_positions (title, sort_order) values
+  ('مدیر پروژه احداث خط لوله انتقال گاز', 0),
+  ('سرپرست دستگاه نظارت', 1),
+  ('سرپرست کارگاه', 2)
+on conflict (title) do nothing;
+
+-- ----------------------------------------------------------------------------
+-- comp_questions: the growable bank itself.
+-- legacy_key preserves the original hardcoded string keys ("governance-1",
+-- etc.) that comp_assessments.answers / comp_panelist_scores.answers (both
+-- jsonb, keyed by question key) already contain for every assessment scored
+-- before this migration — the frontend keeps using legacy_key as the answer
+-- key wherever it's set, and falls back to the row's own id for any question
+-- added after this migration (which has no pre-existing answer data to stay
+-- compatible with).
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_questions (
+  id uuid primary key default gen_random_uuid(),
+  job_position_id uuid not null references comp_job_positions (id) on delete cascade,
+  domain_key text not null check (domain_key in ('governance', 'planning', 'cost', 'hse', 'quality', 'changeRisk', 'stakeholder', 'execution')),
+  legacy_key text unique,
+  text text not null,
+  reference_answer text not null default '',
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_questions enable row level security;
+
+drop policy if exists "comp_questions_select" on comp_questions;
+create policy "comp_questions_select" on comp_questions
+  for select using (true);
+
+drop policy if exists "comp_questions_write" on comp_questions;
+create policy "comp_questions_write" on comp_questions
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create index if not exists idx_comp_questions_job_position on comp_questions (job_position_id, domain_key, sort_order);
+
+-- Backfill: the 32 questions that used to live only in competencyModel.ts,
+-- kept under the original PM position with their original keys so every
+-- already-scored assessment keeps resolving correctly.
+insert into comp_questions (job_position_id, domain_key, legacy_key, text, sort_order)
+select (select id from comp_job_positions where title = 'مدیر پروژه احداث خط لوله انتقال گاز'), v.domain_key, v.legacy_key, v.text, v.sort_order
+from (values
+  ('governance', 'governance-1', 'در یک پروژه خط انتقال گاز، چگونه اهداف زمان، هزینه، کیفیت، HSE و قابلیت بهره‌برداری را به یک برنامه اجرایی یکپارچه تبدیل کردید؟', 0),
+  ('governance', 'governance-2', 'ساختار سازمانی پروژه، ماتریس RACI و حدود اختیار پیمانکاران و پیمانکاران جزء را چگونه تعریف و کنترل می‌کنید؟', 1),
+  ('governance', 'governance-3', 'یک نمونه از اختلاف با کارفرما، مشاور یا پیمانکار را شرح دهید که با استناد قراردادی حل کردید.', 2),
+  ('governance', 'governance-4', 'چگونه اطمینان می‌دهید تصمیم‌های روزانه کارگاه با الزامات قرارداد، مشخصات فنی، ITP و اهداف بهره‌برداری نهایی هم‌راستا هستند؟', 3),
+  ('planning', 'planning-1', 'مبنای تهیه برنامه زمان‌بندی Level 3 یا Level 4 برای خط لوله را چه می‌دانید و فعالیت‌های کلیدی آن چیست؟', 0),
+  ('planning', 'planning-2', 'در صورت عقب‌ماندگی عملیات جوشکاری، NDT یا تأمین شیرآلات، چگونه علت را از اثر تفکیک می‌کنید و برنامه Recovery Plan می‌سازید؟', 1),
+  ('planning', 'planning-3', 'پیشرفت فیزیکی عملیات ROW، خاکبرداری، Stringing، Welding، NDT، Field Joint Coating، Lowering، Backfilling و Hydrotest را چگونه وزن‌دهی می‌کنید؟', 2),
+  ('planning', 'planning-4', 'چه شاخص‌هایی را به‌صورت هفتگی پایش می‌کنید تا تأخیر را پیش از بحرانی‌شدن تشخیص دهید؟', 3),
+  ('cost', 'cost-1', 'چگونه بودجه پروژه را به WBS، CBS، پکیج‌های قراردادی و فعالیت‌های اجرایی متصل می‌کنید؟', 0),
+  ('cost', 'cost-2', 'اگر قیمت لوله، پوشش، ماشین‌آلات یا حمل‌ونقل افزایش یابد، چه اقدام‌هایی برای پیش‌بینی و کنترل اثر مالی انجام می‌دهید؟', 1),
+  ('cost', 'cost-3', 'برای اقلام Long Lead مانند Line Pipe، Valves، Fittings، CP Material یا تجهیزات ایستگاهی، چه فرآیند Expediting تعریف می‌کنید؟', 2),
+  ('cost', 'cost-4', 'یک نمونه از تصمیم شما برای کاهش هزینه یا جلوگیری از هزینه اضافی را با اثر کمی توضیح دهید.', 3),
+  ('hse', 'hse-1', 'مهم‌ترین ریسک‌های HSE در احداث خط انتقال گاز را چگونه شناسایی، رتبه‌بندی و کنترل می‌کنید؟', 0),
+  ('hse', 'hse-2', 'اگر در یک جبهه کاری هم‌زمان عملیات لیفتینگ، جوشکاری، کار در ترانشه و تردد ماشین‌آلات در جریان باشد، چه کنترل‌هایی برقرار می‌کنید؟', 1),
+  ('hse', 'hse-3', 'در صورت وقوع Near Miss جدی یا حادثه با پتانسیل بالا، در ۲۴ ساعت اول چه اقدام‌های مدیریتی انجام می‌دهید؟', 2),
+  ('hse', 'hse-4', 'چگونه مطمئن می‌شوید پیمانکار جزء فقط آمار HSE تولید نمی‌کند، بلکه واقعاً رفتار ایمن و کنترل میدانی دارد؟', 3),
+  ('quality', 'quality-1', 'چگونه مطمئن می‌شوید WPS/PQR، صلاحیت جوشکاران، Consumable Control و شرایط پیش‌گرم با مشخصات پروژه منطبق هستند؟', 0),
+  ('quality', 'quality-2', 'اگر نرخ Repair جوش بالا برود، چه داده‌هایی جمع می‌کنید و چه اقدام اصلاحی مرحله‌ای انجام می‌دهید؟', 1),
+  ('quality', 'quality-3', 'نقش مدیر پروژه در کنترل کیفیت عملیات NDT، Field Joint Coating، Holiday Test، Lowering و Backfilling چیست؟', 2),
+  ('quality', 'quality-4', 'برای Hydrotest، Dewatering، Drying و آماده‌سازی برای Commissioning چه نقاط کنترلی یا Hold Point هایی را حیاتی می‌دانید؟', 3),
+  ('changeRisk', 'changeRisk-1', 'Risk Register پروژه را چگونه زنده نگه می‌دارید و چه تفاوتی میان ریسک، مسئله جاری و فرصت قائل هستید؟', 0),
+  ('changeRisk', 'changeRisk-2', 'اگر کارفرما تغییر مسیر، افزایش ضخامت، تغییر کلاس پوشش یا اصلاح محدوده ایستگاه‌های شیر را درخواست دهد، چگونه Change Control انجام می‌دهید؟', 1),
+  ('changeRisk', 'changeRisk-3', 'یک نمونه از Claim یا اختلاف زمانی/مالی را شرح دهید که با مستندسازی درست، از منافع پروژه دفاع کردید.', 2),
+  ('changeRisk', 'changeRisk-4', 'چه مواردی را از روز اول پروژه مستندسازی می‌کنید تا در صورت تأخیر ناشی از کارفرما، معارض محلی، مجوز یا تغییر طراحی قابل استناد باشد؟', 3),
+  ('stakeholder', 'stakeholder-1', 'چگونه بین خواسته‌های کارفرما، مشاور، بهره‌بردار، واحد طراحی، تدارکات، پیمانکار و ذی‌نفعان محلی اولویت‌گذاری می‌کنید؟', 0),
+  ('stakeholder', 'stakeholder-2', 'نمونه‌ای از تعارض میان تولید/زمان‌بندی و کیفیت یا HSE را شرح دهید؛ تصمیم شما چه بود؟', 1),
+  ('stakeholder', 'stakeholder-3', 'چگونه سرپرستان اجرایی و پیمانکاران جزء را پاسخگو نگه می‌دارید، بدون اینکه صرفاً با فشار و دستور اداره شوند؟', 2),
+  ('stakeholder', 'stakeholder-4', 'در پروژه‌ای با چند Spread یا جبهه کاری، چه سازوکاری برای انتقال سریع تصمیم‌ها و درس‌آموخته‌ها ایجاد می‌کنید؟', 3),
+  ('execution', 'execution-1', 'توالی اجرایی احداث یک خط انتقال گاز را از تحویل مسیر تا تحویل مکانیکی توضیح دهید و وابستگی‌های اصلی را مشخص کنید.', 0),
+  ('execution', 'execution-2', 'در تقاطع رودخانه، جاده، راه‌آهن یا منطقه دارای معارض، چه تفاوتی در برنامه‌ریزی، مجوزها و روش اجرا ایجاد می‌شود؟', 1),
+  ('execution', 'execution-3', 'چگونه Interface بین خط لوله، ایستگاه‌های شیر بین‌راهی، CP، SCADA/Telecom و بهره‌بردار را مدیریت می‌کنید؟', 2),
+  ('execution', 'execution-4', 'چه شرایطی باید برقرار باشد تا یک بخش از خط برای Mechanical Completion، Pre-Commissioning و تحویل به بهره‌برداری آماده تلقی شود؟', 3)
+) as v(domain_key, legacy_key, text, sort_order)
+where not exists (select 1 from comp_questions where legacy_key = v.legacy_key);
+
+-- New questions authored for the two newly added positions — no legacy_key
+-- (nothing scored against them yet), so the frontend keys their answers by
+-- the row's own id.
+insert into comp_questions (job_position_id, domain_key, text, reference_answer, sort_order)
+select (select id from comp_job_positions where title = 'سرپرست دستگاه نظارت'), v.domain_key, v.text, v.reference_answer, v.sort_order
+from (values
+  ('governance', 'نقش شما به‌عنوان سرپرست دستگاه نظارت در تایید صورت‌وضعیت‌ها و اطمینان از انطباق کار انجام‌شده با مشخصات فنی قرارداد چیست؟', 'تایید کمی و کیفی کارکرد پیمانکار بر اساس نقشه‌ها، مشخصات فنی و فهرست بها؛ بازبینی مستندات پیش از تایید صورت‌وضعیت؛ مستندسازی مغایرت‌ها پیش از تایید؛ عدم تایید کاری که مطابق مشخصات فنی/نقشه اجرا نشده حتی تحت فشار زمانی.', 0),
+  ('governance', 'اگر پیمانکار روش اجرایی متفاوت از مشخصات فنی مصوب پیشنهاد دهد، چگونه تصمیم‌گیری می‌کنید؟', 'بررسی مغایرت با ITP/مشخصات فنی، ارجاع به کارفرما/طراح برای تایید رسمی از طریق مکاتبه یا Technical Query، ثبت تصمیم نهایی و دلایل آن، عدم پذیرش تغییر روش بدون تایید مستند.', 1),
+  ('planning', 'چگونه پیشرفت واقعی پیمانکار را در مقابل برنامه زمان‌بندی مصوب راستی‌آزمایی می‌کنید؟', 'بازدید میدانی منظم، مقایسه Daily/Weekly Report پیمانکار با مشاهدات میدانی، بررسی کمیت واقعی اجراشده (متراژ، تعداد جوش) در برابر ادعای پیمانکار، گزارش انحراف به کارفرما با شواهد مصور.', 0),
+  ('planning', 'اگر گزارش پیشرفت پیمانکار با آنچه در کارگاه مشاهده می‌کنید مغایرت داشته باشد، چه اقدامی انجام می‌دهید؟', 'ثبت مغایرت با مستندات و تصاویر تاریخ‌دار، عدم تایید صورت‌وضعیت بر اساس ارقام غیرواقعی، اطلاع فوری به کارفرما، پیگیری اصلاح گزارش توسط پیمانکار.', 1),
+  ('cost', 'چگونه از پرداخت اضافه به پیمانکار برای کارهای ناقص یا غیرمنطبق با مشخصات جلوگیری می‌کنید؟', 'بازرسی فیزیکی پیش از تایید هر قلم صورت‌وضعیت، تطبیق با متره واقعی و نقشه As-Built، کسر یا توقف پرداخت اقلام دارای NCR باز تا رفع مغایرت.', 0),
+  ('cost', 'در صورت درخواست پیمانکار برای کار اضافه (Variation Order)، فرآیند بررسی شما چیست؟', 'بررسی اینکه آیا کار واقعاً خارج از محدوده قرارداد است، استعلام قیمت منطبق با فهرست بها یا تحلیل قیمت جدید، تایید کارفرما پیش از اجرا، مستندسازی کامل قبل و بعد از اجرا.', 1),
+  ('hse', 'وظیفه شما در نظارت بر رعایت الزامات HSE توسط پیمانکار در کارگاه چیست؟', 'پایش اجرای Permit to Work و JSA، توقف کار (Stop Work Authority) در صورت مشاهده خطر جدی، گزارش عدم انطباق HSE به کارفرما و پیگیری اقدام اصلاحی، عدم تایید کار انجام‌شده بدون رعایت الزامات ایمنی حتی در صورت فشار زمانی.', 0),
+  ('hse', 'اگر پیمانکار برای جلو انداختن کار، الزامات ایمنی را نادیده بگیرد، چه واکنشی دارید؟', 'توقف فوری عملیات مربوطه، ثبت مستند مغایرت، اطلاع‌رسانی رسمی به مدیریت پیمانکار و کارفرما، عدم از سرگیری کار تا رفع کامل مغایرت و تایید مجدد.', 1),
+  ('quality', 'چگونه اطمینان می‌دهید کیفیت جوشکاری، پوشش و تست‌های پیمانکار مطابق ITP و مشخصات پروژه است؟', 'حضور در Hold Point های تعیین‌شده در ITP، بازبینی گزارش‌های NDT/Holiday Test، عدم تایید مرحله بعد بدون بستن Hold Point قبلی، پیگیری NCR تا بسته‌شدن کامل.', 0),
+  ('quality', 'در صورت مشاهده نرخ Repair بالا در جوش‌ها، نقش شما چیست؟', 'توقف تایید مراحل بعدی مرتبط، درخواست تحلیل ریشه‌ای از پیمانکار، بازرسی افزایشی نمونه‌ها، عدم پذیرش ادامه کار تا کنترل روند.', 1),
+  ('changeRisk', 'چگونه تغییرات میدانی (Field Change) را ثبت و پیگیری می‌کنید تا در مدارک As-Built منعکس شوند؟', 'ثبت هر تغییر با Redline روی نقشه در لحظه وقوع، تایید مهندس طراح برای تغییرات با اثر فنی، انتقال به مدارک As-Built نهایی، آرشیو مستند برای مراجع بعدی.', 0),
+  ('changeRisk', 'یک نمونه واقعی از مغایرت فنی که کشف کردید و مانع تایید کار پیمانکار شدید را شرح دهید.', 'پاسخ باید مشخص، مستند و شامل نحوه کشف، مستندسازی، مکاتبه رسمی و نتیجه نهایی (اصلاح یا رد کار) باشد.', 1),
+  ('stakeholder', 'چگونه ارتباط بین کارفرما، مشاور طراح و پیمانکار را در مسائل فنی روزمره مدیریت می‌کنید؟', 'مکاتبات رسمی و مستند برای هر سوال فنی (Technical Query)، برگزاری جلسات هماهنگی منظم، پیگیری بازخورد به‌موقع، عدم تصمیم‌گیری یک‌جانبه در موارد خارج از اختیار.', 0),
+  ('stakeholder', 'اگر پیمانکار با نتیجه بازرسی شما مخالف باشد، چگونه تعارض را مدیریت می‌کنید؟', 'دفاع مستند از نظر فنی با استناد به مشخصات و نقشه، ارجاع به کارفرما/مشاور در صورت عدم توافق، عدم عقب‌نشینی از الزامات فنی صرفاً برای اجتناب از تعارض.', 1),
+  ('execution', 'دانش شما از توالی اجرایی و نقاط بازرسی کلیدی (Hold Point) در احداث خط لوله چیست؟', 'شناخت کامل از ترتیب ROW تا Mechanical Completion، آگاهی از Hold Point های Hydrotest/NDT/Coating، تشخیص وابستگی بین فعالیت‌ها.', 0),
+  ('execution', 'در تقاطع‌های خاص (رودخانه، جاده، ریل)، نظارت شما چه تفاوتی با مسیر عادی دارد؟', 'بازرسی دقیق‌تر و مکرر به دلیل حساسیت اجرا، تایید روش اجرایی خاص، حضور مستمر در حین اجرای عملیات بحرانی، بازرسی مضاعف کیفیت جوش/پوشش در این نقاط.', 1)
+) as v(domain_key, text, reference_answer, sort_order)
+where not exists (
+  select 1 from comp_questions q
+  where q.job_position_id = (select id from comp_job_positions where title = 'سرپرست دستگاه نظارت') and q.text = v.text
+);
+
+insert into comp_questions (job_position_id, domain_key, text, reference_answer, sort_order)
+select (select id from comp_job_positions where title = 'سرپرست کارگاه'), v.domain_key, v.text, v.reference_answer, v.sort_order
+from (values
+  ('governance', 'چگونه دستورات مدیر پروژه و برنامه اجرایی روزانه را به سرگروه‌ها و نیروهای کارگاه منتقل و پیگیری می‌کنید؟', 'برگزاری Toolbox Talk/جلسه صبحگاهی روزانه، تعیین وظایف مشخص برای هر گروه، پیگیری اجرا در طول شیفت، گزارش‌دهی روزانه به مدیر پروژه.', 0),
+  ('governance', 'مسئولیت شما در تخصیص و مدیریت ماشین‌آلات و نیروی انسانی در طول یک شیفت کاری چیست؟', 'برنامه‌ریزی تخصیص بر اساس اولویت فعالیت‌های مسیر بحرانی، جابه‌جایی سریع منابع در صورت توقف یک جبهه، پایش بهره‌وری واقعی ماشین‌آلات.', 1),
+  ('planning', 'چگونه پیشرفت روزانه جبهه کاری خود را ثبت و به واحد برنامه‌ریزی گزارش می‌دهید؟', 'ثبت دقیق متراژ/تعداد فعالیت انجام‌شده در پایان هر شیفت، مقایسه با برنامه روزانه، اعلام فوری تاخیر یا مانع به مدیر پروژه، عدم گزارش پیشرفت غیرواقعی.', 0),
+  ('planning', 'اگر یک فعالیت به دلیل کمبود مصالح یا تجهیزات متوقف شود، چه اقدام فوری انجام می‌دهید؟', 'اطلاع فوری به واحد تدارکات/مدیر پروژه، جابه‌جایی نیرو و ماشین‌آلات به فعالیت جایگزین برای جلوگیری از توقف کامل کارگاه، ثبت علت توقف برای پیگیری.', 1),
+  ('cost', 'چگونه از هدررفت مصالح و سوخت ماشین‌آلات در کارگاه جلوگیری می‌کنید؟', 'کنترل روزانه مصرف سوخت در برابر ساعت کارکرد، نظارت بر انبارش و جابجایی صحیح مصالح، پیگیری ضایعات غیرعادی و علت‌یابی آن.', 0),
+  ('cost', 'نقش شما در بهره‌وری ماشین‌آلات اجاره‌ای یا پیمانکاران جزء چیست؟', 'پایش ساعت کارکرد واقعی در برابر ساعت صورت‌وضعیت‌شده، جلوگیری از بیکاری غیرضروری ماشین‌آلات، هماهنگی زمان‌بندی برای حداکثر استفاده.', 1),
+  ('hse', 'چگونه اطمینان می‌دهید تمام نیروهای زیرمجموعه شما قبل از شروع کار، اقدامات ایمنی لازم (JSA، Permit) را رعایت می‌کنند؟', 'بازرسی روزانه قبل از شروع کار، عدم اجازه شروع فعالیت بدون Permit to Work معتبر و JSA امضاشده، اختیار توقف کار (Stop Work) در صورت مشاهده خطر.', 0),
+  ('hse', 'در صورت وقوع یک Near Miss در جبهه کاری شما، اولین اقدامات‌تان چیست؟', 'توقف فوری فعالیت مرتبط، ایمن‌سازی محل، گزارش فوری به HSE و مدیر پروژه، مشارکت در بررسی ریشه‌ای و اجرای اقدام اصلاحی قبل از ازسرگیری کار.', 1),
+  ('quality', 'چگونه اطمینان می‌دهید جوشکاران و اپراتورهای زیرمجموعه شما مطابق WPS/PQR و صلاحیت معتبر کار می‌کنند؟', 'بررسی روزانه گواهی صلاحیت جوشکاران فعال، تطبیق Consumable مصرفی با WPS، جلوگیری از شروع کار جوشکار بدون تایید صلاحیت به‌روز.', 0),
+  ('quality', 'اگر بازرس کیفیت یک قطعه اجراشده را رد کند (NCR)، واکنش شما به‌عنوان سرپرست چیست؟', 'توقف فوری فعالیت مشابه تا شناسایی علت، هماهنگی اصلاح طبق دستور کیفیت، جلوگیری از تکرار مغایرت در بقیه جبهه، گزارش به مدیر پروژه.', 1),
+  ('changeRisk', 'چگونه شرایط غیرمنتظره میدانی (برخورد با تاسیسات دفن‌شده، تغییر خاک، معارض محلی) را مدیریت و گزارش می‌کنید؟', 'توقف فوری کار در نقطه برخورد، ایمن‌سازی محل، گزارش فوری و مستند به مدیر پروژه/HSE، عدم ادامه کار تا دریافت دستور رسمی.', 0),
+  ('changeRisk', 'چگونه اطمینان می‌دهید مستندات روزانه کارگاه (دفتر کارگاه، عکس، گزارش) به‌طور کامل و به‌موقع ثبت می‌شود؟', 'تکمیل دفتر کارگاه در پایان هر شیفت، عکس‌برداری از مراحل کلیدی و موانع، آرشیو منظم برای استفاده در ادعاهای احتمالی بعدی.', 1),
+  ('stakeholder', 'چگونه بین چند سرگروه یا پیمانکار جزء در یک جبهه کاری هماهنگی ایجاد می‌کنید؟', 'جلسه هماهنگی روزانه بین سرگروه‌ها، تعیین واضح توالی و محدوده کاری هر گروه، حل سریع تعارض منابع یا فضای کاری در محل.', 0),
+  ('stakeholder', 'چگونه با نیروهای زیرمجموعه‌ای که عملکرد ضعیف دارند برخورد می‌کنید؟', 'بازخورد مستقیم و فوری، شناسایی علت (آموزش، انگیزه، تجهیزات)، اقدام اصلاحی متناسب، گزارش به مدیر پروژه در صورت تکرار.', 1),
+  ('execution', 'توالی اجرایی دقیق یک روز کاری معمول در جبهه شما (از آغاز شیفت تا پایان) را شرح دهید.', 'برنامه صبحگاهی و Toolbox Talk، تخصیص نیرو/ماشین‌آلات، اجرای فعالیت‌های برنامه‌ریزی‌شده با پایش مستمر، ثبت پیشرفت و مسائل در پایان شیفت.', 0),
+  ('execution', 'در شرایط آب‌وهوایی نامناسب یا محدودیت روشنایی، چگونه تصمیم به ادامه یا توقف کار می‌گیرید؟', 'ارزیابی ریسک ایمنی و کیفیت کار در آن شرایط، توقف فعالیت‌های حساس (جوشکاری، لیفتینگ) در صورت خطر، اطلاع‌رسانی فوری به مدیر پروژه برای برنامه‌ریزی جبرانی.', 1)
+) as v(domain_key, text, reference_answer, sort_order)
+where not exists (
+  select 1 from comp_questions q
+  where q.job_position_id = (select id from comp_job_positions where title = 'سرپرست کارگاه') and q.text = v.text
+);
+
+-- comp_assessments now records which job position the candidate was
+-- interviewed for; existing rows (all originally the one implicit PM role)
+-- backfill to that position so their question set keeps resolving.
+alter table comp_assessments add column if not exists job_position_id uuid references comp_job_positions (id);
+update comp_assessments set job_position_id = (select id from comp_job_positions where title = 'مدیر پروژه احداث خط لوله انتقال گاز') where job_position_id is null;
+create index if not exists idx_comp_assessments_job_position on comp_assessments (job_position_id);
