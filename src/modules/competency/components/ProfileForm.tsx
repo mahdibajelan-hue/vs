@@ -8,7 +8,6 @@ import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsura
 
 const EMPTY: CandidateProfileInput = {
   candidateName: '',
-  candidatePosition: 'مدیر پروژه احداث خط لوله انتقال گاز',
   candidateNationalId: '',
   candidatePhone: '',
   candidateEmail: '',
@@ -97,14 +96,9 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
             </div>
           </Field>
           {!candidateMode && (
-            <>
-              <Field label="سمت مورد ارزیابی">
-                <input value={form.candidatePosition} onChange={(e) => set('candidatePosition', e.target.value)} className="input" />
-              </Field>
-              <Field label="تاریخ مصاحبه">
-                <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />
-              </Field>
-            </>
+            <Field label="تاریخ مصاحبه">
+              <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />
+            </Field>
           )}
           <Field label="کارفرمای فعلی">
             <input value={form.currentEmployer} onChange={(e) => set('currentEmployer', e.target.value)} className="input" />

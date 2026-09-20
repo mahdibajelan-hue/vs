@@ -5,12 +5,23 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
-import type { CompetencyAnswers } from '../types'
+import type { CompetencyAnswers, CompetencyDomainKey, CompetencyQuestion } from '../types'
+
+/** The token-scoped question list the RPC returns alongside the result — just enough shape to
+ * compute domain scores (key/domain/sortOrder), never text or referenceAnswer: this public link
+ * shows aggregate scores only, so there's no reason to expose question wording or model answers. */
+interface PublicResultQuestionRow {
+  id: string
+  domain_key: string
+  legacy_key: string | null
+  sort_order: number
+}
 
 interface PublicResultsRow {
   id: string
   candidate_name: string
   candidate_position: string
+  job_position_id: string | null
   interview_date: string
   status: string
   answers: CompetencyAnswers
@@ -23,6 +34,7 @@ interface PublicResultsRow {
   is_approved: boolean
   strengths: string
   development_areas: string
+  questions: PublicResultQuestionRow[]
 }
 
 /**
@@ -66,10 +78,20 @@ export function PublicResultsPage({ token }: { token: string }) {
     )
   }
 
-  const domainScores = computeDomainScores(row.answers)
+  const questions: CompetencyQuestion[] = row.questions.map((q) => ({
+    key: q.legacy_key ?? q.id,
+    id: q.id,
+    jobPositionId: row.job_position_id ?? '',
+    domain: q.domain_key as CompetencyDomainKey,
+    text: '',
+    referenceAnswer: '',
+    sortOrder: q.sort_order,
+    isActive: true,
+  }))
+  const domainScores = computeDomainScores(questions, row.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(row.answers)
+  const completion = computeCompletion(questions, row.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const qualificationChips = [

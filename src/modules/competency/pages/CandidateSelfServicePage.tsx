@@ -25,6 +25,7 @@ interface SelfServiceRow {
   certifications: CandidateProfileInput['certifications']
   notable_projects: string
   self_service_status: string
+  uploaded_kinds: string[]
 }
 
 const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
@@ -44,6 +45,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [uploadedKinds, setUploadedKinds] = useState<string[]>([])
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState<AttachmentKind | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingKind, setPendingKind] = useState<AttachmentKind>('resume')
@@ -67,6 +69,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         }
         const r = data[0] as SelfServiceRow
         setRow(r)
+        setUploadedKinds([...new Set(r.uploaded_kinds ?? [])])
         if (r.self_service_status === 'submitted' || r.self_service_status === 'reviewed') setSubmitted(true)
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,11 +104,28 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
   const handleUpload = async (file: File) => {
     setUploading(pendingKind)
+    setUploadError(null)
     const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
-    if (path && !error) {
-      await supabase.rpc('comp_self_service_add_attachment', { p_token: token, p_kind: pendingKind, p_file_name: file.name, p_storage_path: path })
-      setUploadedKinds((k) => [...k, pendingKind])
+    if (error || !path) {
+      setUploadError(error ?? 'خطای نامشخص در بارگذاری فایل')
+      setUploading(null)
+      return
     }
+    const { error: rpcError } = await supabase.rpc('comp_self_service_add_attachment', {
+      p_token: token,
+      p_kind: pendingKind,
+      p_file_name: file.name,
+      p_storage_path: path,
+    })
+    if (rpcError) {
+      // The file already landed in storage above — only the metadata row failed — so without this
+      // check the candidate would see a false "uploaded" checkmark while the document stays
+      // invisible to staff (comp_attachments never gets a row pointing at it).
+      setUploadError(`${rpcError.code ?? ''} ${rpcError.message}`.trim())
+      setUploading(null)
+      return
+    }
+    setUploadedKinds((k) => [...k, pendingKind])
     setUploading(null)
   }
 
@@ -137,7 +157,6 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
   const initial: CandidateProfileInput = {
     candidateName: row.candidate_name,
-    candidatePosition: row.candidate_position,
     candidateNationalId: row.candidate_national_id,
     candidatePhone: row.candidate_phone,
     candidateEmail: row.candidate_email,
@@ -223,6 +242,17 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
                   <CheckCircle2 size={12} /> {ATTACHMENT_KIND_LABEL_FA[k as AttachmentKind]} بارگذاری شد
                 </p>
               ))}
+            </div>
+          )}
+          {uploadError && (
+            <div className="rounded-lg border border-red-400/25 bg-red-500/[0.05] p-2.5 text-[11px] text-red-300">
+              بارگذاری مدرک با خطا مواجه شد. لطفاً دوباره تلاش کنید.
+              <details className="mt-1 text-[10px] text-red-200/70">
+                <summary className="cursor-pointer">جزئیات فنی</summary>
+                <p dir="ltr" className="mt-1 break-all rounded-lg bg-black/20 p-2">
+                  {uploadError}
+                </p>
+              </details>
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Plus, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
+import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain, questionsForPosition } from '../lib/competencyModel'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
@@ -26,6 +26,8 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const panelists = useCompetencyStore((s) => s.panelists).filter((p) => p.assessmentId === assessmentId)
   const panelistScores = useCompetencyStore((s) => s.panelistScores).filter((p) => p.assessmentId === assessmentId)
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
+  const allQuestions = useCompetencyStore((s) => s.questions)
+  const myQuestions = questionsForPosition(allQuestions, assessment?.jobPositionId ?? null)
   const fetchProfiles = useCompetencyStore((s) => s.fetchProfiles)
   const fetchPanelists = useCompetencyStore((s) => s.fetchPanelists)
   const fetchPanelistScores = useCompetencyStore((s) => s.fetchPanelistScores)
@@ -63,13 +65,15 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
     if (submittedScores.length === 0) return null
     return COMPETENCY_DOMAINS.map((domain) => {
       const values = submittedScores
-        .map((s) => computeDomainScores(s.answers).find((d) => d.domain.key === domain.key)?.percentScore)
+        .map((s) => computeDomainScores(myQuestions, s.answers).find((d) => d.domain.key === domain.key)?.percentScore)
         .filter((v): v is number => typeof v === 'number')
       return { domain, avg: values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null, count: values.length }
     })
-  }, [submittedScores])
+  }, [submittedScores, myQuestions])
 
-  const overallAverages = submittedScores.map((s) => computeOverallPercent(computeDomainScores(s.answers))).filter((v): v is number => typeof v === 'number')
+  const overallAverages = submittedScores
+    .map((s) => computeOverallPercent(computeDomainScores(myQuestions, s.answers)))
+    .filter((v): v is number => typeof v === 'number')
   const overallAvg = overallAverages.length > 0 ? Math.round(overallAverages.reduce((a, b) => a + b, 0) / overallAverages.length) : null
 
   const capstoneAverages = submittedScores.map((s) => s.capstoneScore).filter((v): v is number => typeof v === 'number')
@@ -204,7 +208,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
           {COMPETENCY_DOMAINS.map((domain) => (
             <div key={domain.key} className="glass-panel space-y-2.5 rounded-2xl p-3.5">
               <p className="text-xs font-bold">{domain.title}</p>
-              {questionsForDomain(domain.key).map((q, i) => (
+              {questionsForDomain(myQuestions, domain.key).map((q, i) => (
                 <QuestionScoreCard
                   key={q.key}
                   index={i}

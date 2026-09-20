@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  ArrowRight,
   Award,
   Briefcase,
   BookOpen,
@@ -32,32 +33,37 @@ import {
   computeOverallPercent,
   domainFlags,
   maturityBand,
+  questionsForPosition,
   tierColor,
 } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
 interface ResultsStageProps {
   assessment: CompetencyAssessment
+  /** Lets the report's own action row carry a direct way back to the candidates list, alongside the wizard's persistent nav bar above — this stage tends to run long, so a second, in-context back button is worth the redundancy. */
+  onBack: () => void
 }
 
 /** The final report: a professional candidate card, radar chart, maturity band, strengths/weaknesses, and position recommendations — all on one printable/exportable page. */
-export function ResultsStage({ assessment }: ResultsStageProps) {
+export function ResultsStage({ assessment, onBack }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
+  const allQuestions = useCompetencyStore((s) => s.questions)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [settingApproval, setSettingApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
-  const domainScores = computeDomainScores(assessment.answers)
+  const questions = questionsForPosition(allQuestions, assessment.jobPositionId)
+  const domainScores = computeDomainScores(questions, assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(assessment.answers)
+  const completion = computeCompletion(questions, assessment.answers)
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   // The panel's contribution, kept alongside the lead's verdict rather than blended into it —
@@ -68,7 +74,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
       const sheet = allPanelistScores.find((s) => s.assessmentId === assessment.id && s.panelistId === p.userId)
       return {
         name: profiles.find((pr) => pr.id === p.userId)?.fullName ?? 'داور',
-        overallPercent: sheet ? computeOverallPercent(computeDomainScores(sheet.answers)) : null,
+        overallPercent: sheet ? computeOverallPercent(computeDomainScores(questions, sheet.answers)) : null,
         submitted: sheet?.submittedAt != null,
       }
     })
@@ -186,7 +192,11 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
 
   return (
     <div className="space-y-4">
-      <div className="no-print flex flex-wrap items-center justify-end gap-2">
+      <div className="no-print flex flex-wrap items-center justify-between gap-2">
+        <button onClick={onBack} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
+          <ArrowRight size={14} /> بازگشت به فهرست متقاضیان
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
         <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
           <Printer size={14} /> پرینت
         </button>
@@ -222,6 +232,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
         >
           <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید صلاحیت'}
         </button>
+        </div>
       </div>
 
       <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
@@ -259,7 +270,7 @@ export function ResultsStage({ assessment }: ResultsStageProps) {
           dark card above stays as-is, but window.print()/PDF export both target this instead, since
           html2canvas captures literal colors and a dark background prints/exports poorly. */}
       <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <CompetencyPrintReport assessment={assessment} panel={panelSummary} />
+        <CompetencyPrintReport assessment={assessment} panel={panelSummary} questions={questions} />
       </div>
 
       <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">

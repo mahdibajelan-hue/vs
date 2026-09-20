@@ -5,6 +5,9 @@ import type {
   CompAttachment,
   CompetencyAnswers,
   CompetencyAssessment,
+  CompetencyDomainKey,
+  CompetencyQuestion,
+  CompJobPosition,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
@@ -17,6 +20,7 @@ export interface CompAssessmentRow {
   id: string
   candidate_name: string
   candidate_position: string
+  job_position_id: string | null
   candidate_national_id: string
   candidate_phone: string
   candidate_email: string
@@ -59,6 +63,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     id: r.id,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
+    jobPositionId: r.job_position_id,
     candidateNationalId: r.candidate_national_id,
     candidatePhone: r.candidate_phone,
     candidateEmail: r.candidate_email,
@@ -175,4 +180,40 @@ export interface ProfileLiteRow {
 
 export function profileLiteFromRow(r: ProfileLiteRow): CompProfileLite {
   return { id: r.id, email: r.email, fullName: r.full_name || r.email }
+}
+
+export interface CompJobPositionRow {
+  id: string
+  title: string
+  sort_order: number
+  is_active: boolean
+  created_at: string
+}
+
+export function compJobPositionFromRow(r: CompJobPositionRow): CompJobPosition {
+  return { id: r.id, title: r.title, sortOrder: r.sort_order, isActive: r.is_active, createdAt: r.created_at }
+}
+
+export interface CompQuestionRow {
+  id: string
+  job_position_id: string
+  domain_key: string
+  legacy_key: string | null
+  text: string
+  reference_answer: string
+  sort_order: number
+  is_active: boolean
+}
+
+export function compQuestionFromRow(r: CompQuestionRow): CompetencyQuestion {
+  return {
+    key: r.legacy_key ?? r.id,
+    id: r.id,
+    jobPositionId: r.job_position_id,
+    domain: r.domain_key as CompetencyDomainKey,
+    text: r.text,
+    referenceAnswer: r.reference_answer ?? '',
+    sortOrder: r.sort_order,
+    isActive: r.is_active,
+  }
 }
