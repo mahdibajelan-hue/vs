@@ -65,6 +65,9 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
         if (!form.candidateName.trim()) return
         onSubmit({
           ...form,
+          // 'سمت مورد ارزیابی' was a free-text duplicate of the job-role select; it's now always
+          // derived from that choice so the two can never say different things.
+          candidatePosition: candidateMode ? form.candidatePosition : JOB_ROLE_LABEL_FA[form.jobRole],
           candidateAge: age,
           yearsExperienceTotal: monthsToYears(totalExperienceMonths),
           yearsExperiencePipeline: monthsToYears(pipelineMonths),
@@ -100,22 +103,16 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
           {!candidateMode && (
             <>
               <Field label="شغل مورد ارزیابی (بانک سؤالات)">
-                <select
-                  value={form.jobRole}
-                  disabled={!!initial}
-                  onChange={(e) => set('jobRole', e.target.value as CandidateProfileInput['jobRole'])}
-                  className="input disabled:opacity-60"
-                >
+                <select value={form.jobRole} onChange={(e) => set('jobRole', e.target.value as CandidateProfileInput['jobRole'])} className="input">
                   {JOB_ROLES.map((role) => (
                     <option key={role} value={role}>
                       {JOB_ROLE_LABEL_FA[role]}
                     </option>
                   ))}
                 </select>
-                {initial && <p className="mt-1 text-[10px] text-muted">شغل مورد ارزیابی پس از شروع مصاحبه قابل تغییر نیست.</p>}
-              </Field>
-              <Field label="سمت مورد ارزیابی">
-                <input value={form.candidatePosition} onChange={(e) => set('candidatePosition', e.target.value)} className="input" />
+                {initial && form.jobRole !== initial.jobRole && (
+                  <p className="mt-1 text-[10px] text-amber-300">تغییر شغل مورد ارزیابی، سؤالات قبلاً انتخاب‌شده برای این نامزد را پاک می‌کند تا از بانک سؤالات نقش جدید دوباره انتخاب شوند.</p>
+                )}
               </Field>
               <Field label="تاریخ مصاحبه">
                 <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />

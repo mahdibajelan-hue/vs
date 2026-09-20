@@ -64,6 +64,8 @@ export type JobRole =
   | 'project_control_specialist'
   | 'hse_specialist'
   | 'contracts_specialist'
+  | 'site_supervisor'
+  | 'inspection_body_supervisor'
 
 export const JOB_ROLE_LABEL_FA: Record<JobRole, string> = {
   project_manager: 'مدیر پروژه',
@@ -76,6 +78,8 @@ export const JOB_ROLE_LABEL_FA: Record<JobRole, string> = {
   project_control_specialist: 'کارشناس کنترل پروژه',
   hse_specialist: 'کارشناس HSE',
   contracts_specialist: 'کارشناس بررسی صورت‌وضعیت و قراردادها',
+  site_supervisor: 'سرپرست کارگاه',
+  inspection_body_supervisor: 'سرپرست دستگاه نظارت',
 }
 
 export const JOB_ROLES: JobRole[] = [
@@ -89,6 +93,8 @@ export const JOB_ROLES: JobRole[] = [
   'project_control_specialist',
   'hse_specialist',
   'contracts_specialist',
+  'site_supervisor',
+  'inspection_body_supervisor',
 ]
 
 /** Question type per spec — drives which of the 4 scoring buckets (see roleCompetencyModel.ts) a question counts toward. */
@@ -186,6 +192,9 @@ export interface CompetencyAssessment {
    * score the exact same question set and re-opening the assessment never reshuffles it. Unused
    * (always []) for jobRole = 'project_manager'. */
   selectedQuestionIds: string[]
+  /** How many panelists this assessment's panel should have — the lead's own choice per candidate
+   * (e.g. a specialty needing extra scrutiny might warrant 4-5), no longer a fixed 3 for everyone. */
+  panelSize: number
   candidateName: string
   candidatePosition: string
   candidateNationalId: string
@@ -250,6 +259,26 @@ export interface CompPanelist {
   isLead: boolean
   addedBy: string | null
   createdAt: string
+}
+
+/** A reusable, named set of interviewers a lead can save once and apply to any matching future
+ * candidate in one click — e.g. "گروه مصاحبه برق و ابزار دقیق" for every electrical/instrumentation
+ * candidate — instead of re-adding the same people to the panel every time. jobRole is optional: a
+ * group with none set is generic and shows up as a suggestion for every role. */
+export interface CompPanelGroup {
+  id: string
+  name: string
+  jobRole: JobRole | null
+  createdBy: string | null
+  createdAt: string
+  members: CompPanelGroupMember[]
+}
+
+export interface CompPanelGroupMember {
+  id: string
+  groupId: string
+  userId: string
+  isLead: boolean
 }
 
 export interface CompPanelistScore {

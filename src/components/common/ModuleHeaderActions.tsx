@@ -3,7 +3,8 @@ import { SignOutButton } from '../Auth/SignOutButton'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
-  onBackToRadar: () => void
+  /** Omit for a module (e.g. Competency) that has no "Project Radar" concept to return to. */
+  onBackToRadar?: () => void
   className?: string
 }
 
@@ -18,13 +19,15 @@ interface ModuleHeaderActionsProps {
 export function ModuleHeaderActions({ onExitToHub, onBackToRadar, className = '' }: ModuleHeaderActionsProps) {
   return (
     <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
-      <button
-        onClick={onBackToRadar}
-        title="بازگشت به رادار"
-        className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
-      >
-        <Radar size={14} /> <span className="hidden sm:inline">بازگشت به رادار</span>
-      </button>
+      {onBackToRadar && (
+        <button
+          onClick={onBackToRadar}
+          title="بازگشت به رادار"
+          className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
+        >
+          <Radar size={14} /> <span className="hidden sm:inline">بازگشت به رادار</span>
+        </button>
+      )}
       <button
         onClick={onExitToHub}
         title="بازگشت به ماژول‌ها"

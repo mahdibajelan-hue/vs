@@ -3703,9 +3703,23 @@ returns void as $$
   from comp_assessments a where a.self_service_token = p_token;
 $$ language sql security definer;
 
+-- Lets the self-service page show a candidate their own already-uploaded documents after a reload
+-- (previously tracked only in unpersisted React state, so a closed/reopened tab always looked
+-- empty even though the files were saved correctly all along). Scoped by the same unguessable
+-- token as every other comp_self_service_* function — never exposes another candidate's rows.
+create or replace function comp_self_service_list_attachments(p_token uuid)
+returns table (id uuid, kind text, file_name text, created_at timestamptz) as $$
+  select att.id, att.kind, att.file_name, att.created_at
+  from comp_attachments att
+  join comp_assessments a on a.id = att.assessment_id
+  where a.self_service_token = p_token
+  order by att.created_at desc;
+$$ language sql security definer stable;
+
 grant execute on function comp_self_service_get(uuid) to anon, authenticated;
 grant execute on function comp_self_service_submit(uuid, text, text, text, text, date, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
 grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
+grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;
 
 -- ----------------------------------------------------------------------------
 -- Storage bucket for candidate documents. Staff read/write is gated by the
@@ -4866,5 +4880,66 @@ create policy "comp_question_bank_select_authenticated" on comp_question_bank
 drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
 create policy "comp_question_bank_write_admin" on comp_question_bank
   for all using (is_admin_user()) with check (is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Section 28: Competency Assessment — configurable panel size + reusable,
+-- specialty-scoped interview panel groups.
+--
+-- 1. panel_size on comp_assessments replaces the previously hardcoded "always
+--    exactly 3 panelists" limit — the lead picks it per assessment.
+-- 2. comp_panel_groups/comp_panel_group_members let a lead save a named set of
+--    people once (e.g. "گروه مصاحبه برق و ابزار دقیق") and apply it to any
+--    matching future candidate in one click instead of re-adding the same
+--    people to the panel every time. job_role is optional (a group can be
+--    generic) and is plain text, not a foreign key, since JobRole is a
+--    client-side enum rather than its own reference table.
+-- ----------------------------------------------------------------------------
+
+alter table comp_assessments add column if not exists panel_size int not null default 3 check (panel_size between 1 and 8);
+
+create table if not exists comp_panel_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  job_role text,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_panel_groups enable row level security;
+
+create table if not exists comp_panel_group_members (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references comp_panel_groups (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  is_lead boolean not null default false,
+  unique (group_id, user_id)
+);
+
+alter table comp_panel_group_members enable row level security;
+
+-- Any authenticated user can see every group (so any lead can pick a matching one), but only an
+-- admin or the group's own creator can edit or delete it — same "anyone reads, owner/admin writes"
+-- shape as comp_assessments' own comp_is_lead check above.
+drop policy if exists "comp_panel_groups_select_authenticated" on comp_panel_groups;
+create policy "comp_panel_groups_select_authenticated" on comp_panel_groups
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panel_groups_write_owner" on comp_panel_groups;
+create policy "comp_panel_groups_write_owner" on comp_panel_groups
+  for all using (is_admin_user() or created_by = auth.uid()) with check (is_admin_user() or created_by = auth.uid());
+
+drop policy if exists "comp_panel_group_members_select_authenticated" on comp_panel_group_members;
+create policy "comp_panel_group_members_select_authenticated" on comp_panel_group_members
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panel_group_members_write_owner" on comp_panel_group_members;
+create policy "comp_panel_group_members_write_owner" on comp_panel_group_members
+  for all using (
+    is_admin_user() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  ) with check (
+    is_admin_user() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  );
+
+create index if not exists idx_comp_panel_group_members_group on comp_panel_group_members (group_id);
 
 create index if not exists idx_comp_question_bank_role_category on comp_question_bank (job_role, category, active);

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Plus, Shuffle, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Layers, Plus, Shuffle, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
 import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA } from '../types'
+import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompPanelGroup, type CompProfileLite, type JobRole } from '../types'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -35,6 +35,12 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const addPanelist = useCompetencyStore((s) => s.addPanelist)
   const removePanelist = useCompetencyStore((s) => s.removePanelist)
   const setPanelistLead = useCompetencyStore((s) => s.setPanelistLead)
+  const setPanelSize = useCompetencyStore((s) => s.setPanelSize)
+  const panelGroups = useCompetencyStore((s) => s.panelGroups)
+  const fetchPanelGroups = useCompetencyStore((s) => s.fetchPanelGroups)
+  const createPanelGroup = useCompetencyStore((s) => s.createPanelGroup)
+  const deletePanelGroup = useCompetencyStore((s) => s.deletePanelGroup)
+  const applyPanelGroup = useCompetencyStore((s) => s.applyPanelGroup)
   const setMyPanelistAnswer = useCompetencyStore((s) => s.setMyPanelistAnswer)
   const setMyPanelistCapstone = useCompetencyStore((s) => s.setMyPanelistCapstone)
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
@@ -51,12 +57,15 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const [pickUserId, setPickUserId] = useState('')
   const [pickAsLead, setPickAsLead] = useState(false)
   const [assigningQuestions, setAssigningQuestions] = useState(false)
+  const [pickGroupId, setPickGroupId] = useState('')
+  const [showGroupBuilder, setShowGroupBuilder] = useState(false)
 
   useEffect(() => {
     if (profiles.length === 0) fetchProfiles()
     fetchPanelists(assessmentId)
     fetchPanelistScores(assessmentId)
     if (questionBank.length === 0) fetchQuestionBank()
+    if (panelGroups.length === 0) fetchPanelGroups()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId])
 
@@ -64,8 +73,9 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const amPanelist = panelists.some((p) => p.userId === myId)
 
   const availableProfiles = profiles.filter((p) => !panelists.some((pl) => pl.userId === p.id))
-  const PANEL_SIZE = 3
-  const panelFull = panelists.length >= PANEL_SIZE
+  const panelSize = assessment?.panelSize ?? 3
+  const panelFull = panelists.length >= panelSize
+  const suggestedGroups = panelGroups.filter((g) => g.jobRole == null || g.jobRole === assessment?.jobRole)
 
   const roleQuestions = useMemo(() => (assessment && !isPM ? questionsForAssessment(assessment, questionBank) : []), [assessment, isPM, questionBank])
 
@@ -93,16 +103,55 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
     <div className="space-y-4">
       {isLead && (
         <div className="glass-panel rounded-2xl p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-bold">
               <Users size={14} className="text-purple-300" /> پنل مصاحبه‌گران این مصاحبه
             </p>
-            <span className={`num rounded-full px-2 py-0.5 text-[10px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
-              {panelists.length.toLocaleString('fa-IR')} از {PANEL_SIZE.toLocaleString('fa-IR')} مصاحبه‌گر
-            </span>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-[10.5px] text-muted">
+                تعداد داوران:
+                <select
+                  value={panelSize}
+                  onChange={(e) => setPanelSize(assessmentId, Number(e.target.value))}
+                  className="input num w-14 !px-1.5 !py-1 text-[11px]"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                    <option key={n} value={n}>
+                      {n.toLocaleString('fa-IR')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className={`num rounded-full px-2 py-0.5 text-[10px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
+                {panelists.length.toLocaleString('fa-IR')} از {panelSize.toLocaleString('fa-IR')} مصاحبه‌گر
+              </span>
+            </div>
           </div>
+
+          <PanelGroupPicker
+            groups={suggestedGroups}
+            allGroups={panelGroups}
+            pickGroupId={pickGroupId}
+            setPickGroupId={setPickGroupId}
+            onApply={() => {
+              if (pickGroupId) applyPanelGroup(assessmentId, pickGroupId)
+              setPickGroupId('')
+            }}
+            disabled={panelFull}
+            profiles={profiles}
+            myId={myId}
+            isAdmin={isAdmin}
+            onDeleteGroup={deletePanelGroup}
+            showBuilder={showGroupBuilder}
+            setShowBuilder={setShowGroupBuilder}
+            jobRole={assessment?.jobRole ?? null}
+            onCreateGroup={createPanelGroup}
+          />
+
           {panelFull ? (
-            <p className="mb-3 text-[11px] text-amber-300/90">پنل تکمیل شده است (۳ داور). یکی از داوران را حذف کنید تا بتوانید داور دیگری اضافه کنید.</p>
+            <p className="mb-3 text-[11px] text-amber-300/90">
+              پنل تکمیل شده است ({panelSize.toLocaleString('fa-IR')} داور). برای افزودن داور دیگر، یکی را حذف کنید یا تعداد داوران را افزایش دهید.
+            </p>
           ) : (
             <div className="mb-3 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -304,6 +353,146 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
         <p className="text-[11px] text-muted">
           سؤال پایانی سناریو («{CAPSTONE_QUESTION.text.slice(0, 40)}…») را در پایان مصاحبه بپرسید — امتیاز نهایی خودتان را در بخش «سوالات» ثبت کنید.
         </p>
+      )}
+    </div>
+  )
+}
+
+/** Lets the lead apply a saved specialty interview group to this assessment's panel in one click,
+ * and build new groups (e.g. "گروه مصاحبه برق و ابزار دقیق") from the pool of RASTA users — a
+ * one-time setup that then works for every future candidate of that specialty. */
+function PanelGroupPicker({
+  groups,
+  allGroups,
+  pickGroupId,
+  setPickGroupId,
+  onApply,
+  disabled,
+  profiles,
+  myId,
+  isAdmin,
+  onDeleteGroup,
+  showBuilder,
+  setShowBuilder,
+  jobRole,
+  onCreateGroup,
+}: {
+  groups: CompPanelGroup[]
+  allGroups: CompPanelGroup[]
+  pickGroupId: string
+  setPickGroupId: (id: string) => void
+  onApply: () => void
+  disabled: boolean
+  profiles: CompProfileLite[]
+  myId: string | null
+  isAdmin: boolean
+  onDeleteGroup: (id: string) => void
+  showBuilder: boolean
+  setShowBuilder: (v: boolean) => void
+  jobRole: JobRole | null
+  onCreateGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => void
+}) {
+  const [newName, setNewName] = useState('')
+  const [newRole, setNewRole] = useState<JobRole | ''>(jobRole ?? '')
+  const [newMembers, setNewMembers] = useState<string[]>([])
+  const [newLead, setNewLead] = useState<string>('')
+
+  const toggleMember = (id: string) =>
+    setNewMembers((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]))
+
+  return (
+    <div className="mb-3 space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold text-secondary">
+          <Layers size={12} className="text-purple-300" /> گروه‌های داوری تخصصی
+        </p>
+        <select value={pickGroupId} onChange={(e) => setPickGroupId(e.target.value)} className="input max-w-[14rem] !py-1 text-[11px]">
+          <option value="">
+            {groups.length === 0 ? 'گروهی برای این شغل ثبت نشده' : 'انتخاب گروه داوری…'}
+          </option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name} {g.jobRole ? `(${JOB_ROLE_LABEL_FA[g.jobRole]})` : '(همه مشاغل)'} — {g.members.length.toLocaleString('fa-IR')} نفر
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!pickGroupId || disabled}
+          onClick={onApply}
+          className="rounded-lg bg-purple-500 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+        >
+          اعمال گروه
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowBuilder(!showBuilder)}
+          className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5"
+        >
+          <Plus size={11} /> گروه جدید <ChevronDown size={11} className={`transition-transform ${showBuilder ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {showBuilder && (
+        <div className="space-y-2 rounded-lg border border-purple-400/20 bg-purple-500/[0.04] p-2.5">
+          <div className="flex flex-wrap gap-2">
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="نام گروه (مثلاً برق و ابزار دقیق)" className="input flex-1 !py-1 text-[11px]" />
+            <select value={newRole} onChange={(e) => setNewRole(e.target.value as JobRole | '')} className="input max-w-[12rem] !py-1 text-[11px]">
+              <option value="">همه مشاغل</option>
+              {JOB_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {JOB_ROLE_LABEL_FA[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/10 p-2">
+            {profiles.length === 0 && <p className="text-[10.5px] text-muted">کاربری یافت نشد.</p>}
+            {profiles.map((p) => (
+              <label key={p.id} className="flex items-center gap-2 text-[11px]">
+                <input type="checkbox" checked={newMembers.includes(p.id)} onChange={() => toggleMember(p.id)} className="h-3 w-3" />
+                <span className="flex-1">
+                  {p.fullName} <span className="text-muted">({p.email})</span>
+                </span>
+                {newMembers.includes(p.id) && (
+                  <label className="flex items-center gap-1 text-[10px] text-amber-300">
+                    <input type="radio" name="new-group-lead" checked={newLead === p.id} onChange={() => setNewLead(p.id)} className="h-3 w-3" /> مسئول تیم
+                  </label>
+                )}
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={!newName.trim() || newMembers.length === 0}
+            onClick={() => {
+              onCreateGroup(newName.trim(), newRole || null, newMembers, newLead || null)
+              setNewName('')
+              setNewRole('')
+              setNewMembers([])
+              setNewLead('')
+              setShowBuilder(false)
+            }}
+            className="rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+          >
+            ذخیره گروه
+          </button>
+        </div>
+      )}
+
+      {allGroups.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t border-white/5 pt-2">
+          {allGroups.map((g) => (
+            <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[10px] text-secondary">
+              {g.name} {g.jobRole && <span className="text-muted">({JOB_ROLE_LABEL_FA[g.jobRole]})</span>}
+              {(isAdmin || g.createdBy === myId) && (
+                <button onClick={() => onDeleteGroup(g.id)} className="text-muted hover:text-red-300">
+                  <Trash2 size={10} />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )

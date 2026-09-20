@@ -6,6 +6,13 @@ import { ProfileForm } from '../components/ProfileForm'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
 import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind } from '../types'
 
+interface SelfServiceAttachment {
+  id: string
+  kind: string
+  file_name: string
+  created_at: string
+}
+
 interface SelfServiceRow {
   id: string
   candidate_name: string
@@ -43,10 +50,19 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [uploadedKinds, setUploadedKinds] = useState<string[]>([])
+  const [attachments, setAttachments] = useState<SelfServiceAttachment[]>([])
   const [uploading, setUploading] = useState<AttachmentKind | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingKind, setPendingKind] = useState<AttachmentKind>('resume')
+
+  // Re-fetched after every upload (not just once on mount) so the list on screen always reflects
+  // what's actually saved — this used to be a plain unpersisted React array that reset to empty on
+  // every reload even though the files themselves were saved correctly all along.
+  const refreshAttachments = () => {
+    supabase
+      .rpc('comp_self_service_list_attachments', { p_token: token })
+      .then(({ data }) => setAttachments((data ?? []) as SelfServiceAttachment[]))
+  }
 
   useEffect(() => {
     supabase
@@ -69,6 +85,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         setRow(r)
         if (r.self_service_status === 'submitted' || r.self_service_status === 'reviewed') setSubmitted(true)
       })
+    refreshAttachments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
@@ -104,7 +121,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
     if (path && !error) {
       await supabase.rpc('comp_self_service_add_attachment', { p_token: token, p_kind: pendingKind, p_file_name: file.name, p_storage_path: path })
-      setUploadedKinds((k) => [...k, pendingKind])
+      refreshAttachments()
     }
     setUploading(null)
   }
@@ -219,11 +236,11 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
               }}
             />
           </div>
-          {uploadedKinds.length > 0 && (
+          {attachments.length > 0 && (
             <div className="space-y-1">
-              {uploadedKinds.map((k, i) => (
-                <p key={i} className="flex items-center gap-1.5 text-[11px] text-green-300">
-                  <CheckCircle2 size={12} /> {ATTACHMENT_KIND_LABEL_FA[k as AttachmentKind]} بارگذاری شد
+              {attachments.map((a) => (
+                <p key={a.id} className="flex items-center gap-1.5 text-[11px] text-green-300">
+                  <CheckCircle2 size={12} /> {ATTACHMENT_KIND_LABEL_FA[a.kind as AttachmentKind] ?? a.kind} — <span dir="ltr">{a.file_name}</span>
                 </p>
               ))}
             </div>

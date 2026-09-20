@@ -5,6 +5,7 @@ import type {
   CompAttachment,
   CompetencyAnswers,
   CompetencyAssessment,
+  CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
@@ -21,6 +22,7 @@ export interface CompAssessmentRow {
   id: string
   job_role: string | null
   selected_question_ids: string[] | null
+  panel_size: number | null
   candidate_name: string
   candidate_position: string
   candidate_national_id: string
@@ -65,6 +67,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     id: r.id,
     jobRole: (r.job_role as JobRole | null) ?? 'project_manager',
     selectedQuestionIds: r.selected_question_ids ?? [],
+    panelSize: r.panel_size ?? 3,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
     candidateNationalId: r.candidate_national_id,
@@ -122,6 +125,33 @@ export function compPanelistFromRow(r: CompPanelistRow): CompPanelist {
     isLead: r.is_lead,
     addedBy: r.added_by,
     createdAt: r.created_at,
+  }
+}
+
+export interface CompPanelGroupMemberRow {
+  id: string
+  group_id: string
+  user_id: string
+  is_lead: boolean
+}
+
+export interface CompPanelGroupRow {
+  id: string
+  name: string
+  job_role: string | null
+  created_by: string | null
+  created_at: string
+  comp_panel_group_members: CompPanelGroupMemberRow[]
+}
+
+export function compPanelGroupFromRow(r: CompPanelGroupRow): CompPanelGroup {
+  return {
+    id: r.id,
+    name: r.name,
+    jobRole: (r.job_role as JobRole | null) ?? null,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    members: (r.comp_panel_group_members ?? []).map((m) => ({ id: m.id, groupId: m.group_id, userId: m.user_id, isLead: m.is_lead })),
   }
 }
 

@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Award, Loader2, UserCircle2 } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from './store/useCompetencyStore'
 import { useAuthStore } from '../../store/useAuthStore'
-import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
-import { AssessmentsListPage } from './pages/AssessmentsListPage'
+import { CompetencyDashboardPage } from './pages/CompetencyDashboardPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { QuestionBankPage } from './pages/QuestionBankPage'
 import { ProfileForm } from './components/ProfileForm'
@@ -14,12 +12,13 @@ export const COMPETENCY_ACCENT = '#a855f7'
 type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: string } | { name: 'questionBank' }
 
 /**
- * Competency Assessment — structured interview/scoring tool for evaluating gas transmission
- * pipeline construction project manager candidates across 8 weighted competency domains plus a
- * closing capstone scenario (see lib/competencyModel.ts), with multi-interviewer panel scoring,
- * candidate self-service profile intake, and a radar-chart report per candidate.
+ * Competency Assessment — structured interview/scoring tool for evaluating EPC pipeline-project
+ * job candidates, with multi-interviewer panel scoring, candidate self-service profile intake, and
+ * a radar-chart report per candidate. Navigation across the module is a single right-hand sidebar
+ * (see CompetencySidebarShell) rather than a page-specific header — every stage of an assessment
+ * and the cross-role dashboard share the same six destinations.
  */
-export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
+export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const loading = useCompetencyStore((s) => s.loading)
   const fetchAll = useCompetencyStore((s) => s.fetchAll)
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
@@ -40,78 +39,48 @@ export function CompetencyApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
     )
   }
 
+  if (view.name === 'list') {
+    return (
+      <CompetencyDashboardPage
+        onOpen={(id) => setView({ name: 'assessment', id })}
+        onNew={() => setView({ name: 'new' })}
+        onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
+        onExitToHub={onExitToHub}
+        nav={{ dashboard: () => setView({ name: 'list' }) }}
+      />
+    )
+  }
+
+  if (view.name === 'assessment') {
+    return (
+      <AssessmentWizardPage
+        assessmentId={view.id}
+        onDone={() => setView({ name: 'list' })}
+        onExitToHub={onExitToHub}
+        onNew={() => setView({ name: 'new' })}
+      />
+    )
+  }
+
+  // 'new' (profile intake) and 'questionBank' (admin question-bank management) sit outside the
+  // six-section sidebar — they're one-off flows reached from the dashboard, not a candidate stage.
   return (
-    <div className="comp-shell flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-      <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: `${COMPETENCY_ACCENT}55`, background: `${COMPETENCY_ACCENT}1a` }}>
-            <Award size={18} style={{ color: COMPETENCY_ACCENT }} />
-          </div>
-          <div className="hidden leading-tight sm:block">
-            <p className="text-sm font-extrabold">ارزیابی شایستگی</p>
-            <p className="text-[10px] text-muted" dir="ltr">
-              Competency Assessment
-            </p>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {myProfile && (
-            <div
-              className="flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs sm:px-3"
-              style={{ borderColor: `${COMPETENCY_ACCENT}40`, background: `${COMPETENCY_ACCENT}14` }}
-            >
-              <UserCircle2 size={14} style={{ color: COMPETENCY_ACCENT }} />
-              <span className="hidden font-bold text-primary sm:inline">{myProfile.fullName}</span>
-              {myProfile.positionTitle && <span className="hidden text-[10px] text-muted lg:inline">— {myProfile.positionTitle}</span>}
-            </div>
-          )}
-          {view.name !== 'list' && (
-            <button
-              onClick={() => setView({ name: 'list' })}
-              className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 sm:px-3"
-            >
-              <Award size={13} /> <span className="hidden sm:inline">فهرست ارزیابی‌ها</span>
-            </button>
-          )}
-          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
-        </div>
-      </header>
-
-      <StorageErrorBanner />
-
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
-        {view.name === 'list' && (
-          <AssessmentsListPage
-            onOpen={(id) => setView({ name: 'assessment', id })}
-            onNew={() => setView({ name: 'new' })}
-            onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
+    <div className="comp-shell flex h-screen w-screen flex-col overflow-y-auto p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+      <button onClick={() => setView({ name: 'list' })} className="mb-4 flex w-fit items-center gap-1.5 text-xs text-secondary hover:text-primary">
+        <ArrowRight size={14} /> بازگشت به داشبورد
+      </button>
+      {view.name === 'new' && (
+        <div className="mx-auto w-full max-w-3xl">
+          <ProfileForm
+            submitLabel="ثبت مشخصات و شروع مصاحبه"
+            onSubmit={async (profile) => {
+              const id = await createAssessment(profile)
+              if (id) setView({ name: 'assessment', id })
+            }}
           />
-        )}
-
-        {view.name === 'new' && (
-          <div className="mx-auto max-w-3xl">
-            <ProfileForm
-              submitLabel="ثبت مشخصات و شروع مصاحبه"
-              onSubmit={async (profile) => {
-                const id = await createAssessment(profile)
-                if (id) setView({ name: 'assessment', id })
-              }}
-            />
-          </div>
-        )}
-
-        {view.name === 'assessment' && (
-          <AssessmentWizardPage
-            assessmentId={view.id}
-            onDone={() => setView({ name: 'list' })}
-            onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
-            onNew={() => setView({ name: 'new' })}
-          />
-        )}
-
-        {view.name === 'questionBank' && <QuestionBankPage onBack={() => setView({ name: 'list' })} />}
-      </div>
+        </div>
+      )}
+      {view.name === 'questionBank' && <QuestionBankPage onBack={() => setView({ name: 'list' })} />}
     </div>
   )
 }

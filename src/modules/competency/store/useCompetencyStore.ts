@@ -9,6 +9,7 @@ import type {
   CertificationEntry,
   CompAttachment,
   CompetencyAssessment,
+  CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
@@ -22,12 +23,14 @@ import type {
 import {
   compAssessmentFromRow,
   compAttachmentFromRow,
+  compPanelGroupFromRow,
   compPanelistFromRow,
   compPanelistScoreFromRow,
   compQuestionBankFromRow,
   profileLiteFromRow,
   type CompAssessmentRow,
   type CompAttachmentRow,
+  type CompPanelGroupRow,
   type CompPanelistRow,
   type CompPanelistScoreRow,
   type CompQuestionBankRow,
@@ -185,6 +188,7 @@ interface CompetencyState {
   profiles: CompProfileLite[]
   panelists: CompPanelist[]
   panelistScores: CompPanelistScore[]
+  panelGroups: CompPanelGroup[]
   attachments: CompAttachment[]
   questionBank: CompQuestionBankItem[]
   loadingQuestionBank: boolean
@@ -212,6 +216,16 @@ interface CompetencyState {
   removePanelist: (id: string) => Promise<void>
   /** Designates one panelist as the interview-team lead, demoting whoever previously held it for this assessment (at most one lead per assessment — see idx_comp_panelists_one_lead). */
   setPanelistLead: (assessmentId: string, panelistRowId: string) => Promise<void>
+  /** How many panelists this assessment's panel is meant to have — per-assessment, no longer a fixed 3. */
+  setPanelSize: (assessmentId: string, size: number) => Promise<void>
+
+  fetchPanelGroups: () => Promise<void>
+  createPanelGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => Promise<void>
+  deletePanelGroup: (id: string) => Promise<void>
+  /** Adds every member of a saved panel group as panelists on this assessment in one call — skips
+   * anyone already on the panel rather than erroring on the unique (assessment_id, user_id)
+   * constraint, and never pushes the panel past its configured panelSize. */
+  applyPanelGroup: (assessmentId: string, groupId: string) => Promise<void>
 
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
@@ -239,6 +253,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   profiles: [],
   panelists: [],
   panelistScores: [],
+  panelGroups: [],
   attachments: [],
   questionBank: [],
   loadingQuestionBank: false,
@@ -276,6 +291,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       id,
       jobRole: profile.jobRole,
       selectedQuestionIds: [],
+      panelSize: 3,
       candidateName: profile.candidateName,
       candidatePosition: profile.candidatePosition,
       candidateNationalId: profile.candidateNationalId,
@@ -321,13 +337,21 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   updateProfile: async (id, profile) => {
     const current = get().assessments.find((a) => a.id === id)
     if (!current) return
-    const { error } = await supabase.from('comp_assessments').update(profileToRowPayload(profile)).eq('id', id)
+    // Changing job role after questions were already assigned would leave selectedQuestionIds
+    // pointing at the old role's bank rows — clear it so the lead is prompted to re-assign from
+    // the newly-chosen role's bank instead of silently scoring against a mismatched question set.
+    const roleChanged = profile.jobRole !== current.jobRole
+    const payload: Record<string, unknown> = { ...profileToRowPayload(profile) }
+    if (roleChanged) payload.selected_question_ids = []
+    const { error } = await supabase.from('comp_assessments').update(payload).eq('id', id)
     if (reportError('بروزرسانی مشخصات نامزد', error)) return
     set({
       assessments: get().assessments.map((a) =>
         a.id === id
           ? {
               ...a,
+              jobRole: profile.jobRole,
+              selectedQuestionIds: roleChanged ? [] : a.selectedQuestionIds,
               candidateName: profile.candidateName,
               candidatePosition: profile.candidatePosition,
               candidateNationalId: profile.candidateNationalId,
@@ -509,6 +533,52 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({
       panelists: get().panelists.map((p) => (p.assessmentId === assessmentId ? { ...p, isLead: p.id === panelistRowId } : p)),
     })
+  },
+
+  setPanelSize: async (assessmentId, size) => {
+    const previous = get().assessments
+    set({ assessments: previous.map((a) => (a.id === assessmentId ? { ...a, panelSize: size } : a)) })
+    const { error } = await supabase.from('comp_assessments').update({ panel_size: size }).eq('id', assessmentId)
+    if (reportError('تغییر تعداد داوران', error)) set({ assessments: previous })
+  },
+
+  fetchPanelGroups: async () => {
+    const { data, error } = await supabase.from('comp_panel_groups').select('*, comp_panel_group_members(*)').order('created_at', { ascending: false })
+    if (reportError('بارگذاری گروه‌های داوری', error)) return
+    set({ panelGroups: ((data ?? []) as CompPanelGroupRow[]).map(compPanelGroupFromRow) })
+  },
+
+  createPanelGroup: async (name, jobRole, memberUserIds, leadUserId) => {
+    const id = crypto.randomUUID()
+    // created_by defaults to auth.uid() at the database — no need to pass it explicitly.
+    const { error } = await supabase.from('comp_panel_groups').insert({ id, name, job_role: jobRole })
+    if (reportError('ساخت گروه داوری', error)) return
+    if (memberUserIds.length > 0) {
+      const { error: membersError } = await supabase
+        .from('comp_panel_group_members')
+        .insert(memberUserIds.map((userId) => ({ id: crypto.randomUUID(), group_id: id, user_id: userId, is_lead: userId === leadUserId })))
+      if (reportError('افزودن اعضای گروه داوری', membersError)) return
+    }
+    await get().fetchPanelGroups()
+  },
+
+  deletePanelGroup: async (id) => {
+    const previous = get().panelGroups
+    set({ panelGroups: previous.filter((g) => g.id !== id) })
+    const { error } = await supabase.from('comp_panel_groups').delete().eq('id', id)
+    if (reportError('حذف گروه داوری', error)) set({ panelGroups: previous })
+  },
+
+  applyPanelGroup: async (assessmentId, groupId) => {
+    const group = get().panelGroups.find((g) => g.id === groupId)
+    if (!group) return
+    const existing = get().panelists.filter((p) => p.assessmentId === assessmentId)
+    const assessment = get().assessments.find((a) => a.id === assessmentId)
+    const room = (assessment?.panelSize ?? 3) - existing.length
+    const toAdd = group.members.filter((m) => !existing.some((p) => p.userId === m.userId)).slice(0, Math.max(0, room))
+    for (const member of toAdd) {
+      await get().addPanelist(assessmentId, member.userId, member.isLead && !existing.some((p) => p.isLead))
+    }
   },
 
   fetchPanelistScores: async (assessmentId) => {

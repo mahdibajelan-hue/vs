@@ -12,23 +12,18 @@ import {
   Compass,
   Copy,
   Download,
-  FileBarChart2,
   Globe,
   GraduationCap,
   HardHat,
   History,
-  LayoutDashboard,
   ListChecks,
-  Lock,
   Mail,
   MessageSquareText,
   Plus,
   Printer,
   Puzzle,
   RefreshCw,
-  Settings,
   ShieldCheck,
-  Sparkles,
   Star,
   Trophy,
   Users,
@@ -42,6 +37,7 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
+import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import {
   computeCompletion,
   computeDomainScores,
@@ -67,10 +63,10 @@ const COMPETENCY_ACCENT = '#a855f7'
 
 interface ResultsStageProps {
   assessment: CompetencyAssessment
-  /** Sidebar navigation — all optional so this page still renders standalone if a caller doesn't wire them. */
-  onOpenList?: () => void
-  onOpenPanel?: () => void
-  onOpenQuestionBank?: () => void
+  /** Which of the shared shell's six sections are reachable from here — built once by
+   * AssessmentWizardPage so the "who can see what" logic (lead vs. panelist) lives in one place. */
+  nav: Partial<Record<CompetencySection, () => void>>
+  onExitToHub: () => void
   onNew?: () => void
 }
 
@@ -99,7 +95,7 @@ const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
  * and a closing recommendation banner — reachable from a right-hand sidebar (mirroring the rest of
  * the RTL app: first flex child sits on the right).
  */
-export function ResultsStage({ assessment, onOpenList, onOpenPanel, onOpenQuestionBank, onNew }: ResultsStageProps) {
+export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
@@ -297,63 +293,16 @@ export function ResultsStage({ assessment, onOpenList, onOpenPanel, onOpenQuesti
     window.location.href = `mailto:${assessment.candidateEmail}?subject=${subject}&body=${body}`
   }
 
-  const navItems: { label: string; icon: typeof LayoutDashboard; onClick?: () => void; active?: boolean }[] = [
-    { label: 'داشبورد', icon: LayoutDashboard, active: true },
-    { label: 'لیست متقاضیان', icon: Users, onClick: onOpenList },
-    { label: 'فرآیند ارزیابی', icon: ListChecks, onClick: onOpenPanel },
-    { label: 'مقایسه کاندیدها', icon: BarChart3, onClick: () => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
-    { label: 'گزارش‌های مدیریتی', icon: FileBarChart2 },
-    { label: 'کتابخانه سوالات', icon: BookOpen, onClick: onOpenQuestionBank },
-    { label: 'تنظیمات', icon: Settings },
-  ]
+  const headerRight = onNew && (
+    <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
+      <Plus size={14} /> ارزیابی جدید
+    </button>
+  )
 
   return (
-    <div className="comp-results-dashboard fixed inset-0 z-40 flex" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-      {/* Sidebar — first flex child, so it lands on the right in this RTL app without any direction hacks. */}
-      <aside className="no-print flex w-14 shrink-0 flex-col gap-1 border-l border-white/10 bg-[#0b0f16] px-2 py-5 sm:w-56 sm:px-3">
-        <div className="mb-5 flex items-center gap-2 px-1 sm:px-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `${COMPETENCY_ACCENT}22`, color: COMPETENCY_ACCENT }}>
-            <Award size={16} />
-          </div>
-          <p className="hidden text-xs font-extrabold sm:block">ارزیابی شایستگی</p>
-        </div>
-        <nav className="flex-1 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              disabled={!item.active && !item.onClick}
-              onClick={item.onClick}
-              title={item.label}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium transition-colors sm:px-3 ${
-                item.active ? 'bg-purple-500/20 text-purple-200' : item.onClick ? 'text-secondary hover:bg-white/5 hover:text-primary' : 'text-muted/50'
-              }`}
-            >
-              <item.icon size={15} className="shrink-0" />
-              <span className="hidden flex-1 text-right sm:block">{item.label}</span>
-              {!item.active && !item.onClick && <Lock size={11} className="hidden opacity-60 sm:block" />}
-            </button>
-          ))}
-        </nav>
-        <p className="hidden px-2 text-[10px] text-muted sm:block">v1.0.0</p>
-      </aside>
-
-      {/* Main content */}
-      <div className="flex-1 overflow-y-auto">
-        <header className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0b0f16]/90 px-5 py-3.5 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-purple-300" />
-            <h1 className="text-sm font-extrabold">پنل ارزیابی متقاضیان {JOB_ROLE_LABEL_FA[assessment.jobRole]}</h1>
-          </div>
-          {onNew && (
-            <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
-              <Plus size={14} /> ارزیابی جدید
-            </button>
-          )}
-        </header>
-
-        <div className="space-y-4 p-4 sm:p-5">
-          {/* Toolbar */}
-          <div className="no-print flex flex-wrap items-center justify-end gap-2">
+    <CompetencySidebarShell active="results" nav={nav} title={`نتیجه ارزیابی — ${assessment.candidateName}`} onExitToHub={onExitToHub} headerRight={headerRight}>
+      {/* Toolbar */}
+      <div className="no-print flex flex-wrap items-center justify-end gap-2">
             <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
               <Printer size={14} /> پرینت
             </button>
@@ -714,9 +663,7 @@ export function ResultsStage({ assessment, onOpenList, onOpenPanel, onOpenQuesti
               </button>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </CompetencySidebarShell>
   )
 }
 

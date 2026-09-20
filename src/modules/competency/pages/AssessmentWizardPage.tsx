@@ -10,6 +10,8 @@ import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCa
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
+import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { EducationCards, EmploymentCards, CertificationCards } from '../components/CandidateCredentialCards'
 import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
 import { QualificationStage } from './QualificationStage'
@@ -26,18 +28,25 @@ const ROLE_SECTIONS: { key: string; label: string; types: QuestionType[] }[] = [
 interface AssessmentWizardPageProps {
   assessmentId: string
   onDone: () => void
-  onOpenQuestionBank?: () => void
+  onExitToHub: () => void
   onNew?: () => void
 }
 
 type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' | 'results'
 
-const STAGE_LABEL: Record<Stage, string> = {
-  profile: 'مشخصات',
+/** Maps an internal Stage onto one of the shared shell's six sidebar sections — 'qualification'
+ * (the PM-only resume/certification scorecard) is a sub-step that lives under "ارزیابی" rather than
+ * getting its own sidebar entry, since the module's navigation model has exactly six destinations. */
+function sectionForStage(stage: Stage): CompetencySection {
+  return stage === 'qualification' ? 'questions' : stage
+}
+
+const SECTION_TITLE: Record<Stage, string> = {
+  profile: 'مشخصات و سوابق نامزد',
   panel: 'پنل مصاحبه‌گران',
-  documents: 'مدارک',
-  questions: 'نظر نهایی',
-  qualification: 'کارت امتیاز',
+  documents: 'بارگذاری مدارک',
+  questions: 'ارزیابی',
+  qualification: 'ارزیابی',
   results: 'نتیجه',
 }
 
@@ -52,7 +61,7 @@ const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qua
 const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
 /** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
-export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank, onNew }: AssessmentWizardPageProps) {
+export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
@@ -97,6 +106,15 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
   const [stage, setStage] = useState<Stage | null>(null)
   const activeStage: Stage = stage && stages.includes(stage) ? stage : 'panel'
 
+  // Which of the shared shell's six sections this viewer can reach from here — a panelist only
+  // ever sees profile/panel/documents (see PANELIST_STAGES above); the lead sees all six.
+  const nav: Partial<Record<CompetencySection, () => void>> = { dashboard: onDone }
+  if (stages.includes('profile')) nav.profile = () => setStage('profile')
+  if (stages.includes('panel')) nav.panel = () => setStage('panel')
+  if (stages.includes('documents')) nav.documents = () => setStage('documents')
+  if (stages.includes('questions')) nav.questions = () => setStage('questions')
+  if (stages.includes('results')) nav.results = () => setStage('results')
+
   const completion = computeCompletion(assessment?.answers ?? {})
 
   // What each interviewer recorded, per question — the lead reads this while setting the final
@@ -122,9 +140,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
   // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
   // nesting inside it.
   if (activeStage === 'results') {
-    return (
-      <ResultsStage assessment={assessment} onOpenList={onDone} onOpenPanel={() => setStage('panel')} onOpenQuestionBank={onOpenQuestionBank} onNew={onNew} />
-    )
+    return <ResultsStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} onNew={onNew} />
   }
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
@@ -159,38 +175,24 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
     interviewDate: assessment.interviewDate,
   }
 
+  const headerRight = (
+    <div className="flex items-center gap-1.5 text-xs text-secondary">
+      <User size={13} className="text-purple-300" />
+      <span className="font-bold text-primary">{myName ?? '—'}</span>
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
+        {isLead ? 'مسئول ارزیابی' : 'داور'}
+      </span>
+    </div>
+  )
+
   return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-purple-400/20 bg-purple-500/[0.06] px-3.5 py-2.5">
-        <div className="flex items-center gap-1.5 text-xs text-secondary">
-          <User size={13} className="text-purple-300" />
-          <span className="font-bold text-primary">{myName ?? '—'}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
-            {isLead ? 'مسئول ارزیابی' : 'داور'}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-secondary">
-          نامزد تحت ارزیابی: <span className="font-bold text-primary">{assessment.candidateName}</span>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <button onClick={onDone} className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary">
-          <ArrowRight size={14} /> بازگشت به فهرست
-        </button>
-        <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] p-1">
-          {stages.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStage(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${activeStage === s ? 'bg-purple-500/25 text-purple-300' : 'text-secondary'}`}
-            >
-              {STAGE_LABEL[s]}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <CompetencySidebarShell
+      active={sectionForStage(activeStage)}
+      nav={nav}
+      title={`${SECTION_TITLE[activeStage]} — ${assessment.candidateName}`}
+      onExitToHub={onExitToHub}
+      headerRight={headerRight}
+    >
       {isLead && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 px-3.5 py-2 text-[11px]">
           <span className="text-muted">وضعیت پنل:</span>
@@ -227,7 +229,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
             </div>
             <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
               <InfoRow label="نام و نام خانوادگی" value={assessment.candidateName} />
-              <InfoRow label="سمت مورد ارزیابی" value={assessment.candidatePosition} />
+              <InfoRow label="شغل مورد ارزیابی" value={JOB_ROLE_LABEL_FA[assessment.jobRole]} />
               <InfoRow label="کد ملی" value={assessment.candidateNationalId || '—'} />
               <InfoRow label="شماره تماس" value={assessment.candidatePhone || '—'} />
               <InfoRow label="ایمیل" value={assessment.candidateEmail || '—'} />
@@ -238,43 +240,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
               <InfoRow label="کارفرمای فعلی" value={assessment.currentEmployer || '—'} />
               <InfoRow label="تاریخ مصاحبه" value={formatJalali(assessment.interviewDate)} />
             </div>
-            {assessment.education.length > 0 && (
-              <div>
-                <p className="mb-1 text-[11px] text-muted">مدارک تحصیلی</p>
-                <ul className="space-y-0.5 text-xs text-secondary">
-                  {assessment.education.map((e) => (
-                    <li key={e.id}>
-                      {e.degree} {e.field && `— ${e.field}`} {e.institution && `(${e.institution})`} {e.year && `— ${e.year}`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {assessment.employmentHistory.length > 0 && (
-              <div>
-                <p className="mb-1 text-[11px] text-muted">سوابق شغلی و بیمه‌ای</p>
-                <ul className="space-y-0.5 text-xs text-secondary">
-                  {assessment.employmentHistory.map((e) => (
-                    <li key={e.id}>
-                      {e.employer} — {e.position} ({formatJalali(e.startDate) || '—'} تا {formatJalali(e.endDate) || 'اکنون'})
-                      {e.insuranceMonths != null && ` — ${e.insuranceMonths} ماه بیمه`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {assessment.certifications.length > 0 && (
-              <div>
-                <p className="mb-1 text-[11px] text-muted">گواهینامه‌ها</p>
-                <ul className="space-y-0.5 text-xs text-secondary">
-                  {assessment.certifications.map((e) => (
-                    <li key={e.id}>
-                      {e.title} {e.issuer && `— ${e.issuer}`} {e.isPmp && '(صلاحیت حرفه‌ای مدیریت پروژه)'}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <EducationCards value={assessment.education} />
+            <EmploymentCards value={assessment.employmentHistory} />
+            <CertificationCards value={assessment.certifications} />
             {assessment.notableProjects && (
               <div>
                 <p className="mb-1 text-[11px] text-muted">پروژه‌های شاخص گذشته</p>
@@ -455,7 +423,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onOpenQuestionBank,
       )}
 
       {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
-    </div>
+    </CompetencySidebarShell>
   )
 }
 

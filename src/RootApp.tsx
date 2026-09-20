@@ -111,7 +111,7 @@ export function RootApp() {
   ) : activeModule === 'material' ? (
     <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
-    <CompetencyApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+    <CompetencyApp onExitToHub={exitToHub} />
   ) : activeModule === 'estimator' ? (
     <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (
