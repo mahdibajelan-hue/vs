@@ -9,6 +9,7 @@ import type {
   CertificationEntry,
   CompAttachment,
   CompetencyAssessment,
+  CompModuleAdmin,
   CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
@@ -23,6 +24,7 @@ import type {
 import {
   compAssessmentFromRow,
   compAttachmentFromRow,
+  compModuleAdminFromRow,
   compPanelGroupFromRow,
   compPanelistFromRow,
   compPanelistScoreFromRow,
@@ -30,6 +32,7 @@ import {
   profileLiteFromRow,
   type CompAssessmentRow,
   type CompAttachmentRow,
+  type CompModuleAdminRow,
   type CompPanelGroupRow,
   type CompPanelistRow,
   type CompPanelistScoreRow,
@@ -189,6 +192,7 @@ interface CompetencyState {
   panelists: CompPanelist[]
   panelistScores: CompPanelistScore[]
   panelGroups: CompPanelGroup[]
+  moduleAdmins: CompModuleAdmin[]
   attachments: CompAttachment[]
   questionBank: CompQuestionBankItem[]
   loadingQuestionBank: boolean
@@ -227,6 +231,10 @@ interface CompetencyState {
    * constraint, and never pushes the panel past its configured panelSize. */
   applyPanelGroup: (assessmentId: string, groupId: string) => Promise<void>
 
+  fetchModuleAdmins: () => Promise<void>
+  addModuleAdmin: (userId: string) => Promise<void>
+  removeModuleAdmin: (userId: string) => Promise<void>
+
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
   setMyPanelistCapstone: (assessmentId: string, score: number | null, note: string) => Promise<void>
@@ -254,6 +262,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   panelists: [],
   panelistScores: [],
   panelGroups: [],
+  moduleAdmins: [],
   attachments: [],
   questionBank: [],
   loadingQuestionBank: false,
@@ -579,6 +588,25 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     for (const member of toAdd) {
       await get().addPanelist(assessmentId, member.userId, member.isLead && !existing.some((p) => p.isLead))
     }
+  },
+
+  fetchModuleAdmins: async () => {
+    const { data, error } = await supabase.from('comp_module_admins').select('*')
+    if (reportError('بارگذاری فهرست ادمین‌های ماژول', error)) return
+    set({ moduleAdmins: ((data ?? []) as CompModuleAdminRow[]).map(compModuleAdminFromRow) })
+  },
+
+  addModuleAdmin: async (userId) => {
+    const { error } = await supabase.from('comp_module_admins').insert({ user_id: userId })
+    if (reportError('افزودن ادمین ماژول', error)) return
+    await get().fetchModuleAdmins()
+  },
+
+  removeModuleAdmin: async (userId) => {
+    const previous = get().moduleAdmins
+    set({ moduleAdmins: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.from('comp_module_admins').delete().eq('user_id', userId)
+    if (reportError('حذف ادمین ماژول', error)) set({ moduleAdmins: previous })
   },
 
   fetchPanelistScores: async (assessmentId) => {

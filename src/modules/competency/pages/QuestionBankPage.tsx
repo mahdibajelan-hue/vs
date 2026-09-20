@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CheckCircle2, Library, Pencil, Plus, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Pencil, Plus, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
 import { useCompetencyStore, type QuestionBankInput } from '../store/useCompetencyStore'
+import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import {
   JOB_ROLES,
   JOB_ROLE_LABEL_FA,
@@ -40,7 +41,12 @@ const EMPTY_INPUT: QuestionBankInput = {
  * deleting — a question already used by a past assessment must stay resolvable, so this never
  * hard-deletes without confirmation and prefers deactivation for anything already in real use.
  */
-export function QuestionBankPage({ onBack }: { onBack: () => void }) {
+interface QuestionBankPageProps {
+  onExitToHub: () => void
+  nav: Partial<Record<CompetencySection, () => void>>
+}
+
+export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const loading = useCompetencyStore((s) => s.loadingQuestionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
@@ -83,27 +89,20 @@ export function QuestionBankPage({ onBack }: { onBack: () => void }) {
     return map
   }, [questionBank])
 
-  return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <button onClick={onBack} className="mb-1 flex items-center gap-1.5 text-xs text-secondary hover:text-primary">
-            <ArrowRight size={13} /> بازگشت
-          </button>
-          <p className="flex items-center gap-1.5 text-lg font-extrabold">
-            <Library size={18} className="text-purple-300" /> بانک سؤالات ارزیابی شایستگی
-          </p>
-          <p className="text-xs text-muted">مدیریت سؤالات تخصصی هر شغل — پاسخ مرجع، معیار امتیازدهی، سطح دشواری و وضعیت فعال/غیرفعال</p>
-        </div>
-        <button
-          onClick={() => setEditing('new')}
-          className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
-        >
-          <Plus size={14} /> سؤال جدید
-        </button>
-      </div>
+  const headerRight = (
+    <button
+      onClick={() => setEditing('new')}
+      className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+    >
+      <Plus size={14} /> سؤال جدید
+    </button>
+  )
 
-      <div className="mb-3 grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
+  return (
+    <CompetencySidebarShell active="questionBank" nav={nav} title="بانک سؤالات ارزیابی شایستگی" onExitToHub={onExitToHub} headerRight={headerRight}>
+      <p className="-mt-2 text-xs text-muted">مدیریت سؤالات تخصصی هر شغل — پاسخ مرجع، معیار امتیازدهی، سطح دشواری و وضعیت فعال/غیرفعال</p>
+
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
         {EDITABLE_ROLES.map((role) => {
           const c = countsByRole.get(role)
           return (
@@ -223,7 +222,7 @@ export function QuestionBankPage({ onBack }: { onBack: () => void }) {
           }}
         />
       )}
-    </div>
+    </CompetencySidebarShell>
   )
 }
 

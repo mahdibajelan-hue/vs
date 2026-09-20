@@ -16,7 +16,6 @@ import {
   GraduationCap,
   HardHat,
   History,
-  ListChecks,
   Mail,
   MessageSquareText,
   Plus,
@@ -38,6 +37,7 @@ import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { computeEvaluationStages } from '../lib/evaluationStages'
 import {
   computeCompletion,
   computeDomainScores,
@@ -178,18 +178,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
 
   const keyProjects = [...assessment.employmentHistory].slice(0, 3)
 
-  // Real, honest signals rather than fabricated dates: each step reflects something actually
-  // recorded on this assessment (submission, panel completion, final sign-off) — a step with no
-  // reliable date just shows its checkmark without one, instead of inventing a timestamp.
   const submittedScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id && s.submittedAt)
   const panelists = allPanelists.filter((p) => p.assessmentId === assessment.id)
-  const stages = [
-    { label: 'ثبت رزومه', done: true, date: assessment.createdAt },
-    { label: 'غربالگری اولیه', done: assessment.selfServiceStatus === 'submitted' || assessment.selfServiceStatus === 'reviewed', date: null as string | null },
-    { label: 'پاسخ به سؤالات', done: completion.percent === 100, date: assessment.interviewDate || null },
-    { label: 'امتیازدهی پنل', done: panelists.length > 0 && submittedScores.length === panelists.length, date: null as string | null },
-    { label: 'ثبت نهایی', done: assessment.status === 'completed', date: assessment.status === 'completed' ? assessment.reviewedAt || assessment.updatedAt : null },
-  ]
+  const stages = computeEvaluationStages(assessment, completion.percent, panelists.length, submittedScores.length)
 
   const qualificationChips = [
     { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
@@ -300,7 +291,14 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   )
 
   return (
-    <CompetencySidebarShell active="results" nav={nav} title={`نتیجه ارزیابی — ${assessment.candidateName}`} onExitToHub={onExitToHub} headerRight={headerRight}>
+    <CompetencySidebarShell
+      active="results"
+      nav={nav}
+      title={`نتیجه ارزیابی — ${assessment.candidateName}`}
+      stageStrip={stages}
+      onExitToHub={onExitToHub}
+      headerRight={headerRight}
+    >
       {/* Toolbar */}
       <div className="no-print flex flex-wrap items-center justify-end gap-2">
             <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
@@ -574,32 +572,6 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 ) : (
                   <p className="py-6 text-center text-[11px] text-muted">سابقه کاری ثبت‌شده‌ای موجود نیست.</p>
                 )}
-              </div>
-            </div>
-
-            {/* Evaluation stages timeline */}
-            <div className="glass-panel rounded-2xl p-4">
-              <p className="mb-4 flex items-center gap-1.5 text-xs font-bold">
-                <ListChecks size={13} className="text-purple-300" /> مراحل ارزیابی
-              </p>
-              <div className="flex items-start justify-between overflow-x-auto pb-1">
-                {stages.map((s, i) => (
-                  <div key={s.label} className="flex flex-1 flex-col items-center gap-1.5 px-1 text-center">
-                    <div className="flex w-full items-center">
-                      <div className={`h-px flex-1 ${i === 0 ? 'opacity-0' : s.done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />
-                      <div
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${
-                          s.done ? 'border-emerald-400 bg-emerald-500/20 text-emerald-300' : 'border-white/15 text-muted'
-                        }`}
-                      >
-                        {s.done ? <CheckCircle2 size={14} /> : <span className="num text-[10px]">{i + 1}</span>}
-                      </div>
-                      <div className={`h-px flex-1 ${i === stages.length - 1 ? 'opacity-0' : stages[i + 1]?.done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />
-                    </div>
-                    <p className="text-[10.5px] font-bold">{s.label}</p>
-                    <p className="num text-[9.5px] text-muted">{s.date ? formatJalali(s.date) : s.done ? '' : 'در انتظار'}</p>
-                  </div>
-                ))}
               </div>
             </div>
 

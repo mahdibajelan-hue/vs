@@ -12,7 +12,6 @@ import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CompetencyAssessment, type CompQuest
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
   onNew: () => void
-  onOpenQuestionBank?: () => void
   onExitToHub: () => void
   nav: Partial<Record<CompetencySection, () => void>>
 }
@@ -20,7 +19,7 @@ interface CompetencyDashboardPageProps {
 /** Landing page of the module — cross-role statistics (how many candidates, how many accepted, who
  * leads each specialty) plus the full candidate grid to open one. Replaces the old plain list page:
  * item 9 of the redesign asked for exactly this comparison view instead of a bare list. */
-export function CompetencyDashboardPage({ onOpen, onNew, onOpenQuestionBank, onExitToHub, nav }: CompetencyDashboardPageProps) {
+export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: CompetencyDashboardPageProps) {
   const assessments = useCompetencyStore((s) => s.assessments)
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
   const questionBank = useCompetencyStore((s) => s.questionBank)
@@ -64,16 +63,9 @@ export function CompetencyDashboardPage({ onOpen, onNew, onOpenQuestionBank, onE
     .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
 
   const headerRight = (
-    <>
-      {onOpenQuestionBank && (
-        <button onClick={onOpenQuestionBank} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 transition-colors">
-          بانک سؤالات
-        </button>
-      )}
-      <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
-        <Plus size={14} /> مصاحبه جدید
-      </button>
-    </>
+    <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
+      <Plus size={14} /> مصاحبه جدید
+    </button>
   )
 
   return (

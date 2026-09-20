@@ -11,6 +11,7 @@ import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { computeEvaluationStages } from '../lib/evaluationStages'
 import { EducationCards, EmploymentCards, CertificationCards } from '../components/CandidateCredentialCards'
 import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
@@ -30,6 +31,9 @@ interface AssessmentWizardPageProps {
   onDone: () => void
   onExitToHub: () => void
   onNew?: () => void
+  /** The module-wide sidebar destinations (بانک سؤالات/گزارش‌ها/تنظیمات) built once in CompetencyApp
+   * and merged into every page's own nav map, so they behave identically everywhere. */
+  moduleNav?: Partial<Record<CompetencySection, () => void>>
 }
 
 type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' | 'results'
@@ -61,7 +65,7 @@ const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qua
 const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
 /** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
-export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew }: AssessmentWizardPageProps) {
+export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew, moduleNav }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
@@ -100,15 +104,14 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew 
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
   const stages = isLead ? (isPM ? LEAD_STAGES : LEAD_STAGES.filter((s) => s !== 'qualification')) : PANELIST_STAGES
-  // Everyone lands on the interviewer panel first — profile is already filled in by the time this
-  // page opens, and jumping straight to the final verdict skipped assembling the panel and
-  // reviewing documents, which need to happen before there's anything to verdict on.
+  // Opening a candidate from the dashboard always lands on their profile first — the natural
+  // starting point before assembling the panel or scoring anything.
   const [stage, setStage] = useState<Stage | null>(null)
-  const activeStage: Stage = stage && stages.includes(stage) ? stage : 'panel'
+  const activeStage: Stage = stage && stages.includes(stage) ? stage : 'profile'
 
   // Which of the shared shell's six sections this viewer can reach from here — a panelist only
   // ever sees profile/panel/documents (see PANELIST_STAGES above); the lead sees all six.
-  const nav: Partial<Record<CompetencySection, () => void>> = { dashboard: onDone }
+  const nav: Partial<Record<CompetencySection, () => void>> = { dashboard: onDone, ...moduleNav }
   if (stages.includes('profile')) nav.profile = () => setStage('profile')
   if (stages.includes('panel')) nav.panel = () => setStage('panel')
   if (stages.includes('documents')) nav.documents = () => setStage('documents')
@@ -145,6 +148,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew 
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
   const roleCompletion = computeRoleCompletion(roleQuestions, assessment.answers)
+  const evalStages = computeEvaluationStages(assessment, isPM ? completion.percent : roleCompletion.percent, panelists.length, submittedScores.length)
   const currentRoleSection = ROLE_SECTIONS[roleSectionIndex]
   const roleSectionQuestions = roleQuestions.filter((q) => (currentRoleSection.types as string[]).includes(q.category))
   const isLastRoleSection = roleSectionIndex === ROLE_SECTIONS.length - 1
@@ -190,6 +194,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew 
       active={sectionForStage(activeStage)}
       nav={nav}
       title={`${SECTION_TITLE[activeStage]} — ${assessment.candidateName}`}
+      stageStrip={evalStages}
       onExitToHub={onExitToHub}
       headerRight={headerRight}
     >
@@ -240,9 +245,11 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew 
               <InfoRow label="کارفرمای فعلی" value={assessment.currentEmployer || '—'} />
               <InfoRow label="تاریخ مصاحبه" value={formatJalali(assessment.interviewDate)} />
             </div>
-            <EducationCards value={assessment.education} />
-            <EmploymentCards value={assessment.employmentHistory} />
-            <CertificationCards value={assessment.certifications} />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <EducationCards value={assessment.education} />
+              <EmploymentCards value={assessment.employmentHistory} />
+              <CertificationCards value={assessment.certifications} />
+            </div>
             {assessment.notableProjects && (
               <div>
                 <p className="mb-1 text-[11px] text-muted">پروژه‌های شاخص گذشته</p>

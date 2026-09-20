@@ -5,6 +5,7 @@ import type {
   CompAttachment,
   CompetencyAnswers,
   CompetencyAssessment,
+  CompModuleAdmin,
   CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
@@ -126,6 +127,16 @@ export function compPanelistFromRow(r: CompPanelistRow): CompPanelist {
     addedBy: r.added_by,
     createdAt: r.created_at,
   }
+}
+
+export interface CompModuleAdminRow {
+  user_id: string
+  added_by: string | null
+  created_at: string
+}
+
+export function compModuleAdminFromRow(r: CompModuleAdminRow): CompModuleAdmin {
+  return { userId: r.user_id, addedBy: r.added_by, createdAt: r.created_at }
 }
 
 export interface CompPanelGroupMemberRow {

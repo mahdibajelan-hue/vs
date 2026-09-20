@@ -4943,3 +4943,104 @@ create policy "comp_panel_group_members_write_owner" on comp_panel_group_members
 create index if not exists idx_comp_panel_group_members_group on comp_panel_group_members (group_id);
 
 create index if not exists idx_comp_question_bank_role_category on comp_question_bank (job_role, category, active);
+
+-- ----------------------------------------------------------------------------
+-- Section 29: Competency Assessment — module-scoped admins, broader candidate
+-- visibility, and lead delete rights.
+--
+-- 1. comp_module_admins: a small set of users granted full admin-equivalent
+--    rights *within this module only*, independent of the global RASTA
+--    profiles.is_admin flag — so a senior evaluator can be trusted with e.g.
+--    editing the question bank without making them a system-wide admin.
+--    comp_is_module_admin() is the single check every "admin-only" policy in
+--    this module should use going forward instead of is_admin_user() alone.
+-- 2. comp_assessments SELECT is opened to any authenticated user — every
+--    evaluator should see every candidate on the dashboard, not just ones
+--    they already happen to be a panelist on.
+-- 3. comp_assessments DELETE now also allows the assessment's own lead
+--    (comp_is_lead), not just its creator or a system admin.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_module_admins (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  added_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_module_admins enable row level security;
+
+create or replace function comp_is_module_admin()
+returns boolean as $$
+  select is_admin_user() or exists (select 1 from comp_module_admins where user_id = auth.uid());
+$$ language sql security definer stable;
+
+-- Anyone authenticated can read the admin list (so the UI can show who has full access); only a
+-- system admin or an existing module admin can add/remove one — self-sustaining once a system
+-- admin seeds the first module admin.
+drop policy if exists "comp_module_admins_select_authenticated" on comp_module_admins;
+create policy "comp_module_admins_select_authenticated" on comp_module_admins
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_module_admins_write_admin" on comp_module_admins;
+create policy "comp_module_admins_write_admin" on comp_module_admins
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+create policy "comp_question_bank_write_admin" on comp_question_bank
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+drop policy if exists "comp_panel_groups_write_owner" on comp_panel_groups;
+create policy "comp_panel_groups_write_owner" on comp_panel_groups
+  for all using (comp_is_module_admin() or created_by = auth.uid()) with check (comp_is_module_admin() or created_by = auth.uid());
+
+drop policy if exists "comp_panel_group_members_write_owner" on comp_panel_group_members;
+create policy "comp_panel_group_members_write_owner" on comp_panel_group_members
+  for all using (
+    comp_is_module_admin() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  ) with check (
+    comp_is_module_admin() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  );
+
+drop policy if exists "comp_assessments_select_own" on comp_assessments;
+create policy "comp_assessments_select_own" on comp_assessments
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_assessments_delete_own" on comp_assessments;
+create policy "comp_assessments_delete_own" on comp_assessments
+  for delete using (created_by = auth.uid() or comp_is_module_admin() or comp_is_lead(id));
+
+-- comp_can_access_assessment/comp_is_lead were written against is_admin_user() before module
+-- admins existed — redefined here so a module admin gets the exact same full read/write standing
+-- on every assessment that a system admin already had ("مانند ادمین سامانه").
+create or replace function comp_can_access_assessment(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or comp_is_module_admin())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid()
+  );
+$$ language sql security definer stable;
+
+create or replace function comp_is_lead(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or comp_is_module_admin())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid() and p.is_lead
+  );
+$$ language sql security definer stable;
+
+-- comp_panelist_scores_delete was the one remaining comp_* write policy still checking
+-- is_admin_user() directly instead of comp_is_module_admin() — a module admin without the global
+-- flag couldn't delete a panelist's score sheet. Bringing it in line with every other admin-gated
+-- policy in this module.
+drop policy if exists "comp_panelist_scores_delete" on comp_panelist_scores;
+create policy "comp_panelist_scores_delete" on comp_panelist_scores
+  for delete using (
+    panelist_id = auth.uid()
+    or exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or comp_is_module_admin()))
+  );

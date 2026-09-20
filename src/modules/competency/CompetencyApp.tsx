@@ -5,11 +5,20 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { CompetencyDashboardPage } from './pages/CompetencyDashboardPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { QuestionBankPage } from './pages/QuestionBankPage'
+import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
+import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
 import { ProfileForm } from './components/ProfileForm'
+import type { CompetencySection } from './components/CompetencySidebarShell'
 
 export const COMPETENCY_ACCENT = '#a855f7'
 
-type View = { name: 'list' } | { name: 'new' } | { name: 'assessment'; id: string } | { name: 'questionBank' }
+type View =
+  | { name: 'list' }
+  | { name: 'new' }
+  | { name: 'assessment'; id: string }
+  | { name: 'questionBank' }
+  | { name: 'reports' }
+  | { name: 'settings' }
 
 /**
  * Competency Assessment — structured interview/scoring tool for evaluating EPC pipeline-project
@@ -22,14 +31,33 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const loading = useCompetencyStore((s) => s.loading)
   const fetchAll = useCompetencyStore((s) => s.fetchAll)
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const fetchModuleAdmins = useCompetencyStore((s) => s.fetchModuleAdmins)
   const myProfile = useAuthStore((s) => s.profile)
 
   const [view, setView] = useState<View>({ name: 'list' })
 
   useEffect(() => {
     fetchAll()
+    fetchModuleAdmins()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Module admins have the same standing as the system admin, but scoped to this module (see
+  // comp_is_module_admin in schema.sql) — both can manage the question bank and module settings.
+  const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
+
+  // The three module-wide sidebar destinations beyond "داشبورد" — shared by every page that builds
+  // its own nav map (dashboard, the assessment wizard, results), so all of them light up identically.
+  const moduleNav: Partial<Record<CompetencySection, () => void>> = {
+    reports: () => setView({ name: 'reports' }),
+    ...(isModuleAdmin
+      ? {
+          questionBank: () => setView({ name: 'questionBank' }),
+          settings: () => setView({ name: 'settings' }),
+        }
+      : {}),
+  }
 
   if (loading) {
     return (
@@ -44,9 +72,8 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
       <CompetencyDashboardPage
         onOpen={(id) => setView({ name: 'assessment', id })}
         onNew={() => setView({ name: 'new' })}
-        onOpenQuestionBank={myProfile?.isAdmin ? () => setView({ name: 'questionBank' }) : undefined}
         onExitToHub={onExitToHub}
-        nav={{ dashboard: () => setView({ name: 'list' }) }}
+        nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }}
       />
     )
   }
@@ -58,29 +85,39 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
         onDone={() => setView({ name: 'list' })}
         onExitToHub={onExitToHub}
         onNew={() => setView({ name: 'new' })}
+        moduleNav={moduleNav}
       />
     )
   }
 
-  // 'new' (profile intake) and 'questionBank' (admin question-bank management) sit outside the
-  // six-section sidebar — they're one-off flows reached from the dashboard, not a candidate stage.
+  if (view.name === 'questionBank') {
+    return <QuestionBankPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  }
+
+  if (view.name === 'reports') {
+    return <CompetencyReportsPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  }
+
+  if (view.name === 'settings') {
+    return <CompetencySettingsPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  }
+
+  // 'new' (profile intake) sits outside the six-section sidebar — it's a one-off flow reached from
+  // the dashboard, not a candidate stage of an assessment that already exists.
   return (
     <div className="comp-shell flex h-screen w-screen flex-col overflow-y-auto p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <button onClick={() => setView({ name: 'list' })} className="mb-4 flex w-fit items-center gap-1.5 text-xs text-secondary hover:text-primary">
         <ArrowRight size={14} /> بازگشت به داشبورد
       </button>
-      {view.name === 'new' && (
-        <div className="mx-auto w-full max-w-3xl">
-          <ProfileForm
-            submitLabel="ثبت مشخصات و شروع مصاحبه"
-            onSubmit={async (profile) => {
-              const id = await createAssessment(profile)
-              if (id) setView({ name: 'assessment', id })
-            }}
-          />
-        </div>
-      )}
-      {view.name === 'questionBank' && <QuestionBankPage onBack={() => setView({ name: 'list' })} />}
+      <div className="mx-auto w-full max-w-3xl">
+        <ProfileForm
+          submitLabel="ثبت مشخصات و شروع مصاحبه"
+          onSubmit={async (profile) => {
+            const id = await createAssessment(profile)
+            if (id) setView({ name: 'assessment', id })
+          }}
+        />
+      </div>
     </div>
   )
 }
