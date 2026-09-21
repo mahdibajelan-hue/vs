@@ -23,6 +23,7 @@ import {
   Puzzle,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Star,
   Trophy,
   Users,
@@ -38,6 +39,7 @@ import { CompetencyPrintReport, type PanelSummaryRow } from '../components/Compe
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { computeEvaluationStages } from '../lib/evaluationStages'
+import { generatePersonalityProfile } from '../lib/personalityAnalysis'
 import {
   computeCompletion,
   computeDomainScores,
@@ -91,6 +93,10 @@ const ROLE_BUCKET_ICON: Record<string, typeof Compass> = {
 }
 
 const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
+
+// A decorative accent per KPI tile (independent of the tier color used for the score itself), so
+// the grid reads as a vivid, varied set of cards rather than one repeated purple tone.
+const DOMAIN_ACCENT_PALETTE = ['#a855f7', '#38bdf8', '#f59e0b', '#34d399', '#fb7185', '#22d3ee', '#818cf8', '#facc15']
 
 /** The final report: a full-screen candidate dashboard — score ring, KPI tiles, radar with a peer
  * benchmark overlay, comparison against top peers of the same role, an evaluation-stage timeline,
@@ -184,10 +190,13 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
     return row
   })
 
-  const kpiTiles = domainScores.map((d) => ({
+  const kpiTiles = domainScores.map((d, i) => ({
     domain: d,
     Icon: isPM ? PM_DOMAIN_ICON[d.domain.key as CompetencyDomainKey] ?? Compass : ROLE_BUCKET_ICON[d.domain.key] ?? Compass,
+    accent: DOMAIN_ACCENT_PALETTE[i % DOMAIN_ACCENT_PALETTE.length],
   }))
+
+  const personalityParagraphs = generatePersonalityProfile(domainScores, overall, assessment, isPM)
 
   const keyProjects = [...assessment.employmentHistory].slice(0, 3)
 
@@ -402,9 +411,12 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
           <div ref={reportRef} className="space-y-4">
             {/* Candidate header + score ring + status card */}
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_0.9fr_1fr]">
-              <div className="glass-panel flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row">
-                <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
-                <div className="flex-1 text-center sm:text-right">
+              <div
+                className="glass-panel relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-5 sm:flex-row"
+                style={{ background: `radial-gradient(120% 140% at 100% 0%, ${tierColor(overall)}22, transparent 55%), radial-gradient(120% 140% at 0% 100%, #a855f722, transparent 55%)` }}
+              >
+                <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} accent={tierColor(overall)} />
+                <div className="relative flex-1 text-center sm:text-right">
                   <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
                     {assessment.candidateName}
                     {assessment.isApproved && <ApprovalMedal />}
@@ -413,10 +425,16 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                   <p className="text-xs text-muted">متقاضی سمت: {assessment.candidatePosition || JOB_ROLE_LABEL_FA[assessment.jobRole]}</p>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                     {assessment.yearsExperienceTotal != null && (
-                      <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10.5px] text-secondary">{assessment.yearsExperienceTotal.toLocaleString('fa-IR')} سال سابقه</span>
+                      <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[10.5px] font-bold text-sky-200">
+                        {assessment.yearsExperienceTotal.toLocaleString('fa-IR')} سال سابقه
+                      </span>
                     )}
-                    {assessment.certifications.slice(0, 2).map((c) => (
-                      <span key={c.id} className="rounded-full bg-purple-500/15 px-2.5 py-1 text-[10.5px] font-bold text-purple-200">
+                    {assessment.certifications.slice(0, 2).map((c, i) => (
+                      <span
+                        key={c.id}
+                        className="rounded-full px-2.5 py-1 text-[10.5px] font-bold"
+                        style={{ background: `${DOMAIN_ACCENT_PALETTE[i + 2]}22`, color: DOMAIN_ACCENT_PALETTE[i + 2] }}
+                      >
                         {c.title}
                       </span>
                     ))}
@@ -427,7 +445,10 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
               <div className="glass-panel flex flex-col items-center justify-center gap-2 rounded-2xl p-5">
                 <div
                   className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
-                  style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+                  style={{
+                    background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+                    boxShadow: `0 0 28px -6px ${tierColor(overall)}70`,
+                  }}
                 >
                   <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
                     <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
@@ -442,7 +463,10 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 </p>
               </div>
 
-              <div className="glass-panel flex flex-col justify-between gap-3 rounded-2xl p-4" style={{ borderColor: `${statusColor}40` }}>
+              <div
+                className="glass-panel flex flex-col justify-between gap-3 rounded-2xl border p-4"
+                style={{ borderColor: `${statusColor}40`, background: `linear-gradient(160deg, ${statusColor}14, transparent 65%)` }}
+              >
                 <div>
                   <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted">
                     وضعیت: <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
@@ -468,12 +492,19 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
 
             {/* KPI tiles */}
             <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 ${kpiTiles.length > 4 ? 'lg:grid-cols-4' : ''}`}>
-              {kpiTiles.map(({ domain: d, Icon }) => {
+              {kpiTiles.map(({ domain: d, Icon, accent }) => {
                 const color = tierColor(d.percentScore)
                 return (
-                  <div key={d.domain.key} className="glass-panel rounded-2xl p-3.5">
-                    <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
-                      <Icon size={13} style={{ color }} /> {d.domain.shortTitle}
+                  <div
+                    key={d.domain.key}
+                    className="glass-panel overflow-hidden rounded-2xl border p-3.5"
+                    style={{ borderColor: `${accent}30`, background: `linear-gradient(155deg, ${accent}14, transparent 65%)` }}
+                  >
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={{ background: `${accent}22`, color: accent }}>
+                        <Icon size={13} />
+                      </span>
+                      <span className="truncate text-[11px] text-secondary">{d.domain.shortTitle}</span>
                     </div>
                     <p className="num text-xl font-extrabold" style={{ color }}>
                       {d.percentScore != null ? d.percentScore.toLocaleString('fa-IR') : '—'} <span className="text-[11px] font-bold text-muted">/۱۰۰</span>
@@ -484,6 +515,24 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                   </div>
                 )
               })}
+            </div>
+
+            {/* Personality analysis — grounded strictly in this candidate's own score pattern */}
+            <div
+              className="glass-panel overflow-hidden rounded-2xl border p-4"
+              style={{ borderColor: '#a855f740', background: 'linear-gradient(135deg, #a855f71a, transparent 60%, #38bdf814)' }}
+            >
+              <p className="mb-2.5 flex items-center gap-1.5 text-sm font-extrabold text-purple-200">
+                <Sparkles size={15} className="text-purple-300" /> تحلیل الگوی پاسخ‌ها
+              </p>
+              <div className="space-y-2">
+                {personalityParagraphs.map((p, i) => (
+                  <p key={i} className="text-[11.5px] leading-7 text-secondary">
+                    {p}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-2.5 text-[9.5px] text-muted">این تحلیل صرفاً بر اساس الگوی امتیازات ثبت‌شده در همین مصاحبه تولید شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
             </div>
 
             {/* Strengths / radar / rank */}
@@ -527,14 +576,17 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 </p>
               </div>
 
-              <div className="glass-panel rounded-2xl p-4">
+              <div
+                className="glass-panel rounded-2xl border p-4"
+                style={{ borderColor: '#facc1530', background: 'linear-gradient(155deg, #facc1514, transparent 65%)' }}
+              >
                 <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
                   <Trophy size={13} className="text-amber-300" /> رتبه در میان متقاضیان
                 </p>
                 {rank != null ? (
                   <>
                     <p className="text-center">
-                      <span className="num text-3xl font-black text-purple-300">{rank.toLocaleString('fa-IR')}</span>
+                      <span className="num text-3xl font-black text-amber-300">{rank.toLocaleString('fa-IR')}</span>
                       <span className="num text-lg text-muted"> / {allOveralls.length.toLocaleString('fa-IR')}</span>
                     </p>
                     <p className="mb-3 text-center text-[10.5px] text-muted">رتبه این متقاضی از میان کل متقاضیان این شغل</p>
@@ -703,7 +755,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   )
 }
 
-function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
+function PhotoBadge({ path, approved, accent = '#a855f7' }: { path: string; approved?: boolean; accent?: string }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -714,7 +766,10 @@ function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
   }, [path])
   return (
     <div className="relative shrink-0">
-      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
+      <div
+        className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 bg-white/5"
+        style={{ borderColor: `${accent}60`, boxShadow: `0 0 20px -6px ${accent}80` }}
+      >
         {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Users size={28} className="text-muted" />}
       </div>
       {approved && (
