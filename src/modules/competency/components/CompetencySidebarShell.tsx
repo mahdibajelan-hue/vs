@@ -129,18 +129,38 @@ function SidebarButton({ section, active, handler }: { section: CompetencySectio
   )
 }
 
-/** The "خیلی فشرده و کوچک" evaluation-progress strip — a row of small dots joined by lines, one per
- * milestone, green once done. No labels in the strip itself (that would defeat the point of being
- * compact); each dot's title attribute carries its name for anyone who hovers. */
+/** A compact but always-legible evaluation-progress pill — dots joined by lines (green once done,
+ * a highlighted ring on whichever one is current) plus the current stage's name written out in
+ * text, so anyone glancing at the header can see exactly where the candidate stands right now
+ * without having to hover over anything. */
 function StageStrip({ stages }: { stages: EvaluationStage[] }) {
+  const doneCount = stages.filter((s) => s.done).length
+  const currentIndex = stages.findIndex((s) => !s.done)
+  const finished = currentIndex === -1
+  const currentLabel = finished ? 'تکمیل‌شده' : stages[currentIndex].label
+
   return (
-    <div className="flex shrink-0 items-center gap-0.5" title="مراحل ارزیابی">
-      {stages.map((s, i) => (
-        <span key={s.label} className="flex items-center">
-          <span className={`h-2 w-2 rounded-full ${s.done ? 'bg-emerald-400' : 'bg-white/15'}`} title={s.label} />
-          {i < stages.length - 1 && <span className={`h-px w-2.5 ${s.done && stages[i + 1].done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />}
-        </span>
-      ))}
+    <div
+      className="flex shrink-0 items-center gap-2 rounded-full border border-purple-400/25 bg-purple-500/10 py-1 pl-2.5 pr-1.5"
+      title="مراحل ارزیابی"
+    >
+      <div className="flex items-center gap-0.5">
+        {stages.map((s, i) => (
+          <span key={s.label} className="flex items-center">
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                s.done ? 'bg-emerald-400' : i === currentIndex ? 'bg-purple-300 ring-2 ring-purple-300/30' : 'bg-white/15'
+              }`}
+              title={s.label}
+            />
+            {i < stages.length - 1 && <span className={`h-px w-2.5 ${s.done && stages[i + 1].done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />}
+          </span>
+        ))}
+      </div>
+      <span className={`text-[10.5px] font-bold ${finished ? 'text-emerald-300' : 'text-purple-200'}`}>{currentLabel}</span>
+      <span className="num text-[9.5px] text-muted">
+        ({doneCount.toLocaleString('fa-IR')}/{stages.length.toLocaleString('fa-IR')})
+      </span>
     </div>
   )
 }
