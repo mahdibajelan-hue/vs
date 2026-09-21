@@ -130,6 +130,12 @@ async function upsertMyPanelistScore(
     answers: existing?.answers ?? {},
     capstoneScore: existing?.capstoneScore ?? null,
     capstoneNote: existing?.capstoneNote ?? '',
+    educationScore: existing?.educationScore ?? null,
+    experienceScore: existing?.experienceScore ?? null,
+    pmTrainingScore: existing?.pmTrainingScore ?? null,
+    pmCertificationScore: existing?.pmCertificationScore ?? null,
+    strengths: existing?.strengths ?? '',
+    developmentAreas: existing?.developmentAreas ?? '',
     submittedAt: existing?.submittedAt ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -143,6 +149,12 @@ async function upsertMyPanelistScore(
       answers: merged.answers,
       capstone_score: merged.capstoneScore,
       capstone_note: merged.capstoneNote,
+      education_score: merged.educationScore,
+      experience_score: merged.experienceScore,
+      pm_training_score: merged.pmTrainingScore,
+      pm_certification_score: merged.pmCertificationScore,
+      strengths: merged.strengths,
+      development_areas: merged.developmentAreas,
       submitted_at: merged.submittedAt,
       ...row,
     },
@@ -238,6 +250,8 @@ interface CompetencyState {
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
   setMyPanelistCapstone: (assessmentId: string, score: number | null, note: string) => Promise<void>
+  setMyPanelistQualificationScores: (assessmentId: string, scores: QualificationScoresInput) => Promise<void>
+  setMyPanelistStrengths: (assessmentId: string, strengths: string, developmentAreas: string) => Promise<void>
   submitMyPanelistScore: (assessmentId: string) => Promise<void>
 
   fetchAttachments: (assessmentId: string) => Promise<void>
@@ -268,14 +282,27 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   loadingQuestionBank: false,
   loading: true,
 
+  // Panelist scores are fetched for every assessment here (not just the one currently open) so the
+  // "official" score everywhere (dashboard leaderboard, reports, results) can be the panel's
+  // average, computed identically regardless of who's looking — see resolveOfficialAnswers.
   fetchAll: async () => {
     set({ loading: true })
-    const { data, error } = await supabase.from('comp_assessments').select('*').order('created_at', { ascending: false })
-    if (reportError('بارگذاری ارزیابی‌ها', error)) {
+    const [assessmentsRes, panelistScoresRes] = await Promise.all([
+      supabase.from('comp_assessments').select('*').order('created_at', { ascending: false }),
+      supabase.from('comp_panelist_scores').select('*'),
+    ])
+    if (reportError('بارگذاری ارزیابی‌ها', assessmentsRes.error)) {
       set({ loading: false })
       return
     }
-    set({ assessments: ((data ?? []) as CompAssessmentRow[]).map(compAssessmentFromRow), loading: false })
+    const panelistScores = reportError('بارگذاری امتیازهای داوران', panelistScoresRes.error)
+      ? []
+      : ((panelistScoresRes.data ?? []) as CompPanelistScoreRow[]).map(compPanelistScoreFromRow)
+    set({
+      assessments: ((assessmentsRes.data ?? []) as CompAssessmentRow[]).map(compAssessmentFromRow),
+      panelistScores,
+      loading: false,
+    })
   },
 
   fetchProfiles: async () => {
@@ -464,7 +491,10 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reportError('بارگذاری عکس پرسنلی', { message: uploadErr ?? 'خطای نامشخص' })
       return
     }
-    const { error } = await supabase.from('comp_assessments').update({ photo_url: path }).eq('id', id)
+    // A narrow RPC rather than a direct table update: any authenticated staff member may set a
+    // candidate's photo (comp_assessments UPDATE itself stays lead-only, since it also guards the
+    // final scores/status) — see comp_set_photo in schema.sql.
+    const { error } = await supabase.rpc('comp_set_photo', { p_assessment_id: id, p_photo_url: path })
     if (reportError('ثبت عکس پرسنلی', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, photoUrl: path } : a)) })
   },
@@ -629,6 +659,30 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     await upsertMyPanelistScore(set, get, assessmentId, 'ثبت امتیاز سناریوی پایانی داور', () => ({
       row: { capstone_score: score, capstone_note: note },
       local: { capstoneScore: score, capstoneNote: note },
+    }))
+  },
+
+  setMyPanelistQualificationScores: async (assessmentId, scores) => {
+    await upsertMyPanelistScore(set, get, assessmentId, 'ثبت کارت امتیاز شایستگی داور', () => ({
+      row: {
+        education_score: scores.educationScore,
+        experience_score: scores.experienceScore,
+        pm_training_score: scores.pmTrainingScore,
+        pm_certification_score: scores.pmCertificationScore,
+      },
+      local: {
+        educationScore: scores.educationScore,
+        experienceScore: scores.experienceScore,
+        pmTrainingScore: scores.pmTrainingScore,
+        pmCertificationScore: scores.pmCertificationScore,
+      },
+    }))
+  },
+
+  setMyPanelistStrengths: async (assessmentId, strengths, developmentAreas) => {
+    await upsertMyPanelistScore(set, get, assessmentId, 'ثبت جمع‌بندی داور', () => ({
+      row: { strengths, development_areas: developmentAreas },
+      local: { strengths, developmentAreas },
     }))
   },
 

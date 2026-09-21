@@ -296,6 +296,16 @@ export interface CompPanelistScore {
   answers: CompetencyAnswers
   capstoneScore: number | null
   capstoneNote: string
+  /** This panelist's own qualification-scorecard judgment — same four components as the shared
+   * QualificationScorecardCard, but per-judge now so the final value can be the average across the
+   * whole panel instead of a single lead-entered number. */
+  educationScore: number | null
+  experienceScore: number | null
+  pmTrainingScore: number | null
+  pmCertificationScore: number | null
+  /** Mandatory before this panelist can submit — see submitMyPanelistScore. */
+  strengths: string
+  developmentAreas: string
   submittedAt: string | null
   createdAt: string
   updatedAt: string

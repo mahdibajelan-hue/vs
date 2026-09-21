@@ -173,6 +173,12 @@ export interface CompPanelistScoreRow {
   answers: CompetencyAnswers
   capstone_score: number | null
   capstone_note: string
+  education_score: number | null
+  experience_score: number | null
+  pm_training_score: number | null
+  pm_certification_score: number | null
+  strengths: string
+  development_areas: string
   submitted_at: string | null
   created_at: string
   updated_at: string
@@ -186,6 +192,12 @@ export function compPanelistScoreFromRow(r: CompPanelistScoreRow): CompPanelistS
     answers: r.answers ?? {},
     capstoneScore: r.capstone_score,
     capstoneNote: r.capstone_note ?? '',
+    educationScore: r.education_score,
+    experienceScore: r.experience_score,
+    pmTrainingScore: r.pm_training_score,
+    pmCertificationScore: r.pm_certification_score,
+    strengths: r.strengths ?? '',
+    developmentAreas: r.development_areas ?? '',
     submittedAt: r.submitted_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

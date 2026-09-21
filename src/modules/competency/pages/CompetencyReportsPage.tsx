@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileBarChart2, Printer } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent } from '../lib/competencyModel'
-import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { computeCategoryScores, isProjectManagerRole, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { JOB_ROLES, JOB_ROLE_LABEL_FA, type JobRole } from '../types'
@@ -20,6 +20,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
   const assessments = useCompetencyStore((s) => s.assessments)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -35,11 +36,15 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
       .filter((a) => roleFilter === 'all' || a.jobRole === roleFilter)
       .map((a) => {
         const isPM = isProjectManagerRole(a.jobRole)
-        const domainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(questionsForAssessment(a, questionBank), a.answers)
+        const officialAnswers = resolveOfficialAnswers(
+          a.answers,
+          panelistScores.filter((s) => s.assessmentId === a.id),
+        )
+        const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(questionsForAssessment(a, questionBank), officialAnswers)
         return { a, overall: computeOverallPercent(domainScores) }
       })
       .sort((x, y) => JOB_ROLE_LABEL_FA[x.a.jobRole].localeCompare(JOB_ROLE_LABEL_FA[y.a.jobRole]))
-  }, [assessments, roleFilter, questionBank])
+  }, [assessments, roleFilter, questionBank, panelistScores])
 
   const handlePrint = () => {
     const node = printRef.current

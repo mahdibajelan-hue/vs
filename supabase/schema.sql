@@ -5044,3 +5044,150 @@ create policy "comp_panelist_scores_delete" on comp_panelist_scores
     panelist_id = auth.uid()
     or exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or comp_is_module_admin()))
   );
+-- ----------------------------------------------------------------------------
+-- Section 30: fixes/features batch —
+--
+-- 1. comp_attachments + the comp-docs storage bucket's staff policies were
+--    still scoped to comp_can_access_assessment() (creator/admin/assigned
+--    panelist only), even though comp_assessments SELECT was already opened
+--    to every authenticated user in Section 29. Any evaluator who could now
+--    SEE a candidate but wasn't specifically assigned to it hit a silent RLS
+--    denial trying to upload/delete a document — the reported "sometimes
+--    upload fails" bug. Broadened to any authenticated user, matching
+--    comp_assessments' own visibility.
+-- 2. Candidate self-service can now also read back its own folder (for photo
+--    /document thumbnail previews across reloads), scoped by the same
+--    self_service_token folder-matching already used for writes.
+-- 3. comp_set_photo / comp_self_service_set_photo: narrow, dedicated RPCs for
+--    the one photo_url column, usable by any authenticated staff member or by
+--    the token-holding candidate — without loosening the general
+--    comp_assessments UPDATE policy that guards scoring/status fields.
+-- 4. comp_panelists / comp_panelist_scores SELECT broadened the same way, so
+--    every evaluator sees the same panel composition and the same panelist
+--    scores for any candidate (needed for a judge-average final score that
+--    doesn't silently vary by who's looking).
+-- 5. comp_panelist_scores gains per-judge qualification scores (education/
+--    experience/training/certification) and a mandatory strengths/
+--    development-areas pair, so each panelist can complete their own
+--    scorecard and wrap-up, not just the lead.
+-- ----------------------------------------------------------------------------
+
+alter table comp_panelist_scores
+  add column if not exists education_score int check (education_score is null or education_score between 0 and 5),
+  add column if not exists experience_score int check (experience_score is null or experience_score between 0 and 5),
+  add column if not exists pm_training_score int check (pm_training_score is null or pm_training_score between 0 and 5),
+  add column if not exists pm_certification_score int check (pm_certification_score is null or pm_certification_score between 0 and 5),
+  add column if not exists strengths text not null default '',
+  add column if not exists development_areas text not null default '';
+
+drop policy if exists "comp_panelists_select" on comp_panelists;
+create policy "comp_panelists_select" on comp_panelists
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panelist_scores_select" on comp_panelist_scores;
+create policy "comp_panelist_scores_select" on comp_panelist_scores
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_attachments_select" on comp_attachments;
+create policy "comp_attachments_select" on comp_attachments
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_attachments_insert" on comp_attachments;
+create policy "comp_attachments_insert" on comp_attachments
+  for insert with check (auth.uid() is not null and uploaded_by_candidate = false);
+
+drop policy if exists "comp_attachments_delete" on comp_attachments;
+create policy "comp_attachments_delete" on comp_attachments
+  for delete using (auth.uid() is not null);
+
+drop policy if exists "comp_docs_read_staff" on storage.objects;
+create policy "comp_docs_read_staff" on storage.objects
+  for select using (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_write_staff" on storage.objects;
+create policy "comp_docs_write_staff" on storage.objects
+  for insert with check (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_delete_staff" on storage.objects;
+create policy "comp_docs_delete_staff" on storage.objects
+  for delete using (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_read_candidate" on storage.objects;
+create policy "comp_docs_read_candidate" on storage.objects
+  for select to anon using (
+    bucket_id = 'comp-docs'
+    and exists (
+      select 1 from comp_assessments a
+      where a.id::text = (storage.foldername(name))[1]
+        and a.self_service_token::text = (storage.foldername(name))[2]
+    )
+  );
+
+create or replace function comp_set_photo(p_assessment_id uuid, p_photo_url text)
+returns void as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  update comp_assessments set photo_url = p_photo_url where id = p_assessment_id;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function comp_set_photo(uuid, text) to authenticated;
+
+create or replace function comp_self_service_set_photo(p_token uuid, p_storage_path text)
+returns void as $$
+  update comp_assessments set photo_url = p_storage_path where self_service_token = p_token;
+$$ language sql security definer;
+
+grant execute on function comp_self_service_set_photo(uuid, text) to anon, authenticated;
+
+-- comp_self_service_get gains photo_url so a reopened self-service link can show the candidate
+-- their own already-uploaded photo instead of always looking empty.
+drop function if exists comp_self_service_get(uuid);
+create or replace function comp_self_service_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  candidate_national_id text,
+  candidate_phone text,
+  candidate_email text,
+  candidate_birth_date date,
+  candidate_age int,
+  has_disability boolean,
+  disability_note text,
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text,
+  education jsonb,
+  employment_history jsonb,
+  certifications jsonb,
+  notable_projects text,
+  self_service_status text,
+  photo_url text
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
+         a.years_experience_total, a.years_experience_pipeline, a.current_employer,
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
+         a.photo_url
+  from comp_assessments a
+  where a.self_service_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function comp_self_service_get(uuid) to anon, authenticated;
+
+-- comp_self_service_list_attachments gains storage_path so the self-service page can render a real
+-- thumbnail preview for image attachments (via the new comp_docs_read_candidate policy above),
+-- not just a filename.
+create or replace function comp_self_service_list_attachments(p_token uuid)
+returns table (id uuid, kind text, file_name text, storage_path text, created_at timestamptz) as $$
+  select att.id, att.kind, att.file_name, att.storage_path, att.created_at
+  from comp_attachments att
+  join comp_assessments a on a.id = att.assessment_id
+  where a.self_service_token = p_token
+  order by att.created_at desc;
+$$ language sql security definer stable;
+
+grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;

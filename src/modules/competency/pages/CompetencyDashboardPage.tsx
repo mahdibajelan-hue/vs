@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Award, CheckCircle2, ClipboardList, Plus, Trash2, TrendingUp, Trophy, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
-import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { computeCategoryScores, isProjectManagerRole, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CompetencyAssessment, type CompQuestionBankItem, type JobRole } from '../types'
+import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CompetencyAssessment, type JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
@@ -24,6 +24,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
 
@@ -32,17 +33,37 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // The overall score everywhere on this page is the official, panel-averaged one (see
+  // resolveOfficialAnswers) — the same figure the candidate's own results page shows.
   const scored = useMemo(
     () =>
       assessments.map((a) => {
         const isPM = isProjectManagerRole(a.jobRole)
-        const domainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(questionsForAssessment(a, questionBank), a.answers)
+        const officialAnswers = resolveOfficialAnswers(
+          a.answers,
+          panelistScores.filter((s) => s.assessmentId === a.id),
+        )
+        const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(questionsForAssessment(a, questionBank), officialAnswers)
         return { assessment: a, overall: computeOverallPercent(domainScores) }
       }),
-    [assessments, questionBank],
+    [assessments, questionBank, panelistScores],
   )
 
   const usedRoles = useMemo(() => JOB_ROLES.filter((r) => assessments.some((a) => a.jobRole === r)), [assessments])
+
+  // Rank of each candidate among peers of the same job role — feeds the dashboard card's floating
+  // rank badge. Ties share the same rank (dense-ish: count of strictly-better peers + 1).
+  const rankById = useMemo(() => {
+    const map = new Map<string, number>()
+    usedRoles.forEach((role) => {
+      const inRole = scored.filter((s) => s.assessment.jobRole === role && s.overall != null)
+      inRole.forEach((s) => {
+        const better = inRole.filter((o) => (o.overall as number) > (s.overall as number)).length
+        map.set(s.assessment.id, better + 1)
+      })
+    })
+    return map
+  }, [scored, usedRoles])
   const filteredAssessments = roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)
 
   const totalInterviews = assessments.length
@@ -141,7 +162,14 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
         ) : (
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredAssessments.map((a) => (
-              <CandidateCard key={a.id} assessment={a} questionBank={questionBank} onOpen={() => onOpen(a.id)} onDelete={() => setConfirmId(a.id)} />
+              <CandidateCard
+                key={a.id}
+                assessment={a}
+                overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
+                rank={rankById.get(a.id)}
+                onOpen={() => onOpen(a.id)}
+                onDelete={() => setConfirmId(a.id)}
+              />
             ))}
           </div>
         )}
@@ -188,18 +216,17 @@ function StatTile({ icon: Icon, label, value, color }: { icon: typeof Users; lab
 
 function CandidateCard({
   assessment: a,
-  questionBank,
+  overall,
+  rank,
   onOpen,
   onDelete,
 }: {
   assessment: CompetencyAssessment
-  questionBank: CompQuestionBankItem[]
+  overall: number | null
+  rank?: number
   onOpen: () => void
   onDelete: () => void
 }) {
-  const isPM = isProjectManagerRole(a.jobRole)
-  const domainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(questionsForAssessment(a, questionBank), a.answers)
-  const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
@@ -226,6 +253,14 @@ function CandidateCard({
           {a.isApproved && (
             <span className="absolute -bottom-1.5 -left-1.5">
               <ApprovalMedal size="sm" />
+            </span>
+          )}
+          {rank != null && (
+            <span
+              className="num absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0b0f16] bg-amber-400 text-[10px] font-extrabold text-amber-950 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+              title={`رتبه ${rank} در میان متقاضیان این شغل`}
+            >
+              {rank.toLocaleString('fa-IR')}
             </span>
           )}
         </div>

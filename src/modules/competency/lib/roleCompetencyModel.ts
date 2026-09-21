@@ -1,7 +1,51 @@
-import type { CompetencyAnswers, CompetencyAssessment, CompetencyDomain, CompQuestionBankItem, DomainScore, JobRole, QuestionType } from '../types'
+import type { CompetencyAnswers, CompetencyAssessment, CompetencyDomain, CompPanelistScore, CompQuestionBankItem, DomainScore, JobRole, QuestionType } from '../types'
 import { tierColor } from './competencyModel'
 
 export { tierColor }
+
+/**
+ * The "official" answer set for an assessment is the panel's own average, not whatever the lead
+ * typed into the shared comp_assessments row — every judge scores independently (comp_panelist_
+ * scores), and the final per-question score is the average across every judge who has submitted.
+ * Falls back to the assessment's own answers only when no panelist has submitted yet (a solo lead
+ * scoring with no panel assigned), so nothing silently loses a score. Notes/candidate-answer text
+ * come from the assessment row first (the lead's transcript) and otherwise from whichever
+ * submitted sheet has one, since the score itself — not the note — is what gets averaged.
+ */
+export function resolveOfficialAnswers(fallbackAnswers: CompetencyAnswers, panelistScores: CompPanelistScore[]): CompetencyAnswers {
+  const submitted = panelistScores.filter((s) => s.submittedAt != null)
+  if (submitted.length === 0) return fallbackAnswers
+
+  const keys = new Set<string>(Object.keys(fallbackAnswers))
+  submitted.forEach((s) => Object.keys(s.answers).forEach((k) => keys.add(k)))
+
+  const result: CompetencyAnswers = {}
+  keys.forEach((key) => {
+    const scores = submitted.map((s) => s.answers[key]?.score).filter((v): v is number => typeof v === 'number')
+    const score = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : (fallbackAnswers[key]?.score ?? null)
+    const note = fallbackAnswers[key]?.note ?? submitted.find((s) => s.answers[key]?.note)?.answers[key]?.note ?? ''
+    const candidateAnswer = fallbackAnswers[key]?.candidateAnswer ?? submitted.find((s) => s.answers[key]?.candidateAnswer)?.answers[key]?.candidateAnswer
+    result[key] = { score, note, candidateAnswer }
+  })
+  return result
+}
+
+type QualificationFields = Pick<CompetencyAssessment, 'educationScore' | 'experienceScore' | 'pmTrainingScore' | 'pmCertificationScore'>
+const QUALIFICATION_KEYS: (keyof QualificationFields)[] = ['educationScore', 'experienceScore', 'pmTrainingScore', 'pmCertificationScore']
+
+/** Same averaging principle as resolveOfficialAnswers, applied to the four qualification-scorecard
+ * components — each judge scores their own copy, and the official value per component is the
+ * average across whichever judges actually filled that one in (falls back to the legacy
+ * assessment-level value when no judge has scored that component at all). */
+export function resolveOfficialQualificationScores(assessment: QualificationFields, panelistScores: CompPanelistScore[]): QualificationFields {
+  const submitted = panelistScores.filter((s) => s.submittedAt != null)
+  const result = {} as QualificationFields
+  QUALIFICATION_KEYS.forEach((key) => {
+    const values = submitted.map((s) => s[key]).filter((v): v is number => typeof v === 'number')
+    result[key] = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : assessment[key]
+  })
+  return result
+}
 
 /** Whether this assessment uses the original, fixed, in-code Project Manager rubric
  * (competencyModel.ts) rather than the DB-backed multi-role question bank below. */

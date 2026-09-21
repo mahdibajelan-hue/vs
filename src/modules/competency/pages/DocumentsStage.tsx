@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, CheckCircle2, Copy, ExternalLink, FileText, Link2, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { Camera, CheckCircle2, Copy, FileText, Link2, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
+import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
 import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind, type CompetencyAssessment } from '../types'
 
 interface DocumentsStageProps {
@@ -169,23 +170,16 @@ export function DocumentsStage({ assessment, isLead }: DocumentsStageProps) {
         {attachments.length === 0 ? (
           <p className="text-[11px] text-muted">مدرکی بارگذاری نشده است.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {attachments.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px]">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">{ATTACHMENT_KIND_LABEL_FA[a.kind]}</span>
-                  <span className="truncate" dir="ltr">
-                    {a.fileName}
-                  </span>
-                  {a.uploadedByCandidate && <span className="shrink-0 text-[10px] text-amber-300">توسط نامزد</span>}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <AttachmentOpenButton path={a.storagePath} />
-                  <button onClick={() => deleteAttachment(a.id)} className="text-muted hover:text-red-300">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
+              <AttachmentPreviewCard
+                key={a.id}
+                kind={a.kind}
+                fileName={a.fileName}
+                storagePath={a.storagePath}
+                uploadedByCandidate={a.uploadedByCandidate}
+                onDelete={() => deleteAttachment(a.id)}
+              />
             ))}
           </div>
         )}
@@ -207,23 +201,5 @@ function PhotoPreview({ path }: { path: string }) {
     <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5">
       {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Camera size={18} className="text-muted" />}
     </div>
-  )
-}
-
-function AttachmentOpenButton({ path }: { path: string }) {
-  const [loading, setLoading] = useState(false)
-  return (
-    <button
-      onClick={async () => {
-        setLoading(true)
-        const url = await getCompDocSignedUrl(path)
-        setLoading(false)
-        if (url) window.open(url, '_blank', 'noopener')
-      }}
-      disabled={loading}
-      className="flex items-center gap-1 text-muted hover:text-purple-300 disabled:opacity-50"
-    >
-      {loading ? <Loader2 size={12} className="animate-spin" /> : <ExternalLink size={12} />}
-    </button>
   )
 }

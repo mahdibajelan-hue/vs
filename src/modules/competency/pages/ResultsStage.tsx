@@ -52,6 +52,8 @@ import {
   isProjectManagerRole,
   questionsForAssessment,
   recommendationForRole,
+  resolveOfficialAnswers,
+  resolveOfficialQualificationScores,
   ROLE_RECOMMENDATION_COLOR,
   ROLE_RECOMMENDATION_LABEL_FA,
 } from '../lib/roleCompetencyModel'
@@ -121,10 +123,17 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
   const domainScoresFor = (answers: CompetencyAssessment['answers']) => (isPM ? computeDomainScores(answers) : computeCategoryScores(roleQuestions, answers))
 
-  const domainScores = domainScoresFor(assessment.answers)
+  // The official score is the panel's own average across every judge who has submitted (falling
+  // back to the lead's own entry only when nobody has submitted yet) — never a single person's
+  // independent verdict. See resolveOfficialAnswers.
+  const myPanelistScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id)
+  const officialAnswers = resolveOfficialAnswers(assessment.answers, myPanelistScores)
+  const officialQualification = resolveOfficialQualificationScores(assessment, myPanelistScores)
+
+  const domainScores = domainScoresFor(officialAnswers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = isPM ? computeCompletion(assessment.answers) : computeRoleCompletion(roleQuestions, assessment.answers)
+  const completion = isPM ? computeCompletion(officialAnswers) : computeRoleCompletion(roleQuestions, officialAnswers)
   const { strengths, weaknesses } = domainFlags(domainScores)
   const roleRecommendation = isPM ? null : recommendationForRole(overall, domainScores)
   const statusColor = isPM ? tierColor(overall) : ROLE_RECOMMENDATION_COLOR[roleRecommendation!.grade]
@@ -133,20 +142,24 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
 
   // Peers: other candidates evaluated for the same job role, used for the benchmark radar overlay,
   // the comparison bar chart, and the rank card. Each peer's own domain scores are computed with the
-  // exact same function used above, over its own answers (and, for role-based assessments, its own
-  // selected questions) — never guessed or interpolated.
+  // exact same official (panel-averaged) resolution used above, over its own answers (and, for
+  // role-based assessments, its own selected questions) — never guessed or interpolated.
   const peers = useMemo(() => {
     return allAssessments
       .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole)
       .map((a) => {
         const aRoleQuestions = isPM ? [] : questionsForAssessment(a, questionBank)
-        const aDomainScores = isPM ? computeDomainScores(a.answers) : computeCategoryScores(aRoleQuestions, a.answers)
+        const aOfficialAnswers = resolveOfficialAnswers(
+          a.answers,
+          allPanelistScores.filter((s) => s.assessmentId === a.id),
+        )
+        const aDomainScores = isPM ? computeDomainScores(aOfficialAnswers) : computeCategoryScores(aRoleQuestions, aOfficialAnswers)
         return { assessment: a, domainScores: aDomainScores, overall: computeOverallPercent(aDomainScores) }
       })
       .filter((p) => p.overall != null)
       .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
       // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAssessments, assessment.id, assessment.jobRole, questionBank, isPM])
+  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank, isPM])
 
   const benchmarkScores: DomainScore[] | undefined =
     peers.length > 0
@@ -183,10 +196,10 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const stages = computeEvaluationStages(assessment, completion.percent, panelists.length, submittedScores.length)
 
   const qualificationChips = [
-    { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
-    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: assessment.experienceScore },
-    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: assessment.pmTrainingScore },
-    { label: 'صلاحیت حرفه‌ای', icon: Award, value: assessment.pmCertificationScore },
+    { label: 'مدرک تحصیلی', icon: GraduationCap, value: officialQualification.educationScore },
+    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: officialQualification.experienceScore },
+    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: officialQualification.pmTrainingScore },
+    { label: 'صلاحیت حرفه‌ای', icon: Award, value: officialQualification.pmCertificationScore },
   ]
 
   const panelSummary: PanelSummaryRow[] = allPanelists
@@ -199,6 +212,18 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
         submitted: sheet?.submittedAt != null,
       }
     })
+
+  // Per-domain judge average — each submitted judge's own domain percentage, averaged across
+  // judges, shown alongside (not instead of) the official panel-averaged score above so the
+  // breakdown by area is visible, not just a single number.
+  const submittedSheets = myPanelistScores.filter((s) => s.submittedAt != null)
+  const panelDomainAverages =
+    submittedSheets.length > 0
+      ? domainScores.map((d, i) => {
+          const values = submittedSheets.map((s) => domainScoresFor(s.answers)[i]?.percentScore).filter((v): v is number => typeof v === 'number')
+          return { domain: d.domain, avg: values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null }
+        })
+      : []
 
   // The panel's own average — distinct from `overall` above (the lead's final verdict) — so the
   // report shows both numbers side by side instead of only the lead's figure with the panel's
@@ -364,7 +389,14 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
           </div>
 
           <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-            <CompetencyPrintReport assessment={assessment} panel={panelSummary} domainScoresOverride={isPM ? undefined : domainScores} roleRecommendation={roleRecommendation} />
+            <CompetencyPrintReport
+              assessment={assessment}
+              panel={panelSummary}
+              domainScoresOverride={domainScores}
+              answersOverride={officialAnswers}
+              qualificationOverride={officialQualification}
+              roleRecommendation={roleRecommendation}
+            />
           </div>
 
           <div ref={reportRef} className="space-y-4">
@@ -627,7 +659,23 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                     </span>
                   </div>
                 ))}
-                <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ اعضای پنل نیست.</p>
+
+                {panelDomainAverages.length > 0 && (
+                  <div className="space-y-1.5 border-t border-white/5 pt-2.5">
+                    <p className="text-[10.5px] font-bold text-muted">میانگین امتیاز داوران به تفکیک زمینه</p>
+                    {panelDomainAverages.map((d) => (
+                      <div key={d.domain.key} className="flex items-center gap-3">
+                        <span className="w-24 shrink-0 text-[10.5px] text-secondary">{d.domain.shortTitle}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                          <div className="h-full rounded-full" style={{ width: `${d.avg ?? 0}%`, background: tierColor(d.avg) }} />
+                        </div>
+                        <span className="num w-10 shrink-0 text-left text-[10px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش میانگین امتیازات همهٔ داورانی است که ثبت نهایی کرده‌اند.</p>
               </div>
             )}
 

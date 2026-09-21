@@ -1,7 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
 import { isProjectManagerRole, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, type CompetencyAssessment, type DomainScore } from '../types'
+import { JOB_ROLE_LABEL_FA, type CompetencyAnswers, type CompetencyAssessment, type DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -84,16 +84,26 @@ interface CompetencyPrintReportProps {
    * component has no access to comp_question_bank itself, so it never recomputes these for a role
    * assessment and falls back to the fixed PM rubric only when both are omitted. */
   domainScoresOverride?: DomainScore[]
+  /** The official (panel-averaged) answers ResultsStage already resolved — used only for the PM
+   * completion count so it matches the on-screen page instead of recounting the lead's raw entry. */
+  answersOverride?: CompetencyAnswers
+  /** The official (panel-averaged) qualification scores ResultsStage already resolved. */
+  qualificationOverride?: {
+    educationScore: number | null
+    experienceScore: number | null
+    pmTrainingScore: number | null
+    pmCertificationScore: number | null
+  }
   roleRecommendation?: RoleRecommendation | null
 }
 
-export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, roleRecommendation }: CompetencyPrintReportProps) {
+export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, answersOverride, qualificationOverride, roleRecommendation }: CompetencyPrintReportProps) {
   const isPM = isProjectManagerRole(assessment.jobRole)
   const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
   const completion = isPM
-    ? computeCompletion(assessment.answers)
+    ? computeCompletion(answersOverride ?? assessment.answers)
     : { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
@@ -101,10 +111,10 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
   const panelAverage = submittedPanelPercents.length > 0 ? Math.round(submittedPanelPercents.reduce((a, b) => a + b, 0) / submittedPanelPercents.length) : null
 
   const qualificationChips = [
-    { label: 'مدرک تحصیلی', value: assessment.educationScore },
-    { label: 'سوابق کاری مرتبط', value: assessment.experienceScore },
-    { label: 'دوره‌های حرفه‌ای', value: assessment.pmTrainingScore },
-    { label: 'صلاحیت حرفه‌ای', value: assessment.pmCertificationScore },
+    { label: 'مدرک تحصیلی', value: qualificationOverride?.educationScore ?? assessment.educationScore },
+    { label: 'سوابق کاری مرتبط', value: qualificationOverride?.experienceScore ?? assessment.experienceScore },
+    { label: 'دوره‌های حرفه‌ای', value: qualificationOverride?.pmTrainingScore ?? assessment.pmTrainingScore },
+    { label: 'صلاحیت حرفه‌ای', value: qualificationOverride?.pmCertificationScore ?? assessment.pmCertificationScore },
     { label: 'نتایج مصاحبه', value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
   ]
 
@@ -227,9 +237,7 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
               </span>
             </div>
           ))}
-          <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>
-            امتیاز کلی بالای این گزارش، نظر نهایی مسئول ارزیابی است و با میانگین سادهٔ داوران یکسان نیست.
-          </p>
+          <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>امتیاز کلی بالای این گزارش میانگین امتیازات همهٔ داورانی است که ثبت نهایی کرده‌اند.</p>
         </div>
       )}
 

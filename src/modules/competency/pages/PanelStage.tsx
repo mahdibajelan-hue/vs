@@ -1,10 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, Layers, Plus, Shuffle, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
-import { useCompetencyStore } from '../store/useCompetencyStore'
+import {
+  Award,
+  Briefcase,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  GraduationCap,
+  Layers,
+  Plus,
+  Shuffle,
+  ShieldCheck,
+  ThumbsUp,
+  Trash2,
+  TrendingUp,
+  UserPlus,
+  Users,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { useCompetencyStore, type QualificationScoresInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
 import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompPanelGroup, type CompProfileLite, type JobRole } from '../types'
+import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompPanelGroup, type CompPanelistScore, type CompProfileLite, type JobRole } from '../types'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -43,6 +60,8 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const applyPanelGroup = useCompetencyStore((s) => s.applyPanelGroup)
   const setMyPanelistAnswer = useCompetencyStore((s) => s.setMyPanelistAnswer)
   const setMyPanelistCapstone = useCompetencyStore((s) => s.setMyPanelistCapstone)
+  const setMyPanelistQualificationScores = useCompetencyStore((s) => s.setMyPanelistQualificationScores)
+  const setMyPanelistStrengths = useCompetencyStore((s) => s.setMyPanelistStrengths)
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
@@ -71,6 +90,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
 
   const myScore = panelistScores.find((p) => p.panelistId === myId)
   const amPanelist = panelists.some((p) => p.userId === myId)
+  const canSubmitMyScore = Boolean(myScore?.strengths.trim()) && Boolean(myScore?.developmentAreas.trim())
 
   const availableProfiles = profiles.filter((p) => !panelists.some((pl) => pl.userId === p.id))
   const panelSize = assessment?.panelSize ?? 3
@@ -263,6 +283,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
               </p>
             )}
           </div>
+          <MyQualificationScorecard myScore={myScore} onChange={(patch) => setMyPanelistQualificationScores(assessmentId, patch)} />
           <ScoringGuideBanner />
           {isPM ? (
             <>
@@ -323,18 +344,29 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
               />
             ))
           )}
+          <MyStrengthsCard
+            key={myScore?.id ?? 'draft'}
+            myScore={myScore}
+            onSave={(strengths, developmentAreas) => setMyPanelistStrengths(assessmentId, strengths, developmentAreas)}
+          />
           <div className="flex items-center justify-end gap-2">
             {myScore?.submittedAt ? (
               <span className="flex items-center gap-1.5 rounded-xl bg-green-500/15 px-4 py-2 text-xs font-bold text-green-300">
                 <CheckCircle2 size={14} /> امتیاز شما ثبت نهایی شد
               </span>
             ) : (
-              <button
-                onClick={() => submitMyPanelistScore(assessmentId)}
-                className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
-              >
-                <Plus size={14} /> ثبت نهایی امتیاز من
-              </button>
+              <div className="flex flex-col items-end gap-1.5">
+                {!canSubmitMyScore && (
+                  <p className="text-[10.5px] text-amber-300">پیش از ثبت نهایی، نقاط قوت و زمینه‌های قابل بهبود را تکمیل کنید.</p>
+                )}
+                <button
+                  disabled={!canSubmitMyScore}
+                  onClick={() => submitMyPanelistScore(assessmentId)}
+                  className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus size={14} /> ثبت نهایی امتیاز من
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -494,6 +526,104 @@ function PanelGroupPicker({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+const QUALIFICATION_CHIP_CONFIG: { key: keyof QualificationScoresInput; icon: LucideIcon; label: string; color: string }[] = [
+  { key: 'educationScore', icon: GraduationCap, label: 'مدرک تحصیلی', color: '#a855f7' },
+  { key: 'experienceScore', icon: Briefcase, label: 'سوابق کاری مرتبط', color: '#38bdf8' },
+  { key: 'pmTrainingScore', icon: BookOpen, label: 'دوره‌های حرفه‌ای تخصصی', color: '#f59e0b' },
+  { key: 'pmCertificationScore', icon: Award, label: 'صلاحیت حرفه‌ای مرتبط', color: '#34d399' },
+]
+
+/** Every panelist's own qualification scorecard (item 4 of the fix batch) — previously only the
+ * lead ever saw/filled this, and it lived on the shared comp_assessments row; now each judge
+ * scores it independently on their own comp_panelist_scores row, and the final value shown in
+ * results is the panel's average. Colorful per-component cards so the card reads as inviting
+ * rather than another gray form. */
+function MyQualificationScorecard({ myScore, onChange }: { myScore: CompPanelistScore | undefined; onChange: (patch: QualificationScoresInput) => void }) {
+  const current: QualificationScoresInput = {
+    educationScore: myScore?.educationScore ?? null,
+    experienceScore: myScore?.experienceScore ?? null,
+    pmTrainingScore: myScore?.pmTrainingScore ?? null,
+    pmCertificationScore: myScore?.pmCertificationScore ?? null,
+  }
+
+  return (
+    <div className="glass-panel rounded-2xl p-3.5">
+      <p className="mb-2.5 text-xs font-bold">کارت امتیاز شایستگی (بر اساس سوابق و مدارک نامزد)</p>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        {QUALIFICATION_CHIP_CONFIG.map(({ key, icon: Icon, label, color }) => {
+          const value = current[key]
+          return (
+            <div key={key} className="rounded-xl border p-2.5" style={{ borderColor: `${color}35`, background: `linear-gradient(150deg, ${color}14, transparent 70%)` }}>
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-bold" style={{ color }}>
+                <Icon size={13} /> {label}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[0, 1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onChange({ ...current, [key]: value === s ? null : s })}
+                    className="num flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-bold transition-colors"
+                    style={{
+                      borderColor: value === s ? color : `${color}35`,
+                      background: value === s ? color : `${color}12`,
+                      color: value === s ? '#fff' : color,
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** Mandatory wrap-up for a panelist's own score sheet — strengths/development-areas must both be
+ * filled before "ثبت نهایی امتیاز من" is enabled (see canSubmitMyScore above). Keyed by myScore's
+ * id from the parent so local draft state resets cleanly once the fetched row actually arrives. */
+function MyStrengthsCard({ myScore, onSave }: { myScore: CompPanelistScore | undefined; onSave: (strengths: string, developmentAreas: string) => void }) {
+  const [strengths, setStrengths] = useState(myScore?.strengths ?? '')
+  const [developmentAreas, setDevelopmentAreas] = useState(myScore?.developmentAreas ?? '')
+
+  return (
+    <div className="glass-panel space-y-3 rounded-2xl border-amber-400/20 p-3.5">
+      <p className="flex items-center gap-1.5 text-xs font-bold">جمع‌بندی شما — تکمیل این بخش برای ثبت نهایی الزامی است</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 flex items-center gap-1.5 text-[11px] text-green-300">
+            <ThumbsUp size={12} /> نقاط قوت
+          </span>
+          <textarea
+            value={strengths}
+            onChange={(e) => setStrengths(e.target.value)}
+            onBlur={() => onSave(strengths, developmentAreas)}
+            rows={3}
+            className="input resize-none"
+            placeholder="نقاط قوت برجستهٔ نامزد از دید شما…"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 flex items-center gap-1.5 text-[11px] text-amber-300">
+            <TrendingUp size={12} /> زمینه‌های قابل بهبود
+          </span>
+          <textarea
+            value={developmentAreas}
+            onChange={(e) => setDevelopmentAreas(e.target.value)}
+            onBlur={() => onSave(strengths, developmentAreas)}
+            rows={3}
+            className="input resize-none"
+            placeholder="زمینه‌هایی که نیاز به توسعه دارند…"
+          />
+        </label>
+      </div>
     </div>
   )
 }

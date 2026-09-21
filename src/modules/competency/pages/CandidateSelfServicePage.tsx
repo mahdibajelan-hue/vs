@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, FileText, Loader2, Upload } from 'lucide-react'
+import { Camera, CheckCircle2, FileText, Loader2, Upload } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { uploadCompDocAsCandidate } from '../lib/compStorage'
+import { getCompDocSignedUrl } from '../lib/compStorage'
 import { ProfileForm } from '../components/ProfileForm'
+import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
 import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind } from '../types'
 
@@ -10,6 +12,7 @@ interface SelfServiceAttachment {
   id: string
   kind: string
   file_name: string
+  storage_path: string
   created_at: string
 }
 
@@ -32,6 +35,7 @@ interface SelfServiceRow {
   certifications: CandidateProfileInput['certifications']
   notable_projects: string
   self_service_status: string
+  photo_url: string | null
 }
 
 const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
@@ -54,6 +58,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [uploading, setUploading] = useState<AttachmentKind | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingKind, setPendingKind] = useState<AttachmentKind>('resume')
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoRef = useRef<HTMLInputElement>(null)
 
   // Re-fetched after every upload (not just once on mount) so the list on screen always reflects
   // what's actually saved — this used to be a plain unpersisted React array that reset to empty on
@@ -84,6 +91,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         const r = data[0] as SelfServiceRow
         setRow(r)
         if (r.self_service_status === 'submitted' || r.self_service_status === 'reviewed') setSubmitted(true)
+        if (r.photo_url) getCompDocSignedUrl(r.photo_url).then((u) => u && setPhotoPreview(u))
       })
     refreshAttachments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +122,16 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       return
     }
     setSubmitted(true)
+  }
+
+  const handlePhotoUpload = async (file: File) => {
+    setPhotoPreview(URL.createObjectURL(file))
+    setUploadingPhoto(true)
+    const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
+    if (path && !error) {
+      await supabase.rpc('comp_self_service_set_photo', { p_token: token, p_storage_path: path })
+    }
+    setUploadingPhoto(false)
   }
 
   const handleUpload = async (file: File) => {
@@ -201,6 +219,36 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           </div>
         )}
 
+        <div className="glass-panel flex items-center gap-3 rounded-2xl p-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5">
+            {photoPreview ? <img src={photoPreview} alt="" className="h-full w-full object-cover" /> : <Camera size={20} className="text-muted" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold">عکس پرسنلی</p>
+            <p className="mt-0.5 text-[10.5px] leading-5 text-muted">یک عکس پرسنلی واضح و رسمی بارگذاری کنید.</p>
+          </div>
+          <button
+            type="button"
+            disabled={uploadingPhoto}
+            onClick={() => photoRef.current?.click()}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-2 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-50"
+          >
+            {uploadingPhoto ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {uploadingPhoto ? 'در حال بارگذاری…' : 'بارگذاری عکس'}
+          </button>
+          <input
+            ref={photoRef}
+            type="file"
+            accept=".jpg,.jpeg,.png"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) handlePhotoUpload(f)
+              e.target.value = ''
+            }}
+          />
+        </div>
+
         <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode />
 
         <div className="glass-panel space-y-3 rounded-2xl p-4">
@@ -237,11 +285,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
             />
           </div>
           {attachments.length > 0 && (
-            <div className="space-y-1">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {attachments.map((a) => (
-                <p key={a.id} className="flex items-center gap-1.5 text-[11px] text-green-300">
-                  <CheckCircle2 size={12} /> {ATTACHMENT_KIND_LABEL_FA[a.kind as AttachmentKind] ?? a.kind} — <span dir="ltr">{a.file_name}</span>
-                </p>
+                <AttachmentPreviewCard key={a.id} kind={a.kind as AttachmentKind} fileName={a.file_name} storagePath={a.storage_path} />
               ))}
             </div>
           )}
