@@ -15,7 +15,7 @@ import { computeEvaluationStages } from '../lib/evaluationStages'
 import { EducationCards, EmploymentCards, CertificationCards } from '../components/CandidateCredentialCards'
 import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
-import { QualificationStage } from './QualificationStage'
+import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
 import { formatJalali } from '../../../lib/jalali'
 
@@ -36,21 +36,13 @@ interface AssessmentWizardPageProps {
   moduleNav?: Partial<Record<CompetencySection, () => void>>
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'qualification' | 'results'
-
-/** Maps an internal Stage onto one of the shared shell's six sidebar sections — 'qualification'
- * (the PM-only resume/certification scorecard) is a sub-step that lives under "ارزیابی" rather than
- * getting its own sidebar entry, since the module's navigation model has exactly six destinations. */
-function sectionForStage(stage: Stage): CompetencySection {
-  return stage === 'qualification' ? 'questions' : stage
-}
+type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'results'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
   panel: 'پنل مصاحبه‌گران',
   documents: 'بارگذاری مدارک',
   questions: 'ارزیابی',
-  qualification: 'ارزیابی',
   results: 'نتیجه',
 }
 
@@ -61,10 +53,16 @@ const SECTION_TITLE: Record<Stage, string> = {
  * the lead, so showing an interviewer the final-verdict screen would only hand them a form whose
  * every save fails.
  */
-const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'qualification', 'results']
+const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'results']
 const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
 
-/** Profile -> panel -> documents -> per-domain scored questions (+ capstone) -> qualification scorecard -> results flow for one assessment. */
+/**
+ * Profile -> panel -> documents -> questions flow for one assessment. For the project-manager
+ * role, "questions" itself opens on the qualification scorecard (education/experience/training/
+ * certification, judged from the candidate's record alone) before any domain is shown, and closes
+ * with the lead's strengths/development-areas summary after the capstone scenario — see
+ * QualificationScorecardCard / EvaluationSummaryCard below.
+ */
 export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew, moduleNav }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
@@ -103,7 +101,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
 
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
-  const stages = isLead ? (isPM ? LEAD_STAGES : LEAD_STAGES.filter((s) => s !== 'qualification')) : PANELIST_STAGES
+  const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
   // Opening a candidate from the dashboard always lands on their profile first — the natural
   // starting point before assembling the panel or scoring anything.
   const [stage, setStage] = useState<Stage | null>(null)
@@ -191,7 +189,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
 
   return (
     <CompetencySidebarShell
-      active={sectionForStage(activeStage)}
+      active={activeStage}
       nav={nav}
       title={`${SECTION_TITLE[activeStage]} — ${assessment.candidateName}`}
       stageStrip={evalStages}
@@ -351,6 +349,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       {activeStage === 'questions' && isPM && (
         <div className="space-y-3">
           <ScoringGuideBanner />
+          {domainIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
           {domain && (
             <div className="glass-panel rounded-2xl p-3.5">
               <div className="mb-2 flex items-center justify-between">
@@ -405,6 +404,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
             <CapstoneCard score={assessment.capstoneScore} note={assessment.capstoneNote} editable onChange={(score, note) => setCapstone(assessment.id, score, note)} />
           )}
 
+          {onCapstoneStep && <EvaluationSummaryCard assessment={assessment} />}
+
           <div className="flex items-center justify-between">
             <button
               disabled={domainIndex === 0}
@@ -421,15 +422,13 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                 {isLastDomain ? 'سناریوی پایانی' : 'حوزه بعد'} <ArrowLeft size={13} />
               </button>
             ) : (
-              <button onClick={() => setStage('qualification')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
-                کارت امتیاز شایستگی <ArrowLeft size={13} />
+              <button onClick={() => setStage('results')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+                مشاهده نتیجه <ArrowLeft size={13} />
               </button>
             )}
           </div>
         </div>
       )}
-
-      {activeStage === 'qualification' && <QualificationStage assessment={assessment} />}
     </CompetencySidebarShell>
   )
 }

@@ -5,24 +5,21 @@ import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
-interface QualificationStageProps {
+interface AssessmentCardProps {
   assessment: CompetencyAssessment
 }
 
 const SCORE_OPTIONS = [0, 1, 2, 3, 4, 5]
 
-/** Qualification scorecard: education, relevant experience, PM training, and professional certification (PMP etc) are each judged manually by the lead from the candidate's profile/documents; the interview score is auto-derived from the weighted domain average, never re-entered by hand. */
-export function QualificationStage({ assessment }: QualificationStageProps) {
+/**
+ * Qualification scorecard: education, relevant experience, PM training, and professional
+ * certification (PMP etc) are each judged manually by the lead from the candidate's
+ * profile/documents alone — shown at the very start of the evaluation questions, before any
+ * interview scoring, so the lead completes it first from the candidate's record.
+ */
+export function QualificationScorecardCard({ assessment }: AssessmentCardProps) {
   const setQualificationScores = useCompetencyStore((s) => s.setQualificationScores)
-  const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
-
-  const domainScores = computeDomainScores(assessment.answers)
-  const overallPercent = computeOverallPercent(domainScores)
-  const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
   const recommendedCoursesTaken = assessment.certifications.filter((c) => RECOMMENDED_PM_COURSES.includes(c.title.trim())).length
-
-  const [strengths, setStrengths] = useState(assessment.strengths)
-  const [developmentAreas, setDevelopmentAreas] = useState(assessment.developmentAreas)
 
   const set = (patch: Partial<Pick<CompetencyAssessment, 'educationScore' | 'experienceScore' | 'pmTrainingScore' | 'pmCertificationScore'>>) => {
     setQualificationScores(assessment.id, {
@@ -39,18 +36,12 @@ export function QualificationStage({ assessment }: QualificationStageProps) {
       <div className="glass-panel rounded-2xl p-4">
         <p className="mb-1 text-sm font-bold">کارت امتیاز شایستگی</p>
         <p className="text-[11px] leading-5 text-muted">
-          هر یک از چهار مؤلفه زیر را با مرور مدارک و پروفایل نامزد، از ۰ تا ۵ امتیاز دهید. امتیاز «نتایج مصاحبه» به‌صورت خودکار از میانگین وزنی حوزه‌های
-          مصاحبه محاسبه می‌شود و قابل ویرایش دستی نیست.
+          پیش از پاسخ‌دهی به سؤالات مصاحبه، هر یک از چهار مؤلفه زیر را با مرور مدارک و پروفایل نامزد، از ۰ تا ۵ امتیاز دهید.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <QualificationChip
-          icon={GraduationCap}
-          label="مدرک تحصیلی"
-          value={assessment.educationScore}
-          onChange={(v) => set({ educationScore: v })}
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <QualificationChip icon={GraduationCap} label="مدرک تحصیلی" value={assessment.educationScore} onChange={(v) => set({ educationScore: v })} />
         <QualificationChip
           icon={Briefcase}
           label="سوابق کاری مرتبط"
@@ -70,13 +61,34 @@ export function QualificationStage({ assessment }: QualificationStageProps) {
           value={assessment.pmCertificationScore}
           onChange={(v) => set({ pmCertificationScore: v })}
         />
-        <div className="glass-panel flex flex-col justify-between rounded-2xl p-3.5">
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
-            <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار)
-          </div>
-          <p className="num text-2xl font-extrabold text-purple-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
-          <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Final wrap-up, shown at the end of the evaluation questions (after the capstone scenario): the
+ * auto-derived interview score (weighted domain average — never hand-edited) alongside the lead's
+ * own narrative strengths/development-areas summary.
+ */
+export function EvaluationSummaryCard({ assessment }: AssessmentCardProps) {
+  const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
+
+  const domainScores = computeDomainScores(assessment.answers)
+  const overallPercent = computeOverallPercent(domainScores)
+  const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
+
+  const [strengths, setStrengths] = useState(assessment.strengths)
+  const [developmentAreas, setDevelopmentAreas] = useState(assessment.developmentAreas)
+
+  return (
+    <div className="space-y-3">
+      <div className="glass-panel flex flex-col justify-between rounded-2xl p-3.5 sm:max-w-xs">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
+          <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار)
         </div>
+        <p className="num text-2xl font-extrabold text-purple-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
+        <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
       </div>
 
       <div className="glass-panel space-y-3 rounded-2xl p-4">
