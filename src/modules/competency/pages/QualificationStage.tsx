@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { GraduationCap, Briefcase, BookOpen, Award, MessageSquareText, ThumbsUp, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent, RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import type { CompetencyAssessment } from '../types'
 
 interface AssessmentCardProps {
@@ -12,14 +11,14 @@ interface AssessmentCardProps {
 const SCORE_OPTIONS = [0, 1, 2, 3, 4, 5]
 
 /**
- * Qualification scorecard: education, relevant experience, PM training, and professional
- * certification (PMP etc) are each judged manually by the lead from the candidate's
- * profile/documents alone — shown at the very start of the evaluation questions, before any
- * interview scoring, so the lead completes it first from the candidate's record.
+ * Qualification scorecard: education, relevant experience, professional training, and
+ * professional certification are each judged manually by the lead from the candidate's
+ * profile/documents alone — shown at the very start of the evaluation questions (before any
+ * interview scoring) for every job role, so the lead completes it first from the candidate's
+ * record, same as the rest of the evaluation process.
  */
 export function QualificationScorecardCard({ assessment }: AssessmentCardProps) {
   const setQualificationScores = useCompetencyStore((s) => s.setQualificationScores)
-  const recommendedCoursesTaken = assessment.certifications.filter((c) => RECOMMENDED_PM_COURSES.includes(c.title.trim())).length
 
   const set = (patch: Partial<Pick<CompetencyAssessment, 'educationScore' | 'experienceScore' | 'pmTrainingScore' | 'pmCertificationScore'>>) => {
     setQualificationScores(assessment.id, {
@@ -50,14 +49,14 @@ export function QualificationScorecardCard({ assessment }: AssessmentCardProps) 
         />
         <QualificationChip
           icon={BookOpen}
-          label="دوره‌های حرفه‌ای مدیریت پروژه"
+          label="دوره‌های حرفه‌ای تخصصی"
           value={assessment.pmTrainingScore}
           onChange={(v) => set({ pmTrainingScore: v })}
-          hint={`${recommendedCoursesTaken.toLocaleString('fa-IR')} از ${RECOMMENDED_PM_COURSES.length.toLocaleString('fa-IR')} دورهٔ توصیه‌شده گذرانده‌شده`}
+          hint={`${assessment.certifications.length.toLocaleString('fa-IR')} گواهینامه/دوره در پروفایل ثبت‌شده`}
         />
         <QualificationChip
           icon={Award}
-          label="صلاحیت حرفه‌ای (PMP و مشابه)"
+          label="صلاحیت حرفه‌ای مرتبط"
           value={assessment.pmCertificationScore}
           onChange={(v) => set({ pmCertificationScore: v })}
         />
@@ -67,15 +66,14 @@ export function QualificationScorecardCard({ assessment }: AssessmentCardProps) 
 }
 
 /**
- * Final wrap-up, shown at the end of the evaluation questions (after the capstone scenario): the
- * auto-derived interview score (weighted domain average — never hand-edited) alongside the lead's
- * own narrative strengths/development-areas summary.
+ * Final wrap-up, shown at the end of the evaluation questions (after the last domain/section):
+ * the auto-derived interview score (weighted domain average — never hand-edited, computed by the
+ * caller with whichever scoring model this role uses) alongside the lead's own narrative
+ * strengths/development-areas summary.
  */
-export function EvaluationSummaryCard({ assessment }: AssessmentCardProps) {
+export function EvaluationSummaryCard({ assessment, overallPercent }: AssessmentCardProps & { overallPercent: number | null }) {
   const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
 
-  const domainScores = computeDomainScores(assessment.answers)
-  const overallPercent = computeOverallPercent(domainScores)
   const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
 
   const [strengths, setStrengths] = useState(assessment.strengths)

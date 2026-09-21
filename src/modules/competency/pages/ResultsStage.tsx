@@ -200,6 +200,12 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
       }
     })
 
+  // The panel's own average — distinct from `overall` above (the lead's final verdict) — so the
+  // report shows both numbers side by side instead of only the lead's figure with the panel's
+  // votes buried in a per-person list.
+  const submittedPanelPercents = panelSummary.filter((p) => p.submitted && p.overallPercent != null).map((p) => p.overallPercent as number)
+  const panelAverage = submittedPanelPercents.length > 0 ? Math.round(submittedPanelPercents.reduce((a, b) => a + b, 0) / submittedPanelPercents.length) : null
+
   const handlePrint = async () => {
     const node = printRef.current
     if (!node) return
@@ -386,7 +392,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 </div>
               </div>
 
-              <div className="glass-panel flex items-center justify-center rounded-2xl p-5">
+              <div className="glass-panel flex flex-col items-center justify-center gap-2 rounded-2xl p-5">
                 <div
                   className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
                   style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
@@ -398,6 +404,10 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                     <p className="text-[10px] text-muted">از ۱۰۰</p>
                   </div>
                 </div>
+                <p className="num text-center text-[10px] text-muted">
+                  {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سؤال پاسخ‌داده‌شده
+                  {completion.percent < 100 && <span className="text-amber-300"> — ارزیابی هنوز کامل نشده</span>}
+                </p>
               </div>
 
               <div className="glass-panel flex flex-col justify-between gap-3 rounded-2xl p-4" style={{ borderColor: `${statusColor}40` }}>
@@ -575,7 +585,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
               </div>
             </div>
 
-            {isPM && qualificationChips.some((c) => c.value != null) && (
+            {qualificationChips.some((c) => c.value != null) && (
               <div className="glass-panel rounded-2xl p-4">
                 <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -602,7 +612,13 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
 
             {panelSummary.length > 0 && (
               <div className="glass-panel space-y-2 rounded-2xl p-4">
-                <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-muted">میانگین امتیاز داوران:</span>
+                    <span className="num font-extrabold text-purple-300">{panelAverage != null ? `٪${panelAverage.toLocaleString('fa-IR')}` : '—'}</span>
+                  </span>
+                </div>
                 {panelSummary.map((p) => (
                   <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
                     <span className="text-secondary">{p.name}</span>

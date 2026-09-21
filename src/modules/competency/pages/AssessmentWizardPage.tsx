@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ArrowLeft, Pencil, Shuffle, User } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { COMPETENCY_DOMAINS, computeCompletion, questionsForDomain } from '../lib/competencyModel'
-import { isProjectManagerRole, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
+import { isProjectManagerRole, computeCategoryScores, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
 import { JOB_ROLE_LABEL_FA, type QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
@@ -147,6 +147,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
   const roleCompletion = computeRoleCompletion(roleQuestions, assessment.answers)
   const evalStages = computeEvaluationStages(assessment, isPM ? completion.percent : roleCompletion.percent, panelists.length, submittedScores.length)
+  const currentDomainScores = isPM ? computeDomainScores(assessment.answers) : computeCategoryScores(roleQuestions, assessment.answers)
+  const currentOverallPercent = computeOverallPercent(currentDomainScores)
   const currentRoleSection = ROLE_SECTIONS[roleSectionIndex]
   const roleSectionQuestions = roleQuestions.filter((q) => (currentRoleSection.types as string[]).includes(q.category))
   const isLastRoleSection = roleSectionIndex === ROLE_SECTIONS.length - 1
@@ -266,6 +268,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
 
       {activeStage === 'questions' && !isPM && (
         <div className="space-y-3">
+          {roleSectionIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
           {roleQuestions.length === 0 ? (
             <div className="glass-panel rounded-2xl p-6 text-center">
               <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{JOB_ROLE_LABEL_FA[assessment.jobRole]}») انتخاب نشده است.</p>
@@ -319,6 +322,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                   />
                 ))}
               </div>
+
+              {isLastRoleSection && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} />}
 
               <div className="flex items-center justify-between">
                 <button
@@ -404,7 +409,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
             <CapstoneCard score={assessment.capstoneScore} note={assessment.capstoneNote} editable onChange={(score, note) => setCapstone(assessment.id, score, note)} />
           )}
 
-          {onCapstoneStep && <EvaluationSummaryCard assessment={assessment} />}
+          {onCapstoneStep && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} />}
 
           <div className="flex items-center justify-between">
             <button

@@ -97,6 +97,9 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
     : { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
+  const submittedPanelPercents = panel.filter((p) => p.submitted && p.overallPercent != null).map((p) => p.overallPercent as number)
+  const panelAverage = submittedPanelPercents.length > 0 ? Math.round(submittedPanelPercents.reduce((a, b) => a + b, 0) / submittedPanelPercents.length) : null
+
   const qualificationChips = [
     { label: 'مدرک تحصیلی', value: assessment.educationScore },
     { label: 'سوابق کاری مرتبط', value: assessment.experienceScore },
@@ -161,7 +164,7 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
         </div>
       </div>
 
-      {isPM ? (
+      {qualificationChips.some((c) => c.value != null) && (
         <div style={{ marginBottom: 20 }}>
           <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>کارت امتیاز شایستگی</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
@@ -173,15 +176,15 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
             ))}
           </div>
         </div>
-      ) : (
-        roleRecommendation && (
-          <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
-            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800 }}>
-              {JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی: <span style={{ color: accent }}>{ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}</span>
-            </p>
-            {roleRecommendation.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, lineHeight: 1.7, color: '#b91c1c' }}>{roleRecommendation.reason}</p>}
-          </div>
-        )
+      )}
+
+      {!isPM && roleRecommendation && (
+        <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
+          <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800 }}>
+            {JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی: <span style={{ color: accent }}>{ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}</span>
+          </p>
+          {roleRecommendation.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, lineHeight: 1.7, color: '#b91c1c' }}>{roleRecommendation.reason}</p>}
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 24, marginBottom: 20, alignItems: 'flex-start' }}>
@@ -209,7 +212,13 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
 
       {panel.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>پنل مصاحبه‌گران</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800 }}>پنل مصاحبه‌گران</p>
+            <p style={{ margin: 0, fontSize: 10.5 }}>
+              میانگین امتیاز داوران:{' '}
+              <span style={{ fontWeight: 800, color: accent }}>{panelAverage != null ? `٪${panelAverage.toLocaleString('fa-IR')}` : '—'}</span>
+            </p>
+          </div>
           {panel.map((p) => (
             <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, borderBottom: `1px solid ${line}` }}>
               <span style={{ color: sub }}>{p.name}</span>
