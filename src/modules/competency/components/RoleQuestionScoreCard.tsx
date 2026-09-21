@@ -22,9 +22,10 @@ interface RoleQuestionScoreCardProps {
 
 /**
  * The DB-backed question-bank equivalent of QuestionScoreCard, implementing spec §17's judge
- * panel: the candidate's own answer is recorded first; the reference answer (key points,
- * excellent-answer indicators, common mistakes, standard) stays hidden behind a "نمایش پاسخ مرجع"
- * button until then, so it never biases what the evaluator writes down for the candidate's answer.
+ * panel: the reference answer (key points, excellent-answer indicators, common mistakes,
+ * standard) sits behind a "نمایش پاسخ مرجع" toggle so it doesn't clutter the card by default, but
+ * an evaluator can open it at any time — including right when the question is asked, before the
+ * candidate's answer is typed in — since that's exactly when they need it to score confidently.
  */
 export function RoleQuestionScoreCard({ index, question: q, answer, editable, onChange, panelVotes }: RoleQuestionScoreCardProps) {
   const score = answer?.score ?? null
@@ -37,7 +38,6 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
   const diverged = panelVotes ? hasPanelDivergence(panelVotes.map((v) => v.score)) : false
 
   const criteria = score != null ? SCORE_GUIDE.find((g) => g.score === score)?.criteria : null
-  const canReveal = candidateAnswer.trim().length > 0
 
   return (
     <div className="rounded-xl border-[1.5px] border-white/15 bg-white/[0.02] p-3.5 shadow-sm">
@@ -71,10 +71,8 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
 
       <button
         type="button"
-        disabled={!canReveal}
         onClick={() => setRevealed((r) => !r)}
-        title={!canReveal ? 'ابتدا پاسخ متقاضی را ثبت کنید' : ''}
-        className="mt-2 flex items-center gap-1.5 rounded-lg border border-purple-400/25 bg-purple-500/10 px-2.5 py-1.5 text-[10.5px] font-bold text-purple-200 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-2 flex items-center gap-1.5 rounded-lg border border-purple-400/25 bg-purple-500/10 px-2.5 py-1.5 text-[10.5px] font-bold text-purple-200 hover:bg-purple-500/20"
       >
         <BookOpenCheck size={12} /> {revealed ? 'پنهان‌کردن پاسخ مرجع' : 'نمایش پاسخ مرجع'}
         {revealed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
