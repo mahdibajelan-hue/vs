@@ -145,6 +145,11 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   }
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
+  // PM's fixed rubric questions are seeded into the bank verbatim so the lead can reveal the same
+  // reference-answer material every other role already has — matched by exact question text. Not
+  // memoized: this runs after the early returns above, so a hook here would violate hook-order
+  // rules when activeStage flips to 'results'.
+  const pmBankByText = new Map(questionBank.filter((q) => q.jobRole === 'project_manager').map((q) => [q.questionText, q]))
   const roleCompletion = computeRoleCompletion(roleQuestions, assessment.answers)
   const evalStages = computeEvaluationStages(assessment, isPM ? completion.percent : roleCompletion.percent, panelists.length, submittedScores.length)
   const currentDomainScores = isPM ? computeDomainScores(assessment.answers) : computeCategoryScores(roleQuestions, assessment.answers)
@@ -402,6 +407,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                   editable
                   onChange={(score, note) => setAnswer(assessment.id, q.key, score, note)}
                   panelVotes={panelVotesByQuestion.get(q.key)}
+                  bankItem={pmBankByText.get(q.text)}
                 />
               ))}
             </div>

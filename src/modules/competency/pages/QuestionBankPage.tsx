@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Lock, Pencil, Plus, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Pencil, Plus, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
 import { useCompetencyStore, type QuestionBankInput } from '../store/useCompetencyStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { COMPETENCY_DOMAINS, questionsForDomain } from '../lib/competencyModel'
 import {
   JOB_ROLES,
   JOB_ROLE_LABEL_FA,
@@ -18,7 +17,9 @@ import {
 const QUESTION_TYPES: QuestionType[] = ['GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED']
 const DIFFICULTIES: QuestionDifficulty[] = ['L1', 'L2', 'L3', 'L4']
 
-const EDITABLE_ROLES = JOB_ROLES.filter((r) => r !== 'project_manager')
+// Project Manager's questions now live in this same DB-backed bank too (seeded once from the
+// fixed rubric's exact wording) — every role is editable here identically, none is special-cased.
+const EDITABLE_ROLES = JOB_ROLES
 
 const EMPTY_INPUT: QuestionBankInput = {
   jobRole: 'welding_inspector',
@@ -90,9 +91,7 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
     return map
   }, [questionBank])
 
-  const isPmView = roleFilter === 'project_manager'
-
-  const headerRight = !isPmView && (
+  const headerRight = (
     <button
       onClick={() => setEditing('new')}
       className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
@@ -106,17 +105,6 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
       <p className="-mt-2 text-xs text-muted">مدیریت سؤالات تخصصی هر شغل — پاسخ مرجع، معیار امتیازدهی، سطح دشواری و وضعیت فعال/غیرفعال</p>
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
-        <button
-          onClick={() => setRoleFilter(isPmView ? 'all' : 'project_manager')}
-          className={`rounded-xl border p-2 text-right transition-colors ${
-            isPmView ? 'border-amber-400/50 bg-amber-500/15' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
-          }`}
-        >
-          <p className="flex items-center gap-1 truncate text-[10px] font-bold">
-            <Lock size={9} className="text-amber-300" /> {JOB_ROLE_LABEL_FA.project_manager}
-          </p>
-          <p className="num text-[10px] text-muted">{COMPETENCY_DOMAINS.reduce((n, d) => n + questionsForDomain(d.key).length, 0).toLocaleString('fa-IR')} سؤال ثابت</p>
-        </button>
         {EDITABLE_ROLES.map((role) => {
           const c = countsByRole.get(role)
           return (
@@ -136,30 +124,7 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
         })}
       </div>
 
-      {isPmView ? (
-        <div className="space-y-3">
-          <div className="glass-panel flex items-start gap-2 rounded-2xl border-amber-400/20 p-3.5 text-[11px] leading-6 text-secondary">
-            <Lock size={14} className="mt-0.5 shrink-0 text-amber-300" />
-            سؤالات مدیر پروژه یک روبریک ثابت و از پیش تعریف‌شده در کد سامانه هستند (نه بانک سؤالات پایگاه‌داده) — به همین دلیل در این صفحه قابل ویرایش، غیرفعال‌سازی یا
-            حذف نیستند؛ فقط برای مشاهده در اینجا فهرست شده‌اند.
-          </div>
-          {COMPETENCY_DOMAINS.map((domain) => (
-            <div key={domain.key} className="glass-panel rounded-xl p-3.5">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold">
-                {domain.title} <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">٪{domain.weight}</span>
-              </p>
-              <div className="space-y-2">
-                {questionsForDomain(domain.key).map((q) => (
-                  <p key={q.key} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5 text-xs leading-6">
-                    {q.text}
-                  </p>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
+      <>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
@@ -247,8 +212,7 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
               ))}
             </div>
           )}
-        </>
-      )}
+      </>
 
       {editing && (
         <QuestionEditorModal

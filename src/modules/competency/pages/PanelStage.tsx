@@ -98,6 +98,12 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const suggestedGroups = panelGroups.filter((g) => g.jobRole == null || g.jobRole === assessment?.jobRole)
 
   const roleQuestions = useMemo(() => (assessment && !isPM ? questionsForAssessment(assessment, questionBank) : []), [assessment, isPM, questionBank])
+  // PM's fixed rubric questions are seeded into the bank verbatim so a panelist can reveal the
+  // same reference-answer material every other role already has — matched by exact question text.
+  const pmBankByText = useMemo(
+    () => new Map(questionBank.filter((q) => q.jobRole === 'project_manager').map((q) => [q.questionText, q])),
+    [questionBank],
+  )
 
   const submittedScores = panelistScores.filter((p) => p.submittedAt)
   const averageDomainScores = useMemo(() => {
@@ -299,6 +305,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
                       answer={myScore?.answers[q.key]}
                       editable
                       onChange={(score, note) => setMyPanelistAnswer(assessmentId, q.key, score, note)}
+                      bankItem={pmBankByText.get(q.text)}
                     />
                   ))}
                 </div>
