@@ -60,6 +60,13 @@ import {
 import { uploadCompDoc } from '../lib/compStorage'
 import { pickDiverseQuestions } from '../lib/questionSelection'
 
+// Fire-and-forget audit logging (spec section 31) — never blocks or fails the primary action it
+// documents; comp_log_audit is a security-definer RPC any authenticated user may call, so this
+// never needs its own error handling beyond "don't let it throw into the caller".
+function logAudit(action: string, entityType: string, entityId: string | null, previous: unknown, next: unknown) {
+  supabase.rpc('comp_log_audit', { p_action: action, p_entity_type: entityType, p_entity_id: entityId, p_previous: previous, p_new: next }).then()
+}
+
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
@@ -465,6 +472,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       updatedAt: now,
     }
     set({ assessments: [created, ...get().assessments] })
+    logAudit('ASSESSMENT_CREATED', 'comp_assessments', id, null, { candidateName: profile.candidateName, jobRole: profile.jobRole })
     return created.id
   },
 
@@ -559,9 +567,11 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   setStatus: async (id, status) => {
+    const previousStatus = get().assessments.find((a) => a.id === id)?.status ?? null
     const { error } = await supabase.from('comp_assessments').update({ status }).eq('id', id)
     if (reportError('بروزرسانی وضعیت ارزیابی', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, status } : a)) })
+    if (status === 'completed') logAudit('ASSESSMENT_FINALIZED', 'comp_assessments', id, { status: previousStatus }, { status })
   },
 
   setApproved: async (id, approved) => {
@@ -646,6 +656,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({
       panelists: [...get().panelists.map((p) => (isLead && p.assessmentId === assessmentId ? { ...p, isLead: false } : p)), created],
     })
+    logAudit('JUDGE_ASSIGNED', 'comp_panelists', assessmentId, null, { userId, isLead })
   },
 
   removePanelist: async (id) => {
@@ -828,6 +839,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       row: { submitted_at: now },
       local: { submittedAt: now },
     }))
+    logAudit('SCORE_SUBMITTED', 'comp_panelist_scores', assessmentId, null, { submittedAt: now })
   },
 
   fetchAttachments: async (assessmentId) => {
@@ -919,6 +931,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       updatedAt: now,
     }
     set({ questionBank: [created, ...get().questionBank] })
+    logAudit('QUESTION_CREATED', 'comp_question_bank', id, null, { jobRole: input.jobRole, category: input.category, questionText: input.questionText })
   },
 
   // Editing never mutates the existing row in place — it inserts a brand-new version row (same
@@ -972,6 +985,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({
       questionBank: [created, ...previous.map((q) => (q.id === id ? { ...q, supersededBy: newId, active: false, updatedAt: now } : q))],
     })
+    logAudit('QUESTION_EDITED', 'comp_question_bank', id, { version: old.version }, { newQuestionId: newId, version: old.version + 1 })
   },
 
   setQuestionActive: async (id, active) => {
@@ -1043,6 +1057,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       // next time, never a reason to roll back the assessment's actual question selection above.
       await supabase.rpc('comp_increment_question_usage', { p_ids: selected })
     }
+    logAudit('QUESTION_GENERATED', 'comp_assessments', assessmentId, null, { jobRole, count: selected.length })
   },
 
   fetchAssessmentTemplates: async () => {
