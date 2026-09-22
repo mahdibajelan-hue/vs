@@ -265,6 +265,7 @@ export interface CompQuestionBankRow {
   question_group_id: string
   version: number | null
   superseded_by: string | null
+  usage_count: number | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -293,6 +294,7 @@ export function compQuestionBankFromRow(r: CompQuestionBankRow): CompQuestionBan
     questionGroupId: r.question_group_id ?? r.id,
     version: r.version ?? 1,
     supersededBy: r.superseded_by,
+    usageCount: r.usage_count ?? 0,
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -345,6 +347,7 @@ export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): Com
     questionGroupId: r.question_group_id ?? r.id,
     version: r.version ?? 1,
     supersededBy: null,
+    usageCount: 0,
     createdBy: null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

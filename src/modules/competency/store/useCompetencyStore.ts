@@ -52,6 +52,7 @@ import {
   type ProfileLiteRow,
 } from '../lib/competencyData'
 import { uploadCompDoc } from '../lib/compStorage'
+import { pickDiverseQuestions } from '../lib/questionSelection'
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
@@ -883,6 +884,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       questionGroupId: id,
       version: 1,
       supersededBy: null,
+      usageCount: 0,
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -933,6 +935,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       questionGroupId: old.questionGroupId,
       version: old.version + 1,
       supersededBy: null,
+      usageCount: 0,
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -981,26 +984,42 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   // has fewer than requested — the designer's own availability-check step is what should have
   // caught that beforehand). Replaces the old fixed hardcoded target counts entirely.
   assignQuestionsFromMix: async (assessmentId, jobRole, mix) => {
-    let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active)
+    let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active && q.approvalStatus === 'APPROVED')
     if (bank.length === 0) {
-      const { data, error } = await supabase.from('comp_question_bank').select('*').eq('job_role', jobRole).eq('active', true)
+      const { data, error } = await supabase
+        .from('comp_question_bank')
+        .select('*')
+        .eq('job_role', jobRole)
+        .eq('active', true)
+        .eq('approval_status', 'APPROVED')
       if (reportError('بارگذاری بانک سؤالات', error)) return
       bank = ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow)
     }
-    const pickRandom = (pool: CompQuestionBankItem[], n: number) => {
-      const shuffled = [...pool].sort(() => Math.random() - 0.5)
-      return shuffled.slice(0, n)
-    }
-    const selected = mix
+    // Cross-cell running list of already-picked question texts, so the similarity check also
+    // catches a near-duplicate landing in two different category/difficulty cells, not just within
+    // the same cell.
+    const pickedTexts: string[] = []
+    const selectedItems = mix
       .filter((cell) => cell.count > 0)
-      .flatMap((cell) => pickRandom(bank.filter((q) => q.category === cell.category && q.difficulty === cell.difficulty), cell.count))
-      .map((q) => q.id)
+      .flatMap((cell) => {
+        const pool = bank.filter((q) => q.category === cell.category && q.difficulty === cell.difficulty)
+        const picked = pickDiverseQuestions(pool, cell.count, pickedTexts)
+        pickedTexts.push(...picked.map((q) => q.questionText))
+        return picked
+      })
+    const selected = selectedItems.map((q) => q.id)
     const current = get().assessments.find((a) => a.id === assessmentId)
     if (!current) return
     set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? { ...a, selectedQuestionIds: selected } : a)) })
     const { error } = await supabase.from('comp_assessments').update({ selected_question_ids: selected }).eq('id', assessmentId)
     if (reportError('تولید آزمون از روی طرح سؤال', error)) {
       set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
+      return
+    }
+    if (selected.length > 0) {
+      // Best-effort — a failure here only means the "previous usage" preference is slightly stale
+      // next time, never a reason to roll back the assessment's actual question selection above.
+      await supabase.rpc('comp_increment_question_usage', { p_ids: selected })
     }
   },
 

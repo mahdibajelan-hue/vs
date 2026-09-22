@@ -5477,3 +5477,23 @@ create policy "comp_assessment_templates_select_authenticated" on comp_assessmen
 drop policy if exists "comp_assessment_templates_write_designer" on comp_assessment_templates;
 create policy "comp_assessment_templates_write_designer" on comp_assessment_templates
   for all using (comp_is_assessment_designer()) with check (comp_is_assessment_designer());
+
+-- ----------------------------------------------------------------------------
+-- Section 34: Competency Assessment Engine v2.0 — Random Question Engine
+-- (spec section 8/9): track how many times each question has been drawn
+-- into a generated assessment, so future generation can prefer under-used
+-- questions over ones that keep coming up ("Previous Usage" control).
+-- comp_increment_question_usage is a narrow, low-risk RPC (bumping a
+-- counter can't leak or corrupt anything sensitive) open to any
+-- authenticated user, the same "low-risk single-purpose RPC" pattern as
+-- comp_set_photo — a plain panelist/lead triggering generation has no
+-- general UPDATE grant on comp_question_bank (admin-only), so a dedicated
+-- RPC is needed rather than a direct table write.
+-- ----------------------------------------------------------------------------
+
+alter table comp_question_bank add column if not exists usage_count int not null default 0;
+
+create or replace function comp_increment_question_usage(p_ids uuid[])
+returns void as $$
+  update comp_question_bank set usage_count = usage_count + 1 where id = any(p_ids) and auth.uid() is not null;
+$$ language sql security definer;

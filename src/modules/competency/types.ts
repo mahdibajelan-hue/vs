@@ -209,6 +209,10 @@ export interface CompQuestionBankItem {
    * with supersededBy set is historical only, kept so past assessment snapshots keep resolving to
    * the exact wording/reference-answer that was actually used. */
   supersededBy: string | null
+  /** How many times this exact question has been drawn into a generated assessment (spec section
+   * 8's "Previous Usage" control) — selection prefers lower values so the same handful of
+   * questions don't keep coming up. */
+  usageCount: number
   createdBy: string | null
   createdAt: string
   updatedAt: string
