@@ -111,8 +111,11 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
-  const questionBank = useCompetencyStore((s) => s.questionBank)
-  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  // Category/weight/text-only classification, not the evaluator-only reference-answer material —
+  // this page must keep working for any evaluator viewing any candidate's finished results, not
+  // just that candidate's own panelists (see the access-scoped comp_question_bank RLS policy).
+  const questionBank = useCompetencyStore((s) => s.questionBankPublic)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const compareRef = useRef<HTMLDivElement>(null)

@@ -5190,4 +5190,251 @@ returns table (id uuid, kind text, file_name text, storage_path text, created_at
   order by att.created_at desc;
 $$ language sql security definer stable;
 
+-- ----------------------------------------------------------------------------
+-- Section 31: Competency Assessment Engine v2.0 — Question Bank architecture.
+--
+-- 1. Three more question types (BEHAVIORAL/HSE/JUDGMENT) alongside the
+--    existing seven, matching the full question-type vocabulary the module
+--    now needs to classify HSE/behavioral/judgment questions distinctly
+--    instead of forcing them into SCENARIO or GENERAL.
+-- 2. weight: per-question weight within its category, for future weighted
+--    scoring (defaults to 1 = no change to today's unweighted average).
+-- 3. approval_status: every row an admin authors directly is auto-APPROVED
+--    (today's behavior, unchanged); non-admin question *proposals* (a later
+--    phase) will land as PENDING_REVIEW instead of writing the bank directly.
+-- 4. Versioning: question_group_id ties every edit of "the same question"
+--    together; version increments and superseded_by chains old -> new on
+--    every edit. Editing NEVER mutates a row in place any more (see the
+--    application-side updateQuestion, which now inserts a new version row) —
+--    so an assessment's frozen selected_question_ids always keeps pointing
+--    at the exact wording/reference-answer that was actually used, even
+--    after an admin later corrects the question. Existing rows are
+--    backfilled as version 1 of their own group (self-referencing).
+-- 5. comp_job_role_config: per-job-role list of allowed question types (spec
+--    section 3) — a small config table rather than touching the JobRole
+--    TypeScript union, since no new job roles are needed right now and every
+--    existing role already has a live question bank.
+-- 6. Question Bank read access is narrowed from "every authenticated user"
+--    to: admin/assessment-designer (full bank, any role), or an evaluator
+--    who can access a *live* (not yet completed) assessment and only for
+--    that assessment's own frozen question selection (or, for the
+--    project_manager fixed rubric, any of their own live PM assessments,
+--    since PM's question set is identical and fixed for every candidate).
+--    A completed assessment's questions/reference-answers stop being
+--    visible to its panelists entirely — only admin/designer/report-viewer
+--    (see Section 32) can still see them, matching spec section 10/24.
+--    Existing app code already renders bank lookups as optional
+--    (`bankItem?: CompQuestionBankItem`), so a row simply not coming back
+--    degrades to "no reveal panel shown" rather than breaking anything.
+-- ----------------------------------------------------------------------------
+
+alter table comp_question_bank drop constraint if exists comp_question_bank_category_check;
+alter table comp_question_bank add constraint comp_question_bank_category_check
+  check (category in ('GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED', 'BEHAVIORAL', 'HSE', 'JUDGMENT'));
+
+alter table comp_question_bank add column if not exists weight numeric not null default 1 check (weight > 0);
+alter table comp_question_bank add column if not exists approval_status text not null default 'APPROVED'
+  check (approval_status in ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_REVISION'));
+alter table comp_question_bank add column if not exists question_group_id uuid;
+alter table comp_question_bank add column if not exists version int not null default 1;
+alter table comp_question_bank add column if not exists superseded_by uuid references comp_question_bank (id);
+
+update comp_question_bank set question_group_id = id where question_group_id is null;
+alter table comp_question_bank alter column question_group_id set not null;
+alter table comp_question_bank alter column question_group_id set default gen_random_uuid();
+
+create index if not exists idx_comp_question_bank_group on comp_question_bank (question_group_id);
+create index if not exists idx_comp_question_bank_approval on comp_question_bank (approval_status);
+
+create table if not exists comp_job_role_config (
+  job_role text primary key,
+  allowed_question_types jsonb not null default
+    '["GENERAL","TECHNICAL","SCENARIO","PROBLEM_SOLVING","EXPERIENCE_BASED","CASE_STUDY","IMAGE_BASED","BEHAVIORAL","HSE","JUDGMENT"]'::jsonb,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_job_role_config enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_job_role_config;
+create trigger trg_set_updated_at before update on comp_job_role_config
+  for each row execute function set_updated_at_and_by();
+
+insert into comp_job_role_config (job_role) values
+  ('project_manager'), ('welding_inspector'), ('mechanical_piping_inspector'), ('pipeline_inspector'),
+  ('coating_cp_inspector'), ('radiography_interpreter'), ('civil_engineer'), ('project_control_specialist'),
+  ('hse_specialist'), ('contracts_specialist'), ('site_supervisor'), ('inspection_body_supervisor')
+on conflict (job_role) do nothing;
+
+drop policy if exists "comp_job_role_config_select_authenticated" on comp_job_role_config;
+create policy "comp_job_role_config_select_authenticated" on comp_job_role_config
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_job_role_config_write_admin" on comp_job_role_config;
+create policy "comp_job_role_config_write_admin" on comp_job_role_config
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+-- comp_question_bank_public: a safe, non-sensitive projection (no reference_answer, key_points,
+-- excellent_answer_indicators, common_mistakes or standard_reference — the evaluator-only advisory
+-- content the rest of this section restricts) that ANY authenticated user may call regardless of
+-- panelist status or assessment completion. The cross-role dashboard and reports pages (spec
+-- sections irrelevant here — this predates this rewrite) only ever need a question's category/
+-- weight/text to bucket an *already-recorded* score into a domain, never the advisory material — so
+-- they read this function instead of the now-restricted comp_question_bank table directly, keeping
+-- "every evaluator sees every candidate's aggregate scores" working exactly as before. security
+-- definer so it can read past the table's row-level policy, same technique as every other
+-- comp_self_service_* / comp_can_access_assessment function above.
+create or replace function comp_question_bank_public()
+returns table (
+  id uuid, job_role text, category text, sub_category text, difficulty text,
+  question_text text, image_url text, weight numeric, question_group_id uuid,
+  version int, active boolean, created_at timestamptz, updated_at timestamptz
+) as $$
+  select id, job_role, category, sub_category, difficulty, question_text, image_url, weight,
+         question_group_id, version, active, created_at, updated_at
+  from comp_question_bank
+  where auth.uid() is not null;
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 32: Competency Assessment Engine v2.0 — RBAC, built on the existing
+-- generic rasta_modules/rasta_roles/rasta_permissions framework (already used
+-- by other modules) instead of a parallel comp-specific role table.
+--
+-- ADMIN            = comp_is_module_admin() (unchanged, existing concept).
+-- ASSESSMENT_DESIGNER = rasta permission 'competency'/'configure' — full
+--   question-bank read (needed to preview/build question mixes) but never a
+--   write grant on comp_question_bank itself.
+-- REPORT_VIEWER    = rasta permission 'competency'/'view' — read-only access
+--   layered on top of whatever a plain authenticated user already sees;
+--   comp_assessments stays visible to every authenticated user as decided in
+--   Section 29, so this role currently only matters for future,
+--   report-scoped policies (e.g. once/if that broad visibility is narrowed).
+-- JUDGE            = unchanged: being an assigned comp_panelists row on a
+--   specific assessment already scopes exactly what the spec calls "Judge"
+--   access — no new global role needed for it.
+-- CANDIDATE        = unchanged: the token-based self-service link, which
+--   never authenticates and never touches comp_question_bank at all.
+-- ----------------------------------------------------------------------------
+
+insert into rasta_modules (key, label_fa) values ('competency', 'ارزیابی شایستگی')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+where m.key = 'competency'
+on conflict (module_key, action) do nothing;
+
+insert into rasta_roles (name, description, is_system)
+values
+  ('ASSESSMENT_DESIGNER', 'طراحی آزمون شایستگی: تعریف ترکیب سؤال و تولید آزمون — بدون دسترسی ویرایش بانک سؤالات', true),
+  ('REPORT_VIEWER', 'مشاهده گزارش‌های نهایی‌شده ارزیابی شایستگی', true)
+on conflict (name) do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'competency' and p.action in ('view', 'create', 'configure')
+where r.name = 'ASSESSMENT_DESIGNER'
+on conflict do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'competency' and p.action in ('view', 'export')
+where r.name = 'REPORT_VIEWER'
+on conflict do nothing;
+
+create or replace function comp_is_assessment_designer()
+returns boolean as $$
+  select comp_is_module_admin() or rasta_has_permission(auth.uid(), 'competency', 'configure');
+$$ language sql security definer stable;
+
+create or replace function comp_is_report_viewer()
+returns boolean as $$
+  select comp_is_module_admin() or comp_is_assessment_designer() or rasta_has_permission(auth.uid(), 'competency', 'view');
+$$ language sql security definer stable;
+
+-- The security-critical piece: replace "any authenticated user may read the whole bank" with the
+-- scoped rule described in Section 31's header comment above.
+drop policy if exists "comp_question_bank_select_authenticated" on comp_question_bank;
+drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
+create policy "comp_question_bank_select_scoped" on comp_question_bank
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or exists (
+      select 1 from comp_assessments a
+      where a.status <> 'completed'
+        and a.job_role = comp_question_bank.job_role
+        and (
+          -- The lead of a live assessment for this role can browse the whole role's bank (needed
+          -- to actually generate/re-generate that assessment's random question selection).
+          comp_is_lead(a.id)
+          -- An ordinary panelist only sees the exact rows already frozen into that one
+          -- assessment's snapshot (or, for project_manager, any live PM assessment they're on —
+          -- the fixed rubric is identical for every PM candidate so there's no extra row-level
+          -- selection to scope by).
+          or (
+            comp_can_access_assessment(a.id)
+            and (a.job_role = 'project_manager' or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text))
+          )
+        )
+    )
+  );
+
 grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;
+
+-- rasta_user_roles is a sitewide table gated to GLOBAL admins only (is_admin_user()), but the
+-- Competency module's Settings page is meant to be usable by a comp_module_admin who may not be a
+-- global admin. Rather than broadening the generic rasta_user_roles policy (which would let a
+-- comp-only admin touch every other module's role grants too), these two narrow RPCs let a module
+-- admin manage exactly the two roles this module cares about, the same "narrow SECURITY DEFINER
+-- RPC" pattern as comp_set_photo/comp_self_service_* elsewhere in this schema.
+
+create or replace function comp_grant_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('ASSESSMENT_DESIGNER', 'REPORT_VIEWER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    raise exception 'role not found';
+  end if;
+  insert into rasta_user_roles (user_id, role_id, created_by)
+  values (p_user_id, v_role_id, auth.uid())
+  on conflict (user_id, role_id) do nothing;
+end;
+$$ language plpgsql security definer;
+
+create or replace function comp_revoke_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    return;
+  end if;
+  delete from rasta_user_roles where user_id = p_user_id and role_id = v_role_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function comp_list_role_assignments(p_role_name text)
+returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
+  select ur.user_id, ur.created_by, ur.created_at
+  from rasta_user_roles ur
+  join rasta_roles r on r.id = ur.role_id
+  where r.name = p_role_name and comp_is_module_admin();
+$$ language sql security definer stable;

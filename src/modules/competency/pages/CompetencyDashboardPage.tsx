@@ -22,8 +22,12 @@ interface CompetencyDashboardPageProps {
 export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: CompetencyDashboardPageProps) {
   const assessments = useCompetencyStore((s) => s.assessments)
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
-  const questionBank = useCompetencyStore((s) => s.questionBank)
-  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  // The dashboard only ever needs a question's category/weight to bucket an already-recorded score
+  // into a domain — never the evaluator-only reference-answer material — so it reads the safe
+  // public projection (visible for every candidate regardless of panelist status) rather than the
+  // now access-restricted full bank.
+  const questionBank = useCompetencyStore((s) => s.questionBankPublic)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')

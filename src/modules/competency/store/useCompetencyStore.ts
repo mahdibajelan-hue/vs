@@ -9,12 +9,14 @@ import type {
   CertificationEntry,
   CompAttachment,
   CompetencyAssessment,
+  CompJobRoleConfig,
   CompModuleAdmin,
   CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
   CompQuestionBankItem,
+  CompRoleAssignment,
   EducationEntry,
   EmploymentEntry,
   JobRole,
@@ -24,19 +26,25 @@ import type {
 import {
   compAssessmentFromRow,
   compAttachmentFromRow,
+  compJobRoleConfigFromRow,
   compModuleAdminFromRow,
   compPanelGroupFromRow,
   compPanelistFromRow,
   compPanelistScoreFromRow,
   compQuestionBankFromRow,
+  compQuestionBankPublicFromRow,
+  compRoleAssignmentFromRow,
   profileLiteFromRow,
   type CompAssessmentRow,
   type CompAttachmentRow,
+  type CompJobRoleConfigRow,
   type CompModuleAdminRow,
   type CompPanelGroupRow,
   type CompPanelistRow,
   type CompPanelistScoreRow,
+  type CompQuestionBankPublicRow,
   type CompQuestionBankRow,
+  type CompRoleAssignmentRow,
   type ProfileLiteRow,
 } from '../lib/competencyData'
 import { uploadCompDoc } from '../lib/compStorage'
@@ -178,6 +186,9 @@ export interface QuestionBankInput {
   standardReference: string
   evaluatorNoteRequired: boolean
   active: boolean
+  /** Relative weight within its category — defaults to 1 in every existing caller/form until the
+   * Question Bank UI exposes an explicit control for it. */
+  weight: number
 }
 
 function questionBankToRowPayload(q: QuestionBankInput) {
@@ -195,6 +206,7 @@ function questionBankToRowPayload(q: QuestionBankInput) {
     standard_reference: q.standardReference,
     evaluator_note_required: q.evaluatorNoteRequired,
     active: q.active,
+    weight: q.weight,
   }
 }
 
@@ -205,8 +217,16 @@ interface CompetencyState {
   panelistScores: CompPanelistScore[]
   panelGroups: CompPanelGroup[]
   moduleAdmins: CompModuleAdmin[]
+  assessmentDesigners: CompRoleAssignment[]
+  reportViewers: CompRoleAssignment[]
   attachments: CompAttachment[]
   questionBank: CompQuestionBankItem[]
+  /** Safe, non-sensitive projection of the bank (no reference answers/key points) — read via
+   * comp_question_bank_public(), which any authenticated user may call regardless of panelist
+   * status or assessment completion. Used only for bucketing already-recorded scores into
+   * categories on the dashboard/reports pages; never for showing evaluator-only material. */
+  questionBankPublic: CompQuestionBankItem[]
+  jobRoleConfigs: CompJobRoleConfig[]
   loadingQuestionBank: boolean
   loading: boolean
 
@@ -247,6 +267,17 @@ interface CompetencyState {
   addModuleAdmin: (userId: string) => Promise<void>
   removeModuleAdmin: (userId: string) => Promise<void>
 
+  /** ASSESSMENT_DESIGNER / REPORT_VIEWER — module-scoped RBAC roles (spec section 11), backed by
+   * the shared rasta_user_roles framework via the comp_grant_role/comp_revoke_role/
+   * comp_list_role_assignments RPCs (see schema.sql) so a module-only admin can manage them without
+   * needing the sitewide admin flag. */
+  fetchAssessmentDesigners: () => Promise<void>
+  addAssessmentDesigner: (userId: string) => Promise<void>
+  removeAssessmentDesigner: (userId: string) => Promise<void>
+  fetchReportViewers: () => Promise<void>
+  addReportViewer: (userId: string) => Promise<void>
+  removeReportViewer: (userId: string) => Promise<void>
+
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
   setMyPanelistCapstone: (assessmentId: string, score: number | null, note: string) => Promise<void>
@@ -259,10 +290,20 @@ interface CompetencyState {
   deleteAttachment: (id: string) => Promise<void>
 
   fetchQuestionBank: () => Promise<void>
+  /** Fetches the safe, non-sensitive projection via comp_question_bank_public() — see
+   * questionBankPublic above. Used by the dashboard/reports pages instead of fetchQuestionBank. */
+  fetchQuestionBankPublic: () => Promise<void>
   createQuestion: (input: QuestionBankInput) => Promise<void>
+  /** Never mutates the existing row — inserts a new version (same question_group_id, version + 1,
+   * chained via superseded_by on the old row) so any assessment snapshot already pointing at the
+   * old row keeps resolving to the exact wording/reference-answer that was actually used (spec
+   * section 13). */
   updateQuestion: (id: string, input: QuestionBankInput) => Promise<void>
   setQuestionActive: (id: string, active: boolean) => Promise<void>
   deleteQuestion: (id: string) => Promise<void>
+
+  fetchJobRoleConfigs: () => Promise<void>
+  updateJobRoleConfig: (jobRole: JobRole, allowedQuestionTypes: QuestionType[]) => Promise<void>
   /** Randomly assigns this assessment's fixed question set for its job role — 5 GENERAL, 9
    * TECHNICAL, 5 SCENARIO/PROBLEM_SOLVING/CASE_STUDY/IMAGE_BASED, 4 EXPERIENCE_BASED (or every
    * active question in a bucket that has fewer than the target count). Written once; re-running it
@@ -277,8 +318,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   panelistScores: [],
   panelGroups: [],
   moduleAdmins: [],
+  assessmentDesigners: [],
+  reportViewers: [],
   attachments: [],
   questionBank: [],
+  questionBankPublic: [],
+  jobRoleConfigs: [],
   loadingQuestionBank: false,
   loading: true,
 
@@ -639,6 +684,44 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('حذف ادمین ماژول', error)) set({ moduleAdmins: previous })
   },
 
+  fetchAssessmentDesigners: async () => {
+    const { data, error } = await supabase.rpc('comp_list_role_assignments', { p_role_name: 'ASSESSMENT_DESIGNER' })
+    if (reportError('بارگذاری فهرست طراحان آزمون', error)) return
+    set({ assessmentDesigners: ((data ?? []) as CompRoleAssignmentRow[]).map(compRoleAssignmentFromRow) })
+  },
+
+  addAssessmentDesigner: async (userId) => {
+    const { error } = await supabase.rpc('comp_grant_role', { p_user_id: userId, p_role_name: 'ASSESSMENT_DESIGNER' })
+    if (reportError('افزودن طراح آزمون', error)) return
+    await get().fetchAssessmentDesigners()
+  },
+
+  removeAssessmentDesigner: async (userId) => {
+    const previous = get().assessmentDesigners
+    set({ assessmentDesigners: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.rpc('comp_revoke_role', { p_user_id: userId, p_role_name: 'ASSESSMENT_DESIGNER' })
+    if (reportError('حذف طراح آزمون', error)) set({ assessmentDesigners: previous })
+  },
+
+  fetchReportViewers: async () => {
+    const { data, error } = await supabase.rpc('comp_list_role_assignments', { p_role_name: 'REPORT_VIEWER' })
+    if (reportError('بارگذاری فهرست بینندگان گزارش', error)) return
+    set({ reportViewers: ((data ?? []) as CompRoleAssignmentRow[]).map(compRoleAssignmentFromRow) })
+  },
+
+  addReportViewer: async (userId) => {
+    const { error } = await supabase.rpc('comp_grant_role', { p_user_id: userId, p_role_name: 'REPORT_VIEWER' })
+    if (reportError('افزودن بیننده گزارش', error)) return
+    await get().fetchReportViewers()
+  },
+
+  removeReportViewer: async (userId) => {
+    const previous = get().reportViewers
+    set({ reportViewers: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.rpc('comp_revoke_role', { p_user_id: userId, p_role_name: 'REPORT_VIEWER' })
+    if (reportError('حذف بیننده گزارش', error)) set({ reportViewers: previous })
+  },
+
   fetchPanelistScores: async (assessmentId) => {
     const { data, error } = await supabase.from('comp_panelist_scores').select('*').eq('assessment_id', assessmentId)
     if (reportError('بارگذاری امتیازهای داوران', error)) return
@@ -741,11 +824,19 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ questionBank: ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow), loadingQuestionBank: false })
   },
 
+  fetchQuestionBankPublic: async () => {
+    const { data, error } = await supabase.rpc('comp_question_bank_public')
+    if (reportError('بارگذاری فهرست دسته‌بندی سؤالات', error)) return
+    set({ questionBankPublic: ((data ?? []) as CompQuestionBankPublicRow[]).map(compQuestionBankPublicFromRow) })
+  },
+
   createQuestion: async (input) => {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
     const uid = currentUserId()
-    const { error } = await supabase.from('comp_question_bank').insert({ id, ...questionBankToRowPayload(input) })
+    const { error } = await supabase
+      .from('comp_question_bank')
+      .insert({ id, question_group_id: id, version: 1, approval_status: 'APPROVED', ...questionBankToRowPayload(input) })
     if (reportError('ثبت سؤال جدید', error)) return
     const created: CompQuestionBankItem = {
       id,
@@ -764,6 +855,11 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       scoreMax: 5,
       evaluatorNoteRequired: input.evaluatorNoteRequired,
       active: input.active,
+      weight: input.weight,
+      approvalStatus: 'APPROVED',
+      questionGroupId: id,
+      version: 1,
+      supersededBy: null,
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -771,32 +867,55 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ questionBank: [created, ...get().questionBank] })
   },
 
+  // Editing never mutates the existing row in place — it inserts a brand-new version row (same
+  // question_group_id, version + 1) and retires the old one (superseded_by + active=false), so any
+  // assessment snapshot already pointing at the old row's id keeps resolving to the exact
+  // wording/reference-answer that was actually used at the time (spec section 13).
   updateQuestion: async (id, input) => {
     const previous = get().questionBank
-    const { error } = await supabase.from('comp_question_bank').update(questionBankToRowPayload(input)).eq('id', id)
-    if (reportError('ویرایش سؤال', error)) return
+    const old = previous.find((q) => q.id === id)
+    if (!old) return
+    const newId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const uid = currentUserId()
+    const { error: insertError } = await supabase.from('comp_question_bank').insert({
+      id: newId,
+      question_group_id: old.questionGroupId,
+      version: old.version + 1,
+      approval_status: 'APPROVED',
+      ...questionBankToRowPayload(input),
+    })
+    if (reportError('ثبت نسخه جدید سؤال', insertError)) return
+    const { error: retireError } = await supabase.from('comp_question_bank').update({ superseded_by: newId, active: false }).eq('id', id)
+    reportError('غیرفعال‌کردن نسخه قبلی سؤال', retireError)
+    const created: CompQuestionBankItem = {
+      id: newId,
+      jobRole: input.jobRole,
+      category: input.category,
+      subCategory: input.subCategory,
+      difficulty: input.difficulty,
+      questionText: input.questionText,
+      imageUrl: input.imageUrl,
+      referenceAnswer: input.referenceAnswer,
+      keyPoints: input.keyPoints,
+      excellentAnswerIndicators: input.excellentAnswerIndicators,
+      commonMistakes: input.commonMistakes,
+      standardReference: input.standardReference,
+      scoreMin: old.scoreMin,
+      scoreMax: old.scoreMax,
+      evaluatorNoteRequired: input.evaluatorNoteRequired,
+      active: input.active,
+      weight: input.weight,
+      approvalStatus: 'APPROVED',
+      questionGroupId: old.questionGroupId,
+      version: old.version + 1,
+      supersededBy: null,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }
     set({
-      questionBank: previous.map((q) =>
-        q.id === id
-          ? {
-              ...q,
-              jobRole: input.jobRole,
-              category: input.category,
-              subCategory: input.subCategory,
-              difficulty: input.difficulty,
-              questionText: input.questionText,
-              imageUrl: input.imageUrl,
-              referenceAnswer: input.referenceAnswer,
-              keyPoints: input.keyPoints,
-              excellentAnswerIndicators: input.excellentAnswerIndicators,
-              commonMistakes: input.commonMistakes,
-              standardReference: input.standardReference,
-              evaluatorNoteRequired: input.evaluatorNoteRequired,
-              active: input.active,
-              updatedAt: new Date().toISOString(),
-            }
-          : q,
-      ),
+      questionBank: [created, ...previous.map((q) => (q.id === id ? { ...q, supersededBy: newId, active: false, updatedAt: now } : q))],
     })
   },
 
@@ -812,6 +931,25 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ questionBank: previous.filter((q) => q.id !== id) })
     const { error } = await supabase.from('comp_question_bank').delete().eq('id', id)
     if (reportError('حذف سؤال', error)) set({ questionBank: previous })
+  },
+
+  fetchJobRoleConfigs: async () => {
+    const { data, error } = await supabase.from('comp_job_role_config').select('*')
+    if (reportError('بارگذاری تنظیمات مشاغل', error)) return
+    set({ jobRoleConfigs: ((data ?? []) as CompJobRoleConfigRow[]).map(compJobRoleConfigFromRow) })
+  },
+
+  updateJobRoleConfig: async (jobRole, allowedQuestionTypes) => {
+    const previous = get().jobRoleConfigs
+    const now = new Date().toISOString()
+    set({
+      jobRoleConfigs: previous.map((c) => (c.jobRole === jobRole ? { ...c, allowedQuestionTypes, updatedAt: now } : c)),
+    })
+    const { error } = await supabase
+      .from('comp_job_role_config')
+      .update({ allowed_question_types: allowedQuestionTypes })
+      .eq('job_role', jobRole)
+    if (reportError('ذخیره تنظیمات شغل', error)) set({ jobRoleConfigs: previous })
   },
 
   assignRandomQuestions: async (assessmentId, jobRole) => {

@@ -5,15 +5,18 @@ import type {
   CompAttachment,
   CompetencyAnswers,
   CompetencyAssessment,
+  CompJobRoleConfig,
   CompModuleAdmin,
   CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
   CompQuestionBankItem,
+  CompRoleAssignment,
   EducationEntry,
   EmploymentEntry,
   JobRole,
+  QuestionApprovalStatus,
   QuestionDifficulty,
   QuestionType,
   SelfServiceStatus,
@@ -255,6 +258,11 @@ export interface CompQuestionBankRow {
   score_max: number
   evaluator_note_required: boolean
   active: boolean
+  weight: number | null
+  approval_status: string | null
+  question_group_id: string
+  version: number | null
+  superseded_by: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -278,8 +286,95 @@ export function compQuestionBankFromRow(r: CompQuestionBankRow): CompQuestionBan
     scoreMax: r.score_max,
     evaluatorNoteRequired: r.evaluator_note_required,
     active: r.active,
+    weight: r.weight ?? 1,
+    approvalStatus: (r.approval_status as QuestionApprovalStatus) ?? 'APPROVED',
+    questionGroupId: r.question_group_id ?? r.id,
+    version: r.version ?? 1,
+    supersededBy: r.superseded_by,
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  }
+}
+
+/** Row shape returned by the comp_question_bank_public() RPC — the safe, non-sensitive projection
+ * (see schema.sql) used by the dashboard/reports pages, which only ever need to bucket an
+ * already-recorded score into a category and never the evaluator-only advisory content. */
+export interface CompQuestionBankPublicRow {
+  id: string
+  job_role: string
+  category: string
+  sub_category: string
+  difficulty: string
+  question_text: string
+  image_url: string | null
+  weight: number | null
+  question_group_id: string
+  version: number | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Fills the fields the public RPC never returns (reference answer, key points, etc.) with safe
+ * empty placeholders — callers of this mapper (dashboard/reports/results aggregate scoring) never
+ * read those fields, they only exist so this can still satisfy the shared CompQuestionBankItem
+ * shape used by roleCompetencyModel.ts's questionsForAssessment/computeCategoryScores. */
+export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): CompQuestionBankItem {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    category: r.category as QuestionType,
+    subCategory: r.sub_category,
+    difficulty: r.difficulty as QuestionDifficulty,
+    questionText: r.question_text,
+    imageUrl: r.image_url ?? '',
+    referenceAnswer: '',
+    keyPoints: [],
+    excellentAnswerIndicators: [],
+    commonMistakes: [],
+    standardReference: '',
+    scoreMin: 0,
+    scoreMax: 5,
+    evaluatorNoteRequired: false,
+    active: r.active,
+    weight: r.weight ?? 1,
+    approvalStatus: 'APPROVED',
+    questionGroupId: r.question_group_id ?? r.id,
+    version: r.version ?? 1,
+    supersededBy: null,
+    createdBy: null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompJobRoleConfigRow {
+  job_role: string
+  allowed_question_types: string[]
+  updated_by: string | null
+  updated_at: string
+}
+
+export function compJobRoleConfigFromRow(r: CompJobRoleConfigRow): CompJobRoleConfig {
+  return {
+    jobRole: r.job_role as JobRole,
+    allowedQuestionTypes: (r.allowed_question_types ?? []) as CompJobRoleConfig['allowedQuestionTypes'],
+    updatedBy: r.updated_by,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompRoleAssignmentRow {
+  user_id: string
+  created_by: string | null
+  created_at: string
+}
+
+export function compRoleAssignmentFromRow(r: CompRoleAssignmentRow): CompRoleAssignment {
+  return {
+    userId: r.user_id,
+    addedBy: r.created_by,
+    createdAt: r.created_at,
   }
 }

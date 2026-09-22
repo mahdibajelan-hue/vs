@@ -18,8 +18,10 @@ const STATUS_LABEL_FA: Record<string, string> = { draft: 'در حال انجام
  * leads who need a hand-off list rather than the interactive dashboard. */
 export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPageProps) {
   const assessments = useCompetencyStore((s) => s.assessments)
-  const questionBank = useCompetencyStore((s) => s.questionBank)
-  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  // Category/weight-only classification for scoring, not the evaluator-only reference-answer
+  // material — see the same note in CompetencyDashboardPage.tsx.
+  const questionBank = useCompetencyStore((s) => s.questionBankPublic)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const printRef = useRef<HTMLDivElement>(null)

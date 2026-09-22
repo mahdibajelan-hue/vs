@@ -98,7 +98,17 @@ export const JOB_ROLES: JobRole[] = [
 ]
 
 /** Question type per spec — drives which of the 4 scoring buckets (see roleCompetencyModel.ts) a question counts toward. */
-export type QuestionType = 'GENERAL' | 'TECHNICAL' | 'SCENARIO' | 'PROBLEM_SOLVING' | 'EXPERIENCE_BASED' | 'CASE_STUDY' | 'IMAGE_BASED'
+export type QuestionType =
+  | 'GENERAL'
+  | 'TECHNICAL'
+  | 'SCENARIO'
+  | 'PROBLEM_SOLVING'
+  | 'EXPERIENCE_BASED'
+  | 'CASE_STUDY'
+  | 'IMAGE_BASED'
+  | 'BEHAVIORAL'
+  | 'HSE'
+  | 'JUDGMENT'
 
 export const QUESTION_TYPE_LABEL_FA: Record<QuestionType, string> = {
   GENERAL: 'عمومی شغلی',
@@ -108,6 +118,21 @@ export const QUESTION_TYPE_LABEL_FA: Record<QuestionType, string> = {
   EXPERIENCE_BASED: 'تجربه‌محور',
   CASE_STUDY: 'مطالعه موردی',
   IMAGE_BASED: 'تصویری',
+  BEHAVIORAL: 'رفتاری',
+  HSE: 'ایمنی و بهداشت (HSE)',
+  JUDGMENT: 'قضاوت حرفه‌ای',
+}
+
+/** Every comp_question_bank row's editorial lifecycle state (spec section 2/12). Admin-authored
+ * rows are auto-APPROVED; a future non-admin "propose a question" workflow lands new rows as
+ * PENDING_REVIEW instead of writing the bank directly. */
+export type QuestionApprovalStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'NEEDS_REVISION'
+
+export const QUESTION_APPROVAL_STATUS_LABEL_FA: Record<QuestionApprovalStatus, string> = {
+  PENDING_REVIEW: 'در انتظار بررسی',
+  APPROVED: 'تأییدشده',
+  REJECTED: 'ردشده',
+  NEEDS_REVISION: 'نیازمند اصلاح',
 }
 
 export type QuestionDifficulty = 'L1' | 'L2' | 'L3' | 'L4'
@@ -147,8 +172,32 @@ export interface CompQuestionBankItem {
   scoreMax: number
   evaluatorNoteRequired: boolean
   active: boolean
+  /** Relative weight of this question within its category — feeds future weighted category
+   * scoring (spec section 16); defaults to 1, which reproduces today's plain average. */
+  weight: number
+  approvalStatus: QuestionApprovalStatus
+  /** Ties every edit of "the same question" together (spec section 13 versioning) — a freshly
+   * created question is its own group (questionGroupId === id). */
+  questionGroupId: string
+  /** 1 for a question's first-ever version; incremented on every admin edit. */
+  version: number
+  /** Set on the OLD row once an edit creates a new version — points at the replacement. A row
+   * with supersededBy set is historical only, kept so past assessment snapshots keep resolving to
+   * the exact wording/reference-answer that was actually used. */
+  supersededBy: string | null
   createdBy: string | null
   createdAt: string
+  updatedAt: string
+}
+
+/** Admin-configurable per-job-role settings (comp_job_role_config) — currently just which
+ * question types are allowed for that role's question bank (spec section 3). Kept as a small
+ * config table rather than folding into the JobRole TypeScript union, since the set of job roles
+ * itself is stable and every role already has a live question bank. */
+export interface CompJobRoleConfig {
+  jobRole: JobRole
+  allowedQuestionTypes: QuestionType[]
+  updatedBy: string | null
   updatedAt: string
 }
 
@@ -255,6 +304,15 @@ export interface CompProfileLite {
 /** A user granted full admin-equivalent standing within the Competency module specifically —
  * independent of the global RASTA profiles.is_admin flag (see comp_is_module_admin() in schema.sql). */
 export interface CompModuleAdmin {
+  userId: string
+  addedBy: string | null
+  createdAt: string
+}
+
+/** One user holding the module-scoped ASSESSMENT_DESIGNER or REPORT_VIEWER role, backed by the
+ * shared rasta_user_roles/rasta_roles framework (not a comp-specific table) — see
+ * comp_is_assessment_designer()/comp_is_report_viewer() in schema.sql. */
+export interface CompRoleAssignment {
   userId: string
   addedBy: string | null
   createdAt: string

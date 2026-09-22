@@ -67,6 +67,13 @@ const CATEGORY_BUCKET: Record<QuestionType, 'roleGeneral' | 'roleTechnical' | 'r
   CASE_STUDY: 'roleScenario',
   IMAGE_BASED: 'roleScenario',
   EXPERIENCE_BASED: 'roleExperience',
+  // HSE and behavioral/conduct questions are general-job-competency in spirit (roleGeneral's own
+  // description already covers "اخلاق حرفه‌ای و ایمنی"); professional-judgment questions belong
+  // with the same bucket as experience-based ones per the §10 "Professional Judgment
+  // (experience-based) 15%" bucket definition above.
+  HSE: 'roleGeneral',
+  BEHAVIORAL: 'roleGeneral',
+  JUDGMENT: 'roleExperience',
 }
 
 const BUCKET_DOMAIN: Record<'roleGeneral' | 'roleTechnical' | 'roleScenario' | 'roleExperience', CompetencyDomain> = {

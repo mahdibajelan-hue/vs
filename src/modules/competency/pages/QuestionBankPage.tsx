@@ -5,6 +5,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import {
   JOB_ROLES,
   JOB_ROLE_LABEL_FA,
+  QUESTION_APPROVAL_STATUS_LABEL_FA,
   QUESTION_DIFFICULTY_COLOR,
   QUESTION_DIFFICULTY_LABEL_FA,
   QUESTION_TYPE_LABEL_FA,
@@ -14,7 +15,18 @@ import {
   type QuestionType,
 } from '../types'
 
-const QUESTION_TYPES: QuestionType[] = ['GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED']
+const QUESTION_TYPES: QuestionType[] = [
+  'GENERAL',
+  'TECHNICAL',
+  'SCENARIO',
+  'PROBLEM_SOLVING',
+  'EXPERIENCE_BASED',
+  'CASE_STUDY',
+  'IMAGE_BASED',
+  'BEHAVIORAL',
+  'HSE',
+  'JUDGMENT',
+]
 const DIFFICULTIES: QuestionDifficulty[] = ['L1', 'L2', 'L3', 'L4']
 
 // Project Manager's questions now live in this same DB-backed bank too (seeded once from the
@@ -35,6 +47,7 @@ const EMPTY_INPUT: QuestionBankInput = {
   standardReference: '',
   evaluatorNoteRequired: true,
   active: true,
+  weight: 1,
 }
 
 /**
@@ -173,6 +186,13 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
                         <ShieldAlert size={10} /> {q.standardReference}
                       </span>
                     )}
+                    {q.version > 1 && (
+                      <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
+                    )}
+                    {q.supersededBy && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">نسخه جدیدتری از این سؤال ثبت شده</span>}
+                    {q.approvalStatus !== 'APPROVED' && (
+                      <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] font-bold text-amber-300">{QUESTION_APPROVAL_STATUS_LABEL_FA[q.approvalStatus]}</span>
+                    )}
                     <span
                       className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
                         q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
@@ -264,6 +284,7 @@ function QuestionEditorModal({
           standardReference: initial.standardReference,
           evaluatorNoteRequired: initial.evaluatorNoteRequired,
           active: initial.active,
+          weight: initial.weight,
         }
       : { ...EMPTY_INPUT, jobRole: defaultJobRole },
   )
@@ -298,9 +319,15 @@ function QuestionEditorModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="glass-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="mb-3 text-sm font-bold">{initial ? 'ویرایش سؤال' : 'سؤال جدید'}</p>
+        <p className="mb-1 text-sm font-bold">{initial ? 'ویرایش سؤال' : 'سؤال جدید'}</p>
+        {initial && (
+          <p className="mb-3 text-[10.5px] text-muted">
+            ذخیره، یک نسخه جدید (نسخه {(initial.version + 1).toLocaleString('fa-IR')}) ثبت می‌کند و نسخه فعلی را به‌عنوان تاریخچه غیرفعال نگه می‌دارد — آزمون‌هایی که قبلاً از این سؤال
+            استفاده کرده‌اند تحت تأثیر قرار نمی‌گیرند.
+          </p>
+        )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <FormField label="شغل">
             <select value={form.jobRole} onChange={(e) => setForm((f) => ({ ...f, jobRole: e.target.value as JobRole }))} className="input">
               {EDITABLE_ROLES.map((r) => (
@@ -327,6 +354,16 @@ function QuestionEditorModal({
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField label="وزن نسبی در دسته‌بندی خود">
+            <input
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={form.weight}
+              onChange={(e) => setForm((f) => ({ ...f, weight: Number(e.target.value) || 1 }))}
+              className="input"
+            />
           </FormField>
         </div>
 
