@@ -4,6 +4,7 @@ import type {
   CertificationEntry,
   CompAssessmentTemplate,
   CompAttachment,
+  CompAuditLogEntry,
   CompetencyAnswers,
   CompetencyAssessment,
   CompJobRoleConfig,
@@ -407,5 +408,29 @@ export function compAssessmentTemplateFromRow(r: CompAssessmentTemplateRow): Com
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  }
+}
+
+export interface CompAuditLogRow {
+  id: string
+  action: string
+  entity_type: string
+  entity_id: string | null
+  actor: string | null
+  previous_value: unknown
+  new_value: unknown
+  created_at: string
+}
+
+export function compAuditLogFromRow(r: CompAuditLogRow): CompAuditLogEntry {
+  return {
+    id: r.id,
+    action: r.action,
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    actor: r.actor,
+    previousValue: r.previous_value,
+    newValue: r.new_value,
+    createdAt: r.created_at,
   }
 }

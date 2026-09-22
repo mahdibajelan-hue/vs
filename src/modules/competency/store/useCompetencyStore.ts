@@ -9,6 +9,7 @@ import type {
   CertificationEntry,
   CompAssessmentTemplate,
   CompAttachment,
+  CompAuditLogEntry,
   CompetencyAssessment,
   CompJobRoleConfig,
   CompModuleAdmin,
@@ -29,6 +30,7 @@ import {
   compAssessmentFromRow,
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
+  compAuditLogFromRow,
   compJobRoleConfigFromRow,
   compModuleAdminFromRow,
   compPanelGroupFromRow,
@@ -41,6 +43,7 @@ import {
   type CompAssessmentRow,
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
+  type CompAuditLogRow,
   type CompJobRoleConfigRow,
   type CompModuleAdminRow,
   type CompPanelGroupRow,
@@ -316,8 +319,10 @@ interface CompetencyState {
    * old row keeps resolving to the exact wording/reference-answer that was actually used (spec
    * section 13). */
   updateQuestion: (id: string, input: QuestionBankInput) => Promise<void>
+  /** Never a hard delete (spec section 13: "Question حذف فیزیکی نشود") — deactivating is the only
+   * removal path, since a hard delete could make a question vanish from an assessment's already-
+   * frozen snapshot (spec section 9). */
   setQuestionActive: (id: string, active: boolean) => Promise<void>
-  deleteQuestion: (id: string) => Promise<void>
 
   fetchJobRoleConfigs: () => Promise<void>
   updateJobRoleConfig: (jobRole: JobRole, allowedQuestionTypes: QuestionType[]) => Promise<void>
@@ -332,6 +337,14 @@ interface CompetencyState {
    * fixed hardcoded target counts) — written once; re-running it on an assessment that already has
    * a selection is a no-op from the UI (guarded by callers). */
   assignQuestionsFromMix: (assessmentId: string, jobRole: JobRole, mix: QuestionMixCell[]) => Promise<void>
+
+  /** Admin-only, read via comp_log_audit()-written rows (spec section 31) — never written directly
+   * by the client. */
+  auditLog: CompAuditLogEntry[]
+  fetchAuditLog: () => Promise<void>
+  /** The only way out of a locked/completed assessment (spec section 30) — admin-only, clears the
+   * assessment status and every panelist's submitted_at so judges can score again. */
+  reopenAssessment: (assessmentId: string) => Promise<void>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -348,6 +361,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   questionBankPublic: [],
   jobRoleConfigs: [],
   assessmentTemplates: [],
+  auditLog: [],
   loadingQuestionBank: false,
   loading: true,
 
@@ -952,13 +966,6 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('تغییر وضعیت فعال‌بودن سؤال', error)) set({ questionBank: previous })
   },
 
-  deleteQuestion: async (id) => {
-    const previous = get().questionBank
-    set({ questionBank: previous.filter((q) => q.id !== id) })
-    const { error } = await supabase.from('comp_question_bank').delete().eq('id', id)
-    if (reportError('حذف سؤال', error)) set({ questionBank: previous })
-  },
-
   fetchJobRoleConfigs: async () => {
     const { data, error } = await supabase.from('comp_job_role_config').select('*')
     if (reportError('بارگذاری تنظیمات مشاغل', error)) return
@@ -1077,5 +1084,19 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ assessmentTemplates: previous.filter((t) => t.id !== id) })
     const { error } = await supabase.from('comp_assessment_templates').delete().eq('id', id)
     if (reportError('حذف طرح آزمون', error)) set({ assessmentTemplates: previous })
+  },
+
+  fetchAuditLog: async () => {
+    const { data, error } = await supabase.from('comp_audit_log').select('*').order('created_at', { ascending: false }).limit(200)
+    if (reportError('بارگذاری گزارش رویدادها', error)) return
+    set({ auditLog: ((data ?? []) as CompAuditLogRow[]).map(compAuditLogFromRow) })
+  },
+
+  reopenAssessment: async (assessmentId) => {
+    const { error } = await supabase.rpc('comp_reopen_assessment', { p_assessment_id: assessmentId })
+    if (reportError('بازگشایی ارزیابی', error)) return
+    // fetchAll() re-pulls both comp_assessments and comp_panelist_scores in one go, so the
+    // now-cleared status and submitted_at flags show up everywhere without a second round trip.
+    await get().fetchAll()
   },
 }))

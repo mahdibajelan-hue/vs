@@ -5497,3 +5497,67 @@ create or replace function comp_increment_question_usage(p_ids uuid[])
 returns void as $$
   update comp_question_bank set usage_count = usage_count + 1 where id = any(p_ids) and auth.uid() is not null;
 $$ language sql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Section 35: Competency Assessment Engine v2.0 — Judge workflow locking +
+-- audit log (spec section 30/31).
+--
+-- 1. comp_audit_log: a minimal, append-only log of sensitive actions. No
+--    direct INSERT policy is granted to authenticated users at all — rows
+--    are written exclusively by SECURITY DEFINER functions (comp_log_audit
+--    below, called from other RPCs), so a client can never forge an entry.
+--    Only a module admin may read it.
+-- 2. Locking: once a panelist has submitted their score (submitted_at set),
+--    they can no longer edit it themselves — only comp_is_module_admin()
+--    bypasses this. The *first* transition into the locked state is still
+--    allowed for its own actor, since the USING clause evaluates against
+--    the row's state *before* the update.
+--    Note: comp_assessments itself is deliberately NOT locked on
+--    status='completed' — the lead's post-completion actions (setApproved,
+--    strengths/development notes, markReviewed on ResultsStage) are the
+--    lifecycle's "Final Review" step, not the "Judge" scoring the spec's
+--    locking requirement targets, so comp_assessments_update_own keeps its
+--    original, unrestricted-by-status shape.
+-- 3. comp_reopen_assessment: admin-only, clears the assessment status and
+--    every panelist's submitted_at for that assessment so judges can score
+--    again, and writes an audit row.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  action text not null,
+  entity_type text not null,
+  entity_id uuid,
+  actor uuid references profiles (id),
+  previous_value jsonb,
+  new_value jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table comp_audit_log enable row level security;
+
+drop policy if exists "comp_audit_log_select_admin" on comp_audit_log;
+create policy "comp_audit_log_select_admin" on comp_audit_log
+  for select using (comp_is_module_admin());
+
+create or replace function comp_log_audit(p_action text, p_entity_type text, p_entity_id uuid, p_previous jsonb, p_new jsonb)
+returns void as $$
+  insert into comp_audit_log (action, entity_type, entity_id, actor, previous_value, new_value)
+  values (p_action, p_entity_type, p_entity_id, auth.uid(), p_previous, p_new);
+$$ language sql security definer;
+
+drop policy if exists "comp_panelist_scores_update" on comp_panelist_scores;
+create policy "comp_panelist_scores_update" on comp_panelist_scores
+  for update using (comp_is_module_admin() or (panelist_id = auth.uid() and submitted_at is null));
+
+create or replace function comp_reopen_assessment(p_assessment_id uuid)
+returns void as $$
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  update comp_assessments set status = 'draft' where id = p_assessment_id;
+  update comp_panelist_scores set submitted_at = null where assessment_id = p_assessment_id;
+  perform comp_log_audit('ASSESSMENT_REOPENED', 'comp_assessments', p_assessment_id, jsonb_build_object('status', 'completed'), jsonb_build_object('status', 'draft'));
+end;
+$$ language plpgsql security definer;

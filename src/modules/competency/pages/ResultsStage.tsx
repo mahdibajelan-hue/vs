@@ -22,6 +22,7 @@ import {
   Printer,
   Puzzle,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
   Star,
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
@@ -107,6 +109,11 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
+  const reopenAssessment = useCompetencyStore((s) => s.reopenAssessment)
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const myProfile = useAuthStore((s) => s.profile)
+  const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
+  const [reopening, setReopening] = useState(false)
   const allAssessments = useCompetencyStore((s) => s.assessments)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
@@ -753,6 +760,26 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید و ارسال به مرحله بعد'}
               </button>
             </div>
+
+            {isModuleAdmin && assessment.status === 'completed' && (
+              <div className="glass-panel flex flex-col items-start gap-2 rounded-2xl border border-amber-400/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] leading-6 text-muted">
+                  این ارزیابی قفل و نهایی‌شده است — داوران دیگر نمی‌توانند امتیاز خود را تغییر دهند. در صورت نیاز به اصلاح، آن را بازگشایی کنید (این اقدام ثبت
+                  می‌شود).
+                </p>
+                <button
+                  disabled={reopening}
+                  onClick={async () => {
+                    setReopening(true)
+                    await reopenAssessment(assessment.id)
+                    setReopening(false)
+                  }}
+                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  <RotateCcw size={14} /> {reopening ? 'در حال بازگشایی…' : 'بازگشایی ارزیابی برای اصلاح'}
+                </button>
+              </div>
+            )}
           </div>
     </CompetencySidebarShell>
   )

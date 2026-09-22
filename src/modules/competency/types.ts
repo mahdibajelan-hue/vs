@@ -418,3 +418,16 @@ export const ATTACHMENT_KIND_LABEL_FA: Record<AttachmentKind, string> = {
   insurance: 'سوابق بیمه',
   other: 'سایر مدارک',
 }
+
+/** One row of comp_audit_log (spec section 31) — always written server-side via comp_log_audit(),
+ * never directly by the client, so this is a read-only view for admins. */
+export interface CompAuditLogEntry {
+  id: string
+  action: string
+  entityType: string
+  entityId: string | null
+  actor: string | null
+  previousValue: unknown
+  newValue: unknown
+  createdAt: string
+}

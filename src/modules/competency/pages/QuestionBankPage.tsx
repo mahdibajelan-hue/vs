@@ -52,9 +52,9 @@ const EMPTY_INPUT: QuestionBankInput = {
 
 /**
  * Admin-only bank management screen (spec §21/22): filter by role/category/difficulty/active,
- * create/edit a question with its full reference-answer structure, and activate/deactivate without
- * deleting — a question already used by a past assessment must stay resolvable, so this never
- * hard-deletes without confirmation and prefers deactivation for anything already in real use.
+ * create/edit a question with its full reference-answer structure, and deactivate rather than
+ * delete — there is no hard-delete path at all (spec §13: soft delete only), since a question
+ * already used by a past assessment's frozen snapshot must stay resolvable forever.
  */
 interface QuestionBankPageProps {
   onExitToHub: () => void
@@ -68,14 +68,12 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
   const createQuestion = useCompetencyStore((s) => s.createQuestion)
   const updateQuestion = useCompetencyStore((s) => s.updateQuestion)
   const setQuestionActive = useCompetencyStore((s) => s.setQuestionActive)
-  const deleteQuestion = useCompetencyStore((s) => s.deleteQuestion)
 
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState<QuestionType | 'all'>('all')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<CompQuestionBankItem | 'new' | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchQuestionBank()
@@ -208,25 +206,18 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
                     </button>
                     <button
                       onClick={() => setQuestionActive(q.id, !q.active)}
-                      className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-secondary hover:bg-white/5"
+                      className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[10.5px] ${
+                        q.active ? 'border-white/10 text-muted hover:bg-red-500/10 hover:text-red-300' : 'border-white/10 text-secondary hover:bg-white/5'
+                      }`}
                     >
-                      {q.active ? 'غیرفعال‌کردن' : 'فعال‌کردن'}
+                      {q.active ? (
+                        <>
+                          <Trash2 size={11} /> غیرفعال‌کردن
+                        </>
+                      ) : (
+                        'فعال‌کردن'
+                      )}
                     </button>
-                    {confirmDeleteId === q.id ? (
-                      <span className="flex items-center gap-1.5 text-[10.5px]">
-                        مطمئنید؟
-                        <button onClick={() => deleteQuestion(q.id)} className="font-bold text-red-300 hover:text-red-200">
-                          حذف
-                        </button>
-                        <button onClick={() => setConfirmDeleteId(null)} className="text-muted hover:text-secondary">
-                          انصراف
-                        </button>
-                      </span>
-                    ) : (
-                      <button onClick={() => setConfirmDeleteId(q.id)} className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-muted hover:bg-red-500/10 hover:text-red-300">
-                        <Trash2 size={11} /> حذف
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}

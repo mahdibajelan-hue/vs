@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { BookOpenCheck, ClipboardEdit, Eye, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { BookOpenCheck, ClipboardEdit, Eye, History, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
+import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { QUESTION_TYPE_LABEL_FA, JOB_ROLES, JOB_ROLE_LABEL_FA, type CompProfileLite, type CompRoleAssignment, type QuestionType } from '../types'
 
@@ -125,12 +126,16 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
   const fetchJobRoleConfigs = useCompetencyStore((s) => s.fetchJobRoleConfigs)
   const updateJobRoleConfig = useCompetencyStore((s) => s.updateJobRoleConfig)
 
+  const auditLog = useCompetencyStore((s) => s.auditLog)
+  const fetchAuditLog = useCompetencyStore((s) => s.fetchAuditLog)
+
   useEffect(() => {
     if (profiles.length === 0) fetchProfiles()
     fetchModuleAdmins()
     fetchAssessmentDesigners()
     fetchReportViewers()
     fetchJobRoleConfigs()
+    fetchAuditLog()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -212,6 +217,35 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
             )
           })}
         </div>
+      </div>
+
+      <div className="glass-panel rounded-2xl p-4">
+        <p className="mb-1 flex items-center gap-1.5 text-sm font-bold">
+          <History size={15} className="text-red-300" /> گزارش رویدادهای حساس (Audit Log)
+        </p>
+        <p className="mb-3 text-[11px] leading-6 text-muted">
+          آخرین ۲۰۰ رویداد حساس ثبت‌شده — فقط توسط سرور و از طریق اقدامات رسمی (مثل بازگشایی ارزیابی) نوشته می‌شود و هیچ‌کس نمی‌تواند مستقیماً آن را ویرایش کند.
+        </p>
+        {auditLog.length === 0 ? (
+          <p className="text-[11px] text-muted">هنوز رویدادی ثبت نشده است.</p>
+        ) : (
+          <div className="max-h-80 space-y-1.5 overflow-y-auto">
+            {auditLog.map((entry) => {
+              const actorProfile = profiles.find((p) => p.id === entry.actor)
+              return (
+                <div key={entry.id} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10.5px]">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="font-bold text-secondary">{entry.action}</span>
+                    <span className="num text-muted">{formatJalali(entry.createdAt)}</span>
+                  </div>
+                  <p className="mt-0.5 text-muted">
+                    {entry.entityType} · توسط {actorProfile?.fullName ?? entry.actor ?? 'سیستم'}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </CompetencySidebarShell>
   )
