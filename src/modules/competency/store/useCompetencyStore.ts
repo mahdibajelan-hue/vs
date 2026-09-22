@@ -1236,7 +1236,18 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ aiAnalysisLoading: { ...get().aiAnalysisLoading, [assessmentId]: true } })
     const { data, error } = await supabase.functions.invoke('comp-gemini-analysis', { body: { assessmentId } })
     set({ aiAnalysisLoading: { ...get().aiAnalysisLoading, [assessmentId]: false } })
-    const functionError = (data as { error?: string } | null)?.error
+    let functionError = (data as { error?: string } | null)?.error
+    // On a non-2xx response, supabase-js sets `data` to null and puts the raw Response on
+    // `error.context` instead of surfacing the function's own JSON error body — without reading it
+    // ourselves here, every failure looks like the same useless "non-2xx status code" message.
+    if (!functionError && error && typeof (error as { context?: Response }).context?.json === 'function') {
+      try {
+        const body = await (error as { context: Response }).context.json()
+        functionError = body?.error
+      } catch {
+        // response body wasn't JSON — fall through to the generic message below
+      }
+    }
     if (error || functionError) {
       const message = functionError || error?.message || 'خطای ناشناخته'
       useSystemStore.getState().setStorageError(`خطا در تحلیل هوشمند: ${message}`)

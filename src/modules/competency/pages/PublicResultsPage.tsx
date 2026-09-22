@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Award, Briefcase, BookOpen, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { formatJalali } from '../../../lib/jalali'
+import { getCompDocSignedUrl } from '../lib/compStorage'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
@@ -32,6 +33,7 @@ interface PublicResultsRow {
   strengths: string
   development_areas: string
   resolved_questions: ResolvedQuestion[]
+  photo_url: string | null
 }
 
 /**
@@ -113,9 +115,7 @@ export function PublicResultsPage({ token }: { token: string }) {
 
         <div className="glass-panel relative overflow-hidden rounded-2xl">
           <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-              <User size={28} className="text-muted" />
-            </div>
+            <PublicPhoto path={row.photo_url} />
             <div className="flex-1 text-center sm:text-right">
               <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
                 {row.candidate_name}
@@ -257,6 +257,22 @@ export function PublicResultsPage({ token }: { token: string }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function PublicPhoto({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    if (path) getCompDocSignedUrl(path).then((u) => active && setUrl(u))
+    return () => {
+      active = false
+    }
+  }, [path])
+  return (
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
+      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
     </div>
   )
 }

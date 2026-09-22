@@ -10,9 +10,14 @@
 // admin/designer-only). Scope: only DB-backed role assessments (selected_question_ids) are
 // supported for now — project_manager's fixed in-code rubric isn't duplicated into this function,
 // so PM assessments get a clear "not yet supported" response instead of guessing.
+//
+// Schema types below are plain uppercase strings ("OBJECT"/"STRING"/...) rather than the SDK's
+// `Type` enum — that's what the Gemini API's OpenAPI-subset schema actually expects on the wire, so
+// this has no dependency on exactly how (or whether) a given @google/genai version re-exports that
+// enum.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { GoogleGenAI, Type } from 'npm:@google/genai@1'
+import { GoogleGenAI } from 'npm:@google/genai@1'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -23,57 +28,63 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } })
 }
 
+function fail(status: number, message: string, err?: unknown) {
+  console.error(`comp-gemini-analysis: ${message}`, err ?? '')
+  return json({ error: message }, status)
+}
+
 const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+  type: 'OBJECT',
   properties: {
-    executive_summary: { type: Type.STRING },
-    overall_assessment: { type: Type.STRING },
+    executive_summary: { type: 'STRING' },
+    overall_assessment: { type: 'STRING' },
     competency_analysis: {
-      type: Type.OBJECT,
+      type: 'OBJECT',
       properties: Object.fromEntries(
         ['technical', 'problem_solving', 'experience', 'hse', 'judgment', 'communication', 'leadership', 'commercial'].map((key) => [
           key,
           {
-            type: Type.OBJECT,
+            type: 'OBJECT',
             properties: {
-              score: { type: Type.NUMBER },
-              analysis: { type: Type.STRING },
-              evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
+              score: { type: 'NUMBER' },
+              analysis: { type: 'STRING' },
+              evidence: { type: 'ARRAY', items: { type: 'STRING' } },
             },
             required: ['score', 'analysis', 'evidence'],
           },
         ]),
       ),
+      required: ['technical', 'problem_solving', 'experience', 'hse', 'judgment', 'communication', 'leadership', 'commercial'],
     },
-    strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-    development_areas: { type: Type.ARRAY, items: { type: Type.STRING } },
-    critical_gaps: { type: Type.ARRAY, items: { type: Type.STRING } },
-    recommended_training: { type: Type.ARRAY, items: { type: Type.STRING } },
+    strengths: { type: 'ARRAY', items: { type: 'STRING' } },
+    development_areas: { type: 'ARRAY', items: { type: 'STRING' } },
+    critical_gaps: { type: 'ARRAY', items: { type: 'STRING' } },
+    recommended_training: { type: 'ARRAY', items: { type: 'STRING' } },
     follow_up_questions: {
-      type: Type.ARRAY,
+      type: 'ARRAY',
       items: {
-        type: Type.OBJECT,
+        type: 'OBJECT',
         properties: {
-          question_id: { type: Type.STRING },
-          question: { type: Type.STRING },
-          reason: { type: Type.STRING },
+          question_id: { type: 'STRING' },
+          question: { type: 'STRING' },
+          reason: { type: 'STRING' },
         },
         required: ['question', 'reason'],
       },
     },
     evidence_log: {
-      type: Type.ARRAY,
+      type: 'ARRAY',
       items: {
-        type: Type.OBJECT,
+        type: 'OBJECT',
         properties: {
-          question_id: { type: Type.STRING },
-          candidate_answer: { type: Type.STRING },
-          analysis: { type: Type.STRING },
+          question_id: { type: 'STRING' },
+          candidate_answer: { type: 'STRING' },
+          analysis: { type: 'STRING' },
         },
         required: ['question_id', 'analysis'],
       },
     },
-    confidence: { type: Type.NUMBER },
+    confidence: { type: 'NUMBER' },
   },
   required: [
     'executive_summary',
@@ -125,32 +136,38 @@ Deno.serve(async (req: Request) => {
 
   try {
     const geminiKey = Deno.env.get('GEMINI_API_KEY')
-    if (!geminiKey) return json({ error: 'GEMINI_API_KEY تنظیم نشده است. لطفاً آن را در Supabase Edge Function Secrets تنظیم کنید.' }, 500)
+    if (!geminiKey) return fail(500, 'GEMINI_API_KEY تنظیم نشده است. لطفاً آن را در Supabase Edge Function Secrets تنظیم کنید.')
 
     const { assessmentId } = await req.json()
-    if (!assessmentId) return json({ error: 'assessmentId الزامی است.' }, 400)
+    if (!assessmentId) return fail(400, 'assessmentId الزامی است.')
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return json({ error: 'احراز هویت لازم است.' }, 401)
+    if (!authHeader) return fail(401, 'احراز هویت لازم است.')
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     })
 
     const { data: assessment, error: assessmentError } = await supabase.from('comp_assessments').select('*').eq('id', assessmentId).single()
-    if (assessmentError || !assessment) return json({ error: 'ارزیابی یافت نشد یا دسترسی مجاز نیست.' }, 404)
+    if (assessmentError || !assessment) return fail(404, 'ارزیابی یافت نشد یا دسترسی مجاز نیست.', assessmentError)
 
     if (assessment.job_role === 'project_manager') {
-      return json({ error: 'تحلیل هوشمند برای رابط ثابت مدیر پروژه هنوز پشتیبانی نمی‌شود — فقط برای مشاغل بانک‌سؤال‌محور فعال است.' }, 400)
+      return fail(400, 'تحلیل هوشمند برای رابط ثابت مدیر پروژه هنوز پشتیبانی نمی‌شود — فقط برای مشاغل بانک‌سؤال‌محور فعال است.')
     }
 
-    const [{ data: panelistScores }, { data: bankRows }] = await Promise.all([
+    const [{ data: panelistScores, error: panelistError }, { data: bankRows, error: bankError }] = await Promise.all([
       supabase.from('comp_panelist_scores').select('submitted_at, answers').eq('assessment_id', assessmentId),
       supabase.rpc('comp_question_bank_public'),
     ])
+    if (panelistError) return fail(500, `بارگذاری امتیازهای داوران ناموفق بود: ${panelistError.message}`, panelistError)
+    if (bankError) return fail(500, `بارگذاری بانک سؤالات ناموفق بود: ${bankError.message}`, bankError)
 
     const selectedIds: string[] = Array.isArray(assessment.selected_question_ids) ? assessment.selected_question_ids : []
     const questions = (bankRows ?? []).filter((q: { id: string; job_role: string }) => selectedIds.includes(q.id))
+
+    if (questions.length === 0) {
+      return fail(400, 'هنوز سؤالی برای این ارزیابی انتخاب نشده — ابتدا آزمون را طراحی و سؤالات را تولید کنید.')
+    }
 
     const answersPayload = questions.map((q: { id: string; category: string; sub_category: string; difficulty: string; question_text: string }) => {
       const { score, notes } = resolveOfficialScore(q.id, assessment.answers ?? {}, panelistScores ?? [])
@@ -185,26 +202,32 @@ Deno.serve(async (req: Request) => {
       questions_and_answers: answersPayload,
     }
 
-    const ai = new GoogleGenAI({ apiKey: geminiKey })
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash'
-    const response = await ai.models.generateContent({
-      model,
-      contents: `داده‌های زیر مربوط به یک ارزیابی شایستگی واقعی است. طبق قوانین ارائه‌شده، آن را تحلیل کن:\n\n${JSON.stringify(promptPayload, null, 2)}`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-      },
-    })
+    let response
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey })
+      response = await ai.models.generateContent({
+        model,
+        contents: `داده‌های زیر مربوط به یک ارزیابی شایستگی واقعی است. طبق قوانین ارائه‌شده، آن را تحلیل کن:\n\n${JSON.stringify(promptPayload, null, 2)}`,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA,
+        },
+      })
+    } catch (geminiErr) {
+      const detail = geminiErr instanceof Error ? geminiErr.message : String(geminiErr)
+      return fail(502, `فراخوانی Gemini ناموفق بود: ${detail}`, geminiErr)
+    }
 
     const text = response.text
-    if (!text) return json({ error: 'پاسخی از Gemini دریافت نشد.' }, 502)
+    if (!text) return fail(502, 'پاسخی از Gemini دریافت نشد.')
 
     let analysis: unknown
     try {
       analysis = JSON.parse(text)
-    } catch {
-      return json({ error: 'پاسخ Gemini قابل تجزیه به JSON نبود.' }, 502)
+    } catch (parseErr) {
+      return fail(502, 'پاسخ Gemini قابل تجزیه به JSON نبود.', { parseErr, text })
     }
 
     const confidence = typeof (analysis as { confidence?: unknown }).confidence === 'number' ? (analysis as { confidence: number }).confidence : null
@@ -214,7 +237,7 @@ Deno.serve(async (req: Request) => {
       .insert({ assessment_id: assessmentId, model, analysis, confidence })
       .select('*')
       .single()
-    if (insertError) return json({ error: `ذخیره تحلیل ناموفق بود: ${insertError.message}` }, 500)
+    if (insertError) return fail(500, `ذخیره تحلیل ناموفق بود: ${insertError.message}`, insertError)
 
     await supabase.rpc('comp_log_audit', {
       p_action: 'AI_ANALYSIS_GENERATED',
@@ -226,6 +249,6 @@ Deno.serve(async (req: Request) => {
 
     return json({ analysis: inserted })
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'خطای غیرمنتظره' }, 500)
+    return fail(500, err instanceof Error ? err.message : 'خطای غیرمنتظره', err)
   }
 })

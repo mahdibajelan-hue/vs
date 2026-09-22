@@ -3819,7 +3819,8 @@ returns table (
   is_approved boolean,
   strengths text,
   development_areas text,
-  resolved_questions jsonb
+  resolved_questions jsonb,
+  photo_url text
 ) as $$
 declare
   v_assessment comp_assessments%rowtype;
@@ -3861,11 +3862,26 @@ begin
     v_assessment.interview_date, v_assessment.status, v_assessment.answers,
     v_assessment.capstone_score, v_assessment.capstone_note,
     v_assessment.education_score, v_assessment.experience_score, v_assessment.pm_training_score, v_assessment.pm_certification_score,
-    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions;
+    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions,
+    v_assessment.photo_url;
 end;
 $$ language plpgsql security definer stable;
 
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
+
+-- The public results page may also show the candidate's photo. photo_url is never embedded with
+-- results_share_token the way self-service uploads embed self_service_token in their storage path
+-- (see comp_docs_insert_self_service above), so an equivalent "path contains the right token" storage
+-- policy isn't possible here. Instead this scopes anon read to exactly the objects that are some
+-- assessment's *official* photo_url — resumes/certifications/national-ID docs are never stored in
+-- that column, so this can never expose them, regardless of which assessment's results_share_token
+-- a visitor holds.
+drop policy if exists "comp_docs_read_public_photo" on storage.objects;
+create policy "comp_docs_read_public_photo" on storage.objects
+  for select to anon using (
+    bucket_id = 'comp-docs'
+    and exists (select 1 from comp_assessments a where a.photo_url = name)
+  );
 
 -- ----------------------------------------------------------------------------
 -- 17. RASTA Access Control — real module gating (completes section 13, which
