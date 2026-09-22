@@ -7,6 +7,7 @@ import type {
   AssessmentStatus,
   AttachmentKind,
   CertificationEntry,
+  CompAssessmentTemplate,
   CompAttachment,
   CompetencyAssessment,
   CompJobRoleConfig,
@@ -21,10 +22,12 @@ import type {
   EmploymentEntry,
   JobRole,
   QuestionDifficulty,
+  QuestionMixCell,
   QuestionType,
 } from '../types'
 import {
   compAssessmentFromRow,
+  compAssessmentTemplateFromRow,
   compAttachmentFromRow,
   compJobRoleConfigFromRow,
   compModuleAdminFromRow,
@@ -36,6 +39,7 @@ import {
   compRoleAssignmentFromRow,
   profileLiteFromRow,
   type CompAssessmentRow,
+  type CompAssessmentTemplateRow,
   type CompAttachmentRow,
   type CompJobRoleConfigRow,
   type CompModuleAdminRow,
@@ -191,6 +195,18 @@ export interface QuestionBankInput {
   weight: number
 }
 
+/** id present = update that existing template (a new version overwrites in place — unlike question
+ * bank rows, a template isn't referenced by frozen historical snapshots, so there's no versioning
+ * need here); id absent = create a new one. */
+export interface AssessmentTemplateInput {
+  id?: string
+  jobRole: JobRole
+  title: string
+  durationMinutes: number
+  panelSizeDefault: number
+  questionMix: QuestionMixCell[]
+}
+
 function questionBankToRowPayload(q: QuestionBankInput) {
   return {
     job_role: q.jobRole,
@@ -304,11 +320,17 @@ interface CompetencyState {
 
   fetchJobRoleConfigs: () => Promise<void>
   updateJobRoleConfig: (jobRole: JobRole, allowedQuestionTypes: QuestionType[]) => Promise<void>
-  /** Randomly assigns this assessment's fixed question set for its job role — 5 GENERAL, 9
-   * TECHNICAL, 5 SCENARIO/PROBLEM_SOLVING/CASE_STUDY/IMAGE_BASED, 4 EXPERIENCE_BASED (or every
-   * active question in a bucket that has fewer than the target count). Written once; re-running it
-   * on an assessment that already has a selection is a no-op from the UI (guarded by callers). */
-  assignRandomQuestions: (assessmentId: string, jobRole: JobRole) => Promise<void>
+
+  /** Reusable, named question-mix "recipes" per job role — the Assessment Designer wizard's saved
+   * output (spec section 6/36). */
+  assessmentTemplates: CompAssessmentTemplate[]
+  fetchAssessmentTemplates: () => Promise<void>
+  upsertAssessmentTemplate: (input: AssessmentTemplateInput) => Promise<string | null>
+  deleteAssessmentTemplate: (id: string) => Promise<void>
+  /** Generates one assessment's frozen question snapshot from a question-mix grid (replaces the old
+   * fixed hardcoded target counts) — written once; re-running it on an assessment that already has
+   * a selection is a no-op from the UI (guarded by callers). */
+  assignQuestionsFromMix: (assessmentId: string, jobRole: JobRole, mix: QuestionMixCell[]) => Promise<void>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -324,6 +346,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   questionBank: [],
   questionBankPublic: [],
   jobRoleConfigs: [],
+  assessmentTemplates: [],
   loadingQuestionBank: false,
   loading: true,
 
@@ -952,30 +975,88 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('ذخیره تنظیمات شغل', error)) set({ jobRoleConfigs: previous })
   },
 
-  assignRandomQuestions: async (assessmentId, jobRole) => {
+  // Generates one assessment's frozen question snapshot from an Assessment Designer question-mix
+  // grid (spec section 6-9): for every {category, difficulty, count} cell, picks `count` random
+  // active+approved bank rows of exactly that type/difficulty (or every one available if the bank
+  // has fewer than requested — the designer's own availability-check step is what should have
+  // caught that beforehand). Replaces the old fixed hardcoded target counts entirely.
+  assignQuestionsFromMix: async (assessmentId, jobRole, mix) => {
     let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active)
     if (bank.length === 0) {
       const { data, error } = await supabase.from('comp_question_bank').select('*').eq('job_role', jobRole).eq('active', true)
       if (reportError('بارگذاری بانک سؤالات', error)) return
       bank = ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow)
     }
-    const TARGET: Record<string, number> = { GENERAL: 5, TECHNICAL: 9, EXPERIENCE_BASED: 4 }
-    const SCENARIO_TYPES = new Set<QuestionType>(['SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'IMAGE_BASED'])
     const pickRandom = (pool: CompQuestionBankItem[], n: number) => {
       const shuffled = [...pool].sort(() => Math.random() - 0.5)
       return shuffled.slice(0, n)
     }
-    const general = pickRandom(bank.filter((q) => q.category === 'GENERAL'), TARGET.GENERAL)
-    const technical = pickRandom(bank.filter((q) => q.category === 'TECHNICAL'), TARGET.TECHNICAL)
-    const scenario = pickRandom(bank.filter((q) => SCENARIO_TYPES.has(q.category)), 5)
-    const experience = pickRandom(bank.filter((q) => q.category === 'EXPERIENCE_BASED'), TARGET.EXPERIENCE_BASED)
-    const selected = [...general, ...technical, ...scenario, ...experience].map((q) => q.id)
+    const selected = mix
+      .filter((cell) => cell.count > 0)
+      .flatMap((cell) => pickRandom(bank.filter((q) => q.category === cell.category && q.difficulty === cell.difficulty), cell.count))
+      .map((q) => q.id)
     const current = get().assessments.find((a) => a.id === assessmentId)
     if (!current) return
     set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? { ...a, selectedQuestionIds: selected } : a)) })
     const { error } = await supabase.from('comp_assessments').update({ selected_question_ids: selected }).eq('id', assessmentId)
-    if (reportError('انتخاب تصادفی سؤالات', error)) {
+    if (reportError('تولید آزمون از روی طرح سؤال', error)) {
       set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
     }
+  },
+
+  fetchAssessmentTemplates: async () => {
+    const { data, error } = await supabase.from('comp_assessment_templates').select('*').order('job_role').order('title')
+    if (reportError('بارگذاری طرح‌های آزمون', error)) return
+    set({ assessmentTemplates: ((data ?? []) as CompAssessmentTemplateRow[]).map(compAssessmentTemplateFromRow) })
+  },
+
+  upsertAssessmentTemplate: async (input) => {
+    const uid = currentUserId()
+    const now = new Date().toISOString()
+    if (input.id) {
+      const { error } = await supabase
+        .from('comp_assessment_templates')
+        .update({
+          title: input.title,
+          duration_minutes: input.durationMinutes,
+          panel_size_default: input.panelSizeDefault,
+          question_mix: input.questionMix,
+        })
+        .eq('id', input.id)
+      if (reportError('ذخیره طرح آزمون', error)) return null
+      const updated: CompAssessmentTemplate = { ...input, id: input.id, createdBy: uid, createdAt: now, updatedAt: now }
+      set({ assessmentTemplates: get().assessmentTemplates.map((t) => (t.id === input.id ? { ...t, ...updated } : t)) })
+      return input.id
+    }
+    const id = crypto.randomUUID()
+    const { error } = await supabase.from('comp_assessment_templates').insert({
+      id,
+      job_role: input.jobRole,
+      title: input.title,
+      duration_minutes: input.durationMinutes,
+      panel_size_default: input.panelSizeDefault,
+      question_mix: input.questionMix,
+    })
+    if (reportError('ثبت طرح آزمون', error)) return null
+    const created: CompAssessmentTemplate = {
+      id,
+      jobRole: input.jobRole,
+      title: input.title,
+      durationMinutes: input.durationMinutes,
+      panelSizeDefault: input.panelSizeDefault,
+      questionMix: input.questionMix,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }
+    set({ assessmentTemplates: [created, ...get().assessmentTemplates] })
+    return id
+  },
+
+  deleteAssessmentTemplate: async (id) => {
+    const previous = get().assessmentTemplates
+    set({ assessmentTemplates: previous.filter((t) => t.id !== id) })
+    const { error } = await supabase.from('comp_assessment_templates').delete().eq('id', id)
+    if (reportError('حذف طرح آزمون', error)) set({ assessmentTemplates: previous })
   },
 }))

@@ -5438,3 +5438,42 @@ returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
   join rasta_roles r on r.id = ur.role_id
   where r.name = p_role_name and comp_is_module_admin();
 $$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 33: Competency Assessment Engine v2.0 — Assessment Designer (spec
+-- section 6/7/8/36): a reusable, named question-mix "recipe" per job role
+-- (category x difficulty x count), designed once by an admin/assessment
+-- designer and then applied to generate any number of candidates' actual
+-- question snapshots (comp_assessments.selected_question_ids), replacing the
+-- old fixed hardcoded target counts in assignRandomQuestions.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_assessment_templates (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  title text not null,
+  duration_minutes int not null default 60 check (duration_minutes > 0),
+  panel_size_default int not null default 3 check (panel_size_default between 1 and 8),
+  -- Array of {category, difficulty, count} cells — see AssessmentDesignerModal.tsx for the exact
+  -- shape. Kept as jsonb rather than child rows since it's always read/written as one whole grid.
+  question_mix jsonb not null default '[]'::jsonb,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_assessment_templates enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_assessment_templates;
+create trigger trg_set_updated_at before update on comp_assessment_templates
+  for each row execute function set_updated_at();
+
+create index if not exists idx_comp_assessment_templates_role on comp_assessment_templates (job_role);
+
+drop policy if exists "comp_assessment_templates_select_authenticated" on comp_assessment_templates;
+create policy "comp_assessment_templates_select_authenticated" on comp_assessment_templates
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_assessment_templates_write_designer" on comp_assessment_templates;
+create policy "comp_assessment_templates_write_designer" on comp_assessment_templates
+  for all using (comp_is_assessment_designer()) with check (comp_is_assessment_designer());

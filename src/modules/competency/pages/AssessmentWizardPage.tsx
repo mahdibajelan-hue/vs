@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ArrowLeft, Pencil, Shuffle, User } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Pencil, User, Wand2 } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
@@ -11,6 +11,7 @@ import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { EducationCards, EmploymentCards, CertificationCards } from '../components/CandidateCredentialCards'
 import { PanelStage } from './PanelStage'
@@ -19,11 +20,14 @@ import { QualificationScorecardCard, EvaluationSummaryCard } from './Qualificati
 import { ResultsStage } from './ResultsStage'
 import { formatJalali } from '../../../lib/jalali'
 
+// Every QuestionType must appear in exactly one section here or its questions would silently
+// never be shown to the evaluator — HSE/BEHAVIORAL and JUDGMENT fold into the same sections as
+// their scoring bucket (see CATEGORY_BUCKET in roleCompetencyModel.ts) for consistency.
 const ROLE_SECTIONS: { key: string; label: string; types: QuestionType[] }[] = [
-  { key: 'roleGeneral', label: 'عمومی شغلی', types: ['GENERAL'] },
+  { key: 'roleGeneral', label: 'عمومی شغلی', types: ['GENERAL', 'HSE', 'BEHAVIORAL'] },
   { key: 'roleTechnical', label: 'تخصصی', types: ['TECHNICAL'] },
   { key: 'roleScenario', label: 'سناریو و حل مسئله', types: ['SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'IMAGE_BASED'] },
-  { key: 'roleExperience', label: 'تجربه و قضاوت حرفه‌ای', types: ['EXPERIENCE_BASED'] },
+  { key: 'roleExperience', label: 'تجربه و قضاوت حرفه‌ای', types: ['EXPERIENCE_BASED', 'JUDGMENT'] },
 ]
 
 interface AssessmentWizardPageProps {
@@ -73,7 +77,6 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const fetchProfiles = useCompetencyStore((s) => s.fetchProfiles)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
-  const assignRandomQuestions = useCompetencyStore((s) => s.assignRandomQuestions)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
@@ -84,7 +87,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const [editingProfile, setEditingProfile] = useState(false)
   const [domainIndex, setDomainIndex] = useState(0)
   const [roleSectionIndex, setRoleSectionIndex] = useState(0)
-  const [assigningQuestions, setAssigningQuestions] = useState(false)
+  const [designerOpen, setDesignerOpen] = useState(false)
 
   const isPM = isProjectManagerRole(assessment?.jobRole ?? 'project_manager')
 
@@ -278,16 +281,14 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
             <div className="glass-panel rounded-2xl p-6 text-center">
               <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{JOB_ROLE_LABEL_FA[assessment.jobRole]}») انتخاب نشده است.</p>
               <button
-                disabled={assigningQuestions}
-                onClick={async () => {
-                  setAssigningQuestions(true)
-                  await assignRandomQuestions(assessment.id, assessment.jobRole)
-                  setAssigningQuestions(false)
-                }}
-                className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50"
+                onClick={() => setDesignerOpen(true)}
+                className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
               >
-                <Shuffle size={13} /> {assigningQuestions ? 'در حال انتخاب…' : 'انتخاب تصادفی سؤالات از بانک سؤالات'}
+                <Wand2 size={13} /> طراحی آزمون شایستگی
               </button>
+              {designerOpen && (
+                <AssessmentDesignerModal assessmentId={assessment.id} jobRole={assessment.jobRole} onClose={() => setDesignerOpen(false)} />
+              )}
             </div>
           ) : (
             <>

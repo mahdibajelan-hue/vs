@@ -135,6 +135,30 @@ export const QUESTION_APPROVAL_STATUS_LABEL_FA: Record<QuestionApprovalStatus, s
   NEEDS_REVISION: 'نیازمند اصلاح',
 }
 
+/** One cell of an assessment template's question-mix grid (spec section 36/7): how many questions
+ * of this exact type+difficulty combination the generated assessment should draw from the bank. */
+export interface QuestionMixCell {
+  category: QuestionType
+  difficulty: QuestionDifficulty
+  count: number
+}
+
+/** A reusable, named "recipe" for how many questions of each type/difficulty a job role's
+ * assessment should draw from comp_question_bank (spec section 6/36) — designed once by an admin
+ * or assessment designer, then applied to generate any number of candidates' actual frozen question
+ * selections. Replaces the old fixed hardcoded target counts. */
+export interface CompAssessmentTemplate {
+  id: string
+  jobRole: JobRole
+  title: string
+  durationMinutes: number
+  panelSizeDefault: number
+  questionMix: QuestionMixCell[]
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type QuestionDifficulty = 'L1' | 'L2' | 'L3' | 'L4'
 
 export const QUESTION_DIFFICULTY_LABEL_FA: Record<QuestionDifficulty, string> = {

@@ -8,13 +8,13 @@ import {
   GraduationCap,
   Layers,
   Plus,
-  Shuffle,
   ShieldCheck,
   ThumbsUp,
   Trash2,
   TrendingUp,
   UserPlus,
   Users,
+  Wand2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useCompetencyStore, type QualificationScoresInput } from '../store/useCompetencyStore'
@@ -26,6 +26,7 @@ import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
+import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 
 interface PanelStageProps {
   assessmentId: string
@@ -65,7 +66,6 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
-  const assignRandomQuestions = useCompetencyStore((s) => s.assignRandomQuestions)
 
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
@@ -75,7 +75,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
 
   const [pickUserId, setPickUserId] = useState('')
   const [pickAsLead, setPickAsLead] = useState(false)
-  const [assigningQuestions, setAssigningQuestions] = useState(false)
+  const [designerOpen, setDesignerOpen] = useState(false)
   const [pickGroupId, setPickGroupId] = useState('')
   const [showGroupBuilder, setShowGroupBuilder] = useState(false)
 
@@ -323,18 +323,17 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
                 هنوز سؤالی برای این ارزیابی («{assessment ? JOB_ROLE_LABEL_FA[assessment.jobRole] : ''}») انتخاب نشده است.
               </p>
               {isLead ? (
-                <button
-                  disabled={assigningQuestions}
-                  onClick={async () => {
-                    if (!assessment) return
-                    setAssigningQuestions(true)
-                    await assignRandomQuestions(assessment.id, assessment.jobRole)
-                    setAssigningQuestions(false)
-                  }}
-                  className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50"
-                >
-                  <Shuffle size={13} /> {assigningQuestions ? 'در حال انتخاب…' : 'انتخاب تصادفی سؤالات'}
-                </button>
+                <>
+                  <button
+                    onClick={() => setDesignerOpen(true)}
+                    className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+                  >
+                    <Wand2 size={13} /> طراحی آزمون شایستگی
+                  </button>
+                  {designerOpen && assessment && (
+                    <AssessmentDesignerModal assessmentId={assessment.id} jobRole={assessment.jobRole} onClose={() => setDesignerOpen(false)} />
+                  )}
+                </>
               ) : (
                 <p className="text-[11px] text-muted">به مسئول ارزیابی اطلاع دهید تا سؤالات را انتخاب کند.</p>
               )}

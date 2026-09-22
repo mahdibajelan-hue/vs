@@ -2,6 +2,7 @@ import type {
   AssessmentStatus,
   AttachmentKind,
   CertificationEntry,
+  CompAssessmentTemplate,
   CompAttachment,
   CompetencyAnswers,
   CompetencyAssessment,
@@ -18,6 +19,7 @@ import type {
   JobRole,
   QuestionApprovalStatus,
   QuestionDifficulty,
+  QuestionMixCell,
   QuestionType,
   SelfServiceStatus,
 } from '../types'
@@ -376,5 +378,31 @@ export function compRoleAssignmentFromRow(r: CompRoleAssignmentRow): CompRoleAss
     userId: r.user_id,
     addedBy: r.created_by,
     createdAt: r.created_at,
+  }
+}
+
+export interface CompAssessmentTemplateRow {
+  id: string
+  job_role: string
+  title: string
+  duration_minutes: number
+  panel_size_default: number
+  question_mix: QuestionMixCell[] | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compAssessmentTemplateFromRow(r: CompAssessmentTemplateRow): CompAssessmentTemplate {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    title: r.title,
+    durationMinutes: r.duration_minutes,
+    panelSizeDefault: r.panel_size_default,
+    questionMix: r.question_mix ?? [],
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }
 }
