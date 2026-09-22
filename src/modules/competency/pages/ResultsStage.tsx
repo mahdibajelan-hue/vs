@@ -39,6 +39,7 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
+import { AIAnalysisCard } from '../components/AIAnalysisCard'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { generatePersonalityProfile } from '../lib/personalityAnalysis'
@@ -750,6 +751,8 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
                 <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش میانگین امتیازات همهٔ داورانی است که ثبت نهایی کرده‌اند.</p>
               </div>
             )}
+
+            <AIAnalysisCard assessmentId={assessment.id} isPM={isPM} />
 
             {/* Final recommendation banner */}
             <div className="glass-panel flex flex-col items-start gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center" style={{ borderColor: `${statusColor}40` }}>

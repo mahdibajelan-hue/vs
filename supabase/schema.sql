@@ -5561,3 +5561,36 @@ begin
   perform comp_log_audit('ASSESSMENT_REOPENED', 'comp_assessments', p_assessment_id, jsonb_build_object('status', 'completed'), jsonb_build_object('status', 'draft'));
 end;
 $$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Section 36: Competency Assessment Engine v2.0 — Gemini AI Analysis (spec
+-- section 18-27). Stores the structured JSON output from the comp-gemini-
+-- analysis Edge Function so it's generated on demand and then persisted
+-- (never recomputed on every page view). Visibility mirrors comp_assessments'
+-- own broad authenticated visibility (Section 29) since this is a derived
+-- report artifact built only from data that visibility already exposes —
+-- never the question bank's evaluator-only reference-answer content (see the
+-- Edge Function, which reads questions via comp_question_bank_public() only).
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_ai_analysis (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  model text not null,
+  analysis jsonb not null,
+  confidence numeric,
+  generated_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_ai_analysis enable row level security;
+
+create index if not exists idx_comp_ai_analysis_assessment on comp_ai_analysis (assessment_id, created_at desc);
+
+drop policy if exists "comp_ai_analysis_select_authenticated" on comp_ai_analysis;
+create policy "comp_ai_analysis_select_authenticated" on comp_ai_analysis
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_ai_analysis_insert_authenticated" on comp_ai_analysis;
+create policy "comp_ai_analysis_insert_authenticated" on comp_ai_analysis
+  for insert with check (auth.uid() is not null);

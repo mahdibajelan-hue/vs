@@ -438,3 +438,45 @@ export interface CompAuditLogEntry {
   newValue: unknown
   createdAt: string
 }
+
+/** One competency dimension's AI-generated analysis (spec section 25's competency_analysis.*). */
+export interface AiCompetencyDimension {
+  score: number
+  analysis: string
+  evidence: string[]
+}
+
+/** A candidate's evidence-based analysis returned by the comp-gemini-analysis Edge Function (spec
+ * section 18-27) — never the final decision (that's always the judges'/Rule Engine's), always
+ * grounded in the actual recorded answers/scores it was given. */
+export interface AiAnalysisContent {
+  executive_summary: string
+  overall_assessment: string
+  competency_analysis: {
+    technical: AiCompetencyDimension
+    problem_solving: AiCompetencyDimension
+    experience: AiCompetencyDimension
+    hse: AiCompetencyDimension
+    judgment: AiCompetencyDimension
+    communication: AiCompetencyDimension
+    leadership: AiCompetencyDimension
+    commercial: AiCompetencyDimension
+  }
+  strengths: string[]
+  development_areas: string[]
+  critical_gaps: string[]
+  recommended_training: string[]
+  follow_up_questions: { question_id?: string; question: string; reason: string }[]
+  evidence_log: { question_id: string; candidate_answer?: string; analysis: string }[]
+  confidence: number
+}
+
+export interface CompAiAnalysis {
+  id: string
+  assessmentId: string
+  model: string
+  analysis: AiAnalysisContent
+  confidence: number | null
+  generatedBy: string | null
+  createdAt: string
+}

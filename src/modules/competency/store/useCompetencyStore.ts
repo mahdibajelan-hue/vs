@@ -7,6 +7,7 @@ import type {
   AssessmentStatus,
   AttachmentKind,
   CertificationEntry,
+  CompAiAnalysis,
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
@@ -27,6 +28,7 @@ import type {
   QuestionType,
 } from '../types'
 import {
+  compAiAnalysisFromRow,
   compAssessmentFromRow,
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
@@ -40,6 +42,7 @@ import {
   compQuestionBankPublicFromRow,
   compRoleAssignmentFromRow,
   profileLiteFromRow,
+  type CompAiAnalysisRow,
   type CompAssessmentRow,
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
@@ -345,6 +348,16 @@ interface CompetencyState {
   /** The only way out of a locked/completed assessment (spec section 30) — admin-only, clears the
    * assessment status and every panelist's submitted_at so judges can score again. */
   reopenAssessment: (assessmentId: string) => Promise<void>
+
+  /** Gemini AI Analysis (spec section 18-27) — keyed by assessment id, holding the latest generated
+   * analysis (if any) for whichever assessments have been fetched. */
+  aiAnalysisByAssessment: Record<string, CompAiAnalysis | null>
+  aiAnalysisLoading: Record<string, boolean>
+  fetchAiAnalysis: (assessmentId: string) => Promise<void>
+  /** Calls the comp-gemini-analysis Edge Function, which does all the real work server-side
+   * (reading the assessment via the caller's own JWT, calling Gemini, persisting the result) —
+   * this just invokes it and refreshes the local cache from what it returns. */
+  generateAiAnalysis: (assessmentId: string) => Promise<{ error: string | null }>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -362,6 +375,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   jobRoleConfigs: [],
   assessmentTemplates: [],
   auditLog: [],
+  aiAnalysisByAssessment: {},
+  aiAnalysisLoading: {},
   loadingQuestionBank: false,
   loading: true,
 
@@ -1098,5 +1113,36 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     // fetchAll() re-pulls both comp_assessments and comp_panelist_scores in one go, so the
     // now-cleared status and submitted_at flags show up everywhere without a second round trip.
     await get().fetchAll()
+  },
+
+  fetchAiAnalysis: async (assessmentId) => {
+    const { data, error } = await supabase
+      .from('comp_ai_analysis')
+      .select('*')
+      .eq('assessment_id', assessmentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (reportError('بارگذاری تحلیل هوشمند', error)) return
+    set({
+      aiAnalysisByAssessment: { ...get().aiAnalysisByAssessment, [assessmentId]: data ? compAiAnalysisFromRow(data as CompAiAnalysisRow) : null },
+    })
+  },
+
+  generateAiAnalysis: async (assessmentId) => {
+    set({ aiAnalysisLoading: { ...get().aiAnalysisLoading, [assessmentId]: true } })
+    const { data, error } = await supabase.functions.invoke('comp-gemini-analysis', { body: { assessmentId } })
+    set({ aiAnalysisLoading: { ...get().aiAnalysisLoading, [assessmentId]: false } })
+    const functionError = (data as { error?: string } | null)?.error
+    if (error || functionError) {
+      const message = functionError || error?.message || 'خطای ناشناخته'
+      useSystemStore.getState().setStorageError(`خطا در تحلیل هوشمند: ${message}`)
+      return { error: message }
+    }
+    const analysis = (data as { analysis?: CompAiAnalysisRow } | null)?.analysis
+    if (analysis) {
+      set({ aiAnalysisByAssessment: { ...get().aiAnalysisByAssessment, [assessmentId]: compAiAnalysisFromRow(analysis) } })
+    }
+    return { error: null }
   },
 }))

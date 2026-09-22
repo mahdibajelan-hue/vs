@@ -1,7 +1,9 @@
 import type {
+  AiAnalysisContent,
   AssessmentStatus,
   AttachmentKind,
   CertificationEntry,
+  CompAiAnalysis,
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
@@ -431,6 +433,28 @@ export function compAuditLogFromRow(r: CompAuditLogRow): CompAuditLogEntry {
     actor: r.actor,
     previousValue: r.previous_value,
     newValue: r.new_value,
+    createdAt: r.created_at,
+  }
+}
+
+export interface CompAiAnalysisRow {
+  id: string
+  assessment_id: string
+  model: string
+  analysis: AiAnalysisContent
+  confidence: number | null
+  generated_by: string | null
+  created_at: string
+}
+
+export function compAiAnalysisFromRow(r: CompAiAnalysisRow): CompAiAnalysis {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    model: r.model,
+    analysis: r.analysis,
+    confidence: r.confidence,
+    generatedBy: r.generated_by,
     createdAt: r.created_at,
   }
 }
