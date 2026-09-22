@@ -220,6 +220,9 @@ export interface CompQuestionBankItem {
    * 8's "Previous Usage" control) — selection prefers lower values so the same handful of
    * questions don't keep coming up. */
   usageCount: number
+  /** Why a non-admin proposer thinks this question should be added (spec section 12's "Reason for
+   * Proposal" field) — empty for questions admins author directly. */
+  proposalReason: string
   createdBy: string | null
   createdAt: string
   updatedAt: string

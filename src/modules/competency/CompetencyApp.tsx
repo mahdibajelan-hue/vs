@@ -47,16 +47,15 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // comp_is_module_admin in schema.sql) — both can manage the question bank and module settings.
   const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
 
-  // The three module-wide sidebar destinations beyond "داشبورد" — shared by every page that builds
-  // its own nav map (dashboard, the assessment wizard, results), so all of them light up identically.
+  // The module-wide sidebar destinations beyond "داشبورد" — shared by every page that builds its
+  // own nav map (dashboard, the assessment wizard, results), so all of them light up identically.
+  // Question Bank is reachable by everyone now (spec section 12's Question Proposal Workflow — a
+  // non-admin can propose a question there, just not edit the bank directly); Settings stays
+  // admin-only.
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
-    ...(isModuleAdmin
-      ? {
-          questionBank: () => setView({ name: 'questionBank' }),
-          settings: () => setView({ name: 'settings' }),
-        }
-      : {}),
+    questionBank: () => setView({ name: 'questionBank' }),
+    ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
   }
 
   if (loading) {
@@ -91,7 +90,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   if (view.name === 'questionBank') {
-    return <QuestionBankPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+    return <QuestionBankPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} isModuleAdmin={isModuleAdmin} />
   }
 
   if (view.name === 'reports') {

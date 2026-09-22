@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Pencil, Plus, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Pencil, Plus, RotateCcw, Search, ShieldAlert, Trash2, XCircle } from 'lucide-react'
 import { useCompetencyStore, type QuestionBankInput } from '../store/useCompetencyStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import {
@@ -51,29 +51,38 @@ const EMPTY_INPUT: QuestionBankInput = {
 }
 
 /**
- * Admin-only bank management screen (spec §21/22): filter by role/category/difficulty/active,
- * create/edit a question with its full reference-answer structure, and deactivate rather than
- * delete — there is no hard-delete path at all (spec §13: soft delete only), since a question
- * already used by a past assessment's frozen snapshot must stay resolvable forever.
+ * Bank management screen. Admins get the full picture (spec §21/22): filter by
+ * role/category/difficulty/active, create/edit a question with its full reference-answer
+ * structure, deactivate rather than delete (spec §13: soft delete only — a question already used
+ * by a past assessment's frozen snapshot must stay resolvable forever), and approve/reject/request
+ * revision on anyone's proposed questions. Everyone else gets the reduced Question Proposal
+ * Workflow view (spec §12): propose a new question and track their own proposals' status — they
+ * can never edit the bank directly (also enforced server-side by RLS).
  */
 interface QuestionBankPageProps {
   onExitToHub: () => void
   nav: Partial<Record<CompetencySection, () => void>>
+  isModuleAdmin: boolean
 }
 
-export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
+export function QuestionBankPage({ onExitToHub, nav, isModuleAdmin }: QuestionBankPageProps) {
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const loading = useCompetencyStore((s) => s.loadingQuestionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
   const createQuestion = useCompetencyStore((s) => s.createQuestion)
   const updateQuestion = useCompetencyStore((s) => s.updateQuestion)
   const setQuestionActive = useCompetencyStore((s) => s.setQuestionActive)
+  const proposeQuestion = useCompetencyStore((s) => s.proposeQuestion)
+  const approveQuestion = useCompetencyStore((s) => s.approveQuestion)
+  const rejectQuestion = useCompetencyStore((s) => s.rejectQuestion)
+  const requestQuestionRevision = useCompetencyStore((s) => s.requestQuestionRevision)
 
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState<QuestionType | 'all'>('all')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<CompQuestionBankItem | 'new' | null>(null)
+  const [proposing, setProposing] = useState(false)
 
   useEffect(() => {
     fetchQuestionBank()
@@ -104,12 +113,51 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
 
   const headerRight = (
     <button
-      onClick={() => setEditing('new')}
+      onClick={() => (isModuleAdmin ? setEditing('new') : setProposing(true))}
       className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
     >
-      <Plus size={14} /> سؤال جدید
+      <Plus size={14} /> {isModuleAdmin ? 'سؤال جدید' : 'پیشنهاد سؤال جدید'}
     </button>
   )
+
+  if (!isModuleAdmin) {
+    return (
+      <CompetencySidebarShell active="questionBank" nav={nav} title="بانک سؤالات ارزیابی شایستگی" onExitToHub={onExitToHub} headerRight={headerRight}>
+        <p className="-mt-2 text-xs text-muted">
+          بانک سؤالات فقط برای ادمین قابل ویرایش است — اما می‌توانید سؤال پیشنهادی خود را ثبت کنید و پس از بررسی ادمین، وضعیت آن را همین‌جا ببینید.
+        </p>
+        {questionBank.length === 0 ? (
+          <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">هنوز سؤالی پیشنهاد نداده‌اید.</div>
+        ) : (
+          <div className="space-y-2">
+            {questionBank.map((q) => (
+              <div key={q.id} className="glass-panel rounded-xl p-3.5">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{JOB_ROLE_LABEL_FA[q.jobRole]}</span>
+                  <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+                  <ApprovalBadge status={q.approvalStatus} />
+                </div>
+                <p className="text-xs leading-6">{q.questionText}</p>
+                {q.proposalReason && <p className="mt-1.5 text-[10.5px] text-muted">دلیل پیشنهاد: {q.proposalReason}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+        {proposing && (
+          <QuestionEditorModal
+            mode="propose"
+            initial={null}
+            defaultJobRole={EMPTY_INPUT.jobRole}
+            onClose={() => setProposing(false)}
+            onSave={async (input, reason) => {
+              await proposeQuestion(input, reason ?? '')
+              setProposing(false)
+            }}
+          />
+        )}
+      </CompetencySidebarShell>
+    )
+  }
 
   return (
     <CompetencySidebarShell active="questionBank" nav={nav} title="بانک سؤالات ارزیابی شایستگی" onExitToHub={onExitToHub} headerRight={headerRight}>
@@ -188,9 +236,7 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
                       <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
                     )}
                     {q.supersededBy && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">نسخه جدیدتری از این سؤال ثبت شده</span>}
-                    {q.approvalStatus !== 'APPROVED' && (
-                      <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] font-bold text-amber-300">{QUESTION_APPROVAL_STATUS_LABEL_FA[q.approvalStatus]}</span>
-                    )}
+                    {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
                     <span
                       className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
                         q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
@@ -200,7 +246,30 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
                     </span>
                   </div>
                   <p className="text-xs leading-6">{q.questionText}</p>
-                  <div className="mt-2 flex items-center gap-2">
+                  {q.proposalReason && <p className="mt-1 text-[10.5px] text-muted">دلیل پیشنهاد: {q.proposalReason}</p>}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {q.approvalStatus === 'PENDING_REVIEW' && (
+                      <>
+                        <button
+                          onClick={() => approveQuestion(q.id)}
+                          className="flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold text-emerald-200 hover:bg-emerald-500/20"
+                        >
+                          <CheckCircle2 size={11} /> تأیید
+                        </button>
+                        <button
+                          onClick={() => requestQuestionRevision(q.id)}
+                          className="flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10.5px] font-bold text-amber-200 hover:bg-amber-500/20"
+                        >
+                          <RotateCcw size={11} /> درخواست اصلاح
+                        </button>
+                        <button
+                          onClick={() => rejectQuestion(q.id)}
+                          className="flex items-center gap-1 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-[10.5px] font-bold text-red-200 hover:bg-red-500/20"
+                        >
+                          <XCircle size={11} /> رد
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => setEditing(q)} className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-secondary hover:bg-white/5">
                       <Pencil size={11} /> ویرایش
                     </button>
@@ -227,6 +296,7 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
 
       {editing && (
         <QuestionEditorModal
+          mode="admin"
           initial={editing === 'new' ? null : editing}
           defaultJobRole={roleFilter !== 'all' ? roleFilter : EMPTY_INPUT.jobRole}
           onClose={() => setEditing(null)}
@@ -241,6 +311,16 @@ export function QuestionBankPage({ onExitToHub, nav }: QuestionBankPageProps) {
   )
 }
 
+function ApprovalBadge({ status }: { status: CompQuestionBankItem['approvalStatus'] }) {
+  if (status === 'APPROVED') return null
+  const toneClass = status === 'REJECTED' ? 'bg-red-500/12 text-red-300' : 'bg-amber-500/12 text-amber-300'
+  return (
+    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${toneClass}`}>
+      <Clock size={10} /> {QUESTION_APPROVAL_STATUS_LABEL_FA[status]}
+    </span>
+  )
+}
+
 function linesToList(value: string): string[] {
   return value
     .split('\n')
@@ -249,16 +329,19 @@ function linesToList(value: string): string[] {
 }
 
 function QuestionEditorModal({
+  mode,
   initial,
   defaultJobRole,
   onClose,
   onSave,
 }: {
+  mode: 'admin' | 'propose'
   initial: CompQuestionBankItem | null
   defaultJobRole: JobRole
   onClose: () => void
-  onSave: (input: QuestionBankInput) => Promise<void>
+  onSave: (input: QuestionBankInput, reason?: string) => Promise<void>
 }) {
+  const [reason, setReason] = useState('')
   const [form, setForm] = useState<QuestionBankInput>(
     initial
       ? {
@@ -295,22 +378,27 @@ function QuestionEditorModal({
   ]
   const allOk = checklist.every((c) => c.ok)
 
+  const canSubmit = form.questionText.trim() && form.referenceAnswer.trim() && (mode === 'admin' || reason.trim())
+
   const submit = async () => {
-    if (!form.questionText.trim() || !form.referenceAnswer.trim()) return
+    if (!canSubmit) return
     setSaving(true)
-    await onSave({
-      ...form,
-      keyPoints: linesToList(keyPointsText),
-      excellentAnswerIndicators: linesToList(excellentText),
-      commonMistakes: linesToList(mistakesText),
-    })
+    await onSave(
+      {
+        ...form,
+        keyPoints: linesToList(keyPointsText),
+        excellentAnswerIndicators: linesToList(excellentText),
+        commonMistakes: linesToList(mistakesText),
+      },
+      mode === 'propose' ? reason.trim() : undefined,
+    )
     setSaving(false)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="glass-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="mb-1 text-sm font-bold">{initial ? 'ویرایش سؤال' : 'سؤال جدید'}</p>
+        <p className="mb-1 text-sm font-bold">{mode === 'propose' ? 'پیشنهاد سؤال جدید' : initial ? 'ویرایش سؤال' : 'سؤال جدید'}</p>
         {initial && (
           <p className="mb-3 text-[10.5px] text-muted">
             ذخیره، یک نسخه جدید (نسخه {(initial.version + 1).toLocaleString('fa-IR')}) ثبت می‌کند و نسخه فعلی را به‌عنوان تاریخچه غیرفعال نگه می‌دارد — آزمون‌هایی که قبلاً از این سؤال
@@ -386,10 +474,16 @@ function QuestionEditorModal({
           <input value={form.standardReference} onChange={(e) => setForm((f) => ({ ...f, standardReference: e.target.value }))} className="input" placeholder="مثلاً API 1104" />
         </FormField>
 
-        <label className="mt-2 flex items-center gap-1.5 text-xs text-secondary">
-          <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} className="h-3.5 w-3.5" />
-          این سؤال فعال باشد (در انتخاب تصادفی سؤالات ارزیابی‌های جدید استفاده شود)
-        </label>
+        {mode === 'propose' ? (
+          <FormField label="دلیل پیشنهاد این سؤال *">
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="input resize-none" placeholder="چرا این سؤال باید به بانک اضافه شود؟" />
+          </FormField>
+        ) : (
+          <label className="mt-2 flex items-center gap-1.5 text-xs text-secondary">
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} className="h-3.5 w-3.5" />
+            این سؤال فعال باشد (در انتخاب تصادفی سؤالات ارزیابی‌های جدید استفاده شود)
+          </label>
+        )}
 
         <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
           <p className="mb-1.5 text-[10px] font-bold text-muted">کنترل کیفیت سؤال</p>
@@ -407,12 +501,8 @@ function QuestionEditorModal({
           <button onClick={onClose} className="rounded-lg border border-white/10 px-3.5 py-1.5 text-xs">
             انصراف
           </button>
-          <button
-            onClick={submit}
-            disabled={saving || !form.questionText.trim() || !form.referenceAnswer.trim()}
-            className="rounded-lg bg-purple-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50"
-          >
-            {saving ? 'در حال ذخیره…' : 'ذخیره سؤال'}
+          <button onClick={submit} disabled={saving || !canSubmit} className="rounded-lg bg-purple-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-50">
+            {saving ? 'در حال ذخیره…' : mode === 'propose' ? 'ثبت پیشنهاد' : 'ذخیره سؤال'}
           </button>
         </div>
       </div>

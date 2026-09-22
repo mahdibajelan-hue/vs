@@ -324,6 +324,13 @@ interface CompetencyState {
    * questionBankPublic above. Used by the dashboard/reports pages instead of fetchQuestionBank. */
   fetchQuestionBankPublic: () => Promise<void>
   createQuestion: (input: QuestionBankInput) => Promise<void>
+  /** Question Proposal Workflow (spec section 12) — any authenticated non-admin can propose a new
+   * question; it lands as PENDING_REVIEW + inactive, owned by them (enforced by RLS), and never
+   * enters live selection until an admin approves it. */
+  proposeQuestion: (input: QuestionBankInput, reason: string) => Promise<boolean>
+  approveQuestion: (id: string) => Promise<void>
+  rejectQuestion: (id: string) => Promise<void>
+  requestQuestionRevision: (id: string) => Promise<void>
   /** Never mutates the existing row — inserts a new version (same question_group_id, version + 1,
    * chained via superseded_by on the old row) so any assessment snapshot already pointing at the
    * old row keeps resolving to the exact wording/reference-answer that was actually used (spec
@@ -926,12 +933,92 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       version: 1,
       supersededBy: null,
       usageCount: 0,
+      proposalReason: '',
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
     }
     set({ questionBank: [created, ...get().questionBank] })
     logAudit('QUESTION_CREATED', 'comp_question_bank', id, null, { jobRole: input.jobRole, category: input.category, questionText: input.questionText })
+  },
+
+  proposeQuestion: async (input, reason) => {
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_question_bank').insert({
+      id,
+      question_group_id: id,
+      version: 1,
+      ...questionBankToRowPayload(input),
+      // Forced AFTER the spread, overriding whatever `input.active` says — a proposer can never
+      // self-approve or self-activate a question (enforced again, independently, by RLS's own
+      // insert check, which would reject this row outright if these two didn't match).
+      approval_status: 'PENDING_REVIEW',
+      active: false,
+      proposal_reason: reason,
+    })
+    if (reportError('ثبت پیشنهاد سؤال', error)) return false
+    const created: CompQuestionBankItem = {
+      id,
+      jobRole: input.jobRole,
+      category: input.category,
+      subCategory: input.subCategory,
+      difficulty: input.difficulty,
+      questionText: input.questionText,
+      imageUrl: input.imageUrl,
+      referenceAnswer: input.referenceAnswer,
+      keyPoints: input.keyPoints,
+      excellentAnswerIndicators: input.excellentAnswerIndicators,
+      commonMistakes: input.commonMistakes,
+      standardReference: input.standardReference,
+      scoreMin: 0,
+      scoreMax: 5,
+      evaluatorNoteRequired: input.evaluatorNoteRequired,
+      active: false,
+      weight: input.weight,
+      approvalStatus: 'PENDING_REVIEW',
+      questionGroupId: id,
+      version: 1,
+      supersededBy: null,
+      usageCount: 0,
+      proposalReason: reason,
+      createdBy: uid,
+      createdAt: now,
+      updatedAt: now,
+    }
+    set({ questionBank: [created, ...get().questionBank] })
+    logAudit('QUESTION_PROPOSED', 'comp_question_bank', id, null, { jobRole: input.jobRole, questionText: input.questionText, reason })
+    return true
+  },
+
+  approveQuestion: async (id) => {
+    const previous = get().questionBank
+    set({ questionBank: previous.map((q) => (q.id === id ? { ...q, approvalStatus: 'APPROVED', active: true } : q)) })
+    const { error } = await supabase.from('comp_question_bank').update({ approval_status: 'APPROVED', active: true }).eq('id', id)
+    if (reportError('تأیید سؤال پیشنهادی', error)) {
+      set({ questionBank: previous })
+      return
+    }
+    logAudit('QUESTION_APPROVED', 'comp_question_bank', id, { approvalStatus: 'PENDING_REVIEW' }, { approvalStatus: 'APPROVED' })
+  },
+
+  rejectQuestion: async (id) => {
+    const previous = get().questionBank
+    set({ questionBank: previous.map((q) => (q.id === id ? { ...q, approvalStatus: 'REJECTED' } : q)) })
+    const { error } = await supabase.from('comp_question_bank').update({ approval_status: 'REJECTED' }).eq('id', id)
+    if (reportError('رد سؤال پیشنهادی', error)) {
+      set({ questionBank: previous })
+      return
+    }
+    logAudit('QUESTION_REJECTED', 'comp_question_bank', id, null, { approvalStatus: 'REJECTED' })
+  },
+
+  requestQuestionRevision: async (id) => {
+    const previous = get().questionBank
+    set({ questionBank: previous.map((q) => (q.id === id ? { ...q, approvalStatus: 'NEEDS_REVISION' } : q)) })
+    const { error } = await supabase.from('comp_question_bank').update({ approval_status: 'NEEDS_REVISION' }).eq('id', id)
+    if (reportError('درخواست اصلاح سؤال پیشنهادی', error)) set({ questionBank: previous })
   },
 
   // Editing never mutates the existing row in place — it inserts a brand-new version row (same
@@ -978,6 +1065,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       version: old.version + 1,
       supersededBy: null,
       usageCount: 0,
+      proposalReason: '',
       createdBy: uid,
       createdAt: now,
       updatedAt: now,

@@ -269,6 +269,7 @@ export interface CompQuestionBankRow {
   version: number | null
   superseded_by: string | null
   usage_count: number | null
+  proposal_reason: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -298,6 +299,7 @@ export function compQuestionBankFromRow(r: CompQuestionBankRow): CompQuestionBan
     version: r.version ?? 1,
     supersededBy: r.superseded_by,
     usageCount: r.usage_count ?? 0,
+    proposalReason: r.proposal_reason ?? '',
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -351,6 +353,7 @@ export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): Com
     version: r.version ?? 1,
     supersededBy: null,
     usageCount: 0,
+    proposalReason: '',
     createdBy: null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

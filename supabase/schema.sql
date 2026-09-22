@@ -5594,3 +5594,52 @@ create policy "comp_ai_analysis_select_authenticated" on comp_ai_analysis
 drop policy if exists "comp_ai_analysis_insert_authenticated" on comp_ai_analysis;
 create policy "comp_ai_analysis_insert_authenticated" on comp_ai_analysis
   for insert with check (auth.uid() is not null);
+
+-- ----------------------------------------------------------------------------
+-- Section 37: Competency Assessment Engine v2.0 — Question Proposal Workflow
+-- (spec section 12), completing the Phase 4 that was deferred earlier in
+-- this rewrite. A non-admin can now INSERT a new comp_question_bank row
+-- directly, but only ever landing as PENDING_REVIEW + inactive and owned by
+-- themselves — it can never appear in a live assessment's random selection
+-- (that only ever draws active + APPROVED rows) until an admin approves it.
+-- Only an admin can still UPDATE/DELETE any row, i.e. only an admin can
+-- move a proposal to APPROVED/REJECTED/NEEDS_REVISION or edit its content.
+-- ----------------------------------------------------------------------------
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+
+create policy "comp_question_bank_insert" on comp_question_bank
+  for insert with check (
+    comp_is_module_admin()
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+create policy "comp_question_bank_update_admin" on comp_question_bank
+  for update using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+create policy "comp_question_bank_delete_admin" on comp_question_bank
+  for delete using (comp_is_module_admin());
+
+-- A proposer must be able to see their own proposal afterward (to track its status), even with no
+-- live assessment tying them to that job role's bank at all.
+drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
+create policy "comp_question_bank_select_scoped" on comp_question_bank
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or created_by = auth.uid()
+    or exists (
+      select 1 from comp_assessments a
+      where a.status <> 'completed'
+        and a.job_role = comp_question_bank.job_role
+        and (
+          comp_is_lead(a.id)
+          or (
+            comp_can_access_assessment(a.id)
+            and (a.job_role = 'project_manager' or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text))
+          )
+        )
+    )
+  );
+
+alter table comp_question_bank add column if not exists proposal_reason text not null default '';
