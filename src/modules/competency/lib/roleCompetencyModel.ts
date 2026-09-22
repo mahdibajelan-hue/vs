@@ -174,7 +174,7 @@ export function questionsForAssessment(assessment: Pick<CompetencyAssessment, 's
 /** Category-weighted maturity score for one role's selected question set — shaped exactly like
  * competencyModel.computeDomainScores's output so computeOverallPercent/domainFlags/tierColor and
  * CompetencyRadarChart all work unmodified on either a PM assessment or a role assessment. */
-export function computeCategoryScores(questions: CompQuestionBankItem[], answers: CompetencyAnswers): DomainScore[] {
+export function computeCategoryScores(questions: Pick<CompQuestionBankItem, 'id' | 'category'>[], answers: CompetencyAnswers): DomainScore[] {
   const buckets: Array<'roleGeneral' | 'roleTechnical' | 'roleScenario' | 'roleExperience'> = ['roleGeneral', 'roleTechnical', 'roleScenario', 'roleExperience']
   return buckets.map((bucketKey) => {
     const bucketQuestions = questions.filter((q) => CATEGORY_BUCKET[q.category] === bucketKey)

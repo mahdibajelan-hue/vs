@@ -3789,12 +3789,24 @@ on conflict (key) do nothing;
 alter table comp_assessments add column if not exists results_share_token uuid not null default gen_random_uuid();
 create unique index if not exists idx_comp_assessments_results_share_token on comp_assessments (results_share_token);
 
+-- comp_public_results_get predates the multi-role DB-backed question bank and originally only ever
+-- worked for project_manager (whose domain scores are computed purely from comp_assessments.answers
+-- keyed by fixed in-code question keys). For every other role, answers are keyed by
+-- comp_question_bank UUIDs, and the public page had no way to resolve a question's category (needed
+-- to bucket it into a domain) without bank access — which an anonymous public-link visitor must
+-- never get (reference answers etc. stay evaluator-only). Fixed (Section 38 below) by having the RPC
+-- resolve each selected question's OFFICIAL score (the panel's average across every submitted
+-- panelist, falling back to the lead's own answers only when nobody has submitted — same rule as
+-- resolveOfficialAnswers on the client) together with just its category into `resolved_questions`;
+-- the client then runs the exact same computeCategoryScores() bucket logic used everywhere else in
+-- the app on that minimal, non-sensitive data.
 drop function if exists comp_public_results_get(uuid);
 create or replace function comp_public_results_get(p_token uuid)
 returns table (
   id uuid,
   candidate_name text,
   candidate_position text,
+  job_role text,
   interview_date date,
   status text,
   answers jsonb,
@@ -3806,15 +3818,52 @@ returns table (
   pm_certification_score numeric,
   is_approved boolean,
   strengths text,
-  development_areas text
+  development_areas text,
+  resolved_questions jsonb
 ) as $$
-  select a.id, a.candidate_name, a.candidate_position, a.interview_date, a.status,
-         a.answers, a.capstone_score, a.capstone_note,
-         a.education_score, a.experience_score, a.pm_training_score, a.pm_certification_score,
-         a.is_approved, a.strengths, a.development_areas
-  from comp_assessments a
-  where a.results_share_token = p_token;
-$$ language sql security definer stable;
+declare
+  v_assessment comp_assessments%rowtype;
+  v_has_submitted boolean;
+  v_resolved_questions jsonb;
+begin
+  select * into v_assessment from comp_assessments a where a.results_share_token = p_token;
+  if not found then
+    return;
+  end if;
+
+  if v_assessment.job_role = 'project_manager' then
+    v_resolved_questions := '[]'::jsonb;
+  else
+    select exists(
+      select 1 from comp_panelist_scores ps where ps.assessment_id = v_assessment.id and ps.submitted_at is not null
+    ) into v_has_submitted;
+
+    select coalesce(jsonb_agg(jsonb_build_object('id', q.id, 'category', q.category, 'score', official.score)), '[]'::jsonb)
+    into v_resolved_questions
+    from comp_question_bank q
+    cross join lateral (
+      select case
+        when v_has_submitted then (
+          select avg((ps.answers -> q.id::text ->> 'score')::numeric)
+          from comp_panelist_scores ps
+          where ps.assessment_id = v_assessment.id
+            and ps.submitted_at is not null
+            and (ps.answers -> q.id::text ->> 'score') is not null
+        )
+        else (v_assessment.answers -> q.id::text ->> 'score')::numeric
+      end as score
+    ) official
+    where q.id::text in (select jsonb_array_elements_text(v_assessment.selected_question_ids));
+  end if;
+
+  return query select
+    v_assessment.id, v_assessment.candidate_name, v_assessment.candidate_position, v_assessment.job_role,
+    v_assessment.interview_date, v_assessment.status, v_assessment.answers,
+    v_assessment.capstone_score, v_assessment.capstone_note,
+    v_assessment.education_score, v_assessment.experience_score, v_assessment.pm_training_score, v_assessment.pm_certification_score,
+    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions;
+end;
+$$ language plpgsql security definer stable;
 
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
 

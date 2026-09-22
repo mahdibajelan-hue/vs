@@ -5,12 +5,20 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
-import type { CompetencyAnswers } from '../types'
+import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
+import type { CompetencyAnswers, JobRole, QuestionType } from '../types'
+
+interface ResolvedQuestion {
+  id: string
+  category: QuestionType
+  score: number | null
+}
 
 interface PublicResultsRow {
   id: string
   candidate_name: string
   candidate_position: string
+  job_role: JobRole
   interview_date: string
   status: string
   answers: CompetencyAnswers
@@ -23,6 +31,7 @@ interface PublicResultsRow {
   is_approved: boolean
   strengths: string
   development_areas: string
+  resolved_questions: ResolvedQuestion[]
 }
 
 /**
@@ -66,10 +75,24 @@ export function PublicResultsPage({ token }: { token: string }) {
     )
   }
 
-  const domainScores = computeDomainScores(row.answers)
+  const isPM = isProjectManagerRole(row.job_role)
+  // Non-PM roles are scored against the DB-backed question bank (keyed by UUID, not the fixed PM
+  // question keys) — resolved_questions gives just {id, category, official score} (never question
+  // text/reference answers, which must stay evaluator-only even to an anonymous public-link
+  // visitor), enough to run the exact same bucket logic used everywhere else in the app.
+  const officialAnswers: CompetencyAnswers = isPM
+    ? row.answers
+    : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))
+  const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(row.resolved_questions, officialAnswers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(row.answers)
+  const completion = isPM
+    ? computeCompletion(officialAnswers)
+    : {
+        answered: row.resolved_questions.filter((q) => q.score != null).length,
+        total: row.resolved_questions.length,
+        percent: row.resolved_questions.length === 0 ? 0 : Math.round((row.resolved_questions.filter((q) => q.score != null).length / row.resolved_questions.length) * 100),
+      }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const qualificationChips = [
