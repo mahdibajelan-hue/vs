@@ -111,6 +111,61 @@ const BUCKET_DOMAIN: Record<'roleGeneral' | 'roleTechnical' | 'roleScenario' | '
   },
 }
 
+// Competency Fingerprint (spec section 14/15): extra, purely-informational dimensions computed
+// directly from a single question category's own scores — zero weight, so merging these into a
+// radar chart or KPI grid alongside the 4 weighted buckets never changes computeOverallPercent or
+// recommendationForRole, which keep reading only the original weighted DomainScore[].
+const EXTENDED_FINGERPRINT_DOMAINS: Record<'roleHse' | 'roleBehavioral' | 'roleJudgment', CompetencyDomain> = {
+  roleHse: {
+    key: 'roleHse',
+    title: 'آگاهی HSE',
+    shortTitle: 'HSE',
+    weight: 0,
+    description: 'شناخت و رعایت الزامات ایمنی، بهداشت و محیط‌زیست.',
+    excellentAnswerHint: 'شناخت دقیق ریسک‌ها و رویه‌های کنترلی، با نمونه عملی مشخص.',
+  },
+  roleBehavioral: {
+    key: 'roleBehavioral',
+    title: 'شایستگی رفتاری',
+    shortTitle: 'رفتاری',
+    weight: 0,
+    description: 'رفتار حرفه‌ای، ارتباط مؤثر و تعامل تیمی.',
+    excellentAnswerHint: 'مثال واقعی از رفتار حرفه‌ای با نتیجه قابل‌مشاهده.',
+  },
+  roleJudgment: {
+    key: 'roleJudgment',
+    title: 'قضاوت حرفه‌ای',
+    shortTitle: 'قضاوت',
+    weight: 0,
+    description: 'توانایی تصمیم‌گیری درست در شرایط مبهم یا پرریسک.',
+    excellentAnswerHint: 'تشخیص درست اولویت و تصمیم مستدل با در نظر گرفتن پیامدها.',
+  },
+}
+
+/** Computes the 3 extra Competency Fingerprint dimensions (HSE/Behavioral/Judgment) directly from
+ * their own question category's scores — display-only, see the module-level comment above. Callers
+ * should filter out entries with totalCount === 0 (a role whose mix never used that question type)
+ * before rendering. */
+export function computeExtendedFingerprint(questions: CompQuestionBankItem[], answers: CompetencyAnswers): DomainScore[] {
+  const buckets: Array<{ key: 'roleHse' | 'roleBehavioral' | 'roleJudgment'; category: QuestionType }> = [
+    { key: 'roleHse', category: 'HSE' },
+    { key: 'roleBehavioral', category: 'BEHAVIORAL' },
+    { key: 'roleJudgment', category: 'JUDGMENT' },
+  ]
+  return buckets.map(({ key, category }) => {
+    const bucketQuestions = questions.filter((q) => q.category === category)
+    const scores = bucketQuestions.map((q) => answers[q.id]?.score).filter((s): s is number => typeof s === 'number')
+    const averageScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null
+    return {
+      domain: EXTENDED_FINGERPRINT_DOMAINS[key],
+      answeredCount: scores.length,
+      totalCount: bucketQuestions.length,
+      averageScore,
+      percentScore: averageScore != null ? Math.round((averageScore / 5) * 100) : null,
+    }
+  })
+}
+
 export function questionsForAssessment(assessment: Pick<CompetencyAssessment, 'selectedQuestionIds'>, bank: CompQuestionBankItem[]): CompQuestionBankItem[] {
   const ids = new Set(assessment.selectedQuestionIds)
   return bank.filter((q) => ids.has(q.id))

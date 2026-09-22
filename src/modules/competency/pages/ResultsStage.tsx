@@ -52,6 +52,7 @@ import {
 } from '../lib/competencyModel'
 import {
   computeCategoryScores,
+  computeExtendedFingerprint,
   computeRoleCompletion,
   isProjectManagerRole,
   questionsForAssessment,
@@ -92,6 +93,9 @@ const ROLE_BUCKET_ICON: Record<string, typeof Compass> = {
   roleTechnical: GraduationCap,
   roleScenario: Puzzle,
   roleExperience: History,
+  roleHse: ShieldCheck,
+  roleBehavioral: Users,
+  roleJudgment: Compass,
 }
 
 const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
@@ -200,7 +204,13 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
     return row
   })
 
-  const kpiTiles = domainScores.map((d, i) => ({
+  // Competency Fingerprint (spec section 14/15): extra HSE/Behavioral/Judgment dimensions, computed
+  // straight from their own question category and shown ADDITIONALLY beside the 4 weighted role
+  // buckets — zero-weight, so they never touch computeOverallPercent/recommendationForRole above.
+  // Only shown when this role's mix actually used that question type at all.
+  const extendedFingerprint = isPM ? [] : computeExtendedFingerprint(roleQuestions, officialAnswers).filter((d) => d.totalCount > 0)
+
+  const kpiTiles = [...domainScores, ...extendedFingerprint].map((d, i) => ({
     domain: d,
     Icon: isPM ? PM_DOMAIN_ICON[d.domain.key as CompetencyDomainKey] ?? Compass : ROLE_BUCKET_ICON[d.domain.key] ?? Compass,
     accent: DOMAIN_ACCENT_PALETTE[i % DOMAIN_ACCENT_PALETTE.length],

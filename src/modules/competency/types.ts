@@ -16,6 +16,13 @@ export type CompetencyDomainKey =
   | 'roleTechnical'
   | 'roleScenario'
   | 'roleExperience'
+  // Zero-weight, display-only Competency Fingerprint dimensions (spec section 14/15) — computed
+  // straight from HSE/BEHAVIORAL/JUDGMENT question scores and shown alongside the 4 weighted
+  // buckets above, but never fed into computeOverallPercent/recommendationForRole so the tested
+  // scoring math never changes (see computeExtendedFingerprint in roleCompetencyModel.ts).
+  | 'roleHse'
+  | 'roleBehavioral'
+  | 'roleJudgment'
 
 export interface CompetencyDomain {
   key: CompetencyDomainKey
