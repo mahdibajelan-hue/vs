@@ -4,9 +4,10 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { PersonalityDashboardPage } from './pages/PersonalityDashboardPage'
 import { PersonalityResultsPage } from './pages/PersonalityResultsPage'
 import { PersonalityQuestionBankPage } from './pages/PersonalityQuestionBankPage'
+import { PersonalityReportsPage } from './pages/PersonalityReportsPage'
 import { PersonalitySettingsPage } from './pages/PersonalitySettingsPage'
 
-type View = { name: 'list' } | { name: 'results'; id: string } | { name: 'questionBank' } | { name: 'settings' }
+type View = { name: 'list' } | { name: 'results'; id: string } | { name: 'questionBank' } | { name: 'reports' } | { name: 'settings' }
 
 /** Personality & Behavioral Assessment module — entry point, mirroring CompetencyApp's
  * {onExitToHub} signature so RootApp wires it in exactly like every other module. */
@@ -49,6 +50,17 @@ export function PersonalityApp({ onExitToHub }: { onExitToHub: () => void }) {
     )
   }
 
+  if (view.name === 'reports') {
+    return (
+      <PersonalityReportsPage
+        onExitToHub={onExitToHub}
+        onNavDashboard={() => setView({ name: 'list' })}
+        onNavQuestionBank={() => setView({ name: 'questionBank' })}
+        onNavSettings={isModuleAdmin ? () => setView({ name: 'settings' }) : undefined}
+      />
+    )
+  }
+
   if (view.name === 'settings' && isModuleAdmin) {
     return <PersonalitySettingsPage onExitToHub={onExitToHub} onNavDashboard={() => setView({ name: 'list' })} onNavQuestionBank={() => setView({ name: 'questionBank' })} />
   }
@@ -58,6 +70,7 @@ export function PersonalityApp({ onExitToHub }: { onExitToHub: () => void }) {
       onExitToHub={onExitToHub}
       onOpenResults={(id) => setView({ name: 'results', id })}
       onOpenQuestionBank={() => setView({ name: 'questionBank' })}
+      onOpenReports={() => setView({ name: 'reports' })}
       onOpenSettings={isModuleAdmin ? () => setView({ name: 'settings' }) : undefined}
     />
   )

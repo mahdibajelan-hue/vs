@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRight, ChevronDown, ChevronUp, Compass, GraduationCap, HelpCircle, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronUp, Compass, GraduationCap, HelpCircle, Loader2, Printer, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
 import { JOB_ROLE_LABEL_FA } from '../../competency/types'
+import { PersonalityPrintReport } from '../components/PersonalityPrintReport'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
 
 /** Staff-facing results/behavioral-fingerprint page — reads exclusively from
@@ -27,6 +28,7 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
   const [generating, setGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [expandedFollowUp, setExpandedFollowUp] = useState<number | null>(null)
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchDimensionScores(personalityAssessmentId)
@@ -51,6 +53,62 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
     if (result.error) setAiError(result.error)
   }
 
+  const handlePrint = async () => {
+    const node = printRef.current
+    if (!node) return
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
+    document.body.appendChild(frame)
+
+    const doc = frame.contentDocument
+    const win = frame.contentWindow
+    if (!doc || !win) {
+      frame.remove()
+      return
+    }
+
+    const marginMm = 8
+    doc.open()
+    doc.write(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<title>ارزیابی شخصیت — ${candidate?.candidateName ?? ''}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap">
+<style>
+  @page { size: A4 portrait; margin: ${marginMm}mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: "Vazirmatn", "Segoe UI", sans-serif; }
+  svg, img { break-inside: avoid; page-break-inside: avoid; }
+</style></head><body><div id="fit-wrap" style="margin:0 auto;overflow:hidden;">${node.innerHTML}</div></body></html>`)
+    doc.close()
+
+    try {
+      await doc.fonts?.ready
+    } catch {
+      /* fonts API unavailable — print with whatever is loaded */
+    }
+
+    const wrap = doc.getElementById('fit-wrap')
+    const reportEl = wrap?.firstElementChild as HTMLElement | undefined
+    if (wrap && reportEl) {
+      const mmToPx = 96 / 25.4
+      const maxWidthPx = (210 - marginMm * 2) * mmToPx
+      const maxHeightPx = (297 - marginMm * 2) * mmToPx
+      const naturalWidth = reportEl.scrollWidth
+      const naturalHeight = reportEl.scrollHeight
+      const scale = Math.min(1, maxWidthPx / naturalWidth, maxHeightPx / naturalHeight)
+      reportEl.style.transformOrigin = 'top left'
+      reportEl.style.transform = `scale(${scale})`
+      wrap.style.width = `${naturalWidth * scale}px`
+      wrap.style.height = `${naturalHeight * scale}px`
+    }
+
+    win.focus()
+    win.print()
+    win.addEventListener('afterprint', () => frame.remove())
+    setTimeout(() => frame.remove(), 60_000)
+  }
+
   if (!assessment) {
     return (
       <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
@@ -62,13 +120,33 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
   return (
     <div className="min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <div className="mx-auto max-w-4xl space-y-4">
-        <button onClick={onBack} className="flex w-fit items-center gap-1.5 text-xs text-secondary hover:text-primary">
-          <ArrowRight size={14} /> بازگشت به داشبورد
-        </button>
+        <div className="no-print flex flex-wrap items-center justify-between gap-2">
+          <button onClick={onBack} className="flex w-fit items-center gap-1.5 text-xs text-secondary hover:text-primary">
+            <ArrowRight size={14} /> بازگشت به داشبورد
+          </button>
+          <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
+            <Printer size={14} /> چاپ گزارش
+          </button>
+        </div>
 
         <div className="glass-panel rounded-2xl p-4">
           <p className="text-sm font-bold">{candidate?.candidateName ?? 'متقاضی'}</p>
           <p className="mt-0.5 text-[11px] text-muted">{JOB_ROLE_LABEL_FA[assessment.jobRole]} — اثرانگشت رفتاری</p>
+        </div>
+
+        <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
+          <PersonalityPrintReport
+            assessment={assessment}
+            candidateName={candidate?.candidateName ?? 'متقاضی'}
+            candidatePosition={candidate?.candidatePosition}
+            traitScores={traitScores}
+            behavioralScores={dimensionScoresOnly}
+            traits={traits}
+            dimensions={dimensions}
+            jobRequirements={requirementsForProfile}
+            validityResult={validityResult}
+            aiAnalysis={aiAnalysis}
+          />
         </div>
 
         {validityResult && (

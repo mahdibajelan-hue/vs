@@ -161,6 +161,11 @@ interface PersonalityStoreState {
 
   fetchDimensionScores: (personalityAssessmentId: string) => Promise<void>
   fetchValidityResult: (personalityAssessmentId: string) => Promise<void>
+  /** Bulk-loads every assessment's dimension scores + validity result in two queries (mirroring how
+   * useCompetencyStore.fetchAll pulls all comp_panelist_scores unfiltered) — used only by
+   * PersonalityReportsPage, which needs every assessment's scores at once for aggregate stats
+   * rather than the one-assessment-at-a-time fetches above that the results page uses. */
+  fetchAllScoresForReports: () => Promise<void>
 
   fetchAiAnalysis: (personalityAssessmentId: string) => Promise<void>
   generateAiAnalysis: (personalityAssessmentId: string) => Promise<{ error: string | null }>
@@ -452,6 +457,19 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
     if (!data) return
     const row = personalityValidityResultFromRow(data as PersonalityValidityResultRow)
     set({ validityResults: [...get().validityResults.filter((v) => v.personalityAssessmentId !== personalityAssessmentId), row] })
+  },
+
+  fetchAllScoresForReports: async () => {
+    const [dsRes, vrRes] = await Promise.all([
+      supabase.from('personality_dimension_scores').select('*'),
+      supabase.from('personality_validity_results').select('*'),
+    ])
+    if (reportError('بارگذاری امتیازهای ابعاد', dsRes.error)) return
+    if (reportError('بارگذاری نتایج اعتبارسنجی', vrRes.error)) return
+    set({
+      dimensionScores: ((dsRes.data ?? []) as PersonalityDimensionScoreRow[]).map(personalityDimensionScoreFromRow),
+      validityResults: ((vrRes.data ?? []) as PersonalityValidityResultRow[]).map(personalityValidityResultFromRow),
+    })
   },
 
   fetchAiAnalysis: async (personalityAssessmentId) => {

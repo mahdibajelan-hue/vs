@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, BrainCircuit, Copy, Home, Link as LinkIcon, Plus, Settings, Wand2 } from 'lucide-react'
+import { BookOpen, BrainCircuit, Copy, FileBarChart2, Home, Link as LinkIcon, Plus, Settings, Wand2 } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
 import { JOB_ROLE_LABEL_FA } from '../../competency/types'
@@ -44,11 +44,13 @@ export function PersonalityDashboardPage({
   onExitToHub,
   onOpenResults,
   onOpenQuestionBank,
+  onOpenReports,
   onOpenSettings,
 }: {
   onExitToHub: () => void
   onOpenResults: (id: string) => void
   onOpenQuestionBank: () => void
+  onOpenReports: () => void
   onOpenSettings?: () => void
 }) {
   const assessments = usePersonalityStore((s) => s.assessments)
@@ -109,6 +111,9 @@ export function PersonalityDashboardPage({
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onOpenQuestionBank} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5">
             <BookOpen size={13} /> بانک سؤالات
+          </button>
+          <button onClick={onOpenReports} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5">
+            <FileBarChart2 size={13} /> گزارش‌ها
           </button>
           {onOpenSettings && (
             <button onClick={onOpenSettings} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5">
