@@ -3,7 +3,7 @@ import { ArrowRight, ArrowLeft, Pencil, User, Wand2 } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
-import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, questionsForAssessment, resolveOfficialAnswers, resolveOfficialCapstone } from '../lib/roleCompetencyModel'
 import { JOB_ROLE_LABEL_FA, type QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
@@ -121,8 +121,6 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   if (stages.includes('questions')) nav.questions = () => setStage('questions')
   if (stages.includes('results')) nav.results = () => setStage('results')
 
-  const completion = computeCompletion(assessment?.answers ?? {})
-
   // What each interviewer recorded, per question — the lead reads this while setting the final
   // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
   const panelVotesByQuestion = useMemo(() => {
@@ -138,9 +136,30 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
     return map
   }, [submittedScores, profiles])
 
+  // Judges' own strengths/development-area notes, compiled so the lead's final summary can start
+  // from them instead of being written from scratch — see EvaluationSummaryCard.
+  const panelNotes = useMemo(
+    () =>
+      submittedScores.map((s) => ({
+        name: profiles.find((p) => p.id === s.panelistId)?.fullName ?? 'داور',
+        strengths: s.strengths,
+        developmentAreas: s.developmentAreas,
+      })),
+    [submittedScores, profiles],
+  )
+
   if (!assessment) {
     return <div className="p-6 text-sm text-muted">ارزیابی یافت نشد.</div>
   }
+
+  // Once any judge has submitted, the official score for every question is that panel's own
+  // average (see resolveOfficialAnswers) — the lead is no longer asked to enter a separate score,
+  // only reads/reviews the average. Before any submission (e.g. scoring solo, no panel assigned),
+  // the lead's own entry is still what counts, exactly as resolveOfficialAnswers falls back to it.
+  const hasOfficialScore = submittedScores.length > 0
+  const officialAnswers = resolveOfficialAnswers(assessment.answers, submittedScores)
+  const officialCapstone = resolveOfficialCapstone(assessment.capstoneScore, assessment.capstoneNote, submittedScores)
+  const completion = computeCompletion(officialAnswers)
 
   // The results dashboard is a full-screen experience with its own right-hand sidebar (see
   // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
@@ -155,9 +174,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   // memoized: this runs after the early returns above, so a hook here would violate hook-order
   // rules when activeStage flips to 'results'.
   const pmBankByText = new Map(questionBank.filter((q) => q.jobRole === 'project_manager').map((q) => [q.questionText, q]))
-  const roleCompletion = computeRoleCompletion(roleQuestions, assessment.answers)
+  const roleCompletion = computeRoleCompletion(roleQuestions, officialAnswers)
   const evalStages = computeEvaluationStages(assessment, isPM ? completion.percent : roleCompletion.percent, panelists.length, submittedScores.length)
-  const currentDomainScores = isPM ? computeDomainScores(assessment.answers) : computeCategoryScores(roleQuestions, assessment.answers)
+  const currentDomainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(roleQuestions, officialAnswers)
   const currentOverallPercent = computeOverallPercent(currentDomainScores)
   const currentRoleSection = ROLE_SECTIONS[roleSectionIndex]
   const roleSectionQuestions = roleQuestions.filter((q) => (currentRoleSection.types as string[]).includes(q.category))
@@ -216,10 +235,12 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           </span>
           {panelists.length === 0 ? (
             <span className="text-amber-300">— ابتدا در بخش «پنل مصاحبه‌گران» سه داور را اضافه کنید.</span>
-          ) : submittedScores.length < panelists.length ? (
-            <span className="text-amber-300">— تا ثبت نهایی همه داوران، نظرات آن‌ها در «نظر نهایی» نمایش داده نمی‌شود.</span>
+          ) : !hasOfficialScore ? (
+            <span className="text-amber-300">— تا ثبت نهایی حداقل یک داور، امتیاز هر سوال را خودتان در بخش «ارزیابی» ثبت می‌کنید.</span>
           ) : (
-            <span className="text-green-300">— نظر همه داوران در بخش «نظر نهایی» زیر هر سوال قابل مشاهده است.</span>
+            <span className="text-green-300">
+              — امتیاز نهایی هر سوال اکنون میانگین نظرات {submittedScores.length.toLocaleString('fa-IR')} داور ثبت‌شده است؛ دیگر نیازی به ثبت جداگانه توسط شما نیست.
+            </span>
           )}
         </div>
       )}
@@ -327,15 +348,15 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                     key={q.id}
                     index={i}
                     question={q}
-                    answer={assessment.answers[q.id]}
-                    editable
+                    answer={officialAnswers[q.id]}
+                    editable={!hasOfficialScore}
                     onChange={(score, note, candidateAnswer) => setAnswer(assessment.id, q.id, score, note, candidateAnswer)}
                     panelVotes={panelVotesByQuestion.get(q.id)}
                   />
                 ))}
               </div>
 
-              {isLastRoleSection && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} />}
+              {isLastRoleSection && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} panelNotes={panelNotes} />}
 
               <div className="flex items-center justify-between">
                 <button
@@ -410,8 +431,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                   index={i}
                   question={q}
                   hint={domain.excellentAnswerHint}
-                  answer={assessment.answers[q.key]}
-                  editable
+                  answer={officialAnswers[q.key]}
+                  editable={!hasOfficialScore}
                   onChange={(score, note) => setAnswer(assessment.id, q.key, score, note)}
                   panelVotes={panelVotesByQuestion.get(q.key)}
                   bankItem={pmBankByText.get(q.text)}
@@ -419,10 +440,15 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
               ))}
             </div>
           ) : (
-            <CapstoneCard score={assessment.capstoneScore} note={assessment.capstoneNote} editable onChange={(score, note) => setCapstone(assessment.id, score, note)} />
+            <CapstoneCard
+              score={officialCapstone.score}
+              note={officialCapstone.note}
+              editable={!hasOfficialScore}
+              onChange={(score, note) => setCapstone(assessment.id, score, note)}
+            />
           )}
 
-          {onCapstoneStep && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} />}
+          {onCapstoneStep && <EvaluationSummaryCard assessment={assessment} overallPercent={currentOverallPercent} panelNotes={panelNotes} />}
 
           <div className="flex items-center justify-between">
             <button

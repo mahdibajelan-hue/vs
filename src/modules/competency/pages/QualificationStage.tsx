@@ -8,6 +8,22 @@ interface AssessmentCardProps {
   assessment: CompetencyAssessment
 }
 
+/** One judge's own strengths/development-area notes (comp_panelist_scores.strengths/
+ * developmentAreas), compiled by the caller from every submitted score sheet. */
+export interface PanelSummaryNote {
+  name: string
+  strengths: string
+  developmentAreas: string
+}
+
+function compilePanelNotes(panelNotes: PanelSummaryNote[], field: 'strengths' | 'developmentAreas'): string {
+  return panelNotes
+    .map((p) => ({ name: p.name, text: p[field].trim() }))
+    .filter((p) => p.text)
+    .map((p) => `${p.name}: ${p.text}`)
+    .join('\n')
+}
+
 const SCORE_OPTIONS = [0, 1, 2, 3, 4, 5]
 
 /**
@@ -68,22 +84,33 @@ export function QualificationScorecardCard({ assessment }: AssessmentCardProps) 
 /**
  * Final wrap-up, shown at the end of the evaluation questions (after the last domain/section):
  * the auto-derived interview score (weighted domain average — never hand-edited, computed by the
- * caller with whichever scoring model this role uses) alongside the lead's own narrative
- * strengths/development-areas summary.
+ * caller with whichever scoring model this role uses, and already the panel's own average once any
+ * judge has submitted) alongside the lead's own narrative strengths/development-areas summary,
+ * pre-filled from every judge's own notes so the lead reviews/completes rather than starting from a
+ * blank page.
  */
-export function EvaluationSummaryCard({ assessment, overallPercent }: AssessmentCardProps & { overallPercent: number | null }) {
+export function EvaluationSummaryCard({
+  assessment,
+  overallPercent,
+  panelNotes = [],
+}: AssessmentCardProps & { overallPercent: number | null; panelNotes?: PanelSummaryNote[] }) {
   const setStrengthsAndDevelopment = useCompetencyStore((s) => s.setStrengthsAndDevelopment)
 
   const interviewScore = overallPercent != null ? Math.round((overallPercent / 20) * 10) / 10 : null
 
-  const [strengths, setStrengths] = useState(assessment.strengths)
-  const [developmentAreas, setDevelopmentAreas] = useState(assessment.developmentAreas)
+  // Only pre-fill from the judges' notes when the lead hasn't written their own summary yet — an
+  // already-saved summary (this candidate's own assessment.strengths/developmentAreas) is never
+  // silently overwritten.
+  const prefilledStrengths = !assessment.strengths && compilePanelNotes(panelNotes, 'strengths')
+  const prefilledDevelopmentAreas = !assessment.developmentAreas && compilePanelNotes(panelNotes, 'developmentAreas')
+  const [strengths, setStrengths] = useState(assessment.strengths || prefilledStrengths || '')
+  const [developmentAreas, setDevelopmentAreas] = useState(assessment.developmentAreas || prefilledDevelopmentAreas || '')
 
   return (
     <div className="space-y-3">
       <div className="glass-panel flex flex-col justify-between rounded-2xl p-3.5 sm:max-w-xs">
         <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted">
-          <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار)
+          <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار — میانگین داوران)
         </div>
         <p className="num text-2xl font-extrabold text-purple-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
         <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
@@ -92,7 +119,9 @@ export function EvaluationSummaryCard({ assessment, overallPercent }: Assessment
       <div className="glass-panel space-y-3 rounded-2xl p-4">
         <p className="text-sm font-bold">جمع‌بندی مسئول ارزیابی</p>
         <p className="text-[11px] leading-5 text-muted">
-          جمع‌بندی روایی خودتان از نامزد — جدا از نقاط قوت/ضعف خودکاری که از امتیاز حوزه‌ها استخراج می‌شود و در گزارش نتیجه نشان داده می‌شود.
+          {panelNotes.length > 0
+            ? 'متن زیر از یادداشت‌های داوران تکمیل شده — آن را مرور، ویرایش و تکمیل کنید تا در پروفایل نامزد ثبت شود.'
+            : 'جمع‌بندی روایی خودتان از نامزد — جدا از نقاط قوت/ضعف خودکاری که از امتیاز حوزه‌ها استخراج می‌شود و در گزارش نتیجه نشان داده می‌شود.'}
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">

@@ -30,6 +30,22 @@ export function resolveOfficialAnswers(fallbackAnswers: CompetencyAnswers, panel
   return result
 }
 
+/** Same official-vs-fallback principle as resolveOfficialAnswers, applied to the legacy PM rubric's
+ * single capstone scenario score/note (not part of the keyed answers map, so it needs its own
+ * resolution). */
+export function resolveOfficialCapstone(
+  fallbackScore: number | null,
+  fallbackNote: string,
+  panelistScores: CompPanelistScore[],
+): { score: number | null; note: string } {
+  const submitted = panelistScores.filter((s) => s.submittedAt != null)
+  if (submitted.length === 0) return { score: fallbackScore, note: fallbackNote }
+  const scores = submitted.map((s) => s.capstoneScore).filter((v): v is number => typeof v === 'number')
+  const score = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : fallbackScore
+  const note = fallbackNote || submitted.find((s) => s.capstoneNote)?.capstoneNote || ''
+  return { score, note }
+}
+
 type QualificationFields = Pick<CompetencyAssessment, 'educationScore' | 'experienceScore' | 'pmTrainingScore' | 'pmCertificationScore'>
 const QUALIFICATION_KEYS: (keyof QualificationFields)[] = ['educationScore', 'experienceScore', 'pmTrainingScore', 'pmCertificationScore']
 
