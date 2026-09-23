@@ -5790,3 +5790,741 @@ $$ language plpgsql security definer;
 grant execute on function comp_set_interview_timer(uuid, text) to authenticated;
 
 alter table comp_question_bank add column if not exists proposal_reason text not null default '';
+
+-- ============================================================================
+-- Section 40: Personality & Behavioral Assessment Engine — Phase 1:
+-- foundational domain model (catalog tables, question bank, per-candidate
+-- assessment shell, scoring/validity/AI-analysis storage, RBAC). This is
+-- Phase 1 of a multi-phase build — question CONTENT, the Assessment Designer
+-- wizard, the candidate-facing UI, the scoring/validity/pattern engines, and
+-- Gemini integration are later phases layered on top of this schema.
+--
+-- Reuse decisions (per the spec's own "do not duplicate, do not disrupt the
+-- existing system" instructions):
+--   - Job roles: reuses the existing JobRole domain (job_role text columns,
+--     same literal values as comp_job_role_config) — no new job-role table.
+--   - Candidate/assessment identity: personality_assessments links to the
+--     EXISTING comp_assessments row (1:1) rather than creating a parallel
+--     candidate model — a candidate is one person with possibly both a
+--     competency assessment and a personality assessment on the same record,
+--     matching the spec's "Technical + Personality Integration".
+--   - Versioning + approval workflow for personality_questions mirrors
+--     comp_question_bank's proven design exactly (question_group_id/version/
+--     superseded_by, approval_status, a non-admin INSERT lands as
+--     PENDING_REVIEW+inactive) rather than a separate "proposals" table.
+--   - Audit trail reuses comp_audit_log/comp_log_audit() (already fully
+--     generic — entity_type/entity_id/actor/before/after — despite the
+--     comp_ prefix, which is a naming artifact from when it was first built)
+--     instead of a parallel personality_audit_logs table; its SELECT policy
+--     is widened below so a personality-only module admin can read it too.
+--   - RBAC reuses the existing rasta_modules/rasta_roles/rasta_permissions/
+--     rasta_has_permission() framework, registering a new 'personality'
+--     module key exactly like 'competency' did, with its own
+--     PERSONALITY_ASSESSMENT_DESIGNER/PERSONALITY_REPORT_VIEWER roles (kept
+--     distinct from competency's ASSESSMENT_DESIGNER/REPORT_VIEWER roles,
+--     since someone may be trusted with one module and not the other) and a
+--     dedicated personality_module_admins table mirroring comp_module_admins.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- RBAC: module admins + rasta_roles registration
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_module_admins (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  added_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+alter table personality_module_admins enable row level security;
+
+create or replace function personality_is_module_admin()
+returns boolean as $$
+  select is_admin_user() or exists (select 1 from personality_module_admins where user_id = auth.uid());
+$$ language sql security definer stable;
+
+drop policy if exists "personality_module_admins_select_authenticated" on personality_module_admins;
+create policy "personality_module_admins_select_authenticated" on personality_module_admins
+  for select using (auth.uid() is not null);
+
+drop policy if exists "personality_module_admins_write_admin" on personality_module_admins;
+create policy "personality_module_admins_write_admin" on personality_module_admins
+  for all using (personality_is_module_admin()) with check (personality_is_module_admin());
+
+insert into rasta_modules (key, label_fa) values ('personality', 'ارزیابی شخصیت و رفتاری')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+where m.key = 'personality'
+on conflict (module_key, action) do nothing;
+
+insert into rasta_roles (name, description, is_system)
+values
+  ('PERSONALITY_ASSESSMENT_DESIGNER', 'طراحی آزمون شخصیت و رفتاری: تعریف ترکیب سؤال و تولید آزمون — بدون دسترسی ویرایش بانک سؤالات', true),
+  ('PERSONALITY_REPORT_VIEWER', 'مشاهده گزارش‌های نهایی‌شده ارزیابی شخصیت و رفتاری', true)
+on conflict (name) do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'personality' and p.action in ('view', 'create', 'configure')
+where r.name = 'PERSONALITY_ASSESSMENT_DESIGNER'
+on conflict do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'personality' and p.action in ('view', 'export')
+where r.name = 'PERSONALITY_REPORT_VIEWER'
+on conflict do nothing;
+
+create or replace function personality_is_assessment_designer()
+returns boolean as $$
+  select personality_is_module_admin() or rasta_has_permission(auth.uid(), 'personality', 'configure');
+$$ language sql security definer stable;
+
+create or replace function personality_is_report_viewer()
+returns boolean as $$
+  select personality_is_module_admin() or personality_is_assessment_designer() or rasta_has_permission(auth.uid(), 'personality', 'view');
+$$ language sql security definer stable;
+
+-- Let a personality-only module admin read the shared audit log too (see the reuse note above) —
+-- additive only, never narrows who could already read it.
+drop policy if exists "comp_audit_log_select_admin" on comp_audit_log;
+create policy "comp_audit_log_select_admin" on comp_audit_log
+  for select using (comp_is_module_admin() or personality_is_module_admin());
+
+-- ----------------------------------------------------------------------------
+-- Catalog: framework / traits / facets / behavioral dimensions / job profiles
+-- / response scales — admin-configurable reference data.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_frameworks (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  version int not null default 1,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create table if not exists personality_traits (
+  id uuid primary key default gen_random_uuid(),
+  framework_id uuid not null references personality_frameworks (id) on delete cascade,
+  key text not null,
+  label_fa text not null,
+  description text not null default '',
+  display_order int not null default 0,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (framework_id, key)
+);
+
+create table if not exists personality_facets (
+  id uuid primary key default gen_random_uuid(),
+  trait_id uuid not null references personality_traits (id) on delete cascade,
+  key text not null,
+  label_fa text not null,
+  description text not null default '',
+  display_order int not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (trait_id, key)
+);
+
+-- The 22+ professional behavioral dimensions — a module-wide catalog, not tied to one framework,
+-- since they describe workplace behavior rather than personality-trait theory.
+create table if not exists personality_behavioral_dimensions (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  default_weight numeric not null default 1 check (default_weight > 0),
+  related_trait_ids uuid[] not null default '{}',
+  related_facet_ids uuid[] not null default '{}',
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+-- Job Behavioral Profile: which dimensions matter for a given job_role, at what weight/threshold.
+-- job_role is a plain text column against the existing JobRole domain (same literal values as
+-- comp_job_role_config.job_role) — no new job-role table. Versioned (job roles can have more than
+-- one profile revision over time; only one should be active per job_role at a time, enforced at the
+-- application layer like comp_question_bank's own versioning, not a DB constraint).
+create table if not exists personality_job_behavioral_profiles (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  version int not null default 1,
+  title text not null,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+create index if not exists idx_personality_job_profiles_role on personality_job_behavioral_profiles (job_role) where active;
+
+create table if not exists personality_job_behavioral_requirements (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references personality_job_behavioral_profiles (id) on delete cascade,
+  dimension_id uuid not null references personality_behavioral_dimensions (id),
+  weight numeric not null default 1 check (weight > 0),
+  min_threshold numeric,
+  preferred_min numeric,
+  preferred_max numeric,
+  is_critical boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (profile_id, dimension_id)
+);
+
+-- Configurable response scales — Likert-5/7, frequency, importance, forced choice, ranking, etc.
+-- labels is [{value:int, label_fa:text}]; reverse_rule names the reversal strategy the scoring
+-- engine applies (computed server-side only, never in frontend code).
+create table if not exists personality_response_scales (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  min_value int not null,
+  max_value int not null,
+  labels jsonb not null default '[]'::jsonb,
+  scoring_rule text not null default 'linear',
+  reverse_rule text not null default 'mirror_min_max',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  check (max_value > min_value)
+);
+
+alter table personality_traits enable row level security;
+alter table personality_facets enable row level security;
+alter table personality_behavioral_dimensions enable row level security;
+alter table personality_job_behavioral_profiles enable row level security;
+alter table personality_job_behavioral_requirements enable row level security;
+alter table personality_response_scales enable row level security;
+alter table personality_frameworks enable row level security;
+
+-- Reference/config data: any authenticated user may read it (needed to render the designer wizard
+-- and, later, non-sensitive parts of the candidate UI); only an admin/assessment-designer may write.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'personality_frameworks', 'personality_traits', 'personality_facets',
+    'personality_behavioral_dimensions', 'personality_job_behavioral_profiles',
+    'personality_job_behavioral_requirements', 'personality_response_scales'
+  ]
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin" on %1$s for all using (personality_is_module_admin() or personality_is_assessment_designer()) with check (personality_is_module_admin() or personality_is_assessment_designer())',
+      t
+    );
+  end loop;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- Personality Question Bank — versioned + approval workflow, mirroring
+-- comp_question_bank's proven design exactly (see the reuse note above)
+-- rather than a separate table.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_questions (
+  id uuid primary key default gen_random_uuid(),
+  question_group_id uuid not null default gen_random_uuid(),
+  version int not null default 1,
+  superseded_by uuid references personality_questions (id),
+  framework_id uuid references personality_frameworks (id),
+  trait_id uuid references personality_traits (id),
+  facet_id uuid references personality_facets (id),
+  dimension_id uuid references personality_behavioral_dimensions (id),
+  question_type text not null check (question_type in ('LIKERT', 'FORCED_CHOICE', 'SJT', 'FREQUENCY', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')),
+  question_text text not null,
+  scenario_context text not null default '',
+  scale_id uuid references personality_response_scales (id),
+  -- For FORCED_CHOICE/SJT/PRIORITY_CHOICE: [{key, label_fa, ...}] — never exposes which option is
+  -- "correct" to the client beyond what the candidate-facing UI needs to render the choice itself.
+  options jsonb not null default '[]'::jsonb,
+  reverse_scored boolean not null default false,
+  job_role text,
+  complexity text not null default 'L1' check (complexity in ('L1', 'L2', 'L3', 'L4')),
+  weight numeric not null default 1 check (weight > 0),
+  active boolean not null default true,
+  approval_status text not null default 'PENDING_REVIEW' check (approval_status in ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_REVISION')),
+  -- Question-quality metadata: {clarity, construct_relevance, social_desirability_risk,
+  -- ambiguity_risk, double_barreled_risk, response_bias_risk} — 0-100 or null when not yet
+  -- assessed. Kept as jsonb rather than fixed columns since the exact metric set is expected to
+  -- evolve (future psychometric analytics).
+  quality jsonb not null default '{}'::jsonb,
+  usage_count int not null default 0,
+  last_used_at timestamptz,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  check (trait_id is not null or dimension_id is not null)
+);
+
+create index if not exists idx_personality_questions_group on personality_questions (question_group_id);
+create index if not exists idx_personality_questions_approval on personality_questions (approval_status);
+create index if not exists idx_personality_questions_dimension on personality_questions (dimension_id);
+create index if not exists idx_personality_questions_trait on personality_questions (trait_id);
+create index if not exists idx_personality_questions_job_role on personality_questions (job_role);
+create index if not exists idx_personality_questions_type on personality_questions (question_type);
+
+alter table personality_questions enable row level security;
+
+-- Mirrors comp_question_bank_insert exactly: an admin/designer row lands pre-approved; anyone
+-- else's lands as an inactive PENDING_REVIEW proposal, never visible in live assessment generation
+-- until approved.
+drop policy if exists "personality_questions_insert" on personality_questions;
+create policy "personality_questions_insert" on personality_questions
+  for insert with check (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+drop policy if exists "personality_questions_select" on personality_questions;
+create policy "personality_questions_select" on personality_questions
+  for select using (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or personality_is_report_viewer()
+    or created_by = auth.uid()
+  );
+
+drop policy if exists "personality_questions_update_admin" on personality_questions;
+create policy "personality_questions_update_admin" on personality_questions
+  for update using (personality_is_module_admin()) with check (personality_is_module_admin());
+
+drop policy if exists "personality_questions_delete_admin" on personality_questions;
+create policy "personality_questions_delete_admin" on personality_questions
+  for delete using (personality_is_module_admin());
+
+-- ----------------------------------------------------------------------------
+-- Assessment templates (reusable question-mix recipes) + the per-candidate
+-- assessment shell, linked to the EXISTING comp_assessments row rather than
+-- a parallel candidate model.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_assessment_templates (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  title text not null,
+  framework_id uuid references personality_frameworks (id),
+  job_profile_id uuid references personality_job_behavioral_profiles (id),
+  -- [{question_type, complexity, count}]
+  question_mix jsonb not null default '[]'::jsonb,
+  duration_minutes int check (duration_minutes is null or duration_minutes > 0),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+alter table personality_assessment_templates enable row level security;
+
+drop policy if exists "personality_assessment_templates_all" on personality_assessment_templates;
+create policy "personality_assessment_templates_all" on personality_assessment_templates
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  -- Reuses the EXISTING candidate/assessment record — a candidate is one person who may have both a
+  -- competency assessment and a personality assessment attached to the same comp_assessments row.
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  job_role text not null,
+  framework_id uuid references personality_frameworks (id),
+  job_profile_id uuid references personality_job_behavioral_profiles (id),
+  form_key text not null default 'A' check (form_key in ('A', 'B', 'C', 'D')),
+  -- Frozen snapshot once generated — same pattern as comp_assessments.selected_question_ids: an
+  -- array of personality_questions.id, immutable after generation.
+  selected_question_ids jsonb not null default '[]'::jsonb,
+  status text not null default 'DRAFT' check (status in (
+    'DRAFT', 'DESIGNED', 'GENERATED', 'ASSIGNED', 'STARTED', 'IN_PROGRESS', 'SUBMITTED',
+    'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED'
+  )),
+  -- Deterministic, rule-based pattern/watchpoint engine output — always computed, independent of
+  -- whether AI analysis has run; AI interpretation layers on top of this, never replaces it.
+  -- [{dimensions:[...], interpretation}] / [{dimensions:[...], topic}].
+  computed_patterns jsonb not null default '[]'::jsonb,
+  computed_watchpoints jsonb not null default '[]'::jsonb,
+  started_at timestamptz,
+  submitted_at timestamptz,
+  locked_at timestamptz,
+  locked_by uuid references profiles (id),
+  -- Separate from results_share_token below, same reasoning as comp_assessments'
+  -- self_service_token/results_share_token split: a leaked results link must never let someone
+  -- submit/overwrite answers, and vice versa.
+  candidate_token uuid not null default gen_random_uuid(),
+  results_share_token uuid not null default gen_random_uuid(),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (assessment_id)
+);
+create unique index if not exists idx_personality_assessments_candidate_token on personality_assessments (candidate_token);
+create unique index if not exists idx_personality_assessments_results_token on personality_assessments (results_share_token);
+create index if not exists idx_personality_assessments_assessment on personality_assessments (assessment_id);
+
+alter table personality_assessments enable row level security;
+
+create or replace function personality_can_access_assessment(p_personality_assessment_id uuid)
+returns boolean as $$
+  select personality_is_module_admin() or personality_is_report_viewer() or exists (
+    select 1 from personality_assessments pa
+    join comp_assessments a on a.id = pa.assessment_id
+    where pa.id = p_personality_assessment_id and (pa.created_by = auth.uid() or a.created_by = auth.uid())
+  );
+$$ language sql security definer stable;
+
+drop policy if exists "personality_assessments_select" on personality_assessments;
+create policy "personality_assessments_select" on personality_assessments
+  for select using (personality_can_access_assessment(id));
+
+drop policy if exists "personality_assessments_insert" on personality_assessments;
+create policy "personality_assessments_insert" on personality_assessments
+  for insert with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+drop policy if exists "personality_assessments_update" on personality_assessments;
+create policy "personality_assessments_update" on personality_assessments
+  for update using (personality_is_module_admin() or personality_is_assessment_designer() or created_by = auth.uid());
+
+drop policy if exists "personality_assessments_delete" on personality_assessments;
+create policy "personality_assessments_delete" on personality_assessments
+  for delete using (personality_is_module_admin() or created_by = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- Responses, scores, validity, AI analysis — all keyed off
+-- personality_assessments, visibility scoped the same way.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_responses (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  question_id uuid not null references personality_questions (id),
+  -- {selected: number|string, selected_option?: text, rank?: [text]} — shape depends on question_type.
+  response_value jsonb not null,
+  response_time_ms int,
+  answered_at timestamptz not null default now(),
+  unique (personality_assessment_id, question_id)
+);
+alter table personality_responses enable row level security;
+
+drop policy if exists "personality_responses_select" on personality_responses;
+create policy "personality_responses_select" on personality_responses
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_responses_write" on personality_responses;
+create policy "personality_responses_write" on personality_responses
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_dimension_scores (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  score_kind text not null check (score_kind in ('TRAIT', 'FACET', 'BEHAVIORAL_DIMENSION')),
+  trait_id uuid references personality_traits (id),
+  facet_id uuid references personality_facets (id),
+  dimension_id uuid references personality_behavioral_dimensions (id),
+  raw_score numeric,
+  normalized_score numeric,
+  weighted_score numeric,
+  coverage_count int not null default 0,
+  confidence text not null default 'LOW' check (confidence in ('LOW', 'MEDIUM', 'HIGH')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+create index if not exists idx_personality_dimension_scores_assessment on personality_dimension_scores (personality_assessment_id);
+alter table personality_dimension_scores enable row level security;
+
+drop policy if exists "personality_dimension_scores_select" on personality_dimension_scores;
+create policy "personality_dimension_scores_select" on personality_dimension_scores
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_dimension_scores_write" on personality_dimension_scores;
+create policy "personality_dimension_scores_write" on personality_dimension_scores
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_validity_results (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade unique,
+  completion_seconds int,
+  straight_lining_flag boolean not null default false,
+  extreme_response_rate numeric,
+  consistency_score numeric,
+  social_desirability_score numeric,
+  random_pattern_flag boolean not null default false,
+  missing_response_count int not null default 0,
+  contradiction_count int not null default 0,
+  overall_status text not null default 'VALID' check (overall_status in ('VALID', 'ACCEPTABLE', 'REVIEW_REQUIRED', 'INVALID')),
+  computed_at timestamptz not null default now()
+);
+alter table personality_validity_results enable row level security;
+
+drop policy if exists "personality_validity_results_select" on personality_validity_results;
+create policy "personality_validity_results_select" on personality_validity_results
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_validity_results_write" on personality_validity_results;
+create policy "personality_validity_results_write" on personality_validity_results
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+-- Mirrors comp_ai_analysis exactly — structured Gemini output, validated against a schema before
+-- storage (enforced by the Edge Function, a later phase).
+create table if not exists personality_ai_analysis (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  model text not null,
+  analysis jsonb not null,
+  confidence text,
+  generated_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_personality_ai_analysis_assessment on personality_ai_analysis (personality_assessment_id, created_at desc);
+alter table personality_ai_analysis enable row level security;
+
+drop policy if exists "personality_ai_analysis_select" on personality_ai_analysis;
+create policy "personality_ai_analysis_select" on personality_ai_analysis
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_ai_analysis_insert" on personality_ai_analysis;
+create policy "personality_ai_analysis_insert" on personality_ai_analysis
+  for insert with check (personality_can_access_assessment(personality_assessment_id));
+
+-- ----------------------------------------------------------------------------
+-- updated_at/updated_by triggers (reuses the existing set_updated_at_and_by()
+-- trigger function already used across the app).
+-- ----------------------------------------------------------------------------
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'personality_frameworks', 'personality_traits', 'personality_facets',
+    'personality_behavioral_dimensions', 'personality_job_behavioral_profiles',
+    'personality_questions', 'personality_assessment_templates', 'personality_assessments',
+    'personality_dimension_scores'
+  ]
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %1$s', t);
+    execute format('create trigger trg_set_updated_at before update on %1$s for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- Phase 1 catalog seed data (spec section 5, 6, 11, 67) — the reference
+-- CATALOG only (framework/traits/facets/behavioral dimensions/response
+-- scales/example job profiles), never fake candidate data, scores, or
+-- assessments. Every row here is fully editable by an admin afterward.
+-- Question CONTENT (the 100-300 actual personality/SJT items) is a later
+-- phase.
+-- ----------------------------------------------------------------------------
+
+insert into personality_frameworks (key, label_fa, description, version)
+values ('big_five', 'مدل پنج‌عاملی شخصیت (Big Five)', 'چارچوب پیش‌فرض و قابل‌تنظیم برای سنجش ویژگی‌های شخصیتی.', 1)
+on conflict (key) do nothing;
+
+with fw as (select id from personality_frameworks where key = 'big_five'),
+tr as (
+  insert into personality_traits (framework_id, key, label_fa, description, display_order)
+  select fw.id, v.key, v.label_fa, v.description, v.ord
+  from fw, (values
+    ('conscientiousness', 'وظیفه‌شناسی', 'نظم، پایبندی به تعهد، برنامه‌ریزی و پیگیری تا نتیجه.', 1),
+    ('emotional_stability', 'ثبات هیجانی', 'مدیریت استرس، تنظیم هیجانی و واکنش به فشار/شکست.', 2),
+    ('agreeableness', 'همسازی', 'همکاری، احترام، همدلی و رویکرد به تعارض.', 3),
+    ('extraversion', 'برون‌گرایی', 'ابتکار در ارتباط، قاطعیت، تعامل اجتماعی و رهبری.', 4),
+    ('openness', 'گشودگی به تجربه', 'یادگیری‌پذیری، کنجکاوی، نوآوری و پذیرش روش‌های جدید.', 5)
+  ) as v(key, label_fa, description, ord)
+  on conflict (framework_id, key) do nothing
+  returning id, key
+)
+insert into personality_facets (trait_id, key, label_fa, display_order)
+select tr.id, f.key, f.label_fa, f.ord
+from tr
+join (values
+  ('conscientiousness', 'discipline', 'نظم', 1),
+  ('conscientiousness', 'organization', 'سازمان‌دهی', 2),
+  ('conscientiousness', 'reliability', 'قابل‌اتکا بودن', 3),
+  ('conscientiousness', 'persistence', 'پشتکار', 4),
+  ('conscientiousness', 'achievement_orientation', 'گرایش به دستاورد', 5),
+  ('conscientiousness', 'planning_orientation', 'گرایش به برنامه‌ریزی', 6),
+  ('conscientiousness', 'attention_to_detail', 'دقت به جزئیات', 7),
+  ('conscientiousness', 'follow_through', 'پیگیری تا انتها', 8),
+  ('emotional_stability', 'stress_management', 'مدیریت استرس', 1),
+  ('emotional_stability', 'emotional_regulation', 'تنظیم هیجانی', 2),
+  ('emotional_stability', 'pressure_tolerance', 'تحمل فشار', 3),
+  ('emotional_stability', 'composure', 'خونسردی', 4),
+  ('emotional_stability', 'resilience', 'تاب‌آوری', 5),
+  ('emotional_stability', 'reaction_to_setbacks', 'واکنش به ناکامی', 6),
+  ('agreeableness', 'cooperation', 'همکاری', 1),
+  ('agreeableness', 'respectfulness', 'احترام', 2),
+  ('agreeableness', 'empathy', 'همدلی', 3),
+  ('agreeableness', 'team_orientation', 'گرایش تیمی', 4),
+  ('agreeableness', 'interpersonal_flexibility', 'انعطاف بین‌فردی', 5),
+  ('agreeableness', 'conflict_approach', 'رویکرد به تعارض', 6),
+  ('extraversion', 'communication_initiative', 'ابتکار در ارتباط', 1),
+  ('extraversion', 'assertiveness', 'قاطعیت', 2),
+  ('extraversion', 'social_engagement', 'تعامل اجتماعی', 3),
+  ('extraversion', 'influence', 'نفوذ', 4),
+  ('extraversion', 'leadership_expression', 'بروز رهبری', 5),
+  ('openness', 'learning_agility', 'چابکی یادگیری', 1),
+  ('openness', 'curiosity', 'کنجکاوی', 2),
+  ('openness', 'innovation', 'نوآوری', 3),
+  ('openness', 'adaptability', 'انطباق‌پذیری', 4),
+  ('openness', 'conceptual_thinking', 'تفکر مفهومی', 5),
+  ('openness', 'acceptance_of_new_methods', 'پذیرش روش‌های جدید', 6)
+) as f(trait_key, key, label_fa, ord) on f.trait_key = tr.key
+on conflict (trait_id, key) do nothing;
+
+insert into personality_behavioral_dimensions (key, label_fa, description)
+values
+  ('ACCOUNTABILITY', 'پاسخگویی', 'پذیرش مسئولیت نتایج کار خود، حتی در شرایط نامطلوب.'),
+  ('DISCIPLINE', 'نظم کاری', 'پایبندی به رویه‌ها، زمان‌بندی و استانداردهای کاری.'),
+  ('OWNERSHIP', 'مالکیت کار', 'برخورد با مسئله به‌عنوان مسئله خود، نه انتظار برای دستور دیگران.'),
+  ('PERSISTENCE', 'پشتکار', 'ادامه تلاش در کارهای دشوار یا کندپیشرفت.'),
+  ('SAFETY_ORIENTATION', 'گرایش ایمنی', 'اولویت‌دهی واقعی به ایمنی در تصمیم‌ها و رفتار روزمره.'),
+  ('INTEGRITY_ORIENTATION', 'گرایش به درستکاری', 'صداقت و شفافیت در گزارش‌دهی و تصمیم‌گیری حرفه‌ای.'),
+  ('RISK_AWARENESS', 'آگاهی از ریسک', 'شناسایی و در نظر گرفتن ریسک پیش از تصمیم‌گیری.'),
+  ('DECISION_CONFIDENCE', 'اطمینان در تصمیم‌گیری', 'توان تصمیم‌گیری به‌موقع با وجود عدم قطعیت.'),
+  ('DECISION_QUALITY', 'کیفیت تصمیم', 'استدلال منطقی و مستند در فرآیند تصمیم‌گیری.'),
+  ('PROBLEM_OWNERSHIP', 'مالکیت حل مسئله', 'پیگیری یک مسئله تا حل واقعی آن، نه صرفاً گزارش آن.'),
+  ('ANALYTICAL_THINKING', 'تفکر تحلیلی', 'تجزیه مسئله به اجزا و استفاده از داده برای تصمیم‌گیری.'),
+  ('DETAIL_ORIENTATION', 'دقت به جزئیات', 'توجه به جزئیات فنی/اجرایی که بر کیفیت نتیجه اثر دارند.'),
+  ('ADAPTABILITY', 'انطباق‌پذیری', 'تعدیل رویکرد در برابر تغییر شرایط یا اطلاعات جدید.'),
+  ('LEARNING_AGILITY', 'چابکی یادگیری', 'سرعت و کیفیت یادگیری از تجربه و بازخورد.'),
+  ('CONFLICT_MANAGEMENT', 'مدیریت تعارض', 'رسیدگی سازنده به اختلاف‌نظر حرفه‌ای.'),
+  ('COMMUNICATION', 'ارتباطات', 'وضوح، به‌موقع بودن و اثربخشی ارتباط حرفه‌ای.'),
+  ('STAKEHOLDER_ORIENTATION', 'گرایش به ذی‌نفعان', 'در نظر گرفتن نیاز و انتظار طرف‌های ذی‌نفع پروژه.'),
+  ('TEAMWORK', 'کار تیمی', 'مشارکت مؤثر و حمایت از موفقیت تیم.'),
+  ('LEADERSHIP', 'رهبری', 'هدایت، الهام‌بخشی و مسئولیت‌پذیری در قبال عملکرد دیگران.'),
+  ('INITIATIVE', 'ابتکار عمل', 'اقدام پیش‌دستانه بدون نیاز به دستور صریح.'),
+  ('RULE_ORIENTATION', 'گرایش به رویه', 'پایبندی به مقررات، استانداردها و رویه‌های تعریف‌شده.'),
+  ('COMMERCIAL_AWARENESS', 'آگاهی تجاری/قراردادی', 'درک اثر تصمیم‌ها بر هزینه، قرارداد و منافع پروژه.'),
+  ('DOCUMENTATION_DISCIPLINE', 'نظم مستندسازی', 'ثبت دقیق و به‌موقع مدارک و سوابق کاری.'),
+  ('ESCALATION_JUDGMENT', 'قضاوت در ارجاع', 'تشخیص درست زمان و نحوه ارجاع مسئله به سطح بالاتر.')
+on conflict (key) do nothing;
+
+insert into personality_response_scales (key, label_fa, min_value, max_value, labels, scoring_rule, reverse_rule)
+values
+  ('likert_7', 'لیکرت ۷ درجه‌ای (توافق)', 1, 7,
+   '[{"value":1,"label_fa":"کاملاً مخالفم"},{"value":2,"label_fa":"مخالفم"},{"value":3,"label_fa":"نسبتاً مخالفم"},{"value":4,"label_fa":"خنثی"},{"value":5,"label_fa":"نسبتاً موافقم"},{"value":6,"label_fa":"موافقم"},{"value":7,"label_fa":"کاملاً موافقم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('likert_5', 'لیکرت ۵ درجه‌ای (توافق)', 1, 5,
+   '[{"value":1,"label_fa":"کاملاً مخالفم"},{"value":2,"label_fa":"مخالفم"},{"value":3,"label_fa":"خنثی"},{"value":4,"label_fa":"موافقم"},{"value":5,"label_fa":"کاملاً موافقم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('frequency_5', 'فراوانی رفتار (۵ درجه)', 1, 5,
+   '[{"value":1,"label_fa":"هرگز"},{"value":2,"label_fa":"بندرت"},{"value":3,"label_fa":"گاهی"},{"value":4,"label_fa":"اغلب"},{"value":5,"label_fa":"همیشه"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('importance_5', 'اهمیت (۵ درجه)', 1, 5,
+   '[{"value":1,"label_fa":"بی‌اهمیت"},{"value":2,"label_fa":"کم‌اهمیت"},{"value":3,"label_fa":"متوسط"},{"value":4,"label_fa":"مهم"},{"value":5,"label_fa":"بسیار مهم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('forced_choice_2', 'انتخاب اجباری (دو گزینه‌ای)', 1, 2, '[]'::jsonb, 'categorical', 'not_applicable'),
+  ('sjt_rank', 'رتبه‌بندی گزینه‌های موقعیتی', 1, 4, '[]'::jsonb, 'rank_weighted', 'not_applicable')
+on conflict (key) do nothing;
+
+-- Example job behavioral profiles (spec section 8) — templates, not fixed psychological truths;
+-- admins can edit weights/thresholds or add more roles.
+with pm as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('project_manager', 'نیم‌رخ رفتاری پیش‌فرض — مدیر پروژه')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pm.id, d.id, v.weight, v.min_threshold, v.is_critical
+from pm
+join (values
+  ('ACCOUNTABILITY', 12, 70, true),
+  ('OWNERSHIP', 10, 65, false),
+  ('DECISION_CONFIDENCE', 10, 65, false),
+  ('LEADERSHIP', 12, 65, false),
+  ('STAKEHOLDER_ORIENTATION', 10, 60, false),
+  ('CONFLICT_MANAGEMENT', 10, 60, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with pm as (select id from personality_job_behavioral_profiles where job_role = 'project_manager')
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pm.id, d.id, 8, 55, false
+from pm, personality_behavioral_dimensions d
+where d.key in ('ADAPTABILITY', 'RISK_AWARENESS', 'SAFETY_ORIENTATION', 'INTEGRITY_ORIENTATION', 'COMMUNICATION')
+on conflict (profile_id, dimension_id) do nothing;
+
+with wi as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('welding_inspector', 'نیم‌رخ رفتاری پیش‌فرض — بازرس جوش')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select wi.id, d.id, v.weight, v.min_threshold, v.is_critical
+from wi
+join (values
+  ('DETAIL_ORIENTATION', 15, 75, true),
+  ('RULE_ORIENTATION', 12, 70, true),
+  ('SAFETY_ORIENTATION', 15, 75, true),
+  ('INTEGRITY_ORIENTATION', 12, 70, true),
+  ('PERSISTENCE', 10, 60, false),
+  ('DOCUMENTATION_DISCIPLINE', 10, 65, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with hse as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('hse_specialist', 'نیم‌رخ رفتاری پیش‌فرض — کارشناس HSE')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select hse.id, d.id, v.weight, v.min_threshold, v.is_critical
+from hse
+join (values
+  ('SAFETY_ORIENTATION', 18, 80, true),
+  ('RULE_ORIENTATION', 12, 70, false),
+  ('RISK_AWARENESS', 15, 75, true),
+  ('INTEGRITY_ORIENTATION', 12, 70, false),
+  ('CONFLICT_MANAGEMENT', 10, 60, false),
+  ('ESCALATION_JUDGMENT', 12, 65, true),
+  ('COMMUNICATION', 10, 60, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with pc as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('project_control_specialist', 'نیم‌رخ رفتاری پیش‌فرض — کارشناس کنترل پروژه')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pc.id, d.id, v.weight, v.min_threshold, v.is_critical
+from pc
+join (values
+  ('ANALYTICAL_THINKING', 18, 75, true),
+  ('DISCIPLINE', 12, 70, false),
+  ('DETAIL_ORIENTATION', 12, 70, false),
+  ('PERSISTENCE', 10, 60, false),
+  ('DOCUMENTATION_DISCIPLINE', 12, 65, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
