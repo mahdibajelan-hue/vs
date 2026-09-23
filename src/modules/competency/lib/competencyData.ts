@@ -66,6 +66,11 @@ export interface CompAssessmentRow {
   is_approved: boolean
   strengths: string
   development_areas: string
+  duration_minutes: number | null
+  auto_finish_on_timeout: boolean
+  interview_timer_started_at: string | null
+  interview_timer_elapsed_seconds: number
+  interview_timer_running: boolean
   created_by: string | null
   created_at: string
   updated_at: string
@@ -111,6 +116,11 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     isApproved: r.is_approved,
     strengths: r.strengths ?? '',
     developmentAreas: r.development_areas ?? '',
+    durationMinutes: r.duration_minutes,
+    autoFinishOnTimeout: r.auto_finish_on_timeout,
+    interviewTimerStartedAt: r.interview_timer_started_at,
+    interviewTimerElapsedSeconds: r.interview_timer_elapsed_seconds,
+    interviewTimerRunning: r.interview_timer_running,
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -394,7 +404,8 @@ export interface CompAssessmentTemplateRow {
   id: string
   job_role: string
   title: string
-  duration_minutes: number
+  duration_minutes: number | null
+  auto_finish_on_timeout: boolean
   panel_size_default: number
   question_mix: QuestionMixCell[] | null
   created_by: string | null
@@ -408,6 +419,7 @@ export function compAssessmentTemplateFromRow(r: CompAssessmentTemplateRow): Com
     jobRole: r.job_role as JobRole,
     title: r.title,
     durationMinutes: r.duration_minutes,
+    autoFinishOnTimeout: r.auto_finish_on_timeout,
     panelSizeDefault: r.panel_size_default,
     questionMix: r.question_mix ?? [],
     createdBy: r.created_by,

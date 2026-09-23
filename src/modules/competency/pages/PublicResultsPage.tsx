@@ -77,11 +77,13 @@ export function PublicResultsPage({ token }: { token: string }) {
     )
   }
 
-  const isPM = isProjectManagerRole(row.job_role)
-  // Non-PM roles are scored against the DB-backed question bank (keyed by UUID, not the fixed PM
-  // question keys) — resolved_questions gives just {id, category, official score} (never question
-  // text/reference answers, which must stay evaluator-only even to an anonymous public-link
-  // visitor), enough to run the exact same bucket logic used everywhere else in the app.
+  // A PM candidate can now be scored either way — the fixed in-code rubric (legacy, resolved_questions
+  // empty) or the DB-backed question bank exactly like every other role (resolved_questions
+  // populated) — see usesLegacyPmRubric/comp_public_results_get. resolved_questions gives just
+  // {id, category, official score} (never question text/reference answers, which must stay
+  // evaluator-only even to an anonymous public-link visitor), enough to run the exact same bucket
+  // logic used everywhere else in the app.
+  const isPM = isProjectManagerRole(row.job_role) && row.resolved_questions.length === 0
   const officialAnswers: CompetencyAnswers = isPM
     ? row.answers
     : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))

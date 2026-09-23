@@ -7,9 +7,11 @@
 // Authorization header), not a service-role key — so this function only ever sees data that user's
 // own RLS grants already expose, and question content is read exclusively via
 // comp_question_bank_public() (no reference answers, key points, etc. — spec section 2 keeps that
-// admin/designer-only). Scope: only DB-backed role assessments (selected_question_ids) are
-// supported for now — project_manager's fixed in-code rubric isn't duplicated into this function,
-// so PM assessments get a clear "not yet supported" response instead of guessing.
+// admin/designer-only). Scope: only DB-backed assessments (selected_question_ids populated) are
+// supported — a Project Manager candidate still on the legacy fixed in-code rubric (empty
+// selected_question_ids) isn't duplicated into this function, so that case gets a clear
+// "not yet supported" response instead of guessing. A bank-driven PM assessment (selected_question_ids
+// populated, same as every other role) works exactly like any other role here.
 //
 // Schema types below are plain uppercase strings ("OBJECT"/"STRING"/...) rather than the SDK's
 // `Type` enum — that's what the Gemini API's OpenAPI-subset schema actually expects on the wire, so
@@ -151,7 +153,12 @@ Deno.serve(async (req: Request) => {
     const { data: assessment, error: assessmentError } = await supabase.from('comp_assessments').select('*').eq('id', assessmentId).single()
     if (assessmentError || !assessment) return fail(404, 'ارزیابی یافت نشد یا دسترسی مجاز نیست.', assessmentError)
 
-    if (assessment.job_role === 'project_manager') {
+    // A Project Manager candidate can now go through either the fixed in-code rubric (legacy,
+    // selected_question_ids empty) or the DB-backed question bank exactly like every other role
+    // (selected_question_ids populated) — see usesLegacyPmRubric on the client. Only the legacy
+    // rubric stays unsupported here, since its answers aren't shaped like a bank selection.
+    const selectedIds: string[] = Array.isArray(assessment.selected_question_ids) ? assessment.selected_question_ids : []
+    if (assessment.job_role === 'project_manager' && selectedIds.length === 0) {
       return fail(400, 'تحلیل هوشمند برای رابط ثابت مدیر پروژه هنوز پشتیبانی نمی‌شود — فقط برای مشاغل بانک‌سؤال‌محور فعال است.')
     }
 
@@ -162,7 +169,6 @@ Deno.serve(async (req: Request) => {
     if (panelistError) return fail(500, `بارگذاری امتیازهای داوران ناموفق بود: ${panelistError.message}`, panelistError)
     if (bankError) return fail(500, `بارگذاری بانک سؤالات ناموفق بود: ${bankError.message}`, bankError)
 
-    const selectedIds: string[] = Array.isArray(assessment.selected_question_ids) ? assessment.selected_question_ids : []
     const questions = (bankRows ?? []).filter((q: { id: string; job_role: string }) => selectedIds.includes(q.id))
 
     if (questions.length === 0) {

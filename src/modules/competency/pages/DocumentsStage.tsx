@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, CheckCircle2, Copy, FileText, Link2, RefreshCw, Upload, Loader2 } from 'lucide-react'
+import { ArrowLeft, Camera, CheckCircle2, Copy, FileText, Link2, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
@@ -9,6 +9,9 @@ interface DocumentsStageProps {
   assessment: CompetencyAssessment
   /** Only the team lead may confirm the candidate's self-declared documents/profile are correct. */
   isLead: boolean
+  /** Advances the wizard to the next stage (پنل مصاحبه‌گران) — omitted only when the caller has no
+   * further stage to send this viewer to. */
+  onContinue?: () => void
 }
 
 const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
@@ -21,7 +24,7 @@ const SELF_SERVICE_STATUS_LABEL: Record<string, string> = {
 }
 
 /** Document attachments (resume, national ID, education/certification scans, insurance records) plus the candidate self-service link — the interview team just reviews what the candidate submits through that link. */
-export function DocumentsStage({ assessment, isLead }: DocumentsStageProps) {
+export function DocumentsStage({ assessment, isLead, onContinue }: DocumentsStageProps) {
   const attachments = useCompetencyStore((s) => s.attachments).filter((a) => a.assessmentId === assessment.id)
   const fetchAttachments = useCompetencyStore((s) => s.fetchAttachments)
   const addAttachment = useCompetencyStore((s) => s.addAttachment)
@@ -184,6 +187,14 @@ export function DocumentsStage({ assessment, isLead }: DocumentsStageProps) {
           </div>
         )}
       </div>
+
+      {onContinue && (
+        <div className="flex justify-end">
+          <button onClick={onContinue} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+            ادامه <ArrowLeft size={13} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -55,7 +55,8 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
   const [templateId, setTemplateId] = useState<string | null>(null)
 
   const [title, setTitle] = useState(`آزمون استاندارد — ${JOB_ROLE_LABEL_FA[jobRole]}`)
-  const [durationMinutes, setDurationMinutes] = useState(60)
+  const [durationMinutes, setDurationMinutes] = useState<number | null>(null)
+  const [autoFinishOnTimeout, setAutoFinishOnTimeout] = useState(false)
   const [panelSizeDefault, setPanelSizeDefault] = useState(3)
   const [counts, setCounts] = useState<Record<string, number>>({})
 
@@ -77,6 +78,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
     if (!t) return
     setTitle(t.title)
     setDurationMinutes(t.durationMinutes)
+    setAutoFinishOnTimeout(t.autoFinishOnTimeout)
     setPanelSizeDefault(t.panelSizeDefault)
     const next: Record<string, number> = {}
     for (const cell of t.questionMix) next[cellKey(cell.category, cell.difficulty)] = cell.count
@@ -127,40 +129,47 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
   const handleGenerate = async () => {
     setGenerating(true)
     const mix = buildMix()
-    await upsertAssessmentTemplate({ id: templateId ?? undefined, jobRole, title, durationMinutes, panelSizeDefault, questionMix: mix })
-    await assignQuestionsFromMix(assessmentId, jobRole, mix)
+    await upsertAssessmentTemplate({ id: templateId ?? undefined, jobRole, title, durationMinutes, autoFinishOnTimeout, panelSizeDefault, questionMix: mix })
+    await assignQuestionsFromMix(assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout)
     setGenerating(false)
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="glass-panel max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <p className="flex items-center gap-1.5 text-sm font-bold">
-            <Wand2 size={16} className="text-purple-300" /> طراحی آزمون شایستگی — {JOB_ROLE_LABEL_FA[jobRole]}
-          </p>
-          <button onClick={onClose} className="text-muted hover:text-primary">
-            <X size={16} />
-          </button>
-        </div>
+      {/* flex-col with a shrink-0 header/footer and a flex-1 scrollable body — keeps the
+          prev/next/generate footer always on screen instead of scrolling away with long step
+          content, which on mobile (especially with the on-screen keyboard open, shrinking the
+          viewport) made the submit button unreachable. */}
+      <div className="glass-panel flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 p-5 pb-0">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <Wand2 size={16} className="text-purple-300" /> طراحی آزمون شایستگی — {JOB_ROLE_LABEL_FA[jobRole]}
+            </p>
+            <button onClick={onClose} className="text-muted hover:text-primary">
+              <X size={16} />
+            </button>
+          </div>
 
-        <div className="mb-5 flex items-center gap-1.5">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex flex-1 items-center gap-1.5">
-              <div
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                  i === step ? 'bg-purple-500 text-white' : i < step ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-muted'
-                }`}
-              >
-                {i < step ? <CheckCircle2 size={13} /> : (i + 1).toLocaleString('fa-IR')}
+          <div className="mb-5 flex items-center gap-1.5">
+            {STEPS.map((label, i) => (
+              <div key={label} className="flex flex-1 items-center gap-1.5">
+                <div
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                    i === step ? 'bg-purple-500 text-white' : i < step ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-muted'
+                  }`}
+                >
+                  {i < step ? <CheckCircle2 size={13} /> : (i + 1).toLocaleString('fa-IR')}
+                </div>
+                <span className={`hidden truncate text-[10px] sm:block ${i === step ? 'font-bold text-primary' : 'text-muted'}`}>{label}</span>
+                {i < STEPS.length - 1 && <div className="h-px flex-1 bg-white/10" />}
               </div>
-              <span className={`hidden truncate text-[10px] sm:block ${i === step ? 'font-bold text-primary' : 'text-muted'}`}>{label}</span>
-              {i < STEPS.length - 1 && <div className="h-px flex-1 bg-white/10" />}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {step === 0 && (
           <div className="space-y-3">
             {templatesForRole.length > 0 && (
@@ -182,8 +191,18 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1 block text-[11px] text-muted">مدت زمان تقریبی (دقیقه)</span>
-                <input type="number" min={1} value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value) || 1)} className="input" />
+                <span className="mb-1 block text-[11px] text-muted">مدت زمان تقریبی (دقیقه) — اختیاری</span>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="بدون محدودیت زمانی"
+                  value={durationMinutes ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setDurationMinutes(v === '' ? null : Math.max(1, Number(v) || 1))
+                  }}
+                  className="input"
+                />
               </label>
               <label className="block">
                 <span className="mb-1 block text-[11px] text-muted">تعداد داوران پیش‌فرض</span>
@@ -197,6 +216,16 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
                 />
               </label>
             </div>
+            <label className={`flex items-center gap-1.5 text-[11px] ${durationMinutes == null ? 'text-muted/50' : 'text-secondary'}`}>
+              <input
+                type="checkbox"
+                disabled={durationMinutes == null}
+                checked={autoFinishOnTimeout}
+                onChange={(e) => setAutoFinishOnTimeout(e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              پس از پایان زمان تعیین‌شده، تایمر مصاحبه به‌صورت خودکار متوقف شود (در غیر این صورت تایمر تا توقف دستی داور ادامه می‌یابد)
+            </label>
           </div>
         )}
 
@@ -312,7 +341,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <PreviewTile label="شغل" value={JOB_ROLE_LABEL_FA[jobRole]} />
               <PreviewTile label="تعداد کل سؤالات" value={grandTotal.toLocaleString('fa-IR')} />
-              <PreviewTile label="مدت زمان تقریبی" value={`${durationMinutes.toLocaleString('fa-IR')} دقیقه`} />
+              <PreviewTile label="مدت زمان تقریبی" value={durationMinutes != null ? `${durationMinutes.toLocaleString('fa-IR')} دقیقه` : 'بدون محدودیت'} />
               <PreviewTile label="داوران پیش‌فرض" value={panelSizeDefault.toLocaleString('fa-IR')} />
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -329,8 +358,9 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
             </p>
           </div>
         )}
+        </div>
 
-        <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
+        <div className="shrink-0 flex items-center justify-between border-t border-white/10 p-5">
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}

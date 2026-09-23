@@ -1,6 +1,6 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
-import { isProjectManagerRole, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
+import { usesLegacyPmRubric, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
 import { JOB_ROLE_LABEL_FA, type CompetencyAnswers, type CompetencyAssessment, type DomainScore } from '../types'
 
 /**
@@ -98,13 +98,20 @@ interface CompetencyPrintReportProps {
 }
 
 export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, answersOverride, qualificationOverride, roleRecommendation }: CompetencyPrintReportProps) {
-  const isPM = isProjectManagerRole(assessment.jobRole)
+  const isPM = usesLegacyPmRubric(assessment)
   const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = isPM
-    ? computeCompletion(answersOverride ?? assessment.answers)
-    : { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
+  // domainScores already reflects whichever scoring model ResultsStage actually used (the fixed PM
+  // rubric or the DB-backed question bank — a PM candidate can now be either, see
+  // usesLegacyPmRubric), so its own answered/total counts are always correct; only the no-override
+  // fallback (never hit by the real caller, which always passes one) still needs the fixed rubric's
+  // own counter.
+  const completion = domainScoresOverride
+    ? { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
+    : isPM
+      ? computeCompletion(answersOverride ?? assessment.answers)
+      : { answered: domainScores.reduce((s, d) => s + d.answeredCount, 0), total: domainScores.reduce((s, d) => s + d.totalCount, 0) }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const submittedPanelPercents = panel.filter((p) => p.submitted && p.overallPercent != null).map((p) => p.overallPercent as number)

@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  ArrowLeft,
   Award,
   Briefcase,
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  Clock,
   GraduationCap,
   Layers,
+  Pause,
+  Play,
   Plus,
+  RotateCcw,
   ShieldCheck,
   ThumbsUp,
   Trash2,
@@ -20,8 +25,8 @@ import type { LucideIcon } from 'lucide-react'
 import { useCompetencyStore, type QualificationScoresInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
-import { computeCategoryScores, isProjectManagerRole, questionsForAssessment } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompPanelGroup, type CompPanelistScore, type CompProfileLite, type JobRole } from '../types'
+import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompetencyAssessment, type CompPanelGroup, type CompPanelistScore, type CompProfileLite, type JobRole } from '../types'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -30,6 +35,9 @@ import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 
 interface PanelStageProps {
   assessmentId: string
+  /** Advances the wizard to the next stage (ارزیابی) — omitted for a viewer with no further stage
+   * to go to (e.g. a panelist, who only ever records their own score here). */
+  onContinue?: () => void
 }
 
 /** Tiered color for a 0-100 score, matching ResultsStage's tierColor — kept as a local duplicate rather than a shared import to avoid coupling this stage to the results page. */
@@ -41,8 +49,99 @@ function tierColor(percent: number | null): string {
   return '#f87171'
 }
 
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
+}
+
+/** Live, judge-controllable interview timer (any panelist — not just the lead — may start/pause/
+ * reset it, see comp_set_interview_timer). Purely a stopwatch for how long the interview itself has
+ * run; it never touches anyone's scores or auto-submits anything. When the assessment's designer set
+ * a target duration and opted into auto-finish, the timer auto-pauses itself once that duration is
+ * reached and flags it — it still never forces a submission. */
+function InterviewTimer({ assessment }: { assessment: CompetencyAssessment }) {
+  const setInterviewTimer = useCompetencyStore((s) => s.setInterviewTimer)
+  const [, forceTick] = useState(0)
+
+  useEffect(() => {
+    if (!assessment.interviewTimerRunning) return
+    const id = setInterval(() => forceTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [assessment.interviewTimerRunning])
+
+  const liveElapsedSeconds =
+    assessment.interviewTimerElapsedSeconds +
+    (assessment.interviewTimerRunning && assessment.interviewTimerStartedAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(assessment.interviewTimerStartedAt).getTime()) / 1000))
+      : 0)
+
+  const durationSeconds = assessment.durationMinutes != null ? assessment.durationMinutes * 60 : null
+  const timedOut = durationSeconds != null && liveElapsedSeconds >= durationSeconds
+
+  useEffect(() => {
+    if (timedOut && assessment.autoFinishOnTimeout && assessment.interviewTimerRunning) {
+      setInterviewTimer(assessment.id, 'pause')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timedOut, assessment.autoFinishOnTimeout, assessment.interviewTimerRunning, assessment.id])
+
+  return (
+    <div className={`glass-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 ${timedOut ? 'border border-red-400/30' : ''}`}>
+      <div className="flex items-center gap-2">
+        <Clock size={16} className={timedOut ? 'text-red-300' : 'text-purple-300'} />
+        <div>
+          <p className="text-xs font-bold">تایمر مصاحبه</p>
+          {durationSeconds != null && (
+            <p className="text-[10.5px] text-muted">
+              زمان تعیین‌شده: {assessment.durationMinutes?.toLocaleString('fa-IR')} دقیقه
+              {assessment.autoFinishOnTimeout ? ' (توقف خودکار در پایان زمان)' : ''}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className={`num text-xl font-extrabold ${timedOut ? 'text-red-300' : ''}`}>{formatDuration(liveElapsedSeconds)}</span>
+        <div className="flex items-center gap-1.5">
+          {assessment.interviewTimerRunning ? (
+            <button
+              onClick={() => setInterviewTimer(assessment.id, 'pause')}
+              className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-bold hover:bg-white/5"
+            >
+              <Pause size={13} /> توقف
+            </button>
+          ) : (
+            <button
+              onClick={() => setInterviewTimer(assessment.id, 'start')}
+              className="flex items-center gap-1 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+            >
+              <Play size={13} /> {liveElapsedSeconds > 0 ? 'ادامه' : 'شروع مصاحبه'}
+            </button>
+          )}
+          <button
+            onClick={() => setInterviewTimer(assessment.id, 'reset')}
+            title="بازنشانی تایمر"
+            className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+          >
+            <RotateCcw size={13} />
+          </button>
+        </div>
+      </div>
+      {timedOut && (
+        <p className="w-full text-[11px] font-bold text-red-300">
+          {assessment.autoFinishOnTimeout
+            ? 'زمان مصاحبه به پایان رسید و تایمر به‌صورت خودکار متوقف شد.'
+            : 'زمان تعیین‌شده برای این مصاحبه به پایان رسیده — تایمر همچنان در حال شمارش (اضافه‌کار) است.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Multi-interviewer panel: assign panelists, let each score the candidate independently, and show the interview lead the panel's average per domain before the lead records their own final score in the "questions" stage. */
-export function PanelStage({ assessmentId }: PanelStageProps) {
+export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
   const profiles = useCompetencyStore((s) => s.profiles)
   const panelists = useCompetencyStore((s) => s.panelists).filter((p) => p.assessmentId === assessmentId)
   const panelistScores = useCompetencyStore((s) => s.panelistScores).filter((p) => p.assessmentId === assessmentId)
@@ -71,7 +170,7 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const myPanelistRow = panelists.find((p) => p.userId === myId)
   const isLead = assessment?.createdBy === myId || isAdmin || myPanelistRow?.isLead === true
-  const isPM = isProjectManagerRole(assessment?.jobRole ?? 'project_manager')
+  const isPM = assessment != null && usesLegacyPmRubric(assessment)
 
   const [pickUserId, setPickUserId] = useState('')
   const [pickAsLead, setPickAsLead] = useState(false)
@@ -127,6 +226,8 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
 
   return (
     <div className="space-y-4">
+      {assessment && <InterviewTimer assessment={assessment} />}
+
       {isLead && (
         <div className="glass-panel rounded-2xl p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -391,6 +492,14 @@ export function PanelStage({ assessmentId }: PanelStageProps) {
         <p className="text-[11px] text-muted">
           سؤال پایانی سناریو («{CAPSTONE_QUESTION.text.slice(0, 40)}…») را در پایان مصاحبه بپرسید — امتیاز نهایی خودتان را در بخش «سوالات» ثبت کنید.
         </p>
+      )}
+
+      {isLead && onContinue && (
+        <div className="flex justify-end">
+          <button onClick={onContinue} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+            ادامه <ArrowLeft size={13} />
+          </button>
+        </div>
       )}
     </div>
   )

@@ -25,7 +25,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // Candidate-specific sections vs. module-wide sections — rendered as two visually separated groups
 // so it's clear "مشخصات"/"پنل"/... belong to whichever candidate is currently open while
 // "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'panel', 'documents', 'questions', 'results']
+const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'questions', 'results']
 const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings']
 
 interface CompetencySidebarShellProps {

@@ -3832,7 +3832,11 @@ begin
     return;
   end if;
 
-  if v_assessment.job_role = 'project_manager' then
+  -- A Project Manager candidate can now go through either the fixed in-code rubric (legacy,
+  -- selected_question_ids empty) or the DB-backed question bank (selected_question_ids populated,
+  -- exactly like every other role) — see usesLegacyPmRubric on the client. Branch on that instead of
+  -- job_role so a bank-driven PM assessment gets its resolved_questions just like any other role.
+  if jsonb_array_length(v_assessment.selected_question_ids) = 0 then
     v_resolved_questions := '[]'::jsonb;
   else
     select exists(
@@ -5706,5 +5710,72 @@ create policy "comp_question_bank_select_scoped" on comp_question_bank
         )
     )
   );
+
+-- ----------------------------------------------------------------------------
+-- Section 39: Competency Assessment Engine v2.0 — optional exam duration + a
+-- live, judge-controllable interview timer. Exam duration becomes optional
+-- (no target duration = no expectation set) on the reusable template, and a
+-- new auto_finish_on_timeout opt-in lets the designer decide whether the
+-- live interview timer below should auto-stop itself once that duration
+-- elapses, or just keep counting into overtime. Never auto-submits/locks
+-- anyone's scores — comp_set_interview_timer only ever touches the 3 timer
+-- columns below.
+-- ----------------------------------------------------------------------------
+
+alter table comp_assessment_templates alter column duration_minutes drop not null;
+alter table comp_assessment_templates alter column duration_minutes drop default;
+alter table comp_assessment_templates drop constraint if exists comp_assessment_templates_duration_minutes_check;
+alter table comp_assessment_templates add constraint comp_assessment_templates_duration_minutes_check check (duration_minutes is null or duration_minutes > 0);
+alter table comp_assessment_templates add column if not exists auto_finish_on_timeout boolean not null default false;
+
+-- Copied onto the actual assessment when generated from a template, since the live interview timer
+-- needs this specific candidate's own target duration/behavior, not just the reusable template's.
+alter table comp_assessments add column if not exists duration_minutes int;
+alter table comp_assessments drop constraint if exists comp_assessments_duration_minutes_check;
+alter table comp_assessments add constraint comp_assessments_duration_minutes_check check (duration_minutes is null or duration_minutes > 0);
+alter table comp_assessments add column if not exists auto_finish_on_timeout boolean not null default false;
+
+-- Live interview timer state — any panelist (not just the lead) may start/pause/reset it, since
+-- whoever is actually running the interview in the room needs control, not just whoever created the
+-- assessment. Elapsed time is computed server-side from real clock time (never trusts a
+-- client-submitted elapsed value), so it can't be tampered with or drift from clock skew.
+alter table comp_assessments add column if not exists interview_timer_started_at timestamptz;
+alter table comp_assessments add column if not exists interview_timer_elapsed_seconds int not null default 0;
+alter table comp_assessments add column if not exists interview_timer_running boolean not null default false;
+
+create or replace function comp_set_interview_timer(p_assessment_id uuid, p_action text)
+returns void as $$
+declare
+  v comp_assessments%rowtype;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  if p_action = 'start' then
+    if not v.interview_timer_running then
+      update comp_assessments set interview_timer_running = true, interview_timer_started_at = now() where id = p_assessment_id;
+    end if;
+  elsif p_action = 'pause' then
+    if v.interview_timer_running and v.interview_timer_started_at is not null then
+      update comp_assessments
+      set interview_timer_running = false,
+          interview_timer_elapsed_seconds = interview_timer_elapsed_seconds + greatest(0, floor(extract(epoch from (now() - v.interview_timer_started_at)))::int),
+          interview_timer_started_at = null
+      where id = p_assessment_id;
+    end if;
+  elsif p_action = 'reset' then
+    update comp_assessments set interview_timer_running = false, interview_timer_started_at = null, interview_timer_elapsed_seconds = 0 where id = p_assessment_id;
+  else
+    raise exception 'invalid timer action: %', p_action;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function comp_set_interview_timer(uuid, text) to authenticated;
 
 alter table comp_question_bank add column if not exists proposal_reason text not null default '';

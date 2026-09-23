@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileBarChart2, Printer } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent } from '../lib/competencyModel'
-import { computeCategoryScores, isProjectManagerRole, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
+import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { JOB_ROLES, JOB_ROLE_LABEL_FA, type JobRole } from '../types'
@@ -37,7 +37,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
     return assessments
       .filter((a) => roleFilter === 'all' || a.jobRole === roleFilter)
       .map((a) => {
-        const isPM = isProjectManagerRole(a.jobRole)
+        const isPM = usesLegacyPmRubric(a)
         const officialAnswers = resolveOfficialAnswers(
           a.answers,
           panelistScores.filter((s) => s.assessmentId === a.id),

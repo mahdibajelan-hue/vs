@@ -158,7 +158,11 @@ export interface CompAssessmentTemplate {
   id: string
   jobRole: JobRole
   title: string
-  durationMinutes: number
+  /** null = no target duration set for this template. */
+  durationMinutes: number | null
+  /** Only meaningful when durationMinutes is set — whether the live interview timer should
+   * auto-stop itself once that duration elapses, or just keep counting into overtime. */
+  autoFinishOnTimeout: boolean
   panelSizeDefault: number
   questionMix: QuestionMixCell[]
   createdBy: string | null
@@ -320,6 +324,20 @@ export interface CompetencyAssessment {
   /** Lead's own narrative judgment — distinct from the per-domain strengths/weaknesses derived automatically from question scores (see domainFlags in competencyModel.ts). */
   strengths: string
   developmentAreas: string
+  /** Target interview duration copied from the Assessment Designer's template at generation time —
+   * null means no target duration was set. See interviewTimer* below for the live, running timer
+   * itself, which is independent of this configured target. */
+  durationMinutes: number | null
+  /** Only meaningful when durationMinutes is set — whether the live interview timer auto-stops
+   * itself once that duration elapses, or just keeps counting into overtime. */
+  autoFinishOnTimeout: boolean
+  /** Live interview timer state (spec: judge-controllable interview timer) — start/pause/reset via
+   * comp_set_interview_timer, never written directly. interviewTimerStartedAt is set only while
+   * running; the displayed elapsed time is interviewTimerElapsedSeconds plus time since that
+   * timestamp when running. */
+  interviewTimerStartedAt: string | null
+  interviewTimerElapsedSeconds: number
+  interviewTimerRunning: boolean
   createdBy: string | null
   createdAt: string
   updatedAt: string

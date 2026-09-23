@@ -1,5 +1,5 @@
 import type { CompetencyAnswers, CompetencyAssessment, CompetencyDomain, CompPanelistScore, CompQuestionBankItem, DomainScore, JobRole, QuestionType } from '../types'
-import { tierColor } from './competencyModel'
+import { COMPETENCY_QUESTIONS, tierColor } from './competencyModel'
 
 export { tierColor }
 
@@ -51,6 +51,20 @@ export function resolveOfficialQualificationScores(assessment: QualificationFiel
  * (competencyModel.ts) rather than the DB-backed multi-role question bank below. */
 export function isProjectManagerRole(jobRole: JobRole): boolean {
   return jobRole === 'project_manager'
+}
+
+/**
+ * Project Manager candidates now go through the same DB-backed question bank + Assessment Designer
+ * as every other role — the fixed in-code rubric (competencyModel.ts) is kept ONLY to keep already-
+ * scored legacy PM assessments (recorded before this change) rendering exactly as they always have.
+ * A PM assessment falls back to the legacy rubric when it truly has no bank selection AND already
+ * carries real answers under the fixed rubric's own question keys (governance-1, etc.) — never for
+ * a brand-new PM assessment, which instead sees the normal "select questions from the bank" flow.
+ */
+export function usesLegacyPmRubric(assessment: Pick<CompetencyAssessment, 'jobRole' | 'selectedQuestionIds' | 'answers'>): boolean {
+  if (!isProjectManagerRole(assessment.jobRole)) return false
+  if (assessment.selectedQuestionIds.length > 0) return false
+  return COMPETENCY_QUESTIONS.some((q) => assessment.answers[q.key] != null)
 }
 
 /**

@@ -3,7 +3,7 @@ import { ArrowRight, ArrowLeft, Pencil, User, Wand2 } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
-import { isProjectManagerRole, computeCategoryScores, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
+import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, questionsForAssessment } from '../lib/roleCompetencyModel'
 import { JOB_ROLE_LABEL_FA, type QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
@@ -57,11 +57,13 @@ const SECTION_TITLE: Record<Stage, string> = {
  * the lead, so showing an interviewer the final-verdict screen would only hand them a form whose
  * every save fails.
  */
-const LEAD_STAGES: Stage[] = ['profile', 'panel', 'documents', 'questions', 'results']
-const PANELIST_STAGES: Stage[] = ['profile', 'panel', 'documents']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'questions', 'results']
+const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel']
 
 /**
- * Profile -> panel -> documents -> questions flow for one assessment. For the project-manager
+ * Profile -> documents (self-service link) -> panel -> questions flow for one assessment. The
+ * candidate's self-declared profile/documents are meant to be collected before the interview panel
+ * ever meets them, so that stage comes right after the profile summary. For the project-manager
  * role, "questions" itself opens on the qualification scorecard (education/experience/training/
  * certification, judged from the candidate's record alone) before any domain is shown, and closes
  * with the lead's strengths/development-areas summary after the capstone scenario — see
@@ -89,7 +91,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const [roleSectionIndex, setRoleSectionIndex] = useState(0)
   const [designerOpen, setDesignerOpen] = useState(false)
 
-  const isPM = isProjectManagerRole(assessment?.jobRole ?? 'project_manager')
+  const isPM = assessment != null && usesLegacyPmRubric(assessment)
 
   useEffect(() => {
     fetchProfiles()
@@ -264,15 +266,19 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                 <p className="text-xs leading-6 text-secondary">{assessment.notableProjects}</p>
               </div>
             )}
-            <button onClick={() => setStage('panel')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+            <button onClick={() => setStage('documents')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
               ادامه <ArrowLeft size={13} />
             </button>
           </div>
         ))}
 
-      {activeStage === 'panel' && <PanelStage assessmentId={assessment.id} />}
+      {activeStage === 'documents' && (
+        <DocumentsStage assessment={assessment} isLead={isLead} onContinue={() => setStage('panel')} />
+      )}
 
-      {activeStage === 'documents' && <DocumentsStage assessment={assessment} isLead={isLead} />}
+      {activeStage === 'panel' && (
+        <PanelStage assessmentId={assessment.id} onContinue={stages.includes('questions') ? () => setStage('questions') : undefined} />
+      )}
 
       {activeStage === 'questions' && !isPM && (
         <div className="space-y-3">

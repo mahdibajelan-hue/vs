@@ -55,7 +55,7 @@ import {
   computeCategoryScores,
   computeExtendedFingerprint,
   computeRoleCompletion,
-  isProjectManagerRole,
+  usesLegacyPmRubric,
   questionsForAssessment,
   recommendationForRole,
   resolveOfficialAnswers,
@@ -140,7 +140,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const isPM = isProjectManagerRole(assessment.jobRole)
+  const isPM = usesLegacyPmRubric(assessment)
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
   const domainScoresFor = (answers: CompetencyAssessment['answers']) => (isPM ? computeDomainScores(answers) : computeCategoryScores(roleQuestions, answers))
 
@@ -169,18 +169,19 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
     return allAssessments
       .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole)
       .map((a) => {
-        const aRoleQuestions = isPM ? [] : questionsForAssessment(a, questionBank)
+        const aIsPM = usesLegacyPmRubric(a)
+        const aRoleQuestions = aIsPM ? [] : questionsForAssessment(a, questionBank)
         const aOfficialAnswers = resolveOfficialAnswers(
           a.answers,
           allPanelistScores.filter((s) => s.assessmentId === a.id),
         )
-        const aDomainScores = isPM ? computeDomainScores(aOfficialAnswers) : computeCategoryScores(aRoleQuestions, aOfficialAnswers)
+        const aDomainScores = aIsPM ? computeDomainScores(aOfficialAnswers) : computeCategoryScores(aRoleQuestions, aOfficialAnswers)
         return { assessment: a, domainScores: aDomainScores, overall: computeOverallPercent(aDomainScores) }
       })
       .filter((p) => p.overall != null)
       .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
       // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank, isPM])
+  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank])
 
   const benchmarkScores: DomainScore[] | undefined =
     peers.length > 0

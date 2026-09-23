@@ -216,7 +216,8 @@ export interface AssessmentTemplateInput {
   id?: string
   jobRole: JobRole
   title: string
-  durationMinutes: number
+  durationMinutes: number | null
+  autoFinishOnTimeout: boolean
   panelSizeDefault: number
   questionMix: QuestionMixCell[]
 }
@@ -352,8 +353,19 @@ interface CompetencyState {
   deleteAssessmentTemplate: (id: string) => Promise<void>
   /** Generates one assessment's frozen question snapshot from a question-mix grid (replaces the old
    * fixed hardcoded target counts) — written once; re-running it on an assessment that already has
-   * a selection is a no-op from the UI (guarded by callers). */
-  assignQuestionsFromMix: (assessmentId: string, jobRole: JobRole, mix: QuestionMixCell[]) => Promise<void>
+   * a selection is a no-op from the UI (guarded by callers). Also copies the template's target
+   * duration/auto-finish choice onto this specific assessment. */
+  assignQuestionsFromMix: (
+    assessmentId: string,
+    jobRole: JobRole,
+    mix: QuestionMixCell[],
+    durationMinutes: number | null,
+    autoFinishOnTimeout: boolean,
+  ) => Promise<void>
+  /** Start/pause/reset the live, judge-controllable interview timer (comp_set_interview_timer) —
+   * any panelist may call this, not just the lead, since whoever is actually running the interview
+   * in the room needs control. Elapsed time is always computed server-side from real clock time. */
+  setInterviewTimer: (assessmentId: string, action: 'start' | 'pause' | 'reset') => Promise<void>
 
   /** Admin-only, read via comp_log_audit()-written rows (spec section 31) — never written directly
    * by the client. */
@@ -474,6 +486,11 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       isApproved: false,
       strengths: '',
       developmentAreas: '',
+      durationMinutes: null,
+      autoFinishOnTimeout: false,
+      interviewTimerStartedAt: null,
+      interviewTimerElapsedSeconds: 0,
+      interviewTimerRunning: false,
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
@@ -1107,7 +1124,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   // active+approved bank rows of exactly that type/difficulty (or every one available if the bank
   // has fewer than requested — the designer's own availability-check step is what should have
   // caught that beforehand). Replaces the old fixed hardcoded target counts entirely.
-  assignQuestionsFromMix: async (assessmentId, jobRole, mix) => {
+  assignQuestionsFromMix: async (assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout) => {
     let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active && q.approvalStatus === 'APPROVED')
     if (bank.length === 0) {
       const { data, error } = await supabase
@@ -1134,8 +1151,15 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     const selected = selectedItems.map((q) => q.id)
     const current = get().assessments.find((a) => a.id === assessmentId)
     if (!current) return
-    set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? { ...a, selectedQuestionIds: selected } : a)) })
-    const { error } = await supabase.from('comp_assessments').update({ selected_question_ids: selected }).eq('id', assessmentId)
+    set({
+      assessments: get().assessments.map((a) =>
+        a.id === assessmentId ? { ...a, selectedQuestionIds: selected, durationMinutes, autoFinishOnTimeout } : a,
+      ),
+    })
+    const { error } = await supabase
+      .from('comp_assessments')
+      .update({ selected_question_ids: selected, duration_minutes: durationMinutes, auto_finish_on_timeout: autoFinishOnTimeout })
+      .eq('id', assessmentId)
     if (reportError('تولید آزمون از روی طرح سؤال', error)) {
       set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
       return
@@ -1146,6 +1170,34 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       await supabase.rpc('comp_increment_question_usage', { p_ids: selected })
     }
     logAudit('QUESTION_GENERATED', 'comp_assessments', assessmentId, null, { jobRole, count: selected.length })
+  },
+
+  // comp_set_interview_timer computes elapsed time server-side from real clock time, so the
+  // optimistic local update below mirrors that exact math rather than trusting a client clock —
+  // any drift self-corrects the next time this assessment is refetched.
+  setInterviewTimer: async (assessmentId, action) => {
+    const current = get().assessments.find((a) => a.id === assessmentId)
+    if (!current) return
+    const nowIso = new Date().toISOString()
+    let next: CompetencyAssessment = current
+    if (action === 'start' && !current.interviewTimerRunning) {
+      next = { ...current, interviewTimerRunning: true, interviewTimerStartedAt: nowIso }
+    } else if (action === 'pause' && current.interviewTimerRunning && current.interviewTimerStartedAt) {
+      const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - new Date(current.interviewTimerStartedAt).getTime()) / 1000))
+      next = {
+        ...current,
+        interviewTimerRunning: false,
+        interviewTimerStartedAt: null,
+        interviewTimerElapsedSeconds: current.interviewTimerElapsedSeconds + elapsedSinceStart,
+      }
+    } else if (action === 'reset') {
+      next = { ...current, interviewTimerRunning: false, interviewTimerStartedAt: null, interviewTimerElapsedSeconds: 0 }
+    }
+    set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? next : a)) })
+    const { error } = await supabase.rpc('comp_set_interview_timer', { p_assessment_id: assessmentId, p_action: action })
+    if (reportError('کنترل تایمر مصاحبه', error)) {
+      set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
+    }
   },
 
   fetchAssessmentTemplates: async () => {
@@ -1163,6 +1215,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
         .update({
           title: input.title,
           duration_minutes: input.durationMinutes,
+          auto_finish_on_timeout: input.autoFinishOnTimeout,
           panel_size_default: input.panelSizeDefault,
           question_mix: input.questionMix,
         })
@@ -1178,6 +1231,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       job_role: input.jobRole,
       title: input.title,
       duration_minutes: input.durationMinutes,
+      auto_finish_on_timeout: input.autoFinishOnTimeout,
       panel_size_default: input.panelSizeDefault,
       question_mix: input.questionMix,
     })
@@ -1187,6 +1241,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       jobRole: input.jobRole,
       title: input.title,
       durationMinutes: input.durationMinutes,
+      autoFinishOnTimeout: input.autoFinishOnTimeout,
       panelSizeDefault: input.panelSizeDefault,
       questionMix: input.questionMix,
       createdBy: uid,

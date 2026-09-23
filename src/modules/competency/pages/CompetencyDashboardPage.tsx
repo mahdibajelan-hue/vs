@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Award, CheckCircle2, ClipboardList, Plus, Trash2, TrendingUp, Trophy, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
-import { computeCategoryScores, isProjectManagerRole, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
+import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
@@ -42,7 +42,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const scored = useMemo(
     () =>
       assessments.map((a) => {
-        const isPM = isProjectManagerRole(a.jobRole)
+        const isPM = usesLegacyPmRubric(a)
         const officialAnswers = resolveOfficialAnswers(
           a.answers,
           panelistScores.filter((s) => s.assessmentId === a.id),
