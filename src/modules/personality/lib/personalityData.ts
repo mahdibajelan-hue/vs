@@ -15,6 +15,8 @@ import type {
   PersonalityFramework,
   PersonalityJobBehavioralProfile,
   PersonalityJobBehavioralRequirement,
+  PersonalityModuleAdmin,
+  PersonalityProfileLite,
   PersonalityQuestion,
   PersonalityQuestionMixCell,
   PersonalityQuestionOption,
@@ -24,12 +26,43 @@ import type {
   PersonalityResponseScale,
   PersonalityResponseScaleLabel,
   PersonalityResponseValue,
+  PersonalityRoleAssignment,
   PersonalityScoreKind,
   PersonalityTrait,
   PersonalityValidityResult,
   PersonalityValidityStatus,
   JobRole,
 } from '../types'
+
+export interface PersonalityProfileLiteRow {
+  id: string
+  email: string
+  full_name: string
+}
+
+export function personalityProfileLiteFromRow(r: PersonalityProfileLiteRow): PersonalityProfileLite {
+  return { id: r.id, email: r.email, fullName: r.full_name || r.email }
+}
+
+export interface PersonalityModuleAdminRow {
+  user_id: string
+  added_by: string | null
+  created_at: string
+}
+
+export function personalityModuleAdminFromRow(r: PersonalityModuleAdminRow): PersonalityModuleAdmin {
+  return { userId: r.user_id, addedBy: r.added_by, createdAt: r.created_at }
+}
+
+export interface PersonalityRoleAssignmentRow {
+  user_id: string
+  created_by: string | null
+  created_at: string
+}
+
+export function personalityRoleAssignmentFromRow(r: PersonalityRoleAssignmentRow): PersonalityRoleAssignment {
+  return { userId: r.user_id, addedBy: r.created_by, createdAt: r.created_at }
+}
 
 export interface PersonalityFrameworkRow {
   id: string

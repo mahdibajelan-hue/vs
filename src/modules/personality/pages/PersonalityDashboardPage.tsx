@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BrainCircuit, Copy, Home, Link as LinkIcon, Plus, Wand2 } from 'lucide-react'
+import { BookOpen, BrainCircuit, Copy, Home, Link as LinkIcon, Plus, Settings, Wand2 } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
 import { JOB_ROLE_LABEL_FA } from '../../competency/types'
@@ -40,7 +40,17 @@ function copyLink(token: string, param: 'p_candidate' | 'p_results') {
  * candidate list to pick who a new personality assessment attaches to, exactly per the reuse note in
  * schema.sql Section 40.
  */
-export function PersonalityDashboardPage({ onExitToHub, onOpenResults }: { onExitToHub: () => void; onOpenResults: (id: string) => void }) {
+export function PersonalityDashboardPage({
+  onExitToHub,
+  onOpenResults,
+  onOpenQuestionBank,
+  onOpenSettings,
+}: {
+  onExitToHub: () => void
+  onOpenResults: (id: string) => void
+  onOpenQuestionBank: () => void
+  onOpenSettings?: () => void
+}) {
   const assessments = usePersonalityStore((s) => s.assessments)
   const fetchAssessments = usePersonalityStore((s) => s.fetchAssessments)
   const fetchCatalog = usePersonalityStore((s) => s.fetchCatalog)
@@ -96,7 +106,15 @@ export function PersonalityDashboardPage({ onExitToHub, onOpenResults }: { onExi
           </div>
           <h1 className="text-sm font-extrabold">ارزیابی شخصیت و رفتاری</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={onOpenQuestionBank} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5">
+            <BookOpen size={13} /> بانک سؤالات
+          </button>
+          {onOpenSettings && (
+            <button onClick={onOpenSettings} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs text-secondary hover:bg-white/5">
+              <Settings size={13} /> تنظیمات
+            </button>
+          )}
           <button onClick={() => setPickerOpen(true)} className="flex items-center gap-1.5 rounded-xl bg-pink-500 px-4 py-2 text-xs font-bold text-white hover:bg-pink-400">
             <Plus size={14} /> ارزیابی جدید
           </button>

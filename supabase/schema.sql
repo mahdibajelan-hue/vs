@@ -6854,3 +6854,60 @@ $$ language sql security definer;
 grant execute on function personality_increment_question_usage(uuid[]) to authenticated;
 
 grant execute on function personality_public_results_get(uuid) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Section 43: Personality & Behavioral Assessment Engine — module-scoped role
+-- management RPCs. Mirrors comp_grant_role/comp_revoke_role/
+-- comp_list_role_assignments exactly (Section 32): rasta_user_roles is a
+-- sitewide table gated to GLOBAL admins only (is_admin_user()), but a
+-- personality-only module admin (personality_is_module_admin(), who may not
+-- be a global admin) still needs to manage PERSONALITY_ASSESSMENT_DESIGNER/
+-- PERSONALITY_REPORT_VIEWER grants from the module's own Settings page. These
+-- narrow SECURITY DEFINER RPCs let them do exactly that, scoped to only these
+-- two role names, without broadening the generic rasta_user_roles policy.
+-- ----------------------------------------------------------------------------
+
+create or replace function personality_grant_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not personality_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('PERSONALITY_ASSESSMENT_DESIGNER', 'PERSONALITY_REPORT_VIEWER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    raise exception 'role not found';
+  end if;
+  insert into rasta_user_roles (user_id, role_id, created_by)
+  values (p_user_id, v_role_id, auth.uid())
+  on conflict (user_id, role_id) do nothing;
+end;
+$$ language plpgsql security definer;
+
+create or replace function personality_revoke_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not personality_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    return;
+  end if;
+  delete from rasta_user_roles where user_id = p_user_id and role_id = v_role_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function personality_list_role_assignments(p_role_name text)
+returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
+  select ur.user_id, ur.created_by, ur.created_at
+  from rasta_user_roles ur
+  join rasta_roles r on r.id = ur.role_id
+  where r.name = p_role_name and personality_is_module_admin();
+$$ language sql security definer stable;

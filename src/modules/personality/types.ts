@@ -188,6 +188,34 @@ export interface PersonalityResponseScale {
 }
 
 // ---------------------------------------------------------------------------
+// Module RBAC: module admins + assessment-designer/report-viewer role grants
+// ---------------------------------------------------------------------------
+
+export interface PersonalityProfileLite {
+  id: string
+  email: string
+  fullName: string
+}
+
+/** A user granted full admin-equivalent standing within the Personality module specifically —
+ * independent of the global RASTA profiles.is_admin flag (see personality_is_module_admin() in
+ * schema.sql). */
+export interface PersonalityModuleAdmin {
+  userId: string
+  addedBy: string | null
+  createdAt: string
+}
+
+/** One user holding the module-scoped PERSONALITY_ASSESSMENT_DESIGNER or PERSONALITY_REPORT_VIEWER
+ * role, backed by the shared rasta_user_roles/rasta_roles framework (not a personality-specific
+ * table) — see personality_is_assessment_designer()/personality_is_report_viewer() in schema.sql. */
+export interface PersonalityRoleAssignment {
+  userId: string
+  addedBy: string | null
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
 // Question bank
 // ---------------------------------------------------------------------------
 

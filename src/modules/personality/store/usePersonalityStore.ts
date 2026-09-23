@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { useSystemStore } from '../../../store/useSystemStore'
 import {
   personalityAiAnalysisFromRow,
@@ -11,9 +12,12 @@ import {
   personalityFrameworkFromRow,
   personalityJobBehavioralProfileFromRow,
   personalityJobBehavioralRequirementFromRow,
+  personalityModuleAdminFromRow,
+  personalityProfileLiteFromRow,
   personalityQuestionFromRow,
   personalityQuestionMixToRowPayload,
   personalityResponseScaleFromRow,
+  personalityRoleAssignmentFromRow,
   personalityTraitFromRow,
   personalityValidityResultFromRow,
   type PersonalityAiAnalysisRow,
@@ -25,8 +29,11 @@ import {
   type PersonalityFrameworkRow,
   type PersonalityJobBehavioralProfileRow,
   type PersonalityJobBehavioralRequirementRow,
+  type PersonalityModuleAdminRow,
+  type PersonalityProfileLiteRow,
   type PersonalityQuestionRow,
   type PersonalityResponseScaleRow,
+  type PersonalityRoleAssignmentRow,
   type PersonalityTraitRow,
   type PersonalityValidityResultRow,
 } from '../lib/personalityData'
@@ -41,9 +48,12 @@ import type {
   PersonalityFramework,
   PersonalityJobBehavioralProfile,
   PersonalityJobBehavioralRequirement,
+  PersonalityModuleAdmin,
+  PersonalityProfileLite,
   PersonalityQuestion,
   PersonalityQuestionMixCell,
   PersonalityResponseScale,
+  PersonalityRoleAssignment,
   PersonalityTrait,
   PersonalityValidityResult,
 } from '../types'
@@ -52,6 +62,21 @@ function reportError(action: string, error: { message: string } | null): boolean
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${error.message}`)
   return true
+}
+
+function currentUserId(): string | null {
+  return useAuthStore.getState().profile?.id ?? null
+}
+
+// Mirrors the personality_questions_insert RLS policy's own OR-conditions exactly, so a proposal
+// that this check lets through as "privileged" never gets rejected by the database, and one it
+// calls unprivileged always satisfies the policy's PENDING_REVIEW+inactive+own-row branch instead.
+function isPrivilegedForQuestions(get: () => Pick<PersonalityStoreState, 'moduleAdmins' | 'assessmentDesigners'>): boolean {
+  const profile = useAuthStore.getState().profile
+  if (profile?.isAdmin) return true
+  const uid = profile?.id
+  if (!uid) return false
+  return get().moduleAdmins.some((m) => m.userId === uid) || get().assessmentDesigners.some((m) => m.userId === uid)
 }
 
 export interface PersonalityQuestionInput {
@@ -85,6 +110,11 @@ export interface PersonalityAssessmentTemplateInput {
 interface PersonalityStoreState {
   loading: boolean
 
+  profiles: PersonalityProfileLite[]
+  moduleAdmins: PersonalityModuleAdmin[]
+  assessmentDesigners: PersonalityRoleAssignment[]
+  reportViewers: PersonalityRoleAssignment[]
+
   frameworks: PersonalityFramework[]
   traits: PersonalityTrait[]
   facets: PersonalityFacet[]
@@ -98,6 +128,23 @@ interface PersonalityStoreState {
   dimensionScores: PersonalityDimensionScore[]
   validityResults: PersonalityValidityResult[]
   aiAnalysisByAssessment: Record<string, PersonalityAiAnalysis | undefined>
+
+  fetchProfiles: () => Promise<void>
+
+  fetchModuleAdmins: () => Promise<void>
+  addModuleAdmin: (userId: string) => Promise<void>
+  removeModuleAdmin: (userId: string) => Promise<void>
+
+  /** PERSONALITY_ASSESSMENT_DESIGNER / PERSONALITY_REPORT_VIEWER — module-scoped RBAC roles, backed
+   * by the shared rasta_user_roles framework via the personality_grant_role/personality_revoke_role/
+   * personality_list_role_assignments RPCs (see schema.sql) so a module-only admin can manage them
+   * without needing the sitewide admin flag. */
+  fetchAssessmentDesigners: () => Promise<void>
+  addAssessmentDesigner: (userId: string) => Promise<void>
+  removeAssessmentDesigner: (userId: string) => Promise<void>
+  fetchReportViewers: () => Promise<void>
+  addReportViewer: (userId: string) => Promise<void>
+  removeReportViewer: (userId: string) => Promise<void>
 
   fetchCatalog: () => Promise<void>
   fetchQuestionBank: () => Promise<void>
@@ -122,6 +169,11 @@ interface PersonalityStoreState {
 export const usePersonalityStore = create<PersonalityStoreState>((set, get) => ({
   loading: false,
 
+  profiles: [],
+  moduleAdmins: [],
+  assessmentDesigners: [],
+  reportViewers: [],
+
   frameworks: [],
   traits: [],
   facets: [],
@@ -135,6 +187,69 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
   dimensionScores: [],
   validityResults: [],
   aiAnalysisByAssessment: {},
+
+  fetchProfiles: async () => {
+    const { data, error } = await supabase.from('profiles').select('id, email, full_name').order('email')
+    if (reportError('بارگذاری فهرست کاربران', error)) return
+    set({ profiles: ((data ?? []) as PersonalityProfileLiteRow[]).map(personalityProfileLiteFromRow) })
+  },
+
+  fetchModuleAdmins: async () => {
+    const { data, error } = await supabase.from('personality_module_admins').select('*')
+    if (reportError('بارگذاری فهرست ادمین‌های ماژول', error)) return
+    set({ moduleAdmins: ((data ?? []) as PersonalityModuleAdminRow[]).map(personalityModuleAdminFromRow) })
+  },
+
+  addModuleAdmin: async (userId) => {
+    const { error } = await supabase.from('personality_module_admins').insert({ user_id: userId })
+    if (reportError('افزودن ادمین ماژول', error)) return
+    await get().fetchModuleAdmins()
+  },
+
+  removeModuleAdmin: async (userId) => {
+    const previous = get().moduleAdmins
+    set({ moduleAdmins: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.from('personality_module_admins').delete().eq('user_id', userId)
+    if (reportError('حذف ادمین ماژول', error)) set({ moduleAdmins: previous })
+  },
+
+  fetchAssessmentDesigners: async () => {
+    const { data, error } = await supabase.rpc('personality_list_role_assignments', { p_role_name: 'PERSONALITY_ASSESSMENT_DESIGNER' })
+    if (reportError('بارگذاری فهرست طراحان آزمون', error)) return
+    set({ assessmentDesigners: ((data ?? []) as PersonalityRoleAssignmentRow[]).map(personalityRoleAssignmentFromRow) })
+  },
+
+  addAssessmentDesigner: async (userId) => {
+    const { error } = await supabase.rpc('personality_grant_role', { p_user_id: userId, p_role_name: 'PERSONALITY_ASSESSMENT_DESIGNER' })
+    if (reportError('افزودن طراح آزمون', error)) return
+    await get().fetchAssessmentDesigners()
+  },
+
+  removeAssessmentDesigner: async (userId) => {
+    const previous = get().assessmentDesigners
+    set({ assessmentDesigners: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.rpc('personality_revoke_role', { p_user_id: userId, p_role_name: 'PERSONALITY_ASSESSMENT_DESIGNER' })
+    if (reportError('حذف طراح آزمون', error)) set({ assessmentDesigners: previous })
+  },
+
+  fetchReportViewers: async () => {
+    const { data, error } = await supabase.rpc('personality_list_role_assignments', { p_role_name: 'PERSONALITY_REPORT_VIEWER' })
+    if (reportError('بارگذاری فهرست بینندگان گزارش', error)) return
+    set({ reportViewers: ((data ?? []) as PersonalityRoleAssignmentRow[]).map(personalityRoleAssignmentFromRow) })
+  },
+
+  addReportViewer: async (userId) => {
+    const { error } = await supabase.rpc('personality_grant_role', { p_user_id: userId, p_role_name: 'PERSONALITY_REPORT_VIEWER' })
+    if (reportError('افزودن بیننده گزارش', error)) return
+    await get().fetchReportViewers()
+  },
+
+  removeReportViewer: async (userId) => {
+    const previous = get().reportViewers
+    set({ reportViewers: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.rpc('personality_revoke_role', { p_user_id: userId, p_role_name: 'PERSONALITY_REPORT_VIEWER' })
+    if (reportError('حذف بیننده گزارش', error)) set({ reportViewers: previous })
+  },
 
   fetchCatalog: async () => {
     set({ loading: true })
@@ -194,7 +309,17 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
       await get().fetchQuestionBank()
       return input.id
     }
-    const { data, error } = await supabase.from('personality_questions').insert(payload).select('id').single()
+    // A module admin/assessment designer's own question lands pre-approved and live immediately;
+    // anyone else's lands as an inactive PENDING_REVIEW proposal — matches the personality_questions
+    // insert RLS policy exactly (see schema.sql), which would otherwise reject either mismatch.
+    const privileged = isPrivilegedForQuestions(get)
+    const insertPayload = {
+      ...payload,
+      created_by: currentUserId(),
+      approval_status: privileged ? 'APPROVED' : 'PENDING_REVIEW',
+      active: privileged,
+    }
+    const { data, error } = await supabase.from('personality_questions').insert(insertPayload).select('id').single()
     if (reportError('ثبت سؤال', error)) return null
     await get().fetchQuestionBank()
     return (data as { id: string } | null)?.id ?? null
