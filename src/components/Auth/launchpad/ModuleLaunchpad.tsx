@@ -9,13 +9,14 @@ import { SmartAnalyticsCard } from './cards/SmartAnalyticsCard'
 import { TechnicalCompetencyCard } from './cards/TechnicalCompetencyCard'
 import { ProjectEstimationCard } from './cards/ProjectEstimationCard'
 import { UserManagementCard } from './cards/UserManagementCard'
+import { PersonalityAssessmentCard } from './cards/PersonalityAssessmentCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => ReactElement
 
 /** Every launchpad entry point. Project Radar has no RBAC gate (it's always the entry point, not
  * one of the `hasModuleAccess`-checked ones), so it's kept out of the filtered list and placed
  * explicitly in the grid's `radar` area (see `.launchpad-module-grid` in index.css) — the other
- * five fill areas a/b/c/d/e around it in this order. New modules are added here as one more
+ * six fill areas a/b/c/d/e/f around it in this order. New modules are added here as one more
  * `{ key, Card, area }` entry (pick any still-open area). */
 const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] = [
   { key: 'executive', Card: PortfolioManagementCard, area: 'area-a' },
@@ -23,6 +24,7 @@ const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] =
   { key: 'competency', Card: TechnicalCompetencyCard, area: 'area-c' },
   { key: 'estimator', Card: ProjectEstimationCard, area: 'area-d' },
   { key: 'admin', Card: UserManagementCard, area: 'area-e' },
+  { key: 'personality', Card: PersonalityAssessmentCard, area: 'area-f' },
 ]
 
 export function ModuleLaunchpad({ onSelect }: { onSelect: (key: 'radar' | ModuleKey) => void }) {

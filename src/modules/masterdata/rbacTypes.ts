@@ -11,6 +11,7 @@ export type ModuleKeyRef =
   | 'estimator'
   | 'lifecycle'
   | 'admin'
+  | 'personality'
 
 export interface RastaModule {
   key: ModuleKeyRef

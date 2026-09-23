@@ -19,6 +19,9 @@ import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
+import { PersonalityApp } from './modules/personality/PersonalityApp'
+import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
+import { PersonalityPublicResultsPage } from './modules/personality/pages/PersonalityPublicResultsPage'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -52,6 +55,15 @@ export function RootApp() {
   // results report with anyone holding the link, never requiring a RASTA login either.
   const resultsToken = new URLSearchParams(window.location.search).get('results')
   if (resultsToken) return <PublicResultsPage token={resultsToken} />
+
+  // Personality module's own candidate-taking and public-results links (?p_candidate=/?p_results=)
+  // — same reasoning as the competency links above, kept as separate query params so the two
+  // modules' tokens never collide.
+  const personalityCandidateToken = new URLSearchParams(window.location.search).get('p_candidate')
+  if (personalityCandidateToken) return <PersonalityCandidatePage token={personalityCandidateToken} />
+
+  const personalityResultsToken = new URLSearchParams(window.location.search).get('p_results')
+  if (personalityResultsToken) return <PersonalityPublicResultsPage token={personalityResultsToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (
@@ -112,6 +124,8 @@ export function RootApp() {
     <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
     <CompetencyApp onExitToHub={exitToHub} />
+  ) : activeModule === 'personality' ? (
+    <PersonalityApp onExitToHub={exitToHub} />
   ) : activeModule === 'estimator' ? (
     <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (

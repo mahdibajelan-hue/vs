@@ -6528,3 +6528,329 @@ join (values
 ) as v(dim_key, weight, min_threshold, is_critical) on true
 join personality_behavioral_dimensions d on d.key = v.dim_key
 on conflict (profile_id, dimension_id) do nothing;
+
+-- ============================================================================
+-- Section 41: Personality & Behavioral Assessment Engine — Phase 3: server-side
+-- scoring engine + candidate RPCs. Scoring is centralized here (never in
+-- frontend code) and always computed from personality_responses — the
+-- frontend only ever reads the resulting personality_dimension_scores/
+-- personality_validity_results rows.
+-- ============================================================================
+
+-- comp_question_bank_public()-equivalent: a safe, non-sensitive projection of a personality
+-- question for the candidate-facing UI — strips dimension_key/score from every option (candidate
+-- must never see which trait/dimension is measured or how an option scores). Scale metadata is
+-- inlined here (rather than a separate personality_response_scales lookup) because the
+-- candidate-taking flow is anonymous and personality_response_scales' RLS is authenticated-only.
+create or replace function personality_question_public(p_ids uuid[])
+returns table (
+  id uuid, question_type text, question_text text, scenario_context text, scale_id uuid, options jsonb, complexity text,
+  scale_key text, scale_min_value int, scale_max_value int, scale_labels jsonb
+) as $$
+  select
+    q.id, q.question_type, q.question_text, q.scenario_context, q.scale_id,
+    coalesce(
+      (select jsonb_agg(jsonb_build_object('key', opt->>'key', 'label_fa', opt->>'label_fa') order by opt->>'key')
+       from jsonb_array_elements(q.options) as opt),
+      '[]'::jsonb
+    ) as options,
+    q.complexity,
+    s.key, s.min_value, s.max_value, s.labels
+  from personality_questions q
+  left join personality_response_scales s on s.id = q.scale_id
+  where q.id = any(p_ids);
+$$ language sql security definer stable;
+
+grant execute on function personality_question_public(uuid[]) to anon, authenticated;
+
+-- Candidate-taking flow (anon, via candidate_token — never the same token as results_share_token).
+
+create or replace function personality_candidate_get(p_token uuid)
+returns table (
+  id uuid, status text, selected_question_ids jsonb, started_at timestamptz, submitted_at timestamptz
+) as $$
+  select pa.id, pa.status, pa.selected_question_ids, pa.started_at, pa.submitted_at
+  from personality_assessments pa
+  where pa.candidate_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_candidate_get(uuid) to anon, authenticated;
+
+create or replace function personality_candidate_start(p_token uuid)
+returns void as $$
+  update personality_assessments
+  set status = case when status = 'DESIGNED' or status = 'GENERATED' or status = 'ASSIGNED' then 'STARTED' else status end,
+      started_at = coalesce(started_at, now())
+  where candidate_token = p_token and status not in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+$$ language sql security definer;
+
+grant execute on function personality_candidate_start(uuid) to anon, authenticated;
+
+create or replace function personality_candidate_submit_response(p_token uuid, p_question_id uuid, p_response jsonb, p_response_time_ms int default null)
+returns void as $$
+declare
+  v_id uuid;
+  v_status text;
+begin
+  select pa.id, pa.status into v_id, v_status from personality_assessments pa where pa.candidate_token = p_token;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  if v_status in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED') then
+    raise exception 'assessment already submitted';
+  end if;
+  update personality_assessments set status = 'IN_PROGRESS' where id = v_id and status = 'STARTED';
+  insert into personality_responses (personality_assessment_id, question_id, response_value, response_time_ms)
+  values (v_id, p_question_id, p_response, p_response_time_ms)
+  on conflict (personality_assessment_id, question_id)
+  do update set response_value = excluded.response_value, response_time_ms = excluded.response_time_ms, answered_at = now();
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_candidate_submit_response(uuid, uuid, jsonb, int) to anon, authenticated;
+
+-- Scoring engine. Idempotent (re-running after a reopen recomputes cleanly). Never claims
+-- population percentiles — normalized 0-100 only.
+create or replace function personality_score_assessment(p_id uuid)
+returns void as $$
+declare
+  pa personality_assessments%rowtype;
+  v_straight_lining boolean := false;
+  v_missing int := 0;
+  v_total_selected int := 0;
+  v_completion_seconds int;
+begin
+  select * into pa from personality_assessments where id = p_id;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+
+  delete from personality_dimension_scores where personality_assessment_id = p_id;
+
+  -- TRAIT scores (Big Five) — average of normalized 0-1 LIKERT/FREQUENCY item scores tied to a
+  -- trait, reverse-scored items mirrored around the scale midpoint first.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, trait_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'TRAIT', x.trait_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 5 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.trait_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.trait_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.trait_id;
+
+  -- FACET scores — same source, grouped by facet.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, facet_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'FACET', x.facet_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 3 then 'HIGH' when count(*) >= 1 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.facet_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.facet_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.facet_id;
+
+  -- BEHAVIORAL_DIMENSION scores — LIKERT/FREQUENCY items tied directly to a dimension, PLUS
+  -- FORCED_CHOICE/SJT/PRIORITY_CHOICE/EXPERIENCE_ANCHORED items resolved via the chosen option's
+  -- embedded dimension_key/score (SJT/EA/PRIORITY_CHOICE options carry a 0-5 quality score;
+  -- FORCED_CHOICE is ipsative, so a chosen side counts as full credit toward its own construct).
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, dimension_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'BEHAVIORAL_DIMENSION', x.dim_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 4 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.dimension_id as dim_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.dimension_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+
+    union all
+
+    select d.id as dim_id,
+      case when q.question_type = 'FORCED_CHOICE' then 1.0 else (opt->>'score')::numeric / 5.0 end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    cross join lateral jsonb_array_elements(q.options) as opt
+    join personality_behavioral_dimensions d on d.key = (opt->>'dimension_key')
+    where r.personality_assessment_id = p_id
+      and q.question_type in ('FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')
+      and (r.response_value->>'selected_option') = (opt->>'key')
+  ) x
+  where x.v is not null
+  group by x.dim_id;
+
+  -- Response validity — evidence for review, never an automatic dishonesty verdict.
+  -- Straight-lining: candidate picked the single most common LIKERT/FREQUENCY value on more than
+  -- 90% of those items (only evaluated once there are enough such items to mean anything).
+  select (count(*) filter (where v = mode_v))::numeric / nullif(count(*), 0) > 0.9
+  into v_straight_lining
+  from (
+    select (r.response_value->>'selected')::numeric as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    where r.personality_assessment_id = p_id and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ) vals
+  cross join lateral (select mode() within group (order by v) as mode_v from (
+    select (r2.response_value->>'selected')::numeric as v
+    from personality_responses r2
+    join personality_questions q2 on q2.id = r2.question_id
+    where r2.personality_assessment_id = p_id and q2.question_type in ('LIKERT', 'FREQUENCY') and (r2.response_value ? 'selected')
+  ) inner_vals) m
+  having count(*) >= 8;
+
+  v_straight_lining := coalesce(v_straight_lining, false);
+
+  select jsonb_array_length(pa.selected_question_ids) into v_total_selected;
+  select v_total_selected - count(*) into v_missing from personality_responses where personality_assessment_id = p_id;
+  v_completion_seconds := case when pa.started_at is not null then greatest(0, extract(epoch from (now() - pa.started_at))::int) else null end;
+
+  insert into personality_validity_results (
+    personality_assessment_id, completion_seconds, straight_lining_flag, missing_response_count, overall_status
+  )
+  values (
+    p_id, v_completion_seconds, v_straight_lining, greatest(0, coalesce(v_missing, 0)),
+    case when v_straight_lining or coalesce(v_missing, 0) > 0 then 'REVIEW_REQUIRED' else 'ACCEPTABLE' end
+  )
+  on conflict (personality_assessment_id) do update set
+    completion_seconds = excluded.completion_seconds,
+    straight_lining_flag = excluded.straight_lining_flag,
+    missing_response_count = excluded.missing_response_count,
+    overall_status = excluded.overall_status,
+    computed_at = now();
+
+  -- Deterministic, rule-based watchpoints — never a diagnosis, just a flag for structured-interview
+  -- follow-up when a behavioral dimension scores low.
+  update personality_assessments pa2
+  set computed_watchpoints = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'topic', 'در مصاحبه ساختاریافته، شواهد بیشتری درباره «' || d.label_fa || '» بررسی شود.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score < 40
+  ), '[]'::jsonb),
+  computed_patterns = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'interpretation', 'الگوی پاسخ نشان‌دهنده تمایل نسبتاً قوی در حوزه «' || d.label_fa || '» است.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score >= 80
+  ), '[]'::jsonb),
+  status = 'FINGERPRINT',
+  submitted_at = coalesce(pa2.submitted_at, now()),
+  updated_at = now()
+  where pa2.id = p_id;
+
+  perform comp_log_audit('PERSONALITY_ASSESSMENT_SCORED', 'personality_assessments', p_id, null, jsonb_build_object('status', 'FINGERPRINT'));
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_score_assessment(uuid) to authenticated;
+
+-- Candidate-facing finalize: marks submitted and scores in one call, callable by the anon
+-- candidate-taking flow via their own token (never requires a RASTA login).
+create or replace function personality_candidate_finalize(p_token uuid)
+returns void as $$
+declare
+  v_id uuid;
+begin
+  select id into v_id from personality_assessments where candidate_token = p_token;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  update personality_assessments set status = 'SUBMITTED', submitted_at = coalesce(submitted_at, now()) where id = v_id;
+  perform personality_score_assessment(v_id);
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_candidate_finalize(uuid) to anon, authenticated;
+
+-- Lets the anon candidate-taking UI resume mid-way after a page reload — returns only this
+-- candidate's own already-submitted answers (scoped by their own token, never another candidate's).
+create or replace function personality_candidate_get_responses(p_token uuid)
+returns table (question_id uuid, response_value jsonb) as $$
+  select r.question_id, r.response_value
+  from personality_responses r
+  join personality_assessments pa on pa.id = r.personality_assessment_id
+  where pa.candidate_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_candidate_get_responses(uuid) to anon, authenticated;
+
+-- Public "view results online" link (analogous to comp_public_results_get) — read-only,
+-- non-sensitive projection only (no raw item-level answers, no reference content).
+create or replace function personality_public_results_get(p_token uuid)
+returns table (
+  id uuid, job_role text, status text, submitted_at timestamptz,
+  dimension_scores jsonb, validity_status text
+) as $$
+  select
+    pa.id, pa.job_role, pa.status, pa.submitted_at,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'scoreKind', ds.score_kind,
+        'traitKey', t.key, 'traitLabelFa', t.label_fa,
+        'facetKey', f.key, 'facetLabelFa', f.label_fa,
+        'dimensionKey', d.key, 'dimensionLabelFa', d.label_fa,
+        'normalizedScore', ds.normalized_score, 'coverageCount', ds.coverage_count, 'confidence', ds.confidence
+      ))
+      from personality_dimension_scores ds
+      left join personality_traits t on t.id = ds.trait_id
+      left join personality_facets f on f.id = ds.facet_id
+      left join personality_behavioral_dimensions d on d.id = ds.dimension_id
+      where ds.personality_assessment_id = pa.id
+    ), '[]'::jsonb),
+    (select vr.overall_status from personality_validity_results vr where vr.personality_assessment_id = pa.id)
+  from personality_assessments pa
+  where pa.results_share_token = p_token;
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 42: Personality & Behavioral Assessment Engine — question usage
+-- tracking. Mirrors comp_increment_question_usage exactly (Section 34): a
+-- narrow, low-risk RPC (bumping a counter can't leak or corrupt anything
+-- sensitive) so a plain designer generating an assessment — who has no
+-- general UPDATE grant on personality_questions (admin-only) — can still
+-- bump usage_count without a dedicated table-level policy.
+-- ----------------------------------------------------------------------------
+
+create or replace function personality_increment_question_usage(p_ids uuid[])
+returns void as $$
+  update personality_questions
+  set usage_count = usage_count + 1, last_used_at = now()
+  where id = any(p_ids) and auth.uid() is not null;
+$$ language sql security definer;
+
+grant execute on function personality_increment_question_usage(uuid[]) to authenticated;
+
+grant execute on function personality_public_results_get(uuid) to anon, authenticated;

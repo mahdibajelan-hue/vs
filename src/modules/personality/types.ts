@@ -191,12 +191,16 @@ export interface PersonalityResponseScale {
 // Question bank
 // ---------------------------------------------------------------------------
 
-/** One selectable choice for FORCED_CHOICE/SJT/PRIORITY_CHOICE items. Never carries a "correct"
- * flag to the client beyond what rendering the choice itself requires — scoring weights live only
- * in the question's own (admin/designer-only visible) configuration. */
+/** One selectable choice for FORCED_CHOICE/SJT/PRIORITY_CHOICE/EXPERIENCE_ANCHORED items.
+ * dimensionKey/score carry the scoring engine's per-choice evidence (which behavioral dimension
+ * this choice reflects, and how strongly, 0-5) — admin/designer-only data, never sent to the
+ * candidate-facing UI beyond the plain label. Resolved to a real dimension_id by the scoring engine
+ * at scoring time via the key, rather than storing a foreign key directly in this jsonb blob. */
 export interface PersonalityQuestionOption {
   key: string
   labelFa: string
+  dimensionKey?: string
+  score?: number
 }
 
 export interface PersonalityQuestionQuality {
