@@ -208,7 +208,10 @@ Deno.serve(async (req: Request) => {
       questions_and_answers: answersPayload,
     }
 
-    const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash'
+    // gemini-2.5-flash was retired ("no longer available to new users") — Google's own 404 error
+    // names gemini-3.6-flash as its replacement. Kept overridable via GEMINI_MODEL so a future
+    // model swap never needs a redeploy of this function's code.
+    const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash'
     let response
     try {
       const ai = new GoogleGenAI({ apiKey: geminiKey })

@@ -136,17 +136,17 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      {/* flex-col with a shrink-0 header/footer and a flex-1 scrollable body — keeps the
-          prev/next/generate footer always on screen instead of scrolling away with long step
-          content, which on mobile (especially with the on-screen keyboard open, shrinking the
-          viewport) made the submit button unreachable. */}
-      {/* dvh (dynamic viewport height), not vh — vh on mobile Safari/Chrome is the LARGEST possible
-          viewport (browser chrome hidden), taller than what's actually visible once the address
-          bar/bottom toolbar are showing, which pinned this modal's footer buttons below the fold
-          with no way to reach them. dvh tracks the real, currently-visible viewport instead. */}
-      <div className="glass-panel flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="shrink-0 p-5 pb-0">
+    // The OVERLAY itself scrolls (overflow-y-auto), and the modal box below has no max-height/
+    // internal-scroll of its own — this is the classic, viewport-unit-proof dialog pattern.
+    // Earlier attempts capped the modal's own height (with vh, then dvh) and gave it an internal
+    // scroll region, but on some mobile browsers (address bar/keyboard changing the real visible
+    // area) that inner max-height still ended up taller than what was actually visible, with
+    // nothing left to scroll — pinning the footer buttons below the fold with no way to reach them.
+    // Letting the page/overlay scroll instead guarantees every part of the modal, including the
+    // footer, is always reachable by a normal scroll gesture, regardless of viewport quirks.
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4" onClick={onClose}>
+      <div className="flex min-h-full items-start justify-center py-6 sm:items-center sm:py-10">
+        <div className="glass-panel w-full max-w-3xl rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
           <div className="mb-4 flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-sm font-bold">
               <Wand2 size={16} className="text-purple-300" /> طراحی آزمون شایستگی — {JOB_ROLE_LABEL_FA[jobRole]}
@@ -171,9 +171,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {step === 0 && (
           <div className="space-y-3">
             {templatesForRole.length > 0 && (
@@ -362,9 +360,8 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
             </p>
           </div>
         )}
-        </div>
 
-        <div className="shrink-0 flex items-center justify-between border-t border-white/10 p-5">
+        <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
@@ -389,6 +386,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
               <Wand2 size={14} /> {generating ? 'در حال تولید…' : 'تولید و اعمال آزمون'}
             </button>
           )}
+        </div>
         </div>
       </div>
     </div>

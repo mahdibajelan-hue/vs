@@ -18,8 +18,10 @@ const DIMENSION_LABEL_FA: Record<string, string> = {
  * Gemini AI Analysis card (spec section 18-27) — an evidence-based, complementary analytical layer
  * over the judges' own recorded scores, never a replacement for them (spec section 24: AI is an
  * ASSISTANT, not the final decision maker — that stays with the judges/Rule Engine). Only supported
- * for DB-backed role assessments; project_manager's fixed rubric isn't wired to this yet (the Edge
- * Function itself refuses it with a clear message).
+ * for DB-backed assessments (selected_question_ids populated) — a Project Manager candidate is no
+ * exception here: a bank-driven PM assessment works exactly like any other role, and only an
+ * assessment still on the legacy fixed in-code PM rubric (selected_question_ids empty) is
+ * unsupported (the Edge Function itself refuses that case with a clear message).
  */
 export function AIAnalysisCard({ assessmentId, isPM }: { assessmentId: string; isPM: boolean }) {
   const analysis = useCompetencyStore((s) => s.aiAnalysisByAssessment[assessmentId])

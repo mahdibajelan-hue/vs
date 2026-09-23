@@ -5691,6 +5691,14 @@ create policy "comp_question_bank_delete_admin" on comp_question_bank
 
 -- A proposer must be able to see their own proposal afterward (to track its status), even with no
 -- live assessment tying them to that job role's bank at all.
+--
+-- The blanket "job_role = 'project_manager'" branch below used to apply to EVERY PM assessment,
+-- because every PM assessment used the fixed in-code rubric (selected_question_ids always empty),
+-- so the generic "selected_question_ids @> ..." branch could never match for PM at all. Now that a
+-- PM assessment can also be bank-driven exactly like every other role (see usesLegacyPmRubric on
+-- the client), that carve-out is narrowed to ONLY the still-legacy case (selected_question_ids
+-- still empty) — a bank-driven PM assessment is scoped by its own real selection, same as any
+-- other role, with no special-case treatment left.
 drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
 create policy "comp_question_bank_select_scoped" on comp_question_bank
   for select using (
@@ -5705,7 +5713,10 @@ create policy "comp_question_bank_select_scoped" on comp_question_bank
           comp_is_lead(a.id)
           or (
             comp_can_access_assessment(a.id)
-            and (a.job_role = 'project_manager' or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text))
+            and (
+              (a.job_role = 'project_manager' and jsonb_array_length(a.selected_question_ids) = 0)
+              or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text)
+            )
           )
         )
     )
