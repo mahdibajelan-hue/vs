@@ -141,7 +141,11 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
           prev/next/generate footer always on screen instead of scrolling away with long step
           content, which on mobile (especially with the on-screen keyboard open, shrinking the
           viewport) made the submit button unreachable. */}
-      <div className="glass-panel flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      {/* dvh (dynamic viewport height), not vh — vh on mobile Safari/Chrome is the LARGEST possible
+          viewport (browser chrome hidden), taller than what's actually visible once the address
+          bar/bottom toolbar are showing, which pinned this modal's footer buttons below the fold
+          with no way to reach them. dvh tracks the real, currently-visible viewport instead. */}
+      <div className="glass-panel flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="shrink-0 p-5 pb-0">
           <div className="mb-4 flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-sm font-bold">
