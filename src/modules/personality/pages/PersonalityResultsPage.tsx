@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRight, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronUp, Compass, GraduationCap, HelpCircle, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
 import { JOB_ROLE_LABEL_FA } from '../../competency/types'
@@ -26,6 +26,7 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
 
   const [generating, setGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [expandedFollowUp, setExpandedFollowUp] = useState<number | null>(null)
 
   useEffect(() => {
     fetchDimensionScores(personalityAssessmentId)
@@ -187,14 +188,70 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
               )}
               {aiAnalysis.analysis.follow_up_questions.length > 0 && (
                 <div>
-                  <p className="mb-1 font-bold text-sky-300">سؤالات پیشنهادی برای مصاحبه ساختاریافته</p>
-                  <ul className="space-y-1">
-                    {aiAnalysis.analysis.follow_up_questions.map((q, i) => (
-                      <li key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-                        {q.question}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mb-1 flex items-center gap-1.5 font-bold text-sky-300">
+                    <HelpCircle size={13} /> سؤالات پیشنهادی برای مصاحبه ساختاریافته
+                  </p>
+                  <div className="space-y-1.5">
+                    {aiAnalysis.analysis.follow_up_questions.map((q, i) => {
+                      const dim = dimensions.find((d) => d.key === q.dimension_key)
+                      const expanded = expandedFollowUp === i
+                      return (
+                        <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+                          <button
+                            onClick={() => setExpandedFollowUp(expanded ? null : i)}
+                            className="flex w-full items-start justify-between gap-2 text-right"
+                          >
+                            <span className="font-medium text-primary">{q.question}</span>
+                            {expanded ? <ChevronUp size={13} className="mt-0.5 shrink-0 text-muted" /> : <ChevronDown size={13} className="mt-0.5 shrink-0 text-muted" />}
+                          </button>
+                          {(q.competency || dim) && (
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {q.competency && (
+                                <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-200">{q.competency}</span>
+                              )}
+                              {dim && <span className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-200">{dim.labelFa}</span>}
+                            </div>
+                          )}
+                          {expanded && (
+                            <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+                              {q.purpose && (
+                                <p>
+                                  <span className="font-bold text-secondary">هدف: </span>
+                                  <span className="text-muted">{q.purpose}</span>
+                                </p>
+                              )}
+                              {q.evidence_to_look_for && (
+                                <p>
+                                  <span className="font-bold text-secondary">شواهدی که باید دنبال شود: </span>
+                                  <span className="text-muted">{q.evidence_to_look_for}</span>
+                                </p>
+                              )}
+                              {q.positive_indicators.length > 0 && (
+                                <div>
+                                  <p className="mb-0.5 font-bold text-emerald-300">نشانه‌های مثبت</p>
+                                  <ul className="list-inside list-disc space-y-0.5 text-muted">
+                                    {q.positive_indicators.map((p, pi) => (
+                                      <li key={pi}>{p}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {q.risk_indicators.length > 0 && (
+                                <div>
+                                  <p className="mb-0.5 font-bold text-red-300">نشانه‌های هشدار</p>
+                                  <ul className="list-inside list-disc space-y-0.5 text-muted">
+                                    {q.risk_indicators.map((r, ri) => (
+                                      <li key={ri}>{r}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -202,6 +259,44 @@ export function PersonalityResultsPage({ personalityAssessmentId, onBack }: { pe
             !generating && <p className="text-[11px] text-muted">هنوز تحلیل هوشمندی برای این ارزیابی تولید نشده است.</p>
           )}
         </div>
+
+        {aiAnalysis && (aiAnalysis.analysis.training_recommendations.length > 0 || aiAnalysis.analysis.career_development_paths.length > 0) && (
+          <div className="glass-panel rounded-2xl border border-teal-400/20 p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-teal-200">
+              <Compass size={14} /> توسعه و مسیر شغلی
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {aiAnalysis.analysis.training_recommendations.length > 0 && (
+                <div className="rounded-xl border border-teal-400/20 bg-teal-500/[0.06] p-3">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-teal-200">
+                    <GraduationCap size={12} /> پیشنهادهای آموزشی
+                  </p>
+                  <ul className="space-y-1">
+                    {aiAnalysis.analysis.training_recommendations.map((t, i) => (
+                      <li key={i} className="text-[11px] leading-6 text-secondary">
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {aiAnalysis.analysis.career_development_paths.length > 0 && (
+                <div className="rounded-xl border border-purple-400/20 bg-purple-500/[0.06] p-3">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-purple-200">
+                    <Compass size={12} /> مسیرهای توسعه شغلی
+                  </p>
+                  <ul className="space-y-1">
+                    {aiAnalysis.analysis.career_development_paths.map((c, i) => (
+                      <li key={i} className="text-[11px] leading-6 text-secondary">
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
