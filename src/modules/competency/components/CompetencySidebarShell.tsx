@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, User, Users } from 'lucide-react'
+import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import type { EvaluationStage } from '../lib/evaluationStages'
@@ -15,6 +15,7 @@ export type CompetencySection =
   | 'interview'
   | 'results'
   | 'aiAnalysis'
+  | 'idp'
   | 'questionBank'
   | 'reports'
   | 'settings'
@@ -35,6 +36,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   interview: { label: 'مصاحبه ساختاریافته', icon: MessagesSquare },
   results: { label: 'نتیجه', icon: Award },
   aiAnalysis: { label: 'تحلیل جامع هوش مصنوعی', icon: Sparkles },
+  idp: { label: 'برنامه توسعه فردی', icon: Sprout },
   questionBank: { label: 'بانک سؤالات', icon: BookOpen },
   reports: { label: 'گزارش‌ها', icon: FileBarChart2 },
   settings: { label: 'تنظیمات', icon: Settings },
@@ -47,7 +49,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // sit between panel and questions — see AssessmentWizardPage's LEAD_STAGES for the full ordering.
 // "بانک سؤالات" now covers both the technical and the personality question banks as tabs on one
 // page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis']
+const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
 const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityReports']
 
 interface CompetencySidebarShellProps {

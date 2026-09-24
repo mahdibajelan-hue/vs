@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Award, CheckCircle2, ClipboardList, Plus, Trash2, TrendingUp, Trophy, User, Users } from 'lucide-react'
+import { Award, CheckCircle2, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, Trophy, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
@@ -8,7 +8,8 @@ import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
-import type { CompetencyAssessment, JobRole } from '../types'
+import { PLAN_STATUS_META } from '../lib/developmentPlan'
+import type { CompDevelopmentPlan, CompetencyAssessment, JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
@@ -31,11 +32,15 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const developmentPlans = useCompetencyStore((s) => s.developmentPlans)
+  const fetchDevelopmentPlans = useCompetencyStore((s) => s.fetchDevelopmentPlans)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
 
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
+    // Phase 5 card badges (IDP status) — RLS-scoped to plans this viewer may read.
+    fetchDevelopmentPlans()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -176,6 +181,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                 assessment={a}
                 overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
                 rank={rankById.get(a.id)}
+                plan={developmentPlans.find((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
+                followUp={assessments.find((x) => x.previousAssessmentId === a.id)}
                 onOpen={() => onOpen(a.id)}
                 onDelete={() => setConfirmId(a.id)}
               />
@@ -227,12 +234,18 @@ function CandidateCard({
   assessment: a,
   overall,
   rank,
+  plan,
+  followUp,
   onOpen,
   onDelete,
 }: {
   assessment: CompetencyAssessment
   overall: number | null
   rank?: number
+  /** This assessment's open Individual Development Plan, if any (Phase 5). */
+  plan?: CompDevelopmentPlan
+  /** The reassessment that follows this one up, if any. */
+  followUp?: CompetencyAssessment
   onOpen: () => void
   onDelete: () => void
 }) {
@@ -292,6 +305,29 @@ function CandidateCard({
           </span>
           <span className="text-[9px] text-muted">{formatJalali(a.interviewDate)}</span>
         </div>
+        {(plan || a.previousAssessmentId || followUp) && (
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {plan && (
+              <span
+                className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+                style={{ background: `${PLAN_STATUS_META[plan.status].color}1f`, color: PLAN_STATUS_META[plan.status].color }}
+                title={`برنامه توسعه فردی — ${PLAN_STATUS_META[plan.status].label}`}
+              >
+                <Sprout size={9} /> IDP
+              </span>
+            )}
+            {a.previousAssessmentId && (
+              <span className="flex items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-200" title="این ارزیابی، ارزیابی مجدد یک ارزیابی قبلی است">
+                <Repeat size={9} /> ارزیابی مجدد
+              </span>
+            )}
+            {followUp && followUp.status !== 'completed' && (
+              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title="ارزیابی مجدد این متقاضی در جریان است">
+                ارزیابی مجدد در جریان
+              </span>
+            )}
+          </div>
+        )}
       </button>
       <button
         onClick={(e) => {

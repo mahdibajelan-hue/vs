@@ -18,7 +18,16 @@ import type {
   CompCompetencyEvidenceSource,
   CompCompetencyEvidenceDetail,
   CompCompetencyProfile,
+  CompDevelopmentAction,
+  CompDevelopmentActionSource,
+  CompDevelopmentActionStatus,
+  CompDevelopmentActionType,
+  CompDevelopmentPlan,
+  CompDevelopmentPlanSeedResult,
+  CompDevelopmentPlanStatus,
+  CompDevelopmentPriority,
   CompEvidenceSourceType,
+  CompReassessmentComparison,
   CompetencyAssessment,
   CompInterviewRating,
   CompJobCompetencyRequirement,
@@ -49,6 +58,8 @@ import {
   compCompetencyEvidenceSourceFromRow,
   compCompetencyFromRow,
   compCompetencyScoreFromRow,
+  compDevelopmentActionFromRow,
+  compDevelopmentPlanFromRow,
   compInterviewRatingFromRow,
   compJobCompetencyRequirementFromRow,
   compJobRoleConfigFromRow,
@@ -71,6 +82,8 @@ import {
   type CompCompetencyEvidenceSourceRow,
   type CompCompetencyRow,
   type CompCompetencyScoreRow,
+  type CompDevelopmentActionRow,
+  type CompDevelopmentPlanRow,
   type CompInterviewRatingRow,
   type CompJobCompetencyRequirementRow,
   type CompJobRoleConfigRow,
@@ -319,6 +332,44 @@ function blueprintToRowPayload(input: AssessmentBlueprintInput) {
     technical_template_id: input.technicalTemplateId,
     personality_template_id: input.personalityTemplateId,
   }
+}
+
+/** Editable fields of a development action — every one optional on update (a partial patch). */
+export interface DevelopmentActionInput {
+  competencyId: string | null
+  actionType: CompDevelopmentActionType
+  title: string
+  description: string
+  currentLevel: number | null
+  targetLevel: number | null
+  priority: CompDevelopmentPriority
+  dueDate: string | null
+  status: CompDevelopmentActionStatus
+  ownerId: string | null
+  progressNote: string
+}
+
+export interface DevelopmentPlanInput {
+  status: CompDevelopmentPlanStatus
+  ownerId: string | null
+  summary: string
+  targetReviewDate: string | null
+}
+
+function developmentActionPatchToRow(patch: Partial<DevelopmentActionInput>) {
+  const row: Record<string, unknown> = {}
+  if (patch.competencyId !== undefined) row.competency_id = patch.competencyId
+  if (patch.actionType !== undefined) row.action_type = patch.actionType
+  if (patch.title !== undefined) row.title = patch.title
+  if (patch.description !== undefined) row.description = patch.description
+  if (patch.currentLevel !== undefined) row.current_level = patch.currentLevel
+  if (patch.targetLevel !== undefined) row.target_level = patch.targetLevel
+  if (patch.priority !== undefined) row.priority = patch.priority
+  if (patch.dueDate !== undefined) row.due_date = patch.dueDate || null
+  if (patch.status !== undefined) row.status = patch.status
+  if (patch.ownerId !== undefined) row.owner_id = patch.ownerId
+  if (patch.progressNote !== undefined) row.progress_note = patch.progressNote
+  return row
 }
 
 export interface JobCompetencyRequirementInput {
@@ -570,6 +621,28 @@ interface CompetencyState {
    * (reading whichever of technical/personality data is available via the caller's own JWT, calling
    * Gemini once, persisting the result) — this just invokes it and refreshes the local cache. */
   generateCandidateAiAnalysis: (assessmentId: string) => Promise<{ error: string | null }>
+
+  /** Individual Development Plans (comp_development_plans, schema.sql Section 52) — every plan the
+   * viewer can read (RLS-scoped), kept for dashboard badges; actions are fetched per plan. */
+  developmentPlans: CompDevelopmentPlan[]
+  developmentActionsByPlan: Record<string, CompDevelopmentAction[]>
+  fetchDevelopmentPlans: () => Promise<void>
+  /** Loads one assessment's open (non-cancelled) plan and its actions. */
+  fetchDevelopmentPlan: (assessmentId: string) => Promise<void>
+  /** comp_seed_development_plan — creates/reuses the DRAFT plan and adds gap-driven suggestions
+   * (idempotent), then refreshes the local copy. */
+  seedDevelopmentPlan: (assessmentId: string) => Promise<CompDevelopmentPlanSeedResult | null>
+  updateDevelopmentPlan: (planId: string, patch: Partial<DevelopmentPlanInput>) => Promise<void>
+  addDevelopmentAction: (planId: string, input: DevelopmentActionInput) => Promise<void>
+  updateDevelopmentAction: (actionId: string, patch: Partial<DevelopmentActionInput>) => Promise<void>
+  removeDevelopmentAction: (actionId: string) => Promise<void>
+
+  /** comp_create_reassessment — returns the follow-up assessment's id (an existing follow-up is
+   * returned as-is) and adds it to the local list. */
+  createReassessment: (assessmentId: string) => Promise<string | null>
+  /** comp_get_reassessment_comparison — read on demand, never cached; null when the assessment has
+   * no predecessor. */
+  fetchReassessmentComparison: (assessmentId: string) => Promise<CompReassessmentComparison | null>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -597,6 +670,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   aiAnalysisLoading: {},
   candidateAiAnalysisByAssessment: {},
   candidateAiAnalysisLoading: {},
+  developmentPlans: [],
+  developmentActionsByPlan: {},
   loadingQuestionBank: false,
   loading: true,
 
@@ -650,6 +725,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       needsStructuredInterview: false,
       includesExperience: true,
       blueprintId: null,
+      previousAssessmentId: null,
       panelSize: 3,
       candidateName: profile.candidateName,
       candidatePosition: profile.candidatePosition,
@@ -1870,5 +1946,144 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     // refresh the local copy so the staleness check compares against the same numbers.
     await get().fetchCompetencyProfile(assessmentId)
     return { error: null }
+  },
+
+  fetchDevelopmentPlans: async () => {
+    const { data, error } = await supabase.from('comp_development_plans').select('*')
+    if (reportError('بارگذاری برنامه‌های توسعه فردی', error)) return
+    set({ developmentPlans: ((data ?? []) as CompDevelopmentPlanRow[]).map(compDevelopmentPlanFromRow) })
+  },
+
+  fetchDevelopmentPlan: async (assessmentId) => {
+    const { data, error } = await supabase
+      .from('comp_development_plans')
+      .select('*')
+      .eq('assessment_id', assessmentId)
+      .neq('status', 'CANCELLED')
+      .maybeSingle()
+    if (reportError('بارگذاری برنامه توسعه فردی', error)) return
+    const others = get().developmentPlans.filter((p) => p.assessmentId !== assessmentId || p.status === 'CANCELLED')
+    if (!data) {
+      set({ developmentPlans: others })
+      return
+    }
+    const plan = compDevelopmentPlanFromRow(data as CompDevelopmentPlanRow)
+    const { data: actions, error: actionsError } = await supabase
+      .from('comp_development_actions')
+      .select('*')
+      .eq('plan_id', plan.id)
+      .order('sort_order')
+      .order('created_at')
+    if (reportError('بارگذاری اقدامات توسعه', actionsError)) return
+    set({
+      developmentPlans: [...others, plan],
+      developmentActionsByPlan: {
+        ...get().developmentActionsByPlan,
+        [plan.id]: ((actions ?? []) as CompDevelopmentActionRow[]).map(compDevelopmentActionFromRow),
+      },
+    })
+  },
+
+  seedDevelopmentPlan: async (assessmentId) => {
+    const { data, error } = await supabase.rpc('comp_seed_development_plan', { p_assessment_id: assessmentId })
+    if (reportError('تولید برنامه توسعه از روی شکاف‌ها', error)) return null
+    await get().fetchDevelopmentPlan(assessmentId)
+    return (data ?? null) as CompDevelopmentPlanSeedResult | null
+  },
+
+  updateDevelopmentPlan: async (planId, patch) => {
+    const previous = get().developmentPlans
+    const current = previous.find((p) => p.id === planId)
+    if (!current) return
+    set({ developmentPlans: previous.map((p) => (p.id === planId ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p)) })
+    const row: Record<string, unknown> = {}
+    if (patch.status !== undefined) row.status = patch.status
+    if (patch.ownerId !== undefined) row.owner_id = patch.ownerId
+    if (patch.summary !== undefined) row.summary = patch.summary
+    if (patch.targetReviewDate !== undefined) row.target_review_date = patch.targetReviewDate || null
+    const { error } = await supabase.from('comp_development_plans').update(row).eq('id', planId)
+    if (reportError('ذخیره برنامه توسعه فردی', error)) {
+      set({ developmentPlans: previous })
+      return
+    }
+    if (patch.status !== undefined && patch.status !== current.status) {
+      logAudit('DEVELOPMENT_PLAN_STATUS_CHANGED', 'comp_assessments', current.assessmentId, { planId, status: current.status }, { planId, status: patch.status })
+    }
+  },
+
+  addDevelopmentAction: async (planId, input) => {
+    const existing = get().developmentActionsByPlan[planId] ?? []
+    const id = crypto.randomUUID()
+    const sortOrder = existing.reduce((max, a) => Math.max(max, a.sortOrder), 0) + 1
+    const { error } = await supabase
+      .from('comp_development_actions')
+      .insert({ id, plan_id: planId, source: 'MANUAL', sort_order: sortOrder, ...developmentActionPatchToRow(input) })
+    if (reportError('افزودن اقدام توسعه', error)) return
+    const now = new Date().toISOString()
+    const created: CompDevelopmentAction = {
+      id,
+      planId,
+      ...input,
+      source: 'MANUAL' as CompDevelopmentActionSource,
+      sortOrder,
+      completedAt: input.status === 'DONE' ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    }
+    set({ developmentActionsByPlan: { ...get().developmentActionsByPlan, [planId]: [...existing, created] } })
+  },
+
+  updateDevelopmentAction: async (actionId, patch) => {
+    const byPlan = get().developmentActionsByPlan
+    const planId = Object.keys(byPlan).find((k) => byPlan[k].some((a) => a.id === actionId))
+    if (!planId) return
+    const previous = byPlan[planId]
+    const now = new Date().toISOString()
+    set({
+      developmentActionsByPlan: {
+        ...byPlan,
+        [planId]: previous.map((a) => {
+          if (a.id !== actionId) return a
+          const next = { ...a, ...patch, updatedAt: now }
+          // Mirrors comp_development_actions_track_completion so the badge updates immediately.
+          if (patch.status !== undefined) next.completedAt = patch.status === 'DONE' ? (a.status === 'DONE' ? a.completedAt : now) : null
+          return next
+        }),
+      },
+    })
+    const { error } = await supabase.from('comp_development_actions').update(developmentActionPatchToRow(patch)).eq('id', actionId)
+    if (reportError('ذخیره اقدام توسعه', error)) {
+      set({ developmentActionsByPlan: { ...get().developmentActionsByPlan, [planId]: previous } })
+    }
+  },
+
+  removeDevelopmentAction: async (actionId) => {
+    const byPlan = get().developmentActionsByPlan
+    const planId = Object.keys(byPlan).find((k) => byPlan[k].some((a) => a.id === actionId))
+    if (!planId) return
+    const previous = byPlan[planId]
+    set({ developmentActionsByPlan: { ...byPlan, [planId]: previous.filter((a) => a.id !== actionId) } })
+    const { error } = await supabase.from('comp_development_actions').delete().eq('id', actionId)
+    if (reportError('حذف اقدام توسعه', error)) {
+      set({ developmentActionsByPlan: { ...get().developmentActionsByPlan, [planId]: previous } })
+    }
+  },
+
+  createReassessment: async (assessmentId) => {
+    const { data, error } = await supabase.rpc('comp_create_reassessment', { p_assessment_id: assessmentId })
+    if (reportError('ایجاد ارزیابی مجدد', error) || !data) return null
+    const id = data as string
+    if (!get().assessments.some((a) => a.id === id)) {
+      const { data: row, error: rowError } = await supabase.from('comp_assessments').select('*').eq('id', id).maybeSingle()
+      if (reportError('بارگذاری ارزیابی مجدد', rowError)) return id
+      if (row) set({ assessments: [compAssessmentFromRow(row as CompAssessmentRow), ...get().assessments] })
+    }
+    return id
+  },
+
+  fetchReassessmentComparison: async (assessmentId) => {
+    const { data, error } = await supabase.rpc('comp_get_reassessment_comparison', { p_assessment_id: assessmentId })
+    if (reportError('بارگذاری مقایسه با ارزیابی قبلی', error)) return null
+    return (data ?? null) as CompReassessmentComparison | null
   },
 }))

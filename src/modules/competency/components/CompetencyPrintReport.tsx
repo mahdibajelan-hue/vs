@@ -2,7 +2,8 @@ import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
 import { usesLegacyPmRubric, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
 import { formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type GapRow } from '../lib/competencyGap'
-import type { CompetencyAnswers, CompetencyAssessment, DomainScore } from '../types'
+import { ACTION_STATUS_META, ACTION_TYPE_LABEL_FA, PLAN_STATUS_META, PRIORITY_META, planProgress } from '../lib/developmentPlan'
+import type { CompDevelopmentAction, CompDevelopmentPlan, CompetencyAnswers, CompetencyAssessment, DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -103,6 +104,13 @@ interface CompetencyPrintReportProps {
   /** Phase 4 gap-analysis rows (Competency Engine output) — rendered as one compact table; omitted
    * when the candidate's competency profile hasn't been computed. */
   competencyGapRows?: GapRow[]
+  /** Phase 5 Individual Development Plan summary — omitted when no plan exists. */
+  developmentPlan?: {
+    plan: CompDevelopmentPlan
+    actions: CompDevelopmentAction[]
+    competencyLabel: (competencyId: string) => string
+    ownerName: string | null
+  } | null
 }
 
 export function CompetencyPrintReport({
@@ -114,6 +122,7 @@ export function CompetencyPrintReport({
   roleRecommendation,
   jobRoleLabel,
   competencyGapRows = [],
+  developmentPlan = null,
 }: CompetencyPrintReportProps) {
   const isPM = usesLegacyPmRubric(assessment)
   const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
@@ -302,6 +311,59 @@ export function CompetencyPrintReport({
             </tbody>
           </table>
           <p style={{ margin: '4px 0 0', fontSize: 9, color: '#94a3b8' }}>★ شایستگی حیاتی · «شواهد ناکافی» یعنی هنوز داده‌ای ثبت نشده — نه ضعف متقاضی.</p>
+        </div>
+      )}
+
+      {developmentPlan && (
+        <div style={{ marginBottom: 20 }}>
+          {(() => {
+            const progress = planProgress(developmentPlan.actions)
+            const rows = [...developmentPlan.actions].filter((a) => a.status !== 'CANCELLED').sort((a, b) => a.sortOrder - b.sortOrder)
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800 }}>برنامه توسعه فردی — {PLAN_STATUS_META[developmentPlan.plan.status].label}</p>
+                  <p style={{ margin: 0, fontSize: 10, color: sub }}>
+                    پیشرفت: {progress.done.toLocaleString('fa-IR')} از {progress.total.toLocaleString('fa-IR')} اقدام (٪{progress.percent.toLocaleString('fa-IR')})
+                    {developmentPlan.ownerName ? ` · مسئول پیگیری: ${developmentPlan.ownerName}` : ''}
+                    {developmentPlan.plan.targetReviewDate ? ` · بازبینی: ${formatJalali(developmentPlan.plan.targetReviewDate)}` : ''}
+                  </p>
+                </div>
+                {developmentPlan.plan.summary && <p style={{ margin: '0 0 6px', fontSize: 10, lineHeight: 1.7, color: sub }}>{developmentPlan.plan.summary}</p>}
+                {rows.length > 0 && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', color: sub }}>
+                        {['شایستگی', 'اقدام', 'نوع', 'اولویت', 'سطح فعلی ← هدف', 'مهلت', 'وضعیت'].map((h) => (
+                          <th key={h} style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 700, borderBottom: `1px solid ${line}` }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((a) => (
+                        <tr key={a.id} style={{ borderBottom: `1px solid ${line}` }}>
+                          <td style={{ padding: '3px 6px', fontWeight: 700 }}>{a.competencyId ? developmentPlan.competencyLabel(a.competencyId) : 'عمومی'}</td>
+                          <td style={{ padding: '3px 6px' }}>{a.title}</td>
+                          <td style={{ padding: '3px 6px' }}>{ACTION_TYPE_LABEL_FA[a.actionType]}</td>
+                          <td style={{ padding: '3px 6px' }}>{PRIORITY_META[a.priority].label.replace('اولویت ', '')}</td>
+                          <td style={{ padding: '3px 6px' }}>
+                            {a.actionType === 'EVIDENCE_COLLECTION' ? 'گردآوری شواهد' : `${formatLevel(a.currentLevel)} ← ${formatLevel(a.targetLevel)}`}
+                          </td>
+                          <td style={{ padding: '3px 6px' }}>{a.dueDate ? formatJalali(a.dueDate) : '—'}</td>
+                          <td style={{ padding: '3px 6px', fontWeight: 700, color: a.status === 'DONE' ? '#15803d' : a.status === 'IN_PROGRESS' ? '#0369a1' : sub }}>
+                            {ACTION_STATUS_META[a.status].label}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                <p style={{ margin: '4px 0 0', fontSize: 9, color: '#94a3b8' }}>«ارزیابی تکمیلی» برای شایستگی‌های فاقد شواهد است — نه برنامه آموزشی برای ضعف.</p>
+              </>
+            )
+          })()}
         </div>
       )}
 

@@ -18,6 +18,13 @@ import type {
   CompCompetencyEvidenceSource,
   CompCompetencyScore,
   CompCompetencyStatus,
+  CompDevelopmentAction,
+  CompDevelopmentActionSource,
+  CompDevelopmentActionStatus,
+  CompDevelopmentActionType,
+  CompDevelopmentPlan,
+  CompDevelopmentPlanStatus,
+  CompDevelopmentPriority,
   CompEvidenceSourceType,
   CompInterviewRating,
   CompetencyAnswers,
@@ -50,6 +57,7 @@ export interface CompAssessmentRow {
   needs_structured_interview: boolean | null
   includes_experience: boolean | null
   blueprint_id: string | null
+  previous_assessment_id?: string | null
   panel_size: number | null
   candidate_name: string
   candidate_position: string
@@ -105,6 +113,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     needsStructuredInterview: r.needs_structured_interview ?? false,
     includesExperience: r.includes_experience ?? true,
     blueprintId: r.blueprint_id ?? null,
+    previousAssessmentId: r.previous_assessment_id ?? null,
     panelSize: r.panel_size ?? 3,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
@@ -761,5 +770,77 @@ export function compCandidateAiAnalysisFromRow(r: CompCandidateAiAnalysisRow): C
     generatedBy: r.generated_by,
     createdAt: r.created_at,
     competencyBasis: Array.isArray(r.competency_basis) ? r.competency_basis : null,
+  }
+}
+
+export interface CompDevelopmentPlanRow {
+  id: string
+  assessment_id: string
+  status: string
+  owner_id: string | null
+  summary: string
+  target_review_date: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compDevelopmentPlanFromRow(r: CompDevelopmentPlanRow): CompDevelopmentPlan {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    status: r.status as CompDevelopmentPlanStatus,
+    ownerId: r.owner_id,
+    summary: r.summary ?? '',
+    targetReviewDate: r.target_review_date,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompDevelopmentActionRow {
+  id: string
+  plan_id: string
+  competency_id: string | null
+  action_type: string
+  title: string
+  description: string
+  current_level: number | string | null
+  target_level: number | string | null
+  priority: string
+  due_date: string | null
+  status: string
+  owner_id: string | null
+  progress_note: string
+  source: string
+  sort_order: number
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+const numericOrNull = (v: number | string | null) => (v == null ? null : Number(v))
+
+export function compDevelopmentActionFromRow(r: CompDevelopmentActionRow): CompDevelopmentAction {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    competencyId: r.competency_id,
+    actionType: r.action_type as CompDevelopmentActionType,
+    title: r.title,
+    description: r.description ?? '',
+    currentLevel: numericOrNull(r.current_level),
+    targetLevel: numericOrNull(r.target_level),
+    priority: r.priority as CompDevelopmentPriority,
+    dueDate: r.due_date,
+    status: r.status as CompDevelopmentActionStatus,
+    ownerId: r.owner_id,
+    progressNote: r.progress_note ?? '',
+    source: r.source as CompDevelopmentActionSource,
+    sortOrder: r.sort_order,
+    completedAt: r.completed_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }
 }

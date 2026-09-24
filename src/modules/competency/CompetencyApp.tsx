@@ -18,7 +18,7 @@ export const COMPETENCY_ACCENT = '#a855f7'
 type View =
   | { name: 'list' }
   | { name: 'new' }
-  | { name: 'assessment'; id: string }
+  | { name: 'assessment'; id: string; stage?: 'results' | 'idp' | 'profile' }
   // Hosts both the technical and the personality question banks as tabs on one page (see
   // QuestionBankPage.tsx) — `tab` lets a cross-link (e.g. from the personality settings/reports
   // pages) land directly on the personality tab instead of always defaulting to the technical one.
@@ -116,7 +116,11 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   if (view.name === 'assessment') {
     return (
       <AssessmentWizardPage
+        // Remount per assessment so moving along a reassessment chain starts on its own stage state.
+        key={view.id}
         assessmentId={view.id}
+        initialStage={view.stage}
+        onOpenAssessment={(id, stage) => setView({ name: 'assessment', id, stage })}
         onDone={() => setView({ name: 'list' })}
         onExitToHub={onExitToHub}
         onNew={() => setView({ name: 'new' })}

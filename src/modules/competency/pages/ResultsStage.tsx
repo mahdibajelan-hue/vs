@@ -21,10 +21,12 @@ import {
   Mail,
   MessageSquareText,
   Plus,
+  GitCompareArrows,
   Printer,
   Puzzle,
   RefreshCw,
   RotateCcw,
+  Sprout,
   ShieldCheck,
   Sparkles,
   Star,
@@ -71,6 +73,9 @@ import {
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
 import { buildGapRows, isAiAnalysisStale } from '../lib/competencyGap'
 import { CompetencyGapAnalysis } from '../components/CompetencyGapAnalysis'
+import { DevelopmentPlanSummary } from '../components/DevelopmentPlanSummary'
+import { ReassessmentComparison } from '../components/ReassessmentComparison'
+import { AssessmentChainNav } from '../components/AssessmentChainNav'
 import type { CompetencyAssessment, CompetencyDomainKey, DomainScore } from '../types'
 
 // Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal
@@ -87,6 +92,10 @@ interface ResultsStageProps {
   /** Sends the viewer to the dedicated "تحلیل جامع هوش مصنوعی" stage (spec follow-up) — this page
    * only ever shows a brief excerpt of that analysis, never the full generation UI. */
   onGoToAiAnalysis: () => void
+  /** Sends the viewer to the «برنامه توسعه فردی» stage (Phase 5); omitted for viewers without it. */
+  onGoToIdp?: () => void
+  /** Opens another assessment of this candidate's reassessment chain. */
+  onOpenAssessment: (id: string, stage?: 'results' | 'idp' | 'profile') => void
 }
 
 const PM_DOMAIN_ICON: Partial<Record<CompetencyDomainKey, typeof Compass>> = {
@@ -126,7 +135,7 @@ const DOMAIN_ACCENT_PALETTE = ['#a855f7', '#38bdf8', '#f59e0b', '#34d399', '#fb7
  * and a closing recommendation banner — reachable from a right-hand sidebar (mirroring the rest of
  * the RTL app: first flex child sits on the right).
  */
-export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnalysis }: ResultsStageProps) {
+export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnalysis, onGoToIdp, onOpenAssessment }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
@@ -197,6 +206,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   const competencyCatalog = useCompetencyStore((s) => s.competencies)
   const competencyScores = competencyProfile?.scores
   const aiAnalysisStale = isAiAnalysisStale(candidateAiAnalysis, competencyScores)
+  // Phase 5: the IDP summary card fetches the plan; the print report reuses the same store entry.
+  const developmentPlan = useCompetencyStore((s) => s.developmentPlans.find((p) => p.assessmentId === assessment.id && p.status !== 'CANCELLED'))
+  const developmentActions = useCompetencyStore((s) => (developmentPlan ? s.developmentActionsByPlan[developmentPlan.id] : undefined))
   const competencyProfileRequestedRef = useRef(false)
   useEffect(() => {
     if (!canComputeCompetencyProfile || competencyProfileRequestedRef.current) return
@@ -410,10 +422,15 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     window.location.href = `mailto:${assessment.candidateEmail}?subject=${subject}&body=${body}`
   }
 
-  const headerRight = onNew && (
-    <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
-      <Plus size={14} /> ارزیابی جدید
-    </button>
+  const headerRight = (
+    <>
+      <AssessmentChainNav assessment={assessment} onOpen={(id) => onOpenAssessment(id, 'results')} />
+      {onNew && (
+        <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
+          <Plus size={14} /> ارزیابی جدید
+        </button>
+      )}
+    </>
   )
 
   return (
@@ -493,6 +510,16 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               roleRecommendation={roleRecommendation}
               jobRoleLabel={resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}
               competencyGapRows={competencyProfile ? buildGapRows(competencyProfile.scores, competencyProfile.evidence, competencyCatalog) : []}
+              developmentPlan={
+                developmentPlan
+                  ? {
+                      plan: developmentPlan,
+                      actions: developmentActions ?? [],
+                      competencyLabel: (id) => competencyCatalog.find((c) => c.id === id)?.labelFa ?? 'شایستگی',
+                      ownerName: profiles.find((p) => p.id === developmentPlan.ownerId)?.fullName ?? null,
+                    }
+                  : null
+              }
             />
           </div>
 
@@ -913,6 +940,22 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
              the three fingerprints rather than replacing any of them. */}
           <FingerprintSectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی — نمای ۳۶۰ درجه متقاضی</FingerprintSectionHeading>
           <CompetencyGapAnalysis assessment={assessment} canRecompute={canRecomputeCompetencyProfile} />
+
+          {/* Phase 5: reassessment comparison (only on a follow-up assessment) and the compact IDP card. */}
+          {assessment.previousAssessmentId && (
+            <>
+              <FingerprintSectionHeading icon={GitCompareArrows} accent="#38bdf8">مقایسه با ارزیابی قبلی</FingerprintSectionHeading>
+              <ReassessmentComparison assessment={assessment} onOpenPrevious={(id) => onOpenAssessment(id, 'results')} />
+            </>
+          )}
+
+          <FingerprintSectionHeading icon={Sprout} accent="#2dd4bf">برنامه توسعه فردی</FingerprintSectionHeading>
+          <DevelopmentPlanSummary
+            assessment={assessment}
+            canManage={isLeadViewer || isDesignerViewer}
+            onGoToIdp={onGoToIdp}
+            onOpenAssessment={onOpenAssessment}
+          />
     </CompetencySidebarShell>
   )
 }

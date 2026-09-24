@@ -23,6 +23,8 @@ import { StructuredInterviewStage } from './StructuredInterviewStage'
 import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
 import { CandidateAiAnalysisStage } from './CandidateAiAnalysisStage'
+import { DevelopmentPlanStage } from './DevelopmentPlanStage'
+import { AssessmentChainNav } from '../components/AssessmentChainNav'
 import { formatJalali } from '../../../lib/jalali'
 
 // Every QuestionType must appear in exactly one section here or its questions would silently
@@ -43,9 +45,14 @@ interface AssessmentWizardPageProps {
   /** The module-wide sidebar destinations (بانک سؤالات/گزارش‌ها/تنظیمات) built once in CompetencyApp
    * and merged into every page's own nav map, so they behave identically everywhere. */
   moduleNav?: Partial<Record<CompetencySection, () => void>>
+  /** Opens another assessment of the same candidate's reassessment chain (Phase 5), optionally on a
+   * given stage. */
+  onOpenAssessment?: (id: string, stage?: 'results' | 'idp' | 'profile') => void
+  /** Which stage to land on when this page opens (defaults to the profile). */
+  initialStage?: 'results' | 'idp' | 'profile'
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'interview' | 'results' | 'aiAnalysis'
+type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'interview' | 'results' | 'aiAnalysis' | 'idp'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
@@ -57,6 +64,7 @@ const SECTION_TITLE: Record<Stage, string> = {
   interview: 'مصاحبه ساختاریافته',
   results: 'نتیجه',
   aiAnalysis: 'تحلیل جامع هوش مصنوعی',
+  idp: 'برنامه توسعه فردی',
 }
 
 /**
@@ -70,9 +78,10 @@ const SECTION_TITLE: Record<Stage, string> = {
  * (see isDesigner below, which only gates the interactive controls within those two stages).
  * "interview" (schema.sql Section 50) is the one scoring stage panelists share with the lead: every
  * panelist rates each competency independently (one comp_interview_ratings row per rater), which
- * RLS already scopes to their own row.
+ * RLS already scopes to their own row. "idp" (Individual Development Plan, schema.sql Section 52) comes
+ * last, after the AI analysis whose training recommendations it can merge in.
  */
-const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
 const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'interview']
 
 /**
@@ -84,7 +93,7 @@ const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'interview']
  * with the lead's strengths/development-areas summary after the capstone scenario — see
  * QualificationScorecardCard / EvaluationSummaryCard below.
  */
-export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew, moduleNav }: AssessmentWizardPageProps) {
+export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew, moduleNav, onOpenAssessment, initialStage }: AssessmentWizardPageProps) {
   const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
   const updateProfile = useCompetencyStore((s) => s.updateProfile)
   const setAnswer = useCompetencyStore((s) => s.setAnswer)
@@ -133,7 +142,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
   // Opening a candidate from the dashboard always lands on their profile first — the natural
   // starting point before assembling the panel or scoring anything.
-  const [stage, setStage] = useState<Stage | null>(null)
+  const [stage, setStage] = useState<Stage | null>(initialStage ?? null)
   const activeStage: Stage = stage && stages.includes(stage) ? stage : 'profile'
 
   // Which of the shared shell's sections this viewer can reach from here — a panelist only ever
@@ -148,6 +157,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   if (stages.includes('interview')) nav.interview = () => setStage('interview')
   if (stages.includes('results')) nav.results = () => setStage('results')
   if (stages.includes('aiAnalysis')) nav.aiAnalysis = () => setStage('aiAnalysis')
+  if (stages.includes('idp')) nav.idp = () => setStage('idp')
+  const openAssessment = onOpenAssessment ?? (() => undefined)
 
   // What each interviewer recorded, per question — the lead reads this while setting the final
   // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
@@ -193,7 +204,17 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
   // nesting inside it.
   if (activeStage === 'results') {
-    return <ResultsStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} onNew={onNew} onGoToAiAnalysis={() => setStage('aiAnalysis')} />
+    return (
+      <ResultsStage
+        assessment={assessment}
+        nav={nav}
+        onExitToHub={onExitToHub}
+        onNew={onNew}
+        onGoToAiAnalysis={() => setStage('aiAnalysis')}
+        onGoToIdp={stages.includes('idp') ? () => setStage('idp') : undefined}
+        onOpenAssessment={openAssessment}
+      />
+    )
   }
 
   // The unified candidate AI analysis (spec follow-up) is its own dedicated, full-screen panel —
@@ -201,6 +222,20 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   // ResultsStage above rather than nesting inside this wizard's narrower chrome.
   if (activeStage === 'aiAnalysis') {
     return <CandidateAiAnalysisStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} />
+  }
+
+  // Individual Development Plan (Phase 5) — full-screen like the two stages above. Editing mirrors
+  // comp_can_manage_development_plan: the lead, an ASSESSMENT_DESIGNER or a module admin.
+  if (activeStage === 'idp') {
+    return (
+      <DevelopmentPlanStage
+        assessment={assessment}
+        nav={nav}
+        onExitToHub={onExitToHub}
+        canManage={isLead || isDesigner}
+        onOpenAssessment={openAssessment}
+      />
+    )
   }
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
@@ -244,7 +279,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   }
 
   const headerRight = (
-    <div className="flex items-center gap-1.5 text-xs text-secondary">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-secondary">
+      <AssessmentChainNav assessment={assessment} onOpen={(id) => openAssessment(id, 'profile')} />
       <User size={13} className="text-purple-300" />
       <span className="font-bold text-primary">{myName ?? '—'}</span>
       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>

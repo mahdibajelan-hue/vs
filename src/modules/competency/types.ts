@@ -616,6 +616,9 @@ export interface CompetencyAssessment {
   /** The blueprint whose toggles were last applied — informational only; the flags above are the
    * candidate's own copy and never change when the blueprint is later edited. */
   blueprintId: string | null
+  /** Phase 5 reassessment chain (schema.sql Section 52) — the assessment this one follows up, if any.
+   * The chain is linear: at most one follow-up per assessment. */
+  previousAssessmentId: string | null
   /** How many panelists this assessment's panel should have — the lead's own choice per candidate
    * (e.g. a specialty needing extra scrutiny might warrant 4-5), no longer a fixed 3 for everyone. */
   panelSize: number
@@ -948,4 +951,137 @@ export interface CandidateAiAnalysis {
   createdAt: string
   /** null = generated before the competency profile was part of the prompt. */
   competencyBasis: CandidateAiCompetencyBasisRow[] | null
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5: Individual Development Plans + Reassessment (schema.sql Section 52)
+// ---------------------------------------------------------------------------
+
+export type CompDevelopmentPlanStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'
+export type CompDevelopmentActionType =
+  | 'TRAINING'
+  | 'MENTORING'
+  | 'ON_THE_JOB'
+  | 'SELF_STUDY'
+  | 'PROJECT_ASSIGNMENT'
+  | 'OTHER'
+  /** «ارزیابی تکمیلی» — collect evidence for an INSUFFICIENT_EVIDENCE competency; never a training action. */
+  | 'EVIDENCE_COLLECTION'
+export type CompDevelopmentActionStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED'
+export type CompDevelopmentActionSource = 'GAP_ENGINE' | 'AI' | 'MANUAL'
+export type CompDevelopmentPriority = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export interface CompDevelopmentPlan {
+  id: string
+  assessmentId: string
+  status: CompDevelopmentPlanStatus
+  /** Who owns follow-through (line manager / HR). */
+  ownerId: string | null
+  summary: string
+  targetReviewDate: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CompDevelopmentAction {
+  id: string
+  planId: string
+  /** null = a general action not tied to one competency (e.g. an unmatched AI recommendation). */
+  competencyId: string | null
+  actionType: CompDevelopmentActionType
+  title: string
+  description: string
+  currentLevel: number | null
+  targetLevel: number | null
+  priority: CompDevelopmentPriority
+  dueDate: string | null
+  status: CompDevelopmentActionStatus
+  ownerId: string | null
+  progressNote: string
+  source: CompDevelopmentActionSource
+  sortOrder: number
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** comp_seed_development_plan's result. */
+export interface CompDevelopmentPlanSeedResult {
+  planId: string
+  created: boolean
+  gapActions: number
+  evidenceActions: number
+  aiActions: number
+  skipped?: 'PLAN_COMPLETED'
+}
+
+export type CompGapOutcome =
+  | 'CLOSED'
+  | 'NARROWED'
+  | 'UNCHANGED'
+  | 'WIDENED'
+  | 'NEW_GAP'
+  | 'GAP_IDENTIFIED'
+  | 'NO_GAP'
+  | 'UNKNOWN'
+  | 'NOT_COMPARABLE'
+
+export interface CompReassessmentSide {
+  requiredLevel: number
+  actualLevel: number | null
+  actualScore: number | null
+  status: CompCompetencyStatus
+  confidence: CompCompetencyConfidence
+  gap: number | null
+}
+
+export interface CompReassessmentActionOutcome {
+  id: string
+  title: string
+  actionType: CompDevelopmentActionType
+  status: CompDevelopmentActionStatus
+  source: CompDevelopmentActionSource
+  targetLevel: number | null
+  completedAt: string | null
+}
+
+export interface CompReassessmentCompetencyRow {
+  competencyId: string
+  key: string | null
+  labelFa: string
+  isCritical: boolean
+  requiredLevel: number
+  previous: CompReassessmentSide | null
+  current: CompReassessmentSide | null
+  levelDelta: number | null
+  scoreDelta: number | null
+  gapOutcome: CompGapOutcome
+  actions: { total: number; done: number; items: CompReassessmentActionOutcome[] }
+}
+
+/** comp_get_reassessment_comparison's result (already camelCase). */
+export interface CompReassessmentComparison {
+  assessmentId: string
+  previousAssessmentId: string
+  previousInterviewDate: string
+  currentInterviewDate: string
+  previousComputedAt: string | null
+  currentComputedAt: string | null
+  plan: { id: string; status: CompDevelopmentPlanStatus; actionsTotal: number; actionsDone: number } | null
+  summary: {
+    competencies: number
+    comparable: number
+    improved: number
+    declined: number
+    gapsBefore: number
+    gapsAfter: number
+    closed: number
+    narrowed: number
+    widened: number
+    newGaps: number
+    unknown: number
+    closedWithDoneActions: number
+  }
+  competencies: CompReassessmentCompetencyRow[]
 }
