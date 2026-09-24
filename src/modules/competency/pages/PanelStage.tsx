@@ -26,7 +26,8 @@ import { useCompetencyStore, type QualificationScoresInput } from '../store/useC
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, CAPSTONE_QUESTION, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, JOB_ROLES, type CompetencyAssessment, type CompPanelGroup, type CompPanelistScore, type CompProfileLite, type JobRole } from '../types'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import type { CompetencyAssessment, CompPanelGroup, CompPanelistScore, CompProfileLite, JobRole } from '../types'
 import { QuestionScoreCard } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -165,6 +166,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
   const submitMyPanelistScore = useCompetencyStore((s) => s.submitMyPanelistScore)
   const questionBank = useCompetencyStore((s) => s.questionBank)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
 
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
@@ -421,7 +423,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
           ) : roleQuestions.length === 0 ? (
             <div className="glass-panel rounded-2xl p-5 text-center">
               <p className="mb-3 text-xs text-secondary">
-                هنوز سؤالی برای این ارزیابی («{assessment ? JOB_ROLE_LABEL_FA[assessment.jobRole] : ''}») انتخاب نشده است.
+                هنوز سؤالی برای این ارزیابی («{assessment ? jobRoleLabel(jobRoleConfigs, assessment.jobRole) : ''}») انتخاب نشده است.
               </p>
               {isLead ? (
                 <>
@@ -539,6 +541,7 @@ function PanelGroupPicker({
   jobRole: JobRole | null
   onCreateGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => void
 }) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [newName, setNewName] = useState('')
   const [newRole, setNewRole] = useState<JobRole | ''>(jobRole ?? '')
   const [newMembers, setNewMembers] = useState<string[]>([])
@@ -559,7 +562,7 @@ function PanelGroupPicker({
           </option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.name} {g.jobRole ? `(${JOB_ROLE_LABEL_FA[g.jobRole]})` : '(همه مشاغل)'} — {g.members.length.toLocaleString('fa-IR')} نفر
+              {g.name} {g.jobRole ? `(${jobRoleLabel(jobRoleConfigs, g.jobRole)})` : '(همه مشاغل)'} — {g.members.length.toLocaleString('fa-IR')} نفر
             </option>
           ))}
         </select>
@@ -586,9 +589,9 @@ function PanelGroupPicker({
             <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="نام گروه (مثلاً برق و ابزار دقیق)" className="input flex-1 !py-1 text-[11px]" />
             <select value={newRole} onChange={(e) => setNewRole(e.target.value as JobRole | '')} className="input max-w-[12rem] !py-1 text-[11px]">
               <option value="">همه مشاغل</option>
-              {JOB_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {JOB_ROLE_LABEL_FA[r]}
+              {sortedJobRoles(jobRoleConfigs).map((c) => (
+                <option key={c.jobRole} value={c.jobRole}>
+                  {c.labelFa}
                 </option>
               ))}
             </select>
@@ -631,7 +634,7 @@ function PanelGroupPicker({
         <div className="flex flex-wrap gap-1.5 border-t border-white/5 pt-2">
           {allGroups.map((g) => (
             <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[10px] text-secondary">
-              {g.name} {g.jobRole && <span className="text-muted">({JOB_ROLE_LABEL_FA[g.jobRole]})</span>}
+              {g.name} {g.jobRole && <span className="text-muted">({jobRoleLabel(jobRoleConfigs, g.jobRole)})</span>}
               {(isAdmin || g.createdBy === myId) && (
                 <button onClick={() => onDeleteGroup(g.id)} className="text-muted hover:text-red-300">
                   <Trash2 size={10} />

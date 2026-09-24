@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { AlertTriangle, ArrowLeft, Fingerprint, Gauge, Loader2, Printer, TrendingDown, TrendingUp } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
+import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
+import { jobRoleLabel } from '../../competency/lib/competencyData'
 import { PersonalityPrintReport } from './PersonalityPrintReport'
 import { RoleAlignmentCard } from './RoleAlignmentCard'
 import { computeRoleAlignment } from '../lib/roleAlignment'
@@ -50,6 +52,7 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
   const traits = usePersonalityStore((s) => s.traits)
   const dimensions = usePersonalityStore((s) => s.dimensions)
   const jobRequirements = usePersonalityStore((s) => s.jobRequirements)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
 
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -150,6 +153,7 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
               dimensions={dimensions}
               jobRequirements={requirementsForProfile}
               validityResult={validityResult}
+              jobRoleLabel={jobRoleLabel(jobRoleConfigs, assessment.jobRole)}
             />
           </div>
         </>

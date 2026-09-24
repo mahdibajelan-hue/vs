@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Sparkles, Wand2, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
+import { jobRoleLabel } from '../lib/competencyData'
 import {
-  JOB_ROLE_LABEL_FA,
   QUESTION_DIFFICULTY_LABEL_FA,
   QUESTION_TYPE_LABEL_FA,
   type JobRole,
@@ -60,7 +60,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
   const templatesForRole = useMemo(() => assessmentTemplates.filter((t) => t.jobRole === jobRole), [assessmentTemplates, jobRole])
   const [templateId, setTemplateId] = useState<string | null>(null)
 
-  const [title, setTitle] = useState(`آزمون استاندارد — ${JOB_ROLE_LABEL_FA[jobRole]}`)
+  const [title, setTitle] = useState(`آزمون استاندارد — ${jobRoleLabel(jobRoleConfigs, jobRole)}`)
   const [durationMinutes, setDurationMinutes] = useState<number | null>(null)
   const [autoFinishOnTimeout, setAutoFinishOnTimeout] = useState(false)
   const [panelSizeDefault, setPanelSizeDefault] = useState(3)
@@ -169,7 +169,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
         <div className="glass-panel w-full max-w-3xl rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
           <div className="mb-4 flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-sm font-bold">
-              <Wand2 size={16} className="text-purple-300" /> طراحی آزمون شایستگی — {JOB_ROLE_LABEL_FA[jobRole]}
+              <Wand2 size={16} className="text-purple-300" /> طراحی آزمون شایستگی — {jobRoleLabel(jobRoleConfigs, jobRole)}
             </p>
             <button onClick={onClose} className="text-muted hover:text-primary">
               <X size={16} />
@@ -361,7 +361,7 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
         {step === 3 && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <PreviewTile label="شغل" value={JOB_ROLE_LABEL_FA[jobRole]} />
+              <PreviewTile label="شغل" value={jobRoleLabel(jobRoleConfigs, jobRole)} />
               <PreviewTile label="تعداد کل سؤالات" value={grandTotal.toLocaleString('fa-IR')} />
               <PreviewTile label="مدت زمان تقریبی" value={durationMinutes != null ? `${durationMinutes.toLocaleString('fa-IR')} دقیقه` : 'بدون محدودیت'} />
               <PreviewTile label="داوران پیش‌فرض" value={panelSizeDefault.toLocaleString('fa-IR')} />

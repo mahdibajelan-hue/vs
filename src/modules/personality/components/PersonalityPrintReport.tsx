@@ -1,5 +1,4 @@
 import { formatJalali } from '../../../lib/jalali'
-import { JOB_ROLE_LABEL_FA } from '../../competency/types'
 import { computeRoleAlignment } from '../lib/roleAlignment'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
 import type {
@@ -39,6 +38,9 @@ interface PersonalityPrintReportProps {
   jobRequirements: PersonalityJobBehavioralRequirement[]
   validityResult?: PersonalityValidityResult
   aiAnalysis?: PersonalityAiAnalysis
+  /** This component has no store access of its own by design (same convention as
+   * CompetencyPrintReport.tsx) — the caller resolves the job-role catalog label and passes it down. */
+  jobRoleLabel: string
 }
 
 export function PersonalityPrintReport({
@@ -52,6 +54,7 @@ export function PersonalityPrintReport({
   jobRequirements,
   validityResult,
   aiAnalysis,
+  jobRoleLabel,
 }: PersonalityPrintReportProps) {
   const ink = '#0f172a'
   const sub = '#475569'
@@ -75,7 +78,7 @@ export function PersonalityPrintReport({
         <div>
           <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>گزارش ارزیابی شخصیت و رفتاری — {candidateName}</p>
           <p style={{ margin: '6px 0 0', fontSize: 12.5, color: sub, fontWeight: 600 }}>
-            {candidatePosition || JOB_ROLE_LABEL_FA[assessment.jobRole]}
+            {candidatePosition || jobRoleLabel}
           </p>
         </div>
         <div style={{ textAlign: 'left' }}>
@@ -125,7 +128,7 @@ export function PersonalityPrintReport({
       {jobRequirements.length > 0 && (
         <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800 }}>تطابق با الزامات رفتاری شغل «{JOB_ROLE_LABEL_FA[assessment.jobRole]}»</p>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800 }}>تطابق با الزامات رفتاری شغل «{jobRoleLabel}»</p>
             {alignment.overallAlignmentPercent != null && (
               <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: alignment.criticalGapCount > 0 ? '#dc2626' : accent }}>
                 ٪{alignment.overallAlignmentPercent.toLocaleString('fa-IR')}

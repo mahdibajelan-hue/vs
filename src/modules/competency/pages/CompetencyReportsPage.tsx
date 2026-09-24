@@ -5,7 +5,8 @@ import { computeDomainScores, computeOverallPercent } from '../lib/competencyMod
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { JOB_ROLES, JOB_ROLE_LABEL_FA, type JobRole } from '../types'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import type { JobRole } from '../types'
 
 interface CompetencyReportsPageProps {
   onExitToHub: () => void
@@ -23,6 +24,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
   const questionBank = useCompetencyStore((s) => s.questionBankPublic)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -31,7 +33,10 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const usedRoles = useMemo(() => JOB_ROLES.filter((r) => assessments.some((a) => a.jobRole === r)), [assessments])
+  const usedRoles = useMemo(
+    () => sortedJobRoles(jobRoleConfigs).map((c) => c.jobRole).filter((r) => assessments.some((a) => a.jobRole === r)),
+    [assessments, jobRoleConfigs],
+  )
 
   const rows = useMemo(() => {
     return assessments
@@ -45,8 +50,8 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
         const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(questionsForAssessment(a, questionBank), officialAnswers)
         return { a, overall: computeOverallPercent(domainScores) }
       })
-      .sort((x, y) => JOB_ROLE_LABEL_FA[x.a.jobRole].localeCompare(JOB_ROLE_LABEL_FA[y.a.jobRole]))
-  }, [assessments, roleFilter, questionBank, panelistScores])
+      .sort((x, y) => jobRoleLabel(jobRoleConfigs, x.a.jobRole).localeCompare(jobRoleLabel(jobRoleConfigs, y.a.jobRole)))
+  }, [assessments, roleFilter, questionBank, panelistScores, jobRoleConfigs])
 
   const handlePrint = () => {
     const node = printRef.current
@@ -100,7 +105,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
             <option value="all">همه مشاغل</option>
             {usedRoles.map((r) => (
               <option key={r} value={r}>
-                {JOB_ROLE_LABEL_FA[r]}
+                {jobRoleLabel(jobRoleConfigs, r)}
               </option>
             ))}
           </select>
@@ -127,7 +132,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
               {rows.map(({ a, overall }) => (
                 <tr key={a.id} className="border-b border-white/5">
                   <td className="p-1.5 font-bold">{a.candidateName}</td>
-                  <td className="p-1.5">{JOB_ROLE_LABEL_FA[a.jobRole]}</td>
+                  <td className="p-1.5">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</td>
                   <td className="num p-1.5" dir="ltr">
                     {a.candidatePhone || '—'}
                   </td>
@@ -151,7 +156,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
       {/* Offscreen print target — plain HTML table, independent of the app's dark theme/layout. */}
       <div className="hidden" aria-hidden="true">
         <div ref={printRef}>
-          <h1>گزارش متقاضیان{roleFilter !== 'all' ? ` — ${JOB_ROLE_LABEL_FA[roleFilter]}` : ''}</h1>
+          <h1>گزارش متقاضیان{roleFilter !== 'all' ? ` — ${jobRoleLabel(jobRoleConfigs, roleFilter)}` : ''}</h1>
           <table>
             <thead>
               <tr>
@@ -171,7 +176,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
               {rows.map(({ a, overall }) => (
                 <tr key={a.id}>
                   <td>{a.candidateName}</td>
-                  <td>{JOB_ROLE_LABEL_FA[a.jobRole]}</td>
+                  <td>{jobRoleLabel(jobRoleConfigs, a.jobRole)}</td>
                   <td dir="ltr">{a.candidatePhone || '—'}</td>
                   <td>{a.candidateNationalId || '—'}</td>
                   <td dir="ltr">{a.candidateEmail || '—'}</td>

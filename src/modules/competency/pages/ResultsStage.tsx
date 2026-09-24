@@ -67,7 +67,8 @@ import {
   ROLE_RECOMMENDATION_COLOR,
   ROLE_RECOMMENDATION_LABEL_FA,
 } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, type CompetencyAssessment, type CompetencyDomainKey, type DomainScore } from '../types'
+import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
+import type { CompetencyAssessment, CompetencyDomainKey, DomainScore } from '../types'
 
 // Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal
 // rather than imported to avoid a circular import back through CompetencyApp -> AssessmentWizardPage -> this file.
@@ -128,6 +129,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
   const reopenAssessment = useCompetencyStore((s) => s.reopenAssessment)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const myProfile = useAuthStore((s) => s.profile)
   const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
   const [reopening, setReopening] = useState(false)
@@ -455,6 +457,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               answersOverride={officialAnswers}
               qualificationOverride={officialQualification}
               roleRecommendation={roleRecommendation}
+              jobRoleLabel={resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}
             />
           </div>
 
@@ -474,7 +477,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                     {assessment.isApproved && <ApprovalMedal />}
                     {overall != null && overall >= 85 && <Star size={16} className="fill-amber-400 text-amber-400" />}
                   </p>
-                  <p className="text-xs text-muted">متقاضی سمت: {assessment.candidatePosition || JOB_ROLE_LABEL_FA[assessment.jobRole]}</p>
+                  <p className="text-xs text-muted">متقاضی سمت: {assessment.candidatePosition || resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}</p>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                     {assessment.yearsExperienceTotal != null && (
                       <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[10.5px] font-bold text-sky-200">

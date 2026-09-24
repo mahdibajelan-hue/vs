@@ -56,53 +56,22 @@ export type AssessmentStatus = 'draft' | 'completed'
 export type SelfServiceStatus = 'not_sent' | 'pending' | 'submitted' | 'reviewed'
 
 /**
- * Every job whose competency is assessed. 'project_manager' is the original, fixed in-code rubric
- * (competencyModel.ts) and must never be affected by the DB-backed question bank below — every
- * other role draws its questions from comp_question_bank instead.
+ * Every job whose competency is assessed. Was a fixed 12-literal union until the Enterprise
+ * Competency Assessment Engine work (schema.sql Section 47) turned comp_job_role_config into the
+ * real, admin-configurable job-role catalog it always should have been — the column was already
+ * loose `text` everywhere (comp_assessments, comp_question_bank, personality_*) with no DB-level
+ * CHECK constraint, so the fixed union only ever existed here, in the frontend. Now a plain string
+ * alias: this deliberately keeps every existing function signature, `Record<JobRole, X>` usage and
+ * prop type unchanged (a `string` is valid wherever a specific literal union was accepted), while
+ * the actual catalog — which labels exist, their order, which are active — lives entirely in
+ * useCompetencyStore's `jobRoleConfigs` (see jobRoleLabel/sortedJobRoles in lib/competencyData.ts).
+ * Adding a new role is now a single INSERT into comp_job_role_config, never a code change.
+ * 'project_manager' remains the one hardcoded VALUE (not type) the app still special-cases — the
+ * original, fixed in-code rubric (competencyModel.ts) that must never be affected by the DB-backed
+ * question bank — but that is an ordinary string comparison (see usesLegacyPmRubric) needing no
+ * change here.
  */
-export type JobRole =
-  | 'project_manager'
-  | 'welding_inspector'
-  | 'mechanical_piping_inspector'
-  | 'pipeline_inspector'
-  | 'coating_cp_inspector'
-  | 'radiography_interpreter'
-  | 'civil_engineer'
-  | 'project_control_specialist'
-  | 'hse_specialist'
-  | 'contracts_specialist'
-  | 'site_supervisor'
-  | 'inspection_body_supervisor'
-
-export const JOB_ROLE_LABEL_FA: Record<JobRole, string> = {
-  project_manager: 'مدیر پروژه',
-  welding_inspector: 'مهندس ناظر جوش',
-  mechanical_piping_inspector: 'مهندس ناظر مکانیکال و پایپینگ',
-  pipeline_inspector: 'مهندس ناظر Pipeline',
-  coating_cp_inspector: 'مهندس ناظر پوشش و حفاظت کاتدیک',
-  radiography_interpreter: 'مهندس مفسر فیلم‌های رادیوگرافی',
-  civil_engineer: 'مهندس Civil (مسیرسازی، حفاری و ابنیه)',
-  project_control_specialist: 'کارشناس کنترل پروژه',
-  hse_specialist: 'کارشناس HSE',
-  contracts_specialist: 'کارشناس بررسی صورت‌وضعیت و قراردادها',
-  site_supervisor: 'سرپرست کارگاه',
-  inspection_body_supervisor: 'سرپرست دستگاه نظارت',
-}
-
-export const JOB_ROLES: JobRole[] = [
-  'project_manager',
-  'welding_inspector',
-  'mechanical_piping_inspector',
-  'pipeline_inspector',
-  'coating_cp_inspector',
-  'radiography_interpreter',
-  'civil_engineer',
-  'project_control_specialist',
-  'hse_specialist',
-  'contracts_specialist',
-  'site_supervisor',
-  'inspection_body_supervisor',
-]
+export type JobRole = string
 
 /** Question type per spec — drives which of the 4 scoring buckets (see roleCompetencyModel.ts) a question counts toward. */
 export type QuestionType =
@@ -232,15 +201,78 @@ export interface CompQuestionBankItem {
   updatedAt: string
 }
 
-/** Admin-configurable per-job-role settings (comp_job_role_config) — currently just which
- * question types are allowed for that role's question bank (spec section 3). Kept as a small
- * config table rather than folding into the JobRole TypeScript union, since the set of job roles
- * itself is stable and every role already has a live question bank. */
+/** The full admin-configurable job-role catalog row (comp_job_role_config, schema.sql Section 47) —
+ * this IS the JobRole catalog now: label_fa/description/active/sort_order turn what used to be the
+ * frontend's hardcoded JOB_ROLE_LABEL_FA/JOB_ROLES into real, admin-editable data, alongside the
+ * pre-existing allowed_question_types (spec section 3). See jobRoleLabel/sortedJobRoles in
+ * lib/competencyData.ts for the read-side helpers every call site that used to read those constants
+ * now uses instead. */
 export interface CompJobRoleConfig {
   jobRole: JobRole
+  labelFa: string
+  description: string
+  active: boolean
+  sortOrder: number
   allowedQuestionTypes: QuestionType[]
   updatedBy: string | null
   updatedAt: string
+  createdAt: string
+}
+
+/** comp_competencies.domain (schema.sql Section 47) — which evidence domain(s) a competency
+ * conceptually draws from; informs a future Evidence Engine phase, not itself a scoring input yet. */
+export type CompCompetencyDomain = 'TECHNICAL' | 'BEHAVIORAL' | 'HYBRID'
+
+export const COMP_COMPETENCY_DOMAIN_LABEL_FA: Record<CompCompetencyDomain, string> = {
+  TECHNICAL: 'فنی',
+  BEHAVIORAL: 'رفتاری',
+  HYBRID: 'ترکیبی',
+}
+
+/** One rung of a competency's configurable proficiency scale (comp_competencies.proficiency_levels)
+ * — mirrors personality_response_scales' own jsonb-labels pattern rather than a fixed level count
+ * baked into a column. Not yet editable from the UI (this phase is catalog/model only — see the
+ * Evidence Engine note in schema.sql Section 47); every competency is created with the schema's
+ * default 5-level scale. */
+export interface CompCompetencyProficiencyLevel {
+  level: number
+  labelFa: string
+}
+
+/** One row of the unified Competency Model (comp_competencies, schema.sql Section 47) — a named
+ * competency spanning technical and/or behavioral evidence, independent of any one job role. Job
+ * roles opt into it (with a required level/weight/criticality) via CompJobCompetencyRequirement. */
+export interface CompCompetency {
+  id: string
+  key: string
+  labelFa: string
+  description: string
+  domain: CompCompetencyDomain
+  proficiencyLevels: CompCompetencyProficiencyLevel[]
+  active: boolean
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  updatedBy: string | null
+}
+
+/** One row of comp_job_competency_requirements (schema.sql Section 47) — how much of a given
+ * competency a given job role requires, mirroring the exact shape already proven by
+ * PersonalityJobBehavioralRequirement (required level, critical flag, weight) but scoped directly to
+ * job_role rather than a separate "profile" indirection. Evidence-source wiring (which
+ * assessments/items actually feed this competency's score) is a later phase — this is catalog/model
+ * only. */
+export interface CompJobCompetencyRequirement {
+  id: string
+  jobRole: JobRole
+  competencyId: string
+  requiredLevel: number
+  isCritical: boolean
+  weight: number
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  updatedBy: string | null
 }
 
 export interface EducationEntry {

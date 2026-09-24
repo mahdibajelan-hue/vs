@@ -45,6 +45,10 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
   const fetchModuleAdmins = useCompetencyStore((s) => s.fetchModuleAdmins)
+  // Fetched once here, app-wide, so every page under this tree (dashboard, wizard stages, question
+  // bank, reports, settings) can read the job-role catalog straight from the store instead of each
+  // needing its own fetch — replaces the old always-available JOB_ROLE_LABEL_FA/JOB_ROLES constants.
+  const fetchJobRoleConfigs = useCompetencyStore((s) => s.fetchJobRoleConfigs)
   const myProfile = useAuthStore((s) => s.profile)
 
   // The personality module no longer has its own top-level entry point — its module-admin standing
@@ -59,6 +63,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
     fetchAll()
     fetchModuleAdmins()
     fetchPersonalityModuleAdmins()
+    fetchJobRoleConfigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -4,7 +4,8 @@ import { useCompetencyStore, type CandidateProfileInput } from '../store/useComp
 import { useAuthStore } from '../../../store/useAuthStore'
 import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
 import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, questionsForAssessment, resolveOfficialAnswers, resolveOfficialCapstone } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, type QuestionType } from '../types'
+import { jobRoleLabel } from '../lib/competencyData'
+import type { QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
@@ -92,6 +93,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
   const fetchAssessmentDesigners = useCompetencyStore((s) => s.fetchAssessmentDesigners)
   const myName = useAuthStore((s) => s.profile?.fullName)
@@ -292,7 +294,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
             </div>
             <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
               <InfoRow label="نام و نام خانوادگی" value={assessment.candidateName} />
-              <InfoRow label="شغل مورد ارزیابی" value={JOB_ROLE_LABEL_FA[assessment.jobRole]} />
+              <InfoRow label="شغل مورد ارزیابی" value={jobRoleLabel(jobRoleConfigs, assessment.jobRole)} />
               <InfoRow label="کد ملی" value={assessment.candidateNationalId || '—'} />
               <InfoRow label="شماره تماس" value={assessment.candidatePhone || '—'} />
               <InfoRow label="ایمیل" value={assessment.candidateEmail || '—'} />
@@ -341,7 +343,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           {roleSectionIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
           {roleQuestions.length === 0 ? (
             <div className="glass-panel rounded-2xl p-6 text-center">
-              <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{JOB_ROLE_LABEL_FA[assessment.jobRole]}») انتخاب نشده است.</p>
+              <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{jobRoleLabel(jobRoleConfigs, assessment.jobRole)}») انتخاب نشده است.</p>
               <button
                 onClick={() => setDesignerOpen(true)}
                 className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"

@@ -7130,3 +7130,46 @@ begin
     execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
   end loop;
 end $$;
+
+-- ============================================================================
+-- Section 48: Enterprise Competency Assessment Engine — public "view results
+-- online" link needs the job role's Persian label too, now that job-role
+-- labels are admin-configurable data (comp_job_role_config, Section 47)
+-- instead of a frontend-hardcoded Record<JobRole, string>. The candidate on
+-- this anonymous link has no session, so the frontend cannot fall back to an
+-- authenticated fetch of comp_job_role_config (RLS there requires auth.uid()
+-- is not null) — personality_public_results_get is already SECURITY DEFINER
+-- and already returns non-sensitive fields (job_role itself included), so
+-- resolving the label server-side here is the smallest possible fix, exactly
+-- mirroring the existing non-sensitive-projection pattern of this function.
+-- ----------------------------------------------------------------------------
+
+drop function if exists personality_public_results_get(uuid);
+create or replace function personality_public_results_get(p_token uuid)
+returns table (
+  id uuid, job_role text, job_role_label_fa text, status text, submitted_at timestamptz,
+  dimension_scores jsonb, validity_status text
+) as $$
+  select
+    pa.id, pa.job_role, coalesce(nullif(jrc.label_fa, ''), pa.job_role), pa.status, pa.submitted_at,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'scoreKind', ds.score_kind,
+        'traitKey', t.key, 'traitLabelFa', t.label_fa,
+        'facetKey', f.key, 'facetLabelFa', f.label_fa,
+        'dimensionKey', d.key, 'dimensionLabelFa', d.label_fa,
+        'normalizedScore', ds.normalized_score, 'coverageCount', ds.coverage_count, 'confidence', ds.confidence
+      ))
+      from personality_dimension_scores ds
+      left join personality_traits t on t.id = ds.trait_id
+      left join personality_facets f on f.id = ds.facet_id
+      left join personality_behavioral_dimensions d on d.id = ds.dimension_id
+      where ds.personality_assessment_id = pa.id
+    ), '[]'::jsonb),
+    (select vr.overall_status from personality_validity_results vr where vr.personality_assessment_id = pa.id)
+  from personality_assessments pa
+  left join comp_job_role_config jrc on jrc.job_role = pa.job_role
+  where pa.results_share_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_public_results_get(uuid) to anon, authenticated;

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrainCircuit, Loader2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
-import { JOB_ROLE_LABEL_FA, type JobRole } from '../../competency/types'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA, type PersonalityValidityStatus } from '../types'
 
 interface PublicDimensionScore {
@@ -20,6 +19,10 @@ interface PublicDimensionScore {
 interface PublicResultsRow {
   id: string
   job_role: string
+  /** Resolved server-side by personality_public_results_get (schema.sql Section 48) — this page has
+   * no session of its own to fetch the job-role catalog with (comp_job_role_config's RLS requires
+   * auth.uid() is not null), so the label comes pre-resolved from the RPC instead. */
+  job_role_label_fa: string
   status: string
   submitted_at: string | null
   dimension_scores: PublicDimensionScore[] | null
@@ -72,7 +75,7 @@ export function PersonalityPublicResultsPage({ token }: { token: string }) {
           </div>
           <div>
             <p className="text-sm font-bold">نتیجه ارزیابی شخصیت و رفتاری</p>
-            <p className="text-[10.5px] text-muted">{JOB_ROLE_LABEL_FA[row.job_role as JobRole]}</p>
+            <p className="text-[10.5px] text-muted">{row.job_role_label_fa}</p>
           </div>
         </div>
 

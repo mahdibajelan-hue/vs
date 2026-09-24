@@ -9,8 +9,12 @@ import type {
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
+  CompCompetency,
+  CompCompetencyDomain,
+  CompCompetencyProficiencyLevel,
   CompetencyAnswers,
   CompetencyAssessment,
+  CompJobCompetencyRequirement,
   CompJobRoleConfig,
   CompModuleAdmin,
   CompPanelGroup,
@@ -378,17 +382,99 @@ export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): Com
 
 export interface CompJobRoleConfigRow {
   job_role: string
+  label_fa: string | null
+  description: string | null
+  active: boolean | null
+  sort_order: number | null
   allowed_question_types: string[]
   updated_by: string | null
   updated_at: string
+  created_at: string | null
 }
 
 export function compJobRoleConfigFromRow(r: CompJobRoleConfigRow): CompJobRoleConfig {
   return {
     jobRole: r.job_role as JobRole,
+    labelFa: r.label_fa || r.job_role,
+    description: r.description ?? '',
+    active: r.active ?? true,
+    sortOrder: r.sort_order ?? 0,
     allowedQuestionTypes: (r.allowed_question_types ?? []) as CompJobRoleConfig['allowedQuestionTypes'],
     updatedBy: r.updated_by,
     updatedAt: r.updated_at,
+    createdAt: r.created_at ?? r.updated_at,
+  }
+}
+
+/** Falls back to the raw job_role key when no catalog row is loaded yet — this must never throw on
+ * an unknown key, unlike a Record<JobRole, string> lookup would have with a role outside the old
+ * compile-time union. The drop-in replacement for every JOB_ROLE_LABEL_FA[x] call site. */
+export function jobRoleLabel(jobRoles: CompJobRoleConfig[], jobRole: JobRole): string {
+  return jobRoles.find((r) => r.jobRole === jobRole)?.labelFa || jobRole
+}
+
+/** Every catalog row ordered exactly as the admin arranged it (sort_order, then a stable
+ * alphabetical tiebreak on the key itself) — the drop-in replacement for the old fixed JOB_ROLES
+ * array everywhere a dropdown/filter needs "every job role, in a sensible order". */
+export function sortedJobRoles(jobRoles: CompJobRoleConfig[]): CompJobRoleConfig[] {
+  return [...jobRoles].sort((a, b) => a.sortOrder - b.sortOrder || a.jobRole.localeCompare(b.jobRole))
+}
+
+export interface CompCompetencyRow {
+  id: string
+  key: string
+  label_fa: string
+  description: string | null
+  domain: string
+  proficiency_levels: CompCompetencyProficiencyLevel[] | null
+  active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compCompetencyFromRow(r: CompCompetencyRow): CompCompetency {
+  return {
+    id: r.id,
+    key: r.key,
+    labelFa: r.label_fa,
+    description: r.description ?? '',
+    domain: r.domain as CompCompetencyDomain,
+    proficiencyLevels: r.proficiency_levels ?? [],
+    active: r.active,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
+  }
+}
+
+export interface CompJobCompetencyRequirementRow {
+  id: string
+  job_role: string
+  competency_id: string
+  required_level: number
+  is_critical: boolean
+  weight: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compJobCompetencyRequirementFromRow(r: CompJobCompetencyRequirementRow): CompJobCompetencyRequirement {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    competencyId: r.competency_id,
+    requiredLevel: r.required_level,
+    isCritical: r.is_critical,
+    weight: r.weight,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
   }
 }
 

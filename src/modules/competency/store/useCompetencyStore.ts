@@ -12,7 +12,10 @@ import type {
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
+  CompCompetency,
+  CompCompetencyDomain,
   CompetencyAssessment,
+  CompJobCompetencyRequirement,
   CompJobRoleConfig,
   CompModuleAdmin,
   CompPanelGroup,
@@ -35,6 +38,8 @@ import {
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
   compAuditLogFromRow,
+  compCompetencyFromRow,
+  compJobCompetencyRequirementFromRow,
   compJobRoleConfigFromRow,
   compModuleAdminFromRow,
   compPanelGroupFromRow,
@@ -50,6 +55,8 @@ import {
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
   type CompAuditLogRow,
+  type CompCompetencyRow,
+  type CompJobCompetencyRequirementRow,
   type CompJobRoleConfigRow,
   type CompModuleAdminRow,
   type CompPanelGroupRow,
@@ -225,6 +232,33 @@ export interface AssessmentTemplateInput {
   questionMix: QuestionMixCell[]
 }
 
+/** Every field of a comp_job_role_config row an admin can edit through the new "مدل شایستگی و
+ * مشاغل" catalog UI, EXCEPT job_role itself — the key is immutable once created (it's a foreign key
+ * from comp_assessments/comp_question_bank/comp_job_competency_requirements), so it's only ever an
+ * argument to addJobRole, never a field an update can change. */
+export interface JobRoleCatalogInput {
+  labelFa: string
+  description: string
+  active: boolean
+  sortOrder: number
+  allowedQuestionTypes: QuestionType[]
+}
+
+export interface CompetencyCatalogInput {
+  key: string
+  labelFa: string
+  description: string
+  domain: CompCompetencyDomain
+  active: boolean
+}
+
+export interface JobCompetencyRequirementInput {
+  competencyId: string
+  requiredLevel: number
+  isCritical: boolean
+  weight: number
+}
+
 function questionBankToRowPayload(q: QuestionBankInput) {
   return {
     job_role: q.jobRole,
@@ -261,6 +295,13 @@ interface CompetencyState {
    * categories on the dashboard/reports pages; never for showing evaluator-only material. */
   questionBankPublic: CompQuestionBankItem[]
   jobRoleConfigs: CompJobRoleConfig[]
+  /** Unified Competency Model catalog (comp_competencies, schema.sql Section 47) — a named
+   * competency spanning technical and/or behavioral evidence, independent of any one job role. */
+  competencies: CompCompetency[]
+  /** Which competencies a given job role requires, and at what level/weight/criticality
+   * (comp_job_competency_requirements) — fetched unfiltered (mirrors jobRoleConfigs/
+   * assessmentTemplates), the "مدل شایستگی و مشاغل" settings UI filters to the selected role itself. */
+  jobCompetencyRequirements: CompJobCompetencyRequirement[]
   loadingQuestionBank: boolean
   loading: boolean
 
@@ -350,6 +391,28 @@ interface CompetencyState {
 
   fetchJobRoleConfigs: () => Promise<void>
   updateJobRoleConfig: (jobRole: JobRole, allowedQuestionTypes: QuestionType[]) => Promise<void>
+  /** Adds a brand-new row to the job-role catalog — the entire point of turning JobRole into
+   * runtime-driven data (see types.ts): adding "a future role" is now this one call, never a code
+   * change. jobRole is the immutable slug key; validate it client-side before calling (see
+   * CompetencySettingsPage's slug check) since RLS has no format constraint of its own. */
+  addJobRole: (jobRole: string, input: JobRoleCatalogInput) => Promise<void>
+  /** Edits every field of an existing catalog row except the immutable job_role key itself. */
+  updateJobRole: (jobRole: JobRole, input: JobRoleCatalogInput) => Promise<void>
+
+  /** Unified Competency Model catalog (comp_competencies) — any authenticated user may read it,
+   * module admin or ASSESSMENT_DESIGNER may write (see schema.sql Section 47's RLS). */
+  fetchCompetencies: () => Promise<void>
+  addCompetency: (input: CompetencyCatalogInput) => Promise<void>
+  updateCompetency: (id: string, input: CompetencyCatalogInput) => Promise<void>
+
+  /** Per-job competency requirements (comp_job_competency_requirements) — same read/write RLS as
+   * comp_competencies above. */
+  fetchJobCompetencyRequirements: () => Promise<void>
+  /** Insert-or-update on the (job_role, competency_id) unique constraint — one call handles both
+   * "add a new requirement" and "edit an existing one", since the settings UI's add-requirement form
+   * and its inline edit are the same shape. */
+  upsertJobCompetencyRequirement: (jobRole: JobRole, input: JobCompetencyRequirementInput) => Promise<void>
+  removeJobCompetencyRequirement: (id: string) => Promise<void>
 
   /** Reusable, named question-mix "recipes" per job role — the Assessment Designer wizard's saved
    * output (spec section 6/36). */
@@ -417,6 +480,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   questionBank: [],
   questionBankPublic: [],
   jobRoleConfigs: [],
+  competencies: [],
+  jobCompetencyRequirements: [],
   assessmentTemplates: [],
   auditLog: [],
   aiAnalysisByAssessment: {},
@@ -1154,6 +1219,142 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       .update({ allowed_question_types: allowedQuestionTypes })
       .eq('job_role', jobRole)
     if (reportError('ذخیره تنظیمات شغل', error)) set({ jobRoleConfigs: previous })
+  },
+
+  addJobRole: async (jobRole, input) => {
+    const now = new Date().toISOString()
+    const uid = currentUserId()
+    const { error } = await supabase.from('comp_job_role_config').insert({
+      job_role: jobRole,
+      label_fa: input.labelFa,
+      description: input.description,
+      active: input.active,
+      sort_order: input.sortOrder,
+      allowed_question_types: input.allowedQuestionTypes,
+      updated_by: uid,
+    })
+    if (reportError('ثبت شغل جدید', error)) return
+    const created: CompJobRoleConfig = {
+      jobRole,
+      labelFa: input.labelFa,
+      description: input.description,
+      active: input.active,
+      sortOrder: input.sortOrder,
+      allowedQuestionTypes: input.allowedQuestionTypes,
+      updatedBy: uid,
+      updatedAt: now,
+      createdAt: now,
+    }
+    set({ jobRoleConfigs: [...get().jobRoleConfigs, created] })
+    logAudit('JOB_ROLE_CREATED', 'comp_job_role_config', jobRole, null, { jobRole, labelFa: input.labelFa })
+  },
+
+  updateJobRole: async (jobRole, input) => {
+    const previous = get().jobRoleConfigs
+    const now = new Date().toISOString()
+    set({
+      jobRoleConfigs: previous.map((c) =>
+        c.jobRole === jobRole
+          ? { ...c, labelFa: input.labelFa, description: input.description, active: input.active, sortOrder: input.sortOrder, allowedQuestionTypes: input.allowedQuestionTypes, updatedAt: now }
+          : c,
+      ),
+    })
+    const { error } = await supabase
+      .from('comp_job_role_config')
+      .update({
+        label_fa: input.labelFa,
+        description: input.description,
+        active: input.active,
+        sort_order: input.sortOrder,
+        allowed_question_types: input.allowedQuestionTypes,
+      })
+      .eq('job_role', jobRole)
+    if (reportError('ذخیره تغییرات شغل', error)) set({ jobRoleConfigs: previous })
+  },
+
+  fetchCompetencies: async () => {
+    const { data, error } = await supabase.from('comp_competencies').select('*').order('label_fa')
+    if (reportError('بارگذاری کاتالوگ شایستگی‌ها', error)) return
+    set({ competencies: ((data ?? []) as CompCompetencyRow[]).map(compCompetencyFromRow) })
+  },
+
+  // Proficiency levels aren't yet editable from the UI (this phase is catalog/model only) and the
+  // database fills them from its own default — refetching rather than guessing that default locally
+  // keeps the local row from ever lying about what's actually stored (same reasoning as
+  // createPanelGroup's own refetch-after-insert below).
+  addCompetency: async (input) => {
+    const { error } = await supabase.from('comp_competencies').insert({
+      id: crypto.randomUUID(),
+      key: input.key,
+      label_fa: input.labelFa,
+      description: input.description,
+      domain: input.domain,
+      active: input.active,
+    })
+    if (reportError('ثبت شایستگی جدید', error)) return
+    await get().fetchCompetencies()
+  },
+
+  updateCompetency: async (id, input) => {
+    const previous = get().competencies
+    const now = new Date().toISOString()
+    set({
+      competencies: previous.map((c) =>
+        c.id === id ? { ...c, key: input.key, labelFa: input.labelFa, description: input.description, domain: input.domain, active: input.active, updatedAt: now } : c,
+      ),
+    })
+    const { error } = await supabase
+      .from('comp_competencies')
+      .update({ key: input.key, label_fa: input.labelFa, description: input.description, domain: input.domain, active: input.active })
+      .eq('id', id)
+    if (reportError('ذخیره تغییرات شایستگی', error)) set({ competencies: previous })
+  },
+
+  fetchJobCompetencyRequirements: async () => {
+    const { data, error } = await supabase.from('comp_job_competency_requirements').select('*')
+    if (reportError('بارگذاری الزامات شایستگی مشاغل', error)) return
+    set({ jobCompetencyRequirements: ((data ?? []) as CompJobCompetencyRequirementRow[]).map(compJobCompetencyRequirementFromRow) })
+  },
+
+  upsertJobCompetencyRequirement: async (jobRole, input) => {
+    const uid = currentUserId()
+    const now = new Date().toISOString()
+    const existing = get().jobCompetencyRequirements.find((r) => r.jobRole === jobRole && r.competencyId === input.competencyId)
+    const id = existing?.id ?? crypto.randomUUID()
+    const { error } = await supabase.from('comp_job_competency_requirements').upsert(
+      {
+        id,
+        job_role: jobRole,
+        competency_id: input.competencyId,
+        required_level: input.requiredLevel,
+        is_critical: input.isCritical,
+        weight: input.weight,
+      },
+      { onConflict: 'job_role,competency_id' },
+    )
+    if (reportError('ثبت الزام شایستگی', error)) return
+    const merged: CompJobCompetencyRequirement = {
+      id,
+      jobRole,
+      competencyId: input.competencyId,
+      requiredLevel: input.requiredLevel,
+      isCritical: input.isCritical,
+      weight: input.weight,
+      createdBy: existing?.createdBy ?? uid,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      updatedBy: uid,
+    }
+    set({
+      jobCompetencyRequirements: [...get().jobCompetencyRequirements.filter((r) => !(r.jobRole === jobRole && r.competencyId === input.competencyId)), merged],
+    })
+  },
+
+  removeJobCompetencyRequirement: async (id) => {
+    const previous = get().jobCompetencyRequirements
+    set({ jobCompetencyRequirements: previous.filter((r) => r.id !== id) })
+    const { error } = await supabase.from('comp_job_competency_requirements').delete().eq('id', id)
+    if (reportError('حذف الزام شایستگی', error)) set({ jobCompetencyRequirements: previous })
   },
 
   // Generates one assessment's frozen question snapshot from an Assessment Designer question-mix

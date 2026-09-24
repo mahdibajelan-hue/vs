@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react'
-import type { CandidateProfileInput } from '../store/useCompetencyStore'
-import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CertificationEntry, type EducationEntry, type EmploymentEntry } from '../types'
+import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
@@ -50,6 +51,11 @@ interface ProfileFormProps {
  */
 export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: ProfileFormProps) {
   const [form, setForm] = useState<CandidateProfileInput>(initial ?? EMPTY)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  // Only active roles are offered for a new/changed assignment — an inactive role can still be the
+  // one already saved on this candidate (see the fallback list built below), it just isn't offered
+  // going forward.
+  const selectableRoles = sortedJobRoles(jobRoleConfigs).filter((c) => c.active || c.jobRole === form.jobRole)
 
   const set = <K extends keyof CandidateProfileInput>(key: K, value: CandidateProfileInput[K]) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -67,7 +73,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
           ...form,
           // 'سمت مورد ارزیابی' was a free-text duplicate of the job-role select; it's now always
           // derived from that choice so the two can never say different things.
-          candidatePosition: candidateMode ? form.candidatePosition : JOB_ROLE_LABEL_FA[form.jobRole],
+          candidatePosition: candidateMode ? form.candidatePosition : jobRoleLabel(jobRoleConfigs, form.jobRole),
           candidateAge: age,
           yearsExperienceTotal: monthsToYears(totalExperienceMonths),
           yearsExperiencePipeline: monthsToYears(pipelineMonths),
@@ -104,9 +110,9 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
             <>
               <Field label="شغل مورد ارزیابی (بانک سؤالات)">
                 <select value={form.jobRole} onChange={(e) => set('jobRole', e.target.value as CandidateProfileInput['jobRole'])} className="input">
-                  {JOB_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {JOB_ROLE_LABEL_FA[role]}
+                  {selectableRoles.map((c) => (
+                    <option key={c.jobRole} value={c.jobRole}>
+                      {c.labelFa}
                     </option>
                   ))}
                 </select>

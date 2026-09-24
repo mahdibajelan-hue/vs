@@ -3,9 +3,8 @@ import { BrainCircuit, CheckCircle2, Clock, ListChecks, Pencil, Plus, RotateCcw,
 import { useCompetencyStore, type QuestionBankInput } from '../store/useCompetencyStore'
 import { usePersonalityStore, type PersonalityQuestionInput } from '../../personality/store/usePersonalityStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import {
-  JOB_ROLES,
-  JOB_ROLE_LABEL_FA,
   QUESTION_APPROVAL_STATUS_LABEL_FA,
   QUESTION_DIFFICULTY_COLOR,
   QUESTION_DIFFICULTY_LABEL_FA,
@@ -39,10 +38,6 @@ const QUESTION_TYPES: QuestionType[] = [
   'JUDGMENT',
 ]
 const DIFFICULTIES: QuestionDifficulty[] = ['L1', 'L2', 'L3', 'L4']
-
-// Project Manager's questions now live in this same DB-backed bank too (seeded once from the
-// fixed rubric's exact wording) — every role is editable here identically, none is special-cased.
-const EDITABLE_ROLES = JOB_ROLES
 
 const EMPTY_INPUT: QuestionBankInput = {
   jobRole: 'welding_inspector',
@@ -157,6 +152,10 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
   const approveQuestion = useCompetencyStore((s) => s.approveQuestion)
   const rejectQuestion = useCompetencyStore((s) => s.rejectQuestion)
   const requestQuestionRevision = useCompetencyStore((s) => s.requestQuestionRevision)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  // Project Manager's questions live in this same DB-backed bank too (seeded once from the fixed
+  // rubric's exact wording) — every role is editable here identically, none is special-cased.
+  const editableRoles = useMemo(() => sortedJobRoles(jobRoleConfigs), [jobRoleConfigs])
 
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState<QuestionType | 'all'>('all')
@@ -217,7 +216,7 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
             {questionBank.map((q) => (
               <div key={q.id} className="glass-panel rounded-xl p-3.5">
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{JOB_ROLE_LABEL_FA[q.jobRole]}</span>
+                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
                   <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
                   <ApprovalBadge status={q.approvalStatus} />
                 </div>
@@ -251,7 +250,7 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
-        {EDITABLE_ROLES.map((role) => {
+        {editableRoles.map(({ jobRole: role, labelFa }) => {
           const c = countsByRole.get(role)
           return (
             <button
@@ -261,7 +260,7 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                 roleFilter === role ? 'border-purple-400/50 bg-purple-500/15' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
               }`}
             >
-              <p className="truncate text-[10px] font-bold">{JOB_ROLE_LABEL_FA[role]}</p>
+              <p className="truncate text-[10px] font-bold">{labelFa}</p>
               <p className="num text-[10px] text-muted">
                 {(c?.active ?? 0).toLocaleString('fa-IR')} فعال / {(c?.total ?? 0).toLocaleString('fa-IR')} کل
               </p>
@@ -290,7 +289,7 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
         </select>
         {roleFilter !== 'all' && (
           <button onClick={() => setRoleFilter('all')} className="text-[11px] text-purple-300 hover:text-purple-200">
-            پاک‌کردن فیلتر شغل ({JOB_ROLE_LABEL_FA[roleFilter]})
+            پاک‌کردن فیلتر شغل ({jobRoleLabel(jobRoleConfigs, roleFilter)})
           </button>
         )}
       </div>
@@ -304,7 +303,7 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
           {filtered.map((q) => (
             <div key={q.id} className="glass-panel rounded-xl p-3.5">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{JOB_ROLE_LABEL_FA[q.jobRole]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
                 <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
                 <span
                   className="rounded-full px-2 py-0.5 text-[9.5px] font-bold"
@@ -426,6 +425,7 @@ function QuestionEditorModal({
   onClose: () => void
   onSave: (input: QuestionBankInput, reason?: string) => Promise<void>
 }) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [reason, setReason] = useState('')
   const [form, setForm] = useState<QuestionBankInput>(
     initial
@@ -494,9 +494,9 @@ function QuestionEditorModal({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <FormField label="شغل">
             <select value={form.jobRole} onChange={(e) => setForm((f) => ({ ...f, jobRole: e.target.value as JobRole }))} className="input">
-              {EDITABLE_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {JOB_ROLE_LABEL_FA[r]}
+              {sortedJobRoles(jobRoleConfigs).map((c) => (
+                <option key={c.jobRole} value={c.jobRole}>
+                  {c.labelFa}
                 </option>
               ))}
             </select>
@@ -613,6 +613,7 @@ function PersonalityQuestionBank({ isModuleAdmin, onNavSettings }: { isModuleAdm
   const dimensions = usePersonalityStore((s) => s.dimensions)
   const scales = usePersonalityStore((s) => s.scales)
   const fetchCatalog = usePersonalityStore((s) => s.fetchCatalog)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
 
   const [typeFilter, setTypeFilter] = useState<PersonalityQuestionType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<PersonalityApprovalStatus | 'all'>('all')
@@ -704,7 +705,7 @@ function PersonalityQuestionBank({ isModuleAdmin, onNavSettings }: { isModuleAdm
                 <span className="rounded-full bg-pink-500/12 px-2 py-0.5 text-[9.5px] font-bold text-pink-200">{PERSONALITY_QUESTION_TYPE_LABEL_FA[q.questionType]}</span>
                 <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{PERSONALITY_COMPLEXITY_LABEL_FA[q.complexity]}</span>
                 <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{constructLabel(q)}</span>
-                {q.jobRole && <span className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] text-sky-300">{JOB_ROLE_LABEL_FA[q.jobRole]}</span>}
+                {q.jobRole && <span className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] text-sky-300">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>}
                 {q.reverseScored && <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] text-amber-300">نمره‌گذاری معکوس</span>}
                 <PersonalityApprovalBadge status={q.approvalStatus} />
                 <span
@@ -867,6 +868,7 @@ function PersonalityQuestionEditorModal({
   onClose: () => void
   onSave: (input: PersonalityQuestionInput) => Promise<void>
 }) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [form, setForm] = useState<PersonalityQuestionInput>(
     initial
       ? {
@@ -979,9 +981,9 @@ function PersonalityQuestionEditorModal({
             <FormField label="شغل مرتبط (اختیاری — خالی یعنی همه مشاغل)">
               <select value={form.jobRole ?? ''} onChange={(e) => setForm((f) => ({ ...f, jobRole: (e.target.value as JobRole) || null }))} className="input">
                 <option value="">— همه مشاغل —</option>
-                {JOB_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {JOB_ROLE_LABEL_FA[r]}
+                {sortedJobRoles(jobRoleConfigs).map((c) => (
+                  <option key={c.jobRole} value={c.jobRole}>
+                    {c.labelFa}
                   </option>
                 ))}
               </select>

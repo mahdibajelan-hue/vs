@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, Gauge, TrendingDown, TrendingUp } from 'lucide-react'
-import { JOB_ROLE_LABEL_FA, type JobRole } from '../../competency/types'
+import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
+import { jobRoleLabel } from '../../competency/lib/competencyData'
+import type { JobRole } from '../../competency/types'
 import type { RoleAlignmentResult, RoleAlignmentRow, RoleAlignmentStatus } from '../lib/roleAlignment'
 
 const STATUS_META: Record<RoleAlignmentStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
@@ -28,10 +30,13 @@ function overallVerdict(percent: number | null, criticalGapCount: number): { lab
  * never contradict each other.
  */
 export function RoleAlignmentCard({ jobRole, hasProfile, alignment }: { jobRole: JobRole; hasProfile: boolean; alignment: RoleAlignmentResult }) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const roleLabel = jobRoleLabel(jobRoleConfigs, jobRole)
+
   if (!hasProfile) {
     return (
       <div className="glass-panel rounded-2xl border border-white/10 p-4 text-[11px] text-muted">
-        هنوز نیم‌رخ رفتاری شغلی برای «{JOB_ROLE_LABEL_FA[jobRole]}» تعریف نشده است — تحلیل تطابق با الزامات شغل پس از تعریف آن در داده‌های پایه ماژول در دسترس خواهد بود.
+        هنوز نیم‌رخ رفتاری شغلی برای «{roleLabel}» تعریف نشده است — تحلیل تطابق با الزامات شغل پس از تعریف آن در داده‌های پایه ماژول در دسترس خواهد بود.
       </div>
     )
   }
@@ -42,7 +47,7 @@ export function RoleAlignmentCard({ jobRole, hasProfile, alignment }: { jobRole:
     <div className="glass-panel rounded-2xl border border-white/10 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Gauge size={15} className="text-sky-300" /> تطابق با الزامات رفتاری شغل «{JOB_ROLE_LABEL_FA[jobRole]}»
+          <Gauge size={15} className="text-sky-300" /> تطابق با الزامات رفتاری شغل «{roleLabel}»
         </p>
         {alignment.overallAlignmentPercent != null && (
           <span className="num rounded-full px-3 py-1 text-sm font-extrabold" style={{ background: `${verdict.color}20`, color: verdict.color }}>

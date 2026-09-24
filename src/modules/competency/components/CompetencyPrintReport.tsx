@@ -1,7 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
 import { usesLegacyPmRubric, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
-import { JOB_ROLE_LABEL_FA, type CompetencyAnswers, type CompetencyAssessment, type DomainScore } from '../types'
+import type { CompetencyAnswers, CompetencyAssessment, DomainScore } from '../types'
 
 /**
  * Light-mode, print/PDF-friendly rendering of the competency results report — a separate
@@ -95,9 +95,13 @@ interface CompetencyPrintReportProps {
     pmCertificationScore: number | null
   }
   roleRecommendation?: RoleRecommendation | null
+  /** This component has no store access of its own by design (see the note on domainScoresOverride
+   * above) — the caller resolves the job-role catalog label and passes it down, same convention as
+   * every other value this report renders. */
+  jobRoleLabel: string
 }
 
-export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, answersOverride, qualificationOverride, roleRecommendation }: CompetencyPrintReportProps) {
+export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, answersOverride, qualificationOverride, roleRecommendation, jobRoleLabel }: CompetencyPrintReportProps) {
   const isPM = usesLegacyPmRubric(assessment)
   const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
@@ -198,7 +202,7 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
       {!isPM && roleRecommendation && (
         <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
           <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800 }}>
-            {JOB_ROLE_LABEL_FA[assessment.jobRole]} — پیشنهاد نهایی: <span style={{ color: accent }}>{ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}</span>
+            {jobRoleLabel} — پیشنهاد نهایی: <span style={{ color: accent }}>{ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation.grade]}</span>
           </p>
           {roleRecommendation.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, lineHeight: 1.7, color: '#b91c1c' }}>{roleRecommendation.reason}</p>}
         </div>

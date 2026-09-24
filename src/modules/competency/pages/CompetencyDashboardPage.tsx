@@ -7,7 +7,8 @@ import { getCompDocSignedUrl } from '../lib/compStorage'
 import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { JOB_ROLES, JOB_ROLE_LABEL_FA, type CompetencyAssessment, type JobRole } from '../types'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import type { CompetencyAssessment, JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
@@ -29,6 +30,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const questionBank = useCompetencyStore((s) => s.questionBankPublic)
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
 
@@ -53,7 +55,10 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     [assessments, questionBank, panelistScores],
   )
 
-  const usedRoles = useMemo(() => JOB_ROLES.filter((r) => assessments.some((a) => a.jobRole === r)), [assessments])
+  const usedRoles = useMemo(
+    () => sortedJobRoles(jobRoleConfigs).map((c) => c.jobRole).filter((r) => assessments.some((a) => a.jobRole === r)),
+    [assessments, jobRoleConfigs],
+  )
 
   // Rank of each candidate among peers of the same job role — feeds the dashboard card's floating
   // rank badge. Ties share the same rank (dense-ish: count of strictly-better peers + 1).
@@ -120,7 +125,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-bold">{a.candidateName}</p>
-                  <p className="truncate text-[10.5px] text-muted">{JOB_ROLE_LABEL_FA[role]}</p>
+                  <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, role)}</p>
                 </div>
                 <span className="num shrink-0 text-sm font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
               </button>
@@ -149,7 +154,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                 onClick={() => setRoleFilter(r)}
                 className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === r ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
               >
-                {JOB_ROLE_LABEL_FA[r]}
+                {jobRoleLabel(jobRoleConfigs, r)}
               </button>
             ))}
           </div>
@@ -232,6 +237,7 @@ function CandidateCard({
   onDelete: () => void
 }) {
   const band = maturityBand(overall)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -270,7 +276,7 @@ function CandidateCard({
         </div>
         <div className="min-w-0 w-full">
           <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
-          <p className="truncate text-[10px] text-muted">{JOB_ROLE_LABEL_FA[a.jobRole]}</p>
+          <p className="truncate text-[10px] text-muted">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
         </div>
         <div className="mt-0.5 flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: tier }}>

@@ -1,9 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { AlertTriangle, BarChart3, BrainCircuit, ClipboardList, FileBarChart2, Home, ShieldAlert, Users } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
+import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
+import { jobRoleLabel, sortedJobRoles } from '../../competency/lib/competencyData'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
-import { JOB_ROLES, JOB_ROLE_LABEL_FA } from '../../competency/types'
 import {
   PERSONALITY_ASSESSMENT_STATUS_LABEL_FA,
   PERSONALITY_VALIDITY_STATUS_LABEL_FA,
@@ -79,6 +80,7 @@ export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuest
   const traits = usePersonalityStore((s) => s.traits)
   const dimensions = usePersonalityStore((s) => s.dimensions)
   const fetchCatalog = usePersonalityStore((s) => s.fetchCatalog)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
 
   useEffect(() => {
     if (assessments.length === 0) fetchAssessments()
@@ -152,15 +154,18 @@ export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuest
   )
 
   const roleRows = useMemo(() => {
-    return JOB_ROLES.filter((role) => assessments.some((a) => a.jobRole === role)).map((role) => {
-      const roleAssessments = assessments.filter((a) => a.jobRole === role)
-      const ids = new Set(roleAssessments.map((a) => a.id))
-      const dimScores = dimensionScores.filter((d) => d.scoreKind === 'BEHAVIORAL_DIMENSION' && ids.has(d.personalityAssessmentId) && d.normalizedScore != null)
-      const avg = dimScores.length > 0 ? Math.round(dimScores.reduce((s, d) => s + (d.normalizedScore ?? 0), 0) / dimScores.length) : null
-      const reviewCount = validityResults.filter((v) => ids.has(v.personalityAssessmentId) && (v.overallStatus === 'REVIEW_REQUIRED' || v.overallStatus === 'INVALID')).length
-      return { role, count: roleAssessments.length, avg, reviewCount }
-    })
-  }, [assessments, dimensionScores, validityResults])
+    return sortedJobRoles(jobRoleConfigs)
+      .map((c) => c.jobRole)
+      .filter((role) => assessments.some((a) => a.jobRole === role))
+      .map((role) => {
+        const roleAssessments = assessments.filter((a) => a.jobRole === role)
+        const ids = new Set(roleAssessments.map((a) => a.id))
+        const dimScores = dimensionScores.filter((d) => d.scoreKind === 'BEHAVIORAL_DIMENSION' && ids.has(d.personalityAssessmentId) && d.normalizedScore != null)
+        const avg = dimScores.length > 0 ? Math.round(dimScores.reduce((s, d) => s + (d.normalizedScore ?? 0), 0) / dimScores.length) : null
+        const reviewCount = validityResults.filter((v) => ids.has(v.personalityAssessmentId) && (v.overallStatus === 'REVIEW_REQUIRED' || v.overallStatus === 'INVALID')).length
+        return { role, count: roleAssessments.length, avg, reviewCount }
+      })
+  }, [assessments, dimensionScores, validityResults, jobRoleConfigs])
 
   const scoredCount = new Set(dimensionScores.map((d) => d.personalityAssessmentId)).size
   const mostCommonWatchpoint = watchpointFrequency[0]
@@ -339,7 +344,7 @@ export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuest
               <tbody>
                 {roleRows.map(({ role, count, avg, reviewCount }) => (
                   <tr key={role} className="border-b border-white/5">
-                    <td className="p-1.5 font-bold">{JOB_ROLE_LABEL_FA[role]}</td>
+                    <td className="p-1.5 font-bold">{jobRoleLabel(jobRoleConfigs, role)}</td>
                     <td className="num p-1.5">{count.toLocaleString('fa-IR')}</td>
                     <td className="num p-1.5">{avg != null ? avg.toLocaleString('fa-IR') : '—'}</td>
                     <td className="num p-1.5">{reviewCount.toLocaleString('fa-IR')}</td>
