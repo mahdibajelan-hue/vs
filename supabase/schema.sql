@@ -8648,3 +8648,535 @@ $$ language plpgsql security definer stable set search_path = public;
 
 revoke execute on function comp_get_competency_evidence_detail(uuid, uuid) from public, anon;
 grant execute on function comp_get_competency_evidence_detail(uuid, uuid) to authenticated;
+
+-- ============================================================================
+-- Section 52: Enterprise Competency Assessment Engine — Phase 5: Individual
+-- Development Plans (IDP) + Reassessment.
+--
+-- 1. comp_development_plans / comp_development_actions — one open (non-
+--    cancelled) development plan per assessment, holding concrete actions per
+--    competency. Read: whoever can access the assessment
+--    (comp_can_access_assessment) plus whoever may manage the plan. Write:
+--    comp_can_manage_development_plan() = the assessment's lead (comp_is_lead:
+--    creator / designated lead panelist / module admin) or an
+--    ASSESSMENT_DESIGNER — the exact standing that already gates the exam
+--    design and profile recompute. Policies are `to authenticated` only.
+-- 2. comp_seed_development_plan — creates (or reuses) the DRAFT plan and
+--    suggests actions from the Competency Engine's STORED profile (it never
+--    re-scores): one development action per GAP / CRITICAL_GAP competency
+--    (target = required level, current = actual level; CRITICAL first, HIGH
+--    priority, due in 60 days; other gaps MEDIUM/90 days when the gap is ≥ 1
+--    level, else LOW/120 days; TECHNICAL/HYBRID → TRAINING, BEHAVIORAL →
+--    MENTORING). An INSUFFICIENT_EVIDENCE competency gets exactly one
+--    EVIDENCE_COLLECTION («ارزیابی تکمیلی») action instead — lack of evidence
+--    is never treated as a gap. Competencies that already have any action in
+--    the plan are skipped, so re-seeding is idempotent and never overwrites a
+--    manual edit. The latest unified AI analysis' training_recommendations are
+--    merged in as source = AI actions (deduplicated by text), linked to a
+--    competency only when the text names a competency that is actually a GAP /
+--    CRITICAL_GAP; otherwise competency_id stays null (a general action).
+--    EVIDENCE_COLLECTION is an extra action_type beyond the six development
+--    types so "go collect evidence" can never be mistaken for training.
+-- 3. comp_assessments.previous_assessment_id + comp_create_reassessment — a
+--    follow-up assessment of the same candidate for the same job role, linked
+--    to its predecessor. The chain is linear (unique index): calling the RPC
+--    again for an assessment that already has a follow-up returns that
+--    follow-up instead of forking the chain. Candidate identity/profile
+--    fields are copied exactly as the create path writes them; answers,
+--    question selection, panel, scores and tokens start fresh (new self-
+--    service/results tokens via the column defaults). DESIGN DECISION: the
+--    previous assessment's exam design (the four method flags + blueprint_id)
+--    is COPIED rather than re-applying the role's current default blueprint —
+--    a reassessment exists to be compared against its predecessor, and
+--    comparing levels measured through different methods would confuse a
+--    design change with development. The Phase 4 default-blueprint trigger is
+--    therefore extended to leave rows with previous_assessment_id alone. The
+--    designer can still change the design in the Exam Design stage.
+-- 4. comp_get_reassessment_comparison — per competency, the predecessor's vs
+--    this assessment's stored level/score/status/confidence/gap, the level and
+--    score delta, a gap outcome (CLOSED / NARROWED / UNCHANGED / WIDENED /
+--    NEW_GAP / GAP_IDENTIFIED / NO_GAP / UNKNOWN / NOT_COMPARABLE —
+--    INSUFFICIENT_EVIDENCE on either side is always UNKNOWN, never "closed"
+--    or "declined") and the predecessor's development-plan actions for that
+--    competency with their outcome. Guarded by comp_can_access_assessment()
+--    on BOTH assessments.
+-- ============================================================================
+
+alter table comp_assessments add column if not exists previous_assessment_id uuid references comp_assessments (id) on delete set null;
+-- One follow-up per assessment → a linear previous/next chain.
+create unique index if not exists idx_comp_assessments_previous_assessment on comp_assessments (previous_assessment_id) where previous_assessment_id is not null;
+
+create or replace function comp_can_manage_development_plan(p_assessment_id uuid)
+returns boolean as $$
+  select comp_is_lead(p_assessment_id) or comp_is_assessment_designer() or comp_is_module_admin();
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_can_manage_development_plan(uuid) from public, anon;
+grant execute on function comp_can_manage_development_plan(uuid) to authenticated;
+
+create table if not exists comp_development_plans (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  status text not null default 'DRAFT' check (status in ('DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED')),
+  -- Who owns follow-through (line manager / HR) — not necessarily the assessment lead.
+  owner_id uuid references profiles (id) on delete set null,
+  summary text not null default '',
+  target_review_date date,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create unique index if not exists idx_comp_development_plans_one_open on comp_development_plans (assessment_id) where status <> 'CANCELLED';
+create index if not exists idx_comp_development_plans_assessment on comp_development_plans (assessment_id);
+create index if not exists idx_comp_development_plans_owner on comp_development_plans (owner_id);
+
+create table if not exists comp_development_actions (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references comp_development_plans (id) on delete cascade,
+  -- Null = a general action not tied to one competency (e.g. an unmatched AI recommendation).
+  competency_id uuid references comp_competencies (id) on delete set null,
+  action_type text not null default 'TRAINING' check (action_type in (
+    'TRAINING', 'MENTORING', 'ON_THE_JOB', 'SELF_STUDY', 'PROJECT_ASSIGNMENT', 'OTHER', 'EVIDENCE_COLLECTION'
+  )),
+  title text not null check (btrim(title) <> ''),
+  description text not null default '',
+  current_level numeric,
+  target_level numeric,
+  priority text not null default 'MEDIUM' check (priority in ('HIGH', 'MEDIUM', 'LOW')),
+  due_date date,
+  status text not null default 'NOT_STARTED' check (status in ('NOT_STARTED', 'IN_PROGRESS', 'DONE', 'CANCELLED')),
+  owner_id uuid references profiles (id) on delete set null,
+  progress_note text not null default '',
+  source text not null default 'MANUAL' check (source in ('GAP_ENGINE', 'AI', 'MANUAL')),
+  sort_order int not null default 0,
+  completed_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create index if not exists idx_comp_development_actions_plan on comp_development_actions (plan_id, sort_order);
+create index if not exists idx_comp_development_actions_competency on comp_development_actions (competency_id);
+create index if not exists idx_comp_development_actions_owner on comp_development_actions (owner_id);
+
+alter table comp_development_plans enable row level security;
+alter table comp_development_actions enable row level security;
+
+drop policy if exists "comp_development_plans_select_access" on comp_development_plans;
+create policy "comp_development_plans_select_access" on comp_development_plans
+  for select to authenticated
+  using (comp_can_access_assessment(assessment_id) or comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_insert_manage" on comp_development_plans;
+create policy "comp_development_plans_insert_manage" on comp_development_plans
+  for insert to authenticated with check (comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_update_manage" on comp_development_plans;
+create policy "comp_development_plans_update_manage" on comp_development_plans
+  for update to authenticated
+  using (comp_can_manage_development_plan(assessment_id)) with check (comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_delete_manage" on comp_development_plans;
+create policy "comp_development_plans_delete_manage" on comp_development_plans
+  for delete to authenticated using (comp_can_manage_development_plan(assessment_id));
+
+-- Actions inherit their plan's standing: readable whenever the plan is (the plan's own RLS filters
+-- the subquery), writable only by whoever may manage that plan's assessment.
+drop policy if exists "comp_development_actions_select_access" on comp_development_actions;
+create policy "comp_development_actions_select_access" on comp_development_actions
+  for select to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id));
+drop policy if exists "comp_development_actions_insert_manage" on comp_development_actions;
+create policy "comp_development_actions_insert_manage" on comp_development_actions
+  for insert to authenticated
+  with check (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+drop policy if exists "comp_development_actions_update_manage" on comp_development_actions;
+create policy "comp_development_actions_update_manage" on comp_development_actions
+  for update to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)))
+  with check (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+drop policy if exists "comp_development_actions_delete_manage" on comp_development_actions;
+create policy "comp_development_actions_delete_manage" on comp_development_actions
+  for delete to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_development_plans', 'comp_development_actions']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- completed_at is stamped server-side when an action first becomes DONE and cleared if it leaves DONE.
+create or replace function comp_development_actions_track_completion()
+returns trigger as $$
+begin
+  if new.status = 'DONE' then
+    if tg_op = 'INSERT' or old.status is distinct from 'DONE' then
+      new.completed_at := now();
+    end if;
+  else
+    new.completed_at := null;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_development_actions_track_completion on comp_development_actions;
+create trigger trg_comp_development_actions_track_completion before insert or update on comp_development_actions
+  for each row execute function comp_development_actions_track_completion();
+
+-- Section 51's default-blueprint trigger, changed ONLY to leave reassessments alone: a follow-up
+-- copies its predecessor's design (see this section's header), which the default must not override.
+create or replace function comp_assessments_apply_default_blueprint()
+returns trigger as $$
+declare
+  v_bp comp_assessment_blueprints%rowtype;
+begin
+  if new.blueprint_id is not null or new.previous_assessment_id is not null then
+    return new;
+  end if;
+  select * into v_bp
+  from comp_assessment_blueprints b
+  where b.job_role = new.job_role and b.is_default and b.active
+  limit 1;
+  if not found then
+    return new;
+  end if;
+  new.blueprint_id := v_bp.id;
+  new.needs_technical_assessment := v_bp.includes_technical;
+  new.needs_personality_assessment := v_bp.includes_personality;
+  new.needs_structured_interview := v_bp.includes_structured_interview;
+  new.includes_experience := v_bp.includes_experience;
+  perform comp_log_audit(
+    'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED', 'comp_assessments', new.id, null,
+    jsonb_build_object(
+      'blueprintId', v_bp.id,
+      'blueprintVersion', v_bp.version,
+      'needsTechnicalAssessment', v_bp.includes_technical,
+      'needsPersonalityAssessment', v_bp.includes_personality,
+      'needsStructuredInterview', v_bp.includes_structured_interview,
+      'includesExperience', v_bp.includes_experience
+    )
+  );
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+create or replace function comp_seed_development_plan(p_assessment_id uuid)
+returns jsonb as $$
+declare
+  v_plan comp_development_plans%rowtype;
+  v_created boolean := false;
+  v_gap_actions int := 0;
+  v_evidence_actions int := 0;
+  v_ai_actions int := 0;
+  v_next_order int;
+  v_recs jsonb;
+  v_rec text;
+  v_match comp_competency_scores%rowtype;
+begin
+  if not comp_can_manage_development_plan(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  if not exists (select 1 from comp_assessments where id = p_assessment_id) then
+    raise exception 'assessment not found';
+  end if;
+  if not exists (select 1 from comp_competency_scores where assessment_id = p_assessment_id) then
+    raise exception 'competency profile has not been computed';
+  end if;
+
+  select * into v_plan from comp_development_plans
+  where assessment_id = p_assessment_id and status <> 'CANCELLED'
+  for update;
+  if not found then
+    insert into comp_development_plans (assessment_id, status, owner_id, target_review_date, created_by)
+    values (p_assessment_id, 'DRAFT', auth.uid(), current_date + 120, auth.uid())
+    returning * into v_plan;
+    v_created := true;
+  end if;
+
+  -- A completed plan is a closed record — never add suggestions to it after the fact.
+  if v_plan.status = 'COMPLETED' then
+    return jsonb_build_object('planId', v_plan.id, 'created', false, 'gapActions', 0, 'evidenceActions', 0, 'aiActions', 0, 'skipped', 'PLAN_COMPLETED');
+  end if;
+
+  select coalesce(max(sort_order), 0) into v_next_order from comp_development_actions where plan_id = v_plan.id;
+
+  with gaps as (
+    select s.competency_id, s.status, s.actual_level, s.required_level, s.gap, c.label_fa, c.domain,
+      row_number() over (order by (s.status = 'CRITICAL_GAP') desc, s.gap desc nulls last, c.label_fa) as rn
+    from comp_competency_scores s
+    join comp_competencies c on c.id = s.competency_id
+    where s.assessment_id = p_assessment_id and s.status in ('GAP', 'CRITICAL_GAP')
+      and not exists (select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.competency_id = s.competency_id)
+  )
+  insert into comp_development_actions (
+    plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+  )
+  select
+    v_plan.id, g.competency_id,
+    case when g.domain = 'BEHAVIORAL' then 'MENTORING' else 'TRAINING' end,
+    'توسعه شایستگی «' || g.label_fa || '»',
+    format('ارتقای سطح از %s به %s (شکاف %s سطح)%s — پیشنهاد خودکار بر پایه تحلیل شکاف شایستگی.',
+      g.actual_level, g.required_level, g.gap, case when g.status = 'CRITICAL_GAP' then '؛ شایستگی حیاتی شغل' else '' end),
+    g.actual_level, g.required_level,
+    case when g.status = 'CRITICAL_GAP' then 'HIGH' when g.gap >= 1 then 'MEDIUM' else 'LOW' end,
+    current_date + case when g.status = 'CRITICAL_GAP' then 60 when g.gap >= 1 then 90 else 120 end,
+    'GAP_ENGINE', v_next_order + g.rn::int, auth.uid()
+  from gaps g;
+  get diagnostics v_gap_actions = row_count;
+  v_next_order := v_next_order + v_gap_actions;
+
+  -- No evidence ≠ no competency: one «ارزیابی تکمیلی» action, never a training action.
+  with unknown as (
+    select s.competency_id, s.is_critical, c.label_fa,
+      row_number() over (order by s.is_critical desc, s.weight desc, c.label_fa) as rn
+    from comp_competency_scores s
+    join comp_competencies c on c.id = s.competency_id
+    where s.assessment_id = p_assessment_id and s.status = 'INSUFFICIENT_EVIDENCE'
+      and not exists (select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.competency_id = s.competency_id)
+  )
+  insert into comp_development_actions (
+    plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+  )
+  select
+    v_plan.id, u.competency_id, 'EVIDENCE_COLLECTION',
+    'ارزیابی تکمیلی «' || u.label_fa || '»',
+    'برای این شایستگی هنوز شواهدی ثبت نشده است — این به معنای ضعف متقاضی نیست. شواهد تکمیلی (مصاحبه ساختاریافته، آزمون یا سوابق مستند) جمع‌آوری و پروفایل شایستگی دوباره محاسبه شود.',
+    null, null,
+    case when u.is_critical then 'HIGH' else 'MEDIUM' end,
+    current_date + 30,
+    'GAP_ENGINE', v_next_order + u.rn::int, auth.uid()
+  from unknown u;
+  get diagnostics v_evidence_actions = row_count;
+  v_next_order := v_next_order + v_evidence_actions;
+
+  select a.analysis -> 'training_recommendations' into v_recs
+  from comp_candidate_ai_analysis a
+  where a.assessment_id = p_assessment_id
+  order by a.created_at desc
+  limit 1;
+
+  if jsonb_typeof(v_recs) = 'array' then
+    for v_rec in
+      select btrim(r) from jsonb_array_elements_text(v_recs) with ordinality x(r, ord) where btrim(r) <> '' order by ord
+    loop
+      continue when exists (
+        select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.source = 'AI' and a.description = v_rec
+      );
+      -- Linked only to a competency the engine actually reports as a gap, never to an
+      -- INSUFFICIENT_EVIDENCE / MEETS / EXCEEDS one (SELECT INTO with no row leaves v_match all-null).
+      select s.* into v_match
+      from comp_competency_scores s
+      join comp_competencies c on c.id = s.competency_id
+      where s.assessment_id = p_assessment_id and s.status in ('GAP', 'CRITICAL_GAP')
+        and (strpos(v_rec, c.label_fa) > 0 or strpos(lower(v_rec), lower(c.key)) > 0 or strpos(lower(v_rec), replace(lower(c.key), '_', ' ')) > 0)
+      order by (s.status = 'CRITICAL_GAP') desc, s.gap desc nulls last
+      limit 1;
+      v_next_order := v_next_order + 1;
+      insert into comp_development_actions (
+        plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+      ) values (
+        v_plan.id, v_match.competency_id, 'TRAINING',
+        case when length(v_rec) > 120 then left(v_rec, 117) || '…' else v_rec end,
+        v_rec, v_match.actual_level, v_match.required_level, 'LOW', current_date + 120, 'AI', v_next_order, auth.uid()
+      );
+      v_ai_actions := v_ai_actions + 1;
+    end loop;
+  end if;
+
+  perform comp_log_audit(
+    'DEVELOPMENT_PLAN_SEEDED', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object('planId', v_plan.id, 'created', v_created, 'gapActions', v_gap_actions,
+      'evidenceActions', v_evidence_actions, 'aiActions', v_ai_actions)
+  );
+
+  return jsonb_build_object('planId', v_plan.id, 'created', v_created, 'gapActions', v_gap_actions,
+    'evidenceActions', v_evidence_actions, 'aiActions', v_ai_actions);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_seed_development_plan(uuid) from public, anon;
+grant execute on function comp_seed_development_plan(uuid) to authenticated;
+
+create or replace function comp_create_reassessment(p_assessment_id uuid)
+returns uuid as $$
+declare
+  v_prev comp_assessments%rowtype;
+  v_id uuid;
+begin
+  if not comp_can_manage_development_plan(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Linear chain: an assessment already followed up returns its follow-up, never a second branch.
+  select id into v_id from comp_assessments where previous_assessment_id = p_assessment_id;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  insert into comp_assessments (
+    previous_assessment_id, job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone,
+    candidate_email, candidate_birth_date, candidate_age, has_disability, disability_note, photo_url,
+    years_experience_total, years_experience_pipeline, current_employer, education, employment_history,
+    certifications, notable_projects, interview_date, status, answers, panel_size,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience,
+    blueprint_id, created_by
+  ) values (
+    p_assessment_id, v_prev.job_role, v_prev.candidate_name, v_prev.candidate_position, v_prev.candidate_national_id, v_prev.candidate_phone,
+    v_prev.candidate_email, v_prev.candidate_birth_date, v_prev.candidate_age, v_prev.has_disability, v_prev.disability_note, v_prev.photo_url,
+    v_prev.years_experience_total, v_prev.years_experience_pipeline, v_prev.current_employer, v_prev.education, v_prev.employment_history,
+    v_prev.certifications, v_prev.notable_projects, current_date, 'draft', '{}'::jsonb, v_prev.panel_size,
+    v_prev.needs_technical_assessment, v_prev.needs_personality_assessment, v_prev.needs_structured_interview, v_prev.includes_experience,
+    v_prev.blueprint_id, auth.uid()
+  )
+  returning id into v_id;
+
+  perform comp_log_audit(
+    'REASSESSMENT_CREATED', 'comp_assessments', v_id,
+    jsonb_build_object('previousAssessmentId', p_assessment_id),
+    jsonb_build_object(
+      'candidateName', v_prev.candidate_name, 'jobRole', v_prev.job_role, 'blueprintId', v_prev.blueprint_id,
+      'needsTechnicalAssessment', v_prev.needs_technical_assessment, 'needsPersonalityAssessment', v_prev.needs_personality_assessment,
+      'needsStructuredInterview', v_prev.needs_structured_interview, 'includesExperience', v_prev.includes_experience
+    )
+  );
+  return v_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_create_reassessment(uuid) from public, anon;
+grant execute on function comp_create_reassessment(uuid) to authenticated;
+
+create or replace function comp_get_reassessment_comparison(p_assessment_id uuid)
+returns jsonb as $$
+declare
+  v_cur comp_assessments%rowtype;
+  v_prev comp_assessments%rowtype;
+  v_plan comp_development_plans%rowtype;
+  v_rows jsonb;
+  v_summary jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_cur from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_cur.previous_assessment_id is null then
+    return null;
+  end if;
+  if not comp_can_access_assessment(v_cur.previous_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = v_cur.previous_assessment_id;
+  select * into v_plan from comp_development_plans where assessment_id = v_prev.id and status <> 'CANCELLED' limit 1;
+
+  with p as (
+    select * from comp_competency_scores where assessment_id = v_prev.id
+  ),
+  c as (
+    select * from comp_competency_scores where assessment_id = v_cur.id
+  ),
+  j as (
+    select
+      coalesce(c.competency_id, p.competency_id) as competency_id,
+      coalesce(c.is_critical, p.is_critical) as is_critical,
+      p.required_level as p_req, p.actual_level as p_level, p.actual_score as p_score, p.status as p_status, p.confidence as p_conf, p.gap as p_gap,
+      c.required_level as c_req, c.actual_level as c_level, c.actual_score as c_score, c.status as c_status, c.confidence as c_conf, c.gap as c_gap
+    from p
+    full outer join c on c.competency_id = p.competency_id
+  ),
+  acts as (
+    select a.competency_id,
+      count(*)::int as total,
+      count(*) filter (where a.status = 'DONE')::int as done,
+      jsonb_agg(jsonb_build_object(
+        'id', a.id, 'title', a.title, 'actionType', a.action_type, 'status', a.status, 'source', a.source,
+        'targetLevel', a.target_level, 'completedAt', a.completed_at
+      ) order by a.sort_order) as items
+    from comp_development_actions a
+    where a.plan_id = v_plan.id and a.competency_id is not null
+    group by a.competency_id
+  ),
+  r as (
+    select j.*, cc.key, cc.label_fa, acts.total, acts.done, acts.items,
+      case when j.p_level is not null and j.c_level is not null then round(j.c_level - j.p_level, 1) end as level_delta,
+      case when j.p_score is not null and j.c_score is not null then round(j.c_score - j.p_score, 2) end as score_delta,
+      case
+        when j.p_status is null or j.c_status is null then 'NOT_COMPARABLE'
+        when j.c_status = 'INSUFFICIENT_EVIDENCE' then 'UNKNOWN'
+        when j.p_status = 'INSUFFICIENT_EVIDENCE' then case when j.c_status in ('GAP', 'CRITICAL_GAP') then 'GAP_IDENTIFIED' else 'NO_GAP' end
+        when j.p_status in ('GAP', 'CRITICAL_GAP') and j.c_status in ('MEETS', 'EXCEEDS') then 'CLOSED'
+        when j.p_status in ('GAP', 'CRITICAL_GAP') then
+          case when j.c_gap < j.p_gap then 'NARROWED' when j.c_gap > j.p_gap then 'WIDENED' else 'UNCHANGED' end
+        when j.c_status in ('GAP', 'CRITICAL_GAP') then 'NEW_GAP'
+        else 'NO_GAP'
+      end as gap_outcome
+    from j
+    left join comp_competencies cc on cc.id = j.competency_id
+    left join acts on acts.competency_id = j.competency_id
+  )
+  select
+    coalesce(jsonb_agg(jsonb_build_object(
+      'competencyId', r.competency_id,
+      'key', r.key,
+      'labelFa', coalesce(r.label_fa, 'شایستگی'),
+      'isCritical', r.is_critical,
+      'requiredLevel', coalesce(r.c_req, r.p_req),
+      'previous', case when r.p_status is null then null else jsonb_build_object(
+        'requiredLevel', r.p_req, 'actualLevel', r.p_level, 'actualScore', r.p_score, 'status', r.p_status, 'confidence', r.p_conf, 'gap', r.p_gap) end,
+      'current', case when r.c_status is null then null else jsonb_build_object(
+        'requiredLevel', r.c_req, 'actualLevel', r.c_level, 'actualScore', r.c_score, 'status', r.c_status, 'confidence', r.c_conf, 'gap', r.c_gap) end,
+      'levelDelta', r.level_delta,
+      'scoreDelta', r.score_delta,
+      'gapOutcome', r.gap_outcome,
+      'actions', jsonb_build_object('total', coalesce(r.total, 0), 'done', coalesce(r.done, 0), 'items', coalesce(r.items, '[]'::jsonb))
+    ) order by r.is_critical desc, r.label_fa), '[]'::jsonb),
+    jsonb_build_object(
+      'competencies', count(*),
+      'comparable', count(*) filter (where r.level_delta is not null),
+      'improved', count(*) filter (where r.level_delta > 0),
+      'declined', count(*) filter (where r.level_delta < 0),
+      'gapsBefore', count(*) filter (where r.p_status in ('GAP', 'CRITICAL_GAP')),
+      'gapsAfter', count(*) filter (where r.c_status in ('GAP', 'CRITICAL_GAP')),
+      'closed', count(*) filter (where r.gap_outcome = 'CLOSED'),
+      'narrowed', count(*) filter (where r.gap_outcome = 'NARROWED'),
+      'widened', count(*) filter (where r.gap_outcome = 'WIDENED'),
+      'newGaps', count(*) filter (where r.gap_outcome in ('NEW_GAP', 'GAP_IDENTIFIED')),
+      'unknown', count(*) filter (where r.gap_outcome = 'UNKNOWN'),
+      'closedWithDoneActions', count(*) filter (where r.gap_outcome = 'CLOSED' and coalesce(r.done, 0) > 0)
+    )
+  into v_rows, v_summary
+  from r;
+
+  return jsonb_build_object(
+    'assessmentId', v_cur.id,
+    'previousAssessmentId', v_prev.id,
+    'previousInterviewDate', v_prev.interview_date,
+    'currentInterviewDate', v_cur.interview_date,
+    'previousComputedAt', (select max(computed_at) from comp_competency_scores where assessment_id = v_prev.id),
+    'currentComputedAt', (select max(computed_at) from comp_competency_scores where assessment_id = v_cur.id),
+    'plan', case when v_plan.id is null then null else jsonb_build_object(
+      'id', v_plan.id, 'status', v_plan.status,
+      'actionsTotal', (select count(*) from comp_development_actions a where a.plan_id = v_plan.id and a.status <> 'CANCELLED'),
+      'actionsDone', (select count(*) from comp_development_actions a where a.plan_id = v_plan.id and a.status = 'DONE')
+    ) end,
+    'summary', v_summary,
+    'competencies', v_rows
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_reassessment_comparison(uuid) from public, anon;
+grant execute on function comp_get_reassessment_comparison(uuid) to authenticated;
