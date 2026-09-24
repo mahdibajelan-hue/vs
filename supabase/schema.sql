@@ -6911,3 +6911,51 @@ returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
   join rasta_roles r on r.id = ur.role_id
   where r.name = p_role_name and personality_is_module_admin();
 $$ language sql security definer stable;
+
+-- ============================================================================
+-- Section 44: Integrated Exam Design Panel (spec follow-up) — lets a
+-- competency ASSESSMENT_DESIGNER decide, per candidate, whether a personality
+-- assessment and/or the technical assessment are required, from a new stage
+-- in the candidate wizard positioned right after "پنل مصاحبه‌گران". This is
+-- also the bridge point where the Personality module — previously its own
+-- standalone top-level module — gets embedded into the Competency module's
+-- own candidate flow instead: rather than duplicating RBAC, a competency
+-- ASSESSMENT_DESIGNER is granted the same standing as a
+-- PERSONALITY_ASSESSMENT_DESIGNER (see the redefinition below), so the same
+-- person configuring the technical question mix here can also configure and
+-- read the personality assessment for the same candidate without a second,
+-- separate module-admin grant.
+-- ============================================================================
+
+alter table comp_assessments add column if not exists needs_personality_assessment boolean not null default false;
+alter table comp_assessments add column if not exists needs_technical_assessment boolean not null default true;
+
+-- Narrow, single-purpose RPC (same reasoning as comp_increment_question_usage/comp_reopen_assessment):
+-- the general comp_assessments UPDATE policy is scoped to the assessment's own lead, but deciding
+-- the exam design is an ASSESSMENT_DESIGNER-only action, which may not be the same person.
+create or replace function comp_set_exam_design(p_assessment_id uuid, p_needs_personality boolean, p_needs_technical boolean)
+returns void as $$
+begin
+  if not (comp_is_assessment_designer() or comp_is_module_admin()) then
+    raise exception 'forbidden';
+  end if;
+  update comp_assessments
+  set needs_personality_assessment = p_needs_personality, needs_technical_assessment = p_needs_technical
+  where id = p_assessment_id;
+  perform comp_log_audit(
+    'EXAM_DESIGN_SET', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object('needsPersonalityAssessment', p_needs_personality, 'needsTechnicalAssessment', p_needs_technical)
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Bridges the two modules' designer roles: a competency ASSESSMENT_DESIGNER (the group the user
+-- chose to reuse for the whole exam design panel, including the personality mix) is now
+-- automatically also a personality-module assessment designer, without a second, separate grant.
+-- personality_is_report_viewer() and every RLS policy built on personality_is_assessment_designer()
+-- (question bank write, template management, personality_can_access_assessment, etc.) inherit this
+-- for free — no other policy needs to change.
+create or replace function personality_is_assessment_designer()
+returns boolean as $$
+  select personality_is_module_admin() or comp_is_assessment_designer() or rasta_has_permission(auth.uid(), 'personality', 'configure');
+$$ language sql security definer stable;
