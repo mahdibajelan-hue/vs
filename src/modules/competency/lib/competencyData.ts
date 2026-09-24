@@ -31,6 +31,8 @@ export interface CompAssessmentRow {
   id: string
   job_role: string | null
   selected_question_ids: string[] | null
+  needs_personality_assessment: boolean
+  needs_technical_assessment: boolean
   panel_size: number | null
   candidate_name: string
   candidate_position: string
@@ -81,6 +83,8 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     id: r.id,
     jobRole: (r.job_role as JobRole | null) ?? 'project_manager',
     selectedQuestionIds: r.selected_question_ids ?? [],
+    needsPersonalityAssessment: r.needs_personality_assessment ?? false,
+    needsTechnicalAssessment: r.needs_technical_assessment ?? true,
     panelSize: r.panel_size ?? 3,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,

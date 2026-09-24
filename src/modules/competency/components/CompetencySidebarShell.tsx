@@ -1,10 +1,23 @@
 import type { ReactNode } from 'react'
-import { Award, BookOpen, FileBarChart2, FileUp, Home, LayoutDashboard, ListChecks, Lock, Settings, Sparkles, User, Users } from 'lucide-react'
+import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, User, Users } from 'lucide-react'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import type { EvaluationStage } from '../lib/evaluationStages'
 
-export type CompetencySection = 'dashboard' | 'profile' | 'panel' | 'documents' | 'questions' | 'results' | 'questionBank' | 'reports' | 'settings'
+export type CompetencySection =
+  | 'dashboard'
+  | 'profile'
+  | 'panel'
+  | 'documents'
+  | 'examDesign'
+  | 'personality'
+  | 'questions'
+  | 'results'
+  | 'questionBank'
+  | 'reports'
+  | 'settings'
+  | 'personalityQuestionBank'
+  | 'personalityReports'
 
 // Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal to
 // avoid a circular import back through CompetencyApp -> AssessmentWizardPage -> this file.
@@ -15,18 +28,23 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   profile: { label: 'مشخصات', icon: User },
   panel: { label: 'پنل مصاحبه‌گران', icon: Users },
   documents: { label: 'بارگذاری مدارک', icon: FileUp },
-  questions: { label: 'ارزیابی', icon: ListChecks },
+  examDesign: { label: 'طراحی آزمون‌ها', icon: ListTree },
+  personality: { label: 'ارزیابی شخصیت و رفتاری', icon: BrainCircuit },
+  questions: { label: 'ارزیابی فنی تخصصی', icon: ListChecks },
   results: { label: 'نتیجه', icon: Award },
   questionBank: { label: 'بانک سؤالات', icon: BookOpen },
   reports: { label: 'گزارش‌ها', icon: FileBarChart2 },
   settings: { label: 'تنظیمات', icon: Settings },
+  personalityQuestionBank: { label: 'بانک سؤالات شخصیت', icon: BrainCircuit },
+  personalityReports: { label: 'گزارش‌های شخصیت', icon: LineChart },
 }
 
 // Candidate-specific sections vs. module-wide sections — rendered as two visually separated groups
 // so it's clear "مشخصات"/"پنل"/... belong to whichever candidate is currently open while
-// "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'questions', 'results']
-const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings']
+// "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole. examDesign/personality
+// sit between panel and questions — see AssessmentWizardPage's LEAD_STAGES for the full ordering.
+const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results']
+const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityQuestionBank', 'personalityReports']
 
 interface CompetencySidebarShellProps {
   active: CompetencySection

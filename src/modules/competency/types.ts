@@ -283,6 +283,12 @@ export interface CompetencyAssessment {
    * score the exact same question set and re-opening the assessment never reshuffles it. Unused
    * (always []) for jobRole = 'project_manager'. */
   selectedQuestionIds: string[]
+  /** Exam Design Panel decision (see comp_set_exam_design in schema.sql) — whether this candidate's
+   * flow needs the personality/behavioral assessment and/or the technical assessment+interview.
+   * Set only by an ASSESSMENT_DESIGNER (or module admin) in the "examDesign" wizard stage; drives
+   * whether the "personality" stage shows a real assessment or a "not required" message. */
+  needsPersonalityAssessment: boolean
+  needsTechnicalAssessment: boolean
   /** How many panelists this assessment's panel should have — the lead's own choice per candidate
    * (e.g. a specialty needing extra scrutiny might warrant 4-5), no longer a fixed 3 for everyone. */
   panelSize: number

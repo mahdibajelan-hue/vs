@@ -19,9 +19,7 @@ import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
-import { PersonalityApp } from './modules/personality/PersonalityApp'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
-import { PersonalityPublicResultsPage } from './modules/personality/pages/PersonalityPublicResultsPage'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -56,14 +54,16 @@ export function RootApp() {
   const resultsToken = new URLSearchParams(window.location.search).get('results')
   if (resultsToken) return <PublicResultsPage token={resultsToken} />
 
-  // Personality module's own candidate-taking and public-results links (?p_candidate=/?p_results=)
-  // — same reasoning as the competency links above, kept as separate query params so the two
-  // modules' tokens never collide.
+  // The personality module's own candidate-taking link (?p_candidate=<token>) — same reasoning as
+  // the competency links above, kept as a separate query param so the two modules' tokens never
+  // collide. The personality module no longer has a standalone top-level presence (its dashboard/
+  // results/question-bank/settings/reports pages are now reached through the Competency module —
+  // see CompetencyApp.tsx and AssessmentWizardPage's examDesign/personality stages), but this one
+  // route survives: an unauthenticated candidate must still be able to answer via their link. The
+  // old public "view results online" link (?p_results=<token>, PersonalityPublicResultsPage) is no
+  // longer routed — staff now view personality results inline in the competency wizard instead.
   const personalityCandidateToken = new URLSearchParams(window.location.search).get('p_candidate')
   if (personalityCandidateToken) return <PersonalityCandidatePage token={personalityCandidateToken} />
-
-  const personalityResultsToken = new URLSearchParams(window.location.search).get('p_results')
-  if (personalityResultsToken) return <PersonalityPublicResultsPage token={personalityResultsToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (
@@ -124,8 +124,6 @@ export function RootApp() {
     <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
     <CompetencyApp onExitToHub={exitToHub} />
-  ) : activeModule === 'personality' ? (
-    <PersonalityApp onExitToHub={exitToHub} />
   ) : activeModule === 'estimator' ? (
     <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (

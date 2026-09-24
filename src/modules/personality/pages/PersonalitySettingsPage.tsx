@@ -94,7 +94,8 @@ function RoleAssignmentSection({
  * admin-equivalent access (personality_module_admins) and who may design assessments / view
  * reports (PERSONALITY_ASSESSMENT_DESIGNER / PERSONALITY_REPORT_VIEWER rasta roles) — mirrors
  * CompetencySettingsPage exactly, reachable only when the viewer is already a module admin (see
- * isModuleAdmin gating in PersonalityApp). */
+ * isPersonalityModuleAdmin gating in CompetencyApp, which now hosts every entry point into this
+ * module's own admin pages instead of the old standalone PersonalityApp). */
 export function PersonalitySettingsPage({ onExitToHub, onNavDashboard, onNavQuestionBank }: PersonalitySettingsPageProps) {
   const profiles = usePersonalityStore((s) => s.profiles)
   const fetchProfiles = usePersonalityStore((s) => s.fetchProfiles)

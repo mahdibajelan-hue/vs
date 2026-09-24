@@ -16,6 +16,8 @@ import { computeEvaluationStages } from '../lib/evaluationStages'
 import { EducationCards, EmploymentCards, CertificationCards } from '../components/CandidateCredentialCards'
 import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
+import { ExamDesignStage } from './ExamDesignStage'
+import { PersonalityStage } from './PersonalityStage'
 import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
 import { formatJalali } from '../../../lib/jalali'
@@ -40,13 +42,15 @@ interface AssessmentWizardPageProps {
   moduleNav?: Partial<Record<CompetencySection, () => void>>
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'questions' | 'results'
+type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'results'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
   panel: 'پنل مصاحبه‌گران',
   documents: 'بارگذاری مدارک',
-  questions: 'ارزیابی',
+  examDesign: 'طراحی آزمون‌ها',
+  personality: 'ارزیابی شخصیت و رفتاری',
+  questions: 'ارزیابی فنی تخصصی',
   results: 'نتیجه',
 }
 
@@ -55,9 +59,12 @@ const SECTION_TITLE: Record<Stage, string> = {
  * (the "panel" stage); the final verdict, scorecard, and report belong to the assessment lead.
  * This matters beyond tidiness: the database rejects writes to comp_assessments from anyone but
  * the lead, so showing an interviewer the final-verdict screen would only hand them a form whose
- * every save fails.
+ * every save fails. "examDesign"/"personality" sit right after the panel is assembled — see the
+ * Exam Design Panel note in schema.sql Section 44 — and are lead-only exactly like
+ * questions/results, whether or not this particular lead also holds ASSESSMENT_DESIGNER standing
+ * (see isDesigner below, which only gates the interactive controls within those two stages).
  */
-const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'questions', 'results']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results']
 const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel']
 
 /**
@@ -82,6 +89,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
+  const fetchAssessmentDesigners = useCompetencyStore((s) => s.fetchAssessmentDesigners)
   const myName = useAuthStore((s) => s.profile?.fullName)
   const myId = useAuthStore((s) => s.profile?.id ?? null)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
@@ -98,6 +108,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
     fetchPanelists(assessmentId)
     fetchPanelistScores(assessmentId)
     if (questionBank.length === 0) fetchQuestionBank()
+    if (assessmentDesigners.length === 0) fetchAssessmentDesigners()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId])
 
@@ -106,18 +117,24 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
 
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
+  // Same standing as CompetencyApp's isModuleAdmin, but for the ASSESSMENT_DESIGNER role — gates the
+  // interactive controls inside the examDesign/personality stages (toggling what's needed, opening
+  // either mix designer). A non-designer lead still reaches both stages, just read-only.
+  const isDesigner = isAdmin || moduleAdmins.some((m) => m.userId === myId) || assessmentDesigners.some((d) => d.userId === myId)
   const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
   // Opening a candidate from the dashboard always lands on their profile first — the natural
   // starting point before assembling the panel or scoring anything.
   const [stage, setStage] = useState<Stage | null>(null)
   const activeStage: Stage = stage && stages.includes(stage) ? stage : 'profile'
 
-  // Which of the shared shell's six sections this viewer can reach from here — a panelist only
-  // ever sees profile/panel/documents (see PANELIST_STAGES above); the lead sees all six.
+  // Which of the shared shell's sections this viewer can reach from here — a panelist only ever
+  // sees profile/panel/documents (see PANELIST_STAGES above); the lead sees every stage.
   const nav: Partial<Record<CompetencySection, () => void>> = { dashboard: onDone, ...moduleNav }
   if (stages.includes('profile')) nav.profile = () => setStage('profile')
   if (stages.includes('panel')) nav.panel = () => setStage('panel')
   if (stages.includes('documents')) nav.documents = () => setStage('documents')
+  if (stages.includes('examDesign')) nav.examDesign = () => setStage('examDesign')
+  if (stages.includes('personality')) nav.personality = () => setStage('personality')
   if (stages.includes('questions')) nav.questions = () => setStage('questions')
   if (stages.includes('results')) nav.results = () => setStage('results')
 
@@ -298,7 +315,15 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       )}
 
       {activeStage === 'panel' && (
-        <PanelStage assessmentId={assessment.id} onContinue={stages.includes('questions') ? () => setStage('questions') : undefined} />
+        <PanelStage assessmentId={assessment.id} onContinue={stages.includes('examDesign') ? () => setStage('examDesign') : undefined} />
+      )}
+
+      {activeStage === 'examDesign' && (
+        <ExamDesignStage assessment={assessment} isDesigner={isDesigner} onContinue={() => setStage('personality')} />
+      )}
+
+      {activeStage === 'personality' && (
+        <PersonalityStage assessment={assessment} onContinue={() => setStage('questions')} onGoToExamDesign={() => setStage('examDesign')} />
       )}
 
       {activeStage === 'questions' && !isPM && (

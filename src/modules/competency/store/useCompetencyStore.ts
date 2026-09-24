@@ -285,6 +285,9 @@ interface CompetencyState {
   setPanelistLead: (assessmentId: string, panelistRowId: string) => Promise<void>
   /** How many panelists this assessment's panel is meant to have — per-assessment, no longer a fixed 3. */
   setPanelSize: (assessmentId: string, size: number) => Promise<void>
+  /** Exam Design Panel decision (comp_set_exam_design RPC) — ASSESSMENT_DESIGNER/module-admin-only;
+   * mirrors reopenAssessment's narrow-RPC-then-refresh shape. */
+  setExamDesign: (assessmentId: string, needsPersonality: boolean, needsTechnical: boolean) => Promise<void>
 
   fetchPanelGroups: () => Promise<void>
   createPanelGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => Promise<void>
@@ -451,6 +454,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       id,
       jobRole: profile.jobRole,
       selectedQuestionIds: [],
+      needsPersonalityAssessment: false,
+      needsTechnicalAssessment: true,
       panelSize: 3,
       candidateName: profile.candidateName,
       candidatePosition: profile.candidatePosition,
@@ -712,6 +717,21 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ assessments: previous.map((a) => (a.id === assessmentId ? { ...a, panelSize: size } : a)) })
     const { error } = await supabase.from('comp_assessments').update({ panel_size: size }).eq('id', assessmentId)
     if (reportError('تغییر تعداد داوران', error)) set({ assessments: previous })
+  },
+
+  setExamDesign: async (assessmentId, needsPersonality, needsTechnical) => {
+    const previous = get().assessments
+    set({
+      assessments: previous.map((a) =>
+        a.id === assessmentId ? { ...a, needsPersonalityAssessment: needsPersonality, needsTechnicalAssessment: needsTechnical } : a,
+      ),
+    })
+    const { error } = await supabase.rpc('comp_set_exam_design', {
+      p_assessment_id: assessmentId,
+      p_needs_personality: needsPersonality,
+      p_needs_technical: needsTechnical,
+    })
+    if (reportError('ثبت طرح آزمون (شخصیت/فنی)', error)) set({ assessments: previous })
   },
 
   fetchPanelGroups: async () => {

@@ -1587,7 +1587,7 @@ select option {
 
 /* Launchpad module grid — Radar sits in the middle of the top row, flanked by two cards, with the
    remaining three below it, so it reads as the surrounded centerpiece once there's room for three
-   columns. Below that breakpoint cards just stack in DOM order (Radar first). All six cells are
+   columns. Below that breakpoint cards just stack in DOM order (Radar first). All five cells are
    the same size — only ModuleCard's own `hero` color treatment marks Radar as different. */
 .launchpad-module-grid {
   display: grid;
@@ -1601,7 +1601,7 @@ select option {
 }
 @media (min-width: 1024px) {
   .launchpad-module-grid {
-    grid-template-areas: 'a radar b' 'c d e' 'f f f';
+    grid-template-areas: 'a radar b' 'c d e';
   }
   .launchpad-module-grid .area-a { grid-area: a; }
   .launchpad-module-grid .area-radar { grid-area: radar; }
@@ -1609,5 +1609,4 @@ select option {
   .launchpad-module-grid .area-c { grid-area: c; }
   .launchpad-module-grid .area-d { grid-area: d; }
   .launchpad-module-grid .area-e { grid-area: e; }
-  .launchpad-module-grid .area-f { grid-area: f; }
 }
