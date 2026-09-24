@@ -7006,3 +7006,127 @@ create policy "comp_candidate_ai_analysis_select" on comp_candidate_ai_analysis
 drop policy if exists "comp_candidate_ai_analysis_insert" on comp_candidate_ai_analysis;
 create policy "comp_candidate_ai_analysis_insert" on comp_candidate_ai_analysis
   for insert with check (auth.uid() is not null);
+
+-- ============================================================================
+-- Section 47: Enterprise Competency Assessment Engine — Phase 1: configurable
+-- Job Role catalog + a unified Competency Model spanning both technical and
+-- behavioral evidence.
+--
+-- Reuse note (per explicit instruction to extend rather than duplicate):
+-- job_role was ALREADY plain `text` everywhere (comp_assessments, comp_
+-- question_bank, personality_*) with no DB-level CHECK constraint against a
+-- fixed list — the "fixed enum" only ever existed in the frontend's JobRole
+-- TypeScript union. comp_job_role_config already existed as a real,
+-- admin-writable, one-row-per-role config table (allowed_question_types) —
+-- rather than creating a parallel comp_job_roles table, this EXTENDS that
+-- exact table into the full configurable job-role catalog (adding a
+-- label/description/active/sort_order), so adding "a future role" from now
+-- on is a single INSERT, no code change, no new table.
+--
+-- comp_competencies/comp_job_competency_requirements are genuinely new: no
+-- existing entity spans BOTH technical and behavioral evidence under one
+-- named competency. This generalizes the exact pattern already proven by
+-- personality_job_behavioral_profiles/personality_job_behavioral_requirements
+-- (Section 40) — same shape (required level, critical flag, weight per job)
+-- — but scoped to job_role directly (via comp_job_role_config) rather than a
+-- separate "profile" indirection, and to a domain-tagged competency instead
+-- of a behavioral-dimension-only one. Evidence-source wiring (which
+-- assessments/items actually feed each competency's score) is deliberately
+-- OUT of scope here — that is the next phase (Evidence Engine) — this phase
+-- is the catalog/model only.
+-- ============================================================================
+
+alter table comp_job_role_config add column if not exists label_fa text not null default '';
+alter table comp_job_role_config add column if not exists description text not null default '';
+alter table comp_job_role_config add column if not exists active boolean not null default true;
+alter table comp_job_role_config add column if not exists sort_order int not null default 0;
+alter table comp_job_role_config add column if not exists created_at timestamptz not null default now();
+
+-- Backfill the 12 pre-existing roles' Persian labels/order — mirrors JOB_ROLE_LABEL_FA/JOB_ROLES
+-- from src/modules/competency/types.ts exactly, so nothing in the UI changes when this ships.
+update comp_job_role_config set label_fa = v.label_fa, sort_order = v.sort_order
+from (values
+  ('project_manager', 'مدیر پروژه', 1),
+  ('welding_inspector', 'بازرس جوش', 2),
+  ('mechanical_piping_inspector', 'بازرس مکانیک/پایپینگ', 3),
+  ('pipeline_inspector', 'بازرس خط لوله', 4),
+  ('coating_cp_inspector', 'بازرس پوشش و حفاظت کاتدی', 5),
+  ('radiography_interpreter', 'مفسر رادیوگرافی', 6),
+  ('civil_engineer', 'مهندس عمران', 7),
+  ('project_control_specialist', 'کارشناس کنترل پروژه', 8),
+  ('hse_specialist', 'کارشناس HSE', 9),
+  ('contracts_specialist', 'کارشناس قراردادها', 10),
+  ('site_supervisor', 'سرپرست کارگاه', 11),
+  ('inspection_body_supervisor', 'سرپرست نهاد بازرسی', 12)
+) as v(job_role, label_fa, sort_order)
+where comp_job_role_config.job_role = v.job_role and comp_job_role_config.label_fa = '';
+
+create table if not exists comp_competencies (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  -- Which evidence domain(s) this competency conceptually draws from — informs the Evidence
+  -- Engine (next phase) which assessment types are even relevant, without yet defining the exact
+  -- weighted evidence-source mapping.
+  domain text not null default 'HYBRID' check (domain in ('TECHNICAL', 'BEHAVIORAL', 'HYBRID')),
+  -- Configurable proficiency scale — mirrors personality_response_scales' own jsonb-labels
+  -- pattern rather than a fixed level count baked into a column.
+  proficiency_levels jsonb not null default
+    '[{"level":1,"label_fa":"مبتدی"},{"level":2,"label_fa":"کارآمد"},{"level":3,"label_fa":"ماهر"},{"level":4,"label_fa":"متخصص"},{"level":5,"label_fa":"استاد"}]'::jsonb,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create table if not exists comp_job_competency_requirements (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null references comp_job_role_config (job_role) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  required_level numeric not null,
+  is_critical boolean not null default false,
+  weight numeric not null default 1 check (weight > 0),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (job_role, competency_id)
+);
+
+create index if not exists idx_comp_job_competency_requirements_job_role on comp_job_competency_requirements (job_role);
+create index if not exists idx_comp_job_competency_requirements_competency on comp_job_competency_requirements (competency_id);
+
+alter table comp_competencies enable row level security;
+alter table comp_job_competency_requirements enable row level security;
+
+-- Same "any authenticated user reads, admin-or-assessment-designer writes" pattern already used
+-- for comp_job_role_config/personality_job_behavioral_requirements — reused verbatim, not a new
+-- policy shape.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competencies', 'comp_job_competency_requirements']
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin_or_designer" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin_or_designer" on %1$s for all using (comp_is_module_admin() or comp_is_assessment_designer()) with check (comp_is_module_admin() or comp_is_assessment_designer())',
+      t
+    );
+  end loop;
+end $$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competencies', 'comp_job_competency_requirements']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
