@@ -9,6 +9,7 @@ import type {
   CandidateAiAnalysis,
   CertificationEntry,
   CompAiAnalysis,
+  CompAssessmentBlueprint,
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
@@ -18,6 +19,7 @@ import type {
   CompCompetencyProfile,
   CompEvidenceSourceType,
   CompetencyAssessment,
+  CompInterviewRating,
   CompJobCompetencyRequirement,
   CompJobRoleConfig,
   CompModuleAdmin,
@@ -37,6 +39,7 @@ import type {
 import {
   compAiAnalysisFromRow,
   compCandidateAiAnalysisFromRow,
+  compAssessmentBlueprintFromRow,
   compAssessmentFromRow,
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
@@ -45,6 +48,7 @@ import {
   compCompetencyEvidenceSourceFromRow,
   compCompetencyFromRow,
   compCompetencyScoreFromRow,
+  compInterviewRatingFromRow,
   compJobCompetencyRequirementFromRow,
   compJobRoleConfigFromRow,
   compModuleAdminFromRow,
@@ -57,6 +61,7 @@ import {
   profileLiteFromRow,
   type CompAiAnalysisRow,
   type CompCandidateAiAnalysisRow,
+  type CompAssessmentBlueprintRow,
   type CompAssessmentRow,
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
@@ -65,6 +70,7 @@ import {
   type CompCompetencyEvidenceSourceRow,
   type CompCompetencyRow,
   type CompCompetencyScoreRow,
+  type CompInterviewRatingRow,
   type CompJobCompetencyRequirementRow,
   type CompJobRoleConfigRow,
   type CompModuleAdminRow,
@@ -94,6 +100,15 @@ function reportError(action: string, error: { message: string } | null): boolean
 
 function currentUserId(): string | null {
   return useAuthStore.getState().profile?.id ?? null
+}
+
+// idx_comp_assessment_blueprints_one_active_default allows one active default per role, so the
+// previous default must be demoted before another is promoted. Returns true on failure.
+async function clearOtherDefaultBlueprints(jobRole: string, keepId: string | null): Promise<boolean> {
+  let query = supabase.from('comp_assessment_blueprints').update({ is_default: false }).eq('job_role', jobRole).eq('is_default', true)
+  if (keepId) query = query.neq('id', keepId)
+  const { error } = await query
+  return reportError('تغییر الگوی پیش‌فرض', error)
 }
 
 export interface CandidateProfileInput {
@@ -267,6 +282,44 @@ export interface EvidenceSourceInput {
   weight: number
 }
 
+export interface AssessmentBlueprintInput {
+  jobRole: JobRole
+  title: string
+  description: string
+  isDefault: boolean
+  active: boolean
+  includesTechnical: boolean
+  includesPersonality: boolean
+  includesStructuredInterview: boolean
+  includesExperience: boolean
+  technicalTemplateId: string | null
+  personalityTemplateId: string | null
+}
+
+/** The optional exam-design flags added in schema.sql Section 50 — an omitted field is sent as null,
+ * which comp_set_exam_design treats as "leave unchanged". */
+export interface ExamDesignExtras {
+  needsStructuredInterview?: boolean
+  includesExperience?: boolean
+  blueprintId?: string
+}
+
+function blueprintToRowPayload(input: AssessmentBlueprintInput) {
+  return {
+    job_role: input.jobRole,
+    title: input.title,
+    description: input.description,
+    is_default: input.isDefault,
+    active: input.active,
+    includes_technical: input.includesTechnical,
+    includes_personality: input.includesPersonality,
+    includes_structured_interview: input.includesStructuredInterview,
+    includes_experience: input.includesExperience,
+    technical_template_id: input.technicalTemplateId,
+    personality_template_id: input.personalityTemplateId,
+  }
+}
+
 export interface JobCompetencyRequirementInput {
   competencyId: string
   requiredLevel: number
@@ -346,7 +399,25 @@ interface CompetencyState {
   setPanelSize: (assessmentId: string, size: number) => Promise<void>
   /** Exam Design Panel decision (comp_set_exam_design RPC) — ASSESSMENT_DESIGNER/module-admin-only;
    * mirrors reopenAssessment's narrow-RPC-then-refresh shape. */
-  setExamDesign: (assessmentId: string, needsPersonality: boolean, needsTechnical: boolean) => Promise<void>
+  setExamDesign: (assessmentId: string, needsPersonality: boolean, needsTechnical: boolean, extras?: ExamDesignExtras) => Promise<void>
+  /** Copies a blueprint's method toggles onto one candidate and records which blueprint it was —
+   * same RPC and permission as setExamDesign. */
+  applyBlueprint: (assessmentId: string, blueprint: CompAssessmentBlueprint) => Promise<void>
+
+  /** Assessment Blueprints (comp_assessment_blueprints, schema.sql Section 50) — fetched unfiltered
+   * like assessmentTemplates; callers filter to a job role. */
+  assessmentBlueprints: CompAssessmentBlueprint[]
+  fetchAssessmentBlueprints: () => Promise<void>
+  addAssessmentBlueprint: (input: AssessmentBlueprintInput) => Promise<void>
+  updateAssessmentBlueprint: (id: string, input: AssessmentBlueprintInput) => Promise<void>
+
+  /** Structured-interview ratings (comp_interview_ratings) for whichever assessments have been
+   * fetched — every rater's rows, since RLS lets anyone with access to the assessment read them. */
+  interviewRatings: CompInterviewRating[]
+  fetchInterviewRatings: (assessmentId: string) => Promise<void>
+  /** Upserts the CURRENT user's own rating of one competency (RLS only ever allows writing your own
+   * row — unique on assessment + competency + rater). */
+  saveInterviewRating: (assessmentId: string, competencyId: string, rating: number, notes: string) => Promise<boolean>
 
   fetchPanelGroups: () => Promise<void>
   createPanelGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => Promise<void>
@@ -515,6 +586,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   evidenceSources: [],
   competencyProfileByAssessment: {},
   assessmentTemplates: [],
+  assessmentBlueprints: [],
+  interviewRatings: [],
   auditLog: [],
   aiAnalysisByAssessment: {},
   aiAnalysisLoading: {},
@@ -570,6 +643,9 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       selectedQuestionIds: [],
       needsPersonalityAssessment: false,
       needsTechnicalAssessment: true,
+      needsStructuredInterview: false,
+      includesExperience: true,
+      blueprintId: null,
       panelSize: 3,
       candidateName: profile.candidateName,
       candidatePosition: profile.candidatePosition,
@@ -833,19 +909,101 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('تغییر تعداد داوران', error)) set({ assessments: previous })
   },
 
-  setExamDesign: async (assessmentId, needsPersonality, needsTechnical) => {
+  setExamDesign: async (assessmentId, needsPersonality, needsTechnical, extras) => {
     const previous = get().assessments
     set({
       assessments: previous.map((a) =>
-        a.id === assessmentId ? { ...a, needsPersonalityAssessment: needsPersonality, needsTechnicalAssessment: needsTechnical } : a,
+        a.id === assessmentId
+          ? {
+              ...a,
+              needsPersonalityAssessment: needsPersonality,
+              needsTechnicalAssessment: needsTechnical,
+              needsStructuredInterview: extras?.needsStructuredInterview ?? a.needsStructuredInterview,
+              includesExperience: extras?.includesExperience ?? a.includesExperience,
+              blueprintId: extras?.blueprintId ?? a.blueprintId,
+            }
+          : a,
       ),
     })
     const { error } = await supabase.rpc('comp_set_exam_design', {
       p_assessment_id: assessmentId,
       p_needs_personality: needsPersonality,
       p_needs_technical: needsTechnical,
+      p_needs_structured_interview: extras?.needsStructuredInterview ?? null,
+      p_includes_experience: extras?.includesExperience ?? null,
+      p_blueprint_id: extras?.blueprintId ?? null,
     })
-    if (reportError('ثبت طرح آزمون (شخصیت/فنی)', error)) set({ assessments: previous })
+    if (reportError('ثبت طرح آزمون', error)) set({ assessments: previous })
+  },
+
+  applyBlueprint: async (assessmentId, blueprint) => {
+    await get().setExamDesign(assessmentId, blueprint.includesPersonality, blueprint.includesTechnical, {
+      needsStructuredInterview: blueprint.includesStructuredInterview,
+      includesExperience: blueprint.includesExperience,
+      blueprintId: blueprint.id,
+    })
+  },
+
+  fetchAssessmentBlueprints: async () => {
+    const { data, error } = await supabase.from('comp_assessment_blueprints').select('*').order('job_role').order('created_at')
+    if (reportError('بارگذاری الگوهای ارزیابی', error)) return
+    set({ assessmentBlueprints: ((data ?? []) as CompAssessmentBlueprintRow[]).map(compAssessmentBlueprintFromRow) })
+  },
+
+  // Refetches after every write rather than merging locally: version is bumped server-side (see
+  // comp_assessment_blueprints_bump_version), so a local merge would show a stale version.
+  addAssessmentBlueprint: async (input) => {
+    if (input.isDefault && input.active && (await clearOtherDefaultBlueprints(input.jobRole, null))) return
+    const { error } = await supabase.from('comp_assessment_blueprints').insert({ id: crypto.randomUUID(), ...blueprintToRowPayload(input) })
+    if (reportError('ثبت الگوی ارزیابی', error)) return
+    await get().fetchAssessmentBlueprints()
+  },
+
+  updateAssessmentBlueprint: async (id, input) => {
+    if (input.isDefault && input.active && (await clearOtherDefaultBlueprints(input.jobRole, id))) return
+    const { error } = await supabase.from('comp_assessment_blueprints').update(blueprintToRowPayload(input)).eq('id', id)
+    if (reportError('ذخیره الگوی ارزیابی', error)) return
+    await get().fetchAssessmentBlueprints()
+  },
+
+  fetchInterviewRatings: async (assessmentId) => {
+    const { data, error } = await supabase.from('comp_interview_ratings').select('*').eq('assessment_id', assessmentId)
+    if (reportError('بارگذاری امتیازهای مصاحبه ساختاریافته', error)) return
+    set({
+      interviewRatings: [
+        ...get().interviewRatings.filter((r) => r.assessmentId !== assessmentId),
+        ...((data ?? []) as CompInterviewRatingRow[]).map(compInterviewRatingFromRow),
+      ],
+    })
+  },
+
+  saveInterviewRating: async (assessmentId, competencyId, rating, notes) => {
+    const uid = currentUserId()
+    if (!uid) return false
+    const existing = get().interviewRatings.find((r) => r.assessmentId === assessmentId && r.competencyId === competencyId && r.raterId === uid)
+    const id = existing?.id ?? crypto.randomUUID()
+    const { error } = await supabase
+      .from('comp_interview_ratings')
+      .upsert({ id, assessment_id: assessmentId, competency_id: competencyId, rater_id: uid, rating, notes }, { onConflict: 'assessment_id,competency_id,rater_id' })
+    if (reportError('ثبت امتیاز مصاحبه ساختاریافته', error)) return false
+    const now = new Date().toISOString()
+    const merged: CompInterviewRating = {
+      id,
+      assessmentId,
+      competencyId,
+      raterId: uid,
+      rating,
+      notes,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    set({
+      interviewRatings: [
+        ...get().interviewRatings.filter((r) => !(r.assessmentId === assessmentId && r.competencyId === competencyId && r.raterId === uid)),
+        merged,
+      ],
+    })
+    return true
   },
 
   fetchPanelGroups: async () => {

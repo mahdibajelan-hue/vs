@@ -6,6 +6,7 @@ import type {
   CandidateAiAnalysisContent,
   CertificationEntry,
   CompAiAnalysis,
+  CompAssessmentBlueprint,
   CompAssessmentTemplate,
   CompAttachment,
   CompAuditLogEntry,
@@ -45,6 +46,9 @@ export interface CompAssessmentRow {
   selected_question_ids: string[] | null
   needs_personality_assessment: boolean
   needs_technical_assessment: boolean
+  needs_structured_interview: boolean | null
+  includes_experience: boolean | null
+  blueprint_id: string | null
   panel_size: number | null
   candidate_name: string
   candidate_position: string
@@ -97,6 +101,9 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     selectedQuestionIds: r.selected_question_ids ?? [],
     needsPersonalityAssessment: r.needs_personality_assessment ?? false,
     needsTechnicalAssessment: r.needs_technical_assessment ?? true,
+    needsStructuredInterview: r.needs_structured_interview ?? false,
+    includesExperience: r.includes_experience ?? true,
+    blueprintId: r.blueprint_id ?? null,
     panelSize: r.panel_size ?? 3,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
@@ -503,6 +510,48 @@ export function compCompetencyEvidenceSourceFromRow(r: CompCompetencyEvidenceSou
     weight: Number(r.weight),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  }
+}
+
+export interface CompAssessmentBlueprintRow {
+  id: string
+  job_role: string
+  title: string
+  description: string | null
+  version: number
+  is_default: boolean
+  active: boolean
+  includes_technical: boolean
+  includes_personality: boolean
+  includes_structured_interview: boolean
+  includes_experience: boolean
+  technical_template_id: string | null
+  personality_template_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compAssessmentBlueprintFromRow(r: CompAssessmentBlueprintRow): CompAssessmentBlueprint {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    title: r.title,
+    description: r.description ?? '',
+    version: r.version,
+    isDefault: r.is_default,
+    active: r.active,
+    includesTechnical: r.includes_technical,
+    includesPersonality: r.includes_personality,
+    includesStructuredInterview: r.includes_structured_interview,
+    includesExperience: r.includes_experience,
+    technicalTemplateId: r.technical_template_id,
+    personalityTemplateId: r.personality_template_id,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
   }
 }
 

@@ -31,23 +31,40 @@ export function PersonalityDesignerModal({
   jobRole,
   onClose,
   onGenerated,
+  initialTemplateId,
 }: {
   personalityAssessmentId: string
   jobRole: JobRole
   onClose: () => void
   onGenerated: () => void
+  /** A saved personality_assessment_templates row (e.g. from the candidate's Assessment Blueprint)
+   * whose question mix replaces DEFAULT_COUNTS as the starting grid. */
+  initialTemplateId?: string | null
 }) {
   const questionBank = usePersonalityStore((s) => s.questionBank)
   const fetchQuestionBank = usePersonalityStore((s) => s.fetchQuestionBank)
   const generateFromMix = usePersonalityStore((s) => s.generateFromMix)
+  const templates = usePersonalityStore((s) => s.templates)
+  const fetchTemplates = usePersonalityStore((s) => s.fetchTemplates)
 
   const [counts, setCounts] = useState<Record<string, number>>(DEFAULT_COUNTS)
   const [generating, setGenerating] = useState(false)
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
 
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
+    if (initialTemplateId && templates.length === 0) fetchTemplates()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const initialTemplate = initialTemplateId ? templates.find((t) => t.id === initialTemplateId) : undefined
+  useEffect(() => {
+    if (!initialTemplate || appliedTemplateId === initialTemplate.id) return
+    const next: Record<string, number> = {}
+    for (const cell of initialTemplate.questionMix) next[cellKey(cell.questionType, cell.complexity)] = cell.count
+    setCounts(next)
+    setAppliedTemplateId(initialTemplate.id)
+  }, [initialTemplate, appliedTemplateId])
 
   const approvedBank = useMemo(
     () => questionBank.filter((q) => q.active && q.approvalStatus === 'APPROVED' && (q.jobRole == null || q.jobRole === jobRole)),
@@ -106,6 +123,9 @@ export function PersonalityDesignerModal({
           </div>
 
           <p className="mb-2 text-[11px] text-muted">برای هر نوع سؤال، تعداد لازم را به تفکیک سطح پیچیدگی وارد کنید.</p>
+          {initialTemplate && (
+            <p className="mb-2 text-[10.5px] text-pink-200">ترکیب اولیه از الگوی «{initialTemplate.title}» بارگذاری شد.</p>
+          )}
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full text-[11px]">
               <thead>

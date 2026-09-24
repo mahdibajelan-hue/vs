@@ -327,6 +327,31 @@ export interface CompCompetencyEvidenceSource {
   updatedAt: string
 }
 
+/** A reusable, versioned, job-specific definition of which assessment methods a candidate goes
+ * through (comp_assessment_blueprints, schema.sql Section 50). Applying one copies its toggles onto
+ * the candidate (see useCompetencyStore.applyBlueprint). `version` is bumped server-side whenever
+ * the methods/templates change. */
+export interface CompAssessmentBlueprint {
+  id: string
+  jobRole: JobRole
+  title: string
+  description: string
+  version: number
+  isDefault: boolean
+  active: boolean
+  includesTechnical: boolean
+  /** Personality items include the SJT items. */
+  includesPersonality: boolean
+  includesStructuredInterview: boolean
+  includesExperience: boolean
+  technicalTemplateId: string | null
+  personalityTemplateId: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  updatedBy: string | null
+}
+
 /** A panel member's direct 1-5 rating of one competency for one candidate (comp_interview_ratings). */
 export interface CompInterviewRating {
   id: string
@@ -448,6 +473,16 @@ export interface CompetencyAssessment {
    * whether the "personality" stage shows a real assessment or a "not required" message. */
   needsPersonalityAssessment: boolean
   needsTechnicalAssessment: boolean
+  /** Whether the panel rates this candidate's competencies directly in the "interview" stage
+   * (comp_interview_ratings). Off by default for candidates designed before blueprints existed. */
+  needsStructuredInterview: boolean
+  /** Whether the candidate's recorded experience/certifications/education count as competency
+   * evidence. Like the three flags above, a method switched off here is excluded from the
+   * Competency Engine's coverage denominator — "not assessed by design", not "missing evidence". */
+  includesExperience: boolean
+  /** The blueprint whose toggles were last applied — informational only; the flags above are the
+   * candidate's own copy and never change when the blueprint is later edited. */
+  blueprintId: string | null
   /** How many panelists this assessment's panel should have — the lead's own choice per candidate
    * (e.g. a specialty needing extra scrutiny might warrant 4-5), no longer a fixed 3 for everyone. */
   panelSize: number

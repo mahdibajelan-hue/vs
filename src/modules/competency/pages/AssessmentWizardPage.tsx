@@ -19,6 +19,7 @@ import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
 import { ExamDesignStage } from './ExamDesignStage'
 import { PersonalityStage } from './PersonalityStage'
+import { StructuredInterviewStage } from './StructuredInterviewStage'
 import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
 import { CandidateAiAnalysisStage } from './CandidateAiAnalysisStage'
@@ -44,7 +45,7 @@ interface AssessmentWizardPageProps {
   moduleNav?: Partial<Record<CompetencySection, () => void>>
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'results' | 'aiAnalysis'
+type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'interview' | 'results' | 'aiAnalysis'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
@@ -53,6 +54,7 @@ const SECTION_TITLE: Record<Stage, string> = {
   examDesign: 'طراحی آزمون‌ها',
   personality: 'ارزیابی شخصیت و رفتاری',
   questions: 'ارزیابی فنی تخصصی',
+  interview: 'مصاحبه ساختاریافته',
   results: 'نتیجه',
   aiAnalysis: 'تحلیل جامع هوش مصنوعی',
 }
@@ -66,9 +68,12 @@ const SECTION_TITLE: Record<Stage, string> = {
  * Exam Design Panel note in schema.sql Section 44 — and are lead-only exactly like
  * questions/results, whether or not this particular lead also holds ASSESSMENT_DESIGNER standing
  * (see isDesigner below, which only gates the interactive controls within those two stages).
+ * "interview" (schema.sql Section 50) is the one scoring stage panelists share with the lead: every
+ * panelist rates each competency independently (one comp_interview_ratings row per rater), which
+ * RLS already scopes to their own row.
  */
-const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results', 'aiAnalysis']
-const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis']
+const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'interview']
 
 /**
  * Profile -> documents (self-service link) -> panel -> questions flow for one assessment. The
@@ -140,6 +145,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   if (stages.includes('examDesign')) nav.examDesign = () => setStage('examDesign')
   if (stages.includes('personality')) nav.personality = () => setStage('personality')
   if (stages.includes('questions')) nav.questions = () => setStage('questions')
+  if (stages.includes('interview')) nav.interview = () => setStage('interview')
   if (stages.includes('results')) nav.results = () => setStage('results')
   if (stages.includes('aiAnalysis')) nav.aiAnalysis = () => setStage('aiAnalysis')
 
@@ -327,7 +333,18 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       )}
 
       {activeStage === 'panel' && (
-        <PanelStage assessmentId={assessment.id} onContinue={stages.includes('examDesign') ? () => setStage('examDesign') : undefined} />
+        <PanelStage
+          assessmentId={assessment.id}
+          onContinue={stages.includes('examDesign') ? () => setStage('examDesign') : () => setStage('interview')}
+        />
+      )}
+
+      {activeStage === 'interview' && (
+        <StructuredInterviewStage
+          assessment={assessment}
+          isLead={isLead}
+          onContinue={stages.includes('results') ? () => setStage('results') : undefined}
+        />
       )}
 
       {activeStage === 'examDesign' && (
@@ -411,8 +428,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                     حوزه بعد <ArrowLeft size={13} />
                   </button>
                 ) : (
-                  <button onClick={() => setStage('results')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
-                    مشاهده نتیجه <ArrowLeft size={13} />
+                  <button onClick={() => setStage('interview')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+                    مصاحبه ساختاریافته <ArrowLeft size={13} />
                   </button>
                 )}
               </div>
@@ -503,8 +520,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                 {isLastDomain ? 'سناریوی پایانی' : 'حوزه بعد'} <ArrowLeft size={13} />
               </button>
             ) : (
-              <button onClick={() => setStage('results')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
-                مشاهده نتیجه <ArrowLeft size={13} />
+              <button onClick={() => setStage('interview')} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+                مصاحبه ساختاریافته <ArrowLeft size={13} />
               </button>
             )}
           </div>

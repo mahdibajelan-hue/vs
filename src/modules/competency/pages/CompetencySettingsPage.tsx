@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { BookOpenCheck, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, Pencil, Plus, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react'
-import { useCompetencyStore, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
+import { BookOpenCheck, CheckCircle2, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, Pencil, Plus, ShieldCheck, Star, Trash2, UserPlus, X } from 'lucide-react'
+import { useCompetencyStore, type AssessmentBlueprintInput, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { sortedJobRoles } from '../lib/competencyData'
@@ -12,6 +12,7 @@ import {
   COMP_EXPERIENCE_METRICS,
   COMP_EXPERIENCE_METRIC_LABEL_FA,
   QUESTION_TYPE_LABEL_FA,
+  type CompAssessmentBlueprint,
   type CompCompetency,
   type CompCompetencyDomain,
   type CompCompetencyEvidenceSource,
@@ -308,7 +309,7 @@ const ALL_DOMAINS: CompCompetencyDomain[] = ['TECHNICAL', 'BEHAVIORAL', 'HYBRID'
 // so it's validated as a simple slug here, at creation, and never editable afterward.
 const JOB_ROLE_SLUG_PATTERN = /^[a-z][a-z0-9_]*$/
 
-type ModelTab = 'roles' | 'competencies' | 'requirements'
+type ModelTab = 'roles' | 'competencies' | 'requirements' | 'blueprints'
 
 function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
@@ -331,7 +332,8 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
  * which competencies each job role requires. Deliberately three tabs of one section rather than
  * three separate glass-panel cards — they're one coherent model, not three unrelated settings.
  * Each competency row in the catalog tab also expands into its evidence-source wiring (schema.sql
- * Section 49) — which assessment outputs feed that competency's score and with what weight.
+ * Section 49) — which assessment outputs feed that competency's score and with what weight. The
+ * blueprints tab (Section 50) defines which assessment methods each job's candidates go through.
  */
 function JobCompetencyModelSection({
   jobRoleConfigs,
@@ -368,6 +370,7 @@ function JobCompetencyModelSection({
         <TabButton active={tab === 'roles'} onClick={() => setTab('roles')} label="کاتالوگ مشاغل" />
         <TabButton active={tab === 'competencies'} onClick={() => setTab('competencies')} label="کاتالوگ شایستگی‌ها" />
         <TabButton active={tab === 'requirements'} onClick={() => setTab('requirements')} label="الزامات شایستگی به تفکیک شغل" />
+        <TabButton active={tab === 'blueprints'} onClick={() => setTab('blueprints')} label="الگوهای ارزیابی" />
       </div>
 
       {tab === 'roles' && <JobRoleCatalogTab jobRoleConfigs={jobRoleConfigs} addJobRole={addJobRole} updateJobRole={updateJobRole} />}
@@ -381,6 +384,7 @@ function JobCompetencyModelSection({
           onRemove={removeJobCompetencyRequirement}
         />
       )}
+      {tab === 'blueprints' && <BlueprintsTab jobRoleConfigs={jobRoleConfigs} />}
     </div>
   )
 }
@@ -1197,5 +1201,303 @@ function RequirementRow({
         </div>
       </td>
     </tr>
+  )
+}
+
+const BLUEPRINT_METHOD_FIELDS: {
+  key: 'includesTechnical' | 'includesPersonality' | 'includesStructuredInterview' | 'includesExperience'
+  label: string
+}[] = [
+  { key: 'includesTechnical', label: 'آزمون فنی تخصصی' },
+  { key: 'includesPersonality', label: 'شخصیت و رفتاری (شامل SJT)' },
+  { key: 'includesStructuredInterview', label: 'مصاحبه ساختاریافته' },
+  { key: 'includesExperience', label: 'سوابق و تجربه' },
+]
+
+/**
+ * «الگوهای ارزیابی» (schema.sql Section 50) — per job role, which assessment methods a candidate
+ * goes through and which saved question-mix templates each method starts from. At most one active
+ * default per role (the store demotes the previous default when another is promoted).
+ */
+function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[] }) {
+  const blueprints = useCompetencyStore((s) => s.assessmentBlueprints)
+  const fetchAssessmentBlueprints = useCompetencyStore((s) => s.fetchAssessmentBlueprints)
+  const addAssessmentBlueprint = useCompetencyStore((s) => s.addAssessmentBlueprint)
+  const updateAssessmentBlueprint = useCompetencyStore((s) => s.updateAssessmentBlueprint)
+  const technicalTemplates = useCompetencyStore((s) => s.assessmentTemplates)
+  const fetchAssessmentTemplates = useCompetencyStore((s) => s.fetchAssessmentTemplates)
+  const personalityTemplates = usePersonalityStore((s) => s.templates)
+  const fetchPersonalityTemplates = usePersonalityStore((s) => s.fetchTemplates)
+
+  const roles = sortedJobRoles(jobRoleConfigs)
+  const [selectedRole, setSelectedRole] = useState('')
+  const [editingId, setEditingId] = useState<string | 'new' | null>(null)
+
+  useEffect(() => {
+    fetchAssessmentBlueprints()
+    fetchAssessmentTemplates()
+    fetchPersonalityTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const effectiveRole = selectedRole || roles[0]?.jobRole || ''
+  const roleLabel = roles.find((r) => r.jobRole === effectiveRole)?.labelFa ?? effectiveRole
+  const rowsForRole = blueprints
+    .filter((b) => b.jobRole === effectiveRole)
+    .sort((a, b) => Number(b.isDefault && b.active) - Number(a.isDefault && a.active) || Number(b.active) - Number(a.active))
+  const technicalForRole = technicalTemplates.filter((t) => t.jobRole === effectiveRole)
+  const personalityForRole = personalityTemplates.filter((t) => t.jobRole === effectiveRole)
+
+  if (roles.length === 0) {
+    return <p className="text-[11px] text-muted">ابتدا در تب «کاتالوگ مشاغل» حداقل یک شغل تعریف کنید.</p>
+  }
+
+  const newBlueprint: AssessmentBlueprintInput = {
+    jobRole: effectiveRole,
+    title: `الگوی جدید — ${roleLabel}`,
+    description: '',
+    isDefault: !rowsForRole.some((b) => b.isDefault && b.active),
+    active: true,
+    includesTechnical: true,
+    includesPersonality: true,
+    includesStructuredInterview: true,
+    includesExperience: true,
+    technicalTemplateId: null,
+    personalityTemplateId: null,
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <label className="block max-w-xs flex-1">
+          <span className="mb-1 block text-[10px] text-muted">شغل</span>
+          <select
+            value={effectiveRole}
+            onChange={(e) => {
+              setSelectedRole(e.target.value)
+              setEditingId(null)
+            }}
+            className="input"
+          >
+            {roles.map((r) => (
+              <option key={r.jobRole} value={r.jobRole}>
+                {r.labelFa}
+              </option>
+            ))}
+          </select>
+        </label>
+        {editingId !== 'new' && (
+          <button
+            type="button"
+            onClick={() => setEditingId('new')}
+            className="flex items-center gap-1 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+          >
+            <Plus size={12} /> الگوی جدید
+          </button>
+        )}
+      </div>
+      <p className="text-[10.5px] leading-6 text-muted">
+        الگوی ارزیابی مشخص می‌کند متقاضیان این شغل از کدام روش‌ها عبور کنند. اعمال الگو روی هر متقاضی در مرحله «طراحی آزمون‌ها» انجام می‌شود و
+        تغییرات بعدی الگو، طرح متقاضیانی را که قبلاً الگو برایشان اعمال شده تغییر نمی‌دهد. نسخه الگو با هر تغییر در روش‌ها یا قالب‌ها خودکار
+        افزایش می‌یابد.
+      </p>
+
+      {editingId === 'new' && (
+        <BlueprintEditor
+          key={`new:${effectiveRole}`}
+          initial={newBlueprint}
+          technicalTemplates={technicalForRole}
+          personalityTemplates={personalityForRole}
+          onCancel={() => setEditingId(null)}
+          onSave={async (input) => {
+            await addAssessmentBlueprint(input)
+            setEditingId(null)
+          }}
+        />
+      )}
+
+      {rowsForRole.length === 0 ? (
+        <p className="text-[11px] text-muted">هنوز الگوی ارزیابی‌ای برای این شغل تعریف نشده است.</p>
+      ) : (
+        <div className="space-y-2">
+          {rowsForRole.map((b) =>
+            editingId === b.id ? (
+              <BlueprintEditor
+                key={b.id}
+                initial={blueprintToInput(b)}
+                technicalTemplates={technicalForRole}
+                personalityTemplates={personalityForRole}
+                onCancel={() => setEditingId(null)}
+                onSave={async (input) => {
+                  await updateAssessmentBlueprint(b.id, input)
+                  setEditingId(null)
+                }}
+              />
+            ) : (
+              <div key={b.id} className={`rounded-xl border border-white/10 p-3 ${!b.active ? 'opacity-50' : ''}`}>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <p className="text-[11.5px] font-bold">{b.title}</p>
+                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">نسخه {b.version.toLocaleString('fa-IR')}</span>
+                  {b.isDefault && b.active && (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9.5px] font-bold text-amber-300">
+                      <Star size={10} /> پیش‌فرض
+                    </span>
+                  )}
+                  {!b.active && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-muted">غیرفعال</span>}
+                  <button onClick={() => setEditingId(b.id)} className="mr-auto rounded-lg border border-white/10 p-1.5 text-secondary hover:bg-white/5">
+                    <Pencil size={12} />
+                  </button>
+                </div>
+                {b.description && <p className="mb-2 text-[10.5px] leading-5 text-muted">{b.description}</p>}
+                <div className="flex flex-wrap gap-1.5">
+                  {BLUEPRINT_METHOD_FIELDS.map((m) => (
+                    <span
+                      key={m.key}
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        b[m.key] ? 'bg-sky-500/15 text-sky-200' : 'bg-white/5 text-muted line-through'
+                      }`}
+                    >
+                      {b[m.key] && <CheckCircle2 size={10} />} {m.label}
+                    </span>
+                  ))}
+                </div>
+                {(b.technicalTemplateId || b.personalityTemplateId) && (
+                  <p className="mt-1.5 text-[10px] text-muted">
+                    {b.technicalTemplateId && <>قالب فنی: {technicalTemplates.find((t) => t.id === b.technicalTemplateId)?.title ?? '—'}</>}
+                    {b.technicalTemplateId && b.personalityTemplateId && ' · '}
+                    {b.personalityTemplateId && <>قالب شخصیت: {personalityTemplates.find((t) => t.id === b.personalityTemplateId)?.title ?? '—'}</>}
+                  </p>
+                )}
+              </div>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function blueprintToInput(b: CompAssessmentBlueprint): AssessmentBlueprintInput {
+  return {
+    jobRole: b.jobRole,
+    title: b.title,
+    description: b.description,
+    isDefault: b.isDefault,
+    active: b.active,
+    includesTechnical: b.includesTechnical,
+    includesPersonality: b.includesPersonality,
+    includesStructuredInterview: b.includesStructuredInterview,
+    includesExperience: b.includesExperience,
+    technicalTemplateId: b.technicalTemplateId,
+    personalityTemplateId: b.personalityTemplateId,
+  }
+}
+
+function BlueprintEditor({
+  initial,
+  technicalTemplates,
+  personalityTemplates,
+  onCancel,
+  onSave,
+}: {
+  initial: AssessmentBlueprintInput
+  technicalTemplates: { id: string; title: string }[]
+  personalityTemplates: { id: string; title: string }[]
+  onCancel: () => void
+  onSave: (input: AssessmentBlueprintInput) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<AssessmentBlueprintInput>(initial)
+  const [saving, setSaving] = useState(false)
+  const patch = (p: Partial<AssessmentBlueprintInput>) => setDraft((d) => ({ ...d, ...p }))
+  const noMethod = !draft.includesTechnical && !draft.includesPersonality && !draft.includesStructuredInterview && !draft.includesExperience
+
+  return (
+    <div className="space-y-2.5 rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">عنوان</span>
+          <input value={draft.title} onChange={(e) => patch({ title: e.target.value })} className="input !py-1.5 text-[11px]" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">توضیح</span>
+          <input value={draft.description} onChange={(e) => patch({ description: e.target.value })} className="input !py-1.5 text-[11px]" />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {BLUEPRINT_METHOD_FIELDS.map((m) => (
+          <label key={m.key} className="flex items-center gap-1.5 text-[11px] text-secondary">
+            <input type="checkbox" checked={draft[m.key]} onChange={(e) => patch({ [m.key]: e.target.checked })} className="h-3.5 w-3.5" /> {m.label}
+          </label>
+        ))}
+      </div>
+      {noMethod && <p className="text-[10.5px] text-amber-300">حداقل یک روش ارزیابی را انتخاب کنید.</p>}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">قالب ترکیب آزمون فنی (اختیاری)</span>
+          <select
+            value={draft.technicalTemplateId ?? ''}
+            onChange={(e) => patch({ technicalTemplateId: e.target.value || null })}
+            disabled={!draft.includesTechnical}
+            className="input !py-1.5 text-[11px] disabled:opacity-40"
+          >
+            <option value="">{technicalTemplates.length === 0 ? 'قالبی برای این شغل ذخیره نشده' : 'بدون قالب (آخرین قالب شغل)'}</option>
+            {technicalTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">قالب ترکیب آزمون شخصیت (اختیاری)</span>
+          <select
+            value={draft.personalityTemplateId ?? ''}
+            onChange={(e) => patch({ personalityTemplateId: e.target.value || null })}
+            disabled={!draft.includesPersonality}
+            className="input !py-1.5 text-[11px] disabled:opacity-40"
+          >
+            <option value="">{personalityTemplates.length === 0 ? 'قالبی برای این شغل ذخیره نشده' : 'بدون قالب (ترکیب پیش‌فرض)'}</option>
+            {personalityTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-1.5 text-[11px] text-secondary">
+          <input type="checkbox" checked={draft.isDefault} onChange={(e) => patch({ isDefault: e.target.checked })} className="h-3.5 w-3.5" /> الگوی پیش‌فرض این شغل
+        </label>
+        <label className="flex items-center gap-1.5 text-[11px] text-secondary">
+          <input type="checkbox" checked={draft.active} onChange={(e) => patch({ active: e.target.checked })} className="h-3.5 w-3.5" /> فعال
+        </label>
+        <div className="mr-auto flex items-center gap-1">
+          <button
+            disabled={saving || !draft.title.trim() || noMethod}
+            onClick={async () => {
+              setSaving(true)
+              await onSave({
+                ...draft,
+                title: draft.title.trim(),
+                description: draft.description.trim(),
+                technicalTemplateId: draft.includesTechnical ? draft.technicalTemplateId : null,
+                personalityTemplateId: draft.includesPersonality ? draft.personalityTemplateId : null,
+              })
+              setSaving(false)
+            }}
+            className="rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+          >
+            ذخیره
+          </button>
+          <button onClick={onCancel} className="rounded-lg border border-white/10 p-1.5 text-muted hover:bg-white/5">
+            <X size={12} />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

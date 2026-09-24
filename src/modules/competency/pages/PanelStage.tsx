@@ -36,8 +36,8 @@ import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 
 interface PanelStageProps {
   assessmentId: string
-  /** Advances the wizard to the next stage (ارزیابی) — omitted for a viewer with no further stage
-   * to go to (e.g. a panelist, who only ever records their own score here). */
+  /** Advances the wizard to the next stage — the exam design for the lead, the structured interview
+   * for a panelist; omitted for a viewer with no further stage to go to. */
   onContinue?: () => void
 }
 
@@ -496,7 +496,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
         </p>
       )}
 
-      {isLead && onContinue && (
+      {onContinue && (
         <div className="flex justify-end">
           <button onClick={onContinue} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
             ادامه <ArrowLeft size={13} />

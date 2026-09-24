@@ -44,7 +44,19 @@ const STEPS = ['تنظیمات آزمون', 'ترکیب سؤال', 'بررسی �
  * type/difficulty mix is saved as a reusable comp_assessment_templates row so the next candidate of
  * the same job role can reuse it in one click instead of reconfiguring from scratch.
  */
-export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { assessmentId: string; jobRole: JobRole; onClose: () => void }) {
+export function AssessmentDesignerModal({
+  assessmentId,
+  jobRole,
+  onClose,
+  initialTemplateId,
+}: {
+  assessmentId: string
+  jobRole: JobRole
+  onClose: () => void
+  /** Preselects this saved template (e.g. the candidate's Assessment Blueprint's technical template)
+   * instead of the role's most recent one; ignored if it isn't a template of this role. */
+  initialTemplateId?: string | null
+}) {
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const fetchJobRoleConfigs = useCompetencyStore((s) => s.fetchJobRoleConfigs)
   const questionBankPublic = useCompetencyStore((s) => s.questionBankPublic)
@@ -105,10 +117,13 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
     setCounts(next)
   }
 
-  // Auto-load this role's most recently saved template once, so a designer generating the Nth
-  // candidate of the same role doesn't have to reconfigure the mix from scratch every time.
+  // Auto-load this role's most recently saved template once (or the blueprint's own template when
+  // one was passed in), so a designer generating the Nth candidate of the same role doesn't have to
+  // reconfigure the mix from scratch every time.
   useEffect(() => {
-    if (templateId === null && templatesForRole.length > 0) applyTemplate(templatesForRole[0].id)
+    if (templateId !== null || templatesForRole.length === 0) return
+    const preferred = initialTemplateId ? templatesForRole.find((t) => t.id === initialTemplateId) : undefined
+    applyTemplate((preferred ?? templatesForRole[0]).id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templatesForRole.length])
 
