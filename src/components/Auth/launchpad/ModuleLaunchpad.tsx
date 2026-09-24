@@ -2,7 +2,6 @@ import type { ReactElement } from 'react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
-import { LoginCard } from './LoginCard'
 import { ProjectRadarCard } from './cards/ProjectRadarCard'
 import { PortfolioManagementCard } from './cards/PortfolioManagementCard'
 import { SmartAnalyticsCard } from './cards/SmartAnalyticsCard'
@@ -40,7 +39,6 @@ export function ModuleLaunchpad({ onSelect }: { onSelect: (key: 'radar' | Module
         {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
       </p>
 
-      {locked && <LoginCard />}
 
       <div className="launchpad-module-grid">
         <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>

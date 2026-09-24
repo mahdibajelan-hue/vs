@@ -4,7 +4,7 @@ export function Footer() {
       className="hub-fade-in relative z-10 flex flex-wrap items-center justify-between gap-2 border-t px-6 py-3 text-[10px] text-muted sm:px-10"
       style={{ borderColor: 'var(--border-soft)', animationDelay: '560ms' }}
     >
-      <span>PMO Project Intelligence Platform</span>
+      <span>فرین — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی</span>
       <span className="flex items-center gap-2.5" dir="ltr">
         <span>v1.0</span>
         <span className="opacity-40">•</span>

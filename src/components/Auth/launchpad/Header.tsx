@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Bell, Search, Settings, UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
+import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 
 function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
@@ -29,21 +30,17 @@ export function Header() {
       style={{ borderColor: 'var(--border-soft)', animationDelay: '0ms' }}
     >
       <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border"
-          style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 40%, transparent)', background: 'color-mix(in srgb, var(--radar-green) 10%, transparent)' }}
-        >
-          <span className="rasta-wordmark text-base" style={{ fontWeight: 800 }}>
-            R
-          </span>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_0_24px_rgba(201,162,39,0.25)]">
+          <FarinMark size={30} />
         </div>
         <div className="leading-tight">
-          <p className="text-base font-extrabold tracking-wide sm:text-lg" dir="ltr">
-            PROJECT CONTROL CENTER
+          <p className="flex items-baseline gap-2 text-base font-extrabold sm:text-lg">
+            <span>{FARIN_NAME_FA}</span>
+            <span className="text-xs font-black tracking-[0.25em] text-[#c9a227]" dir="ltr">
+              FARIN
+            </span>
           </p>
-          <p className="eyebrow-en mt-0.5" dir="ltr">
-            Enterprise Project Intelligence Platform
-          </p>
+          <p className="mt-0.5 text-[11px] text-secondary">{FARIN_TAGLINE_FA}</p>
         </div>
       </div>
 

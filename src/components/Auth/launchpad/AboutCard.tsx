@@ -1,4 +1,5 @@
 import { Mail } from 'lucide-react'
+import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
 
 const DEV_EMAIL = 'bajelanmahdi6900@gmail.com'
 
@@ -9,7 +10,7 @@ const DEV_EMAIL = 'bajelanmahdi6900@gmail.com'
 export function AboutCard() {
   return (
     <div
-      className="hub-grid-card hub-fade-in mx-auto w-full max-w-lg rounded-2xl border p-6 text-center"
+      className="hub-grid-card hub-fade-in mx-auto w-full max-w-lg rounded-2xl border p-6 text-center backdrop-blur-sm"
       style={{ borderColor: 'var(--border-soft)', animationDelay: '440ms' }}
     >
       <div className="hub-grid-card-glow" style={{ background: '#c9a227' }} />
@@ -19,8 +20,8 @@ export function AboutCard() {
           About Us
         </p>
         <p className="mt-3 text-[12.5px] leading-6 text-secondary">
-          RASTA پلتفرم یکپارچه مدیریت و کنترل پروژه‌های EPC است — از رادار هوشمند پروژه تا ریسک، مسائل، مالی، قرارداد و تصمیم مدیریتی، همه در یک
-          سامانه واحد و متصل به هم.
+          <span className="font-bold text-current">{FARIN_NAME_FA}</span> — {FARIN_TAGLINE_FA}؛ از رادار هوشمند پروژه، ریسک، مسائل، مالی و قرارداد تا
+          ارزیابی شایستگی، شخصیت و توسعه نیروی انسانی، همه در یک سامانه واحد و متصل به هم.
         </p>
 
         <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
