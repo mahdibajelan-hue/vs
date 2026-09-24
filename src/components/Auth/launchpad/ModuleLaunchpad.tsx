@@ -27,18 +27,21 @@ const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] =
   { key: 'admin', Card: UserManagementCard, area: 'area-e' },
 ]
 
-export function ModuleLaunchpad({ onSelect }: { onSelect: (key: 'radar' | ModuleKey) => void }) {
+/** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
+ * page-level width/padding and no hint line, just the icon grid. */
+export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar' | ModuleKey) => void; embedded?: boolean }) {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
   const visibleModules = REGULAR_MODULES.filter((m) => hasModuleAccess(accessibleModules, m.key))
   const locked = !isAuthed
 
   return (
-    <main className="relative z-10 mx-auto max-w-4xl px-6 py-8 sm:px-10">
-      <p className="hub-fade-in mb-5 text-center text-xs text-secondary" style={{ animationDelay: '80ms' }}>
-        {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
-      </p>
-
+    <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto max-w-4xl px-6 py-8 sm:px-10'}>
+      {!embedded && (
+        <p className="hub-fade-in mb-5 text-center text-xs text-secondary" style={{ animationDelay: '80ms' }}>
+          {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
+        </p>
+      )}
 
       <div className="launchpad-module-grid">
         <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>

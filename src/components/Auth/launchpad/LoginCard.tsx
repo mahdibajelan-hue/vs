@@ -79,7 +79,7 @@ export function LoginCard() {
                   onChange={(e) => setEmail(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && submit()}
                   disabled={status === 'submitting'}
-                  className="input pl-9 focus:!border-[color:var(--radar-green)]"
+                  className="input !pl-9 focus:!border-[color:var(--radar-green)]"
                   placeholder="person@example.com"
                   dir="ltr"
                   autoFocus
@@ -98,7 +98,7 @@ export function LoginCard() {
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && submit()}
                   disabled={status === 'submitting'}
-                  className="input pl-9"
+                  className="input !pl-9"
                   placeholder="حداقل ۶ کاراکتر"
                 />
                 <button

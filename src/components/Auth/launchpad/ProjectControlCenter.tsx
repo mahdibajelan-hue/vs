@@ -1,7 +1,7 @@
-import { Component, lazy, Suspense, type ReactNode } from 'react'
 import { useModuleStore, type ModuleKey } from '../../../store/useModuleStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { ProjectRadarPage } from '../radar/ProjectRadarPage'
+import { LampContainer } from '@/components/ui/lamp'
 import { Header } from './Header'
 import { ModuleLaunchpad } from './ModuleLaunchpad'
 import { AboutCard } from './AboutCard'
@@ -9,20 +9,17 @@ import { Footer } from './Footer'
 import { LoginCard } from './LoginCard'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
 
-// three.js + react-three-fiber is a large dependency — split out so the launchpad (and the login
-// card on it) render instantly and the 3D scene streams in behind them.
-const LunarGravityCard = lazy(() => import('@/components/ui/lunar-gravity-card'))
-
-// A decorative hero must never be able to take the login card down with it (e.g. its lazy chunk
-// failing to load on a flaky connection).
-class HeroErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-  render() {
-    return this.state.failed ? null : this.props.children
-  }
+/** FARIN wordmark + Persian name + tagline — the hero title that sits under the lamp. */
+function BrandTitle({ centered }: { centered?: boolean }) {
+  return (
+    <div className={`hub-fade-in flex flex-col gap-2 ${centered ? 'items-center text-center' : 'items-center text-center md:items-end md:text-left'}`}>
+      <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-7xl">
+        FARIN
+      </span>
+      <span className="text-5xl font-extrabold leading-tight text-[#c9a227] md:text-6xl">{FARIN_NAME_FA}</span>
+      <p className="mt-1 text-sm font-medium text-zinc-300 md:text-base">{FARIN_TAGLINE_FA}</p>
+    </div>
+  )
 }
 
 /**
@@ -55,41 +52,27 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
   return (
     <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip bg-black">
       <Header />
-      <div className="flex flex-1 flex-col gap-8 py-6">
-        <section className="hub-fade-in px-4 sm:px-8" style={{ animationDelay: '60ms' }}>
-          <HeroErrorBoundary>
-          <Suspense fallback={<div className="mx-auto h-[560px] max-w-6xl rounded-[2.5rem] border border-white/[0.06] bg-black md:h-[460px]" />}>
-          <LunarGravityCard
-            className="mx-auto min-h-0 max-w-6xl border-white/[0.06] md:h-[460px]"
-            sceneClassName="h-[300px] md:h-full"
-            autoRevealDelayMs={1200}
-            title={
-              <span className="flex flex-col gap-2">
-                <span className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-transparent drop-shadow-md">FARIN</span>
-                <span dir="rtl" className="self-start text-[3.25rem] leading-none text-[#c9a227] md:text-[4rem]">
-                  {FARIN_NAME_FA}
-                </span>
-              </span>
-            }
-            description={
-              <p dir="rtl" className="text-right md:w-max">
-                {FARIN_TAGLINE_FA}
-              </p>
-            }
-          />
-          </Suspense>
-          </HeroErrorBoundary>
-        </section>
-
-        {!isAuthed && (
-          <section className="mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-6 px-6 sm:px-10 md:grid-cols-2">
-            <LoginCard />
-            <AboutCard />
-          </section>
+      <LampContainer className="flex-1 pb-10 [--lamp-bg:#000]">
+        {isAuthed ? (
+          <div className="flex w-full flex-col items-center gap-2">
+            <BrandTitle centered />
+            <ModuleLaunchpad onSelect={handleSelect} />
+          </div>
+        ) : (
+          // Signed out, as in the reference layout: login + locked module icons on the right,
+          // wordmark + About (with the signature) on the left. Stacks on mobile, login first.
+          <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-10 gap-y-8 md:grid-cols-2">
+            <div className="flex flex-col items-center gap-2">
+              <LoginCard />
+              <ModuleLaunchpad onSelect={handleSelect} embedded />
+            </div>
+            <div className="flex flex-col gap-6">
+              <BrandTitle />
+              <AboutCard />
+            </div>
+          </div>
         )}
-
-        <ModuleLaunchpad onSelect={handleSelect} />
-      </div>
+      </LampContainer>
       <Footer />
     </div>
   )
