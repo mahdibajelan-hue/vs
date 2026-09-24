@@ -8,7 +8,6 @@ import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { QuestionBankPage } from './pages/QuestionBankPage'
 import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
 import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
-import { PersonalityQuestionBankPage } from '../personality/pages/PersonalityQuestionBankPage'
 import { PersonalityReportsPage } from '../personality/pages/PersonalityReportsPage'
 import { PersonalitySettingsPage } from '../personality/pages/PersonalitySettingsPage'
 import { ProfileForm } from './components/ProfileForm'
@@ -20,14 +19,16 @@ type View =
   | { name: 'list' }
   | { name: 'new' }
   | { name: 'assessment'; id: string }
-  | { name: 'questionBank' }
+  // Hosts both the technical and the personality question banks as tabs on one page (see
+  // QuestionBankPage.tsx) — `tab` lets a cross-link (e.g. from the personality settings/reports
+  // pages) land directly on the personality tab instead of always defaulting to the technical one.
+  | { name: 'questionBank'; tab?: 'technical' | 'personality' }
   | { name: 'reports' }
   | { name: 'settings' }
-  // The personality module's own admin pages (question bank/reports/settings), reachable from this
-  // module's sidebar now that the standalone Personality module has been merged in — see the Exam
-  // Design Panel note in schema.sql Section 44. These three pages already cross-navigate between
-  // each other via their own onNav* props, so only one extra entry point per page is needed here.
-  | { name: 'personalityQuestionBank' }
+  // The personality module's own admin pages (reports/settings), reachable from this module's
+  // sidebar/question bank now that the standalone Personality module has been merged in — see the
+  // Exam Design Panel note in schema.sql Section 44. These pages already cross-navigate between
+  // each other and the merged question bank via their own onNav* props.
   | { name: 'personalityReports' }
   | { name: 'personalitySettings' }
 
@@ -77,14 +78,13 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // The module-wide sidebar destinations beyond "داشبورد" — shared by every page that builds its
   // own nav map (dashboard, the assessment wizard, results), so all of them light up identically.
   // Question Bank is reachable by everyone now (spec section 12's Question Proposal Workflow — a
-  // non-admin can propose a question there, just not edit the bank directly); Settings stays
-  // admin-only. personalityQuestionBank/personalityReports follow the same everyone-can-open
-  // pattern as their competency counterparts — the personality pages behind them do their own
-  // admin-vs-proposer gating via isPersonalityModuleAdmin.
+  // non-admin can propose a question there, just not edit the bank directly) and now hosts the
+  // personality bank as its second tab too; Settings stays admin-only. personalityReports follows
+  // the same everyone-can-open pattern as its competency counterpart — the personality page behind
+  // it does its own admin-vs-proposer gating via isPersonalityModuleAdmin.
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
     questionBank: () => setView({ name: 'questionBank' }),
-    personalityQuestionBank: () => setView({ name: 'personalityQuestionBank' }),
     personalityReports: () => setView({ name: 'personalityReports' }),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
   }
@@ -121,7 +121,16 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   if (view.name === 'questionBank') {
-    return <QuestionBankPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} isModuleAdmin={isModuleAdmin} />
+    return (
+      <QuestionBankPage
+        onExitToHub={onExitToHub}
+        nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }}
+        isModuleAdmin={isModuleAdmin}
+        isPersonalityModuleAdmin={isPersonalityModuleAdmin}
+        onNavPersonalitySettings={isPersonalityModuleAdmin ? () => setView({ name: 'personalitySettings' }) : undefined}
+        initialTab={view.tab}
+      />
+    )
   }
 
   if (view.name === 'reports') {
@@ -132,23 +141,12 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
     return <CompetencySettingsPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
   }
 
-  if (view.name === 'personalityQuestionBank') {
-    return (
-      <PersonalityQuestionBankPage
-        onExitToHub={onExitToHub}
-        onNavDashboard={() => setView({ name: 'list' })}
-        onNavSettings={isPersonalityModuleAdmin ? () => setView({ name: 'personalitySettings' }) : undefined}
-        isModuleAdmin={isPersonalityModuleAdmin}
-      />
-    )
-  }
-
   if (view.name === 'personalityReports') {
     return (
       <PersonalityReportsPage
         onExitToHub={onExitToHub}
         onNavDashboard={() => setView({ name: 'list' })}
-        onNavQuestionBank={() => setView({ name: 'personalityQuestionBank' })}
+        onNavQuestionBank={() => setView({ name: 'questionBank', tab: 'personality' })}
         onNavSettings={isPersonalityModuleAdmin ? () => setView({ name: 'personalitySettings' }) : undefined}
       />
     )
@@ -159,7 +157,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
       <PersonalitySettingsPage
         onExitToHub={onExitToHub}
         onNavDashboard={() => setView({ name: 'list' })}
-        onNavQuestionBank={() => setView({ name: 'personalityQuestionBank' })}
+        onNavQuestionBank={() => setView({ name: 'questionBank', tab: 'personality' })}
       />
     )
   }

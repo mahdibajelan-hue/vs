@@ -16,7 +16,6 @@ export type CompetencySection =
   | 'questionBank'
   | 'reports'
   | 'settings'
-  | 'personalityQuestionBank'
   | 'personalityReports'
 
 // Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal to
@@ -35,7 +34,6 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   questionBank: { label: 'بانک سؤالات', icon: BookOpen },
   reports: { label: 'گزارش‌ها', icon: FileBarChart2 },
   settings: { label: 'تنظیمات', icon: Settings },
-  personalityQuestionBank: { label: 'بانک سؤالات شخصیت', icon: BrainCircuit },
   personalityReports: { label: 'گزارش‌های شخصیت', icon: LineChart },
 }
 
@@ -43,8 +41,10 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // so it's clear "مشخصات"/"پنل"/... belong to whichever candidate is currently open while
 // "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole. examDesign/personality
 // sit between panel and questions — see AssessmentWizardPage's LEAD_STAGES for the full ordering.
+// "بانک سؤالات" now covers both the technical and the personality question banks as tabs on one
+// page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
 const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results']
-const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityQuestionBank', 'personalityReports']
+const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityReports']
 
 interface CompetencySidebarShellProps {
   active: CompetencySection
