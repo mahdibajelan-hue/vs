@@ -7898,3 +7898,446 @@ from (values
 join comp_competencies c on c.key = v.competency_key
 join comp_job_role_config jrc on jrc.job_role = v.job_role
 on conflict (job_role, competency_id) do nothing;
+
+-- ============================================================================
+-- Section 50: Enterprise Competency Assessment Engine — Phase 3: Assessment
+-- Blueprints + the Structured Interview.
+--
+-- An Assessment Blueprint is a reusable, versioned, job-specific definition
+-- of WHICH assessment methods a candidate goes through (technical questions,
+-- personality incl. SJT, structured interview, recorded experience), plus
+-- optionally which saved question-mix template each method starts from.
+-- Applying a blueprint to a candidate COPIES its toggles onto that
+-- comp_assessments row (via comp_set_exam_design) and remembers which
+-- blueprint it came from — the candidate's own flags stay the source of
+-- truth, so later edits to a blueprint never silently rewrite the design of
+-- candidates already in flight (the audit entry records the exact blueprint
+-- version applied).
+--
+-- The Competency Engine now respects that design: an evidence source whose
+-- assessment METHOD was deliberately not part of this candidate's design is
+-- excluded from both evidence collection AND the coverage denominator.
+-- A method that was not part of the design is "not assessed by design", not
+-- "missing evidence" — counting it as uncovered would lower coverage (and so
+-- confidence) for a choice the designer made on purpose, and would make two
+-- candidates with identical results look differently reliable purely because
+-- of their exam design. A competency whose every configured source is
+-- excluded still reports INSUFFICIENT_EVIDENCE / NONE, exactly as before —
+-- never a gap.
+--
+-- The seeded default blueprint per job role at the end of this section is
+-- REAL, admin-editable configuration (Settings → «مدل شایستگی و مشاغل» →
+-- «الگوهای ارزیابی»), not mock data. includes_technical is only seeded true
+-- for roles that actually have approved, active bank questions, so a
+-- candidate is never routed into an empty technical stage.
+-- ============================================================================
+
+create table if not exists comp_assessment_blueprints (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null references comp_job_role_config (job_role) on delete cascade,
+  title text not null,
+  description text not null default '',
+  -- Bumped server-side whenever the design itself (methods/templates) changes — see
+  -- comp_assessment_blueprints_bump_version below; title/description/flag edits don't count.
+  version int not null default 1 check (version >= 1),
+  is_default boolean not null default false,
+  active boolean not null default true,
+  includes_technical boolean not null default true,
+  -- Personality items include the SJT items — both come from the same personality assessment.
+  includes_personality boolean not null default true,
+  includes_structured_interview boolean not null default true,
+  includes_experience boolean not null default true,
+  technical_template_id uuid references comp_assessment_templates (id) on delete set null,
+  personality_template_id uuid references personality_assessment_templates (id) on delete set null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create index if not exists idx_comp_assessment_blueprints_job_role on comp_assessment_blueprints (job_role);
+create index if not exists idx_comp_assessment_blueprints_technical_template on comp_assessment_blueprints (technical_template_id);
+create index if not exists idx_comp_assessment_blueprints_personality_template on comp_assessment_blueprints (personality_template_id);
+-- An inactive blueprint may keep is_default = true without blocking a new active default.
+create unique index if not exists idx_comp_assessment_blueprints_one_active_default
+  on comp_assessment_blueprints (job_role) where is_default and active;
+
+alter table comp_assessment_blueprints enable row level security;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_assessment_blueprints']
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin_or_designer" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin_or_designer" on %1$s for all using (comp_is_module_admin() or comp_is_assessment_designer()) with check (comp_is_module_admin() or comp_is_assessment_designer())',
+      t
+    );
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+create or replace function comp_assessment_blueprints_bump_version()
+returns trigger as $$
+begin
+  if (new.includes_technical, new.includes_personality, new.includes_structured_interview, new.includes_experience,
+      new.technical_template_id, new.personality_template_id)
+     is distinct from
+     (old.includes_technical, old.includes_personality, old.includes_structured_interview, old.includes_experience,
+      old.technical_template_id, old.personality_template_id) then
+    new.version := old.version + 1;
+  else
+    new.version := old.version;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_assessment_blueprints_bump_version on comp_assessment_blueprints;
+create trigger trg_comp_assessment_blueprints_bump_version before update on comp_assessment_blueprints
+  for each row execute function comp_assessment_blueprints_bump_version();
+
+alter table comp_assessments add column if not exists blueprint_id uuid references comp_assessment_blueprints (id) on delete set null;
+alter table comp_assessments add column if not exists needs_structured_interview boolean not null default false;
+alter table comp_assessments add column if not exists includes_experience boolean not null default true;
+create index if not exists idx_comp_assessments_blueprint on comp_assessments (blueprint_id);
+
+-- Supersedes Section 44's 3-arg version. The old signature is dropped (not overloaded) so PostgREST
+-- resolves every existing 3-arg call to this one via the defaults; a null argument means "leave that
+-- flag unchanged".
+drop function if exists comp_set_exam_design(uuid, boolean, boolean);
+create or replace function comp_set_exam_design(
+  p_assessment_id uuid,
+  p_needs_personality boolean,
+  p_needs_technical boolean,
+  p_needs_structured_interview boolean default null,
+  p_includes_experience boolean default null,
+  p_blueprint_id uuid default null
+)
+returns void as $$
+declare
+  v_blueprint_version int;
+begin
+  if not (comp_is_assessment_designer() or comp_is_module_admin()) then
+    raise exception 'forbidden';
+  end if;
+  if p_blueprint_id is not null then
+    select b.version into v_blueprint_version
+    from comp_assessment_blueprints b
+    join comp_assessments a on a.id = p_assessment_id and a.job_role = b.job_role
+    where b.id = p_blueprint_id;
+    if not found then
+      raise exception 'blueprint does not belong to this assessment''s job role';
+    end if;
+  end if;
+  update comp_assessments
+  set needs_personality_assessment = coalesce(p_needs_personality, needs_personality_assessment),
+      needs_technical_assessment = coalesce(p_needs_technical, needs_technical_assessment),
+      needs_structured_interview = coalesce(p_needs_structured_interview, needs_structured_interview),
+      includes_experience = coalesce(p_includes_experience, includes_experience),
+      blueprint_id = coalesce(p_blueprint_id, blueprint_id)
+  where id = p_assessment_id;
+  perform comp_log_audit(
+    'EXAM_DESIGN_SET', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object(
+      'needsPersonalityAssessment', p_needs_personality,
+      'needsTechnicalAssessment', p_needs_technical,
+      'needsStructuredInterview', p_needs_structured_interview,
+      'includesExperience', p_includes_experience,
+      'blueprintId', p_blueprint_id,
+      'blueprintVersion', v_blueprint_version
+    )
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid) from public, anon;
+grant execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid) to authenticated;
+
+-- Section 49's comp_compute_competency_profile, changed ONLY to honor the candidate's exam design
+-- (see this section's header): v_excluded_types lists the source types of every method the design
+-- left out, and both the `srcs` CTE (evidence collection) and the `cov` lateral (coverage
+-- denominator) skip them. Everything else — scoring rules, roll-up, statuses — is unchanged. The
+-- audit entry additionally records which types were excluded, so a reviewer can tell "not assessed
+-- by design" apart from "no evidence" after the fact.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+  v_excluded_types text[];
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Source types whose assessment method is not part of this candidate's design (see the Section 50
+  -- header): dropped from both evidence collection and the coverage denominator below.
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+    where s.source_type <> all(v_excluded_types)
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight / count(*) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id and s.source_type <> all(v_excluded_types)
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count, 'excludedByDesign', to_jsonb(v_excluded_types)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- ---- Default blueprint per job role (real, editable configuration — see the header note) ----
+-- Only roles with no blueprint at all get one, so re-running this file never overrides an admin's
+-- own blueprints (it would only re-add one for a role whose blueprints were all deleted).
+insert into comp_assessment_blueprints (
+  job_role, title, description, is_default, active,
+  includes_technical, includes_personality, includes_structured_interview, includes_experience
+)
+select
+  j.job_role,
+  'الگوی استاندارد — ' || coalesce(nullif(j.label_fa, ''), j.job_role),
+  'الگوی پیش‌فرض ارزیابی این شغل: آزمون شخصیت و رفتاری (شامل سؤالات موقعیتی)، مصاحبه ساختاریافته و سوابق و تجربه'
+    || case when exists (
+      select 1 from comp_question_bank q where q.job_role = j.job_role and q.active and q.approval_status = 'APPROVED'
+    ) then '، به‌همراه آزمون فنی تخصصی.' else '؛ آزمون فنی تا افزودن سؤال تأییدشده به بانک این شغل غیرفعال است.' end,
+  true, true,
+  exists (select 1 from comp_question_bank q where q.job_role = j.job_role and q.active and q.approval_status = 'APPROVED'),
+  true, true, true
+from comp_job_role_config j
+where not exists (select 1 from comp_assessment_blueprints b where b.job_role = j.job_role);

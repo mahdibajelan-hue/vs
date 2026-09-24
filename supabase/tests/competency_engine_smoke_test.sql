@@ -1,5 +1,5 @@
 -- Enterprise Competency Assessment Engine — Evidence Engine + Competency Engine smoke test
--- (schema.sql Section 49).
+-- (schema.sql Section 49, plus Section 50's exam-design exclusion).
 --
 -- Same convention as personality_engine_smoke_test.sql: a self-contained, re-runnable DO block that
 -- drives the real comp_compute_competency_profile RPC end-to-end against throwaway rows and asserts on
@@ -33,6 +33,17 @@
 --   __smoke_gap__   (req 4, NOT critical) EXPERIENCE/years_total w1 (40) → level 2.6 → GAP, gap 1.4 → LOW
 --   __smoke_empty__ (req 3, critical) STRUCTURED_INTERVIEW w1 + EXPERIENCE/years_pipeline w1 (null)
 --     → no evidence at all → INSUFFICIENT_EVIDENCE / NONE / score, level and gap all null — never a gap.
+--
+-- The candidate is first created with EVERY method in its exam design (Section 50), so all of the
+-- above is computed with nothing excluded. Then the design is narrowed and recomputed:
+--   technical + structured interview OFF (personality/experience still on):
+--     __smoke_tech__  only EXPERIENCE/years_total (40) and EXPERIENCE/certifications (none) remain in
+--                     play → score 40 → level 2.6 → CRITICAL_GAP; coverage 1/2 = 0.5 (NOT 1/6 — the two
+--                     excluded methods are "not assessed by design", not missing evidence); 1 item → LOW
+--     __smoke_behav__ INTERVIEW w1 leaves the denominator → coverage (2+1)/3 = 1 (was 0.75), still 80 / MEDIUM
+--     __smoke_empty__ only EXPERIENCE/years_pipeline (null) remains → still INSUFFICIENT_EVIDENCE / NONE / cov 0
+--     and no TECHNICAL_CATEGORY / STRUCTURED_INTERVIEW evidence row may exist at all.
+--   every method OFF: every competency → INSUFFICIENT_EVIDENCE / NONE, coverage 0, zero evidence rows.
 
 do $$
 declare
@@ -124,7 +135,8 @@ begin
   -- ---- Throwaway candidate + evidence ----
   insert into comp_assessments (
     job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by,
-    selected_question_ids, answers, years_experience_total, years_experience_pipeline, certifications
+    selected_question_ids, answers, years_experience_total, years_experience_pipeline, certifications,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience
   ) values (
     v_role, '__smoke_test_competency__', 'test', '0000000009', '09120000009', 'smoke-competency@example.com', v_admin,
     jsonb_build_array(v_q1, v_q2, v_q3),
@@ -132,7 +144,8 @@ begin
       v_q1::text, jsonb_build_object('score', 1, 'note', 'lead note'),
       v_q2::text, jsonb_build_object('score', 2, 'note', '', 'candidateAnswer', 'smoke answer')
     ),
-    6, null, '[{"title": "  ", "issuer": ""}]'::jsonb
+    6, null, '[{"title": "  ", "issuer": ""}]'::jsonb,
+    true, true, true, true
   ) returning id into v_comp_id;
 
   insert into comp_panelist_scores (assessment_id, panelist_id, answers, submitted_at) values
@@ -267,6 +280,51 @@ begin
   if not exists (select 1 from comp_audit_log where action = 'COMPETENCY_PROFILE_COMPUTED' and entity_id = v_comp_id and actor = v_admin
                  and (new_value ->> 'competencies')::int = 5) then
     raise exception 'ASSERTION FAILED: expected a COMPETENCY_PROFILE_COMPUTED audit entry attributed to the caller';
+  end if;
+
+  -- ---- Exam design exclusion (Section 50) ----
+  update comp_assessments set needs_technical_assessment = false, needs_structured_interview = false where id = v_comp_id;
+  perform comp_compute_competency_profile(v_comp_id);
+
+  if exists (select 1 from comp_competency_evidence where assessment_id = v_comp_id
+             and source_type in ('TECHNICAL_CATEGORY', 'STRUCTURED_INTERVIEW')) then
+    raise exception 'ASSERTION FAILED (design): technical/interview evidence collected although neither method is in the exam design';
+  end if;
+
+  select * into v_row from comp_competency_scores where assessment_id = v_comp_id and competency_id = v_c_tech;
+  if v_row.actual_score <> 40 or v_row.actual_level <> 2.6 or v_row.status <> 'CRITICAL_GAP' or v_row.coverage <> 0.5
+     or v_row.evidence_count <> 1 or v_row.confidence <> 'LOW' then
+    raise exception 'ASSERTION FAILED (design/tech): expected 40 / 2.6 / CRITICAL_GAP / cov 0.5 (excluded methods out of the denominator) / 1 item / LOW, got % / % / % / % / % / %',
+      v_row.actual_score, v_row.actual_level, v_row.status, v_row.coverage, v_row.evidence_count, v_row.confidence;
+  end if;
+
+  select * into v_row from comp_competency_scores where assessment_id = v_comp_id and competency_id = v_c_behav;
+  if v_row.actual_score <> 80 or v_row.coverage <> 1 or v_row.confidence <> 'MEDIUM' or v_row.status <> 'EXCEEDS' then
+    raise exception 'ASSERTION FAILED (design/behav): an interview left out by design must not count against coverage — expected 80 / cov 1 / MEDIUM / EXCEEDS, got % / % / % / %',
+      v_row.actual_score, v_row.coverage, v_row.confidence, v_row.status;
+  end if;
+
+  select * into v_row from comp_competency_scores where assessment_id = v_comp_id and competency_id = v_c_empty;
+  if v_row.status <> 'INSUFFICIENT_EVIDENCE' or v_row.confidence <> 'NONE' or v_row.coverage <> 0 or v_row.gap is not null then
+    raise exception 'ASSERTION FAILED (design/empty): expected INSUFFICIENT_EVIDENCE / NONE / cov 0 / null gap, got % / % / % / %',
+      v_row.status, v_row.confidence, v_row.coverage, v_row.gap;
+  end if;
+
+  if not exists (select 1 from comp_audit_log where action = 'COMPETENCY_PROFILE_COMPUTED' and entity_id = v_comp_id
+                 and new_value -> 'excludedByDesign' ? 'TECHNICAL_CATEGORY' and new_value -> 'excludedByDesign' ? 'STRUCTURED_INTERVIEW'
+                 and not (new_value -> 'excludedByDesign' ? 'SJT')) then
+    raise exception 'ASSERTION FAILED (design): audit entry does not record exactly which methods were excluded by design';
+  end if;
+
+  update comp_assessments set needs_personality_assessment = false, includes_experience = false where id = v_comp_id;
+  perform comp_compute_competency_profile(v_comp_id);
+
+  select count(*) into v_n from comp_competency_evidence where assessment_id = v_comp_id;
+  select count(*) into v_n2 from comp_competency_scores
+  where assessment_id = v_comp_id and status = 'INSUFFICIENT_EVIDENCE' and confidence = 'NONE' and coverage = 0
+    and actual_score is null and gap is null;
+  if v_n <> 0 or v_n2 <> 5 then
+    raise exception 'ASSERTION FAILED (design/all-off): expected 0 evidence rows and 5 INSUFFICIENT_EVIDENCE/NONE competencies, got % / %', v_n, v_n2;
   end if;
 
   raise notice 'competency_engine_smoke_test: ALL ASSERTIONS PASSED';
