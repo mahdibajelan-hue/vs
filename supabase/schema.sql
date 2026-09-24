@@ -7173,3 +7173,728 @@ returns table (
 $$ language sql security definer stable;
 
 grant execute on function personality_public_results_get(uuid) to anon, authenticated;
+
+-- ============================================================================
+-- Section 49: Enterprise Competency Assessment Engine — Phase 2: Evidence
+-- Engine + Competency Engine.
+--
+-- Core principle: every assessment result is EVIDENCE, and every competency
+-- score must be explainable by — and traceable back to — the exact evidence
+-- items that produced it. Nothing here re-scores anything: the technical
+-- question scores, personality trait/dimension scores, SJT option scores,
+-- the candidate's recorded experience and the interview panel's direct
+-- ratings stay owned by the modules that already produce them. This section
+-- only (1) configures WHICH of those sources feed WHICH competency and with
+-- what weight (comp_competency_evidence_sources), (2) materializes one
+-- evidence row per contributing item, with its normalized 0-100 score, its
+-- effective weight and a raw drill-down payload (comp_competency_evidence),
+-- and (3) rolls those up into one explainable score per required competency
+-- (comp_competency_scores), with explicit coverage/confidence and a status.
+--
+-- Lack of evidence is never treated as lack of competency: a competency with
+-- no evidence gets actual_score/actual_level/gap = null, confidence NONE and
+-- status INSUFFICIENT_EVIDENCE — never GAP/CRITICAL_GAP. The same rule
+-- applies at item level: an unscored question, an absent experience field or
+-- an empty certification list produce NO evidence row, not a zero.
+--
+-- Evidence rows are derived data, recomputed wholesale by
+-- comp_compute_competency_profile (SECURITY DEFINER) — there is deliberately
+-- no insert/update RLS policy on the two output tables, so the only way a
+-- row can exist is via the audited compute function. comp_interview_ratings
+-- is the one new PRIMARY evidence table: structured-interview ratings of a
+-- competency made directly by a panel member (its entry UI is the next
+-- phase; the table exists now so the engine already reads it).
+--
+-- The default competency library, evidence-source wiring, the 10 new EPC
+-- pipeline job roles and every role's competency requirements seeded at the
+-- end of this section are REAL, admin-editable configuration (Settings →
+-- «مدل شایستگی و مشاغل»), not mock data — they exist so the engine produces
+-- meaningful profiles immediately. Seeded with `on conflict do nothing`, so
+-- re-running this file never overwrites an admin's later edits (it would
+-- only re-add a seeded row an admin had deleted).
+-- ============================================================================
+
+create table if not exists comp_competency_evidence_sources (
+  id uuid primary key default gen_random_uuid(),
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  source_type text not null check (source_type in (
+    'TECHNICAL_CATEGORY', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'EXPERIENCE', 'STRUCTURED_INTERVIEW'
+  )),
+  -- TECHNICAL_CATEGORY: comp_question_bank.category · PERSONALITY_DIMENSION/SJT: behavioral
+  -- dimension key · PERSONALITY_TRAIT: trait key · EXPERIENCE: one of the four metric keys below ·
+  -- STRUCTURED_INTERVIEW: always '' (a direct interview rating of this very competency).
+  source_ref text not null default '',
+  weight numeric not null default 1 check (weight > 0),
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (competency_id, source_type, source_ref),
+  check (source_type <> 'EXPERIENCE' or source_ref in ('years_total', 'years_pipeline', 'certifications', 'education')),
+  check (source_type <> 'STRUCTURED_INTERVIEW' or source_ref = ''),
+  check (source_type = 'STRUCTURED_INTERVIEW' or source_ref <> '')
+);
+
+create table if not exists comp_interview_ratings (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  rater_id uuid not null default auth.uid() references profiles (id),
+  rating numeric not null check (rating between 1 and 5),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (assessment_id, competency_id, rater_id)
+);
+create index if not exists idx_comp_interview_ratings_competency on comp_interview_ratings (competency_id);
+
+create table if not exists comp_competency_evidence (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  source_type text not null,
+  source_ref text not null default '',
+  -- The exact contributing item: question id / personality question id / dimension-score row id /
+  -- experience metric key / rater id — what makes every score traceable.
+  source_item_id text not null,
+  source_label text not null default '',
+  normalized_score numeric not null check (normalized_score between 0 and 100),
+  -- The configured source weight split evenly across that source's items, so a source contributes
+  -- its configured weight in total regardless of how many items it happened to produce.
+  effective_weight numeric not null check (effective_weight > 0),
+  raw_value jsonb not null default '{}'::jsonb,
+  computed_at timestamptz not null default now()
+);
+create index if not exists idx_comp_competency_evidence_assessment on comp_competency_evidence (assessment_id, competency_id);
+create index if not exists idx_comp_competency_evidence_competency on comp_competency_evidence (competency_id);
+
+create table if not exists comp_competency_scores (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  required_level numeric not null,
+  level_count int not null,
+  actual_score numeric,
+  actual_level numeric,
+  -- required_level − actual_level: positive = shortfall. Null whenever there is no evidence.
+  gap numeric,
+  is_critical boolean not null default false,
+  weight numeric not null default 1,
+  evidence_count int not null default 0,
+  source_types_covered int not null default 0,
+  coverage numeric not null default 0 check (coverage between 0 and 1),
+  confidence text not null check (confidence in ('NONE', 'LOW', 'MEDIUM', 'HIGH')),
+  status text not null check (status in ('INSUFFICIENT_EVIDENCE', 'EXCEEDS', 'MEETS', 'GAP', 'CRITICAL_GAP')),
+  computed_at timestamptz not null default now(),
+  unique (assessment_id, competency_id)
+);
+create index if not exists idx_comp_competency_scores_competency on comp_competency_scores (competency_id);
+
+alter table comp_competency_evidence_sources enable row level security;
+alter table comp_interview_ratings enable row level security;
+alter table comp_competency_evidence enable row level security;
+alter table comp_competency_scores enable row level security;
+
+-- Evidence-source wiring is model configuration: same "any authenticated user reads, admin-or-
+-- assessment-designer writes" policy as comp_competencies/comp_job_competency_requirements (Section 47).
+drop policy if exists "comp_competency_evidence_sources_select_authenticated" on comp_competency_evidence_sources;
+create policy "comp_competency_evidence_sources_select_authenticated" on comp_competency_evidence_sources
+  for select using (auth.uid() is not null);
+drop policy if exists "comp_competency_evidence_sources_write_admin_or_designer" on comp_competency_evidence_sources;
+create policy "comp_competency_evidence_sources_write_admin_or_designer" on comp_competency_evidence_sources
+  for all using (comp_is_module_admin() or comp_is_assessment_designer())
+  with check (comp_is_module_admin() or comp_is_assessment_designer());
+
+-- Derived per-candidate outputs: readable by whoever can access the candidate's assessment, and
+-- intentionally NOT writable by anyone directly — only comp_compute_competency_profile writes them.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competency_evidence', 'comp_competency_scores']
+  loop
+    execute format('drop policy if exists "%1$s_select_access" on %1$s', t);
+    execute format('create policy "%1$s_select_access" on %1$s for select using (comp_can_access_assessment(assessment_id))', t);
+  end loop;
+end $$;
+
+-- A rater can see every rating on an assessment they can access, but only ever writes their own.
+drop policy if exists "comp_interview_ratings_select_access" on comp_interview_ratings;
+create policy "comp_interview_ratings_select_access" on comp_interview_ratings
+  for select using (comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_insert_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_insert_own" on comp_interview_ratings
+  for insert with check (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_update_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_update_own" on comp_interview_ratings
+  for update using (rater_id = auth.uid() and comp_can_access_assessment(assessment_id))
+  with check (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_delete_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_delete_own" on comp_interview_ratings
+  for delete using (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competency_evidence_sources', 'comp_interview_ratings']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- Recomputes one candidate's full competency profile from scratch. Scoring rules:
+--   * TECHNICAL_CATEGORY — one item per selected question of that bank category that has an
+--     official score. The official score mirrors resolveOfficialAnswers
+--     (src/modules/competency/lib/roleCompetencyModel.ts) exactly: the rounded average of every
+--     SUBMITTED panelist's numeric score for that question, falling back to the lead's own
+--     comp_assessments.answers entry when no submitted panelist scored it. normalized = score/5×100.
+--     Legacy Project Manager assessments (fixed in-code rubric, empty selected_question_ids) simply
+--     yield no technical evidence — by design, not an error.
+--   * PERSONALITY_TRAIT / PERSONALITY_DIMENSION — the candidate's scored personality assessment's
+--     TRAIT / BEHAVIORAL_DIMENSION row for that key; normalized_score used as-is (already 0-100).
+--   * SJT — one item per answered SJT question (of that same scored personality assessment) whose
+--     CHOSEN option maps to that dimension key; normalized = option score/5×100.
+--   * EXPERIENCE — years_total: min(years/15,1)×100 · years_pipeline: min(years/10,1)×100 ·
+--     certifications: min(count/5,1)×100 · education: min(count/3,1)×100. Only non-blank entries
+--     count; a null value or an empty list is NO evidence, never a zero.
+--   * STRUCTURED_INTERVIEW — one item per rater: (rating−1)/4×100.
+--   effective_weight = source weight / number of items that source produced for that competency.
+-- Roll-up per required (active) competency: actual_score = Σ(normalized×w)/Σw; coverage = Σ weight of
+-- sources with ≥1 item / Σ weight of all configured sources; actual_level = round(1 + score/100 ×
+-- (levels−1), 1); gap = required − actual_level; confidence NONE/LOW/MEDIUM/HIGH and status
+-- INSUFFICIENT_EVIDENCE/EXCEEDS/MEETS/GAP/CRITICAL_GAP as documented inline below.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight / count(*) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- ---- Default competency library (real, editable configuration — see the header note) ----
+
+insert into comp_competencies (key, label_fa, description, domain) values
+  ('technical_knowledge', 'دانش فنی و تخصصی', 'تسلط بر استانداردها، کدها، مشخصات فنی و اصول مهندسی حوزه تخصصی (خطوط لوله، جوش، پایپینگ، پوشش، عمران و ...).', 'TECHNICAL'),
+  ('practical_experience', 'تجربه عملی و اجرایی', 'به‌کارگیری دانش در شرایط واقعی کارگاه و پروژه‌های EPC نفت و گاز، مبتنی بر سوابق و مثال‌های مشخص.', 'TECHNICAL'),
+  ('problem_solving', 'حل مسئله و تفکر تحلیلی', 'شناسایی علت ریشه‌ای مشکلات فنی و اجرایی، تحلیل گزینه‌ها و ارائه راه‌حل عملی.', 'HYBRID'),
+  ('professional_judgment', 'قضاوت حرفه‌ای و تصمیم‌گیری', 'تصمیم‌گیری درست و به‌موقع در موقعیت‌های مبهم یا پرفشار و تشخیص زمان ارجاع موضوع.', 'HYBRID'),
+  ('hse_awareness', 'آگاهی و تعهد HSE', 'شناخت و رعایت الزامات ایمنی، بهداشت و محیط‌زیست و حساسیت نسبت به ریسک‌های کارگاهی.', 'HYBRID'),
+  ('quality_compliance', 'کیفیت و انطباق با الزامات', 'پایبندی به ITP، رویه‌ها و مشخصات فنی، دقت در بازرسی و مستندسازی کیفی.', 'HYBRID'),
+  ('planning_control', 'برنامه‌ریزی و کنترل پروژه', 'برنامه‌ریزی، پایش پیشرفت، کنترل زمان و منابع و گزارش‌دهی به‌موقع انحرافات.', 'HYBRID'),
+  ('leadership', 'رهبری و مدیریت تیم', 'هدایت، انگیزش و هماهنگی تیم‌های اجرایی و پیمانکاران و پذیرش مسئولیت نتیجه.', 'BEHAVIORAL'),
+  ('communication', 'ارتباطات و گزارش‌دهی', 'انتقال شفاف و مؤثر اطلاعات به کارفرما، مشاور، پیمانکار و تیم، به‌صورت شفاهی و مکتوب.', 'BEHAVIORAL'),
+  ('teamwork_collaboration', 'کار تیمی و همکاری', 'همکاری سازنده میان‌رشته‌ای، مدیریت اختلاف‌نظر و حمایت از اهداف مشترک تیم.', 'BEHAVIORAL'),
+  ('accountability_reliability', 'مسئولیت‌پذیری و قابلیت اتکا', 'پاسخگویی در قبال تعهدات، درستکاری و پیگیری کارها تا حصول نتیجه.', 'BEHAVIORAL'),
+  ('commercial_contract_awareness', 'آگاهی قراردادی و تجاری', 'درک مفاد قرارداد، ادعاها، تغییرات (Variation) و پیامدهای مالی تصمیمات اجرایی.', 'HYBRID')
+on conflict (key) do nothing;
+
+insert into comp_competency_evidence_sources (competency_id, source_type, source_ref, weight)
+select c.id, v.source_type, v.source_ref, v.weight
+from (values
+  ('technical_knowledge', 'TECHNICAL_CATEGORY', 'TECHNICAL', 3),
+  ('technical_knowledge', 'TECHNICAL_CATEGORY', 'GENERAL', 1),
+  ('technical_knowledge', 'EXPERIENCE', 'certifications', 1),
+  ('technical_knowledge', 'EXPERIENCE', 'education', 0.5),
+  ('technical_knowledge', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('practical_experience', 'TECHNICAL_CATEGORY', 'EXPERIENCE_BASED', 2),
+  ('practical_experience', 'EXPERIENCE', 'years_total', 1),
+  ('practical_experience', 'EXPERIENCE', 'years_pipeline', 1.5),
+  ('practical_experience', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('problem_solving', 'TECHNICAL_CATEGORY', 'PROBLEM_SOLVING', 2),
+  ('problem_solving', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('problem_solving', 'PERSONALITY_DIMENSION', 'ANALYTICAL_THINKING', 1),
+  ('problem_solving', 'SJT', 'ANALYTICAL_THINKING', 1),
+  ('problem_solving', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('professional_judgment', 'TECHNICAL_CATEGORY', 'SCENARIO', 2),
+  ('professional_judgment', 'TECHNICAL_CATEGORY', 'JUDGMENT', 1),
+  ('professional_judgment', 'SJT', 'DECISION_QUALITY', 1),
+  ('professional_judgment', 'PERSONALITY_DIMENSION', 'ESCALATION_JUDGMENT', 1),
+  ('professional_judgment', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('hse_awareness', 'TECHNICAL_CATEGORY', 'HSE', 2),
+  ('hse_awareness', 'PERSONALITY_DIMENSION', 'SAFETY_ORIENTATION', 1.5),
+  ('hse_awareness', 'SJT', 'SAFETY_ORIENTATION', 1),
+  ('hse_awareness', 'PERSONALITY_DIMENSION', 'RISK_AWARENESS', 1),
+  ('hse_awareness', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'DETAIL_ORIENTATION', 1),
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'RULE_ORIENTATION', 1),
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'DOCUMENTATION_DISCIPLINE', 1),
+  ('quality_compliance', 'TECHNICAL_CATEGORY', 'TECHNICAL', 1),
+  ('quality_compliance', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('planning_control', 'PERSONALITY_TRAIT', 'conscientiousness', 1),
+  ('planning_control', 'PERSONALITY_DIMENSION', 'DISCIPLINE', 1),
+  ('planning_control', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('planning_control', 'EXPERIENCE', 'years_total', 0.5),
+  ('planning_control', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('leadership', 'PERSONALITY_DIMENSION', 'LEADERSHIP', 2),
+  ('leadership', 'SJT', 'LEADERSHIP', 1),
+  ('leadership', 'PERSONALITY_TRAIT', 'extraversion', 0.5),
+  ('leadership', 'PERSONALITY_DIMENSION', 'CONFLICT_MANAGEMENT', 1),
+  ('leadership', 'STRUCTURED_INTERVIEW', '', 2),
+
+  ('communication', 'PERSONALITY_DIMENSION', 'COMMUNICATION', 2),
+  ('communication', 'SJT', 'COMMUNICATION', 1),
+  ('communication', 'PERSONALITY_DIMENSION', 'STAKEHOLDER_ORIENTATION', 1),
+  ('communication', 'STRUCTURED_INTERVIEW', '', 2),
+
+  ('teamwork_collaboration', 'PERSONALITY_DIMENSION', 'TEAMWORK', 2),
+  ('teamwork_collaboration', 'PERSONALITY_TRAIT', 'agreeableness', 1),
+  ('teamwork_collaboration', 'SJT', 'CONFLICT_MANAGEMENT', 1),
+  ('teamwork_collaboration', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('accountability_reliability', 'PERSONALITY_DIMENSION', 'ACCOUNTABILITY', 2),
+  ('accountability_reliability', 'PERSONALITY_DIMENSION', 'OWNERSHIP', 1),
+  ('accountability_reliability', 'SJT', 'INTEGRITY_ORIENTATION', 1),
+  ('accountability_reliability', 'PERSONALITY_TRAIT', 'conscientiousness', 1),
+  ('accountability_reliability', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('commercial_contract_awareness', 'PERSONALITY_DIMENSION', 'COMMERCIAL_AWARENESS', 1.5),
+  ('commercial_contract_awareness', 'SJT', 'COMMERCIAL_AWARENESS', 1),
+  ('commercial_contract_awareness', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('commercial_contract_awareness', 'STRUCTURED_INTERVIEW', '', 1.5)
+) as v(competency_key, source_type, source_ref, weight)
+join comp_competencies c on c.key = v.competency_key
+on conflict (competency_id, source_type, source_ref) do nothing;
+
+-- The 10 EPC pipeline roles not yet in the catalog; the 12 pre-existing rows are left untouched.
+insert into comp_job_role_config (job_role, label_fa, description, sort_order) values
+  ('project_director', 'مدیر طرح', 'مسئول کلان پروژه/طرح EPC، هدایت مدیران پروژه و تعامل با کارفرما در سطح راهبردی.', 13),
+  ('project_control_manager', 'مدیر کنترل پروژه', 'هدایت واحد برنامه‌ریزی و کنترل پروژه، پایش زمان، هزینه و پیشرفت و گزارش به مدیریت.', 14),
+  ('planning_engineer', 'مهندس برنامه‌ریزی', 'تهیه و به‌روزرسانی برنامه زمان‌بندی، محاسبه پیشرفت و تحلیل انحرافات.', 15),
+  ('supervision_manager', 'مدیر نظارت', 'هدایت تیم نظارت کارگاهی و اطمینان از انطباق اجرا با مشخصات فنی، کیفیت و HSE.', 16),
+  ('pipeline_supervisor', 'سرپرست خط لوله', 'سرپرستی عملیات اجرایی خط لوله (ترانشه، لوله‌گذاری، جوشکاری، بستر و خاکریزی).', 17),
+  ('welding_supervisor', 'سرپرست جوشکاری', 'سرپرستی تیم‌های جوشکاری، کنترل WPS/PQR و کیفیت جوش در کارگاه.', 18),
+  ('mechanical_piping_supervisor', 'سرپرست مکانیک/پایپینگ', 'سرپرستی نصب تجهیزات مکانیکی و پایپینگ ایستگاه‌ها و تأسیسات.', 19),
+  ('civil_supervisor', 'سرپرست عمران', 'سرپرستی عملیات عمرانی (فونداسیون، سازه، راه دسترسی و ابنیه) در کارگاه.', 20),
+  ('coating_supervisor', 'سرپرست پوشش', 'سرپرستی آماده‌سازی سطح و اجرای پوشش لوله و سرجوش‌ها مطابق مشخصات فنی.', 21),
+  ('contract_commercial_manager', 'مدیر قراردادها و امور بازرگانی', 'مدیریت قراردادها، الحاقیه‌ها، ادعاها و امور تجاری پروژه.', 22)
+on conflict (job_role) do nothing;
+
+insert into comp_job_competency_requirements (job_role, competency_id, required_level, is_critical, weight)
+select v.job_role, c.id, v.required_level, v.is_critical, v.weight
+from (values
+  ('project_manager', 'leadership', 4, true, 2),
+  ('project_manager', 'planning_control', 4, true, 1.5),
+  ('project_manager', 'professional_judgment', 4, false, 1.5),
+  ('project_manager', 'communication', 4, false, 1),
+  ('project_manager', 'accountability_reliability', 4, false, 1),
+  ('project_manager', 'commercial_contract_awareness', 3, false, 1),
+  ('project_manager', 'hse_awareness', 3, false, 1),
+  ('project_manager', 'problem_solving', 3, false, 1),
+  ('project_manager', 'practical_experience', 3, false, 1),
+
+  ('welding_inspector', 'technical_knowledge', 4, true, 2),
+  ('welding_inspector', 'quality_compliance', 4, true, 1.5),
+  ('welding_inspector', 'practical_experience', 3, false, 1.5),
+  ('welding_inspector', 'professional_judgment', 3, false, 1),
+  ('welding_inspector', 'hse_awareness', 3, false, 1),
+  ('welding_inspector', 'accountability_reliability', 3, false, 1),
+  ('welding_inspector', 'communication', 2, false, 0.5),
+
+  ('mechanical_piping_inspector', 'technical_knowledge', 4, true, 2),
+  ('mechanical_piping_inspector', 'quality_compliance', 4, true, 1.5),
+  ('mechanical_piping_inspector', 'practical_experience', 3, false, 1.5),
+  ('mechanical_piping_inspector', 'problem_solving', 3, false, 1),
+  ('mechanical_piping_inspector', 'hse_awareness', 3, false, 1),
+  ('mechanical_piping_inspector', 'accountability_reliability', 3, false, 1),
+  ('mechanical_piping_inspector', 'communication', 2, false, 0.5),
+
+  ('pipeline_inspector', 'technical_knowledge', 4, true, 2),
+  ('pipeline_inspector', 'quality_compliance', 4, true, 1.5),
+  ('pipeline_inspector', 'practical_experience', 3, false, 1.5),
+  ('pipeline_inspector', 'professional_judgment', 3, false, 1),
+  ('pipeline_inspector', 'hse_awareness', 3, false, 1),
+  ('pipeline_inspector', 'accountability_reliability', 3, false, 1),
+  ('pipeline_inspector', 'communication', 2, false, 0.5),
+
+  ('coating_cp_inspector', 'technical_knowledge', 4, true, 2),
+  ('coating_cp_inspector', 'quality_compliance', 4, true, 1.5),
+  ('coating_cp_inspector', 'practical_experience', 3, false, 1.5),
+  ('coating_cp_inspector', 'problem_solving', 3, false, 1),
+  ('coating_cp_inspector', 'hse_awareness', 3, false, 1),
+  ('coating_cp_inspector', 'accountability_reliability', 3, false, 1),
+
+  ('radiography_interpreter', 'technical_knowledge', 4, true, 2),
+  ('radiography_interpreter', 'quality_compliance', 4, true, 1.5),
+  ('radiography_interpreter', 'professional_judgment', 4, false, 1.5),
+  ('radiography_interpreter', 'practical_experience', 3, false, 1),
+  ('radiography_interpreter', 'hse_awareness', 3, false, 1),
+  ('radiography_interpreter', 'accountability_reliability', 3, false, 1),
+  ('radiography_interpreter', 'communication', 2, false, 0.5),
+
+  ('civil_engineer', 'technical_knowledge', 3, true, 2),
+  ('civil_engineer', 'practical_experience', 3, false, 1),
+  ('civil_engineer', 'problem_solving', 3, false, 1),
+  ('civil_engineer', 'quality_compliance', 3, false, 1),
+  ('civil_engineer', 'hse_awareness', 3, false, 1),
+  ('civil_engineer', 'planning_control', 2, false, 1),
+  ('civil_engineer', 'teamwork_collaboration', 3, false, 1),
+
+  ('project_control_specialist', 'planning_control', 4, true, 2),
+  ('project_control_specialist', 'technical_knowledge', 3, false, 1),
+  ('project_control_specialist', 'problem_solving', 3, false, 1),
+  ('project_control_specialist', 'communication', 3, false, 1),
+  ('project_control_specialist', 'commercial_contract_awareness', 2, false, 1),
+  ('project_control_specialist', 'accountability_reliability', 3, false, 1),
+  ('project_control_specialist', 'teamwork_collaboration', 3, false, 1),
+
+  ('hse_specialist', 'hse_awareness', 4, true, 2),
+  ('hse_specialist', 'professional_judgment', 3, false, 1.5),
+  ('hse_specialist', 'technical_knowledge', 3, false, 1),
+  ('hse_specialist', 'practical_experience', 3, false, 1),
+  ('hse_specialist', 'communication', 3, false, 1),
+  ('hse_specialist', 'accountability_reliability', 4, false, 1),
+  ('hse_specialist', 'leadership', 2, false, 0.5),
+
+  ('contracts_specialist', 'commercial_contract_awareness', 4, true, 2),
+  ('contracts_specialist', 'communication', 3, false, 1),
+  ('contracts_specialist', 'professional_judgment', 3, false, 1),
+  ('contracts_specialist', 'problem_solving', 3, false, 1),
+  ('contracts_specialist', 'accountability_reliability', 3, false, 1),
+  ('contracts_specialist', 'planning_control', 2, false, 1),
+  ('contracts_specialist', 'technical_knowledge', 2, false, 0.5),
+
+  ('site_supervisor', 'hse_awareness', 4, true, 2),
+  ('site_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('site_supervisor', 'leadership', 3, false, 1.5),
+  ('site_supervisor', 'practical_experience', 3, false, 1.5),
+  ('site_supervisor', 'planning_control', 3, false, 1),
+  ('site_supervisor', 'teamwork_collaboration', 3, false, 1),
+  ('site_supervisor', 'communication', 3, false, 1),
+  ('site_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('inspection_body_supervisor', 'technical_knowledge', 4, true, 2),
+  ('inspection_body_supervisor', 'quality_compliance', 4, true, 1.5),
+  ('inspection_body_supervisor', 'hse_awareness', 3, true, 1),
+  ('inspection_body_supervisor', 'professional_judgment', 4, false, 1.5),
+  ('inspection_body_supervisor', 'leadership', 3, false, 1),
+  ('inspection_body_supervisor', 'communication', 3, false, 1),
+  ('inspection_body_supervisor', 'accountability_reliability', 4, false, 1),
+
+  ('project_director', 'leadership', 4, true, 2),
+  ('project_director', 'professional_judgment', 4, true, 1.5),
+  ('project_director', 'commercial_contract_awareness', 3, false, 1),
+  ('project_director', 'planning_control', 3, false, 1),
+  ('project_director', 'communication', 4, false, 1),
+  ('project_director', 'hse_awareness', 3, false, 1),
+  ('project_director', 'accountability_reliability', 4, false, 1),
+  ('project_director', 'problem_solving', 3, false, 1),
+
+  ('project_control_manager', 'planning_control', 4, true, 2),
+  ('project_control_manager', 'leadership', 3, true, 1.5),
+  ('project_control_manager', 'commercial_contract_awareness', 3, false, 1),
+  ('project_control_manager', 'communication', 3, false, 1),
+  ('project_control_manager', 'problem_solving', 3, false, 1),
+  ('project_control_manager', 'professional_judgment', 3, false, 1),
+  ('project_control_manager', 'accountability_reliability', 3, false, 1),
+
+  ('planning_engineer', 'planning_control', 4, true, 2),
+  ('planning_engineer', 'technical_knowledge', 3, false, 1),
+  ('planning_engineer', 'problem_solving', 3, false, 1),
+  ('planning_engineer', 'communication', 2, false, 1),
+  ('planning_engineer', 'teamwork_collaboration', 3, false, 1),
+  ('planning_engineer', 'accountability_reliability', 3, false, 1),
+
+  ('supervision_manager', 'leadership', 4, true, 2),
+  ('supervision_manager', 'technical_knowledge', 3, true, 1.5),
+  ('supervision_manager', 'quality_compliance', 4, true, 1.5),
+  ('supervision_manager', 'hse_awareness', 3, true, 1),
+  ('supervision_manager', 'professional_judgment', 4, false, 1.5),
+  ('supervision_manager', 'communication', 3, false, 1),
+  ('supervision_manager', 'accountability_reliability', 3, false, 1),
+  ('supervision_manager', 'commercial_contract_awareness', 2, false, 0.5),
+
+  ('pipeline_supervisor', 'hse_awareness', 4, true, 2),
+  ('pipeline_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('pipeline_supervisor', 'practical_experience', 4, false, 1.5),
+  ('pipeline_supervisor', 'leadership', 3, false, 1),
+  ('pipeline_supervisor', 'quality_compliance', 3, false, 1),
+  ('pipeline_supervisor', 'teamwork_collaboration', 3, false, 1),
+  ('pipeline_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('welding_supervisor', 'technical_knowledge', 4, true, 2),
+  ('welding_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('welding_supervisor', 'practical_experience', 4, false, 1.5),
+  ('welding_supervisor', 'quality_compliance', 4, false, 1.5),
+  ('welding_supervisor', 'leadership', 3, false, 1),
+  ('welding_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('mechanical_piping_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('mechanical_piping_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('mechanical_piping_supervisor', 'practical_experience', 4, false, 1.5),
+  ('mechanical_piping_supervisor', 'quality_compliance', 3, false, 1),
+  ('mechanical_piping_supervisor', 'leadership', 3, false, 1),
+  ('mechanical_piping_supervisor', 'problem_solving', 3, false, 1),
+  ('mechanical_piping_supervisor', 'teamwork_collaboration', 3, false, 1),
+
+  ('civil_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('civil_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('civil_supervisor', 'practical_experience', 3, false, 1.5),
+  ('civil_supervisor', 'quality_compliance', 3, false, 1),
+  ('civil_supervisor', 'leadership', 3, false, 1),
+  ('civil_supervisor', 'planning_control', 2, false, 1),
+  ('civil_supervisor', 'teamwork_collaboration', 3, false, 1),
+
+  ('coating_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('coating_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('coating_supervisor', 'practical_experience', 3, false, 1.5),
+  ('coating_supervisor', 'quality_compliance', 4, false, 1.5),
+  ('coating_supervisor', 'leadership', 3, false, 1),
+  ('coating_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('contract_commercial_manager', 'commercial_contract_awareness', 4, true, 2),
+  ('contract_commercial_manager', 'leadership', 3, true, 1.5),
+  ('contract_commercial_manager', 'communication', 4, false, 1.5),
+  ('contract_commercial_manager', 'professional_judgment', 4, false, 1),
+  ('contract_commercial_manager', 'problem_solving', 3, false, 1),
+  ('contract_commercial_manager', 'accountability_reliability', 3, false, 1),
+  ('contract_commercial_manager', 'planning_control', 3, false, 1)
+) as v(job_role, competency_key, required_level, is_critical, weight)
+join comp_competencies c on c.key = v.competency_key
+join comp_job_role_config jrc on jrc.job_role = v.job_role
+on conflict (job_role, competency_id) do nothing;

@@ -1,14 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BookOpenCheck, ClipboardEdit, Eye, History, ListTree, Pencil, Plus, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { BookOpenCheck, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, Pencil, Plus, ShieldCheck, Trash2, UserPlus, X } from 'lucide-react'
 import { useCompetencyStore, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { sortedJobRoles } from '../lib/competencyData'
+import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import {
   COMP_COMPETENCY_DOMAIN_LABEL_FA,
+  COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA,
+  COMP_EVIDENCE_SOURCE_TYPES,
+  COMP_EXPERIENCE_METRICS,
+  COMP_EXPERIENCE_METRIC_LABEL_FA,
   QUESTION_TYPE_LABEL_FA,
   type CompCompetency,
   type CompCompetencyDomain,
+  type CompCompetencyEvidenceSource,
+  type CompEvidenceSourceType,
   type CompJobCompetencyRequirement,
   type CompJobRoleConfig,
   type CompProfileLite,
@@ -149,6 +156,10 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
   const upsertJobCompetencyRequirement = useCompetencyStore((s) => s.upsertJobCompetencyRequirement)
   const removeJobCompetencyRequirement = useCompetencyStore((s) => s.removeJobCompetencyRequirement)
 
+  const fetchEvidenceSources = useCompetencyStore((s) => s.fetchEvidenceSources)
+  const personalityTraits = usePersonalityStore((s) => s.traits)
+  const fetchPersonalityCatalog = usePersonalityStore((s) => s.fetchCatalog)
+
   const auditLog = useCompetencyStore((s) => s.auditLog)
   const fetchAuditLog = useCompetencyStore((s) => s.fetchAuditLog)
 
@@ -160,6 +171,8 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
     fetchJobRoleConfigs()
     fetchCompetencies()
     fetchJobCompetencyRequirements()
+    fetchEvidenceSources()
+    if (personalityTraits.length === 0) fetchPersonalityCatalog()
     fetchAuditLog()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -317,8 +330,8 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
  * be the frontend's hardcoded JOB_ROLE_LABEL_FA/JOB_ROLES), the unified competency catalog, and
  * which competencies each job role requires. Deliberately three tabs of one section rather than
  * three separate glass-panel cards — they're one coherent model, not three unrelated settings.
- * Evidence-source wiring (which assessments/items actually feed a competency's score) and any
- * scoring/gap-analysis UI are explicitly a later phase — this is catalog/model management only.
+ * Each competency row in the catalog tab also expands into its evidence-source wiring (schema.sql
+ * Section 49) — which assessment outputs feed that competency's score and with what weight.
  */
 function JobCompetencyModelSection({
   jobRoleConfigs,
@@ -562,6 +575,8 @@ function CompetencyCatalogTab({
   updateCompetency: (id: string, input: CompetencyCatalogInput) => Promise<void>
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const evidenceSources = useCompetencyStore((s) => s.evidenceSources)
   const [newKey, setNewKey] = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [newDescription, setNewDescription] = useState('')
@@ -637,42 +652,271 @@ function CompetencyCatalogTab({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((c) =>
-                editingId === c.id ? (
-                  <CompetencyEditRow
-                    key={c.id}
-                    competency={c}
-                    onCancel={() => setEditingId(null)}
-                    onSave={async (input) => {
-                      await updateCompetency(c.id, input)
-                      setEditingId(null)
-                    }}
-                  />
-                ) : (
-                  <tr key={c.id} className={`border-b border-white/5 last:border-0 ${!c.active ? 'opacity-50' : ''}`}>
-                    <td className="num p-2" dir="ltr">
-                      {c.key}
-                    </td>
-                    <td className="p-2 font-bold">{c.labelFa}</td>
-                    <td className="p-2 text-muted">{c.description || '—'}</td>
-                    <td className="p-2 text-center">{COMP_COMPETENCY_DOMAIN_LABEL_FA[c.domain]}</td>
-                    <td className="p-2 text-center">
-                      <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${c.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
-                        {c.active ? 'فعال' : 'غیرفعال'}
-                      </span>
-                    </td>
-                    <td className="p-2 text-center">
-                      <button onClick={() => setEditingId(c.id)} className="rounded-lg border border-white/10 p-1.5 text-secondary hover:bg-white/5">
-                        <Pencil size={12} />
-                      </button>
-                    </td>
-                  </tr>
-                ),
-              )}
+              {sorted.map((c) => {
+                const sourceCount = evidenceSources.filter((s) => s.competencyId === c.id).length
+                const expanded = expandedId === c.id
+                return (
+                  <Fragment key={c.id}>
+                    {editingId === c.id ? (
+                      <CompetencyEditRow
+                        competency={c}
+                        onCancel={() => setEditingId(null)}
+                        onSave={async (input) => {
+                          await updateCompetency(c.id, input)
+                          setEditingId(null)
+                        }}
+                      />
+                    ) : (
+                      <tr className={`border-b border-white/5 last:border-0 ${!c.active ? 'opacity-50' : ''}`}>
+                        <td className="num p-2" dir="ltr">
+                          {c.key}
+                        </td>
+                        <td className="p-2 font-bold">{c.labelFa}</td>
+                        <td className="p-2 text-muted">{c.description || '—'}</td>
+                        <td className="p-2 text-center">{COMP_COMPETENCY_DOMAIN_LABEL_FA[c.domain]}</td>
+                        <td className="p-2 text-center">
+                          <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${c.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
+                            {c.active ? 'فعال' : 'غیرفعال'}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setExpandedId(expanded ? null : c.id)}
+                              title="منابع شواهد این شایستگی"
+                              className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-bold transition-colors ${
+                                expanded ? 'border-sky-400/40 bg-sky-500/15 text-sky-200' : 'border-white/10 text-secondary hover:bg-white/5'
+                              }`}
+                            >
+                              <Layers size={12} />
+                              <span className="num">{sourceCount}</span>
+                              <ChevronDown size={11} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            <button onClick={() => setEditingId(c.id)} className="rounded-lg border border-white/10 p-1.5 text-secondary hover:bg-white/5">
+                              <Pencil size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {expanded && (
+                      <tr className="border-b border-white/5 bg-white/[0.015] last:border-0">
+                        <td colSpan={6} className="p-3">
+                          <EvidenceSourcesPanel competency={c} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+const SOURCE_TYPE_TONE: Record<CompEvidenceSourceType, string> = {
+  TECHNICAL_CATEGORY: 'bg-amber-500/12 text-amber-300',
+  PERSONALITY_DIMENSION: 'bg-purple-500/12 text-purple-300',
+  PERSONALITY_TRAIT: 'bg-fuchsia-500/12 text-fuchsia-300',
+  SJT: 'bg-sky-500/12 text-sky-300',
+  EXPERIENCE: 'bg-emerald-500/12 text-emerald-300',
+  STRUCTURED_INTERVIEW: 'bg-rose-500/12 text-rose-300',
+}
+
+const STRUCTURED_INTERVIEW_REF_LABEL = 'امتیاز مستقیم مصاحبه‌گران به همین شایستگی'
+
+interface RefOption {
+  value: string
+  label: string
+}
+
+/**
+ * Evidence-source wiring for one competency (comp_competency_evidence_sources, schema.sql Section 49):
+ * which existing assessment outputs feed its score and with what weight. The source_ref picker
+ * depends on the source type — technical question categories, the personality module's own
+ * behavioral-dimension/trait catalog, the fixed experience metrics, or nothing at all for a direct
+ * structured-interview rating of this very competency.
+ */
+function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
+  const evidenceSources = useCompetencyStore((s) => s.evidenceSources)
+  const addEvidenceSource = useCompetencyStore((s) => s.addEvidenceSource)
+  const updateEvidenceSourceWeight = useCompetencyStore((s) => s.updateEvidenceSourceWeight)
+  const removeEvidenceSource = useCompetencyStore((s) => s.removeEvidenceSource)
+  const traits = usePersonalityStore((s) => s.traits)
+  const dimensions = usePersonalityStore((s) => s.dimensions)
+
+  const [sourceType, setSourceType] = useState<CompEvidenceSourceType>('TECHNICAL_CATEGORY')
+  const [sourceRef, setSourceRef] = useState('')
+  const [weight, setWeight] = useState(1)
+  const [adding, setAdding] = useState(false)
+
+  const rows = evidenceSources.filter((s) => s.competencyId === competency.id)
+  const totalWeight = rows.reduce((sum, r) => sum + r.weight, 0)
+
+  const optionsByType = useMemo<Record<CompEvidenceSourceType, RefOption[]>>(() => {
+    const dimensionOptions = dimensions.filter((d) => d.active).map((d) => ({ value: d.key, label: d.labelFa }))
+    const traitOptions = [...new Map(traits.filter((t) => t.active).map((t) => [t.key, { value: t.key, label: t.labelFa }])).values()]
+    return {
+      TECHNICAL_CATEGORY: ALL_QUESTION_TYPES.map((t) => ({ value: t, label: QUESTION_TYPE_LABEL_FA[t] })),
+      PERSONALITY_DIMENSION: dimensionOptions,
+      PERSONALITY_TRAIT: traitOptions,
+      SJT: dimensionOptions,
+      EXPERIENCE: COMP_EXPERIENCE_METRICS.map((m) => ({ value: m, label: COMP_EXPERIENCE_METRIC_LABEL_FA[m] })),
+      STRUCTURED_INTERVIEW: [],
+    }
+  }, [dimensions, traits])
+
+  const refLabel = (row: CompCompetencyEvidenceSource) =>
+    row.sourceType === 'STRUCTURED_INTERVIEW'
+      ? STRUCTURED_INTERVIEW_REF_LABEL
+      : (optionsByType[row.sourceType].find((o) => o.value === row.sourceRef)?.label ?? row.sourceRef)
+
+  const needsRef = sourceType !== 'STRUCTURED_INTERVIEW'
+  const effectiveRef = needsRef ? sourceRef : ''
+  const availableOptions = optionsByType[sourceType].filter((o) => !rows.some((r) => r.sourceType === sourceType && r.sourceRef === o.value))
+  const isDuplicate = rows.some((r) => r.sourceType === sourceType && r.sourceRef === effectiveRef)
+  const canAdd = !adding && weight > 0 && !isDuplicate && (!needsRef || effectiveRef !== '')
+
+  const handleAdd = async () => {
+    if (!canAdd) return
+    setAdding(true)
+    await addEvidenceSource(competency.id, { sourceType, sourceRef: effectiveRef, weight })
+    setAdding(false)
+    setSourceRef('')
+    setWeight(1)
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[10.5px] leading-6 text-muted">
+        منابع شواهدی که امتیاز «{competency.labelFa}» از آن‌ها محاسبه می‌شود. وزن هر منبع بین آیتم‌های آن (مثلاً چند سؤال از یک نوع) تقسیم
+        می‌شود تا تعداد سؤال‌ها سهم منبع را تغییر ندهد. منبعی که برای یک داوطلب داده‌ای نداشته باشد صرفاً پوشش شواهد را کاهش می‌دهد و هرگز
+        به‌عنوان امتیاز صفر حساب نمی‌شود.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">نوع منبع</span>
+          <select
+            value={sourceType}
+            onChange={(e) => {
+              setSourceType(e.target.value as CompEvidenceSourceType)
+              setSourceRef('')
+            }}
+            className="input w-52 !py-1.5 text-[11px]"
+          >
+            {COMP_EVIDENCE_SOURCE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {needsRef ? (
+          <label className="block">
+            <span className="mb-1 block text-[10px] text-muted">مرجع</span>
+            <select value={sourceRef} onChange={(e) => setSourceRef(e.target.value)} className="input w-56 !py-1.5 text-[11px]">
+              <option value="">{availableOptions.length === 0 ? 'گزینه‌ای باقی نمانده' : 'انتخاب…'}</option>
+              {availableOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="pb-2 text-[10.5px] text-secondary">{STRUCTURED_INTERVIEW_REF_LABEL}</p>
+        )}
+        <label className="block">
+          <span className="mb-1 block text-[10px] text-muted">وزن</span>
+          <input
+            type="number"
+            min={0.1}
+            step={0.1}
+            value={weight}
+            onChange={(e) => setWeight(Number(e.target.value) || 0)}
+            className="num input w-20 !py-1.5 text-center text-[11px]"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={!canAdd}
+          onClick={handleAdd}
+          className="flex items-center gap-1 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+        >
+          <Plus size={12} /> افزودن منبع
+        </button>
+        {isDuplicate && <p className="w-full text-[10px] text-amber-300">این منبع قبلاً برای این شایستگی ثبت شده است.</p>}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-[10.5px] text-amber-300/90">
+          هنوز منبع شواهدی تعریف نشده — تا زمانی که منبعی تعریف نشود، این شایستگی برای همه داوطلبان «شواهد ناکافی» خواهد بود.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row) => (
+            <EvidenceSourceRow
+              key={row.id}
+              row={row}
+              refLabel={refLabel(row)}
+              share={totalWeight > 0 ? row.weight / totalWeight : 0}
+              onSaveWeight={(w) => updateEvidenceSourceWeight(row.id, w)}
+              onRemove={() => removeEvidenceSource(row.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EvidenceSourceRow({
+  row,
+  refLabel,
+  share,
+  onSaveWeight,
+  onRemove,
+}: {
+  row: CompCompetencyEvidenceSource
+  refLabel: string
+  share: number
+  onSaveWeight: (weight: number) => Promise<void>
+  onRemove: () => Promise<void>
+}) {
+  const [weight, setWeight] = useState(row.weight)
+  const dirty = weight !== row.weight
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px]">
+      <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${SOURCE_TYPE_TONE[row.sourceType]}`}>
+        {COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA[row.sourceType]}
+      </span>
+      <span className="min-w-[8rem] flex-1 font-bold text-secondary">{refLabel}</span>
+      <span className="num text-[10px] text-muted">سهم {Math.round(share * 100)}٪</span>
+      <input
+        type="number"
+        min={0.1}
+        step={0.1}
+        value={weight}
+        onChange={(e) => setWeight(Number(e.target.value) || 0)}
+        className="num input w-16 !py-1 text-center text-[11px]"
+      />
+      {dirty && (
+        <button
+          disabled={weight <= 0}
+          onClick={() => onSaveWeight(weight)}
+          className="rounded-lg bg-purple-500 px-2 py-1 text-[10.5px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+        >
+          ذخیره
+        </button>
+      )}
+      <button onClick={onRemove} className="rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-300">
+        <Trash2 size={12} />
+      </button>
     </div>
   )
 }

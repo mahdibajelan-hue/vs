@@ -14,6 +14,9 @@ import type {
   CompAuditLogEntry,
   CompCompetency,
   CompCompetencyDomain,
+  CompCompetencyEvidenceSource,
+  CompCompetencyProfile,
+  CompEvidenceSourceType,
   CompetencyAssessment,
   CompJobCompetencyRequirement,
   CompJobRoleConfig,
@@ -38,7 +41,10 @@ import {
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
   compAuditLogFromRow,
+  compCompetencyEvidenceFromRow,
+  compCompetencyEvidenceSourceFromRow,
   compCompetencyFromRow,
+  compCompetencyScoreFromRow,
   compJobCompetencyRequirementFromRow,
   compJobRoleConfigFromRow,
   compModuleAdminFromRow,
@@ -55,7 +61,10 @@ import {
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
   type CompAuditLogRow,
+  type CompCompetencyEvidenceRow,
+  type CompCompetencyEvidenceSourceRow,
   type CompCompetencyRow,
+  type CompCompetencyScoreRow,
   type CompJobCompetencyRequirementRow,
   type CompJobRoleConfigRow,
   type CompModuleAdminRow,
@@ -252,6 +261,12 @@ export interface CompetencyCatalogInput {
   active: boolean
 }
 
+export interface EvidenceSourceInput {
+  sourceType: CompEvidenceSourceType
+  sourceRef: string
+  weight: number
+}
+
 export interface JobCompetencyRequirementInput {
   competencyId: string
   requiredLevel: number
@@ -414,6 +429,21 @@ interface CompetencyState {
   upsertJobCompetencyRequirement: (jobRole: JobRole, input: JobCompetencyRequirementInput) => Promise<void>
   removeJobCompetencyRequirement: (id: string) => Promise<void>
 
+  /** Evidence Engine wiring (comp_competency_evidence_sources, schema.sql Section 49) — which
+   * assessment outputs feed each competency and with what weight. Same read/write RLS as
+   * comp_competencies. */
+  evidenceSources: CompCompetencyEvidenceSource[]
+  fetchEvidenceSources: () => Promise<void>
+  addEvidenceSource: (competencyId: string, input: EvidenceSourceInput) => Promise<void>
+  updateEvidenceSourceWeight: (id: string, weight: number) => Promise<void>
+  removeEvidenceSource: (id: string) => Promise<void>
+
+  /** Competency Engine output per candidate (comp_competency_scores + comp_competency_evidence),
+   * keyed by assessment id. Rows are only ever written server-side by comp_compute_competency_profile. */
+  competencyProfileByAssessment: Record<string, CompCompetencyProfile>
+  fetchCompetencyProfile: (assessmentId: string) => Promise<void>
+  computeCompetencyProfile: (assessmentId: string) => Promise<void>
+
   /** Reusable, named question-mix "recipes" per job role — the Assessment Designer wizard's saved
    * output (spec section 6/36). */
   assessmentTemplates: CompAssessmentTemplate[]
@@ -482,6 +512,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   jobRoleConfigs: [],
   competencies: [],
   jobCompetencyRequirements: [],
+  evidenceSources: [],
+  competencyProfileByAssessment: {},
   assessmentTemplates: [],
   auditLog: [],
   aiAnalysisByAssessment: {},
@@ -1355,6 +1387,59 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ jobCompetencyRequirements: previous.filter((r) => r.id !== id) })
     const { error } = await supabase.from('comp_job_competency_requirements').delete().eq('id', id)
     if (reportError('حذف الزام شایستگی', error)) set({ jobCompetencyRequirements: previous })
+  },
+
+  fetchEvidenceSources: async () => {
+    const { data, error } = await supabase.from('comp_competency_evidence_sources').select('*')
+    if (reportError('بارگذاری منابع شواهد شایستگی', error)) return
+    set({ evidenceSources: ((data ?? []) as CompCompetencyEvidenceSourceRow[]).map(compCompetencyEvidenceSourceFromRow) })
+  },
+
+  addEvidenceSource: async (competencyId, input) => {
+    const { data, error } = await supabase
+      .from('comp_competency_evidence_sources')
+      .insert({ competency_id: competencyId, source_type: input.sourceType, source_ref: input.sourceRef, weight: input.weight })
+      .select('*')
+      .single()
+    if (reportError('افزودن منبع شواهد', error) || !data) return
+    set({ evidenceSources: [...get().evidenceSources, compCompetencyEvidenceSourceFromRow(data as CompCompetencyEvidenceSourceRow)] })
+  },
+
+  updateEvidenceSourceWeight: async (id, weight) => {
+    const previous = get().evidenceSources
+    set({ evidenceSources: previous.map((s) => (s.id === id ? { ...s, weight, updatedAt: new Date().toISOString() } : s)) })
+    const { error } = await supabase.from('comp_competency_evidence_sources').update({ weight }).eq('id', id)
+    if (reportError('ذخیره وزن منبع شواهد', error)) set({ evidenceSources: previous })
+  },
+
+  removeEvidenceSource: async (id) => {
+    const previous = get().evidenceSources
+    set({ evidenceSources: previous.filter((s) => s.id !== id) })
+    const { error } = await supabase.from('comp_competency_evidence_sources').delete().eq('id', id)
+    if (reportError('حذف منبع شواهد', error)) set({ evidenceSources: previous })
+  },
+
+  fetchCompetencyProfile: async (assessmentId) => {
+    const [scoresRes, evidenceRes] = await Promise.all([
+      supabase.from('comp_competency_scores').select('*').eq('assessment_id', assessmentId),
+      supabase.from('comp_competency_evidence').select('*').eq('assessment_id', assessmentId),
+    ])
+    if (reportError('بارگذاری پروفایل شایستگی', scoresRes.error ?? evidenceRes.error)) return
+    set({
+      competencyProfileByAssessment: {
+        ...get().competencyProfileByAssessment,
+        [assessmentId]: {
+          scores: ((scoresRes.data ?? []) as CompCompetencyScoreRow[]).map(compCompetencyScoreFromRow),
+          evidence: ((evidenceRes.data ?? []) as CompCompetencyEvidenceRow[]).map(compCompetencyEvidenceFromRow),
+        },
+      },
+    })
+  },
+
+  computeCompetencyProfile: async (assessmentId) => {
+    const { error } = await supabase.rpc('comp_compute_competency_profile', { p_assessment_id: assessmentId })
+    if (reportError('محاسبه پروفایل شایستگی', error)) return
+    await get().fetchCompetencyProfile(assessmentId)
   },
 
   // Generates one assessment's frozen question snapshot from an Assessment Designer question-mix

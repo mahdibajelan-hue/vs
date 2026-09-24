@@ -220,7 +220,7 @@ export interface CompJobRoleConfig {
 }
 
 /** comp_competencies.domain (schema.sql Section 47) — which evidence domain(s) a competency
- * conceptually draws from; informs a future Evidence Engine phase, not itself a scoring input yet. */
+ * conceptually draws from; descriptive only — the actual scoring inputs are its evidence sources. */
 export type CompCompetencyDomain = 'TECHNICAL' | 'BEHAVIORAL' | 'HYBRID'
 
 export const COMP_COMPETENCY_DOMAIN_LABEL_FA: Record<CompCompetencyDomain, string> = {
@@ -241,7 +241,8 @@ export interface CompCompetencyProficiencyLevel {
 
 /** One row of the unified Competency Model (comp_competencies, schema.sql Section 47) — a named
  * competency spanning technical and/or behavioral evidence, independent of any one job role. Job
- * roles opt into it (with a required level/weight/criticality) via CompJobCompetencyRequirement. */
+ * roles opt into it (with a required level/weight/criticality) via CompJobCompetencyRequirement, and
+ * its score is fed by CompCompetencyEvidenceSource (Section 49). */
 export interface CompCompetency {
   id: string
   key: string
@@ -259,9 +260,8 @@ export interface CompCompetency {
 /** One row of comp_job_competency_requirements (schema.sql Section 47) — how much of a given
  * competency a given job role requires, mirroring the exact shape already proven by
  * PersonalityJobBehavioralRequirement (required level, critical flag, weight) but scoped directly to
- * job_role rather than a separate "profile" indirection. Evidence-source wiring (which
- * assessments/items actually feed this competency's score) is a later phase — this is catalog/model
- * only. */
+ * job_role rather than a separate "profile" indirection. Which assessments/items actually feed the
+ * competency's score is configured per competency (CompCompetencyEvidenceSource), not per job. */
 export interface CompJobCompetencyRequirement {
   id: string
   jobRole: JobRole
@@ -273,6 +273,133 @@ export interface CompJobCompetencyRequirement {
   createdAt: string
   updatedAt: string
   updatedBy: string | null
+}
+
+/** Which kind of existing assessment output feeds a competency (comp_competency_evidence_sources,
+ * schema.sql Section 49). */
+export type CompEvidenceSourceType =
+  | 'TECHNICAL_CATEGORY'
+  | 'PERSONALITY_DIMENSION'
+  | 'PERSONALITY_TRAIT'
+  | 'SJT'
+  | 'EXPERIENCE'
+  | 'STRUCTURED_INTERVIEW'
+
+export const COMP_EVIDENCE_SOURCE_TYPES: CompEvidenceSourceType[] = [
+  'TECHNICAL_CATEGORY',
+  'PERSONALITY_DIMENSION',
+  'PERSONALITY_TRAIT',
+  'SJT',
+  'EXPERIENCE',
+  'STRUCTURED_INTERVIEW',
+]
+
+export const COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA: Record<CompEvidenceSourceType, string> = {
+  TECHNICAL_CATEGORY: 'سؤالات فنی (به تفکیک نوع سؤال)',
+  PERSONALITY_DIMENSION: 'بُعد رفتاری (آزمون شخصیت)',
+  PERSONALITY_TRAIT: 'ویژگی شخصیتی',
+  SJT: 'آزمون موقعیتی (SJT)',
+  EXPERIENCE: 'سوابق و تجربه',
+  STRUCTURED_INTERVIEW: 'مصاحبه ساختاریافته',
+}
+
+/** source_ref values for an EXPERIENCE source — each maps a recorded candidate fact onto 0-100 with
+ * its own saturation point (see comp_compute_competency_profile). */
+export type CompExperienceMetric = 'years_total' | 'years_pipeline' | 'certifications' | 'education'
+
+export const COMP_EXPERIENCE_METRICS: CompExperienceMetric[] = ['years_total', 'years_pipeline', 'certifications', 'education']
+
+export const COMP_EXPERIENCE_METRIC_LABEL_FA: Record<CompExperienceMetric, string> = {
+  years_total: 'سابقه کاری کل (۱۵ سال = ۱۰۰)',
+  years_pipeline: 'سابقه کاری خطوط لوله (۱۰ سال = ۱۰۰)',
+  certifications: 'تعداد گواهینامه‌ها (۵ مورد = ۱۰۰)',
+  education: 'تعداد سوابق تحصیلی (۳ مورد = ۱۰۰)',
+}
+
+export interface CompCompetencyEvidenceSource {
+  id: string
+  competencyId: string
+  sourceType: CompEvidenceSourceType
+  /** Category / dimension / trait / experience-metric key — always '' for STRUCTURED_INTERVIEW. */
+  sourceRef: string
+  weight: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** A panel member's direct 1-5 rating of one competency for one candidate (comp_interview_ratings). */
+export interface CompInterviewRating {
+  id: string
+  assessmentId: string
+  competencyId: string
+  raterId: string
+  rating: number
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** One contributing evidence item behind a competency score — the unit of traceability. */
+export interface CompCompetencyEvidence {
+  id: string
+  assessmentId: string
+  competencyId: string
+  sourceType: CompEvidenceSourceType
+  sourceRef: string
+  sourceItemId: string
+  sourceLabel: string
+  normalizedScore: number
+  effectiveWeight: number
+  rawValue: Record<string, unknown>
+  computedAt: string
+}
+
+export type CompCompetencyConfidence = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH'
+
+export const COMP_COMPETENCY_CONFIDENCE_LABEL_FA: Record<CompCompetencyConfidence, string> = {
+  NONE: 'بدون شواهد',
+  LOW: 'اطمینان کم',
+  MEDIUM: 'اطمینان متوسط',
+  HIGH: 'اطمینان بالا',
+}
+
+/** INSUFFICIENT_EVIDENCE is deliberately its own status, never a gap — missing evidence is not
+ * missing competency. */
+export type CompCompetencyStatus = 'INSUFFICIENT_EVIDENCE' | 'EXCEEDS' | 'MEETS' | 'GAP' | 'CRITICAL_GAP'
+
+export const COMP_COMPETENCY_STATUS_LABEL_FA: Record<CompCompetencyStatus, string> = {
+  INSUFFICIENT_EVIDENCE: 'شواهد ناکافی',
+  EXCEEDS: 'فراتر از انتظار',
+  MEETS: 'مطابق الزام',
+  GAP: 'دارای شکاف',
+  CRITICAL_GAP: 'شکاف حیاتی',
+}
+
+/** One Competency Engine result row (comp_competency_scores) — a required competency's explainable
+ * score for one candidate; its evidence lives in CompCompetencyEvidence. */
+export interface CompCompetencyScore {
+  id: string
+  assessmentId: string
+  competencyId: string
+  requiredLevel: number
+  levelCount: number
+  actualScore: number | null
+  actualLevel: number | null
+  /** requiredLevel − actualLevel; positive = shortfall, null when there is no evidence. */
+  gap: number | null
+  isCritical: boolean
+  weight: number
+  evidenceCount: number
+  sourceTypesCovered: number
+  coverage: number
+  confidence: CompCompetencyConfidence
+  status: CompCompetencyStatus
+  computedAt: string
+}
+
+export interface CompCompetencyProfile {
+  scores: CompCompetencyScore[]
+  evidence: CompCompetencyEvidence[]
 }
 
 export interface EducationEntry {

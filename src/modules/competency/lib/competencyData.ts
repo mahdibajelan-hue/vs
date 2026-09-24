@@ -10,8 +10,14 @@ import type {
   CompAttachment,
   CompAuditLogEntry,
   CompCompetency,
+  CompCompetencyConfidence,
   CompCompetencyDomain,
-  CompCompetencyProficiencyLevel,
+  CompCompetencyEvidence,
+  CompCompetencyEvidenceSource,
+  CompCompetencyScore,
+  CompCompetencyStatus,
+  CompEvidenceSourceType,
+  CompInterviewRating,
   CompetencyAnswers,
   CompetencyAssessment,
   CompJobCompetencyRequirement,
@@ -426,7 +432,7 @@ export interface CompCompetencyRow {
   label_fa: string
   description: string | null
   domain: string
-  proficiency_levels: CompCompetencyProficiencyLevel[] | null
+  proficiency_levels: { level: number; label_fa: string }[] | null
   active: boolean
   created_by: string | null
   created_at: string
@@ -441,7 +447,7 @@ export function compCompetencyFromRow(r: CompCompetencyRow): CompCompetency {
     labelFa: r.label_fa,
     description: r.description ?? '',
     domain: r.domain as CompCompetencyDomain,
-    proficiencyLevels: r.proficiency_levels ?? [],
+    proficiencyLevels: (r.proficiency_levels ?? []).map((l) => ({ level: l.level, labelFa: l.label_fa })),
     active: r.active,
     createdBy: r.created_by,
     createdAt: r.created_at,
@@ -475,6 +481,124 @@ export function compJobCompetencyRequirementFromRow(r: CompJobCompetencyRequirem
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     updatedBy: r.updated_by,
+  }
+}
+
+export interface CompCompetencyEvidenceSourceRow {
+  id: string
+  competency_id: string
+  source_type: string
+  source_ref: string
+  weight: number
+  created_at: string
+  updated_at: string
+}
+
+export function compCompetencyEvidenceSourceFromRow(r: CompCompetencyEvidenceSourceRow): CompCompetencyEvidenceSource {
+  return {
+    id: r.id,
+    competencyId: r.competency_id,
+    sourceType: r.source_type as CompEvidenceSourceType,
+    sourceRef: r.source_ref,
+    weight: Number(r.weight),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompInterviewRatingRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  rater_id: string
+  rating: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compInterviewRatingFromRow(r: CompInterviewRatingRow): CompInterviewRating {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    raterId: r.rater_id,
+    rating: Number(r.rating),
+    notes: r.notes ?? '',
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompCompetencyEvidenceRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  source_type: string
+  source_ref: string
+  source_item_id: string
+  source_label: string
+  normalized_score: number
+  effective_weight: number
+  raw_value: Record<string, unknown> | null
+  computed_at: string
+}
+
+export function compCompetencyEvidenceFromRow(r: CompCompetencyEvidenceRow): CompCompetencyEvidence {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    sourceType: r.source_type as CompEvidenceSourceType,
+    sourceRef: r.source_ref,
+    sourceItemId: r.source_item_id,
+    sourceLabel: r.source_label,
+    normalizedScore: Number(r.normalized_score),
+    effectiveWeight: Number(r.effective_weight),
+    rawValue: r.raw_value ?? {},
+    computedAt: r.computed_at,
+  }
+}
+
+export interface CompCompetencyScoreRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  required_level: number
+  level_count: number
+  actual_score: number | null
+  actual_level: number | null
+  gap: number | null
+  is_critical: boolean
+  weight: number
+  evidence_count: number
+  source_types_covered: number
+  coverage: number
+  confidence: string
+  status: string
+  computed_at: string
+}
+
+const numOrNull = (v: number | null): number | null => (v == null ? null : Number(v))
+
+export function compCompetencyScoreFromRow(r: CompCompetencyScoreRow): CompCompetencyScore {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    requiredLevel: Number(r.required_level),
+    levelCount: r.level_count,
+    actualScore: numOrNull(r.actual_score),
+    actualLevel: numOrNull(r.actual_level),
+    gap: numOrNull(r.gap),
+    isCritical: r.is_critical,
+    weight: Number(r.weight),
+    evidenceCount: r.evidence_count,
+    sourceTypesCovered: r.source_types_covered,
+    coverage: Number(r.coverage),
+    confidence: r.confidence as CompCompetencyConfidence,
+    status: r.status as CompCompetencyStatus,
+    computedAt: r.computed_at,
   }
 }
 

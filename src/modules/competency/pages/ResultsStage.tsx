@@ -170,6 +170,23 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Evidence/Competency Engine (schema.sql Section 49): opening results refreshes this candidate's
+  // evidence-backed competency profile so it always reflects the latest scores. Mirrors
+  // comp_can_access_assessment (creator, module admin, or panelist) so viewers the RPC would reject
+  // never trigger it; moduleAdmins/panelists may load after mount, hence the one-shot ref rather
+  // than a mount-only effect.
+  const computeCompetencyProfile = useCompetencyStore((s) => s.computeCompetencyProfile)
+  const canComputeCompetencyProfile =
+    isModuleAdmin ||
+    (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
+    allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myProfile?.id)
+  const competencyProfileRequestedRef = useRef(false)
+  useEffect(() => {
+    if (!canComputeCompetencyProfile || competencyProfileRequestedRef.current) return
+    competencyProfileRequestedRef.current = true
+    computeCompetencyProfile(assessment.id)
+  }, [canComputeCompetencyProfile, assessment.id, computeCompetencyProfile])
+
   const isPM = usesLegacyPmRubric(assessment)
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
   const domainScoresFor = (answers: CompetencyAssessment['answers']) => (isPM ? computeDomainScores(answers) : computeCategoryScores(roleQuestions, answers))
