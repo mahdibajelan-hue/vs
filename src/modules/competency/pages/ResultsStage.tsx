@@ -12,6 +12,7 @@ import {
   Compass,
   Copy,
   Download,
+  Fingerprint,
   Globe,
   GraduationCap,
   HardHat,
@@ -33,6 +34,9 @@ import {
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
+import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
+import { PersonalityFingerprintPanel } from '../../personality/components/PersonalityFingerprintPanel'
+import type { PersonalityAssessmentStatus } from '../../personality/types'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
@@ -101,6 +105,11 @@ const ROLE_BUCKET_ICON: Record<string, typeof Compass> = {
 
 const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
 
+// Personality assessment statuses that carry real, scored dimension data — matches PersonalityStage's
+// own SCORED_STATUSES, kept as a local literal here since that list isn't exported (this is the only
+// other place that needs it).
+const PERSONALITY_SCORED_STATUSES: PersonalityAssessmentStatus[] = ['FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED']
+
 // A decorative accent per KPI tile (independent of the tier color used for the score itself), so
 // the grid reads as a vivid, varied set of cards rather than one repeated purple tone.
 const DOMAIN_ACCENT_PALETTE = ['#a855f7', '#38bdf8', '#f59e0b', '#34d399', '#fb7185', '#22d3ee', '#818cf8', '#facc15']
@@ -135,8 +144,17 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const [settingApproval, setSettingApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
+  // Aggregated results (spec follow-up: three fingerprints in one panel) — the same personality
+  // assessment PersonalityStage would show, reused here as the "اثرانگشت رفتاری" and "ترکیب
+  // شایستگی‌های شغلی" sections rather than recomputed.
+  const personalityAssessments = usePersonalityStore((s) => s.assessments)
+  const fetchPersonalityAssessments = usePersonalityStore((s) => s.fetchAssessments)
+  const personalityAssessment = personalityAssessments.find((a) => a.assessmentId === assessment.id)
+  const showPersonalityFingerprint = assessment.needsPersonalityAssessment && !!personalityAssessment && PERSONALITY_SCORED_STATUSES.includes(personalityAssessment.status)
+
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
+    if (personalityAssessments.length === 0) fetchPersonalityAssessments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -429,6 +447,8 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
               roleRecommendation={roleRecommendation}
             />
           </div>
+
+          <FingerprintSectionHeading icon={Wrench} accent="#a855f7">اثرانگشت فنی و تخصصی — دانش و تجربه تخصصی</FingerprintSectionHeading>
 
           <div ref={reportRef} className="space-y-4">
             {/* Candidate header + score ring + status card */}
@@ -795,7 +815,42 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
               </div>
             )}
           </div>
+
+          {/* Behavioral Fingerprint + Competency Fingerprint — PersonalityFingerprintPanel already
+             carries its own "اثرانگشت رفتاری" / "ترکیب شایستگی‌های شغلی" section headings internally
+             (shared body with PersonalityStage), so it's rendered here as-is rather than re-wrapped,
+             keeping the whole page one continuous, scrollable report instead of three separately
+             computed views. */}
+          {assessment.needsPersonalityAssessment &&
+            (showPersonalityFingerprint && personalityAssessment ? (
+              <PersonalityFingerprintPanel
+                personalityAssessmentId={personalityAssessment.id}
+                candidateName={assessment.candidateName}
+                candidatePosition={assessment.candidatePosition}
+                showPrintButton={false}
+              />
+            ) : (
+              <>
+                <FingerprintSectionHeading icon={Fingerprint} accent="#f472b6">اثرانگشت رفتاری و ترکیب شایستگی‌های شغلی</FingerprintSectionHeading>
+                <div className="glass-panel rounded-2xl p-4 text-center text-[11px] text-muted">این متقاضی هنوز ارزیابی شخصیت و رفتاری خود را کامل نکرده است.</div>
+              </>
+            ))}
     </CompetencySidebarShell>
+  )
+}
+
+/** A clearly-labeled divider between the results page's three fingerprint sections (technical,
+ * behavioral, competency) — visually distinct while keeping the whole page one continuous,
+ * scrollable panel rather than a tabbed interface, per the aggregated-results spec follow-up. */
+function FingerprintSectionHeading({ icon: Icon, accent, children }: { icon: typeof Wrench; accent: string; children: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `${accent}22`, color: accent }}>
+        <Icon size={16} />
+      </span>
+      <p className="text-base font-extrabold">{children}</p>
+      <div className="h-px flex-1" style={{ background: `${accent}30` }} />
+    </div>
   )
 }
 
