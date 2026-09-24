@@ -6959,3 +6959,16 @@ create or replace function personality_is_assessment_designer()
 returns boolean as $$
   select personality_is_module_admin() or comp_is_assessment_designer() or rasta_has_permission(auth.uid(), 'personality', 'configure');
 $$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 45: Personality module no longer a standalone top-level module (see
+-- Section 44's Exam Design Panel) — deactivate its rasta_modules row so it no
+-- longer shows as a toggleable environment in the admin access matrix or in
+-- rasta_my_accessible_modules(). Deliberately just deactivated, not deleted:
+-- rasta_has_permission()/personality_is_assessment_designer() etc. read
+-- rasta_permissions/rasta_role_permissions directly and never join through
+-- rasta_modules, so this has no effect on any real RBAC check — it only hides
+-- the now-meaningless top-level entry.
+-- ----------------------------------------------------------------------------
+
+update rasta_modules set is_active = false where key = 'personality';
