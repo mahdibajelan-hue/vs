@@ -12,13 +12,23 @@ import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
 
 /** FARIN wordmark + Persian name + tagline — the hero title that sits under the lamp. `children`
  * (the signed-out About note) follows the tagline directly. */
-function BrandTitle({ centered, children }: { centered?: boolean; children?: ReactNode }) {
+function BrandName({ className = '' }: { className?: string }) {
   return (
-    <div className={`hub-fade-in flex flex-col gap-2 ${centered ? 'items-center text-center' : 'items-center text-center md:items-end md:text-left'}`}>
+    <div className={`flex flex-col gap-2 ${className}`}>
       <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-7xl">
         FARIN
       </span>
       <span className="text-5xl font-extrabold leading-tight text-[#c9a227] md:text-6xl">{FARIN_NAME_FA}</span>
+    </div>
+  )
+}
+
+/** `nameOnDesktopOnly`: on mobile the FARIN/فرین name is rendered above the login card instead
+ * (see the signed-out layout), so here it only shows from md up. */
+function BrandTitle({ centered, nameOnDesktopOnly, children }: { centered?: boolean; nameOnDesktopOnly?: boolean; children?: ReactNode }) {
+  return (
+    <div className={`hub-fade-in flex flex-col gap-2 ${centered ? 'items-center text-center' : 'items-center text-center md:items-end md:text-left'}`}>
+      <BrandName className={`${centered ? 'items-center' : 'items-center md:items-end'} ${nameOnDesktopOnly ? 'hidden md:flex' : ''}`} />
       <p className="mt-1 text-sm font-medium text-zinc-300 md:text-base">{FARIN_TAGLINE_FA}</p>
       {children}
     </div>
@@ -53,38 +63,44 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
   }
 
   return (
-    <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip bg-black p-2 sm:p-4">
-      {/* The page frame: a hairline cyan→gold border (the lamp's light meeting the Farin mark's
-          gold) with drafting-sheet corner ticks, wrapping header, hero and footer. */}
-      <div className="launchpad-frame relative flex flex-1 flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2rem]">
-        <span className="launchpad-frame-corner is-tr" aria-hidden="true" />
-        <span className="launchpad-frame-corner is-tl" aria-hidden="true" />
-        <span className="launchpad-frame-corner is-br" aria-hidden="true" />
-        <span className="launchpad-frame-corner is-bl" aria-hidden="true" />
-        <Header />
-        <LampContainer className="flex-1 pb-10 [--lamp-bg:#000]">
-          {isAuthed ? (
-            <div className="flex w-full flex-col items-center gap-2">
-              <BrandTitle centered />
-              <ModuleLaunchpad onSelect={handleSelect} />
-            </div>
-          ) : (
-            // Signed out, as in the reference layout: login + locked module icons on the right,
-            // wordmark + tagline + the faint About note (with the signature) on the left. Stacks on
-            // mobile, login first.
-            <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-x-10 gap-y-8 md:grid-cols-2">
-              <div className="flex flex-col items-center gap-2">
-                <LoginCard />
-                <ModuleLaunchpad onSelect={handleSelect} embedded />
+    <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip bg-black">
+      <Header />
+      <LampContainer className="flex-1 pb-28 [--lamp-bg:#000]" lightClassName="opacity-25 md:opacity-50">
+        {/* The black showcase box the lamp shines onto: hairline cyan→gold border, drafting-sheet
+            corner ticks, and the lamp's light reflected on the "floor" beneath it. */}
+        <div className="relative mx-auto w-full max-w-5xl">
+          <div className="launchpad-frame relative rounded-[1.75rem] px-5 py-8 sm:rounded-[2.25rem] sm:px-10 sm:py-10">
+            <span className="launchpad-frame-corner is-tr" aria-hidden="true" />
+            <span className="launchpad-frame-corner is-tl" aria-hidden="true" />
+            <span className="launchpad-frame-corner is-br" aria-hidden="true" />
+            <span className="launchpad-frame-corner is-bl" aria-hidden="true" />
+            {isAuthed ? (
+              <div className="flex w-full flex-col items-center gap-2">
+                <BrandTitle centered />
+                <ModuleLaunchpad onSelect={handleSelect} />
               </div>
-              <BrandTitle>
-                <AboutNote />
-              </BrandTitle>
-            </div>
-          )}
-        </LampContainer>
-        <Footer />
-      </div>
+            ) : (
+              // Signed out, as in the reference layout: login + locked module icons on the right,
+              // wordmark + tagline + the faint About note (with the signature) on the left. On
+              // mobile the name moves above the login card and the rest follows below.
+              <div className="grid w-full grid-cols-1 items-start gap-x-10 gap-y-8 md:grid-cols-2">
+                <div className="flex flex-col items-center gap-6">
+                  <BrandName className="hub-fade-in items-center text-center md:hidden" />
+                  <div className="flex w-full flex-col items-center gap-2">
+                    <LoginCard />
+                    <ModuleLaunchpad onSelect={handleSelect} embedded />
+                  </div>
+                </div>
+                <BrandTitle nameOnDesktopOnly>
+                  <AboutNote />
+                </BrandTitle>
+              </div>
+            )}
+          </div>
+          <div className="launchpad-frame-reflection" aria-hidden="true" />
+        </div>
+      </LampContainer>
+      <Footer />
     </div>
   )
 }

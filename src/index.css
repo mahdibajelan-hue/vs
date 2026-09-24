@@ -1611,16 +1611,18 @@ select option {
   .launchpad-module-grid .area-e { grid-area: e; }
 }
 
-/* ===== Farin launchpad page frame =====
-   Hairline gradient border (cyan lamp light → Farin gold) drawn with the mask-composite trick so
-   the frame stays 1px crisp at any radius, a soft cyan halo from the top, and four small L-shaped
-   corner ticks like the registration marks on a drawing sheet. */
+/* ===== Farin launchpad showcase box =====
+   The black box the lamp shines onto. Hairline gradient border (cyan lamp light → Farin gold)
+   drawn with the mask-composite trick so it stays 1px crisp at any radius, a faint wash of lamp
+   light across its top edge, four L-shaped corner ticks like the registration marks on a drawing
+   sheet, and (.launchpad-frame-reflection) the lamp's light reflected on the floor beneath it. */
 .launchpad-frame {
-  background: #000;
+  background:
+    radial-gradient(ellipse 60% 120px at 50% 0%, rgba(34, 211, 238, 0.07), transparent 70%),
+    #000;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.015),
-    0 -24px 90px -40px rgba(34, 211, 238, 0.35),
-    0 40px 90px -50px rgba(201, 162, 39, 0.25);
+    0 -18px 60px -30px rgba(34, 211, 238, 0.35),
+    inset 0 1px 0 rgba(34, 211, 238, 0.12);
 }
 .launchpad-frame::before {
   content: '';
@@ -1665,4 +1667,20 @@ select option {
   .launchpad-frame-corner.is-br, .launchpad-frame-corner.is-bl { bottom: 9px; }
   .launchpad-frame-corner.is-tr, .launchpad-frame-corner.is-br { right: 9px; }
   .launchpad-frame-corner.is-tl, .launchpad-frame-corner.is-bl { left: 9px; }
+}
+.launchpad-frame-reflection {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 78%;
+  height: 90px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 3px at 50% 0%, rgba(34, 211, 238, 0.55), transparent 100%),
+    radial-gradient(ellipse 50% 100% at 50% 0%, rgba(34, 211, 238, 0.16), transparent 72%);
+  filter: blur(6px);
+}
+@media (max-width: 767px) {
+  .launchpad-frame-reflection { opacity: 0.5; }
 }

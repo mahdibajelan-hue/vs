@@ -17,7 +17,7 @@ export function AboutNote() {
         <span>
           توسعه‌دهنده: <span className="text-zinc-400">مهدی باجلان</span>
         </span>
-        <span className="text-zinc-700">|</span>
+        <span className="hidden text-zinc-700 sm:inline">|</span>
         <a href={`mailto:${DEV_EMAIL}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-zinc-300" dir="ltr">
           <Mail size={11} /> {DEV_EMAIL}
         </a>
@@ -30,14 +30,14 @@ export function AboutNote() {
       <img
         src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
         alt="Mahdi Bajelan — Software Engineer"
-        className="-mt-1 h-14 w-auto opacity-60 sm:h-16"
+        className="mt-1 h-24 w-auto self-center opacity-80 sm:h-28"
         onError={(e) => {
           // Falls back to a styled text signature if signature-mahdi.png is ever missing from public/.
           e.currentTarget.style.display = 'none'
           e.currentTarget.nextElementSibling?.classList.remove('hidden')
         }}
       />
-      <p style={{ fontFamily: "'Dancing Script', cursive" }} className="hidden text-2xl leading-none text-[#c9a227]/60">
+      <p style={{ fontFamily: "'Dancing Script', cursive" }} className="hidden self-center text-3xl leading-none text-[#c9a227]/80">
         Mahdi Bajelan
       </p>
     </div>

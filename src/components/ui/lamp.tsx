@@ -22,6 +22,7 @@ export const LampContainer = ({
   className,
   color = '#06b6d4',
   glowColor = '#22d3ee',
+  lightClassName,
 }: {
   children: React.ReactNode
   className?: string
@@ -29,6 +30,8 @@ export const LampContainer = ({
   color?: string
   /** Bright bar + inner glow color (default cyan-400). */
   glowColor?: string
+  /** Extra classes on the light band — e.g. `opacity-40 md:opacity-60` to dim the whole lamp. */
+  lightClassName?: string
 }) => {
   return (
     <MotionConfig reducedMotion="user">
@@ -38,7 +41,7 @@ export const LampContainer = ({
           className,
         )}
       >
-        <div className="relative isolate z-0 flex h-[24rem] w-full shrink-0 scale-y-125 items-center justify-center">
+        <div className={cn('relative isolate z-0 flex h-[24rem] w-full shrink-0 scale-y-125 items-center justify-center', lightClassName)}>
           <motion.div
             initial={{ opacity: 0.5, width: '15rem' }}
             whileInView={{ opacity: 1, width: '30rem' }}
