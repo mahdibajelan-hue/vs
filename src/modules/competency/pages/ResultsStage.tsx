@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  ArrowLeft,
   Award,
   Banknote,
   BarChart3,
@@ -43,7 +44,6 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
-import { AIAnalysisCard } from '../components/AIAnalysisCard'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { generatePersonalityProfile } from '../lib/personalityAnalysis'
@@ -80,6 +80,9 @@ interface ResultsStageProps {
   nav: Partial<Record<CompetencySection, () => void>>
   onExitToHub: () => void
   onNew?: () => void
+  /** Sends the viewer to the dedicated "تحلیل جامع هوش مصنوعی" stage (spec follow-up) — this page
+   * only ever shows a brief excerpt of that analysis, never the full generation UI. */
+  onGoToAiAnalysis: () => void
 }
 
 const PM_DOMAIN_ICON: Partial<Record<CompetencyDomainKey, typeof Compass>> = {
@@ -119,7 +122,7 @@ const DOMAIN_ACCENT_PALETTE = ['#a855f7', '#38bdf8', '#f59e0b', '#34d399', '#fb7
  * and a closing recommendation banner — reachable from a right-hand sidebar (mirroring the rest of
  * the RTL app: first flex child sits on the right).
  */
-export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsStageProps) {
+export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnalysis }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
@@ -152,9 +155,16 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
   const personalityAssessment = personalityAssessments.find((a) => a.assessmentId === assessment.id)
   const showPersonalityFingerprint = assessment.needsPersonalityAssessment && !!personalityAssessment && PERSONALITY_SCORED_STATUSES.includes(personalityAssessment.status)
 
+  // Unified candidate AI analysis (spec follow-up) — this page only ever shows a brief excerpt
+  // (the executive summary) plus a link into the dedicated CandidateAiAnalysisStage, which owns the
+  // full read/generate experience.
+  const candidateAiAnalysis = useCompetencyStore((s) => s.candidateAiAnalysisByAssessment[assessment.id])
+  const fetchCandidateAiAnalysis = useCompetencyStore((s) => s.fetchCandidateAiAnalysis)
+
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
     if (personalityAssessments.length === 0) fetchPersonalityAssessments()
+    if (candidateAiAnalysis === undefined) fetchCandidateAiAnalysis(assessment.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -773,7 +783,22 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew }: ResultsSta
               </div>
             )}
 
-            <AIAnalysisCard assessmentId={assessment.id} isPM={isPM} />
+            <div className="glass-panel rounded-2xl border border-indigo-400/20 p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-sm font-bold">
+                  <Sparkles size={15} className="text-indigo-300" /> تحلیل جامع هوش مصنوعی
+                </p>
+                <button
+                  onClick={onGoToAiAnalysis}
+                  className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-bold text-indigo-200 hover:bg-indigo-500/20"
+                >
+                  مشاهده تحلیل کامل <ArrowLeft size={12} />
+                </button>
+              </div>
+              <p className="text-[11.5px] leading-6 text-secondary">
+                {candidateAiAnalysis?.analysis.executive_summary ?? 'تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.'}
+              </p>
+            </div>
 
             {/* Final recommendation banner */}
             <div className="glass-panel flex flex-col items-start gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center" style={{ borderColor: `${statusColor}40` }}>

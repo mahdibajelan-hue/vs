@@ -13,6 +13,7 @@ export type CompetencySection =
   | 'personality'
   | 'questions'
   | 'results'
+  | 'aiAnalysis'
   | 'questionBank'
   | 'reports'
   | 'settings'
@@ -31,6 +32,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   personality: { label: 'ارزیابی شخصیت و رفتاری', icon: BrainCircuit },
   questions: { label: 'ارزیابی فنی تخصصی', icon: ListChecks },
   results: { label: 'نتیجه', icon: Award },
+  aiAnalysis: { label: 'تحلیل جامع هوش مصنوعی', icon: Sparkles },
   questionBank: { label: 'بانک سؤالات', icon: BookOpen },
   reports: { label: 'گزارش‌ها', icon: FileBarChart2 },
   settings: { label: 'تنظیمات', icon: Settings },
@@ -43,7 +45,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // sit between panel and questions — see AssessmentWizardPage's LEAD_STAGES for the full ordering.
 // "بانک سؤالات" now covers both the technical and the personality question banks as tabs on one
 // page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results']
+const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results', 'aiAnalysis']
 const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityReports']
 
 interface CompetencySidebarShellProps {

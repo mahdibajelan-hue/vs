@@ -2,6 +2,8 @@ import type {
   AiAnalysisContent,
   AssessmentStatus,
   AttachmentKind,
+  CandidateAiAnalysis,
+  CandidateAiAnalysisContent,
   CertificationEntry,
   CompAiAnalysis,
   CompAssessmentTemplate,
@@ -467,6 +469,28 @@ export interface CompAiAnalysisRow {
 }
 
 export function compAiAnalysisFromRow(r: CompAiAnalysisRow): CompAiAnalysis {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    model: r.model,
+    analysis: r.analysis,
+    confidence: r.confidence,
+    generatedBy: r.generated_by,
+    createdAt: r.created_at,
+  }
+}
+
+export interface CompCandidateAiAnalysisRow {
+  id: string
+  assessment_id: string
+  model: string
+  analysis: CandidateAiAnalysisContent
+  confidence: string | null
+  generated_by: string | null
+  created_at: string
+}
+
+export function compCandidateAiAnalysisFromRow(r: CompCandidateAiAnalysisRow): CandidateAiAnalysis {
   return {
     id: r.id,
     assessmentId: r.assessment_id,

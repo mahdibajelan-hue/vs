@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import type {
   AssessmentStatus,
   AttachmentKind,
+  CandidateAiAnalysis,
   CertificationEntry,
   CompAiAnalysis,
   CompAssessmentTemplate,
@@ -29,6 +30,7 @@ import type {
 } from '../types'
 import {
   compAiAnalysisFromRow,
+  compCandidateAiAnalysisFromRow,
   compAssessmentFromRow,
   compAssessmentTemplateFromRow,
   compAttachmentFromRow,
@@ -43,6 +45,7 @@ import {
   compRoleAssignmentFromRow,
   profileLiteFromRow,
   type CompAiAnalysisRow,
+  type CompCandidateAiAnalysisRow,
   type CompAssessmentRow,
   type CompAssessmentTemplateRow,
   type CompAttachmentRow,
@@ -387,6 +390,18 @@ interface CompetencyState {
    * (reading the assessment via the caller's own JWT, calling Gemini, persisting the result) —
    * this just invokes it and refreshes the local cache from what it returns. */
   generateAiAnalysis: (assessmentId: string) => Promise<{ error: string | null }>
+
+  /** Unified Candidate AI Analysis (spec follow-up) — ONE comprehensive analysis (technical +
+   * personality + job-fit) per assessment, replacing aiAnalysisByAssessment/personality's own
+   * aiAnalysisByAssessment as the module's single AI-generation surface. Keyed by comp_assessments
+   * id, same caching/regeneration pattern as the two superseded analyses. */
+  candidateAiAnalysisByAssessment: Record<string, CandidateAiAnalysis | null>
+  candidateAiAnalysisLoading: Record<string, boolean>
+  fetchCandidateAiAnalysis: (assessmentId: string) => Promise<void>
+  /** Calls the comp-candidate-ai-analysis Edge Function, which does all the real work server-side
+   * (reading whichever of technical/personality data is available via the caller's own JWT, calling
+   * Gemini once, persisting the result) — this just invokes it and refreshes the local cache. */
+  generateCandidateAiAnalysis: (assessmentId: string) => Promise<{ error: string | null }>
 }
 
 export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
@@ -406,6 +421,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   auditLog: [],
   aiAnalysisByAssessment: {},
   aiAnalysisLoading: {},
+  candidateAiAnalysisByAssessment: {},
+  candidateAiAnalysisLoading: {},
   loadingQuestionBank: false,
   loading: true,
 
@@ -1331,6 +1348,51 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     const analysis = (data as { analysis?: CompAiAnalysisRow } | null)?.analysis
     if (analysis) {
       set({ aiAnalysisByAssessment: { ...get().aiAnalysisByAssessment, [assessmentId]: compAiAnalysisFromRow(analysis) } })
+    }
+    return { error: null }
+  },
+
+  fetchCandidateAiAnalysis: async (assessmentId) => {
+    const { data, error } = await supabase
+      .from('comp_candidate_ai_analysis')
+      .select('*')
+      .eq('assessment_id', assessmentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (reportError('بارگذاری تحلیل جامع هوشمند', error)) return
+    set({
+      candidateAiAnalysisByAssessment: {
+        ...get().candidateAiAnalysisByAssessment,
+        [assessmentId]: data ? compCandidateAiAnalysisFromRow(data as CompCandidateAiAnalysisRow) : null,
+      },
+    })
+  },
+
+  generateCandidateAiAnalysis: async (assessmentId) => {
+    set({ candidateAiAnalysisLoading: { ...get().candidateAiAnalysisLoading, [assessmentId]: true } })
+    const { data, error } = await supabase.functions.invoke('comp-candidate-ai-analysis', { body: { assessmentId } })
+    set({ candidateAiAnalysisLoading: { ...get().candidateAiAnalysisLoading, [assessmentId]: false } })
+    let functionError = (data as { error?: string } | null)?.error
+    // On a non-2xx response, supabase-js sets `data` to null and puts the raw Response on
+    // `error.context` instead of surfacing the function's own JSON error body — without reading it
+    // ourselves here, every failure looks like the same useless "non-2xx status code" message.
+    if (!functionError && error && typeof (error as { context?: Response }).context?.json === 'function') {
+      try {
+        const body = await (error as { context: Response }).context.json()
+        functionError = body?.error
+      } catch {
+        // response body wasn't JSON — fall through to the generic message below
+      }
+    }
+    if (error || functionError) {
+      const message = functionError || error?.message || 'خطای ناشناخته'
+      useSystemStore.getState().setStorageError(`خطا در تحلیل جامع هوشمند: ${message}`)
+      return { error: message }
+    }
+    const analysis = (data as { analysis?: CompCandidateAiAnalysisRow } | null)?.analysis
+    if (analysis) {
+      set({ candidateAiAnalysisByAssessment: { ...get().candidateAiAnalysisByAssessment, [assessmentId]: compCandidateAiAnalysisFromRow(analysis) } })
     }
     return { error: null }
   },

@@ -20,6 +20,7 @@ import { ExamDesignStage } from './ExamDesignStage'
 import { PersonalityStage } from './PersonalityStage'
 import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
 import { ResultsStage } from './ResultsStage'
+import { CandidateAiAnalysisStage } from './CandidateAiAnalysisStage'
 import { formatJalali } from '../../../lib/jalali'
 
 // Every QuestionType must appear in exactly one section here or its questions would silently
@@ -42,7 +43,7 @@ interface AssessmentWizardPageProps {
   moduleNav?: Partial<Record<CompetencySection, () => void>>
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'results'
+type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'results' | 'aiAnalysis'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
@@ -52,6 +53,7 @@ const SECTION_TITLE: Record<Stage, string> = {
   personality: 'ارزیابی شخصیت و رفتاری',
   questions: 'ارزیابی فنی تخصصی',
   results: 'نتیجه',
+  aiAnalysis: 'تحلیل جامع هوش مصنوعی',
 }
 
 /**
@@ -64,7 +66,7 @@ const SECTION_TITLE: Record<Stage, string> = {
  * questions/results, whether or not this particular lead also holds ASSESSMENT_DESIGNER standing
  * (see isDesigner below, which only gates the interactive controls within those two stages).
  */
-const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'results', 'aiAnalysis']
 const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel']
 
 /**
@@ -137,6 +139,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   if (stages.includes('personality')) nav.personality = () => setStage('personality')
   if (stages.includes('questions')) nav.questions = () => setStage('questions')
   if (stages.includes('results')) nav.results = () => setStage('results')
+  if (stages.includes('aiAnalysis')) nav.aiAnalysis = () => setStage('aiAnalysis')
 
   // What each interviewer recorded, per question — the lead reads this while setting the final
   // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
@@ -182,7 +185,14 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   // ResultsStage) — it replaces this page's narrow max-w-3xl wizard chrome entirely rather than
   // nesting inside it.
   if (activeStage === 'results') {
-    return <ResultsStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} onNew={onNew} />
+    return <ResultsStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} onNew={onNew} onGoToAiAnalysis={() => setStage('aiAnalysis')} />
+  }
+
+  // The unified candidate AI analysis (spec follow-up) is its own dedicated, full-screen panel —
+  // reached from ResultsStage's excerpt link or the sidebar — same self-contained-page pattern as
+  // ResultsStage above rather than nesting inside this wizard's narrower chrome.
+  if (activeStage === 'aiAnalysis') {
+    return <CandidateAiAnalysisStage assessment={assessment} nav={nav} onExitToHub={onExitToHub} />
   }
 
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)

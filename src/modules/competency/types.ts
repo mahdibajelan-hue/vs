@@ -507,3 +507,102 @@ export interface CompAiAnalysis {
   generatedBy: string | null
   createdAt: string
 }
+
+// ---------------------------------------------------------------------------
+// Unified Candidate AI Analysis (spec follow-up, schema.sql Section 46) — ONE
+// comprehensive, evidence-based analysis per candidate covering personality
+// profiling, behavioral pattern, technical/specialized evaluation, and
+// job-fit together, returned by the comp-candidate-ai-analysis Edge Function.
+// Replaces the two separate AiAnalysisContent (technical-only) and
+// PersonalityAiAnalysisContent (personality-only) analyses as the module's
+// single AI-generation surface — see CandidateAiAnalysisStage.
+// ---------------------------------------------------------------------------
+
+export interface CandidateAiTechnicalAnalysis {
+  available: boolean
+  competency_analysis: {
+    technical: AiCompetencyDimension
+    problem_solving: AiCompetencyDimension
+    experience: AiCompetencyDimension
+    hse: AiCompetencyDimension
+    judgment: AiCompetencyDimension
+    communication: AiCompetencyDimension
+    leadership: AiCompetencyDimension
+    commercial: AiCompetencyDimension
+  }
+  strengths: string[]
+  development_areas: string[]
+  critical_gaps: string[]
+}
+
+export interface CandidateAiTraitAnalysis {
+  trait_key: string
+  score: number
+  range_label: string
+  analysis: string
+}
+
+export interface CandidateAiBehavioralAnalysis {
+  dimension_key: string
+  score: number
+  analysis: string
+  evidence: string[]
+}
+
+export interface CandidateAiPersonalityAnalysis {
+  available: boolean
+  response_validity_interpretation: string
+  trait_analysis: CandidateAiTraitAnalysis[]
+  behavioral_analysis: CandidateAiBehavioralAnalysis[]
+  observed_patterns: string[]
+  strength_patterns: string[]
+  watchpoints: string[]
+}
+
+export interface CandidateAiFollowUpQuestion {
+  question: string
+  purpose: string
+  competency: string
+  dimension_key: string
+  evidence_to_look_for: string
+  positive_indicators: string[]
+  risk_indicators: string[]
+}
+
+export interface CandidateAiEvidence {
+  source_type: 'QUESTION' | 'SJT' | 'JUDGE_COMMENT' | 'EXPERIENCE'
+  source_id: string
+  dimension_key: string
+  note: string
+}
+
+/** The comprehensive analysis content (spec follow-up) — always covers whichever of
+ * technical_analysis/personality_analysis actually has data for this candidate (each carries its
+ * own `available` flag rather than being nullable, so a half not yet completed still renders as an
+ * explicit "not yet available" state instead of a missing key). */
+export interface CandidateAiAnalysisContent {
+  executive_summary: string
+  technical_analysis: CandidateAiTechnicalAnalysis
+  personality_analysis: CandidateAiPersonalityAnalysis
+  /** Evidence-based narrative synthesizing the candidate's fit against the TARGET JOB's required
+   * behavioral profile — grounded strictly in the same role-alignment numbers the deterministic
+   * RoleAlignmentCard shows; explicitly says job-fit analysis isn't available yet when personality
+   * data or a job profile is missing. */
+  role_fit_narrative: string
+  development_areas: string[]
+  training_recommendations: string[]
+  career_development_paths: string[]
+  follow_up_questions: CandidateAiFollowUpQuestion[]
+  evidence: CandidateAiEvidence[]
+  confidence: 'low' | 'medium' | 'high'
+}
+
+export interface CandidateAiAnalysis {
+  id: string
+  assessmentId: string
+  model: string
+  analysis: CandidateAiAnalysisContent
+  confidence: string | null
+  generatedBy: string | null
+  createdAt: string
+}
