@@ -16,6 +16,7 @@ import type {
   CompCompetency,
   CompCompetencyDomain,
   CompCompetencyEvidenceSource,
+  CompCompetencyEvidenceDetail,
   CompCompetencyProfile,
   CompEvidenceSourceType,
   CompetencyAssessment,
@@ -514,6 +515,9 @@ interface CompetencyState {
   competencyProfileByAssessment: Record<string, CompCompetencyProfile>
   fetchCompetencyProfile: (assessmentId: string) => Promise<void>
   computeCompetencyProfile: (assessmentId: string) => Promise<void>
+  /** Candidate → Competency → Evidence → Assessment Item drill-down (comp_get_competency_evidence_detail,
+   * schema.sql Section 51) — read on demand when a competency is opened, never cached. */
+  fetchCompetencyEvidenceDetail: (assessmentId: string, competencyId: string) => Promise<CompCompetencyEvidenceDetail | null>
 
   /** Reusable, named question-mix "recipes" per job role — the Assessment Designer wizard's saved
    * output (spec section 6/36). */
@@ -689,6 +693,21 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       createdBy: uid,
       createdAt: now,
       updatedAt: now,
+    }
+    // The job role's active default blueprint is applied server-side at INSERT time
+    // (comp_assessments_apply_default_blueprint, schema.sql Section 51), so the design flags above
+    // are only the column defaults — read back what the trigger actually set.
+    const { data: design } = await supabase
+      .from('comp_assessments')
+      .select('blueprint_id, needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience')
+      .eq('id', id)
+      .maybeSingle()
+    if (design) {
+      created.blueprintId = design.blueprint_id ?? null
+      created.needsTechnicalAssessment = design.needs_technical_assessment
+      created.needsPersonalityAssessment = design.needs_personality_assessment
+      created.needsStructuredInterview = design.needs_structured_interview
+      created.includesExperience = design.includes_experience
     }
     set({ assessments: [created, ...get().assessments] })
     logAudit('ASSESSMENT_CREATED', 'comp_assessments', id, null, { candidateName: profile.candidateName, jobRole: profile.jobRole })
@@ -1600,6 +1619,15 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     await get().fetchCompetencyProfile(assessmentId)
   },
 
+  fetchCompetencyEvidenceDetail: async (assessmentId, competencyId) => {
+    const { data, error } = await supabase.rpc('comp_get_competency_evidence_detail', {
+      p_assessment_id: assessmentId,
+      p_competency_id: competencyId,
+    })
+    if (reportError('بارگذاری شواهد شایستگی', error)) return null
+    return (data ?? null) as CompCompetencyEvidenceDetail | null
+  },
+
   // Generates one assessment's frozen question snapshot from an Assessment Designer question-mix
   // grid (spec section 6-9): for every {category, difficulty, count} cell, picks `count` random
   // active+approved bank rows of exactly that type/difficulty (or every one available if the bank
@@ -1838,6 +1866,9 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (analysis) {
       set({ candidateAiAnalysisByAssessment: { ...get().candidateAiAnalysisByAssessment, [assessmentId]: compCandidateAiAnalysisFromRow(analysis) } })
     }
+    // The Edge Function recomputes the competency profile before grounding the analysis in it —
+    // refresh the local copy so the staleness check compares against the same numbers.
+    await get().fetchCompetencyProfile(assessmentId)
     return { error: null }
   },
 }))

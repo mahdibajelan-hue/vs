@@ -8341,3 +8341,310 @@ select
   true, true, true
 from comp_job_role_config j
 where not exists (select 1 from comp_assessment_blueprints b where b.job_role = j.job_role);
+
+-- ============================================================================
+-- Section 51: Enterprise Competency Assessment Engine — Phase 4: Candidate 360
+-- competency gap analysis (drill-down read RPC), AI-analysis grounding in the
+-- competency profile, and default-blueprint auto-apply on candidate creation.
+--
+-- 1. comp_get_competency_evidence_detail — the Candidate → Competency →
+--    Evidence → Assessment Item drill-down behind the results page's «تحلیل
+--    شکاف شایستگی» section. Read-only, SECURITY DEFINER, guarded by
+--    comp_can_access_assessment() exactly like comp_compute_competency_profile,
+--    so it only ever reveals data that caller could already read row by row
+--    (evidence/scores/interview ratings/panel scores). Nothing is re-scored:
+--    the evidence rows are returned as the Competency Engine stored them, each
+--    with its contribution to the competency score and the underlying items it
+--    was derived from. Two deliberate restrictions:
+--      * comp_question_bank reference answers / key points are never returned
+--        (evaluator-only material with its own access-scoped RLS).
+--      * personality item-level detail (the candidate's individual personality
+--        responses and SJT option scoring keys) is only returned when the
+--        caller also passes personality_can_access_assessment() — the same
+--        gate personality_responses' own RLS uses. Otherwise the evidence row
+--        is still shown (its score is already readable) with
+--        itemsRestricted = true.
+-- 2. comp_candidate_ai_analysis.competency_basis — the exact competency score
+--    rows (competency, required/actual level, score, status, confidence) the
+--    comp-candidate-ai-analysis Edge Function fed to Gemini. The results page
+--    recomputes the profile on every visit, so a computed_at comparison would
+--    always read "stale"; comparing the numbers themselves marks an analysis
+--    stale only when the profile it was grounded in actually changed (null =
+--    generated before the profile was part of the prompt → always stale).
+-- 3. comp_assessments_apply_default_blueprint — a candidate created without an
+--    explicit blueprint_id gets its job role's active default blueprint
+--    applied at INSERT time (blueprint_id + the four method flags), mirroring
+--    what applying it in the Exam Design stage does. BEFORE INSERT only: every
+--    later design change (comp_set_exam_design / applying another blueprint)
+--    is never touched, and an insert that names its own blueprint_id is left
+--    exactly as given. The audit entry records the blueprint version applied.
+-- ============================================================================
+
+alter table comp_candidate_ai_analysis add column if not exists competency_basis jsonb;
+
+create or replace function comp_assessments_apply_default_blueprint()
+returns trigger as $$
+declare
+  v_bp comp_assessment_blueprints%rowtype;
+begin
+  if new.blueprint_id is not null then
+    return new;
+  end if;
+  select * into v_bp
+  from comp_assessment_blueprints b
+  where b.job_role = new.job_role and b.is_default and b.active
+  limit 1;
+  if not found then
+    return new;
+  end if;
+  new.blueprint_id := v_bp.id;
+  new.needs_technical_assessment := v_bp.includes_technical;
+  new.needs_personality_assessment := v_bp.includes_personality;
+  new.needs_structured_interview := v_bp.includes_structured_interview;
+  new.includes_experience := v_bp.includes_experience;
+  perform comp_log_audit(
+    'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED', 'comp_assessments', new.id, null,
+    jsonb_build_object(
+      'blueprintId', v_bp.id,
+      'blueprintVersion', v_bp.version,
+      'needsTechnicalAssessment', v_bp.includes_technical,
+      'needsPersonalityAssessment', v_bp.includes_personality,
+      'needsStructuredInterview', v_bp.includes_structured_interview,
+      'includesExperience', v_bp.includes_experience
+    )
+  );
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_assessments_apply_default_blueprint on comp_assessments;
+create trigger trg_comp_assessments_apply_default_blueprint before insert on comp_assessments
+  for each row execute function comp_assessments_apply_default_blueprint();
+
+create or replace function comp_get_competency_evidence_detail(p_assessment_id uuid, p_competency_id uuid)
+returns jsonb as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_competency comp_competencies%rowtype;
+  v_pa_id uuid;
+  v_personality_access boolean := false;
+  v_excluded_types text[];
+  v_total_weight numeric;
+  v_evidence jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select * into v_competency from comp_competencies where id = p_competency_id;
+  if not found then
+    raise exception 'competency not found';
+  end if;
+
+  -- Same "excluded by design" list as comp_compute_competency_profile (Section 50).
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  select pa.id into v_pa_id from personality_assessments pa where pa.assessment_id = p_assessment_id;
+  if v_pa_id is not null then
+    v_personality_access := personality_can_access_assessment(v_pa_id);
+  end if;
+
+  select coalesce(sum(e.effective_weight), 0) into v_total_weight
+  from comp_competency_evidence e
+  where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id;
+
+  select coalesce(jsonb_agg(row_json order by source_order, normalized_score desc), '[]'::jsonb) into v_evidence
+  from (
+    select
+      array_position(array['TECHNICAL_CATEGORY', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'STRUCTURED_INTERVIEW', 'EXPERIENCE'], e.source_type) as source_order,
+      e.normalized_score,
+      jsonb_build_object(
+        'id', e.id,
+        'sourceType', e.source_type,
+        'sourceRef', e.source_ref,
+        'sourceItemId', e.source_item_id,
+        'sourceLabel', e.source_label,
+        'normalizedScore', e.normalized_score,
+        'effectiveWeight', e.effective_weight,
+        -- Points this row adds to the competency's weighted-average score, and its weight share.
+        'contribution', case when v_total_weight > 0 then round(e.normalized_score * e.effective_weight / v_total_weight, 2) end,
+        'weightShare', case when v_total_weight > 0 then round(e.effective_weight / v_total_weight, 4) end,
+        'rawValue', e.raw_value,
+        'computedAt', e.computed_at,
+        'itemsRestricted', e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT') and not v_personality_access,
+        'items', case
+          when e.source_type = 'TECHNICAL_CATEGORY' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'TECHNICAL_QUESTION',
+              'questionId', qb.id,
+              'questionText', qb.question_text,
+              'category', qb.category,
+              'subCategory', qb.sub_category,
+              'difficulty', qb.difficulty,
+              'candidateAnswer', nullif(v_assessment.answers -> qb.id::text ->> 'candidateAnswer', ''),
+              'leadScore', case when jsonb_typeof(v_assessment.answers -> qb.id::text -> 'score') = 'number'
+                then (v_assessment.answers -> qb.id::text ->> 'score')::numeric end,
+              'leadNote', nullif(v_assessment.answers -> qb.id::text ->> 'note', ''),
+              -- Only SUBMITTED panel sheets count toward the official score, so only those are shown.
+              'ratings', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'raterId', ps.panelist_id,
+                  'raterName', coalesce(nullif(p.full_name, ''), p.email, 'داور'),
+                  'score', case when jsonb_typeof(ps.answers -> qb.id::text -> 'score') = 'number'
+                    then (ps.answers -> qb.id::text ->> 'score')::numeric end,
+                  'note', nullif(ps.answers -> qb.id::text ->> 'note', ''),
+                  'submittedAt', ps.submitted_at
+                ) order by ps.submitted_at), '[]'::jsonb)
+                from comp_panelist_scores ps
+                left join profiles p on p.id = ps.panelist_id
+                where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+              )
+            )), '[]'::jsonb)
+            from comp_question_bank qb
+            where qb.id::text = e.source_item_id
+          )
+          when e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT') and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'PERSONALITY_ITEM',
+              'questionId', pq.id,
+              'questionType', pq.question_type,
+              'questionText', pq.question_text,
+              'reverseScored', pq.reverse_scored,
+              'response', pr.response_value,
+              'chosenOptionLabel', (
+                select o.value ->> 'label_fa'
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+                where o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                limit 1
+              ),
+              'answeredAt', pr.answered_at
+            ) order by pq.question_type, pr.answered_at), '[]'::jsonb)
+            from personality_dimension_scores ds
+            join personality_responses pr on pr.personality_assessment_id = ds.personality_assessment_id
+            join personality_questions pq on pq.id = pr.question_id
+            where ds.id::text = e.source_item_id
+              and ds.personality_assessment_id = v_pa_id
+              and (
+                (e.source_type = 'PERSONALITY_TRAIT' and pq.trait_id = ds.trait_id)
+                or (e.source_type = 'PERSONALITY_DIMENSION' and pq.dimension_id = ds.dimension_id)
+              )
+          )
+          when e.source_type = 'SJT' and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'SJT_ITEM',
+              'questionId', pq.id,
+              'questionText', pq.question_text,
+              'scenarioContext', pq.scenario_context,
+              'selectedOption', pr.response_value ->> 'selected_option',
+              'options', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'key', o.value ->> 'key',
+                  'labelFa', o.value ->> 'label_fa',
+                  'score', case when jsonb_typeof(o.value -> 'score') = 'number' then (o.value ->> 'score')::numeric end,
+                  'dimensionKey', o.value ->> 'dimension_key',
+                  'chosen', o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                ) order by o.ordinality), '[]'::jsonb)
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) with ordinality o(value, ordinality)
+              ),
+              'answeredAt', pr.answered_at
+            )), '[]'::jsonb)
+            from personality_responses pr
+            join personality_questions pq on pq.id = pr.question_id
+            where pr.personality_assessment_id = v_pa_id and pq.id::text = e.source_item_id
+          )
+          when e.source_type = 'STRUCTURED_INTERVIEW' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'INTERVIEW_RATING',
+              'raterId', r.rater_id,
+              'raterName', coalesce(nullif(p.full_name, ''), p.email, 'ارزیاب'),
+              'rating', r.rating,
+              'notes', r.notes,
+              'ratedAt', r.updated_at
+            )), '[]'::jsonb)
+            from comp_interview_ratings r
+            left join profiles p on p.id = r.rater_id
+            where r.assessment_id = p_assessment_id and r.competency_id = p_competency_id and r.rater_id::text = e.source_item_id
+          )
+          when e.source_type = 'EXPERIENCE' then jsonb_build_array(jsonb_build_object(
+            'kind', 'EXPERIENCE',
+            'metric', e.source_ref,
+            'yearsExperienceTotal', v_assessment.years_experience_total,
+            'yearsExperiencePipeline', v_assessment.years_experience_pipeline,
+            'certifications', case when e.source_ref = 'certifications' then v_assessment.certifications end,
+            'education', case when e.source_ref = 'education' then v_assessment.education end,
+            'employmentHistory', case when e.source_ref in ('years_total', 'years_pipeline') then v_assessment.employment_history end
+          ))
+          else '[]'::jsonb
+        end
+      ) as row_json
+    from comp_competency_evidence e
+    where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id
+  ) x;
+
+  return jsonb_build_object(
+    'assessmentId', p_assessment_id,
+    'competency', jsonb_build_object(
+      'id', v_competency.id,
+      'key', v_competency.key,
+      'labelFa', v_competency.label_fa,
+      'description', v_competency.description,
+      'domain', v_competency.domain,
+      'proficiencyLevels', v_competency.proficiency_levels
+    ),
+    'requirement', (
+      select jsonb_build_object('requiredLevel', r.required_level, 'isCritical', r.is_critical, 'weight', r.weight)
+      from comp_job_competency_requirements r
+      where r.job_role = v_assessment.job_role and r.competency_id = p_competency_id
+    ),
+    'score', (
+      select jsonb_build_object(
+        'requiredLevel', s.required_level, 'levelCount', s.level_count, 'actualScore', s.actual_score,
+        'actualLevel', s.actual_level, 'gap', s.gap, 'isCritical', s.is_critical, 'weight', s.weight,
+        'evidenceCount', s.evidence_count, 'sourceTypesCovered', s.source_types_covered, 'coverage', s.coverage,
+        'confidence', s.confidence, 'status', s.status, 'computedAt', s.computed_at
+      )
+      from comp_competency_scores s
+      where s.assessment_id = p_assessment_id and s.competency_id = p_competency_id
+    ),
+    'design', jsonb_build_object(
+      'technical', v_assessment.needs_technical_assessment,
+      'personality', v_assessment.needs_personality_assessment,
+      'structuredInterview', v_assessment.needs_structured_interview,
+      'experience', v_assessment.includes_experience
+    ),
+    'personalityItemsVisible', v_personality_access,
+    -- Every configured source for this competency, so the drawer can show which ones produced
+    -- evidence, which produced none, and which were left out by design (never "missing").
+    'sources', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'sourceType', s.source_type,
+        'sourceRef', s.source_ref,
+        'weight', s.weight,
+        'excludedByDesign', s.source_type = any(v_excluded_types),
+        'itemCount', (
+          select count(*) from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )
+      ) order by s.source_type, s.source_ref), '[]'::jsonb)
+      from comp_competency_evidence_sources s
+      where s.competency_id = p_competency_id
+    ),
+    'evidence', v_evidence
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_competency_evidence_detail(uuid, uuid) from public, anon;
+grant execute on function comp_get_competency_evidence_detail(uuid, uuid) to authenticated;

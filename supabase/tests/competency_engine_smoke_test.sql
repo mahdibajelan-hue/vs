@@ -44,6 +44,16 @@
 --     __smoke_empty__ only EXPERIENCE/years_pipeline (null) remains → still INSUFFICIENT_EVIDENCE / NONE / cov 0
 --     and no TECHNICAL_CATEGORY / STRUCTURED_INTERVIEW evidence row may exist at all.
 --   every method OFF: every competency → INSUFFICIENT_EVIDENCE / NONE, coverage 0, zero evidence rows.
+--
+-- Section 51 additions:
+--   comp_get_competency_evidence_detail — shape (competency/requirement/score/design/sources/evidence),
+--     contributions summing back to the competency score (65), q1 drilling down to its bank question with
+--     exactly the 2 SUBMITTED panel ratings and no reference answer, interview → rater rating + notes,
+--     experience → recorded years, SJT items gated by personality_can_access_assessment, an empty
+--     competency listing its configured sources with no evidence, and an outsider refused ('forbidden').
+--   Default blueprint auto-apply — a candidate created without a blueprint gets the role's active default
+--     (flags + blueprint_id + audit entry); a later comp_set_exam_design is never overridden; an explicit
+--     blueprint_id at insert is kept as given; an inactive default is never applied.
 
 do $$
 declare
@@ -69,6 +79,16 @@ declare
   v_ev comp_competency_evidence%rowtype;
   v_n int;
   v_n2 int;
+  v_num numeric;
+  v_detail jsonb;
+  v_json jsonb;
+  v_outsider uuid;
+  v_bp_default uuid;
+  v_bp_other uuid;
+  v_comp_bp uuid;
+  v_comp_bp2 uuid;
+  v_comp_bp3 uuid;
+  v_assessment comp_assessments%rowtype;
 begin
   select id into v_admin from profiles where is_admin order by created_at limit 1;
   if v_admin is null then
@@ -282,6 +302,84 @@ begin
     raise exception 'ASSERTION FAILED: expected a COMPETENCY_PROFILE_COMPUTED audit entry attributed to the caller';
   end if;
 
+  -- ---- Evidence drill-down RPC (Section 51): shape + traceability ----
+  v_detail := comp_get_competency_evidence_detail(v_comp_id, v_c_tech);
+  if not (v_detail ?& array['assessmentId', 'competency', 'requirement', 'score', 'design', 'sources', 'evidence', 'personalityItemsVisible']) then
+    raise exception 'ASSERTION FAILED (detail): missing top-level keys, got %', (select jsonb_agg(k) from jsonb_object_keys(v_detail) k);
+  end if;
+  if v_detail -> 'competency' ->> 'key' <> '__smoke_tech__' or (v_detail -> 'requirement' ->> 'requiredLevel')::numeric <> 4
+     or (v_detail -> 'requirement' ->> 'isCritical')::boolean is not true or v_detail -> 'score' ->> 'status' <> 'CRITICAL_GAP'
+     or (v_detail -> 'score' ->> 'actualLevel')::numeric <> 3.6 then
+    raise exception 'ASSERTION FAILED (detail): competency/requirement/score block does not match the engine row, got % / % / %',
+      v_detail -> 'competency', v_detail -> 'requirement', v_detail -> 'score';
+  end if;
+  if jsonb_array_length(v_detail -> 'evidence') <> 4 or jsonb_array_length(v_detail -> 'sources') <> 4
+     or exists (select 1 from jsonb_array_elements(v_detail -> 'sources') s where (s ->> 'excludedByDesign')::boolean) then
+    raise exception 'ASSERTION FAILED (detail): expected 4 evidence rows and 4 configured sources (none excluded), got % / %',
+      jsonb_array_length(v_detail -> 'evidence'), v_detail -> 'sources';
+  end if;
+  -- Contributions must add back up to the competency score (65) — the drill-down explains the number.
+  select sum((e ->> 'contribution')::numeric) into v_num from jsonb_array_elements(v_detail -> 'evidence') e;
+  if abs(v_num - 65) > 0.05 then
+    raise exception 'ASSERTION FAILED (detail): evidence contributions sum to %, expected the competency score 65', v_num;
+  end if;
+  select e into v_json from jsonb_array_elements(v_detail -> 'evidence') e where e ->> 'sourceItemId' = v_q1::text;
+  if v_json -> 'items' -> 0 ->> 'kind' <> 'TECHNICAL_QUESTION' or v_json -> 'items' -> 0 ->> 'questionId' <> v_q1::text
+     or jsonb_array_length(v_json -> 'items' -> 0 -> 'ratings') <> 2
+     or (v_json -> 'items' -> 0 ->> 'leadScore')::numeric <> 1
+     or v_json -> 'items' -> 0 ? 'referenceAnswer' or v_json -> 'items' -> 0 ? 'reference_answer' then
+    raise exception 'ASSERTION FAILED (detail): q1 should drill down to its bank question with exactly the 2 SUBMITTED panel ratings, the lead score and no reference answer, got %', v_json;
+  end if;
+  select e into v_json from jsonb_array_elements(v_detail -> 'evidence') e where e ->> 'sourceType' = 'STRUCTURED_INTERVIEW';
+  if (v_json -> 'items' -> 0 ->> 'rating')::numeric <> 4 or v_json -> 'items' -> 0 ->> 'notes' <> 'smoke interview'
+     or v_json -> 'items' -> 0 ->> 'raterId' <> v_admin::text then
+    raise exception 'ASSERTION FAILED (detail): interview evidence should drill down to the rater''s rating + notes, got %', v_json;
+  end if;
+  select e into v_json from jsonb_array_elements(v_detail -> 'evidence') e where e ->> 'sourceRef' = 'years_total';
+  if v_json -> 'items' -> 0 ->> 'kind' <> 'EXPERIENCE' or (v_json -> 'items' -> 0 ->> 'yearsExperienceTotal')::numeric <> 6 then
+    raise exception 'ASSERTION FAILED (detail): experience evidence should drill down to the recorded experience, got %', v_json;
+  end if;
+
+  v_detail := comp_get_competency_evidence_detail(v_comp_id, v_c_behav);
+  select e into v_json from jsonb_array_elements(v_detail -> 'evidence') e where e ->> 'sourceType' = 'SJT';
+  if (v_json ->> 'itemsRestricted')::boolean is distinct from not personality_can_access_assessment(v_pa_id) then
+    raise exception 'ASSERTION FAILED (detail): SJT itemsRestricted must mirror personality_can_access_assessment, got %', v_json ->> 'itemsRestricted';
+  end if;
+  if personality_can_access_assessment(v_pa_id) and not exists (
+    select 1 from jsonb_array_elements(v_json -> 'items' -> 0 -> 'options') o where (o ->> 'chosen')::boolean and o ->> 'key' = v_sjt_opt
+  ) then
+    raise exception 'ASSERTION FAILED (detail): SJT evidence should drill down to the question with the chosen option marked, got %', v_json;
+  end if;
+
+  v_detail := comp_get_competency_evidence_detail(v_comp_id, v_c_empty);
+  if jsonb_array_length(v_detail -> 'evidence') <> 0 or v_detail -> 'score' ->> 'status' <> 'INSUFFICIENT_EVIDENCE'
+     or jsonb_array_length(v_detail -> 'sources') <> 2 then
+    raise exception 'ASSERTION FAILED (detail/empty): expected no evidence, INSUFFICIENT_EVIDENCE and both configured sources listed, got %', v_detail;
+  end if;
+
+  -- Access guard: a user who is neither creator, panelist nor module admin must be refused.
+  select p.id into v_outsider
+  from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+    and not exists (select 1 from comp_panelists cp where cp.assessment_id = v_comp_id and cp.user_id = p.id)
+  order by p.created_at
+  limit 1;
+  if v_outsider is null then
+    raise notice 'competency_engine_smoke_test: no non-admin profile available — evidence-detail access-guard check skipped';
+  else
+    perform set_config('request.jwt.claims', json_build_object('sub', v_outsider, 'role', 'authenticated')::text, true);
+    begin
+      perform comp_get_competency_evidence_detail(v_comp_id, v_c_tech);
+      raise exception 'ASSERTION FAILED (detail): an outsider could read the evidence drill-down';
+    exception when others then
+      if sqlerrm <> 'forbidden' then
+        raise;
+      end if;
+    end;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  end if;
+
   -- ---- Exam design exclusion (Section 50) ----
   update comp_assessments set needs_technical_assessment = false, needs_structured_interview = false where id = v_comp_id;
   perform comp_compute_competency_profile(v_comp_id);
@@ -327,18 +425,76 @@ begin
     raise exception 'ASSERTION FAILED (design/all-off): expected 0 evidence rows and 5 INSUFFICIENT_EVIDENCE/NONE competencies, got % / %', v_n, v_n2;
   end if;
 
+  -- ---- Default blueprint auto-apply on creation (Section 51) ----
+  insert into comp_assessment_blueprints (job_role, title, is_default, active, includes_technical, includes_personality, includes_structured_interview, includes_experience)
+  values (v_role, '__smoke_default_bp__', true, true, false, true, true, false)
+  returning id into v_bp_default;
+  insert into comp_assessment_blueprints (job_role, title, is_default, active, includes_technical, includes_personality, includes_structured_interview, includes_experience)
+  values (v_role, '__smoke_other_bp__', false, true, true, false, false, true)
+  returning id into v_bp_other;
+
+  -- Created without a blueprint → the role's active default is applied (overriding the column defaults).
+  insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by)
+  values (v_role, '__smoke_test_competency_bp__', 'test', '0000000010', '09120000010', 'smoke-bp@example.com', v_admin)
+  returning id into v_comp_bp;
+  select * into v_assessment from comp_assessments where id = v_comp_bp;
+  if v_assessment.blueprint_id is distinct from v_bp_default or v_assessment.needs_technical_assessment or not v_assessment.needs_personality_assessment
+     or not v_assessment.needs_structured_interview or v_assessment.includes_experience then
+    raise exception 'ASSERTION FAILED (blueprint): default blueprint not auto-applied on creation, got bp % / tech % / pers % / int % / exp %',
+      v_assessment.blueprint_id, v_assessment.needs_technical_assessment, v_assessment.needs_personality_assessment,
+      v_assessment.needs_structured_interview, v_assessment.includes_experience;
+  end if;
+  if not exists (select 1 from comp_audit_log where action = 'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED' and entity_id = v_comp_bp
+                 and new_value ->> 'blueprintId' = v_bp_default::text and (new_value ->> 'blueprintVersion')::int = 1) then
+    raise exception 'ASSERTION FAILED (blueprint): auto-apply did not write an audit entry recording the blueprint version';
+  end if;
+
+  -- A later explicit design is never overridden (neither by the trigger nor by an unrelated update).
+  perform comp_set_exam_design(v_comp_bp, false, true, false, true);
+  update comp_assessments set candidate_position = 'test 2' where id = v_comp_bp;
+  select * into v_assessment from comp_assessments where id = v_comp_bp;
+  if not v_assessment.needs_technical_assessment or v_assessment.needs_personality_assessment
+     or v_assessment.needs_structured_interview or not v_assessment.includes_experience or v_assessment.blueprint_id is distinct from v_bp_default then
+    raise exception 'ASSERTION FAILED (blueprint): explicit design after creation was overridden, got tech % / pers % / int % / exp % / bp %',
+      v_assessment.needs_technical_assessment, v_assessment.needs_personality_assessment, v_assessment.needs_structured_interview,
+      v_assessment.includes_experience, v_assessment.blueprint_id;
+  end if;
+
+  -- An insert that names its own blueprint is left exactly as given.
+  insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by,
+    blueprint_id, needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience)
+  values (v_role, '__smoke_test_competency_bp2__', 'test', '0000000011', '09120000011', 'smoke-bp2@example.com', v_admin,
+    v_bp_other, true, false, false, true)
+  returning id into v_comp_bp2;
+  select * into v_assessment from comp_assessments where id = v_comp_bp2;
+  if v_assessment.blueprint_id is distinct from v_bp_other or not v_assessment.needs_technical_assessment or v_assessment.needs_personality_assessment
+     or v_assessment.needs_structured_interview or not v_assessment.includes_experience
+     or exists (select 1 from comp_audit_log where action = 'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED' and entity_id = v_comp_bp2) then
+    raise exception 'ASSERTION FAILED (blueprint): an explicit blueprint_id at creation was overridden by the default';
+  end if;
+
+  -- No active default for the role → nothing applied, column defaults kept.
+  update comp_assessment_blueprints set active = false where id = v_bp_default;
+  insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by)
+  values (v_role, '__smoke_test_competency_bp3__', 'test', '0000000012', '09120000012', 'smoke-bp3@example.com', v_admin)
+  returning id into v_comp_bp3;
+  select * into v_assessment from comp_assessments where id = v_comp_bp3;
+  if v_assessment.blueprint_id is not null or not v_assessment.needs_technical_assessment or v_assessment.needs_personality_assessment then
+    raise exception 'ASSERTION FAILED (blueprint): an inactive default blueprint must not be applied, got bp %', v_assessment.blueprint_id;
+  end if;
+
   raise notice 'competency_engine_smoke_test: ALL ASSERTIONS PASSED';
 
   -- ---- Cleanup (success path) ----
-  delete from comp_audit_log where entity_id = v_comp_id and action = 'COMPETENCY_PROFILE_COMPUTED';
-  delete from comp_assessments where id = v_comp_id;
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%');
+  delete from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%';
   delete from comp_competencies where key in ('__smoke_tech__', '__smoke_behav__', '__smoke_meets__', '__smoke_gap__', '__smoke_empty__');
   delete from comp_job_role_config where job_role = v_role;
 
 exception when others then
   -- Clean up even on assertion failure, then re-raise so the caller still sees the failure.
-  delete from comp_audit_log where entity_id = v_comp_id and action = 'COMPETENCY_PROFILE_COMPUTED';
-  delete from comp_assessments where candidate_name = '__smoke_test_competency__';
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%');
+  delete from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%';
   delete from comp_competencies where key in ('__smoke_tech__', '__smoke_behav__', '__smoke_meets__', '__smoke_gap__', '__smoke_empty__');
   delete from comp_job_role_config where job_role = '__smoke_competency_role__';
   raise;

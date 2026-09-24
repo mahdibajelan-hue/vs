@@ -11,6 +11,7 @@ import {
   Lightbulb,
   Loader2,
   Sparkles,
+  Target,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { computeCompletion } from '../lib/competencyModel'
 import { computeRoleCompletion, questionsForAssessment, resolveOfficialAnswers, usesLegacyPmRubric } from '../lib/roleCompetencyModel'
+import { isAiAnalysisStale } from '../lib/competencyGap'
 import type { AiCompetencyDimension, CompetencyAssessment } from '../types'
 
 const DIMENSION_LABEL_FA: Record<string, string> = {
@@ -54,6 +56,8 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const allPanelists = useCompetencyStore((s) => s.panelists)
+  const competencyScores = useCompetencyStore((s) => s.competencyProfileByAssessment[assessment.id]?.scores)
+  const fetchCompetencyProfile = useCompetencyStore((s) => s.fetchCompetencyProfile)
   const [error, setError] = useState<string | null>(null)
   const [expandedDim, setExpandedDim] = useState<string | null>(null)
   const [expandedFollowUp, setExpandedFollowUp] = useState<number | null>(null)
@@ -61,8 +65,14 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
   useEffect(() => {
     if (analysis === undefined) fetchCandidateAiAnalysis(assessment.id)
     if (questionBank.length === 0) fetchQuestionBank()
+    if (!competencyScores) fetchCompetencyProfile(assessment.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessment.id])
+
+  // Phase 4: the analysis is grounded in the competency profile it was generated from
+  // (competency_basis) — if the profile has changed since, say so rather than silently showing
+  // numbers that no longer match the gap analysis on the results page.
+  const stale = isAiAnalysisStale(analysis, competencyScores)
 
   // Same stage-strip computation ResultsStage uses — kept self-contained here too so this page never
   // depends on the wizard's own in-progress "questions" stage state (roleQuestions/domainIndex etc.).
@@ -117,6 +127,19 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
           </div>
         )}
 
+        {stale && !loading && (
+          <button
+            onClick={handleGenerate}
+            className="mb-3 flex w-full items-start gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/10 p-2.5 text-right text-[10.5px] text-amber-200 hover:bg-amber-500/20"
+          >
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-bold">تحلیل به‌روز نیست — بازتولید.</span>{' '}
+              {analysis?.competencyBasis ? 'پروفایل شایستگی متقاضی پس از تولید این تحلیل تغییر کرده است.' : 'این تحلیل پیش از افزوده‌شدن تحلیل شکاف شایستگی تولید شده است.'}
+            </span>
+          </button>
+        )}
+
         {!analysis && !loading && !error && <p className="text-[11px] text-muted">هنوز تحلیل جامعی برای این متقاضی تولید نشده است.</p>}
       </div>
 
@@ -126,6 +149,16 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
             <p className="mb-1.5 text-xs font-bold text-indigo-200">خلاصه اجرایی</p>
             <p className="text-[11.5px] leading-7 text-secondary">{content.executive_summary}</p>
           </div>
+
+          {content.competency_gap_narrative && (
+            <>
+              <SectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی</SectionHeading>
+              <div className="glass-panel rounded-2xl border border-violet-400/25 bg-violet-500/[0.04] p-4">
+                <p className="text-[11.5px] leading-7 text-secondary">{content.competency_gap_narrative}</p>
+                <p className="mt-2 text-[9.5px] text-muted">بر پایه همان اعداد جدول شکاف شایستگی در صفحه نتایج — «شواهد ناکافی» به‌عنوان نامعلوم تفسیر شده، نه ضعف.</p>
+              </div>
+            </>
+          )}
 
           {/* Technical analysis */}
           <SectionHeading icon={Brain} accent="#a855f7">تحلیل فنی و تخصصی</SectionHeading>

@@ -427,6 +427,139 @@ export interface CompCompetencyProfile {
   evidence: CompCompetencyEvidence[]
 }
 
+// ---------------------------------------------------------------------------
+// Candidate → Competency → Evidence → Assessment Item drill-down (Phase 4,
+// comp_get_competency_evidence_detail, schema.sql Section 51). Read-only JSON
+// straight from the RPC (already camelCase), so these mirror its shape 1:1.
+// ---------------------------------------------------------------------------
+
+export interface CompEvidencePanelRating {
+  raterId: string
+  raterName: string
+  score: number | null
+  note: string | null
+  submittedAt: string | null
+}
+
+export interface CompEvidenceTechnicalItem {
+  kind: 'TECHNICAL_QUESTION'
+  questionId: string
+  questionText: string
+  category: string
+  subCategory: string
+  difficulty: string
+  candidateAnswer: string | null
+  leadScore: number | null
+  leadNote: string | null
+  ratings: CompEvidencePanelRating[]
+}
+
+export interface CompEvidencePersonalityItem {
+  kind: 'PERSONALITY_ITEM'
+  questionId: string
+  questionType: string
+  questionText: string
+  reverseScored: boolean
+  response: { selected?: number | string; selected_option?: string } | null
+  chosenOptionLabel: string | null
+  answeredAt: string | null
+}
+
+export interface CompEvidenceSjtItem {
+  kind: 'SJT_ITEM'
+  questionId: string
+  questionText: string
+  scenarioContext: string
+  selectedOption: string | null
+  options: { key: string; labelFa: string; score: number | null; dimensionKey: string | null; chosen: boolean }[]
+  answeredAt: string | null
+}
+
+export interface CompEvidenceInterviewItem {
+  kind: 'INTERVIEW_RATING'
+  raterId: string
+  raterName: string
+  rating: number
+  notes: string
+  ratedAt: string
+}
+
+export interface CompEvidenceExperienceItem {
+  kind: 'EXPERIENCE'
+  metric: CompExperienceMetric
+  yearsExperienceTotal: number | null
+  yearsExperiencePipeline: number | null
+  certifications: { title?: string; issuer?: string; date?: string }[] | null
+  education: { degree?: string; field?: string; institution?: string; year?: string }[] | null
+  employmentHistory: { employer?: string; position?: string; startDate?: string; endDate?: string; isPipelineRole?: boolean }[] | null
+}
+
+export type CompEvidenceDetailItem =
+  | CompEvidenceTechnicalItem
+  | CompEvidencePersonalityItem
+  | CompEvidenceSjtItem
+  | CompEvidenceInterviewItem
+  | CompEvidenceExperienceItem
+
+export interface CompEvidenceDetailRow {
+  id: string
+  sourceType: CompEvidenceSourceType
+  sourceRef: string
+  sourceItemId: string
+  sourceLabel: string
+  normalizedScore: number
+  effectiveWeight: number
+  /** Points this row adds to the competency's weighted-average 0-100 score. */
+  contribution: number | null
+  weightShare: number | null
+  rawValue: Record<string, unknown>
+  computedAt: string
+  /** Personality item-level detail needs personality-module access on top of assessment access. */
+  itemsRestricted: boolean
+  items: CompEvidenceDetailItem[] | null
+}
+
+export interface CompEvidenceDetailSource {
+  sourceType: CompEvidenceSourceType
+  sourceRef: string
+  weight: number
+  excludedByDesign: boolean
+  itemCount: number
+}
+
+export interface CompCompetencyEvidenceDetail {
+  assessmentId: string
+  competency: {
+    id: string
+    key: string
+    labelFa: string
+    description: string
+    domain: CompCompetencyDomain
+    /** Raw comp_competencies.proficiency_levels jsonb (snake_case keys, as stored). */
+    proficiencyLevels: { level: number; label_fa: string }[]
+  }
+  requirement: { requiredLevel: number; isCritical: boolean; weight: number } | null
+  score: {
+    requiredLevel: number
+    levelCount: number
+    actualScore: number | null
+    actualLevel: number | null
+    gap: number | null
+    isCritical: boolean
+    weight: number
+    evidenceCount: number
+    sourceTypesCovered: number
+    coverage: number
+    confidence: CompCompetencyConfidence
+    status: CompCompetencyStatus
+    computedAt: string
+  } | null
+  design: { technical: boolean; personality: boolean; structuredInterview: boolean; experience: boolean }
+  personalityItemsVisible: boolean
+  sources: CompEvidenceDetailSource[]
+  evidence: CompEvidenceDetailRow[]
+}
+
 export interface EducationEntry {
   id: string
   degree: string
@@ -789,6 +922,20 @@ export interface CandidateAiAnalysisContent {
   follow_up_questions: CandidateAiFollowUpQuestion[]
   evidence: CandidateAiEvidence[]
   confidence: 'low' | 'medium' | 'high'
+  /** Phase 4: narrative grounded strictly in the Competency Engine's gap table (required/actual/gap/
+   * status/confidence) — absent on analyses generated before the competency profile was fed in. */
+  competency_gap_narrative?: string
+}
+
+/** One competency score row exactly as it was fed to Gemini (comp_candidate_ai_analysis.
+ * competency_basis) — compared against the current profile to tell whether the analysis is stale. */
+export interface CandidateAiCompetencyBasisRow {
+  competencyId: string
+  requiredLevel: number
+  actualScore: number | null
+  actualLevel: number | null
+  status: CompCompetencyStatus
+  confidence: CompCompetencyConfidence
 }
 
 export interface CandidateAiAnalysis {
@@ -799,4 +946,6 @@ export interface CandidateAiAnalysis {
   confidence: string | null
   generatedBy: string | null
   createdAt: string
+  /** null = generated before the competency profile was part of the prompt. */
+  competencyBasis: CandidateAiCompetencyBasisRow[] | null
 }

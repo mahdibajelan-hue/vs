@@ -4,6 +4,7 @@ import type {
   AttachmentKind,
   CandidateAiAnalysis,
   CandidateAiAnalysisContent,
+  CandidateAiCompetencyBasisRow,
   CertificationEntry,
   CompAiAnalysis,
   CompAssessmentBlueprint,
@@ -747,6 +748,7 @@ export interface CompCandidateAiAnalysisRow {
   confidence: string | null
   generated_by: string | null
   created_at: string
+  competency_basis?: CandidateAiCompetencyBasisRow[] | null
 }
 
 export function compCandidateAiAnalysisFromRow(r: CompCandidateAiAnalysisRow): CandidateAiAnalysis {
@@ -758,5 +760,6 @@ export function compCandidateAiAnalysisFromRow(r: CompCandidateAiAnalysisRow): C
     confidence: r.confidence,
     generatedBy: r.generated_by,
     createdAt: r.created_at,
+    competencyBasis: Array.isArray(r.competency_basis) ? r.competency_basis : null,
   }
 }

@@ -1,6 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand } from '../lib/competencyModel'
 import { usesLegacyPmRubric, type RoleRecommendation, ROLE_RECOMMENDATION_LABEL_FA } from '../lib/roleCompetencyModel'
+import { formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type GapRow } from '../lib/competencyGap'
 import type { CompetencyAnswers, CompetencyAssessment, DomainScore } from '../types'
 
 /**
@@ -99,9 +100,21 @@ interface CompetencyPrintReportProps {
    * above) — the caller resolves the job-role catalog label and passes it down, same convention as
    * every other value this report renders. */
   jobRoleLabel: string
+  /** Phase 4 gap-analysis rows (Competency Engine output) — rendered as one compact table; omitted
+   * when the candidate's competency profile hasn't been computed. */
+  competencyGapRows?: GapRow[]
 }
 
-export function CompetencyPrintReport({ assessment, panel = [], domainScoresOverride, answersOverride, qualificationOverride, roleRecommendation, jobRoleLabel }: CompetencyPrintReportProps) {
+export function CompetencyPrintReport({
+  assessment,
+  panel = [],
+  domainScoresOverride,
+  answersOverride,
+  qualificationOverride,
+  roleRecommendation,
+  jobRoleLabel,
+  competencyGapRows = [],
+}: CompetencyPrintReportProps) {
   const isPM = usesLegacyPmRubric(assessment)
   const domainScores = domainScoresOverride ?? computeDomainScores(assessment.answers)
   const overall = computeOverallPercent(domainScores)
@@ -249,6 +262,46 @@ export function CompetencyPrintReport({ assessment, panel = [], domainScoresOver
             </div>
           ))}
           <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>امتیاز کلی بالای این گزارش میانگین امتیازات همهٔ داورانی است که ثبت نهایی کرده‌اند.</p>
+        </div>
+      )}
+
+      {competencyGapRows.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 800 }}>تحلیل شکاف شایستگی</p>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', color: sub }}>
+                {['شایستگی', 'الزامی', 'واقعی', 'شکاف', 'اطمینان', 'شواهد', 'وضعیت'].map((h) => (
+                  <th key={h} style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 700, borderBottom: `1px solid ${line}` }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortGapRows(competencyGapRows, 'severity').map((r) => {
+                const status = GAP_STATUS_META[r.score.status]
+                const insufficient = r.score.status === 'INSUFFICIENT_EVIDENCE'
+                return (
+                  <tr key={r.competencyId} style={{ borderBottom: `1px solid ${line}`, color: insufficient ? '#94a3b8' : undefined }}>
+                    <td style={{ padding: '3px 6px', fontWeight: 700 }}>
+                      {r.labelFa}
+                      {r.score.isCritical ? ' ★' : ''}
+                    </td>
+                    <td style={{ padding: '3px 6px' }}>{formatLevel(r.score.requiredLevel)}</td>
+                    <td style={{ padding: '3px 6px' }}>{insufficient ? 'نامعلوم' : formatLevel(r.score.actualLevel)}</td>
+                    <td style={{ padding: '3px 6px' }}>{r.score.gap == null ? 'نامعلوم' : r.score.gap > 0 ? `${formatLevel(r.score.gap)}−` : r.score.gap < 0 ? `${formatLevel(-r.score.gap)}+` : '۰'}</td>
+                    <td style={{ padding: '3px 6px' }}>{GAP_CONFIDENCE_META[r.score.confidence].label}</td>
+                    <td style={{ padding: '3px 6px' }}>{r.score.evidenceCount.toLocaleString('fa-IR')}</td>
+                    <td style={{ padding: '3px 6px', fontWeight: 700, color: insufficient ? '#64748b' : status.color === '#fbbf24' ? '#b45309' : status.color === '#f87171' ? '#b91c1c' : '#15803d' }}>
+                      {status.label}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p style={{ margin: '4px 0 0', fontSize: 9, color: '#94a3b8' }}>★ شایستگی حیاتی · «شواهد ناکافی» یعنی هنوز داده‌ای ثبت نشده — نه ضعف متقاضی.</p>
         </div>
       )}
 

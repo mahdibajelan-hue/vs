@@ -16,6 +16,13 @@
 //
 // Schema types below are plain uppercase strings ("OBJECT"/"STRING"/...), matching Gemini's
 // OpenAPI-subset wire schema exactly like the two source functions.
+//
+// Phase 4 (schema.sql Section 51): the prompt also carries the candidate's Competency Engine profile
+// (required/actual level, gap, status, confidence, coverage per required competency + which
+// assessment methods were in the exam design), recomputed right before generation, and Gemini is told
+// to use exactly those numbers and to treat INSUFFICIENT_EVIDENCE as unknown rather than weak. The
+// exact rows used are stored in comp_candidate_ai_analysis.competency_basis so the UI can tell when a
+// cached analysis no longer matches the candidate's current profile.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { GoogleGenAI } from 'npm:@google/genai@1'
@@ -103,6 +110,7 @@ const RESPONSE_SCHEMA = {
       required: ['available', 'response_validity_interpretation', 'trait_analysis', 'behavioral_analysis', 'observed_patterns', 'strength_patterns', 'watchpoints'],
     },
     role_fit_narrative: { type: 'STRING' },
+    competency_gap_narrative: { type: 'STRING' },
     development_areas: { type: 'ARRAY', items: { type: 'STRING' } },
     training_recommendations: { type: 'ARRAY', items: { type: 'STRING' } },
     career_development_paths: { type: 'ARRAY', items: { type: 'STRING' } },
@@ -142,6 +150,7 @@ const RESPONSE_SCHEMA = {
     'technical_analysis',
     'personality_analysis',
     'role_fit_narrative',
+    'competency_gap_narrative',
     'development_areas',
     'training_recommendations',
     'career_development_paths',
@@ -163,7 +172,10 @@ const SYSTEM_INSTRUCTION = `تو یک دستیار تحلیل جامع ارزی�
 8. امتیاز هر بعد شایستگی فنی (competency_analysis) را بین ۰ تا ۱۰۰ بده و آن را صرفاً از روی امتیازهای واقعی ثبت‌شده داوران برای سؤالات مرتبط با همان بعد استخراج کن، نه حدس شخصی. اگر برای یک بعد هیچ سؤال یا امتیازی وجود نداشت، بنویس «شواهد کافی برای این حوزه ثبت نشده است» و امتیاز آن را صفر بگذار.
 9. role_fit_narrative باید فقط زمانی یک تحلیل جامع و منسجم (۳ تا ۶ جمله) درباره تطابق متقاضی با ویژگی‌های رفتاری مورد نیاز شغل بنویسد که ورودی personality همراه با role_alignment موجود باشد — دقیقاً بر اساس اعداد داده‌شده در role_alignment (overall_alignment_percent و ردیف‌های rows) بنویس، هرگز عدد یا درصد جدیدی حدس نزن یا با آنچه داده شده مغایرت نداشته باش. اگر role_alignment.has_job_profile برابر false بود یا اصلاً personality/role_alignment در ورودی نبود، صراحتاً بنویس که تحلیل تطابق شغلی هنوز امکان‌پذیر نیست (نیم‌رخ رفتاری شغل تعریف نشده یا ارزیابی شخصیت هنوز کامل نشده). اگر critical_gap_count بزرگ‌تر از صفر بود، حتماً مشخص کن دقیقاً کدام بعد(های) حیاتی برآورده نشده‌اند و چرا این موضوع برای این شغل اهمیت دارد.
 10. خلاصه اجرایی (executive_summary) باید کل تصویر موجود از متقاضی را در بر بگیرد — اگر فقط یکی از دو بخش فنی/شخصیتی موجود بود، صراحتاً به تکمیل‌نشدن بخش دیگر اشاره کن.
-11. خروجی را کاملاً به فارسی و دقیقاً مطابق ساختار JSON درخواستی بنویس.`
+11. ورودی competency_profile (در صورت وجود) خروجی موتور شایستگی سامانه است: برای هر شایستگی الزامی شغل، سطح الزامی (required_level)، سطح واقعی (actual_level)، امتیاز ۰ تا ۱۰۰ (actual_score)، شکاف (gap = الزامی − واقعی؛ مثبت یعنی کمبود)، حیاتی‌بودن، وضعیت (status)، اطمینان (confidence) و پوشش شواهد (coverage). دقیقاً از همین اعداد و وضعیت‌ها استفاده کن — هرگز سطح، امتیاز، شکاف یا وضعیت جدیدی محاسبه، گرد یا حدس نزن و با آن‌ها مغایرت نداشته باش.
+12. وضعیت INSUFFICIENT_EVIDENCE (و confidence برابر NONE) یعنی «نامعلوم — شواهدی ثبت نشده»، نه ضعف: هرگز آن را شکاف، نقطه ضعف یا امتیاز پایین تفسیر نکن؛ فقط بنویس که برای آن شایستگی شواهد کافی وجود ندارد و در صورت لزوم برای جمع‌آوری شواهد آن سؤال پیگیری پیشنهاد بده. روش‌هایی که در assessment_methods برابر false هستند عمداً در طرح آزمون نبوده‌اند (ارزیابی‌نشده به انتخاب طراح) — آن‌ها را کمبود شواهد یا ضعف متقاضی تلقی نکن.
+13. competency_gap_narrative را (۳ تا ۶ جمله) فقط بر اساس competency_profile بنویس: شکاف‌های حیاتی (CRITICAL_GAP) را با نام و اعداد دقیق ذکر کن، سپس شکاف‌های توسعه‌ای (GAP) و نقاط قوت (MEETS/EXCEEDS با اطمینان متوسط یا بالا)، و صراحتاً شایستگی‌های دارای شواهد ناکافی را به‌عنوان «نامعلوم» نام ببر. به سطح اطمینان پایین (LOW) در نتیجه‌گیری‌ها اشاره کن. اگر competency_profile در ورودی نبود یا خالی بود، بنویس که تحلیل شکاف شایستگی هنوز برای این متقاضی محاسبه نشده است. development_areas و follow_up_questions نیز باید با همین جدول سازگار باشند.
+14. خروجی را کاملاً به فارسی و دقیقاً مطابق ساختار JSON درخواستی بنویس.`
 
 function resolveOfficialScore(
   questionId: string,
@@ -426,7 +438,99 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!technicalAvailable && !personalityAvailable) {
+    // Competency Engine profile (schema.sql Sections 49-51). Recomputed first (best-effort — the RPC
+    // enforces the same comp_can_access_assessment() check that guards reading the scores) so the
+    // analysis is grounded in the candidate's current evidence, then read back row by row.
+    const { error: computeError } = await supabase.rpc('comp_compute_competency_profile', { p_assessment_id: assessmentId })
+    if (computeError) console.error('comp-candidate-ai-analysis: competency profile recompute failed (using stored profile)', computeError)
+
+    type CompetencyScoreRow = {
+      competency_id: string
+      required_level: number
+      level_count: number
+      actual_score: number | null
+      actual_level: number | null
+      gap: number | null
+      is_critical: boolean
+      weight: number
+      evidence_count: number
+      source_types_covered: number
+      coverage: number
+      confidence: string
+      status: string
+      computed_at: string
+      comp_competencies: { key: string; label_fa: string } | null
+    }
+    const [{ data: competencyScores, error: competencyScoresError }, { data: competencyEvidence, error: competencyEvidenceError }] = await Promise.all([
+      supabase
+        .from('comp_competency_scores')
+        .select('competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight, evidence_count, source_types_covered, coverage, confidence, status, computed_at, comp_competencies(key, label_fa)')
+        .eq('assessment_id', assessmentId),
+      supabase.from('comp_competency_evidence').select('competency_id, source_type').eq('assessment_id', assessmentId),
+    ])
+    if (competencyScoresError || competencyEvidenceError) {
+      console.error('comp-candidate-ai-analysis: competency profile read failed', competencyScoresError ?? competencyEvidenceError)
+    }
+    const scoreRows = (competencyScoresError ? [] : (competencyScores as CompetencyScoreRow[] | null) ?? []).map((r) => ({
+      ...r,
+      required_level: Number(r.required_level),
+      actual_score: r.actual_score == null ? null : Number(r.actual_score),
+      actual_level: r.actual_level == null ? null : Number(r.actual_level),
+      gap: r.gap == null ? null : Number(r.gap),
+      weight: Number(r.weight),
+      coverage: Number(r.coverage),
+    }))
+    const evidenceRows = competencyEvidenceError ? [] : ((competencyEvidence as { competency_id: string; source_type: string }[] | null) ?? [])
+    const competencyAvailable = scoreRows.some((r) => r.evidence_count > 0)
+    const competencyProfilePayload =
+      scoreRows.length > 0
+        ? {
+            note: 'خروجی موتور شایستگی — اعداد را دقیقاً همان‌طور که هست استفاده کن؛ INSUFFICIENT_EVIDENCE یعنی نامعلوم، نه ضعف.',
+            level_scale: 'actual_level = round(1 + actual_score/100 × (level_count − 1), 1); gap = required_level − actual_level (مثبت = کمبود)',
+            assessment_methods: {
+              technical: assessment.needs_technical_assessment,
+              personality_and_sjt: assessment.needs_personality_assessment,
+              structured_interview: assessment.needs_structured_interview,
+              experience: assessment.includes_experience,
+            },
+            summary: {
+              required_competencies: scoreRows.length,
+              with_evidence: scoreRows.filter((r) => r.evidence_count > 0).length,
+              exceeds: scoreRows.filter((r) => r.status === 'EXCEEDS').length,
+              meets: scoreRows.filter((r) => r.status === 'MEETS').length,
+              gap: scoreRows.filter((r) => r.status === 'GAP').length,
+              critical_gap: scoreRows.filter((r) => r.status === 'CRITICAL_GAP').length,
+              insufficient_evidence: scoreRows.filter((r) => r.status === 'INSUFFICIENT_EVIDENCE').length,
+            },
+            competencies: scoreRows.map((r) => ({
+              competency_key: r.comp_competencies?.key ?? r.competency_id,
+              competency_label_fa: r.comp_competencies?.label_fa ?? null,
+              required_level: r.required_level,
+              level_count: r.level_count,
+              actual_level: r.actual_level,
+              actual_score: r.actual_score,
+              gap: r.gap,
+              is_critical: r.is_critical,
+              status: r.status,
+              confidence: r.confidence,
+              coverage: r.coverage,
+              evidence_count: r.evidence_count,
+              evidence_source_types: [...new Set(evidenceRows.filter((e) => e.competency_id === r.competency_id).map((e) => e.source_type))],
+            })),
+          }
+        : null
+    // Exactly the rows fed to Gemini — compared client-side against the current profile to flag a
+    // cached analysis as stale (see isAiAnalysisStale in src/modules/competency/lib/competencyGap.ts).
+    const competencyBasis = scoreRows.map((r) => ({
+      competencyId: r.competency_id,
+      requiredLevel: r.required_level,
+      actualScore: r.actual_score,
+      actualLevel: r.actual_level,
+      status: r.status,
+      confidence: r.confidence,
+    }))
+
+    if (!technicalAvailable && !personalityAvailable && !competencyAvailable) {
       return fail(400, 'هنوز داده‌ای برای تحلیل جامع این متقاضی ثبت نشده است.')
     }
 
@@ -447,6 +551,7 @@ Deno.serve(async (req: Request) => {
       technical: technicalAvailable ? technicalPayload : null,
       personality: personalityAvailable ? personalityPayload : null,
       role_alignment: personalityAvailable ? roleAlignmentPayload : null,
+      competency_profile: competencyProfilePayload,
     }
 
     // gemini-2.5-flash was retired ("no longer available to new users") — Google's own 404 error
@@ -483,7 +588,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: inserted, error: insertError } = await supabase
       .from('comp_candidate_ai_analysis')
-      .insert({ assessment_id: assessmentId, model, analysis, confidence })
+      .insert({ assessment_id: assessmentId, model, analysis, confidence, competency_basis: competencyBasis })
       .select('*')
       .single()
     if (insertError) return fail(500, `ذخیره تحلیل ناموفق بود: ${insertError.message}`, insertError)

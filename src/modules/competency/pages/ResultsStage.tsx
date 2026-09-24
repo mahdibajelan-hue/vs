@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Target,
   Trophy,
   Users,
   Wrench,
@@ -68,6 +69,8 @@ import {
   ROLE_RECOMMENDATION_LABEL_FA,
 } from '../lib/roleCompetencyModel'
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
+import { buildGapRows, isAiAnalysisStale } from '../lib/competencyGap'
+import { CompetencyGapAnalysis } from '../components/CompetencyGapAnalysis'
 import type { CompetencyAssessment, CompetencyDomainKey, DomainScore } from '../types'
 
 // Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal
@@ -180,6 +183,20 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     isModuleAdmin ||
     (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
     allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myProfile?.id)
+  // Candidate 360 gap analysis (Phase 4): only the lead (creator / module admin / lead panelist) or an
+  // assessment designer gets the explicit "recompute" button — and only when the compute RPC's own
+  // access check would pass for them.
+  const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
+  const isLeadViewer =
+    isModuleAdmin ||
+    (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
+    allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myProfile?.id && p.isLead)
+  const isDesignerViewer = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id)
+  const canRecomputeCompetencyProfile = canComputeCompetencyProfile && (isLeadViewer || isDesignerViewer)
+  const competencyProfile = useCompetencyStore((s) => s.competencyProfileByAssessment[assessment.id])
+  const competencyCatalog = useCompetencyStore((s) => s.competencies)
+  const competencyScores = competencyProfile?.scores
+  const aiAnalysisStale = isAiAnalysisStale(candidateAiAnalysis, competencyScores)
   const competencyProfileRequestedRef = useRef(false)
   useEffect(() => {
     if (!canComputeCompetencyProfile || competencyProfileRequestedRef.current) return
@@ -475,6 +492,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               qualificationOverride={officialQualification}
               roleRecommendation={roleRecommendation}
               jobRoleLabel={resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}
+              competencyGapRows={competencyProfile ? buildGapRows(competencyProfile.scores, competencyProfile.evidence, competencyCatalog) : []}
             />
           </div>
 
@@ -815,6 +833,15 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                   مشاهده تحلیل کامل <ArrowLeft size={12} />
                 </button>
               </div>
+              {aiAnalysisStale && (
+                <button
+                  onClick={onGoToAiAnalysis}
+                  className="mb-2 flex w-full items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-right text-[10.5px] font-bold text-amber-200 hover:bg-amber-500/20"
+                >
+                  <AlertTriangle size={12} className="shrink-0" /> تحلیل به‌روز نیست — بازتولید
+                  <span className="font-normal text-amber-200/70">(پروفایل شایستگی پس از تولید این تحلیل تغییر کرده است)</span>
+                </button>
+              )}
               <p className="text-[11.5px] leading-6 text-secondary">
                 {candidateAiAnalysis?.analysis.executive_summary ?? 'تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.'}
               </p>
@@ -880,6 +907,12 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                 <div className="glass-panel rounded-2xl p-4 text-center text-[11px] text-muted">این متقاضی هنوز ارزیابی شخصیت و رفتاری خود را کامل نکرده است.</div>
               </>
             ))}
+
+          {/* Candidate 360 competency gap analysis (Phase 4) — the job's required competencies against
+             the Competency Engine's evidence-backed levels, with a full evidence drill-down. Sits after
+             the three fingerprints rather than replacing any of them. */}
+          <FingerprintSectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی — نمای ۳۶۰ درجه متقاضی</FingerprintSectionHeading>
+          <CompetencyGapAnalysis assessment={assessment} canRecompute={canRecomputeCompetencyProfile} />
     </CompetencySidebarShell>
   )
 }
