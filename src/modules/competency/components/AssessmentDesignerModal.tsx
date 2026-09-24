@@ -29,6 +29,12 @@ function cellKey(category: QuestionType, difficulty: QuestionDifficulty) {
   return `${category}__${difficulty}`
 }
 
+// A sensible starting mix per allowed question type — the designer only needs to adjust from here
+// rather than filling every cell of an empty grid from scratch on the first assessment for a role.
+// Skewed toward the middle difficulties (a broad, moderate-depth interview) with a lighter tail at
+// the extremes; a role with a saved template still takes priority over this (see the mount effect).
+const DEFAULT_COUNTS_PER_TYPE: Record<QuestionDifficulty, number> = { L1: 2, L2: 3, L3: 2, L4: 1 }
+
 const STEPS = ['تنظیمات آزمون', 'ترکیب سؤال', 'بررسی موجودی بانک سؤال', 'پیش‌نمایش و تولید'] as const
 
 /**
@@ -71,6 +77,20 @@ export function AssessmentDesignerModal({ assessmentId, jobRole, onClose }: { as
     const config = jobRoleConfigs.find((c) => c.jobRole === jobRole)
     return config && config.allowedQuestionTypes.length > 0 ? config.allowedQuestionTypes : ALL_QUESTION_TYPES
   }, [jobRoleConfigs, jobRole])
+
+  // Pre-fill a default mix so the designer starts from something reasonable rather than an empty
+  // grid — only while no saved template for this role has taken over yet (see the auto-apply effect
+  // below, which fires afterwards on the same render once templatesForRole actually loads and wins
+  // if a real template exists) and only before the designer has touched anything themselves.
+  useEffect(() => {
+    if (templatesForRole.length > 0 || Object.keys(counts).length > 0) return
+    const next: Record<string, number> = {}
+    for (const t of allowedTypes) {
+      for (const d of ALL_DIFFICULTIES) next[cellKey(t, d)] = DEFAULT_COUNTS_PER_TYPE[d]
+    }
+    setCounts(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedTypes, templatesForRole.length])
 
   const applyTemplate = (id: string | null) => {
     setTemplateId(id)
