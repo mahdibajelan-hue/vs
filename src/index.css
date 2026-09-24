@@ -1610,3 +1610,59 @@ select option {
   .launchpad-module-grid .area-d { grid-area: d; }
   .launchpad-module-grid .area-e { grid-area: e; }
 }
+
+/* ===== Farin launchpad page frame =====
+   Hairline gradient border (cyan lamp light → Farin gold) drawn with the mask-composite trick so
+   the frame stays 1px crisp at any radius, a soft cyan halo from the top, and four small L-shaped
+   corner ticks like the registration marks on a drawing sheet. */
+.launchpad-frame {
+  background: #000;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.015),
+    0 -24px 90px -40px rgba(34, 211, 238, 0.35),
+    0 40px 90px -50px rgba(201, 162, 39, 0.25);
+}
+.launchpad-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    165deg,
+    rgba(34, 211, 238, 0.6),
+    rgba(255, 255, 255, 0.07) 28%,
+    rgba(255, 255, 255, 0.04) 68%,
+    rgba(201, 162, 39, 0.6)
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+.launchpad-frame-corner {
+  position: absolute;
+  z-index: 61;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: rgba(201, 162, 39, 0.55);
+  border-style: solid;
+  border-width: 0;
+}
+.launchpad-frame-corner.is-tr { top: 14px; right: 14px; border-top-width: 1.5px; border-right-width: 1.5px; border-color: rgba(34, 211, 238, 0.6); }
+.launchpad-frame-corner.is-tl { top: 14px; left: 14px; border-top-width: 1.5px; border-left-width: 1.5px; border-color: rgba(34, 211, 238, 0.6); }
+.launchpad-frame-corner.is-br { bottom: 14px; right: 14px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+.launchpad-frame-corner.is-bl { bottom: 14px; left: 14px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+@media (max-width: 639px) {
+  .launchpad-frame-corner { width: 12px; height: 12px; }
+  .launchpad-frame-corner.is-tr, .launchpad-frame-corner.is-tl { top: 9px; }
+  .launchpad-frame-corner.is-br, .launchpad-frame-corner.is-bl { bottom: 9px; }
+  .launchpad-frame-corner.is-tr, .launchpad-frame-corner.is-br { right: 9px; }
+  .launchpad-frame-corner.is-tl, .launchpad-frame-corner.is-bl { left: 9px; }
+}
