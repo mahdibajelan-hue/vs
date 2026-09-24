@@ -31,6 +31,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     executive_summary: { type: 'STRING' },
     response_validity_interpretation: { type: 'STRING' },
+    role_fit_narrative: { type: 'STRING' },
     trait_analysis: {
       type: 'ARRAY',
       items: {
@@ -97,6 +98,7 @@ const RESPONSE_SCHEMA = {
   required: [
     'executive_summary',
     'response_validity_interpretation',
+    'role_fit_narrative',
     'trait_analysis',
     'behavioral_analysis',
     'observed_patterns',
@@ -120,7 +122,8 @@ const SYSTEM_INSTRUCTION = `تو یک دستیار تحلیل ارزیابی ش�
 5. هر تحلیل رفتاری باید در صورت امکان به یک مدرک مشخص (evidence) با شناسه سؤال یا بعد مرتبط باشد.
 6. برای هر بعد رفتاری که امتیاز پایینی دارد یا برای شغل مورد نظر حیاتی (critical) است، یک سؤال پیگیری دقیق برای مصاحبه ساختاریافته پیشنهاد بده که شواهد رفتاری واقعی (نه فرضی) را بررسی کند.
 7. خروجی را کاملاً به فارسی و دقیقاً مطابق ساختار JSON درخواستی بنویس.
-8. اگر برای یک ویژگی یا بعد رفتاری شواهد کافی (coverage) وجود نداشت، در تحلیل آن صراحتاً بنویس «شواهد کافی برای این حوزه ثبت نشده است».`
+8. اگر برای یک ویژگی یا بعد رفتاری شواهد کافی (coverage) وجود نداشت، در تحلیل آن صراحتاً بنویس «شواهد کافی برای این حوزه ثبت نشده است».
+9. role_fit_narrative باید یک تحلیل جامع و منسجم (۳ تا ۶ جمله) درباره ارتباط متقاضی با ویژگی‌های رفتاری مورد نیاز شغل «role_alignment.job_role» باشد — دقیقاً بر اساس اعداد داده‌شده در role_alignment (overall_alignment_percent و ردیف‌های rows) بنویس، هرگز عدد یا درصد جدیدی حدس نزن یا با آنچه داده شده مغایرت نداشته باش. اگر role_alignment.has_job_profile برابر false بود، صراحتاً بنویس که نیم‌رخ رفتاری شغلی هنوز برای این شغل تعریف نشده و امکان تحلیل تطابق وجود ندارد. اگر critical_gap_count بزرگ‌تر از صفر بود، حتماً مشخص کن دقیقاً کدام بعد(های) حیاتی برآورده نشده‌اند و چرا این موضوع برای این شغل اهمیت دارد.`
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
@@ -240,6 +243,51 @@ Deno.serve(async (req: Request) => {
       }
     })
 
+    // Deterministic role-fit rows — intentionally the SAME computation as the frontend's
+    // src/modules/personality/lib/roleAlignment.ts (duplicated here rather than shared, since this
+    // Edge Function deploys as a single standalone file with no access to the Vite app's src tree).
+    // Passed to Gemini so role_fit_narrative below is always grounded in these exact numbers — the
+    // UI's Role Alignment card and this narrative can never disagree with each other.
+    function rowFitScore(score: number | null, minThreshold: number | null, preferredMin: number | null, preferredMax: number | null): number | null {
+      if (score == null) return null
+      if (minThreshold == null && preferredMin == null && preferredMax == null) return score
+      if (minThreshold != null && score < minThreshold) return Math.max(0, (score / minThreshold) * 60)
+      if (preferredMin != null && score < preferredMin) {
+        const floor = minThreshold ?? 0
+        const span = Math.max(1, preferredMin - floor)
+        return 60 + Math.min(40, ((score - floor) / span) * 40)
+      }
+      if (preferredMax != null && score > preferredMax) return Math.max(50, 100 - (score - preferredMax))
+      return 100
+    }
+    function rowStatus(score: number | null, minThreshold: number | null, preferredMin: number | null, preferredMax: number | null, isCritical: boolean) {
+      if (score == null) return 'NO_DATA'
+      if (minThreshold != null && score < minThreshold) return 'BELOW_MIN'
+      if (preferredMin != null && score < preferredMin) return 'BELOW_PREFERRED'
+      if (preferredMax != null && score > preferredMax) return 'ABOVE_PREFERRED'
+      return isCritical ? 'MEETS_CRITICAL' : 'MEETS'
+    }
+    const roleAlignmentRows = requirements.map((req) => {
+      const scoreRow = (dimensionScores as ScoreRow[]).find((s) => s.score_kind === 'BEHAVIORAL_DIMENSION' && s.dimension_id === req.dimension_id)
+      const score = scoreRow?.normalized_score ?? null
+      return {
+        dimension_key: scoreRow?.personality_behavioral_dimensions?.key ?? req.dimension_id,
+        dimension_label_fa: scoreRow?.personality_behavioral_dimensions?.label_fa ?? null,
+        is_critical: req.is_critical,
+        weight: req.weight,
+        score,
+        min_threshold: req.min_threshold,
+        preferred_min: req.preferred_min,
+        preferred_max: req.preferred_max,
+        status: rowStatus(score, req.min_threshold, req.preferred_min, req.preferred_max, req.is_critical),
+      }
+    })
+    const alignmentCovered = roleAlignmentRows.filter((r) => r.score != null)
+    const alignmentWeightedSum = alignmentCovered.reduce((sum, r) => sum + (rowFitScore(r.score, r.min_threshold, r.preferred_min, r.preferred_max) ?? 0) * r.weight, 0)
+    const alignmentTotalWeight = alignmentCovered.reduce((sum, r) => sum + r.weight, 0)
+    const overallAlignmentPercent = alignmentTotalWeight > 0 ? Math.round(alignmentWeightedSum / alignmentTotalWeight) : null
+    const criticalGapCount = roleAlignmentRows.filter((r) => r.is_critical && (r.status === 'BELOW_MIN' || r.status === 'BELOW_PREFERRED')).length
+
     const promptPayload = {
       job_role: assessment.job_role,
       computed_patterns: assessment.computed_patterns,
@@ -254,6 +302,15 @@ Deno.serve(async (req: Request) => {
         : null,
       trait_scores: traitAnalysisInput,
       behavioral_dimension_scores: dimensionAnalysisInput,
+      // The exact table the UI shows as "تطابق با الزامات رفتاری شغل" — role_fit_narrative must be
+      // written strictly from these rows and this pre-computed percent, never a re-guessed number.
+      role_alignment: {
+        job_role: assessment.job_role,
+        has_job_profile: requirements.length > 0,
+        overall_alignment_percent: overallAlignmentPercent,
+        critical_gap_count: criticalGapCount,
+        rows: roleAlignmentRows,
+      },
       response_evidence: responseEvidence,
     }
 

@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { PersonalityPrintReport } from '../../personality/components/PersonalityPrintReport'
+import { RoleAlignmentCard } from '../../personality/components/RoleAlignmentCard'
+import { computeRoleAlignment } from '../../personality/lib/roleAlignment'
 import { PERSONALITY_ASSESSMENT_STATUS_LABEL_FA, PERSONALITY_VALIDITY_STATUS_LABEL_FA, type PersonalityAssessmentStatus } from '../../personality/types'
 import type { CompetencyAssessment } from '../types'
 
@@ -182,6 +184,7 @@ function PersonalityResultsPanel({
   const dimensionScoresOnly = dimensionScores.filter((d) => d.scoreKind === 'BEHAVIORAL_DIMENSION')
 
   const requirementsForProfile = useMemo(() => jobRequirements.filter((r) => r.profileId === assessment?.jobProfileId), [jobRequirements, assessment])
+  const roleAlignment = useMemo(() => computeRoleAlignment(requirementsForProfile, dimensionScores, dimensions), [requirementsForProfile, dimensionScores, dimensions])
 
   const handleGenerateAi = async () => {
     setAiError(null)
@@ -288,6 +291,17 @@ function PersonalityResultsPanel({
           وضعیت اعتبار پاسخ‌ها: {PERSONALITY_VALIDITY_STATUS_LABEL_FA[validityResult.overallStatus]}
           {validityResult.straightLiningFlag && ' — الگوی پاسخ یکنواخت مشاهده شد'}
           {validityResult.missingResponseCount > 0 && ` — ${validityResult.missingResponseCount.toLocaleString('fa-IR')} سؤال بی‌پاسخ`}
+        </div>
+      )}
+
+      <RoleAlignmentCard jobRole={assessment.jobRole} hasProfile={assessment.jobProfileId != null} alignment={roleAlignment} />
+
+      {aiAnalysis?.analysis.role_fit_narrative && (
+        <div className="glass-panel rounded-2xl border border-sky-400/25 bg-sky-500/[0.04] p-4">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-sky-200">
+            <Sparkles size={14} /> تحلیل جامع تطابق با شغل
+          </p>
+          <p className="text-[11.5px] leading-7 text-secondary">{aiAnalysis.analysis.role_fit_narrative}</p>
         </div>
       )}
 

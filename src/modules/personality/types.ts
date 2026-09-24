@@ -416,6 +416,11 @@ export interface PersonalityAiEvidence {
 export interface PersonalityAiAnalysisContent {
   executive_summary: string
   response_validity_interpretation: string
+  /** Evidence-based narrative synthesizing the candidate's fit against the TARGET JOB's own
+   * required behavioral profile — always written from the same deterministic per-requirement
+   * numbers the UI's Role Alignment card shows (see roleAlignment.ts / the edge function's
+   * role_alignment payload), so this text and that table can never disagree with each other. */
+  role_fit_narrative: string
   trait_analysis: PersonalityAiTraitAnalysis[]
   behavioral_analysis: PersonalityAiBehavioralAnalysis[]
   observed_patterns: string[]

@@ -1,5 +1,6 @@
 import { formatJalali } from '../../../lib/jalali'
 import { JOB_ROLE_LABEL_FA } from '../../competency/types'
+import { computeRoleAlignment } from '../lib/roleAlignment'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
 import type {
   PersonalityAiAnalysis,
@@ -66,6 +67,8 @@ export function PersonalityPrintReport({
   if (validityResult?.extremeResponseRate != null && validityResult.extremeResponseRate > 40)
     validityReasons.push(`نرخ پاسخ‌های حدی: ٪${Math.round(validityResult.extremeResponseRate).toLocaleString('fa-IR')}`)
 
+  const alignment = computeRoleAlignment(jobRequirements, behavioralScores, dimensions)
+
   return (
     <div style={{ background: '#ffffff', color: ink, width: 900, padding: '36px 40px', fontFamily: '"Vazirmatn", "Segoe UI", sans-serif', direction: 'rtl' }}>
       <div style={{ borderBottom: `2px solid ${ink}`, paddingBottom: 16, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -118,6 +121,24 @@ export function PersonalityPrintReport({
           )}
         </div>
       </div>
+
+      {jobRequirements.length > 0 && (
+        <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800 }}>تطابق با الزامات رفتاری شغل «{JOB_ROLE_LABEL_FA[assessment.jobRole]}»</p>
+            {alignment.overallAlignmentPercent != null && (
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: alignment.criticalGapCount > 0 ? '#dc2626' : accent }}>
+                ٪{alignment.overallAlignmentPercent.toLocaleString('fa-IR')}
+              </p>
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 10.5, color: sub }}>
+            {alignment.criticalGapCount > 0
+              ? `${alignment.criticalGapCount.toLocaleString('fa-IR')} مورد از الزامات حیاتی این شغل هنوز برآورده نشده است.`
+              : 'الزامات حیاتی این شغل بر اساس شواهد ثبت‌شده برآورده شده‌اند.'}
+          </p>
+        </div>
+      )}
 
       {traitScores.length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -198,6 +219,12 @@ export function PersonalityPrintReport({
         <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 800 }}>خلاصه تحلیل هوشمند</p>
           <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.8, color: sub }}>{aiAnalysis.analysis.executive_summary}</p>
+          {aiAnalysis.analysis.role_fit_narrative && (
+            <>
+              <p style={{ margin: '10px 0 4px', fontSize: 11, fontWeight: 800 }}>تحلیل جامع تطابق با شغل</p>
+              <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.8, color: sub }}>{aiAnalysis.analysis.role_fit_narrative}</p>
+            </>
+          )}
         </div>
       )}
 
