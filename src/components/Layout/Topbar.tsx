@@ -17,6 +17,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
   const currentUser = useAuthStore((s) => s.currentUser())
   const role = useCurrentRole()
   const exitToHub = useModuleStore((s) => s.exitToHub)
+  const backToRadar = useModuleStore((s) => s.backToRadar)
   const [showUsers, setShowUsers] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const hierarchyPath = useHierarchyPath('pipepulse', project?.id ?? null)
@@ -73,7 +74,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <ModuleHeaderActions onExitToHub={exitToHub} />
+        <ModuleHeaderActions onExitToHub={exitToHub} onBackToRadar={backToRadar} />
       </div>
       {showUsers && project && <UserManagementModal projectName={project.name} onClose={() => setShowUsers(false)} />}
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}

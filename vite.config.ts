@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -20,4 +21,8 @@ export default defineConfig({
   // like any normal import, so it lands inside the module's own React.lazy() chunk and only loads
   // when that module is actually opened.
   plugins: [react(), tailwindcss(), cesium({ rebuildCesium: true })],
+  // shadcn-style `@/` alias (components/ui, lib/utils) — mirrored in tsconfig.app.json's paths.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
 })

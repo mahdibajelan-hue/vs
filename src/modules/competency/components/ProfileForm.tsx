@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react'
-import type { CandidateProfileInput } from '../store/useCompetencyStore'
+import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
 
 const EMPTY: CandidateProfileInput = {
+  jobRole: 'project_manager',
   candidateName: '',
+  candidatePosition: 'مدیر پروژه احداث خط لوله انتقال گاز',
   candidateNationalId: '',
   candidatePhone: '',
   candidateEmail: '',
@@ -48,6 +51,11 @@ interface ProfileFormProps {
  */
 export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: ProfileFormProps) {
   const [form, setForm] = useState<CandidateProfileInput>(initial ?? EMPTY)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  // Only active roles are offered for a new/changed assignment — an inactive role can still be the
+  // one already saved on this candidate (see the fallback list built below), it just isn't offered
+  // going forward.
+  const selectableRoles = sortedJobRoles(jobRoleConfigs).filter((c) => c.active || c.jobRole === form.jobRole)
 
   const set = <K extends keyof CandidateProfileInput>(key: K, value: CandidateProfileInput[K]) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -63,6 +71,9 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
         if (!form.candidateName.trim()) return
         onSubmit({
           ...form,
+          // 'سمت مورد ارزیابی' was a free-text duplicate of the job-role select; it's now always
+          // derived from that choice so the two can never say different things.
+          candidatePosition: candidateMode ? form.candidatePosition : jobRoleLabel(jobRoleConfigs, form.jobRole),
           candidateAge: age,
           yearsExperienceTotal: monthsToYears(totalExperienceMonths),
           yearsExperiencePipeline: monthsToYears(pipelineMonths),
@@ -96,9 +107,23 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
             </div>
           </Field>
           {!candidateMode && (
-            <Field label="تاریخ مصاحبه">
-              <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />
-            </Field>
+            <>
+              <Field label="شغل مورد ارزیابی (بانک سؤالات)">
+                <select value={form.jobRole} onChange={(e) => set('jobRole', e.target.value as CandidateProfileInput['jobRole'])} className="input">
+                  {selectableRoles.map((c) => (
+                    <option key={c.jobRole} value={c.jobRole}>
+                      {c.labelFa}
+                    </option>
+                  ))}
+                </select>
+                {initial && form.jobRole !== initial.jobRole && (
+                  <p className="mt-1 text-[10px] text-amber-300">تغییر شغل مورد ارزیابی، سؤالات قبلاً انتخاب‌شده برای این نامزد را پاک می‌کند تا از بانک سؤالات نقش جدید دوباره انتخاب شوند.</p>
+                )}
+              </Field>
+              <Field label="تاریخ مصاحبه">
+                <JalaliDateInput value={form.interviewDate} onChange={(v) => set('interviewDate', v)} />
+              </Field>
+            </>
           )}
           <Field label="کارفرمای فعلی">
             <input value={form.currentEmployer} onChange={(e) => set('currentEmployer', e.target.value)} className="input" />

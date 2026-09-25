@@ -4,7 +4,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { Loader2 } from 'lucide-react'
 import type { Equipment3D, Joint, Point3D, Spool } from '../../types'
-import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
+import { buildMeshColorMap, DIM_COLOR, DIM_OPACITY, isMeshSelected, meshColor, SELECTED_MESH_COLOR } from '../../lib/model3dColoring'
+import { splitMergedMeshes, type SplitStats } from '../../lib/model3dSplit'
+import { cutMeshesAtJoints, type JointCutStats } from '../../lib/model3dJointCut'
 
 export type ViewerMode = 'view' | 'placeJoint' | 'selectMeshes'
 
@@ -45,8 +47,8 @@ function applyMeshColoring(root: THREE.Object3D, colorMap: Map<string, string>, 
   const selectedSet = new Set(selectedMeshNames)
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    const isSelected = mode === 'selectMeshes' && selectedSet.has(child.name)
-    const completeColor = colorMap.get(child.name)
+    const isSelected = mode === 'selectMeshes' && isMeshSelected(selectedSet, child.name)
+    const completeColor = meshColor(colorMap, child.name)
     forEachMaterial(child, (mat) => {
       if (!mat.color) return
       if (isSelected) {
@@ -160,6 +162,11 @@ interface ThreeViewerProps {
   /** id of the joint whose detail panel is open — its marker is highlighted, and its live screen position is reported every frame via onJointScreenPosition so the caller can anchor a panel to it. */
   selectedJointId?: string | null
   onJointScreenPosition?: (pos: { x: number; y: number } | null) => void
+  /** Reports how the loaded model was broken into selectable parts — surfaced in the UI so a model
+   * whose solids stayed fused is visible rather than just feeling broken. */
+  onSplitStats?: (stats: SplitStats) => void
+  /** Reports how many spool spans the weld-based cut recovered from fused runs. */
+  onJointCutStats?: (stats: JointCutStats) => void
 }
 
 /**
@@ -183,6 +190,8 @@ export function ThreeViewer({
   onJointClick,
   selectedJointId = null,
   onJointScreenPosition,
+  onSplitStats,
+  onJointCutStats,
 }: ThreeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
@@ -195,10 +204,22 @@ export function ThreeViewer({
   // Kept fresh via this cheap effect so the click handler and animate loop (bound once per model
   // load) always see the latest mode/callbacks/selection without needing to re-bind — editing
   // props never triggers a reload.
-  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition })
+  const liveRef = useRef({ mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints })
   useEffect(() => {
-    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition }
-  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition])
+    liveRef.current = { mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints }
+  }, [mode, onPointPicked, onMeshToggle, onJointClick, selectedJointId, onJointScreenPosition, onSplitStats, onJointCutStats, joints])
+
+  /**
+   * Which welds define the cut. The model is reloaded when this changes, because cutting is
+   * destructive — re-deriving the parts from a fresh load is honest, where incremental surgery on
+   * already-cut geometry would drift. Only placed joints matter; editing a joint's metadata does
+   * not move a cut line and so must not trigger a reload.
+   */
+  const jointCutKey = joints
+    .filter((j) => j.position)
+    .map((j) => `${j.lineId}:${j.sequenceNumber}:${j.position!.x},${j.position!.y},${j.position!.z}`)
+    .sort()
+    .join('|')
 
   useEffect(() => {
     const container = containerRef.current
@@ -235,6 +256,35 @@ export function ThreeViewer({
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
+    // Panning moves the target by the exact on-screen drag distance instead of sliding along the
+    // ground plane — with the ground plane a drag near the horizon barely moves anything while a
+    // drag over it flies past the cursor, which is what "locks" panning felt like.
+    controls.screenSpacePanning = true
+    controls.panSpeed = 1.4
+    controls.rotateSpeed = 0.9
+    controls.zoomSpeed = 1.1
+    // The model is always normalized to a ~20-unit bounding box (see the loader below), so a fixed
+    // range is safe: it stops the camera dollying through the model (near-zero distance degenerates
+    // the controls) or drifting out to a distance where scroll-to-zoom stops visibly doing anything.
+    controls.minDistance = 1
+    controls.maxDistance = 400
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+
+    // Right-drag is the pan gesture, but without this the browser's own context menu opens on
+    // release and eats the next click — which reads exactly like "panning doesn't work, it just
+    // rotates." Shift+left-drag is added as a second, keyboard-only way to pan for anyone on a
+    // trackpad or a monitor where a clean right-click-drag is awkward.
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+    renderer.domElement.addEventListener('contextmenu', handleContextMenu)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') controls.mouseButtons.LEFT = THREE.MOUSE.PAN
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
 
     let frameId = 0
     let disposed = false
@@ -326,8 +376,28 @@ export function ThreeViewer({
         object.scale.setScalar(scale)
         object.position.sub(center.multiplyScalar(scale))
 
-        prepareMaterialsForColoring(object)
+        // Split BEFORE cloning materials: CAD exporters merge a whole pipe run into one mesh, and
+        // until it is broken into its individual solids a click can only ever select the entire
+        // run. Each component then needs its own material clone to be coloured independently.
+        const stats = splitMergedMeshes(object)
+
+        // Second pass, for runs the first cannot touch: a pipe authored as one continuous welded
+        // surface has no internal boundary to find, so it is divided at the welds the user has
+        // already placed instead. Runs before materials are cloned, like the split above, so every
+        // resulting part colours independently.
         scene.add(object)
+        const jointStats = cutMeshesAtJoints(object, liveRef.current.joints)
+        if (jointStats.partsCreated > 0) {
+          stats.meshesAfter += jointStats.partsCreated - jointStats.meshesCut
+          stats.meshNames = []
+          object.traverse((child) => {
+            if (child instanceof THREE.Mesh) stats.meshNames.push(child.name)
+          })
+        }
+        liveRef.current.onSplitStats?.(stats)
+        liveRef.current.onJointCutStats?.(jointStats)
+
+        prepareMaterialsForColoring(object)
         objectRef.current = object
 
         const fitDistance = 24
@@ -362,6 +432,9 @@ export function ThreeViewer({
       resizeObserver.disconnect()
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
       renderer.domElement.removeEventListener('pointerup', handlePointerUp)
+      renderer.domElement.removeEventListener('contextmenu', handleContextMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
       controls.dispose()
       renderer.dispose()
       scene.traverse((obj) => {
@@ -375,11 +448,12 @@ export function ThreeViewer({
       objectRef.current = null
       markersGroupRef.current = null
     }
-    // joints/equipment3d/spools/mode/selectedMeshNames/callbacks intentionally excluded: this
-    // effect only (re)loads the model itself on url change — see the coloring effect below for
-    // how progress edits get reflected without a reload.
+    // equipment3d/spools/mode/selectedMeshNames/callbacks intentionally excluded: this effect
+    // only (re)loads the model itself — see the coloring effect below for how progress edits get
+    // reflected without a reload. jointCutKey IS a dependency because the weld cut is baked into
+    // the geometry at load, so moving or adding a weld has to rebuild the parts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url])
+  }, [url, jointCutKey])
 
   // Recolors meshes and rebuilds joint markers whenever the underlying progress data, the
   // interaction mode, or the in-progress mesh selection changes — independent of the (expensive)
@@ -392,7 +466,14 @@ export function ThreeViewer({
   }, [modelReady, joints, equipment3d, spools, mode, selectedMeshNames, selectedJointId])
 
   return (
-    <div ref={containerRef} className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}>
+    <div
+      ref={containerRef}
+      className={`relative h-full w-full overflow-hidden rounded-2xl ${mode !== 'view' ? 'cursor-crosshair' : ''}`}
+      // Without this, a touchscreen hands one/two-finger drags to the browser's own page-zoom and
+      // scroll before OrbitControls sees them, which is exactly what "only rotates, won't pan"
+      // looks like on touch: rotation still works (it doesn't scroll the page), panning doesn't.
+      style={{ touchAction: 'none' }}
+    >
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <Loader2 size={26} className="animate-spin text-brand-400" />
@@ -400,6 +481,14 @@ export function ThreeViewer({
       )}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 p-6 text-center text-sm text-red-300">{error}</div>
+      )}
+      {modelReady && !error && (
+        <div
+          className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/70 backdrop-blur-sm"
+          dir="rtl"
+        >
+          چرخش: کلیک چپ و بکشید · جابه‌جایی خطی: کلیک راست (یا Shift+کلیک چپ) و بکشید · زوم: چرخ ماوس
+        </div>
       )}
     </div>
   )

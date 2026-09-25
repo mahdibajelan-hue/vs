@@ -1,100 +1,343 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  ArrowRight,
+  ArrowLeft,
   Award,
-  Briefcase,
+  Banknote,
+  BarChart3,
   BookOpen,
+  Briefcase,
+  Building2,
+  Calendar,
   CheckCircle2,
+  Compass,
   Copy,
   Download,
+  Fingerprint,
   Globe,
   GraduationCap,
+  HardHat,
+  History,
   Mail,
   MessageSquareText,
+  Plus,
+  GitCompareArrows,
   Printer,
+  Puzzle,
   RefreshCw,
+  RotateCcw,
+  Sprout,
   ShieldCheck,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
-  User,
+  Star,
+  Target,
+  Trophy,
+  Users,
+  Wrench,
 } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
+import { useAuthStore } from '../../../store/useAuthStore'
+import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
+import { PersonalityFingerprintPanel } from '../../personality/components/PersonalityFingerprintPanel'
+import type { PersonalityAssessmentStatus } from '../../personality/types'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PanelSummaryRow } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
+import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { computeEvaluationStages } from '../lib/evaluationStages'
+import { generatePersonalityProfile } from '../lib/personalityAnalysis'
 import {
   computeCompletion,
   computeDomainScores,
   computeOverallPercent,
   domainFlags,
   maturityBand,
-  questionsForPosition,
   tierColor,
 } from '../lib/competencyModel'
-import type { CompetencyAssessment } from '../types'
+import {
+  computeCategoryScores,
+  computeExtendedFingerprint,
+  computeRoleCompletion,
+  usesLegacyPmRubric,
+  questionsForAssessment,
+  recommendationForRole,
+  resolveOfficialAnswers,
+  resolveOfficialQualificationScores,
+  ROLE_RECOMMENDATION_COLOR,
+  ROLE_RECOMMENDATION_LABEL_FA,
+} from '../lib/roleCompetencyModel'
+import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
+import { buildGapRows, isAiAnalysisStale } from '../lib/competencyGap'
+import { CompetencyGapAnalysis } from '../components/CompetencyGapAnalysis'
+import { DevelopmentPlanSummary } from '../components/DevelopmentPlanSummary'
+import { ReassessmentComparison } from '../components/ReassessmentComparison'
+import { AssessmentChainNav } from '../components/AssessmentChainNav'
+import type { CompetencyAssessment, CompetencyDomainKey, DomainScore } from '../types'
+
+// Matches COMPETENCY_ACCENT in CompetencyApp.tsx (Tailwind purple-500) — duplicated as a literal
+// rather than imported to avoid a circular import back through CompetencyApp -> AssessmentWizardPage -> this file.
+const COMPETENCY_ACCENT = '#a855f7'
 
 interface ResultsStageProps {
   assessment: CompetencyAssessment
-  /** Lets the report's own action row carry a direct way back to the candidates list, alongside the wizard's persistent nav bar above — this stage tends to run long, so a second, in-context back button is worth the redundancy. */
-  onBack: () => void
+  /** Which of the shared shell's six sections are reachable from here — built once by
+   * AssessmentWizardPage so the "who can see what" logic (lead vs. panelist) lives in one place. */
+  nav: Partial<Record<CompetencySection, () => void>>
+  onExitToHub: () => void
+  onNew?: () => void
+  /** Sends the viewer to the dedicated "تحلیل جامع هوش مصنوعی" stage (spec follow-up) — this page
+   * only ever shows a brief excerpt of that analysis, never the full generation UI. */
+  onGoToAiAnalysis: () => void
+  /** Sends the viewer to the «برنامه توسعه فردی» stage (Phase 5); omitted for viewers without it. */
+  onGoToIdp?: () => void
+  /** Opens another assessment of this candidate's reassessment chain. */
+  onOpenAssessment: (id: string, stage?: 'results' | 'idp' | 'profile') => void
 }
 
-/** The final report: a professional candidate card, radar chart, maturity band, strengths/weaknesses, and position recommendations — all on one printable/exportable page. */
-export function ResultsStage({ assessment, onBack }: ResultsStageProps) {
+const PM_DOMAIN_ICON: Partial<Record<CompetencyDomainKey, typeof Compass>> = {
+  governance: Compass,
+  planning: Calendar,
+  cost: Banknote,
+  hse: HardHat,
+  quality: ShieldCheck,
+  changeRisk: AlertTriangle,
+  stakeholder: Users,
+  execution: Wrench,
+}
+
+const ROLE_BUCKET_ICON: Record<string, typeof Compass> = {
+  roleGeneral: Briefcase,
+  roleTechnical: GraduationCap,
+  roleScenario: Puzzle,
+  roleExperience: History,
+  roleHse: ShieldCheck,
+  roleBehavioral: Users,
+  roleJudgment: Compass,
+}
+
+const PEER_SERIES_COLORS = ['#38bdf8', '#34d399']
+
+// Personality assessment statuses that carry real, scored dimension data — matches PersonalityStage's
+// own SCORED_STATUSES, kept as a local literal here since that list isn't exported (this is the only
+// other place that needs it).
+const PERSONALITY_SCORED_STATUSES: PersonalityAssessmentStatus[] = ['FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED']
+
+// A decorative accent per KPI tile (independent of the tier color used for the score itself), so
+// the grid reads as a vivid, varied set of cards rather than one repeated purple tone.
+const DOMAIN_ACCENT_PALETTE = ['#a855f7', '#38bdf8', '#f59e0b', '#34d399', '#fb7185', '#22d3ee', '#818cf8', '#facc15']
+
+/** The final report: a full-screen candidate dashboard — score ring, KPI tiles, radar with a peer
+ * benchmark overlay, comparison against top peers of the same role, an evaluation-stage timeline,
+ * and a closing recommendation banner — reachable from a right-hand sidebar (mirroring the rest of
+ * the RTL app: first flex child sits on the right).
+ */
+export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnalysis, onGoToIdp, onOpenAssessment }: ResultsStageProps) {
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
+  const reopenAssessment = useCompetencyStore((s) => s.reopenAssessment)
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const myProfile = useAuthStore((s) => s.profile)
+  const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
+  const [reopening, setReopening] = useState(false)
+  const allAssessments = useCompetencyStore((s) => s.assessments)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
   const profiles = useCompetencyStore((s) => s.profiles)
-  const allQuestions = useCompetencyStore((s) => s.questions)
+  // Category/weight/text-only classification, not the evaluator-only reference-answer material —
+  // this page must keep working for any evaluator viewing any candidate's finished results, not
+  // just that candidate's own panelists (see the access-scoped comp_question_bank RLS policy).
+  const questionBank = useCompetencyStore((s) => s.questionBankPublic)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
+  const compareRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
   const [settingApproval, setSettingApproval] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
-  const questions = questionsForPosition(allQuestions, assessment.jobPositionId)
-  const domainScores = computeDomainScores(questions, assessment.answers)
+  // Aggregated results (spec follow-up: three fingerprints in one panel) — the same personality
+  // assessment PersonalityStage would show, reused here as the "اثرانگشت رفتاری" and "ترکیب
+  // شایستگی‌های شغلی" sections rather than recomputed.
+  const personalityAssessments = usePersonalityStore((s) => s.assessments)
+  const fetchPersonalityAssessments = usePersonalityStore((s) => s.fetchAssessments)
+  const personalityAssessment = personalityAssessments.find((a) => a.assessmentId === assessment.id)
+  const showPersonalityFingerprint = assessment.needsPersonalityAssessment && !!personalityAssessment && PERSONALITY_SCORED_STATUSES.includes(personalityAssessment.status)
+
+  // Unified candidate AI analysis (spec follow-up) — this page only ever shows a brief excerpt
+  // (the executive summary) plus a link into the dedicated CandidateAiAnalysisStage, which owns the
+  // full read/generate experience.
+  const candidateAiAnalysis = useCompetencyStore((s) => s.candidateAiAnalysisByAssessment[assessment.id])
+  const fetchCandidateAiAnalysis = useCompetencyStore((s) => s.fetchCandidateAiAnalysis)
+
+  useEffect(() => {
+    if (questionBank.length === 0) fetchQuestionBank()
+    if (personalityAssessments.length === 0) fetchPersonalityAssessments()
+    if (candidateAiAnalysis === undefined) fetchCandidateAiAnalysis(assessment.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Evidence/Competency Engine (schema.sql Section 49): opening results refreshes this candidate's
+  // evidence-backed competency profile so it always reflects the latest scores. Mirrors
+  // comp_can_access_assessment (creator, module admin, or panelist) so viewers the RPC would reject
+  // never trigger it; moduleAdmins/panelists may load after mount, hence the one-shot ref rather
+  // than a mount-only effect.
+  const computeCompetencyProfile = useCompetencyStore((s) => s.computeCompetencyProfile)
+  const canComputeCompetencyProfile =
+    isModuleAdmin ||
+    (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
+    allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myProfile?.id)
+  // Candidate 360 gap analysis (Phase 4): only the lead (creator / module admin / lead panelist) or an
+  // assessment designer gets the explicit "recompute" button — and only when the compute RPC's own
+  // access check would pass for them.
+  const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
+  const isLeadViewer =
+    isModuleAdmin ||
+    (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
+    allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myProfile?.id && p.isLead)
+  const isDesignerViewer = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id)
+  const canRecomputeCompetencyProfile = canComputeCompetencyProfile && (isLeadViewer || isDesignerViewer)
+  const competencyProfile = useCompetencyStore((s) => s.competencyProfileByAssessment[assessment.id])
+  const competencyCatalog = useCompetencyStore((s) => s.competencies)
+  const competencyScores = competencyProfile?.scores
+  const aiAnalysisStale = isAiAnalysisStale(candidateAiAnalysis, competencyScores)
+  // Phase 5: the IDP summary card fetches the plan; the print report reuses the same store entry.
+  const developmentPlan = useCompetencyStore((s) => s.developmentPlans.find((p) => p.assessmentId === assessment.id && p.status !== 'CANCELLED'))
+  const developmentActions = useCompetencyStore((s) => (developmentPlan ? s.developmentActionsByPlan[developmentPlan.id] : undefined))
+  const competencyProfileRequestedRef = useRef(false)
+  useEffect(() => {
+    if (!canComputeCompetencyProfile || competencyProfileRequestedRef.current) return
+    competencyProfileRequestedRef.current = true
+    computeCompetencyProfile(assessment.id)
+  }, [canComputeCompetencyProfile, assessment.id, computeCompetencyProfile])
+
+  const isPM = usesLegacyPmRubric(assessment)
+  const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
+  const domainScoresFor = (answers: CompetencyAssessment['answers']) => (isPM ? computeDomainScores(answers) : computeCategoryScores(roleQuestions, answers))
+
+  // The official score is the panel's own average across every judge who has submitted (falling
+  // back to the lead's own entry only when nobody has submitted yet) — never a single person's
+  // independent verdict. See resolveOfficialAnswers.
+  const myPanelistScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id)
+  const officialAnswers = resolveOfficialAnswers(assessment.answers, myPanelistScores)
+  const officialQualification = resolveOfficialQualificationScores(assessment, myPanelistScores)
+
+  const domainScores = domainScoresFor(officialAnswers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(questions, assessment.answers)
+  const completion = isPM ? computeCompletion(officialAnswers) : computeRoleCompletion(roleQuestions, officialAnswers)
   const { strengths, weaknesses } = domainFlags(domainScores)
+  const roleRecommendation = isPM ? null : recommendationForRole(overall, domainScores)
+  const statusColor = isPM ? tierColor(overall) : ROLE_RECOMMENDATION_COLOR[roleRecommendation!.grade]
+  const statusLabel = isPM ? band.label : ROLE_RECOMMENDATION_LABEL_FA[roleRecommendation!.grade]
+  const statusGuidance = isPM ? band.guidance : roleRecommendation!.reason || `امتیاز کلی ٪${overall ?? 0} — بدون نقص حیاتی در حوزه‌های ارزیابی‌شده.`
 
-  // The panel's contribution, kept alongside the lead's verdict rather than blended into it —
-  // the headline score on this report is the lead's final call, not an average of the three.
+  // Peers: other candidates evaluated for the same job role, used for the benchmark radar overlay,
+  // the comparison bar chart, and the rank card. Each peer's own domain scores are computed with the
+  // exact same official (panel-averaged) resolution used above, over its own answers (and, for
+  // role-based assessments, its own selected questions) — never guessed or interpolated.
+  const peers = useMemo(() => {
+    return allAssessments
+      .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole)
+      .map((a) => {
+        const aIsPM = usesLegacyPmRubric(a)
+        const aRoleQuestions = aIsPM ? [] : questionsForAssessment(a, questionBank)
+        const aOfficialAnswers = resolveOfficialAnswers(
+          a.answers,
+          allPanelistScores.filter((s) => s.assessmentId === a.id),
+        )
+        const aDomainScores = aIsPM ? computeDomainScores(aOfficialAnswers) : computeCategoryScores(aRoleQuestions, aOfficialAnswers)
+        return { assessment: a, domainScores: aDomainScores, overall: computeOverallPercent(aDomainScores) }
+      })
+      .filter((p) => p.overall != null)
+      .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank])
+
+  const benchmarkScores: DomainScore[] | undefined =
+    peers.length > 0
+      ? domainScores.map((d, i) => {
+          const values = peers.map((p) => p.domainScores[i]?.percentScore).filter((v): v is number => typeof v === 'number')
+          const avg = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null
+          return { ...d, percentScore: avg }
+        })
+      : undefined
+
+  const allOveralls = [overall, ...peers.map((p) => p.overall)].filter((v): v is number => typeof v === 'number')
+  const rank = overall != null ? allOveralls.filter((v) => v > overall).length + 1 : null
+  const avgOverall = allOveralls.length > 0 ? Math.round(allOveralls.reduce((a, b) => a + b, 0) / allOveralls.length) : null
+  const maxOverall = allOveralls.length > 0 ? Math.max(...allOveralls) : null
+
+  const topPeers = peers.slice(0, 2)
+  const comparisonData = domainScores.map((d, i) => {
+    const row: Record<string, string | number> = { domain: d.domain.shortTitle, [assessment.candidateName]: d.percentScore ?? 0 }
+    topPeers.forEach((p) => {
+      row[p.assessment.candidateName] = p.domainScores[i]?.percentScore ?? 0
+    })
+    return row
+  })
+
+  // Competency Fingerprint (spec section 14/15): extra HSE/Behavioral/Judgment dimensions, computed
+  // straight from their own question category and shown ADDITIONALLY beside the 4 weighted role
+  // buckets — zero-weight, so they never touch computeOverallPercent/recommendationForRole above.
+  // Only shown when this role's mix actually used that question type at all.
+  const extendedFingerprint = isPM ? [] : computeExtendedFingerprint(roleQuestions, officialAnswers).filter((d) => d.totalCount > 0)
+
+  const kpiTiles = [...domainScores, ...extendedFingerprint].map((d, i) => ({
+    domain: d,
+    Icon: isPM ? PM_DOMAIN_ICON[d.domain.key as CompetencyDomainKey] ?? Compass : ROLE_BUCKET_ICON[d.domain.key] ?? Compass,
+    accent: DOMAIN_ACCENT_PALETTE[i % DOMAIN_ACCENT_PALETTE.length],
+  }))
+
+  const personalityParagraphs = generatePersonalityProfile(domainScores, overall, assessment, isPM)
+
+  const keyProjects = [...assessment.employmentHistory].slice(0, 3)
+
+  const submittedScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id && s.submittedAt)
+  const panelists = allPanelists.filter((p) => p.assessmentId === assessment.id)
+  const stages = computeEvaluationStages(assessment, completion.percent, panelists.length, submittedScores.length)
+
+  const qualificationChips = [
+    { label: 'مدرک تحصیلی', icon: GraduationCap, value: officialQualification.educationScore },
+    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: officialQualification.experienceScore },
+    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: officialQualification.pmTrainingScore },
+    { label: 'صلاحیت حرفه‌ای', icon: Award, value: officialQualification.pmCertificationScore },
+  ]
+
   const panelSummary: PanelSummaryRow[] = allPanelists
     .filter((p) => p.assessmentId === assessment.id)
     .map((p) => {
       const sheet = allPanelistScores.find((s) => s.assessmentId === assessment.id && s.panelistId === p.userId)
       return {
         name: profiles.find((pr) => pr.id === p.userId)?.fullName ?? 'داور',
-        overallPercent: sheet ? computeOverallPercent(computeDomainScores(questions, sheet.answers)) : null,
+        overallPercent: sheet ? computeOverallPercent(domainScoresFor(sheet.answers)) : null,
         submitted: sheet?.submittedAt != null,
       }
     })
 
-  const qualificationChips = [
-    { label: 'مدرک تحصیلی', icon: GraduationCap, value: assessment.educationScore },
-    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: assessment.experienceScore },
-    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: assessment.pmTrainingScore },
-    { label: 'صلاحیت حرفه‌ای', icon: Award, value: assessment.pmCertificationScore },
-    { label: 'نتایج مصاحبه', icon: MessageSquareText, value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
-  ]
+  // Per-domain judge average — each submitted judge's own domain percentage, averaged across
+  // judges, shown alongside (not instead of) the official panel-averaged score above so the
+  // breakdown by area is visible, not just a single number.
+  const submittedSheets = myPanelistScores.filter((s) => s.submittedAt != null)
+  const panelDomainAverages =
+    submittedSheets.length > 0
+      ? domainScores.map((d, i) => {
+          const values = submittedSheets.map((s) => domainScoresFor(s.answers)[i]?.percentScore).filter((v): v is number => typeof v === 'number')
+          return { domain: d.domain, avg: values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null }
+        })
+      : []
 
-  /**
-   * Prints the light-mode report on its own, inside a throwaway iframe.
-   *
-   * Calling window.print() on the app can't produce a usable page: the module shell paints its
-   * dark background through inline styles that print CSS can't reach, and the app's global @page
-   * rule is A4 landscape for the wide dashboards. The iframe starts from a blank document, so the
-   * report is the only thing on the paper and it gets its own portrait page box.
-   */
+  // The panel's own average — distinct from `overall` above (the lead's final verdict) — so the
+  // report shows both numbers side by side instead of only the lead's figure with the panel's
+  // votes buried in a per-person list.
+  const submittedPanelPercents = panelSummary.filter((p) => p.submitted && p.overallPercent != null).map((p) => p.overallPercent as number)
+  const panelAverage = submittedPanelPercents.length > 0 ? Math.round(submittedPanelPercents.reduce((a, b) => a + b, 0) / submittedPanelPercents.length) : null
+
   const handlePrint = async () => {
     const node = printRef.current
     if (!node) return
@@ -124,21 +367,12 @@ export function ResultsStage({ assessment, onBack }: ResultsStageProps) {
 </style></head><body><div id="fit-wrap" style="margin:0 auto;overflow:hidden;">${node.innerHTML}</div></body></html>`)
     doc.close()
 
-    // Without waiting, Chrome snapshots the page before the webfont arrives and prints fallback
-    // glyphs with the wrong metrics.
     try {
       await doc.fonts?.ready
     } catch {
       /* fonts API unavailable — print with whatever is loaded */
     }
 
-    // The report is authored at a fixed 900px, sized for the PDF capture, without regard for
-    // whether that happens to fit one A4 page. Reflowing its width to the page (the previous
-    // approach) let the report's internal fixed-px columns overflow instead of shrinking, which is
-    // exactly the "page size doesn't match the text" symptom. Uniformly scaling the whole,
-    // unreflowed report down to fit the page's printable box — same idea as the PDF export's
-    // fitToOnePage — keeps every internal proportion intact and guarantees it never spills onto a
-    // second page.
     const wrap = doc.getElementById('fit-wrap')
     const reportEl = wrap?.firstElementChild as HTMLElement | undefined
     if (wrap && reportEl) {
@@ -156,8 +390,6 @@ export function ResultsStage({ assessment, onBack }: ResultsStageProps) {
 
     win.focus()
     win.print()
-    // Safari fires afterprint late (or not at all when the dialog is dismissed), so also sweep up
-    // on a timer; removing an already-removed node is a no-op.
     win.addEventListener('afterprint', () => frame.remove())
     setTimeout(() => frame.remove(), 60_000)
   }
@@ -185,261 +417,565 @@ export function ResultsStage({ assessment, onBack }: ResultsStageProps) {
   const handleSend = () => {
     const subject = encodeURIComponent(`نتیجه مصاحبه ارزیابی شایستگی — ${assessment.candidateName}`)
     const body = encodeURIComponent(
-      `با سلام\n\nنتیجه ارزیابی شایستگی جناب/سرکار خانم ${assessment.candidateName}:\nامتیاز کلی: ${overall != null ? overall + '٪' : '—'}\nسطح بلوغ: ${band.label}\n\nبرای گزارش کامل، فایل PDF پیوست را مشاهده کنید.`,
+      `با سلام\n\nنتیجه ارزیابی شایستگی جناب/سرکار خانم ${assessment.candidateName}:\nامتیاز کلی: ${overall != null ? overall + '٪' : '—'}\nسطح: ${statusLabel}\n\nبرای گزارش کامل، فایل PDF پیوست را مشاهده کنید.`,
     )
     window.location.href = `mailto:${assessment.candidateEmail}?subject=${subject}&body=${body}`
   }
 
+  const headerRight = (
+    <>
+      <AssessmentChainNav assessment={assessment} onOpen={(id) => onOpenAssessment(id, 'results')} />
+      {onNew && (
+        <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400">
+          <Plus size={14} /> ارزیابی جدید
+        </button>
+      )}
+    </>
+  )
+
   return (
-    <div className="space-y-4">
-      <div className="no-print flex flex-wrap items-center justify-between gap-2">
-        <button onClick={onBack} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
-          <ArrowRight size={14} /> بازگشت به فهرست متقاضیان
-        </button>
-        <div className="flex flex-wrap items-center gap-2">
-        <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
-          <Printer size={14} /> پرینت
-        </button>
-        <button
-          onClick={handlePdf}
-          disabled={exporting}
-          className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 disabled:opacity-50"
-        >
-          <Download size={14} /> {exporting ? 'در حال ساخت PDF…' : 'دانلود PDF'}
-        </button>
-        <button
-          onClick={handleSend}
-          disabled={!assessment.candidateEmail}
-          title={!assessment.candidateEmail ? 'ابتدا ایمیل نامزد را در بخش مشخصات ثبت کنید' : ''}
-          className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
-        >
-          <Mail size={14} /> ارسال به نامزد
-        </button>
-        {assessment.status !== 'completed' && (
-          <button
-            onClick={() => setStatus(assessment.id, 'completed')}
-            className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400"
-          >
-            <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
-          </button>
-        )}
-        <button
-          onClick={handleApprove}
-          disabled={settingApproval}
-          className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
-            assessment.isApproved ? 'border border-white/10 text-secondary hover:bg-white/5' : 'bg-emerald-500 text-white hover:bg-emerald-400'
-          }`}
-        >
-          <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید صلاحیت'}
-        </button>
-        </div>
-      </div>
-
-      <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
-        <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Globe size={14} className="text-purple-300" /> لینک عمومی نتایج
-        </p>
-        <p className="text-[11px] leading-5 text-muted">
-          این لینک را برای هر کسی ارسال کنید تا بدون ورود به سامانه، فقط همین بخش نتایج را به‌صورت آنلاین ببیند — بدون نام مصاحبه‌گران و بدون سایر اطلاعات نامزد.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <input readOnly value={resultsShareUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(resultsShareUrl)
-              setLinkCopied(true)
-              setTimeout(() => setLinkCopied(false), 2000)
-            }}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
-          >
-            <Copy size={12} /> {linkCopied ? 'کپی شد' : 'کپی لینک'}
-          </button>
-          <button
-            type="button"
-            onClick={() => regenerateResultsShareLink(assessment.id)}
-            title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
-          >
-            <RefreshCw size={12} /> لینک جدید
-          </button>
-        </div>
-      </div>
-
-      {/* Off-screen, light-mode print/PDF template — kept out of view (print-only) so the on-screen
-          dark card above stays as-is, but window.print()/PDF export both target this instead, since
-          html2canvas captures literal colors and a dark background prints/exports poorly. */}
-      <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <CompetencyPrintReport assessment={assessment} panel={panelSummary} questions={questions} />
-      </div>
-
-      <div ref={reportRef} className="no-print space-y-4 rounded-2xl bg-[#0b0f16] p-1">
-        {/* Personnel card header */}
-        <div className="glass-panel relative overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} />
-            <div className="flex-1 text-center sm:text-right">
-              <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
-                {assessment.candidateName}
-                {assessment.isApproved && <ApprovalMedal />}
-              </p>
-              <p className="text-xs text-muted">{assessment.candidatePosition}</p>
-              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-secondary sm:justify-start">
-                {assessment.candidatePhone && <span dir="ltr">{assessment.candidatePhone}</span>}
-                {assessment.candidateEmail && <span dir="ltr">{assessment.candidateEmail}</span>}
-                <span>تاریخ مصاحبه: {formatJalali(assessment.interviewDate)}</span>
-              </div>
-            </div>
-            <div
-              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
-              style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
+    <CompetencySidebarShell
+      active="results"
+      nav={nav}
+      title={`نتیجه ارزیابی — ${assessment.candidateName}`}
+      stageStrip={stages}
+      onExitToHub={onExitToHub}
+      headerRight={headerRight}
+    >
+      {/* Toolbar */}
+      <div className="no-print flex flex-wrap items-center justify-end gap-2">
+            <button onClick={handlePrint} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">
+              <Printer size={14} /> پرینت
+            </button>
+            <button
+              onClick={handlePdf}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5 disabled:opacity-50"
             >
-              <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
-                <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
-                  {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-                </p>
-                <p className="mt-0.5 text-[10px] font-bold">{band.label}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Qualification scorecard */}
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {qualificationChips.map((c) => {
-              const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
-              return (
-                <div
-                  key={c.label}
-                  className="relative overflow-hidden rounded-2xl border p-3.5 text-center transition-transform hover:-translate-y-0.5"
-                  style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
-                >
-                  <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
-                  <p className="num text-2xl font-black leading-none" style={{ color }}>
-                    {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
-                    <span className="text-xs font-bold text-muted"> /۵</span>
-                  </p>
-                  <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Radar + maturity guidance */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="glass-panel rounded-2xl p-4">
-            <p className="mb-2 text-xs font-bold">نمودار رادار بلوغ شایستگی</p>
-            <CompetencyRadarChart domainScores={domainScores} />
-            <p className="text-center text-[11px] text-muted">
-              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="glass-panel rounded-2xl p-4">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
-                <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
-              </p>
-              <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
-            </div>
-
-            {assessment.capstoneScore != null && (
-              <div className="glass-panel rounded-2xl p-4">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
-                  <AlertTriangle size={13} className="text-amber-300" /> امتیاز سناریوی پایانی (بحران چندوجهی)
-                </p>
-                <p className="num text-lg font-extrabold">{assessment.capstoneScore.toLocaleString('fa-IR')} / ۵</p>
-                {assessment.capstoneNote && <p className="mt-1 text-[11px] leading-5 text-secondary">{assessment.capstoneNote}</p>}
-              </div>
+              <Download size={14} /> {exporting ? 'در حال ساخت PDF…' : 'دانلود PDF'}
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={!assessment.candidateEmail}
+              title={!assessment.candidateEmail ? 'ابتدا ایمیل نامزد را در بخش مشخصات ثبت کنید' : ''}
+              className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+            >
+              <Mail size={14} /> ارسال به نامزد
+            </button>
+            {assessment.status !== 'completed' && (
+              <button
+                onClick={() => setStatus(assessment.id, 'completed')}
+                className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400"
+              >
+                <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
+              </button>
             )}
+          </div>
 
-            {(strengths.length > 0 || weaknesses.length > 0) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                {strengths.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)
+          <div className="no-print glass-panel space-y-2.5 rounded-2xl p-4">
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <Globe size={14} className="text-purple-300" /> لینک عمومی نتایج
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input readOnly value={resultsShareUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(resultsShareUrl)
+                  setLinkCopied(true)
+                  setTimeout(() => setLinkCopied(false), 2000)
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+              >
+                <Copy size={12} /> {linkCopied ? 'کپی شد' : 'کپی لینک'}
+              </button>
+              <button
+                type="button"
+                onClick={() => regenerateResultsShareLink(assessment.id)}
+                title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+              >
+                <RefreshCw size={12} /> لینک جدید
+              </button>
+            </div>
+          </div>
+
+          <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
+            <CompetencyPrintReport
+              assessment={assessment}
+              panel={panelSummary}
+              domainScoresOverride={domainScores}
+              answersOverride={officialAnswers}
+              qualificationOverride={officialQualification}
+              roleRecommendation={roleRecommendation}
+              jobRoleLabel={resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}
+              competencyGapRows={competencyProfile ? buildGapRows(competencyProfile.scores, competencyProfile.evidence, competencyCatalog) : []}
+              developmentPlan={
+                developmentPlan
+                  ? {
+                      plan: developmentPlan,
+                      actions: developmentActions ?? [],
+                      competencyLabel: (id) => competencyCatalog.find((c) => c.id === id)?.labelFa ?? 'شایستگی',
+                      ownerName: profiles.find((p) => p.id === developmentPlan.ownerId)?.fullName ?? null,
+                    }
+                  : null
+              }
+            />
+          </div>
+
+          <FingerprintSectionHeading icon={Wrench} accent="#a855f7">اثرانگشت فنی و تخصصی — دانش و تجربه تخصصی</FingerprintSectionHeading>
+
+          <div ref={reportRef} className="space-y-4">
+            {/* Candidate header + score ring + status card */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_0.9fr_1fr]">
+              <div
+                className="glass-panel relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl p-5 sm:flex-row"
+                style={{ background: `radial-gradient(120% 140% at 100% 0%, ${tierColor(overall)}22, transparent 55%), radial-gradient(120% 140% at 0% 100%, #a855f722, transparent 55%)` }}
+              >
+                <PhotoBadge path={assessment.photoUrl} approved={assessment.isApproved} accent={tierColor(overall)} />
+                <div className="relative flex-1 text-center sm:text-right">
+                  <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
+                    {assessment.candidateName}
+                    {assessment.isApproved && <ApprovalMedal />}
+                    {overall != null && overall >= 85 && <Star size={16} className="fill-amber-400 text-amber-400" />}
+                  </p>
+                  <p className="text-xs text-muted">متقاضی سمت: {assessment.candidatePosition || resolveJobRoleLabel(jobRoleConfigs, assessment.jobRole)}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
+                    {assessment.yearsExperienceTotal != null && (
+                      <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[10.5px] font-bold text-sky-200">
+                        {assessment.yearsExperienceTotal.toLocaleString('fa-IR')} سال سابقه
+                      </span>
+                    )}
+                    {assessment.certifications.slice(0, 2).map((c, i) => (
+                      <span
+                        key={c.id}
+                        className="rounded-full px-2.5 py-1 text-[10.5px] font-bold"
+                        style={{ background: `${DOMAIN_ACCENT_PALETTE[i + 2]}22`, color: DOMAIN_ACCENT_PALETTE[i + 2] }}
+                      >
+                        {c.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel flex flex-col items-center justify-center gap-2 rounded-2xl p-5">
+                <div
+                  className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
+                  style={{
+                    background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+                    boxShadow: `0 0 28px -6px ${tierColor(overall)}70`,
+                  }}
+                >
+                  <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
+                    <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
+                      {overall != null ? overall.toLocaleString('fa-IR') : '—'}
                     </p>
-                    <p className="text-[11px] leading-6 text-secondary">{strengths.map((s) => s.domain.title).join('، ')}</p>
+                    <p className="text-[10px] text-muted">از ۱۰۰</p>
+                  </div>
+                </div>
+                <p className="num text-center text-[10px] text-muted">
+                  {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سؤال پاسخ‌داده‌شده
+                  {completion.percent < 100 && <span className="text-amber-300"> — ارزیابی هنوز کامل نشده</span>}
+                </p>
+              </div>
+
+              <div
+                className="glass-panel flex flex-col justify-between gap-3 rounded-2xl border p-4"
+                style={{ borderColor: `${statusColor}40`, background: `linear-gradient(160deg, ${statusColor}14, transparent 65%)` }}
+              >
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+                    وضعیت: <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
+                  </p>
+                  <p className="text-base font-extrabold" style={{ color: statusColor }}>
+                    {statusLabel}
+                  </p>
+                  <p className="mt-1.5 line-clamp-3 text-[10.5px] leading-5 text-secondary">{statusGuidance}</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={handlePdf} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-500 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400">
+                    <Download size={12} /> گزارش کامل
+                  </button>
+                  <button
+                    onClick={() => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+                  >
+                    <BarChart3 size={12} /> مقایسه با سایرین
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI tiles */}
+            <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 ${kpiTiles.length > 4 ? 'lg:grid-cols-4' : ''}`}>
+              {kpiTiles.map(({ domain: d, Icon, accent }) => {
+                const color = tierColor(d.percentScore)
+                return (
+                  <div
+                    key={d.domain.key}
+                    className="glass-panel overflow-hidden rounded-2xl border p-3.5"
+                    style={{ borderColor: `${accent}30`, background: `linear-gradient(155deg, ${accent}14, transparent 65%)` }}
+                  >
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={{ background: `${accent}22`, color: accent }}>
+                        <Icon size={13} />
+                      </span>
+                      <span className="truncate text-[11px] text-secondary">{d.domain.shortTitle}</span>
+                    </div>
+                    <p className="num text-xl font-extrabold" style={{ color }}>
+                      {d.percentScore != null ? d.percentScore.toLocaleString('fa-IR') : '—'} <span className="text-[11px] font-bold text-muted">/۱۰۰</span>
+                    </p>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: color }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Personality analysis — grounded strictly in this candidate's own score pattern */}
+            <div
+              className="glass-panel overflow-hidden rounded-2xl border p-4"
+              style={{ borderColor: '#a855f740', background: 'linear-gradient(135deg, #a855f71a, transparent 60%, #38bdf814)' }}
+            >
+              <p className="mb-2.5 flex items-center gap-1.5 text-sm font-extrabold text-purple-200">
+                <Sparkles size={15} className="text-purple-300" /> تحلیل الگوی پاسخ‌ها
+              </p>
+              <div className="space-y-2">
+                {personalityParagraphs.map((p, i) => (
+                  <p key={i} className="text-[11.5px] leading-7 text-secondary">
+                    {p}
+                  </p>
+                ))}
+              </div>
+              <p className="mt-2.5 text-[9.5px] text-muted">این تحلیل صرفاً بر اساس الگوی امتیازات ثبت‌شده در همین مصاحبه تولید شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
+            </div>
+
+            {/* Strengths / radar / rank */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.85fr_1.3fr_0.85fr]">
+              <div className="space-y-3">
+                {strengths.length > 0 && (
+                  <div className="glass-panel rounded-2xl p-4">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-green-300">
+                      <Trophy size={13} /> نقاط قوت
+                    </p>
+                    <ul className="space-y-1.5">
+                      {strengths.map((s) => (
+                        <li key={s.domain.key} className="flex items-center gap-1.5 text-[11px] text-secondary">
+                          <CheckCircle2 size={12} className="shrink-0 text-green-400" /> {s.domain.title}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {weaknesses.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-300">
-                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)
+                  <div className="glass-panel rounded-2xl p-4">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                      <AlertTriangle size={13} /> نقاط قابل بهبود
                     </p>
-                    <p className="text-[11px] leading-6 text-secondary">{weaknesses.map((s) => s.domain.title).join('، ')}</p>
+                    <ul className="space-y-1.5">
+                      {weaknesses.map((s) => (
+                        <li key={s.domain.key} className="flex items-center gap-1.5 text-[11px] text-secondary">
+                          <AlertTriangle size={12} className="shrink-0 text-amber-400" /> {s.domain.title}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
-            )}
 
-            {(assessment.strengths || assessment.developmentAreas) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                <p className="text-[11px] font-bold text-purple-200">جمع‌بندی مسئول ارزیابی</p>
-                {assessment.strengths && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{assessment.strengths}</p>
-                  </div>
-                )}
-                {assessment.developmentAreas && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
-                      <TrendingDown size={12} /> زمینه‌های قابل بهبود
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{assessment.developmentAreas}</p>
-                  </div>
-                )}
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-2 text-center text-xs font-bold">نمودار شایستگی‌ها</p>
+                <CompetencyRadarChart domainScores={domainScores} benchmarkScores={benchmarkScores} />
+                <p className="text-center text-[11px] text-muted">
+                  {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
+                </p>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Domain breakdown */}
-        <div className="glass-panel space-y-2 rounded-2xl p-4">
-          <p className="mb-1 text-xs font-bold">امتیاز به تفکیک حوزه (با وزن)</p>
-          {domainScores.map((d) => (
-            <div key={d.domain.key} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-[11px] text-secondary">
-                {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
-              </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: tierColor(d.percentScore) }} />
+              <div
+                className="glass-panel rounded-2xl border p-4"
+                style={{ borderColor: '#facc1530', background: 'linear-gradient(155deg, #facc1514, transparent 65%)' }}
+              >
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
+                  <Trophy size={13} className="text-amber-300" /> رتبه در میان متقاضیان
+                </p>
+                {rank != null ? (
+                  <>
+                    <p className="text-center">
+                      <span className="num text-3xl font-black text-amber-300">{rank.toLocaleString('fa-IR')}</span>
+                      <span className="num text-lg text-muted"> / {allOveralls.length.toLocaleString('fa-IR')}</span>
+                    </p>
+                    <p className="mb-3 text-center text-[10.5px] text-muted">رتبه این متقاضی از میان کل متقاضیان این شغل</p>
+                    <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3 text-center">
+                      <div className="flex-1">
+                        <p className="num text-sm font-bold">{avgOverall?.toLocaleString('fa-IR') ?? '—'}</p>
+                        <p className="text-[10px] text-muted">میانگین کل</p>
+                      </div>
+                      <div className="flex-1">
+                        <p className="num text-sm font-bold text-emerald-300">{maxOverall?.toLocaleString('fa-IR') ?? '—'}</p>
+                        <p className="text-[10px] text-muted">بالاترین امتیاز</p>
+                      </div>
+                    </div>
+                    {overall != null && maxOverall != null && (
+                      <div className="mt-3">
+                        <div className="relative h-1.5 rounded-full bg-white/5">
+                          <div className="absolute inset-y-0 right-0 rounded-full bg-purple-500/40" style={{ width: `${maxOverall}%` }} />
+                          <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-[#0b0f16] bg-purple-400" style={{ right: `calc(${overall}% - 6px)` }} />
+                        </div>
+                        <div className="mt-1 flex justify-between text-[9px] text-muted">
+                          <span>۰</span>
+                          <span>۱۰۰</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="py-6 text-center text-[11px] text-muted">هنوز متقاضی دیگری با این شغل ثبت نشده — رتبه‌بندی پس از ثبت چند متقاضی دیگر نمایش داده می‌شود.</p>
+                )}
               </div>
-              <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
-                {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
-              </span>
             </div>
-          ))}
-        </div>
 
-        {panelSummary.length > 0 && (
-          <div className="glass-panel space-y-2 rounded-2xl p-4">
-            <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
-            {panelSummary.map((p) => (
-              <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
-                <span className="text-secondary">{p.name}</span>
-                <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
-                  {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
-                </span>
+            {/* Comparison vs top peers + key project history */}
+            <div ref={compareRef} className="grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 text-xs font-bold">مقایسه با سایر متقاضیان برتر</p>
+                {topPeers.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={comparisonData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="domain" tick={{ fill: '#9aa4b8', fontSize: 10 }} />
+                      <YAxis domain={[0, 100]} tick={{ fill: '#9aa4b8', fontSize: 10 }} />
+                      <Tooltip contentStyle={{ background: 'rgba(20,10,32,0.94)', border: `1px solid ${COMPETENCY_ACCENT}55`, borderRadius: 10, fontSize: 12 }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey={assessment.candidateName} fill={COMPETENCY_ACCENT} radius={[4, 4, 0, 0]} />
+                      {topPeers.map((p, i) => (
+                        <Bar key={p.assessment.id} dataKey={p.assessment.candidateName} fill={PEER_SERIES_COLORS[i]} radius={[4, 4, 0, 0]} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="py-10 text-center text-[11px] text-muted">هنوز متقاضی دیگری برای مقایسه در این شغل ثبت نشده است.</p>
+                )}
               </div>
-            ))}
-            <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش، نظر نهایی مسئول ارزیابی است و میانگین سادهٔ اعضای پنل نیست.</p>
+
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
+                  <Briefcase size={13} className="text-purple-300" /> سوابق کلیدی پروژه‌ها
+                </p>
+                {keyProjects.length > 0 ? (
+                  <div className="space-y-2">
+                    {keyProjects.map((p) => (
+                      <div key={p.id} className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-300">
+                          <Building2 size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] font-bold">{p.employer || '—'}</p>
+                          <p className="truncate text-[10px] text-muted">
+                            {p.position} {p.startDate && `— از ${formatJalali(p.startDate)}`}
+                          </p>
+                        </div>
+                        <CheckCircle2 size={14} className="shrink-0 text-green-400" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-[11px] text-muted">سابقه کاری ثبت‌شده‌ای موجود نیست.</p>
+                )}
+              </div>
+            </div>
+
+            {qualificationChips.some((c) => c.value != null) && (
+              <div className="glass-panel rounded-2xl p-4">
+                <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {qualificationChips.map((c) => {
+                    const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+                    return (
+                      <div
+                        key={c.label}
+                        className="relative overflow-hidden rounded-2xl border p-3.5 text-center"
+                        style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
+                      >
+                        <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
+                        <p className="num text-2xl font-black leading-none" style={{ color }}>
+                          {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
+                          <span className="text-xs font-bold text-muted"> /۵</span>
+                        </p>
+                        <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {panelSummary.length > 0 && (
+              <div className="glass-panel space-y-2 rounded-2xl p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold">پنل مصاحبه‌گران</p>
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <span className="text-muted">میانگین امتیاز داوران:</span>
+                    <span className="num font-extrabold text-purple-300">{panelAverage != null ? `٪${panelAverage.toLocaleString('fa-IR')}` : '—'}</span>
+                  </span>
+                </div>
+                {panelSummary.map((p) => (
+                  <div key={p.name} className="flex items-center justify-between gap-2 border-b border-white/5 py-1.5 text-[11px]">
+                    <span className="text-secondary">{p.name}</span>
+                    <span className={`num font-bold ${p.submitted ? 'text-purple-300' : 'text-muted'}`}>
+                      {p.submitted ? (p.overallPercent != null ? `٪${p.overallPercent.toLocaleString('fa-IR')}` : 'بدون امتیاز') : 'ثبت نهایی نشده'}
+                    </span>
+                  </div>
+                ))}
+
+                {panelDomainAverages.length > 0 && (
+                  <div className="space-y-1.5 border-t border-white/5 pt-2.5">
+                    <p className="text-[10.5px] font-bold text-muted">میانگین امتیاز داوران به تفکیک زمینه</p>
+                    {panelDomainAverages.map((d) => (
+                      <div key={d.domain.key} className="flex items-center gap-3">
+                        <span className="w-24 shrink-0 text-[10.5px] text-secondary">{d.domain.shortTitle}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+                          <div className="h-full rounded-full" style={{ width: `${d.avg ?? 0}%`, background: tierColor(d.avg) }} />
+                        </div>
+                        <span className="num w-10 shrink-0 text-left text-[10px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[10px] leading-5 text-muted">امتیاز کلی این گزارش میانگین امتیازات همهٔ داورانی است که ثبت نهایی کرده‌اند.</p>
+              </div>
+            )}
+
+            <div className="glass-panel rounded-2xl border border-indigo-400/20 p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-sm font-bold">
+                  <Sparkles size={15} className="text-indigo-300" /> تحلیل جامع هوش مصنوعی
+                </p>
+                <button
+                  onClick={onGoToAiAnalysis}
+                  className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-bold text-indigo-200 hover:bg-indigo-500/20"
+                >
+                  مشاهده تحلیل کامل <ArrowLeft size={12} />
+                </button>
+              </div>
+              {aiAnalysisStale && (
+                <button
+                  onClick={onGoToAiAnalysis}
+                  className="mb-2 flex w-full items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-right text-[10.5px] font-bold text-amber-200 hover:bg-amber-500/20"
+                >
+                  <AlertTriangle size={12} className="shrink-0" /> تحلیل به‌روز نیست — بازتولید
+                  <span className="font-normal text-amber-200/70">(پروفایل شایستگی پس از تولید این تحلیل تغییر کرده است)</span>
+                </button>
+              )}
+              <p className="text-[11.5px] leading-6 text-secondary">
+                {candidateAiAnalysis?.analysis.executive_summary ?? 'تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.'}
+              </p>
+            </div>
+
+            {/* Final recommendation banner */}
+            <div className="glass-panel flex flex-col items-start gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center" style={{ borderColor: `${statusColor}40` }}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${statusColor}1c`, color: statusColor }}>
+                <MessageSquareText size={18} />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-extrabold">جمع‌بندی و پیشنهاد</p>
+                <p className="mt-0.5 text-[11px] leading-6 text-secondary">{assessment.strengths || assessment.developmentAreas ? assessment.strengths : statusGuidance}</p>
+              </div>
+              <button
+                onClick={handleApprove}
+                disabled={settingApproval}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
+                  assessment.isApproved ? 'border border-white/10 text-secondary hover:bg-white/5' : 'bg-emerald-500 text-white hover:bg-emerald-400'
+                }`}
+              >
+                <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید و ارسال به مرحله بعد'}
+              </button>
+            </div>
+
+            {isModuleAdmin && assessment.status === 'completed' && (
+              <div className="glass-panel flex flex-col items-start gap-2 rounded-2xl border border-amber-400/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] leading-6 text-muted">
+                  این ارزیابی قفل و نهایی‌شده است — داوران دیگر نمی‌توانند امتیاز خود را تغییر دهند. در صورت نیاز به اصلاح، آن را بازگشایی کنید (این اقدام ثبت
+                  می‌شود).
+                </p>
+                <button
+                  disabled={reopening}
+                  onClick={async () => {
+                    setReopening(true)
+                    await reopenAssessment(assessment.id)
+                    setReopening(false)
+                  }}
+                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  <RotateCcw size={14} /> {reopening ? 'در حال بازگشایی…' : 'بازگشایی ارزیابی برای اصلاح'}
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Behavioral Fingerprint + Competency Fingerprint — PersonalityFingerprintPanel already
+             carries its own "اثرانگشت رفتاری" / "ترکیب شایستگی‌های شغلی" section headings internally
+             (shared body with PersonalityStage), so it's rendered here as-is rather than re-wrapped,
+             keeping the whole page one continuous, scrollable report instead of three separately
+             computed views. */}
+          {assessment.needsPersonalityAssessment &&
+            (showPersonalityFingerprint && personalityAssessment ? (
+              <PersonalityFingerprintPanel
+                personalityAssessmentId={personalityAssessment.id}
+                candidateName={assessment.candidateName}
+                candidatePosition={assessment.candidatePosition}
+                showPrintButton={false}
+              />
+            ) : (
+              <>
+                <FingerprintSectionHeading icon={Fingerprint} accent="#f472b6">اثرانگشت رفتاری و ترکیب شایستگی‌های شغلی</FingerprintSectionHeading>
+                <div className="glass-panel rounded-2xl p-4 text-center text-[11px] text-muted">این متقاضی هنوز ارزیابی شخصیت و رفتاری خود را کامل نکرده است.</div>
+              </>
+            ))}
+
+          {/* Candidate 360 competency gap analysis (Phase 4) — the job's required competencies against
+             the Competency Engine's evidence-backed levels, with a full evidence drill-down. Sits after
+             the three fingerprints rather than replacing any of them. */}
+          <FingerprintSectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی — نمای ۳۶۰ درجه متقاضی</FingerprintSectionHeading>
+          <CompetencyGapAnalysis assessment={assessment} canRecompute={canRecomputeCompetencyProfile} />
+
+          {/* Phase 5: reassessment comparison (only on a follow-up assessment) and the compact IDP card. */}
+          {assessment.previousAssessmentId && (
+            <>
+              <FingerprintSectionHeading icon={GitCompareArrows} accent="#38bdf8">مقایسه با ارزیابی قبلی</FingerprintSectionHeading>
+              <ReassessmentComparison assessment={assessment} onOpenPrevious={(id) => onOpenAssessment(id, 'results')} />
+            </>
+          )}
+
+          <FingerprintSectionHeading icon={Sprout} accent="#2dd4bf">برنامه توسعه فردی</FingerprintSectionHeading>
+          <DevelopmentPlanSummary
+            assessment={assessment}
+            canManage={isLeadViewer || isDesignerViewer}
+            onGoToIdp={onGoToIdp}
+            onOpenAssessment={onOpenAssessment}
+          />
+    </CompetencySidebarShell>
+  )
+}
+
+/** A clearly-labeled divider between the results page's three fingerprint sections (technical,
+ * behavioral, competency) — visually distinct while keeping the whole page one continuous,
+ * scrollable panel rather than a tabbed interface, per the aggregated-results spec follow-up. */
+function FingerprintSectionHeading({ icon: Icon, accent, children }: { icon: typeof Wrench; accent: string; children: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `${accent}22`, color: accent }}>
+        <Icon size={16} />
+      </span>
+      <p className="text-base font-extrabold">{children}</p>
+      <div className="h-px flex-1" style={{ background: `${accent}30` }} />
     </div>
   )
 }
 
-function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
+function PhotoBadge({ path, approved, accent = '#a855f7' }: { path: string; approved?: boolean; accent?: string }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -450,8 +986,11 @@ function PhotoBadge({ path, approved }: { path: string; approved?: boolean }) {
   }, [path])
   return (
     <div className="relative shrink-0">
-      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
+      <div
+        className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-2 bg-white/5"
+        style={{ borderColor: `${accent}60`, boxShadow: `0 0 20px -6px ${accent}80` }}
+      >
+        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Users size={28} className="text-muted" />}
       </div>
       {approved && (
         <span className="absolute -bottom-1.5 -left-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#0b0f16] bg-emerald-500 text-white shadow-lg">

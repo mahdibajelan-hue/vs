@@ -2,26 +2,24 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Award, Briefcase, BookOpen, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { formatJalali } from '../../../lib/jalali'
+import { getCompDocSignedUrl } from '../lib/compStorage'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
-import type { CompetencyAnswers, CompetencyDomainKey, CompetencyQuestion } from '../types'
+import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
+import type { CompetencyAnswers, JobRole, QuestionType } from '../types'
 
-/** The token-scoped question list the RPC returns alongside the result — just enough shape to
- * compute domain scores (key/domain/sortOrder), never text or referenceAnswer: this public link
- * shows aggregate scores only, so there's no reason to expose question wording or model answers. */
-interface PublicResultQuestionRow {
+interface ResolvedQuestion {
   id: string
-  domain_key: string
-  legacy_key: string | null
-  sort_order: number
+  category: QuestionType
+  score: number | null
 }
 
 interface PublicResultsRow {
   id: string
   candidate_name: string
   candidate_position: string
-  job_position_id: string | null
+  job_role: JobRole
   interview_date: string
   status: string
   answers: CompetencyAnswers
@@ -34,7 +32,8 @@ interface PublicResultsRow {
   is_approved: boolean
   strengths: string
   development_areas: string
-  questions: PublicResultQuestionRow[]
+  resolved_questions: ResolvedQuestion[]
+  photo_url: string | null
 }
 
 /**
@@ -78,20 +77,26 @@ export function PublicResultsPage({ token }: { token: string }) {
     )
   }
 
-  const questions: CompetencyQuestion[] = row.questions.map((q) => ({
-    key: q.legacy_key ?? q.id,
-    id: q.id,
-    jobPositionId: row.job_position_id ?? '',
-    domain: q.domain_key as CompetencyDomainKey,
-    text: '',
-    referenceAnswer: '',
-    sortOrder: q.sort_order,
-    isActive: true,
-  }))
-  const domainScores = computeDomainScores(questions, row.answers)
+  // A PM candidate can now be scored either way — the fixed in-code rubric (legacy, resolved_questions
+  // empty) or the DB-backed question bank exactly like every other role (resolved_questions
+  // populated) — see usesLegacyPmRubric/comp_public_results_get. resolved_questions gives just
+  // {id, category, official score} (never question text/reference answers, which must stay
+  // evaluator-only even to an anonymous public-link visitor), enough to run the exact same bucket
+  // logic used everywhere else in the app.
+  const isPM = isProjectManagerRole(row.job_role) && row.resolved_questions.length === 0
+  const officialAnswers: CompetencyAnswers = isPM
+    ? row.answers
+    : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))
+  const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(row.resolved_questions, officialAnswers)
   const overall = computeOverallPercent(domainScores)
   const band = maturityBand(overall)
-  const completion = computeCompletion(questions, row.answers)
+  const completion = isPM
+    ? computeCompletion(officialAnswers)
+    : {
+        answered: row.resolved_questions.filter((q) => q.score != null).length,
+        total: row.resolved_questions.length,
+        percent: row.resolved_questions.length === 0 ? 0 : Math.round((row.resolved_questions.filter((q) => q.score != null).length / row.resolved_questions.length) * 100),
+      }
   const { strengths, weaknesses } = domainFlags(domainScores)
 
   const qualificationChips = [
@@ -112,9 +117,7 @@ export function PublicResultsPage({ token }: { token: string }) {
 
         <div className="glass-panel relative overflow-hidden rounded-2xl">
           <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-              <User size={28} className="text-muted" />
-            </div>
+            <PublicPhoto path={row.photo_url} />
             <div className="flex-1 text-center sm:text-right">
               <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
                 {row.candidate_name}
@@ -256,6 +259,22 @@ export function PublicResultsPage({ token }: { token: string }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function PublicPhoto({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    if (path) getCompDocSignedUrl(path).then((u) => active && setUrl(u))
+    return () => {
+      active = false
+    }
+  }, [path])
+  return (
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
+      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <User size={28} className="text-muted" />}
     </div>
   )
 }

@@ -1,12 +1,11 @@
 import type { CompetencyAnswers, CompetencyDomain, CompetencyDomainKey, CompetencyQuestion, DomainScore } from '../types'
 
 /**
- * The 8 weighted competency domains (weights sum to 100) shared by every job position's rubric —
- * this taxonomy stays a versioned constant in code. The interview QUESTIONS under each domain are
- * no longer hardcoded here: they're the growable, admin-managed comp_questions bank (schema.sql /
- * useCompetencyStore.questions), scoped per job position — every function below that used to read
- * the old hardcoded COMPETENCY_QUESTIONS constant now takes the caller's already position-filtered
- * question list as a parameter instead (see questionsForPosition).
+ * The fixed evaluation rubric for a gas transmission pipeline construction project manager
+ * interview: 8 weighted competency domains (weights sum to 100), 4 real interview questions each,
+ * plus one closing capstone scenario question. This lives in code (not a DB table) because it's a
+ * versioned assessment instrument, not user-entered data — every assessment that uses it should be
+ * scored against the exact same rubric.
  */
 export const COMPETENCY_DOMAINS: CompetencyDomain[] = [
   {
@@ -81,6 +80,49 @@ export const COMPETENCY_DOMAINS: CompetencyDomain[] = [
     excellentAnswerHint:
       'درک روشن از ROW، مجوزها، عبورهای خاص، Tie-in، Punch List، سیستم Turnover، As-Built، تست‌های تکمیلی و انتقال مالکیت مدارک به بهره‌برداری.',
   },
+]
+
+export const COMPETENCY_QUESTIONS: CompetencyQuestion[] = [
+  // راهبری پروژه و مدیریت قرارداد
+  { key: 'governance-1', domain: 'governance', text: 'در یک پروژه خط انتقال گاز، چگونه اهداف زمان، هزینه، کیفیت، HSE و قابلیت بهره‌برداری را به یک برنامه اجرایی یکپارچه تبدیل کردید؟' },
+  { key: 'governance-2', domain: 'governance', text: 'ساختار سازمانی پروژه، ماتریس RACI و حدود اختیار پیمانکاران و پیمانکاران جزء را چگونه تعریف و کنترل می‌کنید؟' },
+  { key: 'governance-3', domain: 'governance', text: 'یک نمونه از اختلاف با کارفرما، مشاور یا پیمانکار را شرح دهید که با استناد قراردادی حل کردید.' },
+  { key: 'governance-4', domain: 'governance', text: 'چگونه اطمینان می‌دهید تصمیم‌های روزانه کارگاه با الزامات قرارداد، مشخصات فنی، ITP و اهداف بهره‌برداری نهایی هم‌راستا هستند؟' },
+  // برنامه‌ریزی، پیشرفت و بازیابی تأخیر
+  { key: 'planning-1', domain: 'planning', text: 'مبنای تهیه برنامه زمان‌بندی Level 3 یا Level 4 برای خط لوله را چه می‌دانید و فعالیت‌های کلیدی آن چیست؟' },
+  { key: 'planning-2', domain: 'planning', text: 'در صورت عقب‌ماندگی عملیات جوشکاری، NDT یا تأمین شیرآلات، چگونه علت را از اثر تفکیک می‌کنید و برنامه Recovery Plan می‌سازید؟' },
+  { key: 'planning-3', domain: 'planning', text: 'پیشرفت فیزیکی عملیات ROW، خاکبرداری، Stringing، Welding، NDT، Field Joint Coating، Lowering، Backfilling و Hydrotest را چگونه وزن‌دهی می‌کنید؟' },
+  { key: 'planning-4', domain: 'planning', text: 'چه شاخص‌هایی را به‌صورت هفتگی پایش می‌کنید تا تأخیر را پیش از بحرانی‌شدن تشخیص دهید؟' },
+  // مدیریت هزینه، خرید و منابع
+  { key: 'cost-1', domain: 'cost', text: 'چگونه بودجه پروژه را به WBS، CBS، پکیج‌های قراردادی و فعالیت‌های اجرایی متصل می‌کنید؟' },
+  { key: 'cost-2', domain: 'cost', text: 'اگر قیمت لوله، پوشش، ماشین‌آلات یا حمل‌ونقل افزایش یابد، چه اقدام‌هایی برای پیش‌بینی و کنترل اثر مالی انجام می‌دهید؟' },
+  { key: 'cost-3', domain: 'cost', text: 'برای اقلام Long Lead مانند Line Pipe، Valves، Fittings، CP Material یا تجهیزات ایستگاهی، چه فرآیند Expediting تعریف می‌کنید؟' },
+  { key: 'cost-4', domain: 'cost', text: 'یک نمونه از تصمیم شما برای کاهش هزینه یا جلوگیری از هزینه اضافی را با اثر کمی توضیح دهید.' },
+  // HSE، مدیریت ریسک و آمادگی اضطراری
+  { key: 'hse-1', domain: 'hse', text: 'مهم‌ترین ریسک‌های HSE در احداث خط انتقال گاز را چگونه شناسایی، رتبه‌بندی و کنترل می‌کنید؟' },
+  { key: 'hse-2', domain: 'hse', text: 'اگر در یک جبهه کاری هم‌زمان عملیات لیفتینگ، جوشکاری، کار در ترانشه و تردد ماشین‌آلات در جریان باشد، چه کنترل‌هایی برقرار می‌کنید؟' },
+  { key: 'hse-3', domain: 'hse', text: 'در صورت وقوع Near Miss جدی یا حادثه با پتانسیل بالا، در ۲۴ ساعت اول چه اقدام‌های مدیریتی انجام می‌دهید؟' },
+  { key: 'hse-4', domain: 'hse', text: 'چگونه مطمئن می‌شوید پیمانکار جزء فقط آمار HSE تولید نمی‌کند، بلکه واقعاً رفتار ایمن و کنترل میدانی دارد؟' },
+  // کیفیت، جوشکاری و یکپارچگی خط
+  { key: 'quality-1', domain: 'quality', text: 'چگونه مطمئن می‌شوید WPS/PQR، صلاحیت جوشکاران، Consumable Control و شرایط پیش‌گرم با مشخصات پروژه منطبق هستند؟' },
+  { key: 'quality-2', domain: 'quality', text: 'اگر نرخ Repair جوش بالا برود، چه داده‌هایی جمع می‌کنید و چه اقدام اصلاحی مرحله‌ای انجام می‌دهید؟' },
+  { key: 'quality-3', domain: 'quality', text: 'نقش مدیر پروژه در کنترل کیفیت عملیات NDT، Field Joint Coating، Holiday Test، Lowering و Backfilling چیست؟' },
+  { key: 'quality-4', domain: 'quality', text: 'برای Hydrotest، Dewatering، Drying و آماده‌سازی برای Commissioning چه نقاط کنترلی یا Hold Point هایی را حیاتی می‌دانید؟' },
+  // مدیریت ریسک، تغییرات و Claims
+  { key: 'changeRisk-1', domain: 'changeRisk', text: 'Risk Register پروژه را چگونه زنده نگه می‌دارید و چه تفاوتی میان ریسک، مسئله جاری و فرصت قائل هستید؟' },
+  { key: 'changeRisk-2', domain: 'changeRisk', text: 'اگر کارفرما تغییر مسیر، افزایش ضخامت، تغییر کلاس پوشش یا اصلاح محدوده ایستگاه‌های شیر را درخواست دهد، چگونه Change Control انجام می‌دهید؟' },
+  { key: 'changeRisk-3', domain: 'changeRisk', text: 'یک نمونه از Claim یا اختلاف زمانی/مالی را شرح دهید که با مستندسازی درست، از منافع پروژه دفاع کردید.' },
+  { key: 'changeRisk-4', domain: 'changeRisk', text: 'چه مواردی را از روز اول پروژه مستندسازی می‌کنید تا در صورت تأخیر ناشی از کارفرما، معارض محلی، مجوز یا تغییر طراحی قابل استناد باشد؟' },
+  // مدیریت ذی‌نفعان و رهبری تیم
+  { key: 'stakeholder-1', domain: 'stakeholder', text: 'چگونه بین خواسته‌های کارفرما، مشاور، بهره‌بردار، واحد طراحی، تدارکات، پیمانکار و ذی‌نفعان محلی اولویت‌گذاری می‌کنید؟' },
+  { key: 'stakeholder-2', domain: 'stakeholder', text: 'نمونه‌ای از تعارض میان تولید/زمان‌بندی و کیفیت یا HSE را شرح دهید؛ تصمیم شما چه بود؟' },
+  { key: 'stakeholder-3', domain: 'stakeholder', text: 'چگونه سرپرستان اجرایی و پیمانکاران جزء را پاسخگو نگه می‌دارید، بدون اینکه صرفاً با فشار و دستور اداره شوند؟' },
+  { key: 'stakeholder-4', domain: 'stakeholder', text: 'در پروژه‌ای با چند Spread یا جبهه کاری، چه سازوکاری برای انتقال سریع تصمیم‌ها و درس‌آموخته‌ها ایجاد می‌کنید؟' },
+  // دانش اجرایی خط لوله و راه‌اندازی
+  { key: 'execution-1', domain: 'execution', text: 'توالی اجرایی احداث یک خط انتقال گاز را از تحویل مسیر تا تحویل مکانیکی توضیح دهید و وابستگی‌های اصلی را مشخص کنید.' },
+  { key: 'execution-2', domain: 'execution', text: 'در تقاطع رودخانه، جاده، راه‌آهن یا منطقه دارای معارض، چه تفاوتی در برنامه‌ریزی، مجوزها و روش اجرا ایجاد می‌شود؟' },
+  { key: 'execution-3', domain: 'execution', text: 'چگونه Interface بین خط لوله، ایستگاه‌های شیر بین‌راهی، CP، SCADA/Telecom و بهره‌بردار را مدیریت می‌کنید؟' },
+  { key: 'execution-4', domain: 'execution', text: 'چه شرایطی باید برقرار باشد تا یک بخش از خط برای Mechanical Completion، Pre-Commissioning و تحویل به بهره‌برداری آماده تلقی شود؟' },
 ]
 
 /** Asked last, on purpose — a single realistic crisis scenario that surfaces nearly every competency at once. Scored and noted separately from the 8 weighted domains, never silently blended into their average. */
@@ -177,27 +219,20 @@ export const MATURITY_BANDS: { min: number; max: number; label: string; guidance
   },
 ]
 
-/** Active questions belonging to one job position, sorted domain-by-domain then by sortOrder — the actual list every scoring screen iterates over. */
-export function questionsForPosition(questions: CompetencyQuestion[], jobPositionId: string | null): CompetencyQuestion[] {
-  return questions
-    .filter((q) => q.jobPositionId === jobPositionId && q.isActive)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+export function questionsForDomain(domain: CompetencyDomainKey): CompetencyQuestion[] {
+  return COMPETENCY_QUESTIONS.filter((q) => q.domain === domain)
 }
 
-export function questionsForDomain(questions: CompetencyQuestion[], domain: CompetencyDomainKey): CompetencyQuestion[] {
-  return questions.filter((q) => q.domain === domain)
-}
-
-/** Domain maturity = average of that domain's answered question scores, converted to a 0-100 percentage. An unanswered domain plots as 0 on the radar chart but is excluded from the weighted overall score below. `questions` should already be filtered to the assessment's own job position (questionsForPosition). */
-export function computeDomainScores(questions: CompetencyQuestion[], answers: CompetencyAnswers): DomainScore[] {
+/** Domain maturity = average of that domain's answered question scores, converted to a 0-100 percentage. An unanswered domain plots as 0 on the radar chart but is excluded from the weighted overall score below. */
+export function computeDomainScores(answers: CompetencyAnswers): DomainScore[] {
   return COMPETENCY_DOMAINS.map((domain) => {
-    const domainQuestions = questionsForDomain(questions, domain.key)
-    const scores = domainQuestions.map((q) => answers[q.key]?.score).filter((s): s is number => typeof s === 'number')
+    const questions = questionsForDomain(domain.key)
+    const scores = questions.map((q) => answers[q.key]?.score).filter((s): s is number => typeof s === 'number')
     const averageScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null
     return {
       domain,
       answeredCount: scores.length,
-      totalCount: domainQuestions.length,
+      totalCount: questions.length,
       averageScore,
       percentScore: averageScore != null ? Math.round((averageScore / 5) * 100) : null,
     }
@@ -214,9 +249,9 @@ export function computeOverallPercent(domainScores: DomainScore[]): number | nul
   return Math.round(weightedSum / totalWeight)
 }
 
-export function computeCompletion(questions: CompetencyQuestion[], answers: CompetencyAnswers): { answered: number; total: number; percent: number } {
-  const total = questions.length
-  const answered = questions.filter((q) => typeof answers[q.key]?.score === 'number').length
+export function computeCompletion(answers: CompetencyAnswers): { answered: number; total: number; percent: number } {
+  const total = COMPETENCY_QUESTIONS.length
+  const answered = COMPETENCY_QUESTIONS.filter((q) => typeof answers[q.key]?.score === 'number').length
   return { answered, total, percent: total === 0 ? 0 : Math.round((answered / total) * 100) }
 }
 

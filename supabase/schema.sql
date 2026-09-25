@@ -3647,14 +3647,12 @@ returns table (
   employment_history jsonb,
   certifications jsonb,
   notable_projects text,
-  self_service_status text,
-  uploaded_kinds text[]
+  self_service_status text
 ) as $$
   select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
          a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
          a.years_experience_total, a.years_experience_pipeline, a.current_employer,
-         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
-         coalesce((select array_agg(att.kind order by att.created_at) from comp_attachments att where att.assessment_id = a.id), array[]::text[]) as uploaded_kinds
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status
   from comp_assessments a
   where a.self_service_token = p_token;
 $$ language sql security definer stable;
@@ -3705,9 +3703,23 @@ returns void as $$
   from comp_assessments a where a.self_service_token = p_token;
 $$ language sql security definer;
 
+-- Lets the self-service page show a candidate their own already-uploaded documents after a reload
+-- (previously tracked only in unpersisted React state, so a closed/reopened tab always looked
+-- empty even though the files were saved correctly all along). Scoped by the same unguessable
+-- token as every other comp_self_service_* function — never exposes another candidate's rows.
+create or replace function comp_self_service_list_attachments(p_token uuid)
+returns table (id uuid, kind text, file_name text, created_at timestamptz) as $$
+  select att.id, att.kind, att.file_name, att.created_at
+  from comp_attachments att
+  join comp_assessments a on a.id = att.assessment_id
+  where a.self_service_token = p_token
+  order by att.created_at desc;
+$$ language sql security definer stable;
+
 grant execute on function comp_self_service_get(uuid) to anon, authenticated;
 grant execute on function comp_self_service_submit(uuid, text, text, text, text, date, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
 grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
+grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;
 
 -- ----------------------------------------------------------------------------
 -- Storage bucket for candidate documents. Staff read/write is gated by the
@@ -3743,14 +3755,9 @@ create policy "comp_docs_delete_staff" on storage.objects
     and comp_can_access_assessment(((storage.foldername(name))[1])::uuid)
   );
 
--- Deliberately not restricted "to anon": the security boundary here is knowing the exact
--- self_service_token in the path, not the caller's auth state. Scoping this to anon only meant an
--- already-authenticated browser session (e.g. staff opening their own candidate link to test it,
--- or a candidate who also happens to hold a RASTA account) got a silent RLS-denied upload instead
--- of the same token check everyone else passes.
 drop policy if exists "comp_docs_write_candidate" on storage.objects;
 create policy "comp_docs_write_candidate" on storage.objects
-  for insert with check (
+  for insert to anon with check (
     bucket_id = 'comp-docs'
     and exists (
       select 1 from comp_assessments a
@@ -3782,13 +3789,24 @@ on conflict (key) do nothing;
 alter table comp_assessments add column if not exists results_share_token uuid not null default gen_random_uuid();
 create unique index if not exists idx_comp_assessments_results_share_token on comp_assessments (results_share_token);
 
+-- comp_public_results_get predates the multi-role DB-backed question bank and originally only ever
+-- worked for project_manager (whose domain scores are computed purely from comp_assessments.answers
+-- keyed by fixed in-code question keys). For every other role, answers are keyed by
+-- comp_question_bank UUIDs, and the public page had no way to resolve a question's category (needed
+-- to bucket it into a domain) without bank access — which an anonymous public-link visitor must
+-- never get (reference answers etc. stay evaluator-only). Fixed (Section 38 below) by having the RPC
+-- resolve each selected question's OFFICIAL score (the panel's average across every submitted
+-- panelist, falling back to the lead's own answers only when nobody has submitted — same rule as
+-- resolveOfficialAnswers on the client) together with just its category into `resolved_questions`;
+-- the client then runs the exact same computeCategoryScores() bucket logic used everywhere else in
+-- the app on that minimal, non-sensitive data.
 drop function if exists comp_public_results_get(uuid);
 create or replace function comp_public_results_get(p_token uuid)
 returns table (
   id uuid,
   candidate_name text,
   candidate_position text,
-  job_position_id uuid,
+  job_role text,
   interview_date date,
   status text,
   answers jsonb,
@@ -3800,17 +3818,74 @@ returns table (
   pm_certification_score numeric,
   is_approved boolean,
   strengths text,
-  development_areas text
+  development_areas text,
+  resolved_questions jsonb,
+  photo_url text
 ) as $$
-  select a.id, a.candidate_name, a.candidate_position, a.job_position_id, a.interview_date, a.status,
-         a.answers, a.capstone_score, a.capstone_note,
-         a.education_score, a.experience_score, a.pm_training_score, a.pm_certification_score,
-         a.is_approved, a.strengths, a.development_areas
-  from comp_assessments a
-  where a.results_share_token = p_token;
-$$ language sql security definer stable;
+declare
+  v_assessment comp_assessments%rowtype;
+  v_has_submitted boolean;
+  v_resolved_questions jsonb;
+begin
+  select * into v_assessment from comp_assessments a where a.results_share_token = p_token;
+  if not found then
+    return;
+  end if;
+
+  -- A Project Manager candidate can now go through either the fixed in-code rubric (legacy,
+  -- selected_question_ids empty) or the DB-backed question bank (selected_question_ids populated,
+  -- exactly like every other role) — see usesLegacyPmRubric on the client. Branch on that instead of
+  -- job_role so a bank-driven PM assessment gets its resolved_questions just like any other role.
+  if jsonb_array_length(v_assessment.selected_question_ids) = 0 then
+    v_resolved_questions := '[]'::jsonb;
+  else
+    select exists(
+      select 1 from comp_panelist_scores ps where ps.assessment_id = v_assessment.id and ps.submitted_at is not null
+    ) into v_has_submitted;
+
+    select coalesce(jsonb_agg(jsonb_build_object('id', q.id, 'category', q.category, 'score', official.score)), '[]'::jsonb)
+    into v_resolved_questions
+    from comp_question_bank q
+    cross join lateral (
+      select case
+        when v_has_submitted then (
+          select avg((ps.answers -> q.id::text ->> 'score')::numeric)
+          from comp_panelist_scores ps
+          where ps.assessment_id = v_assessment.id
+            and ps.submitted_at is not null
+            and (ps.answers -> q.id::text ->> 'score') is not null
+        )
+        else (v_assessment.answers -> q.id::text ->> 'score')::numeric
+      end as score
+    ) official
+    where q.id::text in (select jsonb_array_elements_text(v_assessment.selected_question_ids));
+  end if;
+
+  return query select
+    v_assessment.id, v_assessment.candidate_name, v_assessment.candidate_position, v_assessment.job_role,
+    v_assessment.interview_date, v_assessment.status, v_assessment.answers,
+    v_assessment.capstone_score, v_assessment.capstone_note,
+    v_assessment.education_score, v_assessment.experience_score, v_assessment.pm_training_score, v_assessment.pm_certification_score,
+    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions,
+    v_assessment.photo_url;
+end;
+$$ language plpgsql security definer stable;
 
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
+
+-- The public results page may also show the candidate's photo. photo_url is never embedded with
+-- results_share_token the way self-service uploads embed self_service_token in their storage path
+-- (see comp_docs_insert_self_service above), so an equivalent "path contains the right token" storage
+-- policy isn't possible here. Instead this scopes anon read to exactly the objects that are some
+-- assessment's *official* photo_url — resumes/certifications/national-ID docs are never stored in
+-- that column, so this can never expose them, regardless of which assessment's results_share_token
+-- a visitor holds.
+drop policy if exists "comp_docs_read_public_photo" on storage.objects;
+create policy "comp_docs_read_public_photo" on storage.objects
+  for select to anon using (
+    bucket_id = 'comp-docs'
+    and exists (select 1 from comp_assessments a where a.photo_url = name)
+  );
 
 -- ----------------------------------------------------------------------------
 -- 17. RASTA Access Control — real module gating (completes section 13, which
@@ -3843,6 +3918,13 @@ insert into rasta_modules (key, label_fa) values
   ('finance', 'مدیریت مالی پروژه'),
   ('material', 'مدیریت تامین کالا'),
   ('pipelinedigitaltwin', 'دوقلوی دیجیتال خط لوله')
+on conflict (key) do nothing;
+
+-- Added later (Project Cost Estimator module) — kept in this same block so a fresh database
+-- only needs to run this file once; on conflict do nothing makes it safe to also re-run on an
+-- existing database that already has the earlier rows.
+insert into rasta_modules (key, label_fa) values
+  ('estimator', 'برآورد هزینه پروژه')
 on conflict (key) do nothing;
 
 insert into rasta_permissions (module_key, action)
@@ -3889,182 +3971,5212 @@ $$ language sql security definer stable;
 
 grant execute on function rasta_my_accessible_modules() to authenticated;
 
--- ============================================================================
--- 18. Competency module: job-position registry + growable question bank
---     (Sept 2026 request). Previously the interview rubric was a single
---     hardcoded question set (COMPETENCY_QUESTIONS in competencyModel.ts)
---     covering exactly one role. This introduces:
---       - comp_job_positions: an admin-managed list of job titles a
---         candidate can be interviewed for.
---       - comp_questions: the question bank itself, scoped to a job position
---         + one of the existing 8 competency domains, with a per-question
---         reference_answer (visible to panelists/lead/admin, never to the
---         candidate) — admin can keep adding rows over time.
---     The 8 domains themselves (weights, scoring rubric) stay a shared,
---     versioned constant in code (COMPETENCY_DOMAINS) — only the question
---     text/reference-answer content becomes data.
--- ============================================================================
+-- ----------------------------------------------------------------------------
+-- 18. Project Cost Estimator — project definitions + saved estimate history.
+--     Ownership model is deliberately simple (unlike Risk/Material's multi-role
+--     project membership): a cost estimate is personal working data, so RLS is
+--     just "creator, or an admin". est_estimates is an append-only history —
+--     every "محاسبه" the user runs is saved as a new row (never overwritten),
+--     so a project can be re-priced over time without losing earlier runs.
+-- ----------------------------------------------------------------------------
 
-create table if not exists comp_job_positions (
+create table if not exists est_projects (
   id uuid primary key default gen_random_uuid(),
-  title text not null unique,
-  sort_order int not null default 0,
-  is_active boolean not null default true,
-  created_by uuid references profiles (id),
+  name text not null,
+  has_onshore boolean not null default true,
+  has_offshore boolean not null default false,
+  has_compressor_station boolean not null default false,
+  tie_in_count integer not null default 0 check (tie_in_count >= 0),
+  has_telecom_scada boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table est_projects enable row level security;
+
+drop policy if exists "est_projects_select_own" on est_projects;
+create policy "est_projects_select_own" on est_projects
+  for select using (created_by = auth.uid() or is_admin_user());
+drop policy if exists "est_projects_insert_own" on est_projects;
+create policy "est_projects_insert_own" on est_projects
+  for insert with check (created_by = auth.uid());
+drop policy if exists "est_projects_update_own" on est_projects;
+create policy "est_projects_update_own" on est_projects
+  for update using (created_by = auth.uid() or is_admin_user());
+drop policy if exists "est_projects_delete_own" on est_projects;
+create policy "est_projects_delete_own" on est_projects
+  for delete using (created_by = auth.uid() or is_admin_user());
+
+drop trigger if exists trg_set_updated_at on est_projects;
+create trigger trg_set_updated_at before update on est_projects for each row execute function set_updated_at();
+
+-- inputs/results are stored as JSONB snapshots (the full wizard spec and the full computed
+-- breakdown at that moment) rather than a normalized column-per-field schema — mirrors how
+-- EstimatorInputs/computeCBS already work client-side as one flat config/result object, and lets
+-- the section-spec shape evolve without a migration every time a new option is added.
+create table if not exists est_estimates (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references est_projects (id) on delete cascade,
+  label text not null default '',
+  inputs jsonb not null,
+  results jsonb not null,
+  fx_rial_per_usd numeric not null default 0,
+  grand_total_eur numeric not null default 0,
+  grand_total_rial numeric not null default 0,
+  created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now()
 );
 
-alter table comp_job_positions enable row level security;
+alter table est_estimates enable row level security;
 
--- Every competency-module user (panelist or lead) needs to read the position
--- list to start/continue an interview; only an admin can add/rename/retire one.
-drop policy if exists "comp_job_positions_select" on comp_job_positions;
-create policy "comp_job_positions_select" on comp_job_positions
-  for select using (true);
+drop policy if exists "est_estimates_select_own" on est_estimates;
+create policy "est_estimates_select_own" on est_estimates
+  for select using (
+    exists (select 1 from est_projects p where p.id = project_id and (p.created_by = auth.uid() or is_admin_user()))
+  );
+drop policy if exists "est_estimates_insert_own" on est_estimates;
+create policy "est_estimates_insert_own" on est_estimates
+  for insert with check (
+    created_by = auth.uid()
+    and exists (select 1 from est_projects p where p.id = project_id and p.created_by = auth.uid())
+  );
+drop policy if exists "est_estimates_delete_own" on est_estimates;
+create policy "est_estimates_delete_own" on est_estimates
+  for delete using (
+    exists (select 1 from est_projects p where p.id = project_id and (p.created_by = auth.uid() or is_admin_user()))
+  );
 
-drop policy if exists "comp_job_positions_write" on comp_job_positions;
-create policy "comp_job_positions_write" on comp_job_positions
+create index if not exists idx_est_estimates_project on est_estimates (project_id, created_at desc);
+
+-- Singleton assumptions row (Ministry-of-Petroleum-guideline default rates, overhead percentages,
+-- and lifecycle durations) — every new calculation seeds from this instead of hardcoded client
+-- constants once an admin has set it. The boolean primary key pinned to true is the standard
+-- Postgres singleton-table trick: only one row can ever exist.
+create table if not exists est_assumptions (
+  id boolean primary key default true check (id),
+  overhead jsonb not null,
+  lifecycle jsonb not null,
+  specs jsonb not null,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table est_assumptions enable row level security;
+
+drop policy if exists "est_assumptions_select_all" on est_assumptions;
+create policy "est_assumptions_select_all" on est_assumptions
+  for select using (auth.uid() is not null);
+drop policy if exists "est_assumptions_write_admin" on est_assumptions;
+create policy "est_assumptions_write_admin" on est_assumptions
   for all using (is_admin_user()) with check (is_admin_user());
 
-insert into comp_job_positions (title, sort_order) values
-  ('مدیر پروژه احداث خط لوله انتقال گاز', 0),
-  ('سرپرست دستگاه نظارت', 1),
-  ('سرپرست کارگاه', 2)
-on conflict (title) do nothing;
+drop trigger if exists trg_set_updated_at on est_assumptions;
+create trigger trg_set_updated_at before update on est_assumptions for each row execute function set_updated_at_and_by();
 
--- ----------------------------------------------------------------------------
--- comp_questions: the growable bank itself.
--- legacy_key preserves the original hardcoded string keys ("governance-1",
--- etc.) that comp_assessments.answers / comp_panelist_scores.answers (both
--- jsonb, keyed by question key) already contain for every assessment scored
--- before this migration — the frontend keeps using legacy_key as the answer
--- key wherever it's set, and falls back to the row's own id for any question
--- added after this migration (which has no pre-existing answer data to stay
--- compatible with).
--- ----------------------------------------------------------------------------
+-- ============================================================================
+-- 21. Project Lifecycle & Control Tower — stage/gate governance, master-plan
+--     alignment, milestone tracking, readiness/health scoring and early warning
+--     across the Portfolio -> Program(طرح/Plan) -> Project hierarchy.
+--
+--     DELIBERATELY NOT DUPLICATED (see the audit that preceded this section):
+--       * The three-level hierarchy already exists as portfolios -> programs ->
+--         master_projects. "Plan" in the request is the existing
+--         `programs` (labelled «طرح» throughout the UI); no parallel hierarchy is
+--         created here and every plc_* row hangs off master_projects.id.
+--       * Actions already exist as rasta_actions (owner/due/priority/status/
+--         source + risk and issue links). Rather than a second action table this
+--         section only ADDS two nullable link columns to it, so the Reporting
+--         module's Decision Center and this module's Control Tower read and write
+--         the same action rows.
+--       * Risk and Issue stay in rm_* / im_* and are reached through
+--         rasta_project_mappings, exactly like every other module does.
+--
+--     master_projects.status (idea/planning/executing/...) is intentionally left
+--     alone: it is a coarse label other modules already read. The governed stage —
+--     the one with gates, readiness and an audit trail — lives in
+--     plc_project_lifecycle.current_stage_key so neither concept fights the other.
+-- ============================================================================
 
-create table if not exists comp_questions (
+-- ---------------------------------------------------------------------------
+-- 21a. Template engine — an admin defines stages/gates/checklists once per
+--      project type ("Pipeline EPC", "Station", "Building"), and instantiating a
+--      template onto a project copies them into the plc_project_* tables. Copying
+--      rather than referencing is deliberate: editing a template must never
+--      retroactively rewrite the governance record of a project already running.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_templates (
   id uuid primary key default gen_random_uuid(),
-  job_position_id uuid not null references comp_job_positions (id) on delete cascade,
-  domain_key text not null check (domain_key in ('governance', 'planning', 'cost', 'hse', 'quality', 'changeRisk', 'stakeholder', 'execution')),
-  legacy_key text unique,
-  text text not null,
+  name text not null,
+  description text not null default '',
+  project_type text not null default '',
+  is_default boolean not null default false,
+  is_active boolean not null default true,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_templates enable row level security;
+drop policy if exists "plc_templates_select_authenticated" on plc_templates;
+create policy "plc_templates_select_authenticated" on plc_templates
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_templates_write_admin" on plc_templates;
+create policy "plc_templates_write_admin" on plc_templates
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists plc_template_stages (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references plc_templates (id) on delete cascade,
+  stage_key text not null,
+  name_fa text not null,
+  name_en text not null default '',
+  sequence smallint not null default 0,
+  typical_duration_months numeric,
+  gate_name text not null default '',
+  gate_readiness_threshold smallint not null default 100 check (gate_readiness_threshold between 0 and 100),
+  created_at timestamptz not null default now(),
+  unique (template_id, stage_key)
+);
+
+alter table plc_template_stages enable row level security;
+drop policy if exists "plc_template_stages_select_authenticated" on plc_template_stages;
+create policy "plc_template_stages_select_authenticated" on plc_template_stages
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_template_stages_write_admin" on plc_template_stages;
+create policy "plc_template_stages_write_admin" on plc_template_stages
+  for all using (is_admin_user()) with check (is_admin_user());
+
+create table if not exists plc_template_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  template_stage_id uuid not null references plc_template_stages (id) on delete cascade,
+  category text not null default 'general',
+  title text not null,
+  is_mandatory boolean not null default true,
+  requires_document boolean not null default false,
+  requires_approval boolean not null default false,
+  guidance text not null default '',
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table plc_template_checklist_items enable row level security;
+drop policy if exists "plc_template_checklist_select_authenticated" on plc_template_checklist_items;
+create policy "plc_template_checklist_select_authenticated" on plc_template_checklist_items
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_template_checklist_write_admin" on plc_template_checklist_items;
+create policy "plc_template_checklist_write_admin" on plc_template_checklist_items
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- ---------------------------------------------------------------------------
+-- 21b. Per-project lifecycle state.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_project_lifecycle (
+  project_id uuid primary key references master_projects (id) on delete cascade,
+  template_id uuid references plc_templates (id) on delete set null,
+  current_stage_key text not null default 'idea',
+  stage_entered_at date,
+  -- Overall health is normally derived from plc_health_scores; an authorised
+  -- manager may override it, but only with a reason recorded alongside.
+  health_override text check (health_override in ('green', 'yellow', 'red', 'black')),
+  health_override_reason text not null default '',
+  health_override_by uuid references profiles (id),
+  health_override_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_project_lifecycle enable row level security;
+drop policy if exists "plc_project_lifecycle_select_authenticated" on plc_project_lifecycle;
+create policy "plc_project_lifecycle_select_authenticated" on plc_project_lifecycle
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_lifecycle_write_authenticated" on plc_project_lifecycle;
+create policy "plc_project_lifecycle_write_authenticated" on plc_project_lifecycle
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_project_stages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  name_fa text not null,
+  sequence smallint not null default 0,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'skipped')),
+  planned_start date,
+  planned_finish date,
+  actual_start date,
+  actual_finish date,
+  forecast_finish date,
+  progress smallint not null default 0 check (progress between 0 and 100),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, stage_key)
+);
+
+alter table plc_project_stages enable row level security;
+drop policy if exists "plc_project_stages_select_authenticated" on plc_project_stages;
+create policy "plc_project_stages_select_authenticated" on plc_project_stages
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_stages_write_authenticated" on plc_project_stages;
+create policy "plc_project_stages_write_authenticated" on plc_project_stages
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- A gate is the controlled exit from a stage. Readiness % is computed by the
+-- client engine from the checklist, but the *decision* (approved/rejected) and
+-- any override of an unmet requirement are stored here so they survive a
+-- recalculation and remain auditable.
+create table if not exists plc_project_gates (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  name text not null,
+  gate_owner_id uuid references profiles (id),
+  readiness_threshold smallint not null default 100 check (readiness_threshold between 0 and 100),
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'ready', 'approved', 'rejected', 'blocked')),
+  approval_date date,
+  approved_by uuid references profiles (id),
+  comments text not null default '',
+  -- Override = passing a gate whose mandatory requirements are not all met.
+  -- Never allowed silently: user, timestamp and reason are all required by the UI
+  -- and kept here as the permanent record.
+  override_by uuid references profiles (id),
+  override_reason text not null default '',
+  override_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_id, stage_key)
+);
+
+alter table plc_project_gates enable row level security;
+drop policy if exists "plc_project_gates_select_authenticated" on plc_project_gates;
+create policy "plc_project_gates_select_authenticated" on plc_project_gates
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_project_gates_write_authenticated" on plc_project_gates;
+create policy "plc_project_gates_write_authenticated" on plc_project_gates
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  stage_key text not null,
+  category text not null default 'general',
+  title text not null,
+  is_mandatory boolean not null default true,
+  requires_document boolean not null default false,
+  requires_approval boolean not null default false,
+  responsible_id uuid references profiles (id),
+  due_date date,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'waived')),
+  completion_date date,
+  evidence_url text not null default '',
+  evidence_label text not null default '',
+  comment text not null default '',
+  guidance text not null default '',
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_checklist_items enable row level security;
+drop policy if exists "plc_checklist_items_select_authenticated" on plc_checklist_items;
+create policy "plc_checklist_items_select_authenticated" on plc_checklist_items
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_checklist_items_write_authenticated" on plc_checklist_items;
+create policy "plc_checklist_items_write_authenticated" on plc_checklist_items
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_checklist_project_stage on plc_checklist_items (project_id, stage_key);
+
+-- ---------------------------------------------------------------------------
+-- 21c. Master plan — activities and milestones with the baseline / forecast /
+--      actual triad the whole variance story rests on.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_activities (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  wbs_code text not null default '',
+  name text not null,
+  stage_key text not null default '',
+  baseline_start date,
+  baseline_finish date,
+  forecast_start date,
+  forecast_finish date,
+  actual_start date,
+  actual_finish date,
+  progress smallint not null default 0 check (progress between 0 and 100),
+  owner_id uuid references profiles (id),
+  is_critical boolean not null default false,
+  depends_on_id uuid references plc_activities (id) on delete set null,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'completed', 'on_hold')),
+  sequence smallint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_activities enable row level security;
+drop policy if exists "plc_activities_select_authenticated" on plc_activities;
+create policy "plc_activities_select_authenticated" on plc_activities
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_activities_write_authenticated" on plc_activities;
+create policy "plc_activities_write_authenticated" on plc_activities
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_activities_project on plc_activities (project_id, sequence);
+
+create table if not exists plc_milestones (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  name text not null,
+  milestone_type text not null default 'project' check (milestone_type in ('contractual', 'project', 'gate', 'payment', 'regulatory', 'external')),
+  stage_key text not null default '',
+  baseline_date date,
+  forecast_date date,
+  actual_date date,
+  is_critical boolean not null default false,
+  owner_id uuid references profiles (id),
+  depends_on_id uuid references plc_milestones (id) on delete set null,
+  status text not null default 'on_track' check (status in ('achieved', 'on_track', 'at_risk', 'delayed', 'blocked')),
+  evidence_url text not null default '',
+  evidence_label text not null default '',
+  comments text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_milestones enable row level security;
+drop policy if exists "plc_milestones_select_authenticated" on plc_milestones;
+create policy "plc_milestones_select_authenticated" on plc_milestones
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_milestones_write_authenticated" on plc_milestones;
+create policy "plc_milestones_write_authenticated" on plc_milestones
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_milestones_project on plc_milestones (project_id);
+
+-- Every forecast_date change is appended here. This is what makes drift
+-- detectable: a milestone sitting at "+5 days" is a variance, but one that went
+-- +5 -> +8 -> +12 -> +17 over four reporting cycles is a trend, and only the
+-- trend justifies an early warning.
+create table if not exists plc_milestone_forecast_history (
+  id uuid primary key default gen_random_uuid(),
+  milestone_id uuid not null references plc_milestones (id) on delete cascade,
+  forecast_date date,
+  variance_days integer not null default 0,
+  note text not null default '',
+  recorded_by uuid references profiles (id) default auth.uid(),
+  recorded_at timestamptz not null default now()
+);
+
+alter table plc_milestone_forecast_history enable row level security;
+drop policy if exists "plc_ms_history_select_authenticated" on plc_milestone_forecast_history;
+create policy "plc_ms_history_select_authenticated" on plc_milestone_forecast_history
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_ms_history_insert_authenticated" on plc_milestone_forecast_history;
+create policy "plc_ms_history_insert_authenticated" on plc_milestone_forecast_history
+  for insert with check (auth.uid() is not null);
+
+create index if not exists idx_plc_ms_history_milestone on plc_milestone_forecast_history (milestone_id, recorded_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 21d. Health, warnings, audit.
+-- ---------------------------------------------------------------------------
+
+create table if not exists plc_health_scores (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  dimension text not null check (dimension in (
+    'schedule', 'cost', 'engineering', 'procurement', 'construction',
+    'quality', 'hse', 'risk', 'contract', 'cashflow'
+  )),
+  score smallint not null default 100 check (score between 0 and 100),
+  status text not null default 'green' check (status in ('green', 'yellow', 'red', 'black')),
+  trend text not null default 'flat' check (trend in ('improving', 'flat', 'worsening')),
+  explanation text not null default '',
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  unique (project_id, dimension)
+);
+
+alter table plc_health_scores enable row level security;
+drop policy if exists "plc_health_select_authenticated" on plc_health_scores;
+create policy "plc_health_select_authenticated" on plc_health_scores
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_health_write_authenticated" on plc_health_scores;
+create policy "plc_health_write_authenticated" on plc_health_scores
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create table if not exists plc_early_warnings (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  trigger_key text not null,
+  severity text not null default 'medium' check (severity in ('low', 'medium', 'high', 'critical')),
+  title text not null,
+  detail text not null default '',
+  responsible_id uuid references profiles (id),
+  required_action text not null default '',
+  status text not null default 'open' check (status in ('open', 'acknowledged', 'resolved', 'dismissed')),
+  related_milestone_id uuid references plc_milestones (id) on delete set null,
+  detected_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table plc_early_warnings enable row level security;
+drop policy if exists "plc_warnings_select_authenticated" on plc_early_warnings;
+create policy "plc_warnings_select_authenticated" on plc_early_warnings
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_warnings_write_authenticated" on plc_early_warnings;
+create policy "plc_warnings_write_authenticated" on plc_early_warnings
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create index if not exists idx_plc_warnings_project on plc_early_warnings (project_id, status);
+
+-- Governance events only (stage moves, gate decisions, baseline/forecast edits,
+-- health overrides) — not a generic row-diff log. Append-only by policy: there is
+-- no update or delete policy, so even an admin cannot rewrite the trail.
+create table if not exists plc_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  entity_type text not null,
+  entity_id uuid,
+  event text not null,
+  field text not null default '',
+  old_value text not null default '',
+  new_value text not null default '',
+  reason text not null default '',
+  changed_by uuid references profiles (id) default auth.uid(),
+  changed_at timestamptz not null default now()
+);
+
+alter table plc_audit_log enable row level security;
+drop policy if exists "plc_audit_select_authenticated" on plc_audit_log;
+create policy "plc_audit_select_authenticated" on plc_audit_log
+  for select using (auth.uid() is not null);
+drop policy if exists "plc_audit_insert_authenticated" on plc_audit_log;
+create policy "plc_audit_insert_authenticated" on plc_audit_log
+  for insert with check (auth.uid() is not null);
+
+create index if not exists idx_plc_audit_project on plc_audit_log (project_id, changed_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 21e. Integration with the EXISTING action table rather than a second one.
+-- ---------------------------------------------------------------------------
+
+alter table rasta_actions add column if not exists related_milestone_id uuid references plc_milestones (id) on delete set null;
+alter table rasta_actions add column if not exists related_gate_id uuid references plc_project_gates (id) on delete set null;
+alter table rasta_actions add column if not exists completion_pct smallint not null default 0 check (completion_pct between 0 and 100);
+alter table rasta_actions add column if not exists closed_date date;
+
+-- 'lifecycle' joins the existing source list so a Control Tower action is
+-- distinguishable from one raised in the Decision Center.
+alter table rasta_actions drop constraint if exists rasta_actions_source_check;
+alter table rasta_actions add constraint rasta_actions_source_check
+  check (source in ('risk', 'issue', 'decision', 'management_report', 'lifecycle', 'milestone', 'gate'));
+
+-- The module registry row + its permission set (the cross-join re-seed in
+-- section 17 covers the actions once the module key exists).
+insert into rasta_modules (key, label_fa) values
+  ('lifecycle', 'چرخه عمر و برج کنترل پروژه')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+on conflict (module_key, action) do nothing;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'plc_templates', 'plc_project_lifecycle', 'plc_project_stages', 'plc_project_gates',
+    'plc_checklist_items', 'plc_activities', 'plc_milestones', 'plc_health_scores', 'plc_early_warnings'
+  ] loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 21f. Evidence storage for checklist items that carry requires_document.
+--
+--      Mirrors the finance-docs bucket, with one deliberate difference: write is
+--      authenticated rather than admin-only. A checklist item is completed by the
+--      project member who did the work, not by an administrator, so gating upload
+--      on is_admin_user() would leave the mandatory-evidence gap it is meant to
+--      close. Read stays authenticated-only — these are internal governance
+--      records, never public. Objects are keyed `${projectId}/${uuid}.${ext}`.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('plc-docs', 'plc-docs', false)
+on conflict (id) do nothing;
+
+drop policy if exists "plc_docs_read_authenticated" on storage.objects;
+create policy "plc_docs_read_authenticated" on storage.objects
+  for select using (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+drop policy if exists "plc_docs_write_authenticated" on storage.objects;
+create policy "plc_docs_write_authenticated" on storage.objects
+  for insert with check (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+drop policy if exists "plc_docs_update_authenticated" on storage.objects;
+create policy "plc_docs_update_authenticated" on storage.objects
+  for update using (bucket_id = 'plc-docs' and auth.uid() is not null);
+
+-- Delete stays admin-only: evidence backing an approved gate is part of the
+-- audit trail, so removing it is a governance act, not routine housekeeping.
+drop policy if exists "plc_docs_delete_admin" on storage.objects;
+create policy "plc_docs_delete_admin" on storage.objects
+  for delete using (bucket_id = 'plc-docs' and is_admin_user());
+
+-- ---------------------------------------------------------------------------
+-- 21g. Control Tower -> Issue Management bridge. An overdue rasta_actions row
+--      (raised in the lifecycle module, e.g. an overdue checklist/gate action)
+--      can be converted, in place, into a real im_issues row in the project's
+--      mapped Issue Management project — carrying its own pursuer + deadline
+--      chosen at conversion time, rather than the action's original owner/due
+--      date. im_issues.related_action_id points back so the Control Tower can
+--      show "already converted" and avoid duplicate conversions; rasta_actions
+--      already had related_issue_id (section 17c) so the link is bidirectional.
+-- ---------------------------------------------------------------------------
+
+alter table im_issues add column if not exists source text not null default 'manual';
+alter table im_issues drop constraint if exists im_issues_source_check;
+alter table im_issues add constraint im_issues_source_check
+  check (source in ('manual', 'lifecycle_action'));
+
+alter table im_issues add column if not exists related_action_id uuid references rasta_actions (id) on delete set null;
+
+create index if not exists idx_im_issues_related_action on im_issues (related_action_id) where related_action_id is not null;
+
+-- SECURITY DEFINER: an ordinary Control Tower user is very unlikely to also be
+-- an im_issues project member (im_issues_insert_member requires
+-- im_is_project_member), so a plain client-side insert would be denied by RLS
+-- for exactly the users this feature is for. The function re-checks access to
+-- the *master* project itself (same helper the rest of section 17c/21 uses)
+-- before writing, so it never becomes an open door.
+create or replace function rasta_convert_action_to_issue(
+  p_action_id uuid,
+  p_pursuer_id uuid,
+  p_deadline_days smallint default 3
+)
+returns uuid as $$
+declare
+  v_action rasta_actions%rowtype;
+  v_im_project_id uuid;
+  v_issue_id uuid;
+begin
+  select * into v_action from rasta_actions where id = p_action_id;
+  if not found then
+    raise exception 'action not found';
+  end if;
+
+  if not rasta_user_can_access_master_project(v_action.master_project_id) then
+    raise exception 'not authorized for this project';
+  end if;
+
+  if v_action.related_issue_id is not null then
+    raise exception 'action already converted to an issue';
+  end if;
+
+  select source_project_id into v_im_project_id
+  from rasta_project_mappings
+  where master_project_id = v_action.master_project_id
+    and source_module = 'issues'
+    and status = 'confirmed'
+  limit 1;
+
+  if v_im_project_id is null then
+    raise exception 'no confirmed Issue Management project is linked to this project yet';
+  end if;
+
+  if p_deadline_days is null or p_deadline_days <= 0 then
+    p_deadline_days := 3;
+  end if;
+
+  insert into im_issues (project_id, title, description, pursuer_id, priority, deadline_days, status, created_by, source, related_action_id)
+  values (
+    v_im_project_id,
+    v_action.title,
+    'ایجاد شده خودکار از یک اقدام دیرکرد شده در برج کنترل پروژه.',
+    p_pursuer_id,
+    v_action.priority,
+    p_deadline_days,
+    'open',
+    auth.uid(),
+    'lifecycle_action',
+    p_action_id
+  )
+  returning id into v_issue_id;
+
+  update rasta_actions set related_issue_id = v_issue_id, updated_at = now() where id = p_action_id;
+
+  return v_issue_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- =====================================================================
+-- Section 24: Change Management — the Project Radar sidebar's "Change
+-- Management" module. Rebuilt (2026-08) into a full EPC change-control
+-- workflow: Draft -> Submitted -> Engineering Review -> Planning Review ->
+-- Contract Review -> PM Review -> CCB Approval -> Approved/Rejected ->
+-- Implementation -> Verification -> Closed. Tables key on
+-- master_projects.id directly (same convention as fin_contracts/plc_* —
+-- no per-module project-space or mapping row needed).
+--
+-- chg_change_requests: the core record + contractor-submitted financial/
+--   schedule proposal. Percent-of-contract/duration figures are always
+--   derived at read time (never stored), so they can't go stale.
+-- chg_stage_reviews: one row per (change, stage) — the review/decision
+--   for Engineering, Planning, Contract, PM and CCB. Stage-specific fields
+--   (affected drawings, contractual basis, CCB meeting no., ...) live in
+--   `details` jsonb, same "shape varies by type" pattern the Risk module
+--   already uses for strategy_details, rather than dozens of nullable
+--   columns most rows would never use.
+-- chg_documents: lightweight document register (metadata only for now —
+--   file_url accepts a link/reference; binary upload is a later add-on,
+--   same storage-bucket pattern PLC's evidence upload already uses).
+-- chg_history: append-only activity log powering the Change History
+--   timeline — the application writes one row per submission/decision,
+--   mirroring the PLC module's own writeAudit() fire-and-forget pattern.
+-- =====================================================================
+
+insert into rasta_project_roles (name, is_system) values
+  ('مجری', true),
+  ('مدیرعامل', true),
+  ('مدیر مهندسی', true),
+  ('مدیر برنامه‌ریزی و کنترل پروژه', true),
+  ('مدیر امور پیمان', true),
+  ('عضو کمیته کنترل تغییرات', true)
+on conflict (name) do nothing;
+
+drop table if exists chg_history cascade;
+drop table if exists chg_documents cascade;
+drop table if exists chg_stage_reviews cascade;
+drop table if exists chg_change_requests cascade;
+
+create sequence if not exists chg_cr_seq;
+
+create table chg_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  cr_number text not null default ('CR-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('chg_cr_seq')::text, 4, '0')),
+  title text not null default '',
+  description text not null default '',
+  reason_for_change text not null default '',
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
+
+  -- Financial proposal (currency snapshotted at submission so the record's
+  -- own history never drifts if the linked contract's currency changes later).
+  currency text not null default 'IRR',
+  original_contract_amount numeric not null default 0,
+  proposed_change_amount numeric not null default 0,
+  approved_change_amount numeric,
+
+  -- Schedule proposal
+  original_duration_days integer not null default 0,
+  proposed_schedule_impact_days integer not null default 0,
+  approved_schedule_impact_days integer,
+
+  -- Risk / scope (new_risks_count is informational until real Risk-module
+  -- linkage is built — see the module's own scoping notes)
+  new_risks_count integer not null default 0,
+  scope_impact_level text not null default 'medium' check (scope_impact_level in ('low', 'medium', 'high', 'critical')),
+
+  status text not null default 'draft' check (status in (
+    'draft', 'submitted', 'engineering_review', 'planning_review', 'contract_review',
+    'pm_review', 'ccb_review', 'approved', 'rejected', 'implementation', 'verification', 'closed'
+  )),
+
+  submitted_by uuid references profiles (id),
+  submitted_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_set_updated_at on chg_change_requests;
+create trigger trg_set_updated_at before update on chg_change_requests for each row execute function set_updated_at_and_by();
+
+alter table chg_change_requests enable row level security;
+create policy "chg_change_requests_select_authenticated" on chg_change_requests for select using (auth.uid() is not null);
+create policy "chg_change_requests_write_admin" on chg_change_requests for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_stage_reviews (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  stage text not null check (stage in ('engineering', 'planning', 'contract', 'pm', 'ccb')),
+  decision text not null default 'pending' check (decision in ('pending', 'approved', 'approved_with_conditions', 'rejected', 'request_revision', 'returned')),
+  responsible_user_id uuid references profiles (id),
+  reviewer_user_id uuid references profiles (id),
+  approver_user_id uuid references profiles (id),
+  comment text not null default '',
+  details jsonb not null default '{}'::jsonb,
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (change_request_id, stage)
+);
+
+drop trigger if exists trg_set_updated_at on chg_stage_reviews;
+create trigger trg_set_updated_at before update on chg_stage_reviews for each row execute function set_updated_at_and_by();
+
+alter table chg_stage_reviews enable row level security;
+create policy "chg_stage_reviews_select_authenticated" on chg_stage_reviews for select using (auth.uid() is not null);
+create policy "chg_stage_reviews_write_admin" on chg_stage_reviews for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_documents (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  category text not null default 'other' check (category in (
+    'contractor_proposal', 'technical', 'drawing', 'boq_mto', 'cost_breakdown',
+    'schedule_analysis', 'contract', 'correspondence', 'ccb_minutes', 'other'
+  )),
+  document_number text not null default '',
+  revision text not null default '',
+  file_name text not null default '',
+  file_url text not null default '',
+  approval_status text not null default 'pending' check (approval_status in ('pending', 'approved', 'rejected')),
+  uploaded_by uuid references profiles (id) default auth.uid(),
+  uploaded_at timestamptz not null default now()
+);
+
+alter table chg_documents enable row level security;
+create policy "chg_documents_select_authenticated" on chg_documents for select using (auth.uid() is not null);
+create policy "chg_documents_write_admin" on chg_documents for all using (is_admin_user()) with check (is_admin_user());
+
+create table chg_history (
+  id uuid primary key default gen_random_uuid(),
+  change_request_id uuid not null references chg_change_requests (id) on delete cascade,
+  user_id uuid references profiles (id) default auth.uid(),
+  role_label text not null default '',
+  action text not null default '',
+  comment text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table chg_history enable row level security;
+create policy "chg_history_select_authenticated" on chg_history for select using (auth.uid() is not null);
+create policy "chg_history_write_admin" on chg_history for all using (is_admin_user()) with check (is_admin_user());
+
+-- =====================================================================
+-- Section 25: Change Management — fields from the organization's own
+-- "فرم درخواست و مدیریت تغییر پروژه EPC" Word template that Section 24's
+-- first pass didn't yet capture: general/contract identification, change
+-- classification checkboxes, affected-document register, scope-change
+-- type, a change-level risk register mini-table, and closeout/lessons-
+-- learned facts. Purely additive (ADD COLUMN IF NOT EXISTS) — safe to
+-- re-run, no data loss for Section 24's tables.
+--
+-- The Word form's "امور مالی/کنترل هزینه" and "HSE/QAQC" reviewer blocks
+-- are NOT modeled as two more pipeline stages — that would mean a 7-stage
+-- workflow and a bigger UI/state-machine change than this pass covers.
+-- Cost-control fields are folded into the existing `contract` stage's
+-- `details` jsonb (it already owns financial entitlement/evaluation), and
+-- HSE/QAQC fields are folded into the existing `engineering` stage's
+-- `details` jsonb, each stage keeping its own single decision.
+-- =====================================================================
+
+alter table chg_change_requests add column if not exists project_code text not null default '';
+alter table chg_change_requests add column if not exists contract_name text not null default '';
+alter table chg_change_requests add column if not exists contract_number text not null default '';
+alter table chg_change_requests add column if not exists contract_date text not null default '';
+alter table chg_change_requests add column if not exists project_phase text check (project_phase in ('engineering', 'procurement', 'construction', 'commissioning'));
+alter table chg_change_requests add column if not exists requester_name text not null default '';
+alter table chg_change_requests add column if not exists requester_organization text check (requester_organization in ('employer', 'consultant', 'contractor', 'pm'));
+alter table chg_change_requests add column if not exists change_types text[] not null default '{}';
+
+alter table chg_change_requests add column if not exists current_situation_description text not null default '';
+alter table chg_change_requests add column if not exists change_reason_categories text[] not null default '{}';
+alter table chg_change_requests add column if not exists change_reason_other text not null default '';
+-- array of { docNumber, title, currentRevision, proposedRevision }
+alter table chg_change_requests add column if not exists affected_documents jsonb not null default '[]'::jsonb;
+
+alter table chg_change_requests add column if not exists scope_change_type text check (scope_change_type in ('none', 'increase', 'decrease', 'unchanged_modified'));
+alter table chg_change_requests add column if not exists scope_effect_description text not null default '';
+
+-- array of { description, probability, impact, controlAction }
+alter table chg_change_requests add column if not exists identified_risks jsonb not null default '[]'::jsonb;
+alter table chg_change_requests add column if not exists requires_new_risk_register_entry boolean not null default false;
+alter table chg_change_requests add column if not exists creates_new_issue boolean not null default false;
+
+-- array of { seq, actionLabel, responsible, plannedStart, plannedEnd, status }, seeded with the
+-- Word form's 8 default rows when a request first enters 'implementation' (app-layer, not a trigger).
+alter table chg_change_requests add column if not exists implementation_actions jsonb not null default '[]'::jsonb;
+
+alter table chg_change_requests add column if not exists implemented_as_approved boolean;
+alter table chg_change_requests add column if not exists actual_cost_amount numeric;
+alter table chg_change_requests add column if not exists actual_delay_days integer;
+alter table chg_change_requests add column if not exists documents_updated boolean;
+alter table chg_change_requests add column if not exists updated_document_types text[] not null default '{}';
+alter table chg_change_requests add column if not exists lesson_learned_recorded boolean;
+alter table chg_change_requests add column if not exists lesson_learned_number text not null default '';
+
+-- CCB gets 3 extra decision shades the Word form asks for (تصویب با اصلاح هزینه/زمان، تعلیق) —
+-- only the CCB card renders buttons for these, but the column-level check applies to every stage.
+alter table chg_stage_reviews drop constraint if exists chg_stage_reviews_decision_check;
+alter table chg_stage_reviews add constraint chg_stage_reviews_decision_check check (decision in (
+  'pending', 'approved', 'approved_with_conditions', 'approved_with_cost_revision',
+  'approved_with_time_revision', 'suspended', 'rejected', 'request_revision', 'returned'
+));
+
+-- =====================================================================
+-- Section 26: Change Management — real per-role write access.
+--
+-- Every chg_* write policy so far has been "is_admin_user() only" (an
+-- explicitly disclosed simplification from Section 24). In practice this
+-- meant a real مدیر مهندسی/مدیر برنامه‌ریزی/... who is not also a global
+-- admin saw fully-enabled decision buttons in the UI (app-layer role
+-- gating passed) but every click silently failed at the database (RLS
+-- denied it) — the "Engineering stage buttons don't work" bug. This
+-- section replaces the admin-only write policies with a helper that also
+-- recognizes anyone holding one of the Change Management project roles
+-- on that specific project, while keeping delete admin-only per request.
+-- =====================================================================
+
+create or replace function chg_can_write_project(target_project_id uuid)
+returns boolean as $$
+  select
+    is_admin_user()
+    or exists (
+      select 1
+      from rasta_project_role_assignments a
+      join rasta_project_roles r on r.id = a.project_role_id
+      where a.project_id = target_project_id
+        and a.user_id = auth.uid()
+        and r.name in (
+          'پیمانکار', 'مدیر مهندسی', 'مدیر برنامه‌ریزی و کنترل پروژه',
+          'مدیر امور پیمان', 'مدیر پروژه', 'عضو کمیته کنترل تغییرات', 'مجری'
+        )
+    );
+$$ language sql security definer stable;
+
+drop policy if exists "chg_change_requests_write_admin" on chg_change_requests;
+create policy "chg_change_requests_insert" on chg_change_requests for insert with check (chg_can_write_project(master_project_id));
+create policy "chg_change_requests_update" on chg_change_requests for update using (chg_can_write_project(master_project_id)) with check (chg_can_write_project(master_project_id));
+create policy "chg_change_requests_delete" on chg_change_requests for delete using (is_admin_user());
+
+drop policy if exists "chg_stage_reviews_write_admin" on chg_stage_reviews;
+create policy "chg_stage_reviews_write" on chg_stage_reviews for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+drop policy if exists "chg_documents_write_admin" on chg_documents;
+create policy "chg_documents_write" on chg_documents for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+drop policy if exists "chg_history_write_admin" on chg_history;
+create policy "chg_history_write" on chg_history for all
+  using (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)))
+  with check (chg_can_write_project((select master_project_id from chg_change_requests where id = change_request_id)));
+
+-- =====================================================================
+-- Section 27: Competency Assessment — multi-role question bank.
+--
+-- The module originally assessed exactly one job (مدیر پروژه) against a
+-- fixed, versioned-in-code rubric (competencyModel.ts) — deliberately kept
+-- untouched, including every existing comp_assessments row (job_role
+-- defaults to 'project_manager', so nothing pre-existing changes meaning).
+-- Every OTHER job role now draws its questions from this DB-backed bank
+-- instead: admin-authored via the Question Bank screen, activatable/
+-- deactivatable without deleting, each with a full reference-answer +
+-- scoring-rubric structure (never shown to the candidate, only to the
+-- evaluator, and only once the candidate's own answer is on record — see
+-- RoleQuestionScoreCard.tsx). comp_assessments gains job_role (which bank
+-- applies) and selected_question_ids (the specific rows randomly assigned
+-- to that one assessment, frozen once set so every panelist and the lead
+-- score the exact same question set).
+--
+-- The actual ~23-question-per-role seed content (welding, mechanical/
+-- piping, pipeline, coating/CP, radiography interpretation, civil,
+-- project control, HSE, contracts) lives in the companion file
+-- supabase/competency_question_bank_seed.sql, applied once after this
+-- section — kept separate so this main file doesn't balloon with a few
+-- hundred KB of question text.
+-- =====================================================================
+
+alter table comp_assessments add column if not exists job_role text not null default 'project_manager';
+alter table comp_assessments add column if not exists selected_question_ids jsonb not null default '[]'::jsonb;
+
+create table if not exists comp_question_bank (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  category text not null check (category in ('GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED')),
+  sub_category text not null default '',
+  difficulty text not null default 'L2' check (difficulty in ('L1', 'L2', 'L3', 'L4')),
+  question_text text not null,
+  image_url text not null default '',
+  -- Never shown to the candidate — only to the evaluator, and only after the candidate's own
+  -- answer has been recorded (client-enforced reveal gate; this table has no candidate-facing path).
   reference_answer text not null default '',
-  sort_order int not null default 0,
-  is_active boolean not null default true,
-  created_by uuid references profiles (id),
+  key_points jsonb not null default '[]'::jsonb,
+  excellent_answer_indicators jsonb not null default '[]'::jsonb,
+  common_mistakes jsonb not null default '[]'::jsonb,
+  standard_reference text not null default '',
+  score_min int not null default 0,
+  score_max int not null default 5,
+  evaluator_note_required boolean not null default true,
+  active boolean not null default true,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_question_bank enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_question_bank;
+create trigger trg_set_updated_at before update on comp_question_bank
+  for each row execute function set_updated_at();
+
+-- Every authenticated user may read the bank (an evaluator needs the reference answer, not just
+-- admins) — only writing (author/edit/activate/delete) is admin-only, same pattern as
+-- rasta_modules/plc_templates above.
+drop policy if exists "comp_question_bank_select_authenticated" on comp_question_bank;
+create policy "comp_question_bank_select_authenticated" on comp_question_bank
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+create policy "comp_question_bank_write_admin" on comp_question_bank
+  for all using (is_admin_user()) with check (is_admin_user());
+
+-- ----------------------------------------------------------------------------
+-- Section 28: Competency Assessment — configurable panel size + reusable,
+-- specialty-scoped interview panel groups.
+--
+-- 1. panel_size on comp_assessments replaces the previously hardcoded "always
+--    exactly 3 panelists" limit — the lead picks it per assessment.
+-- 2. comp_panel_groups/comp_panel_group_members let a lead save a named set of
+--    people once (e.g. "گروه مصاحبه برق و ابزار دقیق") and apply it to any
+--    matching future candidate in one click instead of re-adding the same
+--    people to the panel every time. job_role is optional (a group can be
+--    generic) and is plain text, not a foreign key, since JobRole is a
+--    client-side enum rather than its own reference table.
+-- ----------------------------------------------------------------------------
+
+alter table comp_assessments add column if not exists panel_size int not null default 3 check (panel_size between 1 and 8);
+
+create table if not exists comp_panel_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  job_role text,
+  created_by uuid references profiles (id) default auth.uid(),
   created_at timestamptz not null default now()
 );
 
-alter table comp_questions enable row level security;
+alter table comp_panel_groups enable row level security;
 
-drop policy if exists "comp_questions_select" on comp_questions;
-create policy "comp_questions_select" on comp_questions
-  for select using (true);
-
-drop policy if exists "comp_questions_write" on comp_questions;
-create policy "comp_questions_write" on comp_questions
-  for all using (is_admin_user()) with check (is_admin_user());
-
-create index if not exists idx_comp_questions_job_position on comp_questions (job_position_id, domain_key, sort_order);
-
--- Backfill: the 32 questions that used to live only in competencyModel.ts,
--- kept under the original PM position with their original keys so every
--- already-scored assessment keeps resolving correctly.
-insert into comp_questions (job_position_id, domain_key, legacy_key, text, sort_order)
-select (select id from comp_job_positions where title = 'مدیر پروژه احداث خط لوله انتقال گاز'), v.domain_key, v.legacy_key, v.text, v.sort_order
-from (values
-  ('governance', 'governance-1', 'در یک پروژه خط انتقال گاز، چگونه اهداف زمان، هزینه، کیفیت، HSE و قابلیت بهره‌برداری را به یک برنامه اجرایی یکپارچه تبدیل کردید؟', 0),
-  ('governance', 'governance-2', 'ساختار سازمانی پروژه، ماتریس RACI و حدود اختیار پیمانکاران و پیمانکاران جزء را چگونه تعریف و کنترل می‌کنید؟', 1),
-  ('governance', 'governance-3', 'یک نمونه از اختلاف با کارفرما، مشاور یا پیمانکار را شرح دهید که با استناد قراردادی حل کردید.', 2),
-  ('governance', 'governance-4', 'چگونه اطمینان می‌دهید تصمیم‌های روزانه کارگاه با الزامات قرارداد، مشخصات فنی، ITP و اهداف بهره‌برداری نهایی هم‌راستا هستند؟', 3),
-  ('planning', 'planning-1', 'مبنای تهیه برنامه زمان‌بندی Level 3 یا Level 4 برای خط لوله را چه می‌دانید و فعالیت‌های کلیدی آن چیست؟', 0),
-  ('planning', 'planning-2', 'در صورت عقب‌ماندگی عملیات جوشکاری، NDT یا تأمین شیرآلات، چگونه علت را از اثر تفکیک می‌کنید و برنامه Recovery Plan می‌سازید؟', 1),
-  ('planning', 'planning-3', 'پیشرفت فیزیکی عملیات ROW، خاکبرداری، Stringing، Welding، NDT، Field Joint Coating، Lowering، Backfilling و Hydrotest را چگونه وزن‌دهی می‌کنید؟', 2),
-  ('planning', 'planning-4', 'چه شاخص‌هایی را به‌صورت هفتگی پایش می‌کنید تا تأخیر را پیش از بحرانی‌شدن تشخیص دهید؟', 3),
-  ('cost', 'cost-1', 'چگونه بودجه پروژه را به WBS، CBS، پکیج‌های قراردادی و فعالیت‌های اجرایی متصل می‌کنید؟', 0),
-  ('cost', 'cost-2', 'اگر قیمت لوله، پوشش، ماشین‌آلات یا حمل‌ونقل افزایش یابد، چه اقدام‌هایی برای پیش‌بینی و کنترل اثر مالی انجام می‌دهید؟', 1),
-  ('cost', 'cost-3', 'برای اقلام Long Lead مانند Line Pipe، Valves، Fittings، CP Material یا تجهیزات ایستگاهی، چه فرآیند Expediting تعریف می‌کنید؟', 2),
-  ('cost', 'cost-4', 'یک نمونه از تصمیم شما برای کاهش هزینه یا جلوگیری از هزینه اضافی را با اثر کمی توضیح دهید.', 3),
-  ('hse', 'hse-1', 'مهم‌ترین ریسک‌های HSE در احداث خط انتقال گاز را چگونه شناسایی، رتبه‌بندی و کنترل می‌کنید؟', 0),
-  ('hse', 'hse-2', 'اگر در یک جبهه کاری هم‌زمان عملیات لیفتینگ، جوشکاری، کار در ترانشه و تردد ماشین‌آلات در جریان باشد، چه کنترل‌هایی برقرار می‌کنید؟', 1),
-  ('hse', 'hse-3', 'در صورت وقوع Near Miss جدی یا حادثه با پتانسیل بالا، در ۲۴ ساعت اول چه اقدام‌های مدیریتی انجام می‌دهید؟', 2),
-  ('hse', 'hse-4', 'چگونه مطمئن می‌شوید پیمانکار جزء فقط آمار HSE تولید نمی‌کند، بلکه واقعاً رفتار ایمن و کنترل میدانی دارد؟', 3),
-  ('quality', 'quality-1', 'چگونه مطمئن می‌شوید WPS/PQR، صلاحیت جوشکاران، Consumable Control و شرایط پیش‌گرم با مشخصات پروژه منطبق هستند؟', 0),
-  ('quality', 'quality-2', 'اگر نرخ Repair جوش بالا برود، چه داده‌هایی جمع می‌کنید و چه اقدام اصلاحی مرحله‌ای انجام می‌دهید؟', 1),
-  ('quality', 'quality-3', 'نقش مدیر پروژه در کنترل کیفیت عملیات NDT، Field Joint Coating، Holiday Test، Lowering و Backfilling چیست؟', 2),
-  ('quality', 'quality-4', 'برای Hydrotest، Dewatering، Drying و آماده‌سازی برای Commissioning چه نقاط کنترلی یا Hold Point هایی را حیاتی می‌دانید؟', 3),
-  ('changeRisk', 'changeRisk-1', 'Risk Register پروژه را چگونه زنده نگه می‌دارید و چه تفاوتی میان ریسک، مسئله جاری و فرصت قائل هستید؟', 0),
-  ('changeRisk', 'changeRisk-2', 'اگر کارفرما تغییر مسیر، افزایش ضخامت، تغییر کلاس پوشش یا اصلاح محدوده ایستگاه‌های شیر را درخواست دهد، چگونه Change Control انجام می‌دهید؟', 1),
-  ('changeRisk', 'changeRisk-3', 'یک نمونه از Claim یا اختلاف زمانی/مالی را شرح دهید که با مستندسازی درست، از منافع پروژه دفاع کردید.', 2),
-  ('changeRisk', 'changeRisk-4', 'چه مواردی را از روز اول پروژه مستندسازی می‌کنید تا در صورت تأخیر ناشی از کارفرما، معارض محلی، مجوز یا تغییر طراحی قابل استناد باشد؟', 3),
-  ('stakeholder', 'stakeholder-1', 'چگونه بین خواسته‌های کارفرما، مشاور، بهره‌بردار، واحد طراحی، تدارکات، پیمانکار و ذی‌نفعان محلی اولویت‌گذاری می‌کنید؟', 0),
-  ('stakeholder', 'stakeholder-2', 'نمونه‌ای از تعارض میان تولید/زمان‌بندی و کیفیت یا HSE را شرح دهید؛ تصمیم شما چه بود؟', 1),
-  ('stakeholder', 'stakeholder-3', 'چگونه سرپرستان اجرایی و پیمانکاران جزء را پاسخگو نگه می‌دارید، بدون اینکه صرفاً با فشار و دستور اداره شوند؟', 2),
-  ('stakeholder', 'stakeholder-4', 'در پروژه‌ای با چند Spread یا جبهه کاری، چه سازوکاری برای انتقال سریع تصمیم‌ها و درس‌آموخته‌ها ایجاد می‌کنید؟', 3),
-  ('execution', 'execution-1', 'توالی اجرایی احداث یک خط انتقال گاز را از تحویل مسیر تا تحویل مکانیکی توضیح دهید و وابستگی‌های اصلی را مشخص کنید.', 0),
-  ('execution', 'execution-2', 'در تقاطع رودخانه، جاده، راه‌آهن یا منطقه دارای معارض، چه تفاوتی در برنامه‌ریزی، مجوزها و روش اجرا ایجاد می‌شود؟', 1),
-  ('execution', 'execution-3', 'چگونه Interface بین خط لوله، ایستگاه‌های شیر بین‌راهی، CP، SCADA/Telecom و بهره‌بردار را مدیریت می‌کنید؟', 2),
-  ('execution', 'execution-4', 'چه شرایطی باید برقرار باشد تا یک بخش از خط برای Mechanical Completion، Pre-Commissioning و تحویل به بهره‌برداری آماده تلقی شود؟', 3)
-) as v(domain_key, legacy_key, text, sort_order)
-where not exists (select 1 from comp_questions where legacy_key = v.legacy_key);
-
--- New questions authored for the two newly added positions — no legacy_key
--- (nothing scored against them yet), so the frontend keys their answers by
--- the row's own id.
-insert into comp_questions (job_position_id, domain_key, text, reference_answer, sort_order)
-select (select id from comp_job_positions where title = 'سرپرست دستگاه نظارت'), v.domain_key, v.text, v.reference_answer, v.sort_order
-from (values
-  ('governance', 'نقش شما به‌عنوان سرپرست دستگاه نظارت در تایید صورت‌وضعیت‌ها و اطمینان از انطباق کار انجام‌شده با مشخصات فنی قرارداد چیست؟', 'تایید کمی و کیفی کارکرد پیمانکار بر اساس نقشه‌ها، مشخصات فنی و فهرست بها؛ بازبینی مستندات پیش از تایید صورت‌وضعیت؛ مستندسازی مغایرت‌ها پیش از تایید؛ عدم تایید کاری که مطابق مشخصات فنی/نقشه اجرا نشده حتی تحت فشار زمانی.', 0),
-  ('governance', 'اگر پیمانکار روش اجرایی متفاوت از مشخصات فنی مصوب پیشنهاد دهد، چگونه تصمیم‌گیری می‌کنید؟', 'بررسی مغایرت با ITP/مشخصات فنی، ارجاع به کارفرما/طراح برای تایید رسمی از طریق مکاتبه یا Technical Query، ثبت تصمیم نهایی و دلایل آن، عدم پذیرش تغییر روش بدون تایید مستند.', 1),
-  ('planning', 'چگونه پیشرفت واقعی پیمانکار را در مقابل برنامه زمان‌بندی مصوب راستی‌آزمایی می‌کنید؟', 'بازدید میدانی منظم، مقایسه Daily/Weekly Report پیمانکار با مشاهدات میدانی، بررسی کمیت واقعی اجراشده (متراژ، تعداد جوش) در برابر ادعای پیمانکار، گزارش انحراف به کارفرما با شواهد مصور.', 0),
-  ('planning', 'اگر گزارش پیشرفت پیمانکار با آنچه در کارگاه مشاهده می‌کنید مغایرت داشته باشد، چه اقدامی انجام می‌دهید؟', 'ثبت مغایرت با مستندات و تصاویر تاریخ‌دار، عدم تایید صورت‌وضعیت بر اساس ارقام غیرواقعی، اطلاع فوری به کارفرما، پیگیری اصلاح گزارش توسط پیمانکار.', 1),
-  ('cost', 'چگونه از پرداخت اضافه به پیمانکار برای کارهای ناقص یا غیرمنطبق با مشخصات جلوگیری می‌کنید؟', 'بازرسی فیزیکی پیش از تایید هر قلم صورت‌وضعیت، تطبیق با متره واقعی و نقشه As-Built، کسر یا توقف پرداخت اقلام دارای NCR باز تا رفع مغایرت.', 0),
-  ('cost', 'در صورت درخواست پیمانکار برای کار اضافه (Variation Order)، فرآیند بررسی شما چیست؟', 'بررسی اینکه آیا کار واقعاً خارج از محدوده قرارداد است، استعلام قیمت منطبق با فهرست بها یا تحلیل قیمت جدید، تایید کارفرما پیش از اجرا، مستندسازی کامل قبل و بعد از اجرا.', 1),
-  ('hse', 'وظیفه شما در نظارت بر رعایت الزامات HSE توسط پیمانکار در کارگاه چیست؟', 'پایش اجرای Permit to Work و JSA، توقف کار (Stop Work Authority) در صورت مشاهده خطر جدی، گزارش عدم انطباق HSE به کارفرما و پیگیری اقدام اصلاحی، عدم تایید کار انجام‌شده بدون رعایت الزامات ایمنی حتی در صورت فشار زمانی.', 0),
-  ('hse', 'اگر پیمانکار برای جلو انداختن کار، الزامات ایمنی را نادیده بگیرد، چه واکنشی دارید؟', 'توقف فوری عملیات مربوطه، ثبت مستند مغایرت، اطلاع‌رسانی رسمی به مدیریت پیمانکار و کارفرما، عدم از سرگیری کار تا رفع کامل مغایرت و تایید مجدد.', 1),
-  ('quality', 'چگونه اطمینان می‌دهید کیفیت جوشکاری، پوشش و تست‌های پیمانکار مطابق ITP و مشخصات پروژه است؟', 'حضور در Hold Point های تعیین‌شده در ITP، بازبینی گزارش‌های NDT/Holiday Test، عدم تایید مرحله بعد بدون بستن Hold Point قبلی، پیگیری NCR تا بسته‌شدن کامل.', 0),
-  ('quality', 'در صورت مشاهده نرخ Repair بالا در جوش‌ها، نقش شما چیست؟', 'توقف تایید مراحل بعدی مرتبط، درخواست تحلیل ریشه‌ای از پیمانکار، بازرسی افزایشی نمونه‌ها، عدم پذیرش ادامه کار تا کنترل روند.', 1),
-  ('changeRisk', 'چگونه تغییرات میدانی (Field Change) را ثبت و پیگیری می‌کنید تا در مدارک As-Built منعکس شوند؟', 'ثبت هر تغییر با Redline روی نقشه در لحظه وقوع، تایید مهندس طراح برای تغییرات با اثر فنی، انتقال به مدارک As-Built نهایی، آرشیو مستند برای مراجع بعدی.', 0),
-  ('changeRisk', 'یک نمونه واقعی از مغایرت فنی که کشف کردید و مانع تایید کار پیمانکار شدید را شرح دهید.', 'پاسخ باید مشخص، مستند و شامل نحوه کشف، مستندسازی، مکاتبه رسمی و نتیجه نهایی (اصلاح یا رد کار) باشد.', 1),
-  ('stakeholder', 'چگونه ارتباط بین کارفرما، مشاور طراح و پیمانکار را در مسائل فنی روزمره مدیریت می‌کنید؟', 'مکاتبات رسمی و مستند برای هر سوال فنی (Technical Query)، برگزاری جلسات هماهنگی منظم، پیگیری بازخورد به‌موقع، عدم تصمیم‌گیری یک‌جانبه در موارد خارج از اختیار.', 0),
-  ('stakeholder', 'اگر پیمانکار با نتیجه بازرسی شما مخالف باشد، چگونه تعارض را مدیریت می‌کنید؟', 'دفاع مستند از نظر فنی با استناد به مشخصات و نقشه، ارجاع به کارفرما/مشاور در صورت عدم توافق، عدم عقب‌نشینی از الزامات فنی صرفاً برای اجتناب از تعارض.', 1),
-  ('execution', 'دانش شما از توالی اجرایی و نقاط بازرسی کلیدی (Hold Point) در احداث خط لوله چیست؟', 'شناخت کامل از ترتیب ROW تا Mechanical Completion، آگاهی از Hold Point های Hydrotest/NDT/Coating، تشخیص وابستگی بین فعالیت‌ها.', 0),
-  ('execution', 'در تقاطع‌های خاص (رودخانه، جاده، ریل)، نظارت شما چه تفاوتی با مسیر عادی دارد؟', 'بازرسی دقیق‌تر و مکرر به دلیل حساسیت اجرا، تایید روش اجرایی خاص، حضور مستمر در حین اجرای عملیات بحرانی، بازرسی مضاعف کیفیت جوش/پوشش در این نقاط.', 1)
-) as v(domain_key, text, reference_answer, sort_order)
-where not exists (
-  select 1 from comp_questions q
-  where q.job_position_id = (select id from comp_job_positions where title = 'سرپرست دستگاه نظارت') and q.text = v.text
+create table if not exists comp_panel_group_members (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references comp_panel_groups (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  is_lead boolean not null default false,
+  unique (group_id, user_id)
 );
 
-insert into comp_questions (job_position_id, domain_key, text, reference_answer, sort_order)
-select (select id from comp_job_positions where title = 'سرپرست کارگاه'), v.domain_key, v.text, v.reference_answer, v.sort_order
-from (values
-  ('governance', 'چگونه دستورات مدیر پروژه و برنامه اجرایی روزانه را به سرگروه‌ها و نیروهای کارگاه منتقل و پیگیری می‌کنید؟', 'برگزاری Toolbox Talk/جلسه صبحگاهی روزانه، تعیین وظایف مشخص برای هر گروه، پیگیری اجرا در طول شیفت، گزارش‌دهی روزانه به مدیر پروژه.', 0),
-  ('governance', 'مسئولیت شما در تخصیص و مدیریت ماشین‌آلات و نیروی انسانی در طول یک شیفت کاری چیست؟', 'برنامه‌ریزی تخصیص بر اساس اولویت فعالیت‌های مسیر بحرانی، جابه‌جایی سریع منابع در صورت توقف یک جبهه، پایش بهره‌وری واقعی ماشین‌آلات.', 1),
-  ('planning', 'چگونه پیشرفت روزانه جبهه کاری خود را ثبت و به واحد برنامه‌ریزی گزارش می‌دهید؟', 'ثبت دقیق متراژ/تعداد فعالیت انجام‌شده در پایان هر شیفت، مقایسه با برنامه روزانه، اعلام فوری تاخیر یا مانع به مدیر پروژه، عدم گزارش پیشرفت غیرواقعی.', 0),
-  ('planning', 'اگر یک فعالیت به دلیل کمبود مصالح یا تجهیزات متوقف شود، چه اقدام فوری انجام می‌دهید؟', 'اطلاع فوری به واحد تدارکات/مدیر پروژه، جابه‌جایی نیرو و ماشین‌آلات به فعالیت جایگزین برای جلوگیری از توقف کامل کارگاه، ثبت علت توقف برای پیگیری.', 1),
-  ('cost', 'چگونه از هدررفت مصالح و سوخت ماشین‌آلات در کارگاه جلوگیری می‌کنید؟', 'کنترل روزانه مصرف سوخت در برابر ساعت کارکرد، نظارت بر انبارش و جابجایی صحیح مصالح، پیگیری ضایعات غیرعادی و علت‌یابی آن.', 0),
-  ('cost', 'نقش شما در بهره‌وری ماشین‌آلات اجاره‌ای یا پیمانکاران جزء چیست؟', 'پایش ساعت کارکرد واقعی در برابر ساعت صورت‌وضعیت‌شده، جلوگیری از بیکاری غیرضروری ماشین‌آلات، هماهنگی زمان‌بندی برای حداکثر استفاده.', 1),
-  ('hse', 'چگونه اطمینان می‌دهید تمام نیروهای زیرمجموعه شما قبل از شروع کار، اقدامات ایمنی لازم (JSA، Permit) را رعایت می‌کنند؟', 'بازرسی روزانه قبل از شروع کار، عدم اجازه شروع فعالیت بدون Permit to Work معتبر و JSA امضاشده، اختیار توقف کار (Stop Work) در صورت مشاهده خطر.', 0),
-  ('hse', 'در صورت وقوع یک Near Miss در جبهه کاری شما، اولین اقدامات‌تان چیست؟', 'توقف فوری فعالیت مرتبط، ایمن‌سازی محل، گزارش فوری به HSE و مدیر پروژه، مشارکت در بررسی ریشه‌ای و اجرای اقدام اصلاحی قبل از ازسرگیری کار.', 1),
-  ('quality', 'چگونه اطمینان می‌دهید جوشکاران و اپراتورهای زیرمجموعه شما مطابق WPS/PQR و صلاحیت معتبر کار می‌کنند؟', 'بررسی روزانه گواهی صلاحیت جوشکاران فعال، تطبیق Consumable مصرفی با WPS، جلوگیری از شروع کار جوشکار بدون تایید صلاحیت به‌روز.', 0),
-  ('quality', 'اگر بازرس کیفیت یک قطعه اجراشده را رد کند (NCR)، واکنش شما به‌عنوان سرپرست چیست؟', 'توقف فوری فعالیت مشابه تا شناسایی علت، هماهنگی اصلاح طبق دستور کیفیت، جلوگیری از تکرار مغایرت در بقیه جبهه، گزارش به مدیر پروژه.', 1),
-  ('changeRisk', 'چگونه شرایط غیرمنتظره میدانی (برخورد با تاسیسات دفن‌شده، تغییر خاک، معارض محلی) را مدیریت و گزارش می‌کنید؟', 'توقف فوری کار در نقطه برخورد، ایمن‌سازی محل، گزارش فوری و مستند به مدیر پروژه/HSE، عدم ادامه کار تا دریافت دستور رسمی.', 0),
-  ('changeRisk', 'چگونه اطمینان می‌دهید مستندات روزانه کارگاه (دفتر کارگاه، عکس، گزارش) به‌طور کامل و به‌موقع ثبت می‌شود؟', 'تکمیل دفتر کارگاه در پایان هر شیفت، عکس‌برداری از مراحل کلیدی و موانع، آرشیو منظم برای استفاده در ادعاهای احتمالی بعدی.', 1),
-  ('stakeholder', 'چگونه بین چند سرگروه یا پیمانکار جزء در یک جبهه کاری هماهنگی ایجاد می‌کنید؟', 'جلسه هماهنگی روزانه بین سرگروه‌ها، تعیین واضح توالی و محدوده کاری هر گروه، حل سریع تعارض منابع یا فضای کاری در محل.', 0),
-  ('stakeholder', 'چگونه با نیروهای زیرمجموعه‌ای که عملکرد ضعیف دارند برخورد می‌کنید؟', 'بازخورد مستقیم و فوری، شناسایی علت (آموزش، انگیزه، تجهیزات)، اقدام اصلاحی متناسب، گزارش به مدیر پروژه در صورت تکرار.', 1),
-  ('execution', 'توالی اجرایی دقیق یک روز کاری معمول در جبهه شما (از آغاز شیفت تا پایان) را شرح دهید.', 'برنامه صبحگاهی و Toolbox Talk، تخصیص نیرو/ماشین‌آلات، اجرای فعالیت‌های برنامه‌ریزی‌شده با پایش مستمر، ثبت پیشرفت و مسائل در پایان شیفت.', 0),
-  ('execution', 'در شرایط آب‌وهوایی نامناسب یا محدودیت روشنایی، چگونه تصمیم به ادامه یا توقف کار می‌گیرید؟', 'ارزیابی ریسک ایمنی و کیفیت کار در آن شرایط، توقف فعالیت‌های حساس (جوشکاری، لیفتینگ) در صورت خطر، اطلاع‌رسانی فوری به مدیر پروژه برای برنامه‌ریزی جبرانی.', 1)
-) as v(domain_key, text, reference_answer, sort_order)
-where not exists (
-  select 1 from comp_questions q
-  where q.job_position_id = (select id from comp_job_positions where title = 'سرپرست کارگاه') and q.text = v.text
+alter table comp_panel_group_members enable row level security;
+
+-- Any authenticated user can see every group (so any lead can pick a matching one), but only an
+-- admin or the group's own creator can edit or delete it — same "anyone reads, owner/admin writes"
+-- shape as comp_assessments' own comp_is_lead check above.
+drop policy if exists "comp_panel_groups_select_authenticated" on comp_panel_groups;
+create policy "comp_panel_groups_select_authenticated" on comp_panel_groups
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panel_groups_write_owner" on comp_panel_groups;
+create policy "comp_panel_groups_write_owner" on comp_panel_groups
+  for all using (is_admin_user() or created_by = auth.uid()) with check (is_admin_user() or created_by = auth.uid());
+
+drop policy if exists "comp_panel_group_members_select_authenticated" on comp_panel_group_members;
+create policy "comp_panel_group_members_select_authenticated" on comp_panel_group_members
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panel_group_members_write_owner" on comp_panel_group_members;
+create policy "comp_panel_group_members_write_owner" on comp_panel_group_members
+  for all using (
+    is_admin_user() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  ) with check (
+    is_admin_user() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  );
+
+create index if not exists idx_comp_panel_group_members_group on comp_panel_group_members (group_id);
+
+create index if not exists idx_comp_question_bank_role_category on comp_question_bank (job_role, category, active);
+
+-- ----------------------------------------------------------------------------
+-- Section 29: Competency Assessment — module-scoped admins, broader candidate
+-- visibility, and lead delete rights.
+--
+-- 1. comp_module_admins: a small set of users granted full admin-equivalent
+--    rights *within this module only*, independent of the global RASTA
+--    profiles.is_admin flag — so a senior evaluator can be trusted with e.g.
+--    editing the question bank without making them a system-wide admin.
+--    comp_is_module_admin() is the single check every "admin-only" policy in
+--    this module should use going forward instead of is_admin_user() alone.
+-- 2. comp_assessments SELECT is opened to any authenticated user — every
+--    evaluator should see every candidate on the dashboard, not just ones
+--    they already happen to be a panelist on.
+-- 3. comp_assessments DELETE now also allows the assessment's own lead
+--    (comp_is_lead), not just its creator or a system admin.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_module_admins (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  added_by uuid references profiles (id),
+  created_at timestamptz not null default now()
 );
 
--- comp_assessments now records which job position the candidate was
--- interviewed for; existing rows (all originally the one implicit PM role)
--- backfill to that position so their question set keeps resolving.
-alter table comp_assessments add column if not exists job_position_id uuid references comp_job_positions (id);
-update comp_assessments set job_position_id = (select id from comp_job_positions where title = 'مدیر پروژه احداث خط لوله انتقال گاز') where job_position_id is null;
-create index if not exists idx_comp_assessments_job_position on comp_assessments (job_position_id);
+alter table comp_module_admins enable row level security;
+
+create or replace function comp_is_module_admin()
+returns boolean as $$
+  select is_admin_user() or exists (select 1 from comp_module_admins where user_id = auth.uid());
+$$ language sql security definer stable;
+
+-- Anyone authenticated can read the admin list (so the UI can show who has full access); only a
+-- system admin or an existing module admin can add/remove one — self-sustaining once a system
+-- admin seeds the first module admin.
+drop policy if exists "comp_module_admins_select_authenticated" on comp_module_admins;
+create policy "comp_module_admins_select_authenticated" on comp_module_admins
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_module_admins_write_admin" on comp_module_admins;
+create policy "comp_module_admins_write_admin" on comp_module_admins
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+create policy "comp_question_bank_write_admin" on comp_question_bank
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+drop policy if exists "comp_panel_groups_write_owner" on comp_panel_groups;
+create policy "comp_panel_groups_write_owner" on comp_panel_groups
+  for all using (comp_is_module_admin() or created_by = auth.uid()) with check (comp_is_module_admin() or created_by = auth.uid());
+
+drop policy if exists "comp_panel_group_members_write_owner" on comp_panel_group_members;
+create policy "comp_panel_group_members_write_owner" on comp_panel_group_members
+  for all using (
+    comp_is_module_admin() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  ) with check (
+    comp_is_module_admin() or exists (select 1 from comp_panel_groups g where g.id = group_id and g.created_by = auth.uid())
+  );
+
+drop policy if exists "comp_assessments_select_own" on comp_assessments;
+create policy "comp_assessments_select_own" on comp_assessments
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_assessments_delete_own" on comp_assessments;
+create policy "comp_assessments_delete_own" on comp_assessments
+  for delete using (created_by = auth.uid() or comp_is_module_admin() or comp_is_lead(id));
+
+-- comp_can_access_assessment/comp_is_lead were written against is_admin_user() before module
+-- admins existed — redefined here so a module admin gets the exact same full read/write standing
+-- on every assessment that a system admin already had ("مانند ادمین سامانه").
+create or replace function comp_can_access_assessment(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or comp_is_module_admin())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid()
+  );
+$$ language sql security definer stable;
+
+create or replace function comp_is_lead(p_assessment_id uuid)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id and (a.created_by = auth.uid() or comp_is_module_admin())
+  ) or exists (
+    select 1 from comp_panelists p
+    where p.assessment_id = p_assessment_id and p.user_id = auth.uid() and p.is_lead
+  );
+$$ language sql security definer stable;
+
+-- comp_panelist_scores_delete was the one remaining comp_* write policy still checking
+-- is_admin_user() directly instead of comp_is_module_admin() — a module admin without the global
+-- flag couldn't delete a panelist's score sheet. Bringing it in line with every other admin-gated
+-- policy in this module.
+drop policy if exists "comp_panelist_scores_delete" on comp_panelist_scores;
+create policy "comp_panelist_scores_delete" on comp_panelist_scores
+  for delete using (
+    panelist_id = auth.uid()
+    or exists (select 1 from comp_assessments a where a.id = assessment_id and (a.created_by = auth.uid() or comp_is_module_admin()))
+  );
+-- ----------------------------------------------------------------------------
+-- Section 30: fixes/features batch —
+--
+-- 1. comp_attachments + the comp-docs storage bucket's staff policies were
+--    still scoped to comp_can_access_assessment() (creator/admin/assigned
+--    panelist only), even though comp_assessments SELECT was already opened
+--    to every authenticated user in Section 29. Any evaluator who could now
+--    SEE a candidate but wasn't specifically assigned to it hit a silent RLS
+--    denial trying to upload/delete a document — the reported "sometimes
+--    upload fails" bug. Broadened to any authenticated user, matching
+--    comp_assessments' own visibility.
+-- 2. Candidate self-service can now also read back its own folder (for photo
+--    /document thumbnail previews across reloads), scoped by the same
+--    self_service_token folder-matching already used for writes.
+-- 3. comp_set_photo / comp_self_service_set_photo: narrow, dedicated RPCs for
+--    the one photo_url column, usable by any authenticated staff member or by
+--    the token-holding candidate — without loosening the general
+--    comp_assessments UPDATE policy that guards scoring/status fields.
+-- 4. comp_panelists / comp_panelist_scores SELECT broadened the same way, so
+--    every evaluator sees the same panel composition and the same panelist
+--    scores for any candidate (needed for a judge-average final score that
+--    doesn't silently vary by who's looking).
+-- 5. comp_panelist_scores gains per-judge qualification scores (education/
+--    experience/training/certification) and a mandatory strengths/
+--    development-areas pair, so each panelist can complete their own
+--    scorecard and wrap-up, not just the lead.
+-- ----------------------------------------------------------------------------
+
+alter table comp_panelist_scores
+  add column if not exists education_score int check (education_score is null or education_score between 0 and 5),
+  add column if not exists experience_score int check (experience_score is null or experience_score between 0 and 5),
+  add column if not exists pm_training_score int check (pm_training_score is null or pm_training_score between 0 and 5),
+  add column if not exists pm_certification_score int check (pm_certification_score is null or pm_certification_score between 0 and 5),
+  add column if not exists strengths text not null default '',
+  add column if not exists development_areas text not null default '';
+
+drop policy if exists "comp_panelists_select" on comp_panelists;
+create policy "comp_panelists_select" on comp_panelists
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_panelist_scores_select" on comp_panelist_scores;
+create policy "comp_panelist_scores_select" on comp_panelist_scores
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_attachments_select" on comp_attachments;
+create policy "comp_attachments_select" on comp_attachments
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_attachments_insert" on comp_attachments;
+create policy "comp_attachments_insert" on comp_attachments
+  for insert with check (auth.uid() is not null and uploaded_by_candidate = false);
+
+drop policy if exists "comp_attachments_delete" on comp_attachments;
+create policy "comp_attachments_delete" on comp_attachments
+  for delete using (auth.uid() is not null);
+
+drop policy if exists "comp_docs_read_staff" on storage.objects;
+create policy "comp_docs_read_staff" on storage.objects
+  for select using (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_write_staff" on storage.objects;
+create policy "comp_docs_write_staff" on storage.objects
+  for insert with check (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_delete_staff" on storage.objects;
+create policy "comp_docs_delete_staff" on storage.objects
+  for delete using (bucket_id = 'comp-docs' and auth.uid() is not null);
+
+drop policy if exists "comp_docs_read_candidate" on storage.objects;
+create policy "comp_docs_read_candidate" on storage.objects
+  for select to anon using (
+    bucket_id = 'comp-docs'
+    and exists (
+      select 1 from comp_assessments a
+      where a.id::text = (storage.foldername(name))[1]
+        and a.self_service_token::text = (storage.foldername(name))[2]
+    )
+  );
+
+create or replace function comp_set_photo(p_assessment_id uuid, p_photo_url text)
+returns void as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  update comp_assessments set photo_url = p_photo_url where id = p_assessment_id;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function comp_set_photo(uuid, text) to authenticated;
+
+create or replace function comp_self_service_set_photo(p_token uuid, p_storage_path text)
+returns void as $$
+  update comp_assessments set photo_url = p_storage_path where self_service_token = p_token;
+$$ language sql security definer;
+
+grant execute on function comp_self_service_set_photo(uuid, text) to anon, authenticated;
+
+-- comp_self_service_get gains photo_url so a reopened self-service link can show the candidate
+-- their own already-uploaded photo instead of always looking empty.
+drop function if exists comp_self_service_get(uuid);
+create or replace function comp_self_service_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  candidate_national_id text,
+  candidate_phone text,
+  candidate_email text,
+  candidate_birth_date date,
+  candidate_age int,
+  has_disability boolean,
+  disability_note text,
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text,
+  education jsonb,
+  employment_history jsonb,
+  certifications jsonb,
+  notable_projects text,
+  self_service_status text,
+  photo_url text
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
+         a.years_experience_total, a.years_experience_pipeline, a.current_employer,
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
+         a.photo_url
+  from comp_assessments a
+  where a.self_service_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function comp_self_service_get(uuid) to anon, authenticated;
+
+-- comp_self_service_list_attachments gains storage_path so the self-service page can render a real
+-- thumbnail preview for image attachments (via the new comp_docs_read_candidate policy above),
+-- not just a filename.
+create or replace function comp_self_service_list_attachments(p_token uuid)
+returns table (id uuid, kind text, file_name text, storage_path text, created_at timestamptz) as $$
+  select att.id, att.kind, att.file_name, att.storage_path, att.created_at
+  from comp_attachments att
+  join comp_assessments a on a.id = att.assessment_id
+  where a.self_service_token = p_token
+  order by att.created_at desc;
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 31: Competency Assessment Engine v2.0 — Question Bank architecture.
+--
+-- 1. Three more question types (BEHAVIORAL/HSE/JUDGMENT) alongside the
+--    existing seven, matching the full question-type vocabulary the module
+--    now needs to classify HSE/behavioral/judgment questions distinctly
+--    instead of forcing them into SCENARIO or GENERAL.
+-- 2. weight: per-question weight within its category, for future weighted
+--    scoring (defaults to 1 = no change to today's unweighted average).
+-- 3. approval_status: every row an admin authors directly is auto-APPROVED
+--    (today's behavior, unchanged); non-admin question *proposals* (a later
+--    phase) will land as PENDING_REVIEW instead of writing the bank directly.
+-- 4. Versioning: question_group_id ties every edit of "the same question"
+--    together; version increments and superseded_by chains old -> new on
+--    every edit. Editing NEVER mutates a row in place any more (see the
+--    application-side updateQuestion, which now inserts a new version row) —
+--    so an assessment's frozen selected_question_ids always keeps pointing
+--    at the exact wording/reference-answer that was actually used, even
+--    after an admin later corrects the question. Existing rows are
+--    backfilled as version 1 of their own group (self-referencing).
+-- 5. comp_job_role_config: per-job-role list of allowed question types (spec
+--    section 3) — a small config table rather than touching the JobRole
+--    TypeScript union, since no new job roles are needed right now and every
+--    existing role already has a live question bank.
+-- 6. Question Bank read access is narrowed from "every authenticated user"
+--    to: admin/assessment-designer (full bank, any role), or an evaluator
+--    who can access a *live* (not yet completed) assessment and only for
+--    that assessment's own frozen question selection (or, for the
+--    project_manager fixed rubric, any of their own live PM assessments,
+--    since PM's question set is identical and fixed for every candidate).
+--    A completed assessment's questions/reference-answers stop being
+--    visible to its panelists entirely — only admin/designer/report-viewer
+--    (see Section 32) can still see them, matching spec section 10/24.
+--    Existing app code already renders bank lookups as optional
+--    (`bankItem?: CompQuestionBankItem`), so a row simply not coming back
+--    degrades to "no reveal panel shown" rather than breaking anything.
+-- ----------------------------------------------------------------------------
+
+alter table comp_question_bank drop constraint if exists comp_question_bank_category_check;
+alter table comp_question_bank add constraint comp_question_bank_category_check
+  check (category in ('GENERAL', 'TECHNICAL', 'SCENARIO', 'PROBLEM_SOLVING', 'EXPERIENCE_BASED', 'CASE_STUDY', 'IMAGE_BASED', 'BEHAVIORAL', 'HSE', 'JUDGMENT'));
+
+alter table comp_question_bank add column if not exists weight numeric not null default 1 check (weight > 0);
+alter table comp_question_bank add column if not exists approval_status text not null default 'APPROVED'
+  check (approval_status in ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_REVISION'));
+alter table comp_question_bank add column if not exists question_group_id uuid;
+alter table comp_question_bank add column if not exists version int not null default 1;
+alter table comp_question_bank add column if not exists superseded_by uuid references comp_question_bank (id);
+
+update comp_question_bank set question_group_id = id where question_group_id is null;
+alter table comp_question_bank alter column question_group_id set not null;
+alter table comp_question_bank alter column question_group_id set default gen_random_uuid();
+
+create index if not exists idx_comp_question_bank_group on comp_question_bank (question_group_id);
+create index if not exists idx_comp_question_bank_approval on comp_question_bank (approval_status);
+
+create table if not exists comp_job_role_config (
+  job_role text primary key,
+  allowed_question_types jsonb not null default
+    '["GENERAL","TECHNICAL","SCENARIO","PROBLEM_SOLVING","EXPERIENCE_BASED","CASE_STUDY","IMAGE_BASED","BEHAVIORAL","HSE","JUDGMENT"]'::jsonb,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_job_role_config enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_job_role_config;
+create trigger trg_set_updated_at before update on comp_job_role_config
+  for each row execute function set_updated_at_and_by();
+
+insert into comp_job_role_config (job_role) values
+  ('project_manager'), ('welding_inspector'), ('mechanical_piping_inspector'), ('pipeline_inspector'),
+  ('coating_cp_inspector'), ('radiography_interpreter'), ('civil_engineer'), ('project_control_specialist'),
+  ('hse_specialist'), ('contracts_specialist'), ('site_supervisor'), ('inspection_body_supervisor')
+on conflict (job_role) do nothing;
+
+drop policy if exists "comp_job_role_config_select_authenticated" on comp_job_role_config;
+create policy "comp_job_role_config_select_authenticated" on comp_job_role_config
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_job_role_config_write_admin" on comp_job_role_config;
+create policy "comp_job_role_config_write_admin" on comp_job_role_config
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+-- comp_question_bank_public: a safe, non-sensitive projection (no reference_answer, key_points,
+-- excellent_answer_indicators, common_mistakes or standard_reference — the evaluator-only advisory
+-- content the rest of this section restricts) that ANY authenticated user may call regardless of
+-- panelist status or assessment completion. The cross-role dashboard and reports pages (spec
+-- sections irrelevant here — this predates this rewrite) only ever need a question's category/
+-- weight/text to bucket an *already-recorded* score into a domain, never the advisory material — so
+-- they read this function instead of the now-restricted comp_question_bank table directly, keeping
+-- "every evaluator sees every candidate's aggregate scores" working exactly as before. security
+-- definer so it can read past the table's row-level policy, same technique as every other
+-- comp_self_service_* / comp_can_access_assessment function above.
+create or replace function comp_question_bank_public()
+returns table (
+  id uuid, job_role text, category text, sub_category text, difficulty text,
+  question_text text, image_url text, weight numeric, question_group_id uuid,
+  version int, active boolean, created_at timestamptz, updated_at timestamptz
+) as $$
+  select id, job_role, category, sub_category, difficulty, question_text, image_url, weight,
+         question_group_id, version, active, created_at, updated_at
+  from comp_question_bank
+  where auth.uid() is not null;
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 32: Competency Assessment Engine v2.0 — RBAC, built on the existing
+-- generic rasta_modules/rasta_roles/rasta_permissions framework (already used
+-- by other modules) instead of a parallel comp-specific role table.
+--
+-- ADMIN            = comp_is_module_admin() (unchanged, existing concept).
+-- ASSESSMENT_DESIGNER = rasta permission 'competency'/'configure' — full
+--   question-bank read (needed to preview/build question mixes) but never a
+--   write grant on comp_question_bank itself.
+-- REPORT_VIEWER    = rasta permission 'competency'/'view' — read-only access
+--   layered on top of whatever a plain authenticated user already sees;
+--   comp_assessments stays visible to every authenticated user as decided in
+--   Section 29, so this role currently only matters for future,
+--   report-scoped policies (e.g. once/if that broad visibility is narrowed).
+-- JUDGE            = unchanged: being an assigned comp_panelists row on a
+--   specific assessment already scopes exactly what the spec calls "Judge"
+--   access — no new global role needed for it.
+-- CANDIDATE        = unchanged: the token-based self-service link, which
+--   never authenticates and never touches comp_question_bank at all.
+-- ----------------------------------------------------------------------------
+
+insert into rasta_modules (key, label_fa) values ('competency', 'ارزیابی شایستگی')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+where m.key = 'competency'
+on conflict (module_key, action) do nothing;
+
+insert into rasta_roles (name, description, is_system)
+values
+  ('ASSESSMENT_DESIGNER', 'طراحی آزمون شایستگی: تعریف ترکیب سؤال و تولید آزمون — بدون دسترسی ویرایش بانک سؤالات', true),
+  ('REPORT_VIEWER', 'مشاهده گزارش‌های نهایی‌شده ارزیابی شایستگی', true)
+on conflict (name) do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'competency' and p.action in ('view', 'create', 'configure')
+where r.name = 'ASSESSMENT_DESIGNER'
+on conflict do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'competency' and p.action in ('view', 'export')
+where r.name = 'REPORT_VIEWER'
+on conflict do nothing;
+
+create or replace function comp_is_assessment_designer()
+returns boolean as $$
+  select comp_is_module_admin() or rasta_has_permission(auth.uid(), 'competency', 'configure');
+$$ language sql security definer stable;
+
+create or replace function comp_is_report_viewer()
+returns boolean as $$
+  select comp_is_module_admin() or comp_is_assessment_designer() or rasta_has_permission(auth.uid(), 'competency', 'view');
+$$ language sql security definer stable;
+
+-- The security-critical piece: replace "any authenticated user may read the whole bank" with the
+-- scoped rule described in Section 31's header comment above.
+drop policy if exists "comp_question_bank_select_authenticated" on comp_question_bank;
+drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
+create policy "comp_question_bank_select_scoped" on comp_question_bank
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or exists (
+      select 1 from comp_assessments a
+      where a.status <> 'completed'
+        and a.job_role = comp_question_bank.job_role
+        and (
+          -- The lead of a live assessment for this role can browse the whole role's bank (needed
+          -- to actually generate/re-generate that assessment's random question selection).
+          comp_is_lead(a.id)
+          -- An ordinary panelist only sees the exact rows already frozen into that one
+          -- assessment's snapshot (or, for project_manager, any live PM assessment they're on —
+          -- the fixed rubric is identical for every PM candidate so there's no extra row-level
+          -- selection to scope by).
+          or (
+            comp_can_access_assessment(a.id)
+            and (a.job_role = 'project_manager' or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text))
+          )
+        )
+    )
+  );
+
+grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;
+
+-- rasta_user_roles is a sitewide table gated to GLOBAL admins only (is_admin_user()), but the
+-- Competency module's Settings page is meant to be usable by a comp_module_admin who may not be a
+-- global admin. Rather than broadening the generic rasta_user_roles policy (which would let a
+-- comp-only admin touch every other module's role grants too), these two narrow RPCs let a module
+-- admin manage exactly the two roles this module cares about, the same "narrow SECURITY DEFINER
+-- RPC" pattern as comp_set_photo/comp_self_service_* elsewhere in this schema.
+
+create or replace function comp_grant_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('ASSESSMENT_DESIGNER', 'REPORT_VIEWER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    raise exception 'role not found';
+  end if;
+  insert into rasta_user_roles (user_id, role_id, created_by)
+  values (p_user_id, v_role_id, auth.uid())
+  on conflict (user_id, role_id) do nothing;
+end;
+$$ language plpgsql security definer;
+
+create or replace function comp_revoke_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    return;
+  end if;
+  delete from rasta_user_roles where user_id = p_user_id and role_id = v_role_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function comp_list_role_assignments(p_role_name text)
+returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
+  select ur.user_id, ur.created_by, ur.created_at
+  from rasta_user_roles ur
+  join rasta_roles r on r.id = ur.role_id
+  where r.name = p_role_name and comp_is_module_admin();
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 33: Competency Assessment Engine v2.0 — Assessment Designer (spec
+-- section 6/7/8/36): a reusable, named question-mix "recipe" per job role
+-- (category x difficulty x count), designed once by an admin/assessment
+-- designer and then applied to generate any number of candidates' actual
+-- question snapshots (comp_assessments.selected_question_ids), replacing the
+-- old fixed hardcoded target counts in assignRandomQuestions.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_assessment_templates (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  title text not null,
+  duration_minutes int not null default 60 check (duration_minutes > 0),
+  panel_size_default int not null default 3 check (panel_size_default between 1 and 8),
+  -- Array of {category, difficulty, count} cells — see AssessmentDesignerModal.tsx for the exact
+  -- shape. Kept as jsonb rather than child rows since it's always read/written as one whole grid.
+  question_mix jsonb not null default '[]'::jsonb,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table comp_assessment_templates enable row level security;
+
+drop trigger if exists trg_set_updated_at on comp_assessment_templates;
+create trigger trg_set_updated_at before update on comp_assessment_templates
+  for each row execute function set_updated_at();
+
+create index if not exists idx_comp_assessment_templates_role on comp_assessment_templates (job_role);
+
+drop policy if exists "comp_assessment_templates_select_authenticated" on comp_assessment_templates;
+create policy "comp_assessment_templates_select_authenticated" on comp_assessment_templates
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_assessment_templates_write_designer" on comp_assessment_templates;
+create policy "comp_assessment_templates_write_designer" on comp_assessment_templates
+  for all using (comp_is_assessment_designer()) with check (comp_is_assessment_designer());
+
+-- ----------------------------------------------------------------------------
+-- Section 34: Competency Assessment Engine v2.0 — Random Question Engine
+-- (spec section 8/9): track how many times each question has been drawn
+-- into a generated assessment, so future generation can prefer under-used
+-- questions over ones that keep coming up ("Previous Usage" control).
+-- comp_increment_question_usage is a narrow, low-risk RPC (bumping a
+-- counter can't leak or corrupt anything sensitive) open to any
+-- authenticated user, the same "low-risk single-purpose RPC" pattern as
+-- comp_set_photo — a plain panelist/lead triggering generation has no
+-- general UPDATE grant on comp_question_bank (admin-only), so a dedicated
+-- RPC is needed rather than a direct table write.
+-- ----------------------------------------------------------------------------
+
+alter table comp_question_bank add column if not exists usage_count int not null default 0;
+
+create or replace function comp_increment_question_usage(p_ids uuid[])
+returns void as $$
+  update comp_question_bank set usage_count = usage_count + 1 where id = any(p_ids) and auth.uid() is not null;
+$$ language sql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Section 35: Competency Assessment Engine v2.0 — Judge workflow locking +
+-- audit log (spec section 30/31).
+--
+-- 1. comp_audit_log: a minimal, append-only log of sensitive actions. No
+--    direct INSERT policy is granted to authenticated users at all — rows
+--    are written exclusively by SECURITY DEFINER functions (comp_log_audit
+--    below, called from other RPCs), so a client can never forge an entry.
+--    Only a module admin may read it.
+-- 2. Locking: once a panelist has submitted their score (submitted_at set),
+--    they can no longer edit it themselves — only comp_is_module_admin()
+--    bypasses this. The *first* transition into the locked state is still
+--    allowed for its own actor, since the USING clause evaluates against
+--    the row's state *before* the update.
+--    Note: comp_assessments itself is deliberately NOT locked on
+--    status='completed' — the lead's post-completion actions (setApproved,
+--    strengths/development notes, markReviewed on ResultsStage) are the
+--    lifecycle's "Final Review" step, not the "Judge" scoring the spec's
+--    locking requirement targets, so comp_assessments_update_own keeps its
+--    original, unrestricted-by-status shape.
+-- 3. comp_reopen_assessment: admin-only, clears the assessment status and
+--    every panelist's submitted_at for that assessment so judges can score
+--    again, and writes an audit row.
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  action text not null,
+  entity_type text not null,
+  entity_id uuid,
+  actor uuid references profiles (id),
+  previous_value jsonb,
+  new_value jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table comp_audit_log enable row level security;
+
+drop policy if exists "comp_audit_log_select_admin" on comp_audit_log;
+create policy "comp_audit_log_select_admin" on comp_audit_log
+  for select using (comp_is_module_admin());
+
+create or replace function comp_log_audit(p_action text, p_entity_type text, p_entity_id uuid, p_previous jsonb, p_new jsonb)
+returns void as $$
+  insert into comp_audit_log (action, entity_type, entity_id, actor, previous_value, new_value)
+  values (p_action, p_entity_type, p_entity_id, auth.uid(), p_previous, p_new);
+$$ language sql security definer;
+
+drop policy if exists "comp_panelist_scores_update" on comp_panelist_scores;
+create policy "comp_panelist_scores_update" on comp_panelist_scores
+  for update using (comp_is_module_admin() or (panelist_id = auth.uid() and submitted_at is null));
+
+create or replace function comp_reopen_assessment(p_assessment_id uuid)
+returns void as $$
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  update comp_assessments set status = 'draft' where id = p_assessment_id;
+  update comp_panelist_scores set submitted_at = null where assessment_id = p_assessment_id;
+  perform comp_log_audit('ASSESSMENT_REOPENED', 'comp_assessments', p_assessment_id, jsonb_build_object('status', 'completed'), jsonb_build_object('status', 'draft'));
+end;
+$$ language plpgsql security definer;
+
+-- ----------------------------------------------------------------------------
+-- Section 36: Competency Assessment Engine v2.0 — Gemini AI Analysis (spec
+-- section 18-27). Stores the structured JSON output from the comp-gemini-
+-- analysis Edge Function so it's generated on demand and then persisted
+-- (never recomputed on every page view). Visibility mirrors comp_assessments'
+-- own broad authenticated visibility (Section 29) since this is a derived
+-- report artifact built only from data that visibility already exposes —
+-- never the question bank's evaluator-only reference-answer content (see the
+-- Edge Function, which reads questions via comp_question_bank_public() only).
+-- ----------------------------------------------------------------------------
+
+create table if not exists comp_ai_analysis (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  model text not null,
+  analysis jsonb not null,
+  confidence numeric,
+  generated_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+alter table comp_ai_analysis enable row level security;
+
+create index if not exists idx_comp_ai_analysis_assessment on comp_ai_analysis (assessment_id, created_at desc);
+
+drop policy if exists "comp_ai_analysis_select_authenticated" on comp_ai_analysis;
+create policy "comp_ai_analysis_select_authenticated" on comp_ai_analysis
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_ai_analysis_insert_authenticated" on comp_ai_analysis;
+create policy "comp_ai_analysis_insert_authenticated" on comp_ai_analysis
+  for insert with check (auth.uid() is not null);
+
+-- ----------------------------------------------------------------------------
+-- Section 37: Competency Assessment Engine v2.0 — Question Proposal Workflow
+-- (spec section 12), completing the Phase 4 that was deferred earlier in
+-- this rewrite. A non-admin can now INSERT a new comp_question_bank row
+-- directly, but only ever landing as PENDING_REVIEW + inactive and owned by
+-- themselves — it can never appear in a live assessment's random selection
+-- (that only ever draws active + APPROVED rows) until an admin approves it.
+-- Only an admin can still UPDATE/DELETE any row, i.e. only an admin can
+-- move a proposal to APPROVED/REJECTED/NEEDS_REVISION or edit its content.
+-- ----------------------------------------------------------------------------
+
+drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
+
+create policy "comp_question_bank_insert" on comp_question_bank
+  for insert with check (
+    comp_is_module_admin()
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+create policy "comp_question_bank_update_admin" on comp_question_bank
+  for update using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+create policy "comp_question_bank_delete_admin" on comp_question_bank
+  for delete using (comp_is_module_admin());
+
+-- A proposer must be able to see their own proposal afterward (to track its status), even with no
+-- live assessment tying them to that job role's bank at all.
+--
+-- The blanket "job_role = 'project_manager'" branch below used to apply to EVERY PM assessment,
+-- because every PM assessment used the fixed in-code rubric (selected_question_ids always empty),
+-- so the generic "selected_question_ids @> ..." branch could never match for PM at all. Now that a
+-- PM assessment can also be bank-driven exactly like every other role (see usesLegacyPmRubric on
+-- the client), that carve-out is narrowed to ONLY the still-legacy case (selected_question_ids
+-- still empty) — a bank-driven PM assessment is scoped by its own real selection, same as any
+-- other role, with no special-case treatment left.
+drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
+create policy "comp_question_bank_select_scoped" on comp_question_bank
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or created_by = auth.uid()
+    or exists (
+      select 1 from comp_assessments a
+      where a.status <> 'completed'
+        and a.job_role = comp_question_bank.job_role
+        and (
+          comp_is_lead(a.id)
+          or (
+            comp_can_access_assessment(a.id)
+            and (
+              (a.job_role = 'project_manager' and jsonb_array_length(a.selected_question_ids) = 0)
+              or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text)
+            )
+          )
+        )
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- Section 39: Competency Assessment Engine v2.0 — optional exam duration + a
+-- live, judge-controllable interview timer. Exam duration becomes optional
+-- (no target duration = no expectation set) on the reusable template, and a
+-- new auto_finish_on_timeout opt-in lets the designer decide whether the
+-- live interview timer below should auto-stop itself once that duration
+-- elapses, or just keep counting into overtime. Never auto-submits/locks
+-- anyone's scores — comp_set_interview_timer only ever touches the 3 timer
+-- columns below.
+-- ----------------------------------------------------------------------------
+
+alter table comp_assessment_templates alter column duration_minutes drop not null;
+alter table comp_assessment_templates alter column duration_minutes drop default;
+alter table comp_assessment_templates drop constraint if exists comp_assessment_templates_duration_minutes_check;
+alter table comp_assessment_templates add constraint comp_assessment_templates_duration_minutes_check check (duration_minutes is null or duration_minutes > 0);
+alter table comp_assessment_templates add column if not exists auto_finish_on_timeout boolean not null default false;
+
+-- Copied onto the actual assessment when generated from a template, since the live interview timer
+-- needs this specific candidate's own target duration/behavior, not just the reusable template's.
+alter table comp_assessments add column if not exists duration_minutes int;
+alter table comp_assessments drop constraint if exists comp_assessments_duration_minutes_check;
+alter table comp_assessments add constraint comp_assessments_duration_minutes_check check (duration_minutes is null or duration_minutes > 0);
+alter table comp_assessments add column if not exists auto_finish_on_timeout boolean not null default false;
+
+-- Live interview timer state — any panelist (not just the lead) may start/pause/reset it, since
+-- whoever is actually running the interview in the room needs control, not just whoever created the
+-- assessment. Elapsed time is computed server-side from real clock time (never trusts a
+-- client-submitted elapsed value), so it can't be tampered with or drift from clock skew.
+alter table comp_assessments add column if not exists interview_timer_started_at timestamptz;
+alter table comp_assessments add column if not exists interview_timer_elapsed_seconds int not null default 0;
+alter table comp_assessments add column if not exists interview_timer_running boolean not null default false;
+
+create or replace function comp_set_interview_timer(p_assessment_id uuid, p_action text)
+returns void as $$
+declare
+  v comp_assessments%rowtype;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  if p_action = 'start' then
+    if not v.interview_timer_running then
+      update comp_assessments set interview_timer_running = true, interview_timer_started_at = now() where id = p_assessment_id;
+    end if;
+  elsif p_action = 'pause' then
+    if v.interview_timer_running and v.interview_timer_started_at is not null then
+      update comp_assessments
+      set interview_timer_running = false,
+          interview_timer_elapsed_seconds = interview_timer_elapsed_seconds + greatest(0, floor(extract(epoch from (now() - v.interview_timer_started_at)))::int),
+          interview_timer_started_at = null
+      where id = p_assessment_id;
+    end if;
+  elsif p_action = 'reset' then
+    update comp_assessments set interview_timer_running = false, interview_timer_started_at = null, interview_timer_elapsed_seconds = 0 where id = p_assessment_id;
+  else
+    raise exception 'invalid timer action: %', p_action;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function comp_set_interview_timer(uuid, text) to authenticated;
+
+alter table comp_question_bank add column if not exists proposal_reason text not null default '';
+
+-- ============================================================================
+-- Section 40: Personality & Behavioral Assessment Engine — Phase 1:
+-- foundational domain model (catalog tables, question bank, per-candidate
+-- assessment shell, scoring/validity/AI-analysis storage, RBAC). This is
+-- Phase 1 of a multi-phase build — question CONTENT, the Assessment Designer
+-- wizard, the candidate-facing UI, the scoring/validity/pattern engines, and
+-- Gemini integration are later phases layered on top of this schema.
+--
+-- Reuse decisions (per the spec's own "do not duplicate, do not disrupt the
+-- existing system" instructions):
+--   - Job roles: reuses the existing JobRole domain (job_role text columns,
+--     same literal values as comp_job_role_config) — no new job-role table.
+--   - Candidate/assessment identity: personality_assessments links to the
+--     EXISTING comp_assessments row (1:1) rather than creating a parallel
+--     candidate model — a candidate is one person with possibly both a
+--     competency assessment and a personality assessment on the same record,
+--     matching the spec's "Technical + Personality Integration".
+--   - Versioning + approval workflow for personality_questions mirrors
+--     comp_question_bank's proven design exactly (question_group_id/version/
+--     superseded_by, approval_status, a non-admin INSERT lands as
+--     PENDING_REVIEW+inactive) rather than a separate "proposals" table.
+--   - Audit trail reuses comp_audit_log/comp_log_audit() (already fully
+--     generic — entity_type/entity_id/actor/before/after — despite the
+--     comp_ prefix, which is a naming artifact from when it was first built)
+--     instead of a parallel personality_audit_logs table; its SELECT policy
+--     is widened below so a personality-only module admin can read it too.
+--   - RBAC reuses the existing rasta_modules/rasta_roles/rasta_permissions/
+--     rasta_has_permission() framework, registering a new 'personality'
+--     module key exactly like 'competency' did, with its own
+--     PERSONALITY_ASSESSMENT_DESIGNER/PERSONALITY_REPORT_VIEWER roles (kept
+--     distinct from competency's ASSESSMENT_DESIGNER/REPORT_VIEWER roles,
+--     since someone may be trusted with one module and not the other) and a
+--     dedicated personality_module_admins table mirroring comp_module_admins.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- RBAC: module admins + rasta_roles registration
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_module_admins (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  added_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+alter table personality_module_admins enable row level security;
+
+create or replace function personality_is_module_admin()
+returns boolean as $$
+  select is_admin_user() or exists (select 1 from personality_module_admins where user_id = auth.uid());
+$$ language sql security definer stable;
+
+drop policy if exists "personality_module_admins_select_authenticated" on personality_module_admins;
+create policy "personality_module_admins_select_authenticated" on personality_module_admins
+  for select using (auth.uid() is not null);
+
+drop policy if exists "personality_module_admins_write_admin" on personality_module_admins;
+create policy "personality_module_admins_write_admin" on personality_module_admins
+  for all using (personality_is_module_admin()) with check (personality_is_module_admin());
+
+insert into rasta_modules (key, label_fa) values ('personality', 'ارزیابی شخصیت و رفتاری')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+where m.key = 'personality'
+on conflict (module_key, action) do nothing;
+
+insert into rasta_roles (name, description, is_system)
+values
+  ('PERSONALITY_ASSESSMENT_DESIGNER', 'طراحی آزمون شخصیت و رفتاری: تعریف ترکیب سؤال و تولید آزمون — بدون دسترسی ویرایش بانک سؤالات', true),
+  ('PERSONALITY_REPORT_VIEWER', 'مشاهده گزارش‌های نهایی‌شده ارزیابی شخصیت و رفتاری', true)
+on conflict (name) do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'personality' and p.action in ('view', 'create', 'configure')
+where r.name = 'PERSONALITY_ASSESSMENT_DESIGNER'
+on conflict do nothing;
+
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id
+from rasta_roles r
+join rasta_permissions p on p.module_key = 'personality' and p.action in ('view', 'export')
+where r.name = 'PERSONALITY_REPORT_VIEWER'
+on conflict do nothing;
+
+create or replace function personality_is_assessment_designer()
+returns boolean as $$
+  select personality_is_module_admin() or rasta_has_permission(auth.uid(), 'personality', 'configure');
+$$ language sql security definer stable;
+
+create or replace function personality_is_report_viewer()
+returns boolean as $$
+  select personality_is_module_admin() or personality_is_assessment_designer() or rasta_has_permission(auth.uid(), 'personality', 'view');
+$$ language sql security definer stable;
+
+-- Let a personality-only module admin read the shared audit log too (see the reuse note above) —
+-- additive only, never narrows who could already read it.
+drop policy if exists "comp_audit_log_select_admin" on comp_audit_log;
+create policy "comp_audit_log_select_admin" on comp_audit_log
+  for select using (comp_is_module_admin() or personality_is_module_admin());
+
+-- ----------------------------------------------------------------------------
+-- Catalog: framework / traits / facets / behavioral dimensions / job profiles
+-- / response scales — admin-configurable reference data.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_frameworks (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  version int not null default 1,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create table if not exists personality_traits (
+  id uuid primary key default gen_random_uuid(),
+  framework_id uuid not null references personality_frameworks (id) on delete cascade,
+  key text not null,
+  label_fa text not null,
+  description text not null default '',
+  display_order int not null default 0,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (framework_id, key)
+);
+
+create table if not exists personality_facets (
+  id uuid primary key default gen_random_uuid(),
+  trait_id uuid not null references personality_traits (id) on delete cascade,
+  key text not null,
+  label_fa text not null,
+  description text not null default '',
+  display_order int not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (trait_id, key)
+);
+
+-- The 22+ professional behavioral dimensions — a module-wide catalog, not tied to one framework,
+-- since they describe workplace behavior rather than personality-trait theory.
+create table if not exists personality_behavioral_dimensions (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  default_weight numeric not null default 1 check (default_weight > 0),
+  related_trait_ids uuid[] not null default '{}',
+  related_facet_ids uuid[] not null default '{}',
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+-- Job Behavioral Profile: which dimensions matter for a given job_role, at what weight/threshold.
+-- job_role is a plain text column against the existing JobRole domain (same literal values as
+-- comp_job_role_config.job_role) — no new job-role table. Versioned (job roles can have more than
+-- one profile revision over time; only one should be active per job_role at a time, enforced at the
+-- application layer like comp_question_bank's own versioning, not a DB constraint).
+create table if not exists personality_job_behavioral_profiles (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  version int not null default 1,
+  title text not null,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+create index if not exists idx_personality_job_profiles_role on personality_job_behavioral_profiles (job_role) where active;
+
+create table if not exists personality_job_behavioral_requirements (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references personality_job_behavioral_profiles (id) on delete cascade,
+  dimension_id uuid not null references personality_behavioral_dimensions (id),
+  weight numeric not null default 1 check (weight > 0),
+  min_threshold numeric,
+  preferred_min numeric,
+  preferred_max numeric,
+  is_critical boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (profile_id, dimension_id)
+);
+
+-- Configurable response scales — Likert-5/7, frequency, importance, forced choice, ranking, etc.
+-- labels is [{value:int, label_fa:text}]; reverse_rule names the reversal strategy the scoring
+-- engine applies (computed server-side only, never in frontend code).
+create table if not exists personality_response_scales (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  min_value int not null,
+  max_value int not null,
+  labels jsonb not null default '[]'::jsonb,
+  scoring_rule text not null default 'linear',
+  reverse_rule text not null default 'mirror_min_max',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  check (max_value > min_value)
+);
+
+alter table personality_traits enable row level security;
+alter table personality_facets enable row level security;
+alter table personality_behavioral_dimensions enable row level security;
+alter table personality_job_behavioral_profiles enable row level security;
+alter table personality_job_behavioral_requirements enable row level security;
+alter table personality_response_scales enable row level security;
+alter table personality_frameworks enable row level security;
+
+-- Reference/config data: any authenticated user may read it (needed to render the designer wizard
+-- and, later, non-sensitive parts of the candidate UI); only an admin/assessment-designer may write.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'personality_frameworks', 'personality_traits', 'personality_facets',
+    'personality_behavioral_dimensions', 'personality_job_behavioral_profiles',
+    'personality_job_behavioral_requirements', 'personality_response_scales'
+  ]
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin" on %1$s for all using (personality_is_module_admin() or personality_is_assessment_designer()) with check (personality_is_module_admin() or personality_is_assessment_designer())',
+      t
+    );
+  end loop;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- Personality Question Bank — versioned + approval workflow, mirroring
+-- comp_question_bank's proven design exactly (see the reuse note above)
+-- rather than a separate table.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_questions (
+  id uuid primary key default gen_random_uuid(),
+  question_group_id uuid not null default gen_random_uuid(),
+  version int not null default 1,
+  superseded_by uuid references personality_questions (id),
+  framework_id uuid references personality_frameworks (id),
+  trait_id uuid references personality_traits (id),
+  facet_id uuid references personality_facets (id),
+  dimension_id uuid references personality_behavioral_dimensions (id),
+  question_type text not null check (question_type in ('LIKERT', 'FORCED_CHOICE', 'SJT', 'FREQUENCY', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')),
+  question_text text not null,
+  scenario_context text not null default '',
+  scale_id uuid references personality_response_scales (id),
+  -- For FORCED_CHOICE/SJT/PRIORITY_CHOICE: [{key, label_fa, ...}] — never exposes which option is
+  -- "correct" to the client beyond what the candidate-facing UI needs to render the choice itself.
+  options jsonb not null default '[]'::jsonb,
+  reverse_scored boolean not null default false,
+  job_role text,
+  complexity text not null default 'L1' check (complexity in ('L1', 'L2', 'L3', 'L4')),
+  weight numeric not null default 1 check (weight > 0),
+  active boolean not null default true,
+  approval_status text not null default 'PENDING_REVIEW' check (approval_status in ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_REVISION')),
+  -- Question-quality metadata: {clarity, construct_relevance, social_desirability_risk,
+  -- ambiguity_risk, double_barreled_risk, response_bias_risk} — 0-100 or null when not yet
+  -- assessed. Kept as jsonb rather than fixed columns since the exact metric set is expected to
+  -- evolve (future psychometric analytics).
+  quality jsonb not null default '{}'::jsonb,
+  usage_count int not null default 0,
+  last_used_at timestamptz,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  check (trait_id is not null or dimension_id is not null)
+);
+
+create index if not exists idx_personality_questions_group on personality_questions (question_group_id);
+create index if not exists idx_personality_questions_approval on personality_questions (approval_status);
+create index if not exists idx_personality_questions_dimension on personality_questions (dimension_id);
+create index if not exists idx_personality_questions_trait on personality_questions (trait_id);
+create index if not exists idx_personality_questions_job_role on personality_questions (job_role);
+create index if not exists idx_personality_questions_type on personality_questions (question_type);
+
+alter table personality_questions enable row level security;
+
+-- Mirrors comp_question_bank_insert exactly: an admin/designer row lands pre-approved; anyone
+-- else's lands as an inactive PENDING_REVIEW proposal, never visible in live assessment generation
+-- until approved.
+drop policy if exists "personality_questions_insert" on personality_questions;
+create policy "personality_questions_insert" on personality_questions
+  for insert with check (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+drop policy if exists "personality_questions_select" on personality_questions;
+create policy "personality_questions_select" on personality_questions
+  for select using (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or personality_is_report_viewer()
+    or created_by = auth.uid()
+  );
+
+drop policy if exists "personality_questions_update_admin" on personality_questions;
+create policy "personality_questions_update_admin" on personality_questions
+  for update using (personality_is_module_admin()) with check (personality_is_module_admin());
+
+drop policy if exists "personality_questions_delete_admin" on personality_questions;
+create policy "personality_questions_delete_admin" on personality_questions
+  for delete using (personality_is_module_admin());
+
+-- ----------------------------------------------------------------------------
+-- Assessment templates (reusable question-mix recipes) + the per-candidate
+-- assessment shell, linked to the EXISTING comp_assessments row rather than
+-- a parallel candidate model.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_assessment_templates (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null,
+  title text not null,
+  framework_id uuid references personality_frameworks (id),
+  job_profile_id uuid references personality_job_behavioral_profiles (id),
+  -- [{question_type, complexity, count}]
+  question_mix jsonb not null default '[]'::jsonb,
+  duration_minutes int check (duration_minutes is null or duration_minutes > 0),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+alter table personality_assessment_templates enable row level security;
+
+drop policy if exists "personality_assessment_templates_all" on personality_assessment_templates;
+create policy "personality_assessment_templates_all" on personality_assessment_templates
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  -- Reuses the EXISTING candidate/assessment record — a candidate is one person who may have both a
+  -- competency assessment and a personality assessment attached to the same comp_assessments row.
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  job_role text not null,
+  framework_id uuid references personality_frameworks (id),
+  job_profile_id uuid references personality_job_behavioral_profiles (id),
+  form_key text not null default 'A' check (form_key in ('A', 'B', 'C', 'D')),
+  -- Frozen snapshot once generated — same pattern as comp_assessments.selected_question_ids: an
+  -- array of personality_questions.id, immutable after generation.
+  selected_question_ids jsonb not null default '[]'::jsonb,
+  status text not null default 'DRAFT' check (status in (
+    'DRAFT', 'DESIGNED', 'GENERATED', 'ASSIGNED', 'STARTED', 'IN_PROGRESS', 'SUBMITTED',
+    'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED'
+  )),
+  -- Deterministic, rule-based pattern/watchpoint engine output — always computed, independent of
+  -- whether AI analysis has run; AI interpretation layers on top of this, never replaces it.
+  -- [{dimensions:[...], interpretation}] / [{dimensions:[...], topic}].
+  computed_patterns jsonb not null default '[]'::jsonb,
+  computed_watchpoints jsonb not null default '[]'::jsonb,
+  started_at timestamptz,
+  submitted_at timestamptz,
+  locked_at timestamptz,
+  locked_by uuid references profiles (id),
+  -- Separate from results_share_token below, same reasoning as comp_assessments'
+  -- self_service_token/results_share_token split: a leaked results link must never let someone
+  -- submit/overwrite answers, and vice versa.
+  candidate_token uuid not null default gen_random_uuid(),
+  results_share_token uuid not null default gen_random_uuid(),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (assessment_id)
+);
+create unique index if not exists idx_personality_assessments_candidate_token on personality_assessments (candidate_token);
+create unique index if not exists idx_personality_assessments_results_token on personality_assessments (results_share_token);
+create index if not exists idx_personality_assessments_assessment on personality_assessments (assessment_id);
+
+alter table personality_assessments enable row level security;
+
+create or replace function personality_can_access_assessment(p_personality_assessment_id uuid)
+returns boolean as $$
+  select personality_is_module_admin() or personality_is_report_viewer() or exists (
+    select 1 from personality_assessments pa
+    join comp_assessments a on a.id = pa.assessment_id
+    where pa.id = p_personality_assessment_id and (pa.created_by = auth.uid() or a.created_by = auth.uid())
+  );
+$$ language sql security definer stable;
+
+drop policy if exists "personality_assessments_select" on personality_assessments;
+create policy "personality_assessments_select" on personality_assessments
+  for select using (personality_can_access_assessment(id));
+
+drop policy if exists "personality_assessments_insert" on personality_assessments;
+create policy "personality_assessments_insert" on personality_assessments
+  for insert with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+drop policy if exists "personality_assessments_update" on personality_assessments;
+create policy "personality_assessments_update" on personality_assessments
+  for update using (personality_is_module_admin() or personality_is_assessment_designer() or created_by = auth.uid());
+
+drop policy if exists "personality_assessments_delete" on personality_assessments;
+create policy "personality_assessments_delete" on personality_assessments
+  for delete using (personality_is_module_admin() or created_by = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- Responses, scores, validity, AI analysis — all keyed off
+-- personality_assessments, visibility scoped the same way.
+-- ----------------------------------------------------------------------------
+
+create table if not exists personality_responses (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  question_id uuid not null references personality_questions (id),
+  -- {selected: number|string, selected_option?: text, rank?: [text]} — shape depends on question_type.
+  response_value jsonb not null,
+  response_time_ms int,
+  answered_at timestamptz not null default now(),
+  unique (personality_assessment_id, question_id)
+);
+alter table personality_responses enable row level security;
+
+drop policy if exists "personality_responses_select" on personality_responses;
+create policy "personality_responses_select" on personality_responses
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_responses_write" on personality_responses;
+create policy "personality_responses_write" on personality_responses
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_dimension_scores (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  score_kind text not null check (score_kind in ('TRAIT', 'FACET', 'BEHAVIORAL_DIMENSION')),
+  trait_id uuid references personality_traits (id),
+  facet_id uuid references personality_facets (id),
+  dimension_id uuid references personality_behavioral_dimensions (id),
+  raw_score numeric,
+  normalized_score numeric,
+  weighted_score numeric,
+  coverage_count int not null default 0,
+  confidence text not null default 'LOW' check (confidence in ('LOW', 'MEDIUM', 'HIGH')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+create index if not exists idx_personality_dimension_scores_assessment on personality_dimension_scores (personality_assessment_id);
+alter table personality_dimension_scores enable row level security;
+
+drop policy if exists "personality_dimension_scores_select" on personality_dimension_scores;
+create policy "personality_dimension_scores_select" on personality_dimension_scores
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_dimension_scores_write" on personality_dimension_scores;
+create policy "personality_dimension_scores_write" on personality_dimension_scores
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+create table if not exists personality_validity_results (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade unique,
+  completion_seconds int,
+  straight_lining_flag boolean not null default false,
+  extreme_response_rate numeric,
+  consistency_score numeric,
+  social_desirability_score numeric,
+  random_pattern_flag boolean not null default false,
+  missing_response_count int not null default 0,
+  contradiction_count int not null default 0,
+  overall_status text not null default 'VALID' check (overall_status in ('VALID', 'ACCEPTABLE', 'REVIEW_REQUIRED', 'INVALID')),
+  computed_at timestamptz not null default now()
+);
+alter table personality_validity_results enable row level security;
+
+drop policy if exists "personality_validity_results_select" on personality_validity_results;
+create policy "personality_validity_results_select" on personality_validity_results
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_validity_results_write" on personality_validity_results;
+create policy "personality_validity_results_write" on personality_validity_results
+  for all using (personality_is_module_admin() or personality_is_assessment_designer())
+  with check (personality_is_module_admin() or personality_is_assessment_designer());
+
+-- Mirrors comp_ai_analysis exactly — structured Gemini output, validated against a schema before
+-- storage (enforced by the Edge Function, a later phase).
+create table if not exists personality_ai_analysis (
+  id uuid primary key default gen_random_uuid(),
+  personality_assessment_id uuid not null references personality_assessments (id) on delete cascade,
+  model text not null,
+  analysis jsonb not null,
+  confidence text,
+  generated_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_personality_ai_analysis_assessment on personality_ai_analysis (personality_assessment_id, created_at desc);
+alter table personality_ai_analysis enable row level security;
+
+drop policy if exists "personality_ai_analysis_select" on personality_ai_analysis;
+create policy "personality_ai_analysis_select" on personality_ai_analysis
+  for select using (personality_can_access_assessment(personality_assessment_id));
+
+drop policy if exists "personality_ai_analysis_insert" on personality_ai_analysis;
+create policy "personality_ai_analysis_insert" on personality_ai_analysis
+  for insert with check (personality_can_access_assessment(personality_assessment_id));
+
+-- ----------------------------------------------------------------------------
+-- updated_at/updated_by triggers (reuses the existing set_updated_at_and_by()
+-- trigger function already used across the app).
+-- ----------------------------------------------------------------------------
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'personality_frameworks', 'personality_traits', 'personality_facets',
+    'personality_behavioral_dimensions', 'personality_job_behavioral_profiles',
+    'personality_questions', 'personality_assessment_templates', 'personality_assessments',
+    'personality_dimension_scores'
+  ]
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %1$s', t);
+    execute format('create trigger trg_set_updated_at before update on %1$s for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- Phase 1 catalog seed data (spec section 5, 6, 11, 67) — the reference
+-- CATALOG only (framework/traits/facets/behavioral dimensions/response
+-- scales/example job profiles), never fake candidate data, scores, or
+-- assessments. Every row here is fully editable by an admin afterward.
+-- Question CONTENT (the 100-300 actual personality/SJT items) is a later
+-- phase.
+-- ----------------------------------------------------------------------------
+
+insert into personality_frameworks (key, label_fa, description, version)
+values ('big_five', 'مدل پنج‌عاملی شخصیت (Big Five)', 'چارچوب پیش‌فرض و قابل‌تنظیم برای سنجش ویژگی‌های شخصیتی.', 1)
+on conflict (key) do nothing;
+
+with fw as (select id from personality_frameworks where key = 'big_five'),
+tr as (
+  insert into personality_traits (framework_id, key, label_fa, description, display_order)
+  select fw.id, v.key, v.label_fa, v.description, v.ord
+  from fw, (values
+    ('conscientiousness', 'وظیفه‌شناسی', 'نظم، پایبندی به تعهد، برنامه‌ریزی و پیگیری تا نتیجه.', 1),
+    ('emotional_stability', 'ثبات هیجانی', 'مدیریت استرس، تنظیم هیجانی و واکنش به فشار/شکست.', 2),
+    ('agreeableness', 'همسازی', 'همکاری، احترام، همدلی و رویکرد به تعارض.', 3),
+    ('extraversion', 'برون‌گرایی', 'ابتکار در ارتباط، قاطعیت، تعامل اجتماعی و رهبری.', 4),
+    ('openness', 'گشودگی به تجربه', 'یادگیری‌پذیری، کنجکاوی، نوآوری و پذیرش روش‌های جدید.', 5)
+  ) as v(key, label_fa, description, ord)
+  on conflict (framework_id, key) do nothing
+  returning id, key
+)
+insert into personality_facets (trait_id, key, label_fa, display_order)
+select tr.id, f.key, f.label_fa, f.ord
+from tr
+join (values
+  ('conscientiousness', 'discipline', 'نظم', 1),
+  ('conscientiousness', 'organization', 'سازمان‌دهی', 2),
+  ('conscientiousness', 'reliability', 'قابل‌اتکا بودن', 3),
+  ('conscientiousness', 'persistence', 'پشتکار', 4),
+  ('conscientiousness', 'achievement_orientation', 'گرایش به دستاورد', 5),
+  ('conscientiousness', 'planning_orientation', 'گرایش به برنامه‌ریزی', 6),
+  ('conscientiousness', 'attention_to_detail', 'دقت به جزئیات', 7),
+  ('conscientiousness', 'follow_through', 'پیگیری تا انتها', 8),
+  ('emotional_stability', 'stress_management', 'مدیریت استرس', 1),
+  ('emotional_stability', 'emotional_regulation', 'تنظیم هیجانی', 2),
+  ('emotional_stability', 'pressure_tolerance', 'تحمل فشار', 3),
+  ('emotional_stability', 'composure', 'خونسردی', 4),
+  ('emotional_stability', 'resilience', 'تاب‌آوری', 5),
+  ('emotional_stability', 'reaction_to_setbacks', 'واکنش به ناکامی', 6),
+  ('agreeableness', 'cooperation', 'همکاری', 1),
+  ('agreeableness', 'respectfulness', 'احترام', 2),
+  ('agreeableness', 'empathy', 'همدلی', 3),
+  ('agreeableness', 'team_orientation', 'گرایش تیمی', 4),
+  ('agreeableness', 'interpersonal_flexibility', 'انعطاف بین‌فردی', 5),
+  ('agreeableness', 'conflict_approach', 'رویکرد به تعارض', 6),
+  ('extraversion', 'communication_initiative', 'ابتکار در ارتباط', 1),
+  ('extraversion', 'assertiveness', 'قاطعیت', 2),
+  ('extraversion', 'social_engagement', 'تعامل اجتماعی', 3),
+  ('extraversion', 'influence', 'نفوذ', 4),
+  ('extraversion', 'leadership_expression', 'بروز رهبری', 5),
+  ('openness', 'learning_agility', 'چابکی یادگیری', 1),
+  ('openness', 'curiosity', 'کنجکاوی', 2),
+  ('openness', 'innovation', 'نوآوری', 3),
+  ('openness', 'adaptability', 'انطباق‌پذیری', 4),
+  ('openness', 'conceptual_thinking', 'تفکر مفهومی', 5),
+  ('openness', 'acceptance_of_new_methods', 'پذیرش روش‌های جدید', 6)
+) as f(trait_key, key, label_fa, ord) on f.trait_key = tr.key
+on conflict (trait_id, key) do nothing;
+
+insert into personality_behavioral_dimensions (key, label_fa, description)
+values
+  ('ACCOUNTABILITY', 'پاسخگویی', 'پذیرش مسئولیت نتایج کار خود، حتی در شرایط نامطلوب.'),
+  ('DISCIPLINE', 'نظم کاری', 'پایبندی به رویه‌ها، زمان‌بندی و استانداردهای کاری.'),
+  ('OWNERSHIP', 'مالکیت کار', 'برخورد با مسئله به‌عنوان مسئله خود، نه انتظار برای دستور دیگران.'),
+  ('PERSISTENCE', 'پشتکار', 'ادامه تلاش در کارهای دشوار یا کندپیشرفت.'),
+  ('SAFETY_ORIENTATION', 'گرایش ایمنی', 'اولویت‌دهی واقعی به ایمنی در تصمیم‌ها و رفتار روزمره.'),
+  ('INTEGRITY_ORIENTATION', 'گرایش به درستکاری', 'صداقت و شفافیت در گزارش‌دهی و تصمیم‌گیری حرفه‌ای.'),
+  ('RISK_AWARENESS', 'آگاهی از ریسک', 'شناسایی و در نظر گرفتن ریسک پیش از تصمیم‌گیری.'),
+  ('DECISION_CONFIDENCE', 'اطمینان در تصمیم‌گیری', 'توان تصمیم‌گیری به‌موقع با وجود عدم قطعیت.'),
+  ('DECISION_QUALITY', 'کیفیت تصمیم', 'استدلال منطقی و مستند در فرآیند تصمیم‌گیری.'),
+  ('PROBLEM_OWNERSHIP', 'مالکیت حل مسئله', 'پیگیری یک مسئله تا حل واقعی آن، نه صرفاً گزارش آن.'),
+  ('ANALYTICAL_THINKING', 'تفکر تحلیلی', 'تجزیه مسئله به اجزا و استفاده از داده برای تصمیم‌گیری.'),
+  ('DETAIL_ORIENTATION', 'دقت به جزئیات', 'توجه به جزئیات فنی/اجرایی که بر کیفیت نتیجه اثر دارند.'),
+  ('ADAPTABILITY', 'انطباق‌پذیری', 'تعدیل رویکرد در برابر تغییر شرایط یا اطلاعات جدید.'),
+  ('LEARNING_AGILITY', 'چابکی یادگیری', 'سرعت و کیفیت یادگیری از تجربه و بازخورد.'),
+  ('CONFLICT_MANAGEMENT', 'مدیریت تعارض', 'رسیدگی سازنده به اختلاف‌نظر حرفه‌ای.'),
+  ('COMMUNICATION', 'ارتباطات', 'وضوح، به‌موقع بودن و اثربخشی ارتباط حرفه‌ای.'),
+  ('STAKEHOLDER_ORIENTATION', 'گرایش به ذی‌نفعان', 'در نظر گرفتن نیاز و انتظار طرف‌های ذی‌نفع پروژه.'),
+  ('TEAMWORK', 'کار تیمی', 'مشارکت مؤثر و حمایت از موفقیت تیم.'),
+  ('LEADERSHIP', 'رهبری', 'هدایت، الهام‌بخشی و مسئولیت‌پذیری در قبال عملکرد دیگران.'),
+  ('INITIATIVE', 'ابتکار عمل', 'اقدام پیش‌دستانه بدون نیاز به دستور صریح.'),
+  ('RULE_ORIENTATION', 'گرایش به رویه', 'پایبندی به مقررات، استانداردها و رویه‌های تعریف‌شده.'),
+  ('COMMERCIAL_AWARENESS', 'آگاهی تجاری/قراردادی', 'درک اثر تصمیم‌ها بر هزینه، قرارداد و منافع پروژه.'),
+  ('DOCUMENTATION_DISCIPLINE', 'نظم مستندسازی', 'ثبت دقیق و به‌موقع مدارک و سوابق کاری.'),
+  ('ESCALATION_JUDGMENT', 'قضاوت در ارجاع', 'تشخیص درست زمان و نحوه ارجاع مسئله به سطح بالاتر.')
+on conflict (key) do nothing;
+
+insert into personality_response_scales (key, label_fa, min_value, max_value, labels, scoring_rule, reverse_rule)
+values
+  ('likert_7', 'لیکرت ۷ درجه‌ای (توافق)', 1, 7,
+   '[{"value":1,"label_fa":"کاملاً مخالفم"},{"value":2,"label_fa":"مخالفم"},{"value":3,"label_fa":"نسبتاً مخالفم"},{"value":4,"label_fa":"خنثی"},{"value":5,"label_fa":"نسبتاً موافقم"},{"value":6,"label_fa":"موافقم"},{"value":7,"label_fa":"کاملاً موافقم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('likert_5', 'لیکرت ۵ درجه‌ای (توافق)', 1, 5,
+   '[{"value":1,"label_fa":"کاملاً مخالفم"},{"value":2,"label_fa":"مخالفم"},{"value":3,"label_fa":"خنثی"},{"value":4,"label_fa":"موافقم"},{"value":5,"label_fa":"کاملاً موافقم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('frequency_5', 'فراوانی رفتار (۵ درجه)', 1, 5,
+   '[{"value":1,"label_fa":"هرگز"},{"value":2,"label_fa":"بندرت"},{"value":3,"label_fa":"گاهی"},{"value":4,"label_fa":"اغلب"},{"value":5,"label_fa":"همیشه"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('importance_5', 'اهمیت (۵ درجه)', 1, 5,
+   '[{"value":1,"label_fa":"بی‌اهمیت"},{"value":2,"label_fa":"کم‌اهمیت"},{"value":3,"label_fa":"متوسط"},{"value":4,"label_fa":"مهم"},{"value":5,"label_fa":"بسیار مهم"}]'::jsonb,
+   'linear', 'mirror_min_max'),
+  ('forced_choice_2', 'انتخاب اجباری (دو گزینه‌ای)', 1, 2, '[]'::jsonb, 'categorical', 'not_applicable'),
+  ('sjt_rank', 'رتبه‌بندی گزینه‌های موقعیتی', 1, 4, '[]'::jsonb, 'rank_weighted', 'not_applicable')
+on conflict (key) do nothing;
+
+-- Example job behavioral profiles (spec section 8) — templates, not fixed psychological truths;
+-- admins can edit weights/thresholds or add more roles.
+with pm as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('project_manager', 'نیم‌رخ رفتاری پیش‌فرض — مدیر پروژه')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pm.id, d.id, v.weight, v.min_threshold, v.is_critical
+from pm
+join (values
+  ('ACCOUNTABILITY', 12, 70, true),
+  ('OWNERSHIP', 10, 65, false),
+  ('DECISION_CONFIDENCE', 10, 65, false),
+  ('LEADERSHIP', 12, 65, false),
+  ('STAKEHOLDER_ORIENTATION', 10, 60, false),
+  ('CONFLICT_MANAGEMENT', 10, 60, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with pm as (select id from personality_job_behavioral_profiles where job_role = 'project_manager')
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pm.id, d.id, 8, 55, false
+from pm, personality_behavioral_dimensions d
+where d.key in ('ADAPTABILITY', 'RISK_AWARENESS', 'SAFETY_ORIENTATION', 'INTEGRITY_ORIENTATION', 'COMMUNICATION')
+on conflict (profile_id, dimension_id) do nothing;
+
+with wi as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('welding_inspector', 'نیم‌رخ رفتاری پیش‌فرض — بازرس جوش')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select wi.id, d.id, v.weight, v.min_threshold, v.is_critical
+from wi
+join (values
+  ('DETAIL_ORIENTATION', 15, 75, true),
+  ('RULE_ORIENTATION', 12, 70, true),
+  ('SAFETY_ORIENTATION', 15, 75, true),
+  ('INTEGRITY_ORIENTATION', 12, 70, true),
+  ('PERSISTENCE', 10, 60, false),
+  ('DOCUMENTATION_DISCIPLINE', 10, 65, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with hse as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('hse_specialist', 'نیم‌رخ رفتاری پیش‌فرض — کارشناس HSE')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select hse.id, d.id, v.weight, v.min_threshold, v.is_critical
+from hse
+join (values
+  ('SAFETY_ORIENTATION', 18, 80, true),
+  ('RULE_ORIENTATION', 12, 70, false),
+  ('RISK_AWARENESS', 15, 75, true),
+  ('INTEGRITY_ORIENTATION', 12, 70, false),
+  ('CONFLICT_MANAGEMENT', 10, 60, false),
+  ('ESCALATION_JUDGMENT', 12, 65, true),
+  ('COMMUNICATION', 10, 60, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+with pc as (
+  insert into personality_job_behavioral_profiles (job_role, title)
+  values ('project_control_specialist', 'نیم‌رخ رفتاری پیش‌فرض — کارشناس کنترل پروژه')
+  returning id
+)
+insert into personality_job_behavioral_requirements (profile_id, dimension_id, weight, min_threshold, is_critical)
+select pc.id, d.id, v.weight, v.min_threshold, v.is_critical
+from pc
+join (values
+  ('ANALYTICAL_THINKING', 18, 75, true),
+  ('DISCIPLINE', 12, 70, false),
+  ('DETAIL_ORIENTATION', 12, 70, false),
+  ('PERSISTENCE', 10, 60, false),
+  ('DOCUMENTATION_DISCIPLINE', 12, 65, false)
+) as v(dim_key, weight, min_threshold, is_critical) on true
+join personality_behavioral_dimensions d on d.key = v.dim_key
+on conflict (profile_id, dimension_id) do nothing;
+
+-- ============================================================================
+-- Section 41: Personality & Behavioral Assessment Engine — Phase 3: server-side
+-- scoring engine + candidate RPCs. Scoring is centralized here (never in
+-- frontend code) and always computed from personality_responses — the
+-- frontend only ever reads the resulting personality_dimension_scores/
+-- personality_validity_results rows.
+-- ============================================================================
+
+-- comp_question_bank_public()-equivalent: a safe, non-sensitive projection of a personality
+-- question for the candidate-facing UI — strips dimension_key/score from every option (candidate
+-- must never see which trait/dimension is measured or how an option scores). Scale metadata is
+-- inlined here (rather than a separate personality_response_scales lookup) because the
+-- candidate-taking flow is anonymous and personality_response_scales' RLS is authenticated-only.
+create or replace function personality_question_public(p_ids uuid[])
+returns table (
+  id uuid, question_type text, question_text text, scenario_context text, scale_id uuid, options jsonb, complexity text,
+  scale_key text, scale_min_value int, scale_max_value int, scale_labels jsonb
+) as $$
+  select
+    q.id, q.question_type, q.question_text, q.scenario_context, q.scale_id,
+    coalesce(
+      (select jsonb_agg(jsonb_build_object('key', opt->>'key', 'label_fa', opt->>'label_fa') order by opt->>'key')
+       from jsonb_array_elements(q.options) as opt),
+      '[]'::jsonb
+    ) as options,
+    q.complexity,
+    s.key, s.min_value, s.max_value, s.labels
+  from personality_questions q
+  left join personality_response_scales s on s.id = q.scale_id
+  where q.id = any(p_ids);
+$$ language sql security definer stable;
+
+grant execute on function personality_question_public(uuid[]) to anon, authenticated;
+
+-- Candidate-taking flow (anon, via candidate_token — never the same token as results_share_token).
+
+create or replace function personality_candidate_get(p_token uuid)
+returns table (
+  id uuid, status text, selected_question_ids jsonb, started_at timestamptz, submitted_at timestamptz
+) as $$
+  select pa.id, pa.status, pa.selected_question_ids, pa.started_at, pa.submitted_at
+  from personality_assessments pa
+  where pa.candidate_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_candidate_get(uuid) to anon, authenticated;
+
+create or replace function personality_candidate_start(p_token uuid)
+returns void as $$
+  update personality_assessments
+  set status = case when status = 'DESIGNED' or status = 'GENERATED' or status = 'ASSIGNED' then 'STARTED' else status end,
+      started_at = coalesce(started_at, now())
+  where candidate_token = p_token and status not in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+$$ language sql security definer;
+
+grant execute on function personality_candidate_start(uuid) to anon, authenticated;
+
+create or replace function personality_candidate_submit_response(p_token uuid, p_question_id uuid, p_response jsonb, p_response_time_ms int default null)
+returns void as $$
+declare
+  v_id uuid;
+  v_status text;
+begin
+  select pa.id, pa.status into v_id, v_status from personality_assessments pa where pa.candidate_token = p_token;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  if v_status in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED') then
+    raise exception 'assessment already submitted';
+  end if;
+  update personality_assessments set status = 'IN_PROGRESS' where id = v_id and status = 'STARTED';
+  insert into personality_responses (personality_assessment_id, question_id, response_value, response_time_ms)
+  values (v_id, p_question_id, p_response, p_response_time_ms)
+  on conflict (personality_assessment_id, question_id)
+  do update set response_value = excluded.response_value, response_time_ms = excluded.response_time_ms, answered_at = now();
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_candidate_submit_response(uuid, uuid, jsonb, int) to anon, authenticated;
+
+-- Scoring engine. Idempotent (re-running after a reopen recomputes cleanly). Never claims
+-- population percentiles — normalized 0-100 only.
+create or replace function personality_score_assessment(p_id uuid)
+returns void as $$
+declare
+  pa personality_assessments%rowtype;
+  v_straight_lining boolean := false;
+  v_missing int := 0;
+  v_total_selected int := 0;
+  v_completion_seconds int;
+begin
+  select * into pa from personality_assessments where id = p_id;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+
+  delete from personality_dimension_scores where personality_assessment_id = p_id;
+
+  -- TRAIT scores (Big Five) — average of normalized 0-1 LIKERT/FREQUENCY item scores tied to a
+  -- trait, reverse-scored items mirrored around the scale midpoint first.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, trait_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'TRAIT', x.trait_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 5 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.trait_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.trait_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.trait_id;
+
+  -- FACET scores — same source, grouped by facet.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, facet_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'FACET', x.facet_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 3 then 'HIGH' when count(*) >= 1 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.facet_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.facet_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.facet_id;
+
+  -- BEHAVIORAL_DIMENSION scores — LIKERT/FREQUENCY items tied directly to a dimension, PLUS
+  -- FORCED_CHOICE/SJT/PRIORITY_CHOICE/EXPERIENCE_ANCHORED items resolved via the chosen option's
+  -- embedded dimension_key/score (SJT/EA/PRIORITY_CHOICE options carry a 0-5 quality score;
+  -- FORCED_CHOICE is ipsative, so a chosen side counts as full credit toward its own construct).
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, dimension_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'BEHAVIORAL_DIMENSION', x.dim_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 4 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.dimension_id as dim_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.dimension_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+
+    union all
+
+    select d.id as dim_id,
+      case when q.question_type = 'FORCED_CHOICE' then 1.0 else (opt->>'score')::numeric / 5.0 end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    cross join lateral jsonb_array_elements(q.options) as opt
+    join personality_behavioral_dimensions d on d.key = (opt->>'dimension_key')
+    where r.personality_assessment_id = p_id
+      and q.question_type in ('FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')
+      and (r.response_value->>'selected_option') = (opt->>'key')
+  ) x
+  where x.v is not null
+  group by x.dim_id;
+
+  -- Response validity — evidence for review, never an automatic dishonesty verdict.
+  -- Straight-lining: candidate picked the single most common LIKERT/FREQUENCY value on more than
+  -- 90% of those items (only evaluated once there are enough such items to mean anything).
+  select (count(*) filter (where v = mode_v))::numeric / nullif(count(*), 0) > 0.9
+  into v_straight_lining
+  from (
+    select (r.response_value->>'selected')::numeric as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    where r.personality_assessment_id = p_id and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ) vals
+  cross join lateral (select mode() within group (order by v) as mode_v from (
+    select (r2.response_value->>'selected')::numeric as v
+    from personality_responses r2
+    join personality_questions q2 on q2.id = r2.question_id
+    where r2.personality_assessment_id = p_id and q2.question_type in ('LIKERT', 'FREQUENCY') and (r2.response_value ? 'selected')
+  ) inner_vals) m
+  having count(*) >= 8;
+
+  v_straight_lining := coalesce(v_straight_lining, false);
+
+  select jsonb_array_length(pa.selected_question_ids) into v_total_selected;
+  select v_total_selected - count(*) into v_missing from personality_responses where personality_assessment_id = p_id;
+  v_completion_seconds := case when pa.started_at is not null then greatest(0, extract(epoch from (now() - pa.started_at))::int) else null end;
+
+  insert into personality_validity_results (
+    personality_assessment_id, completion_seconds, straight_lining_flag, missing_response_count, overall_status
+  )
+  values (
+    p_id, v_completion_seconds, v_straight_lining, greatest(0, coalesce(v_missing, 0)),
+    case when v_straight_lining or coalesce(v_missing, 0) > 0 then 'REVIEW_REQUIRED' else 'ACCEPTABLE' end
+  )
+  on conflict (personality_assessment_id) do update set
+    completion_seconds = excluded.completion_seconds,
+    straight_lining_flag = excluded.straight_lining_flag,
+    missing_response_count = excluded.missing_response_count,
+    overall_status = excluded.overall_status,
+    computed_at = now();
+
+  -- Deterministic, rule-based watchpoints — never a diagnosis, just a flag for structured-interview
+  -- follow-up when a behavioral dimension scores low.
+  update personality_assessments pa2
+  set computed_watchpoints = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'topic', 'در مصاحبه ساختاریافته، شواهد بیشتری درباره «' || d.label_fa || '» بررسی شود.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score < 40
+  ), '[]'::jsonb),
+  computed_patterns = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'interpretation', 'الگوی پاسخ نشان‌دهنده تمایل نسبتاً قوی در حوزه «' || d.label_fa || '» است.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score >= 80
+  ), '[]'::jsonb),
+  status = 'FINGERPRINT',
+  submitted_at = coalesce(pa2.submitted_at, now()),
+  updated_at = now()
+  where pa2.id = p_id;
+
+  perform comp_log_audit('PERSONALITY_ASSESSMENT_SCORED', 'personality_assessments', p_id, null, jsonb_build_object('status', 'FINGERPRINT'));
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_score_assessment(uuid) to authenticated;
+
+-- Candidate-facing finalize: marks submitted and scores in one call, callable by the anon
+-- candidate-taking flow via their own token (never requires a RASTA login).
+create or replace function personality_candidate_finalize(p_token uuid)
+returns void as $$
+declare
+  v_id uuid;
+begin
+  select id into v_id from personality_assessments where candidate_token = p_token;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  update personality_assessments set status = 'SUBMITTED', submitted_at = coalesce(submitted_at, now()) where id = v_id;
+  perform personality_score_assessment(v_id);
+end;
+$$ language plpgsql security definer;
+
+grant execute on function personality_candidate_finalize(uuid) to anon, authenticated;
+
+-- Lets the anon candidate-taking UI resume mid-way after a page reload — returns only this
+-- candidate's own already-submitted answers (scoped by their own token, never another candidate's).
+create or replace function personality_candidate_get_responses(p_token uuid)
+returns table (question_id uuid, response_value jsonb) as $$
+  select r.question_id, r.response_value
+  from personality_responses r
+  join personality_assessments pa on pa.id = r.personality_assessment_id
+  where pa.candidate_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_candidate_get_responses(uuid) to anon, authenticated;
+
+-- Public "view results online" link (analogous to comp_public_results_get) — read-only,
+-- non-sensitive projection only (no raw item-level answers, no reference content).
+create or replace function personality_public_results_get(p_token uuid)
+returns table (
+  id uuid, job_role text, status text, submitted_at timestamptz,
+  dimension_scores jsonb, validity_status text
+) as $$
+  select
+    pa.id, pa.job_role, pa.status, pa.submitted_at,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'scoreKind', ds.score_kind,
+        'traitKey', t.key, 'traitLabelFa', t.label_fa,
+        'facetKey', f.key, 'facetLabelFa', f.label_fa,
+        'dimensionKey', d.key, 'dimensionLabelFa', d.label_fa,
+        'normalizedScore', ds.normalized_score, 'coverageCount', ds.coverage_count, 'confidence', ds.confidence
+      ))
+      from personality_dimension_scores ds
+      left join personality_traits t on t.id = ds.trait_id
+      left join personality_facets f on f.id = ds.facet_id
+      left join personality_behavioral_dimensions d on d.id = ds.dimension_id
+      where ds.personality_assessment_id = pa.id
+    ), '[]'::jsonb),
+    (select vr.overall_status from personality_validity_results vr where vr.personality_assessment_id = pa.id)
+  from personality_assessments pa
+  where pa.results_share_token = p_token;
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 42: Personality & Behavioral Assessment Engine — question usage
+-- tracking. Mirrors comp_increment_question_usage exactly (Section 34): a
+-- narrow, low-risk RPC (bumping a counter can't leak or corrupt anything
+-- sensitive) so a plain designer generating an assessment — who has no
+-- general UPDATE grant on personality_questions (admin-only) — can still
+-- bump usage_count without a dedicated table-level policy.
+-- ----------------------------------------------------------------------------
+
+create or replace function personality_increment_question_usage(p_ids uuid[])
+returns void as $$
+  update personality_questions
+  set usage_count = usage_count + 1, last_used_at = now()
+  where id = any(p_ids) and auth.uid() is not null;
+$$ language sql security definer;
+
+grant execute on function personality_increment_question_usage(uuid[]) to authenticated;
+
+grant execute on function personality_public_results_get(uuid) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Section 43: Personality & Behavioral Assessment Engine — module-scoped role
+-- management RPCs. Mirrors comp_grant_role/comp_revoke_role/
+-- comp_list_role_assignments exactly (Section 32): rasta_user_roles is a
+-- sitewide table gated to GLOBAL admins only (is_admin_user()), but a
+-- personality-only module admin (personality_is_module_admin(), who may not
+-- be a global admin) still needs to manage PERSONALITY_ASSESSMENT_DESIGNER/
+-- PERSONALITY_REPORT_VIEWER grants from the module's own Settings page. These
+-- narrow SECURITY DEFINER RPCs let them do exactly that, scoped to only these
+-- two role names, without broadening the generic rasta_user_roles policy.
+-- ----------------------------------------------------------------------------
+
+create or replace function personality_grant_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not personality_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('PERSONALITY_ASSESSMENT_DESIGNER', 'PERSONALITY_REPORT_VIEWER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    raise exception 'role not found';
+  end if;
+  insert into rasta_user_roles (user_id, role_id, created_by)
+  values (p_user_id, v_role_id, auth.uid())
+  on conflict (user_id, role_id) do nothing;
+end;
+$$ language plpgsql security definer;
+
+create or replace function personality_revoke_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not personality_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    return;
+  end if;
+  delete from rasta_user_roles where user_id = p_user_id and role_id = v_role_id;
+end;
+$$ language plpgsql security definer;
+
+create or replace function personality_list_role_assignments(p_role_name text)
+returns table (user_id uuid, created_by uuid, created_at timestamptz) as $$
+  select ur.user_id, ur.created_by, ur.created_at
+  from rasta_user_roles ur
+  join rasta_roles r on r.id = ur.role_id
+  where r.name = p_role_name and personality_is_module_admin();
+$$ language sql security definer stable;
+
+-- ============================================================================
+-- Section 44: Integrated Exam Design Panel (spec follow-up) — lets a
+-- competency ASSESSMENT_DESIGNER decide, per candidate, whether a personality
+-- assessment and/or the technical assessment are required, from a new stage
+-- in the candidate wizard positioned right after "پنل مصاحبه‌گران". This is
+-- also the bridge point where the Personality module — previously its own
+-- standalone top-level module — gets embedded into the Competency module's
+-- own candidate flow instead: rather than duplicating RBAC, a competency
+-- ASSESSMENT_DESIGNER is granted the same standing as a
+-- PERSONALITY_ASSESSMENT_DESIGNER (see the redefinition below), so the same
+-- person configuring the technical question mix here can also configure and
+-- read the personality assessment for the same candidate without a second,
+-- separate module-admin grant.
+-- ============================================================================
+
+alter table comp_assessments add column if not exists needs_personality_assessment boolean not null default false;
+alter table comp_assessments add column if not exists needs_technical_assessment boolean not null default true;
+
+-- Narrow, single-purpose RPC (same reasoning as comp_increment_question_usage/comp_reopen_assessment):
+-- the general comp_assessments UPDATE policy is scoped to the assessment's own lead, but deciding
+-- the exam design is an ASSESSMENT_DESIGNER-only action, which may not be the same person.
+create or replace function comp_set_exam_design(p_assessment_id uuid, p_needs_personality boolean, p_needs_technical boolean)
+returns void as $$
+begin
+  if not (comp_is_assessment_designer() or comp_is_module_admin()) then
+    raise exception 'forbidden';
+  end if;
+  update comp_assessments
+  set needs_personality_assessment = p_needs_personality, needs_technical_assessment = p_needs_technical
+  where id = p_assessment_id;
+  perform comp_log_audit(
+    'EXAM_DESIGN_SET', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object('needsPersonalityAssessment', p_needs_personality, 'needsTechnicalAssessment', p_needs_technical)
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Bridges the two modules' designer roles: a competency ASSESSMENT_DESIGNER (the group the user
+-- chose to reuse for the whole exam design panel, including the personality mix) is now
+-- automatically also a personality-module assessment designer, without a second, separate grant.
+-- personality_is_report_viewer() and every RLS policy built on personality_is_assessment_designer()
+-- (question bank write, template management, personality_can_access_assessment, etc.) inherit this
+-- for free — no other policy needs to change.
+create or replace function personality_is_assessment_designer()
+returns boolean as $$
+  select personality_is_module_admin() or comp_is_assessment_designer() or rasta_has_permission(auth.uid(), 'personality', 'configure');
+$$ language sql security definer stable;
+
+-- ----------------------------------------------------------------------------
+-- Section 45: Personality module no longer a standalone top-level module (see
+-- Section 44's Exam Design Panel) — deactivate its rasta_modules row so it no
+-- longer shows as a toggleable environment in the admin access matrix or in
+-- rasta_my_accessible_modules(). Deliberately just deactivated, not deleted:
+-- rasta_has_permission()/personality_is_assessment_designer() etc. read
+-- rasta_permissions/rasta_role_permissions directly and never join through
+-- rasta_modules, so this has no effect on any real RBAC check — it only hides
+-- the now-meaningless top-level entry.
+-- ----------------------------------------------------------------------------
+
+update rasta_modules set is_active = false where key = 'personality';
+
+-- ============================================================================
+-- Section 46: Unified Candidate AI Analysis (spec follow-up) — replaces the
+-- two separate comp_ai_analysis (technical-only) and personality_ai_analysis
+-- (personality-only) analyses with ONE comprehensive, evidence-based analysis
+-- per candidate, covering personality profiling, behavioral pattern,
+-- technical/specialized evaluation, and job-fit together — generated by a
+-- single Gemini call that reads BOTH the technical and personality data for
+-- the same comp_assessments row. The two old tables/edge functions are left
+-- in place untouched (historical data, never deleted), but the frontend
+-- stops surfacing/generating them in favor of this one.
+-- ============================================================================
+
+create table if not exists comp_candidate_ai_analysis (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  model text not null,
+  analysis jsonb not null,
+  confidence text,
+  generated_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_comp_candidate_ai_analysis_assessment on comp_candidate_ai_analysis (assessment_id, created_at desc);
+alter table comp_candidate_ai_analysis enable row level security;
+
+-- Same permissive, any-authenticated-user policy already used for comp_ai_analysis/
+-- personality_ai_analysis — a deliberate existing choice in this codebase, not a new relaxation.
+drop policy if exists "comp_candidate_ai_analysis_select" on comp_candidate_ai_analysis;
+create policy "comp_candidate_ai_analysis_select" on comp_candidate_ai_analysis
+  for select using (auth.uid() is not null);
+
+drop policy if exists "comp_candidate_ai_analysis_insert" on comp_candidate_ai_analysis;
+create policy "comp_candidate_ai_analysis_insert" on comp_candidate_ai_analysis
+  for insert with check (auth.uid() is not null);
+
+-- ============================================================================
+-- Section 47: Enterprise Competency Assessment Engine — Phase 1: configurable
+-- Job Role catalog + a unified Competency Model spanning both technical and
+-- behavioral evidence.
+--
+-- Reuse note (per explicit instruction to extend rather than duplicate):
+-- job_role was ALREADY plain `text` everywhere (comp_assessments, comp_
+-- question_bank, personality_*) with no DB-level CHECK constraint against a
+-- fixed list — the "fixed enum" only ever existed in the frontend's JobRole
+-- TypeScript union. comp_job_role_config already existed as a real,
+-- admin-writable, one-row-per-role config table (allowed_question_types) —
+-- rather than creating a parallel comp_job_roles table, this EXTENDS that
+-- exact table into the full configurable job-role catalog (adding a
+-- label/description/active/sort_order), so adding "a future role" from now
+-- on is a single INSERT, no code change, no new table.
+--
+-- comp_competencies/comp_job_competency_requirements are genuinely new: no
+-- existing entity spans BOTH technical and behavioral evidence under one
+-- named competency. This generalizes the exact pattern already proven by
+-- personality_job_behavioral_profiles/personality_job_behavioral_requirements
+-- (Section 40) — same shape (required level, critical flag, weight per job)
+-- — but scoped to job_role directly (via comp_job_role_config) rather than a
+-- separate "profile" indirection, and to a domain-tagged competency instead
+-- of a behavioral-dimension-only one. Evidence-source wiring (which
+-- assessments/items actually feed each competency's score) is deliberately
+-- OUT of scope here — that is the next phase (Evidence Engine) — this phase
+-- is the catalog/model only.
+-- ============================================================================
+
+alter table comp_job_role_config add column if not exists label_fa text not null default '';
+alter table comp_job_role_config add column if not exists description text not null default '';
+alter table comp_job_role_config add column if not exists active boolean not null default true;
+alter table comp_job_role_config add column if not exists sort_order int not null default 0;
+alter table comp_job_role_config add column if not exists created_at timestamptz not null default now();
+
+-- Backfill the 12 pre-existing roles' Persian labels/order — mirrors JOB_ROLE_LABEL_FA/JOB_ROLES
+-- from src/modules/competency/types.ts exactly, so nothing in the UI changes when this ships.
+update comp_job_role_config set label_fa = v.label_fa, sort_order = v.sort_order
+from (values
+  ('project_manager', 'مدیر پروژه', 1),
+  ('welding_inspector', 'بازرس جوش', 2),
+  ('mechanical_piping_inspector', 'بازرس مکانیک/پایپینگ', 3),
+  ('pipeline_inspector', 'بازرس خط لوله', 4),
+  ('coating_cp_inspector', 'بازرس پوشش و حفاظت کاتدی', 5),
+  ('radiography_interpreter', 'مفسر رادیوگرافی', 6),
+  ('civil_engineer', 'مهندس عمران', 7),
+  ('project_control_specialist', 'کارشناس کنترل پروژه', 8),
+  ('hse_specialist', 'کارشناس HSE', 9),
+  ('contracts_specialist', 'کارشناس قراردادها', 10),
+  ('site_supervisor', 'سرپرست کارگاه', 11),
+  ('inspection_body_supervisor', 'سرپرست نهاد بازرسی', 12)
+) as v(job_role, label_fa, sort_order)
+where comp_job_role_config.job_role = v.job_role and comp_job_role_config.label_fa = '';
+
+create table if not exists comp_competencies (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label_fa text not null,
+  description text not null default '',
+  -- Which evidence domain(s) this competency conceptually draws from — informs the Evidence
+  -- Engine (next phase) which assessment types are even relevant, without yet defining the exact
+  -- weighted evidence-source mapping.
+  domain text not null default 'HYBRID' check (domain in ('TECHNICAL', 'BEHAVIORAL', 'HYBRID')),
+  -- Configurable proficiency scale — mirrors personality_response_scales' own jsonb-labels
+  -- pattern rather than a fixed level count baked into a column.
+  proficiency_levels jsonb not null default
+    '[{"level":1,"label_fa":"مبتدی"},{"level":2,"label_fa":"کارآمد"},{"level":3,"label_fa":"ماهر"},{"level":4,"label_fa":"متخصص"},{"level":5,"label_fa":"استاد"}]'::jsonb,
+  active boolean not null default true,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create table if not exists comp_job_competency_requirements (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null references comp_job_role_config (job_role) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  required_level numeric not null,
+  is_critical boolean not null default false,
+  weight numeric not null default 1 check (weight > 0),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (job_role, competency_id)
+);
+
+create index if not exists idx_comp_job_competency_requirements_job_role on comp_job_competency_requirements (job_role);
+create index if not exists idx_comp_job_competency_requirements_competency on comp_job_competency_requirements (competency_id);
+
+alter table comp_competencies enable row level security;
+alter table comp_job_competency_requirements enable row level security;
+
+-- Same "any authenticated user reads, admin-or-assessment-designer writes" pattern already used
+-- for comp_job_role_config/personality_job_behavioral_requirements — reused verbatim, not a new
+-- policy shape.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competencies', 'comp_job_competency_requirements']
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin_or_designer" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin_or_designer" on %1$s for all using (comp_is_module_admin() or comp_is_assessment_designer()) with check (comp_is_module_admin() or comp_is_assessment_designer())',
+      t
+    );
+  end loop;
+end $$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competencies', 'comp_job_competency_requirements']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- ============================================================================
+-- Section 48: Enterprise Competency Assessment Engine — public "view results
+-- online" link needs the job role's Persian label too, now that job-role
+-- labels are admin-configurable data (comp_job_role_config, Section 47)
+-- instead of a frontend-hardcoded Record<JobRole, string>. The candidate on
+-- this anonymous link has no session, so the frontend cannot fall back to an
+-- authenticated fetch of comp_job_role_config (RLS there requires auth.uid()
+-- is not null) — personality_public_results_get is already SECURITY DEFINER
+-- and already returns non-sensitive fields (job_role itself included), so
+-- resolving the label server-side here is the smallest possible fix, exactly
+-- mirroring the existing non-sensitive-projection pattern of this function.
+-- ----------------------------------------------------------------------------
+
+drop function if exists personality_public_results_get(uuid);
+create or replace function personality_public_results_get(p_token uuid)
+returns table (
+  id uuid, job_role text, job_role_label_fa text, status text, submitted_at timestamptz,
+  dimension_scores jsonb, validity_status text
+) as $$
+  select
+    pa.id, pa.job_role, coalesce(nullif(jrc.label_fa, ''), pa.job_role), pa.status, pa.submitted_at,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'scoreKind', ds.score_kind,
+        'traitKey', t.key, 'traitLabelFa', t.label_fa,
+        'facetKey', f.key, 'facetLabelFa', f.label_fa,
+        'dimensionKey', d.key, 'dimensionLabelFa', d.label_fa,
+        'normalizedScore', ds.normalized_score, 'coverageCount', ds.coverage_count, 'confidence', ds.confidence
+      ))
+      from personality_dimension_scores ds
+      left join personality_traits t on t.id = ds.trait_id
+      left join personality_facets f on f.id = ds.facet_id
+      left join personality_behavioral_dimensions d on d.id = ds.dimension_id
+      where ds.personality_assessment_id = pa.id
+    ), '[]'::jsonb),
+    (select vr.overall_status from personality_validity_results vr where vr.personality_assessment_id = pa.id)
+  from personality_assessments pa
+  left join comp_job_role_config jrc on jrc.job_role = pa.job_role
+  where pa.results_share_token = p_token;
+$$ language sql security definer stable;
+
+grant execute on function personality_public_results_get(uuid) to anon, authenticated;
+
+-- ============================================================================
+-- Section 49: Enterprise Competency Assessment Engine — Phase 2: Evidence
+-- Engine + Competency Engine.
+--
+-- Core principle: every assessment result is EVIDENCE, and every competency
+-- score must be explainable by — and traceable back to — the exact evidence
+-- items that produced it. Nothing here re-scores anything: the technical
+-- question scores, personality trait/dimension scores, SJT option scores,
+-- the candidate's recorded experience and the interview panel's direct
+-- ratings stay owned by the modules that already produce them. This section
+-- only (1) configures WHICH of those sources feed WHICH competency and with
+-- what weight (comp_competency_evidence_sources), (2) materializes one
+-- evidence row per contributing item, with its normalized 0-100 score, its
+-- effective weight and a raw drill-down payload (comp_competency_evidence),
+-- and (3) rolls those up into one explainable score per required competency
+-- (comp_competency_scores), with explicit coverage/confidence and a status.
+--
+-- Lack of evidence is never treated as lack of competency: a competency with
+-- no evidence gets actual_score/actual_level/gap = null, confidence NONE and
+-- status INSUFFICIENT_EVIDENCE — never GAP/CRITICAL_GAP. The same rule
+-- applies at item level: an unscored question, an absent experience field or
+-- an empty certification list produce NO evidence row, not a zero.
+--
+-- Evidence rows are derived data, recomputed wholesale by
+-- comp_compute_competency_profile (SECURITY DEFINER) — there is deliberately
+-- no insert/update RLS policy on the two output tables, so the only way a
+-- row can exist is via the audited compute function. comp_interview_ratings
+-- is the one new PRIMARY evidence table: structured-interview ratings of a
+-- competency made directly by a panel member (its entry UI is the next
+-- phase; the table exists now so the engine already reads it).
+--
+-- The default competency library, evidence-source wiring, the 10 new EPC
+-- pipeline job roles and every role's competency requirements seeded at the
+-- end of this section are REAL, admin-editable configuration (Settings →
+-- «مدل شایستگی و مشاغل»), not mock data — they exist so the engine produces
+-- meaningful profiles immediately. Seeded with `on conflict do nothing`, so
+-- re-running this file never overwrites an admin's later edits (it would
+-- only re-add a seeded row an admin had deleted).
+-- ============================================================================
+
+create table if not exists comp_competency_evidence_sources (
+  id uuid primary key default gen_random_uuid(),
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  source_type text not null check (source_type in (
+    'TECHNICAL_CATEGORY', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'EXPERIENCE', 'STRUCTURED_INTERVIEW'
+  )),
+  -- TECHNICAL_CATEGORY: comp_question_bank.category · PERSONALITY_DIMENSION/SJT: behavioral
+  -- dimension key · PERSONALITY_TRAIT: trait key · EXPERIENCE: one of the four metric keys below ·
+  -- STRUCTURED_INTERVIEW: always '' (a direct interview rating of this very competency).
+  source_ref text not null default '',
+  weight numeric not null default 1 check (weight > 0),
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (competency_id, source_type, source_ref),
+  check (source_type <> 'EXPERIENCE' or source_ref in ('years_total', 'years_pipeline', 'certifications', 'education')),
+  check (source_type <> 'STRUCTURED_INTERVIEW' or source_ref = ''),
+  check (source_type = 'STRUCTURED_INTERVIEW' or source_ref <> '')
+);
+
+create table if not exists comp_interview_ratings (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  rater_id uuid not null default auth.uid() references profiles (id),
+  rating numeric not null check (rating between 1 and 5),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  unique (assessment_id, competency_id, rater_id)
+);
+create index if not exists idx_comp_interview_ratings_competency on comp_interview_ratings (competency_id);
+
+create table if not exists comp_competency_evidence (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  source_type text not null,
+  source_ref text not null default '',
+  -- The exact contributing item: question id / personality question id / dimension-score row id /
+  -- experience metric key / rater id — what makes every score traceable.
+  source_item_id text not null,
+  source_label text not null default '',
+  normalized_score numeric not null check (normalized_score between 0 and 100),
+  -- The configured source weight split evenly across that source's items, so a source contributes
+  -- its configured weight in total regardless of how many items it happened to produce.
+  effective_weight numeric not null check (effective_weight > 0),
+  raw_value jsonb not null default '{}'::jsonb,
+  computed_at timestamptz not null default now()
+);
+create index if not exists idx_comp_competency_evidence_assessment on comp_competency_evidence (assessment_id, competency_id);
+create index if not exists idx_comp_competency_evidence_competency on comp_competency_evidence (competency_id);
+
+create table if not exists comp_competency_scores (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  competency_id uuid not null references comp_competencies (id) on delete cascade,
+  required_level numeric not null,
+  level_count int not null,
+  actual_score numeric,
+  actual_level numeric,
+  -- required_level − actual_level: positive = shortfall. Null whenever there is no evidence.
+  gap numeric,
+  is_critical boolean not null default false,
+  weight numeric not null default 1,
+  evidence_count int not null default 0,
+  source_types_covered int not null default 0,
+  coverage numeric not null default 0 check (coverage between 0 and 1),
+  confidence text not null check (confidence in ('NONE', 'LOW', 'MEDIUM', 'HIGH')),
+  status text not null check (status in ('INSUFFICIENT_EVIDENCE', 'EXCEEDS', 'MEETS', 'GAP', 'CRITICAL_GAP')),
+  computed_at timestamptz not null default now(),
+  unique (assessment_id, competency_id)
+);
+create index if not exists idx_comp_competency_scores_competency on comp_competency_scores (competency_id);
+
+alter table comp_competency_evidence_sources enable row level security;
+alter table comp_interview_ratings enable row level security;
+alter table comp_competency_evidence enable row level security;
+alter table comp_competency_scores enable row level security;
+
+-- Evidence-source wiring is model configuration: same "any authenticated user reads, admin-or-
+-- assessment-designer writes" policy as comp_competencies/comp_job_competency_requirements (Section 47).
+drop policy if exists "comp_competency_evidence_sources_select_authenticated" on comp_competency_evidence_sources;
+create policy "comp_competency_evidence_sources_select_authenticated" on comp_competency_evidence_sources
+  for select using (auth.uid() is not null);
+drop policy if exists "comp_competency_evidence_sources_write_admin_or_designer" on comp_competency_evidence_sources;
+create policy "comp_competency_evidence_sources_write_admin_or_designer" on comp_competency_evidence_sources
+  for all using (comp_is_module_admin() or comp_is_assessment_designer())
+  with check (comp_is_module_admin() or comp_is_assessment_designer());
+
+-- Derived per-candidate outputs: readable by whoever can access the candidate's assessment, and
+-- intentionally NOT writable by anyone directly — only comp_compute_competency_profile writes them.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competency_evidence', 'comp_competency_scores']
+  loop
+    execute format('drop policy if exists "%1$s_select_access" on %1$s', t);
+    execute format('create policy "%1$s_select_access" on %1$s for select using (comp_can_access_assessment(assessment_id))', t);
+  end loop;
+end $$;
+
+-- A rater can see every rating on an assessment they can access, but only ever writes their own.
+drop policy if exists "comp_interview_ratings_select_access" on comp_interview_ratings;
+create policy "comp_interview_ratings_select_access" on comp_interview_ratings
+  for select using (comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_insert_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_insert_own" on comp_interview_ratings
+  for insert with check (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_update_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_update_own" on comp_interview_ratings
+  for update using (rater_id = auth.uid() and comp_can_access_assessment(assessment_id))
+  with check (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+drop policy if exists "comp_interview_ratings_delete_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_delete_own" on comp_interview_ratings
+  for delete using (rater_id = auth.uid() and comp_can_access_assessment(assessment_id));
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_competency_evidence_sources', 'comp_interview_ratings']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- Recomputes one candidate's full competency profile from scratch. Scoring rules:
+--   * TECHNICAL_CATEGORY — one item per selected question of that bank category that has an
+--     official score. The official score mirrors resolveOfficialAnswers
+--     (src/modules/competency/lib/roleCompetencyModel.ts) exactly: the rounded average of every
+--     SUBMITTED panelist's numeric score for that question, falling back to the lead's own
+--     comp_assessments.answers entry when no submitted panelist scored it. normalized = score/5×100.
+--     Legacy Project Manager assessments (fixed in-code rubric, empty selected_question_ids) simply
+--     yield no technical evidence — by design, not an error.
+--   * PERSONALITY_TRAIT / PERSONALITY_DIMENSION — the candidate's scored personality assessment's
+--     TRAIT / BEHAVIORAL_DIMENSION row for that key; normalized_score used as-is (already 0-100).
+--   * SJT — one item per answered SJT question (of that same scored personality assessment) whose
+--     CHOSEN option maps to that dimension key; normalized = option score/5×100.
+--   * EXPERIENCE — years_total: min(years/15,1)×100 · years_pipeline: min(years/10,1)×100 ·
+--     certifications: min(count/5,1)×100 · education: min(count/3,1)×100. Only non-blank entries
+--     count; a null value or an empty list is NO evidence, never a zero.
+--   * STRUCTURED_INTERVIEW — one item per rater: (rating−1)/4×100.
+--   effective_weight = source weight / number of items that source produced for that competency.
+-- Roll-up per required (active) competency: actual_score = Σ(normalized×w)/Σw; coverage = Σ weight of
+-- sources with ≥1 item / Σ weight of all configured sources; actual_level = round(1 + score/100 ×
+-- (levels−1), 1); gap = required − actual_level; confidence NONE/LOW/MEDIUM/HIGH and status
+-- INSUFFICIENT_EVIDENCE/EXCEEDS/MEETS/GAP/CRITICAL_GAP as documented inline below.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight / count(*) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- ---- Default competency library (real, editable configuration — see the header note) ----
+
+insert into comp_competencies (key, label_fa, description, domain) values
+  ('technical_knowledge', 'دانش فنی و تخصصی', 'تسلط بر استانداردها، کدها، مشخصات فنی و اصول مهندسی حوزه تخصصی (خطوط لوله، جوش، پایپینگ، پوشش، عمران و ...).', 'TECHNICAL'),
+  ('practical_experience', 'تجربه عملی و اجرایی', 'به‌کارگیری دانش در شرایط واقعی کارگاه و پروژه‌های EPC نفت و گاز، مبتنی بر سوابق و مثال‌های مشخص.', 'TECHNICAL'),
+  ('problem_solving', 'حل مسئله و تفکر تحلیلی', 'شناسایی علت ریشه‌ای مشکلات فنی و اجرایی، تحلیل گزینه‌ها و ارائه راه‌حل عملی.', 'HYBRID'),
+  ('professional_judgment', 'قضاوت حرفه‌ای و تصمیم‌گیری', 'تصمیم‌گیری درست و به‌موقع در موقعیت‌های مبهم یا پرفشار و تشخیص زمان ارجاع موضوع.', 'HYBRID'),
+  ('hse_awareness', 'آگاهی و تعهد HSE', 'شناخت و رعایت الزامات ایمنی، بهداشت و محیط‌زیست و حساسیت نسبت به ریسک‌های کارگاهی.', 'HYBRID'),
+  ('quality_compliance', 'کیفیت و انطباق با الزامات', 'پایبندی به ITP، رویه‌ها و مشخصات فنی، دقت در بازرسی و مستندسازی کیفی.', 'HYBRID'),
+  ('planning_control', 'برنامه‌ریزی و کنترل پروژه', 'برنامه‌ریزی، پایش پیشرفت، کنترل زمان و منابع و گزارش‌دهی به‌موقع انحرافات.', 'HYBRID'),
+  ('leadership', 'رهبری و مدیریت تیم', 'هدایت، انگیزش و هماهنگی تیم‌های اجرایی و پیمانکاران و پذیرش مسئولیت نتیجه.', 'BEHAVIORAL'),
+  ('communication', 'ارتباطات و گزارش‌دهی', 'انتقال شفاف و مؤثر اطلاعات به کارفرما، مشاور، پیمانکار و تیم، به‌صورت شفاهی و مکتوب.', 'BEHAVIORAL'),
+  ('teamwork_collaboration', 'کار تیمی و همکاری', 'همکاری سازنده میان‌رشته‌ای، مدیریت اختلاف‌نظر و حمایت از اهداف مشترک تیم.', 'BEHAVIORAL'),
+  ('accountability_reliability', 'مسئولیت‌پذیری و قابلیت اتکا', 'پاسخگویی در قبال تعهدات، درستکاری و پیگیری کارها تا حصول نتیجه.', 'BEHAVIORAL'),
+  ('commercial_contract_awareness', 'آگاهی قراردادی و تجاری', 'درک مفاد قرارداد، ادعاها، تغییرات (Variation) و پیامدهای مالی تصمیمات اجرایی.', 'HYBRID')
+on conflict (key) do nothing;
+
+insert into comp_competency_evidence_sources (competency_id, source_type, source_ref, weight)
+select c.id, v.source_type, v.source_ref, v.weight
+from (values
+  ('technical_knowledge', 'TECHNICAL_CATEGORY', 'TECHNICAL', 3),
+  ('technical_knowledge', 'TECHNICAL_CATEGORY', 'GENERAL', 1),
+  ('technical_knowledge', 'EXPERIENCE', 'certifications', 1),
+  ('technical_knowledge', 'EXPERIENCE', 'education', 0.5),
+  ('technical_knowledge', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('practical_experience', 'TECHNICAL_CATEGORY', 'EXPERIENCE_BASED', 2),
+  ('practical_experience', 'EXPERIENCE', 'years_total', 1),
+  ('practical_experience', 'EXPERIENCE', 'years_pipeline', 1.5),
+  ('practical_experience', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('problem_solving', 'TECHNICAL_CATEGORY', 'PROBLEM_SOLVING', 2),
+  ('problem_solving', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('problem_solving', 'PERSONALITY_DIMENSION', 'ANALYTICAL_THINKING', 1),
+  ('problem_solving', 'SJT', 'ANALYTICAL_THINKING', 1),
+  ('problem_solving', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('professional_judgment', 'TECHNICAL_CATEGORY', 'SCENARIO', 2),
+  ('professional_judgment', 'TECHNICAL_CATEGORY', 'JUDGMENT', 1),
+  ('professional_judgment', 'SJT', 'DECISION_QUALITY', 1),
+  ('professional_judgment', 'PERSONALITY_DIMENSION', 'ESCALATION_JUDGMENT', 1),
+  ('professional_judgment', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('hse_awareness', 'TECHNICAL_CATEGORY', 'HSE', 2),
+  ('hse_awareness', 'PERSONALITY_DIMENSION', 'SAFETY_ORIENTATION', 1.5),
+  ('hse_awareness', 'SJT', 'SAFETY_ORIENTATION', 1),
+  ('hse_awareness', 'PERSONALITY_DIMENSION', 'RISK_AWARENESS', 1),
+  ('hse_awareness', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'DETAIL_ORIENTATION', 1),
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'RULE_ORIENTATION', 1),
+  ('quality_compliance', 'PERSONALITY_DIMENSION', 'DOCUMENTATION_DISCIPLINE', 1),
+  ('quality_compliance', 'TECHNICAL_CATEGORY', 'TECHNICAL', 1),
+  ('quality_compliance', 'STRUCTURED_INTERVIEW', '', 1),
+
+  ('planning_control', 'PERSONALITY_TRAIT', 'conscientiousness', 1),
+  ('planning_control', 'PERSONALITY_DIMENSION', 'DISCIPLINE', 1),
+  ('planning_control', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('planning_control', 'EXPERIENCE', 'years_total', 0.5),
+  ('planning_control', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('leadership', 'PERSONALITY_DIMENSION', 'LEADERSHIP', 2),
+  ('leadership', 'SJT', 'LEADERSHIP', 1),
+  ('leadership', 'PERSONALITY_TRAIT', 'extraversion', 0.5),
+  ('leadership', 'PERSONALITY_DIMENSION', 'CONFLICT_MANAGEMENT', 1),
+  ('leadership', 'STRUCTURED_INTERVIEW', '', 2),
+
+  ('communication', 'PERSONALITY_DIMENSION', 'COMMUNICATION', 2),
+  ('communication', 'SJT', 'COMMUNICATION', 1),
+  ('communication', 'PERSONALITY_DIMENSION', 'STAKEHOLDER_ORIENTATION', 1),
+  ('communication', 'STRUCTURED_INTERVIEW', '', 2),
+
+  ('teamwork_collaboration', 'PERSONALITY_DIMENSION', 'TEAMWORK', 2),
+  ('teamwork_collaboration', 'PERSONALITY_TRAIT', 'agreeableness', 1),
+  ('teamwork_collaboration', 'SJT', 'CONFLICT_MANAGEMENT', 1),
+  ('teamwork_collaboration', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('accountability_reliability', 'PERSONALITY_DIMENSION', 'ACCOUNTABILITY', 2),
+  ('accountability_reliability', 'PERSONALITY_DIMENSION', 'OWNERSHIP', 1),
+  ('accountability_reliability', 'SJT', 'INTEGRITY_ORIENTATION', 1),
+  ('accountability_reliability', 'PERSONALITY_TRAIT', 'conscientiousness', 1),
+  ('accountability_reliability', 'STRUCTURED_INTERVIEW', '', 1.5),
+
+  ('commercial_contract_awareness', 'PERSONALITY_DIMENSION', 'COMMERCIAL_AWARENESS', 1.5),
+  ('commercial_contract_awareness', 'SJT', 'COMMERCIAL_AWARENESS', 1),
+  ('commercial_contract_awareness', 'TECHNICAL_CATEGORY', 'CASE_STUDY', 1),
+  ('commercial_contract_awareness', 'STRUCTURED_INTERVIEW', '', 1.5)
+) as v(competency_key, source_type, source_ref, weight)
+join comp_competencies c on c.key = v.competency_key
+on conflict (competency_id, source_type, source_ref) do nothing;
+
+-- The 10 EPC pipeline roles not yet in the catalog; the 12 pre-existing rows are left untouched.
+insert into comp_job_role_config (job_role, label_fa, description, sort_order) values
+  ('project_director', 'مدیر طرح', 'مسئول کلان پروژه/طرح EPC، هدایت مدیران پروژه و تعامل با کارفرما در سطح راهبردی.', 13),
+  ('project_control_manager', 'مدیر کنترل پروژه', 'هدایت واحد برنامه‌ریزی و کنترل پروژه، پایش زمان، هزینه و پیشرفت و گزارش به مدیریت.', 14),
+  ('planning_engineer', 'مهندس برنامه‌ریزی', 'تهیه و به‌روزرسانی برنامه زمان‌بندی، محاسبه پیشرفت و تحلیل انحرافات.', 15),
+  ('supervision_manager', 'مدیر نظارت', 'هدایت تیم نظارت کارگاهی و اطمینان از انطباق اجرا با مشخصات فنی، کیفیت و HSE.', 16),
+  ('pipeline_supervisor', 'سرپرست خط لوله', 'سرپرستی عملیات اجرایی خط لوله (ترانشه، لوله‌گذاری، جوشکاری، بستر و خاکریزی).', 17),
+  ('welding_supervisor', 'سرپرست جوشکاری', 'سرپرستی تیم‌های جوشکاری، کنترل WPS/PQR و کیفیت جوش در کارگاه.', 18),
+  ('mechanical_piping_supervisor', 'سرپرست مکانیک/پایپینگ', 'سرپرستی نصب تجهیزات مکانیکی و پایپینگ ایستگاه‌ها و تأسیسات.', 19),
+  ('civil_supervisor', 'سرپرست عمران', 'سرپرستی عملیات عمرانی (فونداسیون، سازه، راه دسترسی و ابنیه) در کارگاه.', 20),
+  ('coating_supervisor', 'سرپرست پوشش', 'سرپرستی آماده‌سازی سطح و اجرای پوشش لوله و سرجوش‌ها مطابق مشخصات فنی.', 21),
+  ('contract_commercial_manager', 'مدیر قراردادها و امور بازرگانی', 'مدیریت قراردادها، الحاقیه‌ها، ادعاها و امور تجاری پروژه.', 22)
+on conflict (job_role) do nothing;
+
+insert into comp_job_competency_requirements (job_role, competency_id, required_level, is_critical, weight)
+select v.job_role, c.id, v.required_level, v.is_critical, v.weight
+from (values
+  ('project_manager', 'leadership', 4, true, 2),
+  ('project_manager', 'planning_control', 4, true, 1.5),
+  ('project_manager', 'professional_judgment', 4, false, 1.5),
+  ('project_manager', 'communication', 4, false, 1),
+  ('project_manager', 'accountability_reliability', 4, false, 1),
+  ('project_manager', 'commercial_contract_awareness', 3, false, 1),
+  ('project_manager', 'hse_awareness', 3, false, 1),
+  ('project_manager', 'problem_solving', 3, false, 1),
+  ('project_manager', 'practical_experience', 3, false, 1),
+
+  ('welding_inspector', 'technical_knowledge', 4, true, 2),
+  ('welding_inspector', 'quality_compliance', 4, true, 1.5),
+  ('welding_inspector', 'practical_experience', 3, false, 1.5),
+  ('welding_inspector', 'professional_judgment', 3, false, 1),
+  ('welding_inspector', 'hse_awareness', 3, false, 1),
+  ('welding_inspector', 'accountability_reliability', 3, false, 1),
+  ('welding_inspector', 'communication', 2, false, 0.5),
+
+  ('mechanical_piping_inspector', 'technical_knowledge', 4, true, 2),
+  ('mechanical_piping_inspector', 'quality_compliance', 4, true, 1.5),
+  ('mechanical_piping_inspector', 'practical_experience', 3, false, 1.5),
+  ('mechanical_piping_inspector', 'problem_solving', 3, false, 1),
+  ('mechanical_piping_inspector', 'hse_awareness', 3, false, 1),
+  ('mechanical_piping_inspector', 'accountability_reliability', 3, false, 1),
+  ('mechanical_piping_inspector', 'communication', 2, false, 0.5),
+
+  ('pipeline_inspector', 'technical_knowledge', 4, true, 2),
+  ('pipeline_inspector', 'quality_compliance', 4, true, 1.5),
+  ('pipeline_inspector', 'practical_experience', 3, false, 1.5),
+  ('pipeline_inspector', 'professional_judgment', 3, false, 1),
+  ('pipeline_inspector', 'hse_awareness', 3, false, 1),
+  ('pipeline_inspector', 'accountability_reliability', 3, false, 1),
+  ('pipeline_inspector', 'communication', 2, false, 0.5),
+
+  ('coating_cp_inspector', 'technical_knowledge', 4, true, 2),
+  ('coating_cp_inspector', 'quality_compliance', 4, true, 1.5),
+  ('coating_cp_inspector', 'practical_experience', 3, false, 1.5),
+  ('coating_cp_inspector', 'problem_solving', 3, false, 1),
+  ('coating_cp_inspector', 'hse_awareness', 3, false, 1),
+  ('coating_cp_inspector', 'accountability_reliability', 3, false, 1),
+
+  ('radiography_interpreter', 'technical_knowledge', 4, true, 2),
+  ('radiography_interpreter', 'quality_compliance', 4, true, 1.5),
+  ('radiography_interpreter', 'professional_judgment', 4, false, 1.5),
+  ('radiography_interpreter', 'practical_experience', 3, false, 1),
+  ('radiography_interpreter', 'hse_awareness', 3, false, 1),
+  ('radiography_interpreter', 'accountability_reliability', 3, false, 1),
+  ('radiography_interpreter', 'communication', 2, false, 0.5),
+
+  ('civil_engineer', 'technical_knowledge', 3, true, 2),
+  ('civil_engineer', 'practical_experience', 3, false, 1),
+  ('civil_engineer', 'problem_solving', 3, false, 1),
+  ('civil_engineer', 'quality_compliance', 3, false, 1),
+  ('civil_engineer', 'hse_awareness', 3, false, 1),
+  ('civil_engineer', 'planning_control', 2, false, 1),
+  ('civil_engineer', 'teamwork_collaboration', 3, false, 1),
+
+  ('project_control_specialist', 'planning_control', 4, true, 2),
+  ('project_control_specialist', 'technical_knowledge', 3, false, 1),
+  ('project_control_specialist', 'problem_solving', 3, false, 1),
+  ('project_control_specialist', 'communication', 3, false, 1),
+  ('project_control_specialist', 'commercial_contract_awareness', 2, false, 1),
+  ('project_control_specialist', 'accountability_reliability', 3, false, 1),
+  ('project_control_specialist', 'teamwork_collaboration', 3, false, 1),
+
+  ('hse_specialist', 'hse_awareness', 4, true, 2),
+  ('hse_specialist', 'professional_judgment', 3, false, 1.5),
+  ('hse_specialist', 'technical_knowledge', 3, false, 1),
+  ('hse_specialist', 'practical_experience', 3, false, 1),
+  ('hse_specialist', 'communication', 3, false, 1),
+  ('hse_specialist', 'accountability_reliability', 4, false, 1),
+  ('hse_specialist', 'leadership', 2, false, 0.5),
+
+  ('contracts_specialist', 'commercial_contract_awareness', 4, true, 2),
+  ('contracts_specialist', 'communication', 3, false, 1),
+  ('contracts_specialist', 'professional_judgment', 3, false, 1),
+  ('contracts_specialist', 'problem_solving', 3, false, 1),
+  ('contracts_specialist', 'accountability_reliability', 3, false, 1),
+  ('contracts_specialist', 'planning_control', 2, false, 1),
+  ('contracts_specialist', 'technical_knowledge', 2, false, 0.5),
+
+  ('site_supervisor', 'hse_awareness', 4, true, 2),
+  ('site_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('site_supervisor', 'leadership', 3, false, 1.5),
+  ('site_supervisor', 'practical_experience', 3, false, 1.5),
+  ('site_supervisor', 'planning_control', 3, false, 1),
+  ('site_supervisor', 'teamwork_collaboration', 3, false, 1),
+  ('site_supervisor', 'communication', 3, false, 1),
+  ('site_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('inspection_body_supervisor', 'technical_knowledge', 4, true, 2),
+  ('inspection_body_supervisor', 'quality_compliance', 4, true, 1.5),
+  ('inspection_body_supervisor', 'hse_awareness', 3, true, 1),
+  ('inspection_body_supervisor', 'professional_judgment', 4, false, 1.5),
+  ('inspection_body_supervisor', 'leadership', 3, false, 1),
+  ('inspection_body_supervisor', 'communication', 3, false, 1),
+  ('inspection_body_supervisor', 'accountability_reliability', 4, false, 1),
+
+  ('project_director', 'leadership', 4, true, 2),
+  ('project_director', 'professional_judgment', 4, true, 1.5),
+  ('project_director', 'commercial_contract_awareness', 3, false, 1),
+  ('project_director', 'planning_control', 3, false, 1),
+  ('project_director', 'communication', 4, false, 1),
+  ('project_director', 'hse_awareness', 3, false, 1),
+  ('project_director', 'accountability_reliability', 4, false, 1),
+  ('project_director', 'problem_solving', 3, false, 1),
+
+  ('project_control_manager', 'planning_control', 4, true, 2),
+  ('project_control_manager', 'leadership', 3, true, 1.5),
+  ('project_control_manager', 'commercial_contract_awareness', 3, false, 1),
+  ('project_control_manager', 'communication', 3, false, 1),
+  ('project_control_manager', 'problem_solving', 3, false, 1),
+  ('project_control_manager', 'professional_judgment', 3, false, 1),
+  ('project_control_manager', 'accountability_reliability', 3, false, 1),
+
+  ('planning_engineer', 'planning_control', 4, true, 2),
+  ('planning_engineer', 'technical_knowledge', 3, false, 1),
+  ('planning_engineer', 'problem_solving', 3, false, 1),
+  ('planning_engineer', 'communication', 2, false, 1),
+  ('planning_engineer', 'teamwork_collaboration', 3, false, 1),
+  ('planning_engineer', 'accountability_reliability', 3, false, 1),
+
+  ('supervision_manager', 'leadership', 4, true, 2),
+  ('supervision_manager', 'technical_knowledge', 3, true, 1.5),
+  ('supervision_manager', 'quality_compliance', 4, true, 1.5),
+  ('supervision_manager', 'hse_awareness', 3, true, 1),
+  ('supervision_manager', 'professional_judgment', 4, false, 1.5),
+  ('supervision_manager', 'communication', 3, false, 1),
+  ('supervision_manager', 'accountability_reliability', 3, false, 1),
+  ('supervision_manager', 'commercial_contract_awareness', 2, false, 0.5),
+
+  ('pipeline_supervisor', 'hse_awareness', 4, true, 2),
+  ('pipeline_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('pipeline_supervisor', 'practical_experience', 4, false, 1.5),
+  ('pipeline_supervisor', 'leadership', 3, false, 1),
+  ('pipeline_supervisor', 'quality_compliance', 3, false, 1),
+  ('pipeline_supervisor', 'teamwork_collaboration', 3, false, 1),
+  ('pipeline_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('welding_supervisor', 'technical_knowledge', 4, true, 2),
+  ('welding_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('welding_supervisor', 'practical_experience', 4, false, 1.5),
+  ('welding_supervisor', 'quality_compliance', 4, false, 1.5),
+  ('welding_supervisor', 'leadership', 3, false, 1),
+  ('welding_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('mechanical_piping_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('mechanical_piping_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('mechanical_piping_supervisor', 'practical_experience', 4, false, 1.5),
+  ('mechanical_piping_supervisor', 'quality_compliance', 3, false, 1),
+  ('mechanical_piping_supervisor', 'leadership', 3, false, 1),
+  ('mechanical_piping_supervisor', 'problem_solving', 3, false, 1),
+  ('mechanical_piping_supervisor', 'teamwork_collaboration', 3, false, 1),
+
+  ('civil_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('civil_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('civil_supervisor', 'practical_experience', 3, false, 1.5),
+  ('civil_supervisor', 'quality_compliance', 3, false, 1),
+  ('civil_supervisor', 'leadership', 3, false, 1),
+  ('civil_supervisor', 'planning_control', 2, false, 1),
+  ('civil_supervisor', 'teamwork_collaboration', 3, false, 1),
+
+  ('coating_supervisor', 'technical_knowledge', 3, true, 1.5),
+  ('coating_supervisor', 'hse_awareness', 3, true, 1.5),
+  ('coating_supervisor', 'practical_experience', 3, false, 1.5),
+  ('coating_supervisor', 'quality_compliance', 4, false, 1.5),
+  ('coating_supervisor', 'leadership', 3, false, 1),
+  ('coating_supervisor', 'accountability_reliability', 3, false, 1),
+
+  ('contract_commercial_manager', 'commercial_contract_awareness', 4, true, 2),
+  ('contract_commercial_manager', 'leadership', 3, true, 1.5),
+  ('contract_commercial_manager', 'communication', 4, false, 1.5),
+  ('contract_commercial_manager', 'professional_judgment', 4, false, 1),
+  ('contract_commercial_manager', 'problem_solving', 3, false, 1),
+  ('contract_commercial_manager', 'accountability_reliability', 3, false, 1),
+  ('contract_commercial_manager', 'planning_control', 3, false, 1)
+) as v(job_role, competency_key, required_level, is_critical, weight)
+join comp_competencies c on c.key = v.competency_key
+join comp_job_role_config jrc on jrc.job_role = v.job_role
+on conflict (job_role, competency_id) do nothing;
+
+-- ============================================================================
+-- Section 50: Enterprise Competency Assessment Engine — Phase 3: Assessment
+-- Blueprints + the Structured Interview.
+--
+-- An Assessment Blueprint is a reusable, versioned, job-specific definition
+-- of WHICH assessment methods a candidate goes through (technical questions,
+-- personality incl. SJT, structured interview, recorded experience), plus
+-- optionally which saved question-mix template each method starts from.
+-- Applying a blueprint to a candidate COPIES its toggles onto that
+-- comp_assessments row (via comp_set_exam_design) and remembers which
+-- blueprint it came from — the candidate's own flags stay the source of
+-- truth, so later edits to a blueprint never silently rewrite the design of
+-- candidates already in flight (the audit entry records the exact blueprint
+-- version applied).
+--
+-- The Competency Engine now respects that design: an evidence source whose
+-- assessment METHOD was deliberately not part of this candidate's design is
+-- excluded from both evidence collection AND the coverage denominator.
+-- A method that was not part of the design is "not assessed by design", not
+-- "missing evidence" — counting it as uncovered would lower coverage (and so
+-- confidence) for a choice the designer made on purpose, and would make two
+-- candidates with identical results look differently reliable purely because
+-- of their exam design. A competency whose every configured source is
+-- excluded still reports INSUFFICIENT_EVIDENCE / NONE, exactly as before —
+-- never a gap.
+--
+-- The seeded default blueprint per job role at the end of this section is
+-- REAL, admin-editable configuration (Settings → «مدل شایستگی و مشاغل» →
+-- «الگوهای ارزیابی»), not mock data. includes_technical is only seeded true
+-- for roles that actually have approved, active bank questions, so a
+-- candidate is never routed into an empty technical stage.
+-- ============================================================================
+
+create table if not exists comp_assessment_blueprints (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null references comp_job_role_config (job_role) on delete cascade,
+  title text not null,
+  description text not null default '',
+  -- Bumped server-side whenever the design itself (methods/templates) changes — see
+  -- comp_assessment_blueprints_bump_version below; title/description/flag edits don't count.
+  version int not null default 1 check (version >= 1),
+  is_default boolean not null default false,
+  active boolean not null default true,
+  includes_technical boolean not null default true,
+  -- Personality items include the SJT items — both come from the same personality assessment.
+  includes_personality boolean not null default true,
+  includes_structured_interview boolean not null default true,
+  includes_experience boolean not null default true,
+  technical_template_id uuid references comp_assessment_templates (id) on delete set null,
+  personality_template_id uuid references personality_assessment_templates (id) on delete set null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create index if not exists idx_comp_assessment_blueprints_job_role on comp_assessment_blueprints (job_role);
+create index if not exists idx_comp_assessment_blueprints_technical_template on comp_assessment_blueprints (technical_template_id);
+create index if not exists idx_comp_assessment_blueprints_personality_template on comp_assessment_blueprints (personality_template_id);
+-- An inactive blueprint may keep is_default = true without blocking a new active default.
+create unique index if not exists idx_comp_assessment_blueprints_one_active_default
+  on comp_assessment_blueprints (job_role) where is_default and active;
+
+alter table comp_assessment_blueprints enable row level security;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_assessment_blueprints']
+  loop
+    execute format('drop policy if exists "%1$s_select_authenticated" on %1$s', t);
+    execute format('create policy "%1$s_select_authenticated" on %1$s for select using (auth.uid() is not null)', t);
+    execute format('drop policy if exists "%1$s_write_admin_or_designer" on %1$s', t);
+    execute format(
+      'create policy "%1$s_write_admin_or_designer" on %1$s for all using (comp_is_module_admin() or comp_is_assessment_designer()) with check (comp_is_module_admin() or comp_is_assessment_designer())',
+      t
+    );
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+create or replace function comp_assessment_blueprints_bump_version()
+returns trigger as $$
+begin
+  if (new.includes_technical, new.includes_personality, new.includes_structured_interview, new.includes_experience,
+      new.technical_template_id, new.personality_template_id)
+     is distinct from
+     (old.includes_technical, old.includes_personality, old.includes_structured_interview, old.includes_experience,
+      old.technical_template_id, old.personality_template_id) then
+    new.version := old.version + 1;
+  else
+    new.version := old.version;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_assessment_blueprints_bump_version on comp_assessment_blueprints;
+create trigger trg_comp_assessment_blueprints_bump_version before update on comp_assessment_blueprints
+  for each row execute function comp_assessment_blueprints_bump_version();
+
+alter table comp_assessments add column if not exists blueprint_id uuid references comp_assessment_blueprints (id) on delete set null;
+alter table comp_assessments add column if not exists needs_structured_interview boolean not null default false;
+alter table comp_assessments add column if not exists includes_experience boolean not null default true;
+create index if not exists idx_comp_assessments_blueprint on comp_assessments (blueprint_id);
+
+-- Supersedes Section 44's 3-arg version. The old signature is dropped (not overloaded) so PostgREST
+-- resolves every existing 3-arg call to this one via the defaults; a null argument means "leave that
+-- flag unchanged".
+drop function if exists comp_set_exam_design(uuid, boolean, boolean);
+create or replace function comp_set_exam_design(
+  p_assessment_id uuid,
+  p_needs_personality boolean,
+  p_needs_technical boolean,
+  p_needs_structured_interview boolean default null,
+  p_includes_experience boolean default null,
+  p_blueprint_id uuid default null
+)
+returns void as $$
+declare
+  v_blueprint_version int;
+begin
+  if not (comp_is_assessment_designer() or comp_is_module_admin()) then
+    raise exception 'forbidden';
+  end if;
+  if p_blueprint_id is not null then
+    select b.version into v_blueprint_version
+    from comp_assessment_blueprints b
+    join comp_assessments a on a.id = p_assessment_id and a.job_role = b.job_role
+    where b.id = p_blueprint_id;
+    if not found then
+      raise exception 'blueprint does not belong to this assessment''s job role';
+    end if;
+  end if;
+  update comp_assessments
+  set needs_personality_assessment = coalesce(p_needs_personality, needs_personality_assessment),
+      needs_technical_assessment = coalesce(p_needs_technical, needs_technical_assessment),
+      needs_structured_interview = coalesce(p_needs_structured_interview, needs_structured_interview),
+      includes_experience = coalesce(p_includes_experience, includes_experience),
+      blueprint_id = coalesce(p_blueprint_id, blueprint_id)
+  where id = p_assessment_id;
+  perform comp_log_audit(
+    'EXAM_DESIGN_SET', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object(
+      'needsPersonalityAssessment', p_needs_personality,
+      'needsTechnicalAssessment', p_needs_technical,
+      'needsStructuredInterview', p_needs_structured_interview,
+      'includesExperience', p_includes_experience,
+      'blueprintId', p_blueprint_id,
+      'blueprintVersion', v_blueprint_version
+    )
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid) from public, anon;
+grant execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid) to authenticated;
+
+-- Section 49's comp_compute_competency_profile, changed ONLY to honor the candidate's exam design
+-- (see this section's header): v_excluded_types lists the source types of every method the design
+-- left out, and both the `srcs` CTE (evidence collection) and the `cov` lateral (coverage
+-- denominator) skip them. Everything else — scoring rules, roll-up, statuses — is unchanged. The
+-- audit entry additionally records which types were excluded, so a reviewer can tell "not assessed
+-- by design" apart from "no evidence" after the fact.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+  v_excluded_types text[];
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Source types whose assessment method is not part of this candidate's design (see the Section 50
+  -- header): dropped from both evidence collection and the coverage denominator below.
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+    where s.source_type <> all(v_excluded_types)
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight / count(*) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id and s.source_type <> all(v_excluded_types)
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count, 'excludedByDesign', to_jsonb(v_excluded_types)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- ---- Default blueprint per job role (real, editable configuration — see the header note) ----
+-- Only roles with no blueprint at all get one, so re-running this file never overrides an admin's
+-- own blueprints (it would only re-add one for a role whose blueprints were all deleted).
+insert into comp_assessment_blueprints (
+  job_role, title, description, is_default, active,
+  includes_technical, includes_personality, includes_structured_interview, includes_experience
+)
+select
+  j.job_role,
+  'الگوی استاندارد — ' || coalesce(nullif(j.label_fa, ''), j.job_role),
+  'الگوی پیش‌فرض ارزیابی این شغل: آزمون شخصیت و رفتاری (شامل سؤالات موقعیتی)، مصاحبه ساختاریافته و سوابق و تجربه'
+    || case when exists (
+      select 1 from comp_question_bank q where q.job_role = j.job_role and q.active and q.approval_status = 'APPROVED'
+    ) then '، به‌همراه آزمون فنی تخصصی.' else '؛ آزمون فنی تا افزودن سؤال تأییدشده به بانک این شغل غیرفعال است.' end,
+  true, true,
+  exists (select 1 from comp_question_bank q where q.job_role = j.job_role and q.active and q.approval_status = 'APPROVED'),
+  true, true, true
+from comp_job_role_config j
+where not exists (select 1 from comp_assessment_blueprints b where b.job_role = j.job_role);
+
+-- ============================================================================
+-- Section 51: Enterprise Competency Assessment Engine — Phase 4: Candidate 360
+-- competency gap analysis (drill-down read RPC), AI-analysis grounding in the
+-- competency profile, and default-blueprint auto-apply on candidate creation.
+--
+-- 1. comp_get_competency_evidence_detail — the Candidate → Competency →
+--    Evidence → Assessment Item drill-down behind the results page's «تحلیل
+--    شکاف شایستگی» section. Read-only, SECURITY DEFINER, guarded by
+--    comp_can_access_assessment() exactly like comp_compute_competency_profile,
+--    so it only ever reveals data that caller could already read row by row
+--    (evidence/scores/interview ratings/panel scores). Nothing is re-scored:
+--    the evidence rows are returned as the Competency Engine stored them, each
+--    with its contribution to the competency score and the underlying items it
+--    was derived from. Two deliberate restrictions:
+--      * comp_question_bank reference answers / key points are never returned
+--        (evaluator-only material with its own access-scoped RLS).
+--      * personality item-level detail (the candidate's individual personality
+--        responses and SJT option scoring keys) is only returned when the
+--        caller also passes personality_can_access_assessment() — the same
+--        gate personality_responses' own RLS uses. Otherwise the evidence row
+--        is still shown (its score is already readable) with
+--        itemsRestricted = true.
+-- 2. comp_candidate_ai_analysis.competency_basis — the exact competency score
+--    rows (competency, required/actual level, score, status, confidence) the
+--    comp-candidate-ai-analysis Edge Function fed to Gemini. The results page
+--    recomputes the profile on every visit, so a computed_at comparison would
+--    always read "stale"; comparing the numbers themselves marks an analysis
+--    stale only when the profile it was grounded in actually changed (null =
+--    generated before the profile was part of the prompt → always stale).
+-- 3. comp_assessments_apply_default_blueprint — a candidate created without an
+--    explicit blueprint_id gets its job role's active default blueprint
+--    applied at INSERT time (blueprint_id + the four method flags), mirroring
+--    what applying it in the Exam Design stage does. BEFORE INSERT only: every
+--    later design change (comp_set_exam_design / applying another blueprint)
+--    is never touched, and an insert that names its own blueprint_id is left
+--    exactly as given. The audit entry records the blueprint version applied.
+-- ============================================================================
+
+alter table comp_candidate_ai_analysis add column if not exists competency_basis jsonb;
+
+create or replace function comp_assessments_apply_default_blueprint()
+returns trigger as $$
+declare
+  v_bp comp_assessment_blueprints%rowtype;
+begin
+  if new.blueprint_id is not null then
+    return new;
+  end if;
+  select * into v_bp
+  from comp_assessment_blueprints b
+  where b.job_role = new.job_role and b.is_default and b.active
+  limit 1;
+  if not found then
+    return new;
+  end if;
+  new.blueprint_id := v_bp.id;
+  new.needs_technical_assessment := v_bp.includes_technical;
+  new.needs_personality_assessment := v_bp.includes_personality;
+  new.needs_structured_interview := v_bp.includes_structured_interview;
+  new.includes_experience := v_bp.includes_experience;
+  perform comp_log_audit(
+    'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED', 'comp_assessments', new.id, null,
+    jsonb_build_object(
+      'blueprintId', v_bp.id,
+      'blueprintVersion', v_bp.version,
+      'needsTechnicalAssessment', v_bp.includes_technical,
+      'needsPersonalityAssessment', v_bp.includes_personality,
+      'needsStructuredInterview', v_bp.includes_structured_interview,
+      'includesExperience', v_bp.includes_experience
+    )
+  );
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_assessments_apply_default_blueprint on comp_assessments;
+create trigger trg_comp_assessments_apply_default_blueprint before insert on comp_assessments
+  for each row execute function comp_assessments_apply_default_blueprint();
+
+create or replace function comp_get_competency_evidence_detail(p_assessment_id uuid, p_competency_id uuid)
+returns jsonb as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_competency comp_competencies%rowtype;
+  v_pa_id uuid;
+  v_personality_access boolean := false;
+  v_excluded_types text[];
+  v_total_weight numeric;
+  v_evidence jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select * into v_competency from comp_competencies where id = p_competency_id;
+  if not found then
+    raise exception 'competency not found';
+  end if;
+
+  -- Same "excluded by design" list as comp_compute_competency_profile (Section 50).
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  select pa.id into v_pa_id from personality_assessments pa where pa.assessment_id = p_assessment_id;
+  if v_pa_id is not null then
+    v_personality_access := personality_can_access_assessment(v_pa_id);
+  end if;
+
+  select coalesce(sum(e.effective_weight), 0) into v_total_weight
+  from comp_competency_evidence e
+  where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id;
+
+  select coalesce(jsonb_agg(row_json order by source_order, normalized_score desc), '[]'::jsonb) into v_evidence
+  from (
+    select
+      array_position(array['TECHNICAL_CATEGORY', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'STRUCTURED_INTERVIEW', 'EXPERIENCE'], e.source_type) as source_order,
+      e.normalized_score,
+      jsonb_build_object(
+        'id', e.id,
+        'sourceType', e.source_type,
+        'sourceRef', e.source_ref,
+        'sourceItemId', e.source_item_id,
+        'sourceLabel', e.source_label,
+        'normalizedScore', e.normalized_score,
+        'effectiveWeight', e.effective_weight,
+        -- Points this row adds to the competency's weighted-average score, and its weight share.
+        'contribution', case when v_total_weight > 0 then round(e.normalized_score * e.effective_weight / v_total_weight, 2) end,
+        'weightShare', case when v_total_weight > 0 then round(e.effective_weight / v_total_weight, 4) end,
+        'rawValue', e.raw_value,
+        'computedAt', e.computed_at,
+        'itemsRestricted', e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT') and not v_personality_access,
+        'items', case
+          when e.source_type = 'TECHNICAL_CATEGORY' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'TECHNICAL_QUESTION',
+              'questionId', qb.id,
+              'questionText', qb.question_text,
+              'category', qb.category,
+              'subCategory', qb.sub_category,
+              'difficulty', qb.difficulty,
+              'candidateAnswer', nullif(v_assessment.answers -> qb.id::text ->> 'candidateAnswer', ''),
+              'leadScore', case when jsonb_typeof(v_assessment.answers -> qb.id::text -> 'score') = 'number'
+                then (v_assessment.answers -> qb.id::text ->> 'score')::numeric end,
+              'leadNote', nullif(v_assessment.answers -> qb.id::text ->> 'note', ''),
+              -- Only SUBMITTED panel sheets count toward the official score, so only those are shown.
+              'ratings', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'raterId', ps.panelist_id,
+                  'raterName', coalesce(nullif(p.full_name, ''), p.email, 'داور'),
+                  'score', case when jsonb_typeof(ps.answers -> qb.id::text -> 'score') = 'number'
+                    then (ps.answers -> qb.id::text ->> 'score')::numeric end,
+                  'note', nullif(ps.answers -> qb.id::text ->> 'note', ''),
+                  'submittedAt', ps.submitted_at
+                ) order by ps.submitted_at), '[]'::jsonb)
+                from comp_panelist_scores ps
+                left join profiles p on p.id = ps.panelist_id
+                where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+              )
+            )), '[]'::jsonb)
+            from comp_question_bank qb
+            where qb.id::text = e.source_item_id
+          )
+          when e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT') and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'PERSONALITY_ITEM',
+              'questionId', pq.id,
+              'questionType', pq.question_type,
+              'questionText', pq.question_text,
+              'reverseScored', pq.reverse_scored,
+              'response', pr.response_value,
+              'chosenOptionLabel', (
+                select o.value ->> 'label_fa'
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+                where o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                limit 1
+              ),
+              'answeredAt', pr.answered_at
+            ) order by pq.question_type, pr.answered_at), '[]'::jsonb)
+            from personality_dimension_scores ds
+            join personality_responses pr on pr.personality_assessment_id = ds.personality_assessment_id
+            join personality_questions pq on pq.id = pr.question_id
+            where ds.id::text = e.source_item_id
+              and ds.personality_assessment_id = v_pa_id
+              and (
+                (e.source_type = 'PERSONALITY_TRAIT' and pq.trait_id = ds.trait_id)
+                or (e.source_type = 'PERSONALITY_DIMENSION' and pq.dimension_id = ds.dimension_id)
+              )
+          )
+          when e.source_type = 'SJT' and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'SJT_ITEM',
+              'questionId', pq.id,
+              'questionText', pq.question_text,
+              'scenarioContext', pq.scenario_context,
+              'selectedOption', pr.response_value ->> 'selected_option',
+              'options', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'key', o.value ->> 'key',
+                  'labelFa', o.value ->> 'label_fa',
+                  'score', case when jsonb_typeof(o.value -> 'score') = 'number' then (o.value ->> 'score')::numeric end,
+                  'dimensionKey', o.value ->> 'dimension_key',
+                  'chosen', o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                ) order by o.ordinality), '[]'::jsonb)
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) with ordinality o(value, ordinality)
+              ),
+              'answeredAt', pr.answered_at
+            )), '[]'::jsonb)
+            from personality_responses pr
+            join personality_questions pq on pq.id = pr.question_id
+            where pr.personality_assessment_id = v_pa_id and pq.id::text = e.source_item_id
+          )
+          when e.source_type = 'STRUCTURED_INTERVIEW' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'INTERVIEW_RATING',
+              'raterId', r.rater_id,
+              'raterName', coalesce(nullif(p.full_name, ''), p.email, 'ارزیاب'),
+              'rating', r.rating,
+              'notes', r.notes,
+              'ratedAt', r.updated_at
+            )), '[]'::jsonb)
+            from comp_interview_ratings r
+            left join profiles p on p.id = r.rater_id
+            where r.assessment_id = p_assessment_id and r.competency_id = p_competency_id and r.rater_id::text = e.source_item_id
+          )
+          when e.source_type = 'EXPERIENCE' then jsonb_build_array(jsonb_build_object(
+            'kind', 'EXPERIENCE',
+            'metric', e.source_ref,
+            'yearsExperienceTotal', v_assessment.years_experience_total,
+            'yearsExperiencePipeline', v_assessment.years_experience_pipeline,
+            'certifications', case when e.source_ref = 'certifications' then v_assessment.certifications end,
+            'education', case when e.source_ref = 'education' then v_assessment.education end,
+            'employmentHistory', case when e.source_ref in ('years_total', 'years_pipeline') then v_assessment.employment_history end
+          ))
+          else '[]'::jsonb
+        end
+      ) as row_json
+    from comp_competency_evidence e
+    where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id
+  ) x;
+
+  return jsonb_build_object(
+    'assessmentId', p_assessment_id,
+    'competency', jsonb_build_object(
+      'id', v_competency.id,
+      'key', v_competency.key,
+      'labelFa', v_competency.label_fa,
+      'description', v_competency.description,
+      'domain', v_competency.domain,
+      'proficiencyLevels', v_competency.proficiency_levels
+    ),
+    'requirement', (
+      select jsonb_build_object('requiredLevel', r.required_level, 'isCritical', r.is_critical, 'weight', r.weight)
+      from comp_job_competency_requirements r
+      where r.job_role = v_assessment.job_role and r.competency_id = p_competency_id
+    ),
+    'score', (
+      select jsonb_build_object(
+        'requiredLevel', s.required_level, 'levelCount', s.level_count, 'actualScore', s.actual_score,
+        'actualLevel', s.actual_level, 'gap', s.gap, 'isCritical', s.is_critical, 'weight', s.weight,
+        'evidenceCount', s.evidence_count, 'sourceTypesCovered', s.source_types_covered, 'coverage', s.coverage,
+        'confidence', s.confidence, 'status', s.status, 'computedAt', s.computed_at
+      )
+      from comp_competency_scores s
+      where s.assessment_id = p_assessment_id and s.competency_id = p_competency_id
+    ),
+    'design', jsonb_build_object(
+      'technical', v_assessment.needs_technical_assessment,
+      'personality', v_assessment.needs_personality_assessment,
+      'structuredInterview', v_assessment.needs_structured_interview,
+      'experience', v_assessment.includes_experience
+    ),
+    'personalityItemsVisible', v_personality_access,
+    -- Every configured source for this competency, so the drawer can show which ones produced
+    -- evidence, which produced none, and which were left out by design (never "missing").
+    'sources', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'sourceType', s.source_type,
+        'sourceRef', s.source_ref,
+        'weight', s.weight,
+        'excludedByDesign', s.source_type = any(v_excluded_types),
+        'itemCount', (
+          select count(*) from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )
+      ) order by s.source_type, s.source_ref), '[]'::jsonb)
+      from comp_competency_evidence_sources s
+      where s.competency_id = p_competency_id
+    ),
+    'evidence', v_evidence
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_competency_evidence_detail(uuid, uuid) from public, anon;
+grant execute on function comp_get_competency_evidence_detail(uuid, uuid) to authenticated;
+
+-- ============================================================================
+-- Section 52: Enterprise Competency Assessment Engine — Phase 5: Individual
+-- Development Plans (IDP) + Reassessment.
+--
+-- 1. comp_development_plans / comp_development_actions — one open (non-
+--    cancelled) development plan per assessment, holding concrete actions per
+--    competency. Read: whoever can access the assessment
+--    (comp_can_access_assessment) plus whoever may manage the plan. Write:
+--    comp_can_manage_development_plan() = the assessment's lead (comp_is_lead:
+--    creator / designated lead panelist / module admin) or an
+--    ASSESSMENT_DESIGNER — the exact standing that already gates the exam
+--    design and profile recompute. Policies are `to authenticated` only.
+-- 2. comp_seed_development_plan — creates (or reuses) the DRAFT plan and
+--    suggests actions from the Competency Engine's STORED profile (it never
+--    re-scores): one development action per GAP / CRITICAL_GAP competency
+--    (target = required level, current = actual level; CRITICAL first, HIGH
+--    priority, due in 60 days; other gaps MEDIUM/90 days when the gap is ≥ 1
+--    level, else LOW/120 days; TECHNICAL/HYBRID → TRAINING, BEHAVIORAL →
+--    MENTORING). An INSUFFICIENT_EVIDENCE competency gets exactly one
+--    EVIDENCE_COLLECTION («ارزیابی تکمیلی») action instead — lack of evidence
+--    is never treated as a gap. Competencies that already have any action in
+--    the plan are skipped, so re-seeding is idempotent and never overwrites a
+--    manual edit. The latest unified AI analysis' training_recommendations are
+--    merged in as source = AI actions (deduplicated by text), linked to a
+--    competency only when the text names a competency that is actually a GAP /
+--    CRITICAL_GAP; otherwise competency_id stays null (a general action).
+--    EVIDENCE_COLLECTION is an extra action_type beyond the six development
+--    types so "go collect evidence" can never be mistaken for training.
+-- 3. comp_assessments.previous_assessment_id + comp_create_reassessment — a
+--    follow-up assessment of the same candidate for the same job role, linked
+--    to its predecessor. The chain is linear (unique index): calling the RPC
+--    again for an assessment that already has a follow-up returns that
+--    follow-up instead of forking the chain. Candidate identity/profile
+--    fields are copied exactly as the create path writes them; answers,
+--    question selection, panel, scores and tokens start fresh (new self-
+--    service/results tokens via the column defaults). DESIGN DECISION: the
+--    previous assessment's exam design (the four method flags + blueprint_id)
+--    is COPIED rather than re-applying the role's current default blueprint —
+--    a reassessment exists to be compared against its predecessor, and
+--    comparing levels measured through different methods would confuse a
+--    design change with development. The Phase 4 default-blueprint trigger is
+--    therefore extended to leave rows with previous_assessment_id alone. The
+--    designer can still change the design in the Exam Design stage.
+-- 4. comp_get_reassessment_comparison — per competency, the predecessor's vs
+--    this assessment's stored level/score/status/confidence/gap, the level and
+--    score delta, a gap outcome (CLOSED / NARROWED / UNCHANGED / WIDENED /
+--    NEW_GAP / GAP_IDENTIFIED / NO_GAP / UNKNOWN / NOT_COMPARABLE —
+--    INSUFFICIENT_EVIDENCE on either side is always UNKNOWN, never "closed"
+--    or "declined") and the predecessor's development-plan actions for that
+--    competency with their outcome. Guarded by comp_can_access_assessment()
+--    on BOTH assessments.
+-- ============================================================================
+
+alter table comp_assessments add column if not exists previous_assessment_id uuid references comp_assessments (id) on delete set null;
+-- One follow-up per assessment → a linear previous/next chain.
+create unique index if not exists idx_comp_assessments_previous_assessment on comp_assessments (previous_assessment_id) where previous_assessment_id is not null;
+
+create or replace function comp_can_manage_development_plan(p_assessment_id uuid)
+returns boolean as $$
+  select comp_is_lead(p_assessment_id) or comp_is_assessment_designer() or comp_is_module_admin();
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_can_manage_development_plan(uuid) from public, anon;
+grant execute on function comp_can_manage_development_plan(uuid) to authenticated;
+
+create table if not exists comp_development_plans (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  status text not null default 'DRAFT' check (status in ('DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED')),
+  -- Who owns follow-through (line manager / HR) — not necessarily the assessment lead.
+  owner_id uuid references profiles (id) on delete set null,
+  summary text not null default '',
+  target_review_date date,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create unique index if not exists idx_comp_development_plans_one_open on comp_development_plans (assessment_id) where status <> 'CANCELLED';
+create index if not exists idx_comp_development_plans_assessment on comp_development_plans (assessment_id);
+create index if not exists idx_comp_development_plans_owner on comp_development_plans (owner_id);
+
+create table if not exists comp_development_actions (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references comp_development_plans (id) on delete cascade,
+  -- Null = a general action not tied to one competency (e.g. an unmatched AI recommendation).
+  competency_id uuid references comp_competencies (id) on delete set null,
+  action_type text not null default 'TRAINING' check (action_type in (
+    'TRAINING', 'MENTORING', 'ON_THE_JOB', 'SELF_STUDY', 'PROJECT_ASSIGNMENT', 'OTHER', 'EVIDENCE_COLLECTION'
+  )),
+  title text not null check (btrim(title) <> ''),
+  description text not null default '',
+  current_level numeric,
+  target_level numeric,
+  priority text not null default 'MEDIUM' check (priority in ('HIGH', 'MEDIUM', 'LOW')),
+  due_date date,
+  status text not null default 'NOT_STARTED' check (status in ('NOT_STARTED', 'IN_PROGRESS', 'DONE', 'CANCELLED')),
+  owner_id uuid references profiles (id) on delete set null,
+  progress_note text not null default '',
+  source text not null default 'MANUAL' check (source in ('GAP_ENGINE', 'AI', 'MANUAL')),
+  sort_order int not null default 0,
+  completed_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create index if not exists idx_comp_development_actions_plan on comp_development_actions (plan_id, sort_order);
+create index if not exists idx_comp_development_actions_competency on comp_development_actions (competency_id);
+create index if not exists idx_comp_development_actions_owner on comp_development_actions (owner_id);
+
+alter table comp_development_plans enable row level security;
+alter table comp_development_actions enable row level security;
+
+drop policy if exists "comp_development_plans_select_access" on comp_development_plans;
+create policy "comp_development_plans_select_access" on comp_development_plans
+  for select to authenticated
+  using (comp_can_access_assessment(assessment_id) or comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_insert_manage" on comp_development_plans;
+create policy "comp_development_plans_insert_manage" on comp_development_plans
+  for insert to authenticated with check (comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_update_manage" on comp_development_plans;
+create policy "comp_development_plans_update_manage" on comp_development_plans
+  for update to authenticated
+  using (comp_can_manage_development_plan(assessment_id)) with check (comp_can_manage_development_plan(assessment_id));
+drop policy if exists "comp_development_plans_delete_manage" on comp_development_plans;
+create policy "comp_development_plans_delete_manage" on comp_development_plans
+  for delete to authenticated using (comp_can_manage_development_plan(assessment_id));
+
+-- Actions inherit their plan's standing: readable whenever the plan is (the plan's own RLS filters
+-- the subquery), writable only by whoever may manage that plan's assessment.
+drop policy if exists "comp_development_actions_select_access" on comp_development_actions;
+create policy "comp_development_actions_select_access" on comp_development_actions
+  for select to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id));
+drop policy if exists "comp_development_actions_insert_manage" on comp_development_actions;
+create policy "comp_development_actions_insert_manage" on comp_development_actions
+  for insert to authenticated
+  with check (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+drop policy if exists "comp_development_actions_update_manage" on comp_development_actions;
+create policy "comp_development_actions_update_manage" on comp_development_actions
+  for update to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)))
+  with check (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+drop policy if exists "comp_development_actions_delete_manage" on comp_development_actions;
+create policy "comp_development_actions_delete_manage" on comp_development_actions
+  for delete to authenticated
+  using (exists (select 1 from comp_development_plans p where p.id = plan_id and comp_can_manage_development_plan(p.assessment_id)));
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['comp_development_plans', 'comp_development_actions']
+  loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at_and_by()', t);
+  end loop;
+end $$;
+
+-- completed_at is stamped server-side when an action first becomes DONE and cleared if it leaves DONE.
+create or replace function comp_development_actions_track_completion()
+returns trigger as $$
+begin
+  if new.status = 'DONE' then
+    if tg_op = 'INSERT' or old.status is distinct from 'DONE' then
+      new.completed_at := now();
+    end if;
+  else
+    new.completed_at := null;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_development_actions_track_completion on comp_development_actions;
+create trigger trg_comp_development_actions_track_completion before insert or update on comp_development_actions
+  for each row execute function comp_development_actions_track_completion();
+
+-- Section 51's default-blueprint trigger, changed ONLY to leave reassessments alone: a follow-up
+-- copies its predecessor's design (see this section's header), which the default must not override.
+create or replace function comp_assessments_apply_default_blueprint()
+returns trigger as $$
+declare
+  v_bp comp_assessment_blueprints%rowtype;
+begin
+  if new.blueprint_id is not null or new.previous_assessment_id is not null then
+    return new;
+  end if;
+  select * into v_bp
+  from comp_assessment_blueprints b
+  where b.job_role = new.job_role and b.is_default and b.active
+  limit 1;
+  if not found then
+    return new;
+  end if;
+  new.blueprint_id := v_bp.id;
+  new.needs_technical_assessment := v_bp.includes_technical;
+  new.needs_personality_assessment := v_bp.includes_personality;
+  new.needs_structured_interview := v_bp.includes_structured_interview;
+  new.includes_experience := v_bp.includes_experience;
+  perform comp_log_audit(
+    'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED', 'comp_assessments', new.id, null,
+    jsonb_build_object(
+      'blueprintId', v_bp.id,
+      'blueprintVersion', v_bp.version,
+      'needsTechnicalAssessment', v_bp.includes_technical,
+      'needsPersonalityAssessment', v_bp.includes_personality,
+      'needsStructuredInterview', v_bp.includes_structured_interview,
+      'includesExperience', v_bp.includes_experience
+    )
+  );
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+create or replace function comp_seed_development_plan(p_assessment_id uuid)
+returns jsonb as $$
+declare
+  v_plan comp_development_plans%rowtype;
+  v_created boolean := false;
+  v_gap_actions int := 0;
+  v_evidence_actions int := 0;
+  v_ai_actions int := 0;
+  v_next_order int;
+  v_recs jsonb;
+  v_rec text;
+  v_match comp_competency_scores%rowtype;
+begin
+  if not comp_can_manage_development_plan(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  if not exists (select 1 from comp_assessments where id = p_assessment_id) then
+    raise exception 'assessment not found';
+  end if;
+  if not exists (select 1 from comp_competency_scores where assessment_id = p_assessment_id) then
+    raise exception 'competency profile has not been computed';
+  end if;
+
+  select * into v_plan from comp_development_plans
+  where assessment_id = p_assessment_id and status <> 'CANCELLED'
+  for update;
+  if not found then
+    insert into comp_development_plans (assessment_id, status, owner_id, target_review_date, created_by)
+    values (p_assessment_id, 'DRAFT', auth.uid(), current_date + 120, auth.uid())
+    returning * into v_plan;
+    v_created := true;
+  end if;
+
+  -- A completed plan is a closed record — never add suggestions to it after the fact.
+  if v_plan.status = 'COMPLETED' then
+    return jsonb_build_object('planId', v_plan.id, 'created', false, 'gapActions', 0, 'evidenceActions', 0, 'aiActions', 0, 'skipped', 'PLAN_COMPLETED');
+  end if;
+
+  select coalesce(max(sort_order), 0) into v_next_order from comp_development_actions where plan_id = v_plan.id;
+
+  with gaps as (
+    select s.competency_id, s.status, s.actual_level, s.required_level, s.gap, c.label_fa, c.domain,
+      row_number() over (order by (s.status = 'CRITICAL_GAP') desc, s.gap desc nulls last, c.label_fa) as rn
+    from comp_competency_scores s
+    join comp_competencies c on c.id = s.competency_id
+    where s.assessment_id = p_assessment_id and s.status in ('GAP', 'CRITICAL_GAP')
+      and not exists (select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.competency_id = s.competency_id)
+  )
+  insert into comp_development_actions (
+    plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+  )
+  select
+    v_plan.id, g.competency_id,
+    case when g.domain = 'BEHAVIORAL' then 'MENTORING' else 'TRAINING' end,
+    'توسعه شایستگی «' || g.label_fa || '»',
+    format('ارتقای سطح از %s به %s (شکاف %s سطح)%s — پیشنهاد خودکار بر پایه تحلیل شکاف شایستگی.',
+      g.actual_level, g.required_level, g.gap, case when g.status = 'CRITICAL_GAP' then '؛ شایستگی حیاتی شغل' else '' end),
+    g.actual_level, g.required_level,
+    case when g.status = 'CRITICAL_GAP' then 'HIGH' when g.gap >= 1 then 'MEDIUM' else 'LOW' end,
+    current_date + case when g.status = 'CRITICAL_GAP' then 60 when g.gap >= 1 then 90 else 120 end,
+    'GAP_ENGINE', v_next_order + g.rn::int, auth.uid()
+  from gaps g;
+  get diagnostics v_gap_actions = row_count;
+  v_next_order := v_next_order + v_gap_actions;
+
+  -- No evidence ≠ no competency: one «ارزیابی تکمیلی» action, never a training action.
+  with unknown as (
+    select s.competency_id, s.is_critical, c.label_fa,
+      row_number() over (order by s.is_critical desc, s.weight desc, c.label_fa) as rn
+    from comp_competency_scores s
+    join comp_competencies c on c.id = s.competency_id
+    where s.assessment_id = p_assessment_id and s.status = 'INSUFFICIENT_EVIDENCE'
+      and not exists (select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.competency_id = s.competency_id)
+  )
+  insert into comp_development_actions (
+    plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+  )
+  select
+    v_plan.id, u.competency_id, 'EVIDENCE_COLLECTION',
+    'ارزیابی تکمیلی «' || u.label_fa || '»',
+    'برای این شایستگی هنوز شواهدی ثبت نشده است — این به معنای ضعف متقاضی نیست. شواهد تکمیلی (مصاحبه ساختاریافته، آزمون یا سوابق مستند) جمع‌آوری و پروفایل شایستگی دوباره محاسبه شود.',
+    null, null,
+    case when u.is_critical then 'HIGH' else 'MEDIUM' end,
+    current_date + 30,
+    'GAP_ENGINE', v_next_order + u.rn::int, auth.uid()
+  from unknown u;
+  get diagnostics v_evidence_actions = row_count;
+  v_next_order := v_next_order + v_evidence_actions;
+
+  select a.analysis -> 'training_recommendations' into v_recs
+  from comp_candidate_ai_analysis a
+  where a.assessment_id = p_assessment_id
+  order by a.created_at desc
+  limit 1;
+
+  if jsonb_typeof(v_recs) = 'array' then
+    for v_rec in
+      select btrim(r) from jsonb_array_elements_text(v_recs) with ordinality x(r, ord) where btrim(r) <> '' order by ord
+    loop
+      continue when exists (
+        select 1 from comp_development_actions a where a.plan_id = v_plan.id and a.source = 'AI' and a.description = v_rec
+      );
+      -- Linked only to a competency the engine actually reports as a gap, never to an
+      -- INSUFFICIENT_EVIDENCE / MEETS / EXCEEDS one (SELECT INTO with no row leaves v_match all-null).
+      select s.* into v_match
+      from comp_competency_scores s
+      join comp_competencies c on c.id = s.competency_id
+      where s.assessment_id = p_assessment_id and s.status in ('GAP', 'CRITICAL_GAP')
+        and (strpos(v_rec, c.label_fa) > 0 or strpos(lower(v_rec), lower(c.key)) > 0 or strpos(lower(v_rec), replace(lower(c.key), '_', ' ')) > 0)
+      order by (s.status = 'CRITICAL_GAP') desc, s.gap desc nulls last
+      limit 1;
+      v_next_order := v_next_order + 1;
+      insert into comp_development_actions (
+        plan_id, competency_id, action_type, title, description, current_level, target_level, priority, due_date, source, sort_order, created_by
+      ) values (
+        v_plan.id, v_match.competency_id, 'TRAINING',
+        case when length(v_rec) > 120 then left(v_rec, 117) || '…' else v_rec end,
+        v_rec, v_match.actual_level, v_match.required_level, 'LOW', current_date + 120, 'AI', v_next_order, auth.uid()
+      );
+      v_ai_actions := v_ai_actions + 1;
+    end loop;
+  end if;
+
+  perform comp_log_audit(
+    'DEVELOPMENT_PLAN_SEEDED', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object('planId', v_plan.id, 'created', v_created, 'gapActions', v_gap_actions,
+      'evidenceActions', v_evidence_actions, 'aiActions', v_ai_actions)
+  );
+
+  return jsonb_build_object('planId', v_plan.id, 'created', v_created, 'gapActions', v_gap_actions,
+    'evidenceActions', v_evidence_actions, 'aiActions', v_ai_actions);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_seed_development_plan(uuid) from public, anon;
+grant execute on function comp_seed_development_plan(uuid) to authenticated;
+
+create or replace function comp_create_reassessment(p_assessment_id uuid)
+returns uuid as $$
+declare
+  v_prev comp_assessments%rowtype;
+  v_id uuid;
+begin
+  if not comp_can_manage_development_plan(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Linear chain: an assessment already followed up returns its follow-up, never a second branch.
+  select id into v_id from comp_assessments where previous_assessment_id = p_assessment_id;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  insert into comp_assessments (
+    previous_assessment_id, job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone,
+    candidate_email, candidate_birth_date, candidate_age, has_disability, disability_note, photo_url,
+    years_experience_total, years_experience_pipeline, current_employer, education, employment_history,
+    certifications, notable_projects, interview_date, status, answers, panel_size,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience,
+    blueprint_id, created_by
+  ) values (
+    p_assessment_id, v_prev.job_role, v_prev.candidate_name, v_prev.candidate_position, v_prev.candidate_national_id, v_prev.candidate_phone,
+    v_prev.candidate_email, v_prev.candidate_birth_date, v_prev.candidate_age, v_prev.has_disability, v_prev.disability_note, v_prev.photo_url,
+    v_prev.years_experience_total, v_prev.years_experience_pipeline, v_prev.current_employer, v_prev.education, v_prev.employment_history,
+    v_prev.certifications, v_prev.notable_projects, current_date, 'draft', '{}'::jsonb, v_prev.panel_size,
+    v_prev.needs_technical_assessment, v_prev.needs_personality_assessment, v_prev.needs_structured_interview, v_prev.includes_experience,
+    v_prev.blueprint_id, auth.uid()
+  )
+  returning id into v_id;
+
+  perform comp_log_audit(
+    'REASSESSMENT_CREATED', 'comp_assessments', v_id,
+    jsonb_build_object('previousAssessmentId', p_assessment_id),
+    jsonb_build_object(
+      'candidateName', v_prev.candidate_name, 'jobRole', v_prev.job_role, 'blueprintId', v_prev.blueprint_id,
+      'needsTechnicalAssessment', v_prev.needs_technical_assessment, 'needsPersonalityAssessment', v_prev.needs_personality_assessment,
+      'needsStructuredInterview', v_prev.needs_structured_interview, 'includesExperience', v_prev.includes_experience
+    )
+  );
+  return v_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_create_reassessment(uuid) from public, anon;
+grant execute on function comp_create_reassessment(uuid) to authenticated;
+
+create or replace function comp_get_reassessment_comparison(p_assessment_id uuid)
+returns jsonb as $$
+declare
+  v_cur comp_assessments%rowtype;
+  v_prev comp_assessments%rowtype;
+  v_plan comp_development_plans%rowtype;
+  v_rows jsonb;
+  v_summary jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_cur from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_cur.previous_assessment_id is null then
+    return null;
+  end if;
+  if not comp_can_access_assessment(v_cur.previous_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = v_cur.previous_assessment_id;
+  select * into v_plan from comp_development_plans where assessment_id = v_prev.id and status <> 'CANCELLED' limit 1;
+
+  with p as (
+    select * from comp_competency_scores where assessment_id = v_prev.id
+  ),
+  c as (
+    select * from comp_competency_scores where assessment_id = v_cur.id
+  ),
+  j as (
+    select
+      coalesce(c.competency_id, p.competency_id) as competency_id,
+      coalesce(c.is_critical, p.is_critical) as is_critical,
+      p.required_level as p_req, p.actual_level as p_level, p.actual_score as p_score, p.status as p_status, p.confidence as p_conf, p.gap as p_gap,
+      c.required_level as c_req, c.actual_level as c_level, c.actual_score as c_score, c.status as c_status, c.confidence as c_conf, c.gap as c_gap
+    from p
+    full outer join c on c.competency_id = p.competency_id
+  ),
+  acts as (
+    select a.competency_id,
+      count(*)::int as total,
+      count(*) filter (where a.status = 'DONE')::int as done,
+      jsonb_agg(jsonb_build_object(
+        'id', a.id, 'title', a.title, 'actionType', a.action_type, 'status', a.status, 'source', a.source,
+        'targetLevel', a.target_level, 'completedAt', a.completed_at
+      ) order by a.sort_order) as items
+    from comp_development_actions a
+    where a.plan_id = v_plan.id and a.competency_id is not null
+    group by a.competency_id
+  ),
+  r as (
+    select j.*, cc.key, cc.label_fa, acts.total, acts.done, acts.items,
+      case when j.p_level is not null and j.c_level is not null then round(j.c_level - j.p_level, 1) end as level_delta,
+      case when j.p_score is not null and j.c_score is not null then round(j.c_score - j.p_score, 2) end as score_delta,
+      case
+        when j.p_status is null or j.c_status is null then 'NOT_COMPARABLE'
+        when j.c_status = 'INSUFFICIENT_EVIDENCE' then 'UNKNOWN'
+        when j.p_status = 'INSUFFICIENT_EVIDENCE' then case when j.c_status in ('GAP', 'CRITICAL_GAP') then 'GAP_IDENTIFIED' else 'NO_GAP' end
+        when j.p_status in ('GAP', 'CRITICAL_GAP') and j.c_status in ('MEETS', 'EXCEEDS') then 'CLOSED'
+        when j.p_status in ('GAP', 'CRITICAL_GAP') then
+          case when j.c_gap < j.p_gap then 'NARROWED' when j.c_gap > j.p_gap then 'WIDENED' else 'UNCHANGED' end
+        when j.c_status in ('GAP', 'CRITICAL_GAP') then 'NEW_GAP'
+        else 'NO_GAP'
+      end as gap_outcome
+    from j
+    left join comp_competencies cc on cc.id = j.competency_id
+    left join acts on acts.competency_id = j.competency_id
+  )
+  select
+    coalesce(jsonb_agg(jsonb_build_object(
+      'competencyId', r.competency_id,
+      'key', r.key,
+      'labelFa', coalesce(r.label_fa, 'شایستگی'),
+      'isCritical', r.is_critical,
+      'requiredLevel', coalesce(r.c_req, r.p_req),
+      'previous', case when r.p_status is null then null else jsonb_build_object(
+        'requiredLevel', r.p_req, 'actualLevel', r.p_level, 'actualScore', r.p_score, 'status', r.p_status, 'confidence', r.p_conf, 'gap', r.p_gap) end,
+      'current', case when r.c_status is null then null else jsonb_build_object(
+        'requiredLevel', r.c_req, 'actualLevel', r.c_level, 'actualScore', r.c_score, 'status', r.c_status, 'confidence', r.c_conf, 'gap', r.c_gap) end,
+      'levelDelta', r.level_delta,
+      'scoreDelta', r.score_delta,
+      'gapOutcome', r.gap_outcome,
+      'actions', jsonb_build_object('total', coalesce(r.total, 0), 'done', coalesce(r.done, 0), 'items', coalesce(r.items, '[]'::jsonb))
+    ) order by r.is_critical desc, r.label_fa), '[]'::jsonb),
+    jsonb_build_object(
+      'competencies', count(*),
+      'comparable', count(*) filter (where r.level_delta is not null),
+      'improved', count(*) filter (where r.level_delta > 0),
+      'declined', count(*) filter (where r.level_delta < 0),
+      'gapsBefore', count(*) filter (where r.p_status in ('GAP', 'CRITICAL_GAP')),
+      'gapsAfter', count(*) filter (where r.c_status in ('GAP', 'CRITICAL_GAP')),
+      'closed', count(*) filter (where r.gap_outcome = 'CLOSED'),
+      'narrowed', count(*) filter (where r.gap_outcome = 'NARROWED'),
+      'widened', count(*) filter (where r.gap_outcome = 'WIDENED'),
+      'newGaps', count(*) filter (where r.gap_outcome in ('NEW_GAP', 'GAP_IDENTIFIED')),
+      'unknown', count(*) filter (where r.gap_outcome = 'UNKNOWN'),
+      'closedWithDoneActions', count(*) filter (where r.gap_outcome = 'CLOSED' and coalesce(r.done, 0) > 0)
+    )
+  into v_rows, v_summary
+  from r;
+
+  return jsonb_build_object(
+    'assessmentId', v_cur.id,
+    'previousAssessmentId', v_prev.id,
+    'previousInterviewDate', v_prev.interview_date,
+    'currentInterviewDate', v_cur.interview_date,
+    'previousComputedAt', (select max(computed_at) from comp_competency_scores where assessment_id = v_prev.id),
+    'currentComputedAt', (select max(computed_at) from comp_competency_scores where assessment_id = v_cur.id),
+    'plan', case when v_plan.id is null then null else jsonb_build_object(
+      'id', v_plan.id, 'status', v_plan.status,
+      'actionsTotal', (select count(*) from comp_development_actions a where a.plan_id = v_plan.id and a.status <> 'CANCELLED'),
+      'actionsDone', (select count(*) from comp_development_actions a where a.plan_id = v_plan.id and a.status = 'DONE')
+    ) end,
+    'summary', v_summary,
+    'competencies', v_rows
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_reassessment_comparison(uuid) from public, anon;
+grant execute on function comp_get_reassessment_comparison(uuid) to authenticated;

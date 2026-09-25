@@ -18,6 +18,10 @@ interface SidebarProps {
   /** Mobile drawer state — irrelevant at lg+ where the sidebar is always visible in-flow. */
   mobileOpen: boolean
   onMobileClose: () => void
+  /** Set when arrived here from Project Radar with a specific project in context: hides the
+   * project list/switcher and the cross-project portfolio view, so there's no way to wander to
+   * another project's data. */
+  locked?: boolean
 }
 
 const NAV: { id: Page; label: string; icon: typeof Map }[] = [
@@ -32,7 +36,7 @@ const NAV: { id: Page; label: string; icon: typeof Map }[] = [
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
-export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobileClose, locked }: SidebarProps) {
   const projects = useStore((s) => s.projects)
   const currentProjectId = useStore((s) => s.currentProjectId)
   const currentProject = useStore((s) => s.currentProject())
@@ -100,7 +104,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
       )}
 
       <nav className="px-3 space-y-1">
-        {NAV.map(({ id, label, icon: Icon }) => (
+        {(locked ? NAV.filter((n) => n.id !== 'portfolio') : NAV).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => {
@@ -122,10 +126,15 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
           <span className="flex items-center gap-1.5 text-xs font-medium text-brand-300">
             <FolderKanban size={13} /> پروژه‌ها
           </span>
-          <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
-            <Plus size={15} />
-          </button>
+          {!locked && (
+            <button onClick={onNewProject} className="text-brand-400 hover:text-brand-300">
+              <Plus size={15} />
+            </button>
+          )}
         </div>
+        {locked ? (
+          <div className="px-3 pb-3 text-xs font-medium text-current">{currentProject?.name}</div>
+        ) : (
         <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
           {projects.map((p) => (
             <div
@@ -180,6 +189,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
             </div>
           ))}
         </div>
+        )}
       </div>
 
       <div className="px-3 py-2 mt-2 flex items-center gap-1.5 border-t" style={{ borderColor: 'var(--border-soft)' }}>
@@ -191,13 +201,15 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
         >
           <Download size={12} /> خروجی پروژه
         </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
-          title="ورود پروژه از فایل JSON"
-        >
-          <Upload size={12} /> ورود پروژه
-        </button>
+        {!locked && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
+            title="ورود پروژه از فایل JSON"
+          >
+            <Upload size={12} /> ورود پروژه
+          </button>
+        )}
         <input
           ref={fileInputRef}
           type="file"

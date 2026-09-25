@@ -1,26 +1,66 @@
 import type {
+  AiAnalysisContent,
   AssessmentStatus,
   AttachmentKind,
+  CandidateAiAnalysis,
+  CandidateAiAnalysisContent,
+  CandidateAiCompetencyBasisRow,
   CertificationEntry,
+  CompAiAnalysis,
+  CompAssessmentBlueprint,
+  CompAssessmentTemplate,
   CompAttachment,
+  CompAuditLogEntry,
+  CompCompetency,
+  CompCompetencyConfidence,
+  CompCompetencyDomain,
+  CompCompetencyEvidence,
+  CompCompetencyEvidenceSource,
+  CompCompetencyScore,
+  CompCompetencyStatus,
+  CompDevelopmentAction,
+  CompDevelopmentActionSource,
+  CompDevelopmentActionStatus,
+  CompDevelopmentActionType,
+  CompDevelopmentPlan,
+  CompDevelopmentPlanStatus,
+  CompDevelopmentPriority,
+  CompEvidenceSourceType,
+  CompInterviewRating,
   CompetencyAnswers,
   CompetencyAssessment,
-  CompetencyDomainKey,
-  CompetencyQuestion,
-  CompJobPosition,
+  CompJobCompetencyRequirement,
+  CompJobRoleConfig,
+  CompModuleAdmin,
+  CompPanelGroup,
   CompPanelist,
   CompPanelistScore,
   CompProfileLite,
+  CompQuestionBankItem,
+  CompRoleAssignment,
   EducationEntry,
   EmploymentEntry,
+  JobRole,
+  QuestionApprovalStatus,
+  QuestionDifficulty,
+  QuestionMixCell,
+  QuestionType,
   SelfServiceStatus,
 } from '../types'
 
 export interface CompAssessmentRow {
   id: string
+  job_role: string | null
+  selected_question_ids: string[] | null
+  needs_personality_assessment: boolean
+  needs_technical_assessment: boolean
+  needs_structured_interview: boolean | null
+  includes_experience: boolean | null
+  blueprint_id: string | null
+  previous_assessment_id?: string | null
+  panel_size: number | null
   candidate_name: string
   candidate_position: string
-  job_position_id: string | null
   candidate_national_id: string
   candidate_phone: string
   candidate_email: string
@@ -53,6 +93,11 @@ export interface CompAssessmentRow {
   is_approved: boolean
   strengths: string
   development_areas: string
+  duration_minutes: number | null
+  auto_finish_on_timeout: boolean
+  interview_timer_started_at: string | null
+  interview_timer_elapsed_seconds: number
+  interview_timer_running: boolean
   created_by: string | null
   created_at: string
   updated_at: string
@@ -61,9 +106,17 @@ export interface CompAssessmentRow {
 export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessment {
   return {
     id: r.id,
+    jobRole: (r.job_role as JobRole | null) ?? 'project_manager',
+    selectedQuestionIds: r.selected_question_ids ?? [],
+    needsPersonalityAssessment: r.needs_personality_assessment ?? false,
+    needsTechnicalAssessment: r.needs_technical_assessment ?? true,
+    needsStructuredInterview: r.needs_structured_interview ?? false,
+    includesExperience: r.includes_experience ?? true,
+    blueprintId: r.blueprint_id ?? null,
+    previousAssessmentId: r.previous_assessment_id ?? null,
+    panelSize: r.panel_size ?? 3,
     candidateName: r.candidate_name,
     candidatePosition: r.candidate_position,
-    jobPositionId: r.job_position_id,
     candidateNationalId: r.candidate_national_id,
     candidatePhone: r.candidate_phone,
     candidateEmail: r.candidate_email,
@@ -96,6 +149,11 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     isApproved: r.is_approved,
     strengths: r.strengths ?? '',
     developmentAreas: r.development_areas ?? '',
+    durationMinutes: r.duration_minutes,
+    autoFinishOnTimeout: r.auto_finish_on_timeout,
+    interviewTimerStartedAt: r.interview_timer_started_at,
+    interviewTimerElapsedSeconds: r.interview_timer_elapsed_seconds,
+    interviewTimerRunning: r.interview_timer_running,
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -122,6 +180,43 @@ export function compPanelistFromRow(r: CompPanelistRow): CompPanelist {
   }
 }
 
+export interface CompModuleAdminRow {
+  user_id: string
+  added_by: string | null
+  created_at: string
+}
+
+export function compModuleAdminFromRow(r: CompModuleAdminRow): CompModuleAdmin {
+  return { userId: r.user_id, addedBy: r.added_by, createdAt: r.created_at }
+}
+
+export interface CompPanelGroupMemberRow {
+  id: string
+  group_id: string
+  user_id: string
+  is_lead: boolean
+}
+
+export interface CompPanelGroupRow {
+  id: string
+  name: string
+  job_role: string | null
+  created_by: string | null
+  created_at: string
+  comp_panel_group_members: CompPanelGroupMemberRow[]
+}
+
+export function compPanelGroupFromRow(r: CompPanelGroupRow): CompPanelGroup {
+  return {
+    id: r.id,
+    name: r.name,
+    jobRole: (r.job_role as JobRole | null) ?? null,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    members: (r.comp_panel_group_members ?? []).map((m) => ({ id: m.id, groupId: m.group_id, userId: m.user_id, isLead: m.is_lead })),
+  }
+}
+
 export interface CompPanelistScoreRow {
   id: string
   assessment_id: string
@@ -129,6 +224,12 @@ export interface CompPanelistScoreRow {
   answers: CompetencyAnswers
   capstone_score: number | null
   capstone_note: string
+  education_score: number | null
+  experience_score: number | null
+  pm_training_score: number | null
+  pm_certification_score: number | null
+  strengths: string
+  development_areas: string
   submitted_at: string | null
   created_at: string
   updated_at: string
@@ -142,6 +243,12 @@ export function compPanelistScoreFromRow(r: CompPanelistScoreRow): CompPanelistS
     answers: r.answers ?? {},
     capstoneScore: r.capstone_score,
     capstoneNote: r.capstone_note ?? '',
+    educationScore: r.education_score,
+    experienceScore: r.experience_score,
+    pmTrainingScore: r.pm_training_score,
+    pmCertificationScore: r.pm_certification_score,
+    strengths: r.strengths ?? '',
+    developmentAreas: r.development_areas ?? '',
     submittedAt: r.submitted_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -182,38 +289,558 @@ export function profileLiteFromRow(r: ProfileLiteRow): CompProfileLite {
   return { id: r.id, email: r.email, fullName: r.full_name || r.email }
 }
 
-export interface CompJobPositionRow {
+export interface CompQuestionBankRow {
   id: string
+  job_role: string
+  category: string
+  sub_category: string
+  difficulty: string
+  question_text: string
+  image_url: string | null
+  reference_answer: string
+  key_points: string[] | null
+  excellent_answer_indicators: string[] | null
+  common_mistakes: string[] | null
+  standard_reference: string | null
+  score_min: number
+  score_max: number
+  evaluator_note_required: boolean
+  active: boolean
+  weight: number | null
+  approval_status: string | null
+  question_group_id: string
+  version: number | null
+  superseded_by: string | null
+  usage_count: number | null
+  proposal_reason: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compQuestionBankFromRow(r: CompQuestionBankRow): CompQuestionBankItem {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    category: r.category as QuestionType,
+    subCategory: r.sub_category,
+    difficulty: r.difficulty as QuestionDifficulty,
+    questionText: r.question_text,
+    imageUrl: r.image_url ?? '',
+    referenceAnswer: r.reference_answer,
+    keyPoints: r.key_points ?? [],
+    excellentAnswerIndicators: r.excellent_answer_indicators ?? [],
+    commonMistakes: r.common_mistakes ?? [],
+    standardReference: r.standard_reference ?? '',
+    scoreMin: r.score_min,
+    scoreMax: r.score_max,
+    evaluatorNoteRequired: r.evaluator_note_required,
+    active: r.active,
+    weight: r.weight ?? 1,
+    approvalStatus: (r.approval_status as QuestionApprovalStatus) ?? 'APPROVED',
+    questionGroupId: r.question_group_id ?? r.id,
+    version: r.version ?? 1,
+    supersededBy: r.superseded_by,
+    usageCount: r.usage_count ?? 0,
+    proposalReason: r.proposal_reason ?? '',
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+/** Row shape returned by the comp_question_bank_public() RPC — the safe, non-sensitive projection
+ * (see schema.sql) used by the dashboard/reports pages, which only ever need to bucket an
+ * already-recorded score into a category and never the evaluator-only advisory content. */
+export interface CompQuestionBankPublicRow {
+  id: string
+  job_role: string
+  category: string
+  sub_category: string
+  difficulty: string
+  question_text: string
+  image_url: string | null
+  weight: number | null
+  question_group_id: string
+  version: number | null
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Fills the fields the public RPC never returns (reference answer, key points, etc.) with safe
+ * empty placeholders — callers of this mapper (dashboard/reports/results aggregate scoring) never
+ * read those fields, they only exist so this can still satisfy the shared CompQuestionBankItem
+ * shape used by roleCompetencyModel.ts's questionsForAssessment/computeCategoryScores. */
+export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): CompQuestionBankItem {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    category: r.category as QuestionType,
+    subCategory: r.sub_category,
+    difficulty: r.difficulty as QuestionDifficulty,
+    questionText: r.question_text,
+    imageUrl: r.image_url ?? '',
+    referenceAnswer: '',
+    keyPoints: [],
+    excellentAnswerIndicators: [],
+    commonMistakes: [],
+    standardReference: '',
+    scoreMin: 0,
+    scoreMax: 5,
+    evaluatorNoteRequired: false,
+    active: r.active,
+    weight: r.weight ?? 1,
+    approvalStatus: 'APPROVED',
+    questionGroupId: r.question_group_id ?? r.id,
+    version: r.version ?? 1,
+    supersededBy: null,
+    usageCount: 0,
+    proposalReason: '',
+    createdBy: null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompJobRoleConfigRow {
+  job_role: string
+  label_fa: string | null
+  description: string | null
+  active: boolean | null
+  sort_order: number | null
+  allowed_question_types: string[]
+  updated_by: string | null
+  updated_at: string
+  created_at: string | null
+}
+
+export function compJobRoleConfigFromRow(r: CompJobRoleConfigRow): CompJobRoleConfig {
+  return {
+    jobRole: r.job_role as JobRole,
+    labelFa: r.label_fa || r.job_role,
+    description: r.description ?? '',
+    active: r.active ?? true,
+    sortOrder: r.sort_order ?? 0,
+    allowedQuestionTypes: (r.allowed_question_types ?? []) as CompJobRoleConfig['allowedQuestionTypes'],
+    updatedBy: r.updated_by,
+    updatedAt: r.updated_at,
+    createdAt: r.created_at ?? r.updated_at,
+  }
+}
+
+/** Falls back to the raw job_role key when no catalog row is loaded yet — this must never throw on
+ * an unknown key, unlike a Record<JobRole, string> lookup would have with a role outside the old
+ * compile-time union. The drop-in replacement for every JOB_ROLE_LABEL_FA[x] call site. */
+export function jobRoleLabel(jobRoles: CompJobRoleConfig[], jobRole: JobRole): string {
+  return jobRoles.find((r) => r.jobRole === jobRole)?.labelFa || jobRole
+}
+
+/** Every catalog row ordered exactly as the admin arranged it (sort_order, then a stable
+ * alphabetical tiebreak on the key itself) — the drop-in replacement for the old fixed JOB_ROLES
+ * array everywhere a dropdown/filter needs "every job role, in a sensible order". */
+export function sortedJobRoles(jobRoles: CompJobRoleConfig[]): CompJobRoleConfig[] {
+  return [...jobRoles].sort((a, b) => a.sortOrder - b.sortOrder || a.jobRole.localeCompare(b.jobRole))
+}
+
+export interface CompCompetencyRow {
+  id: string
+  key: string
+  label_fa: string
+  description: string | null
+  domain: string
+  proficiency_levels: { level: number; label_fa: string }[] | null
+  active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compCompetencyFromRow(r: CompCompetencyRow): CompCompetency {
+  return {
+    id: r.id,
+    key: r.key,
+    labelFa: r.label_fa,
+    description: r.description ?? '',
+    domain: r.domain as CompCompetencyDomain,
+    proficiencyLevels: (r.proficiency_levels ?? []).map((l) => ({ level: l.level, labelFa: l.label_fa })),
+    active: r.active,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
+  }
+}
+
+export interface CompJobCompetencyRequirementRow {
+  id: string
+  job_role: string
+  competency_id: string
+  required_level: number
+  is_critical: boolean
+  weight: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compJobCompetencyRequirementFromRow(r: CompJobCompetencyRequirementRow): CompJobCompetencyRequirement {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    competencyId: r.competency_id,
+    requiredLevel: r.required_level,
+    isCritical: r.is_critical,
+    weight: r.weight,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
+  }
+}
+
+export interface CompCompetencyEvidenceSourceRow {
+  id: string
+  competency_id: string
+  source_type: string
+  source_ref: string
+  weight: number
+  created_at: string
+  updated_at: string
+}
+
+export function compCompetencyEvidenceSourceFromRow(r: CompCompetencyEvidenceSourceRow): CompCompetencyEvidenceSource {
+  return {
+    id: r.id,
+    competencyId: r.competency_id,
+    sourceType: r.source_type as CompEvidenceSourceType,
+    sourceRef: r.source_ref,
+    weight: Number(r.weight),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompAssessmentBlueprintRow {
+  id: string
+  job_role: string
   title: string
-  sort_order: number
-  is_active: boolean
+  description: string | null
+  version: number
+  is_default: boolean
+  active: boolean
+  includes_technical: boolean
+  includes_personality: boolean
+  includes_structured_interview: boolean
+  includes_experience: boolean
+  technical_template_id: string | null
+  personality_template_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  updated_by: string | null
+}
+
+export function compAssessmentBlueprintFromRow(r: CompAssessmentBlueprintRow): CompAssessmentBlueprint {
+  return {
+    id: r.id,
+    jobRole: r.job_role as JobRole,
+    title: r.title,
+    description: r.description ?? '',
+    version: r.version,
+    isDefault: r.is_default,
+    active: r.active,
+    includesTechnical: r.includes_technical,
+    includesPersonality: r.includes_personality,
+    includesStructuredInterview: r.includes_structured_interview,
+    includesExperience: r.includes_experience,
+    technicalTemplateId: r.technical_template_id,
+    personalityTemplateId: r.personality_template_id,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by,
+  }
+}
+
+export interface CompInterviewRatingRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  rater_id: string
+  rating: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compInterviewRatingFromRow(r: CompInterviewRatingRow): CompInterviewRating {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    raterId: r.rater_id,
+    rating: Number(r.rating),
+    notes: r.notes ?? '',
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompCompetencyEvidenceRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  source_type: string
+  source_ref: string
+  source_item_id: string
+  source_label: string
+  normalized_score: number
+  effective_weight: number
+  raw_value: Record<string, unknown> | null
+  computed_at: string
+}
+
+export function compCompetencyEvidenceFromRow(r: CompCompetencyEvidenceRow): CompCompetencyEvidence {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    sourceType: r.source_type as CompEvidenceSourceType,
+    sourceRef: r.source_ref,
+    sourceItemId: r.source_item_id,
+    sourceLabel: r.source_label,
+    normalizedScore: Number(r.normalized_score),
+    effectiveWeight: Number(r.effective_weight),
+    rawValue: r.raw_value ?? {},
+    computedAt: r.computed_at,
+  }
+}
+
+export interface CompCompetencyScoreRow {
+  id: string
+  assessment_id: string
+  competency_id: string
+  required_level: number
+  level_count: number
+  actual_score: number | null
+  actual_level: number | null
+  gap: number | null
+  is_critical: boolean
+  weight: number
+  evidence_count: number
+  source_types_covered: number
+  coverage: number
+  confidence: string
+  status: string
+  computed_at: string
+}
+
+const numOrNull = (v: number | null): number | null => (v == null ? null : Number(v))
+
+export function compCompetencyScoreFromRow(r: CompCompetencyScoreRow): CompCompetencyScore {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    competencyId: r.competency_id,
+    requiredLevel: Number(r.required_level),
+    levelCount: r.level_count,
+    actualScore: numOrNull(r.actual_score),
+    actualLevel: numOrNull(r.actual_level),
+    gap: numOrNull(r.gap),
+    isCritical: r.is_critical,
+    weight: Number(r.weight),
+    evidenceCount: r.evidence_count,
+    sourceTypesCovered: r.source_types_covered,
+    coverage: Number(r.coverage),
+    confidence: r.confidence as CompCompetencyConfidence,
+    status: r.status as CompCompetencyStatus,
+    computedAt: r.computed_at,
+  }
+}
+
+export interface CompRoleAssignmentRow {
+  user_id: string
+  created_by: string | null
   created_at: string
 }
 
-export function compJobPositionFromRow(r: CompJobPositionRow): CompJobPosition {
-  return { id: r.id, title: r.title, sortOrder: r.sort_order, isActive: r.is_active, createdAt: r.created_at }
-}
-
-export interface CompQuestionRow {
-  id: string
-  job_position_id: string
-  domain_key: string
-  legacy_key: string | null
-  text: string
-  reference_answer: string
-  sort_order: number
-  is_active: boolean
-}
-
-export function compQuestionFromRow(r: CompQuestionRow): CompetencyQuestion {
+export function compRoleAssignmentFromRow(r: CompRoleAssignmentRow): CompRoleAssignment {
   return {
-    key: r.legacy_key ?? r.id,
+    userId: r.user_id,
+    addedBy: r.created_by,
+    createdAt: r.created_at,
+  }
+}
+
+export interface CompAssessmentTemplateRow {
+  id: string
+  job_role: string
+  title: string
+  duration_minutes: number | null
+  auto_finish_on_timeout: boolean
+  panel_size_default: number
+  question_mix: QuestionMixCell[] | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compAssessmentTemplateFromRow(r: CompAssessmentTemplateRow): CompAssessmentTemplate {
+  return {
     id: r.id,
-    jobPositionId: r.job_position_id,
-    domain: r.domain_key as CompetencyDomainKey,
-    text: r.text,
-    referenceAnswer: r.reference_answer ?? '',
+    jobRole: r.job_role as JobRole,
+    title: r.title,
+    durationMinutes: r.duration_minutes,
+    autoFinishOnTimeout: r.auto_finish_on_timeout,
+    panelSizeDefault: r.panel_size_default,
+    questionMix: r.question_mix ?? [],
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompAuditLogRow {
+  id: string
+  action: string
+  entity_type: string
+  entity_id: string | null
+  actor: string | null
+  previous_value: unknown
+  new_value: unknown
+  created_at: string
+}
+
+export function compAuditLogFromRow(r: CompAuditLogRow): CompAuditLogEntry {
+  return {
+    id: r.id,
+    action: r.action,
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    actor: r.actor,
+    previousValue: r.previous_value,
+    newValue: r.new_value,
+    createdAt: r.created_at,
+  }
+}
+
+export interface CompAiAnalysisRow {
+  id: string
+  assessment_id: string
+  model: string
+  analysis: AiAnalysisContent
+  confidence: number | null
+  generated_by: string | null
+  created_at: string
+}
+
+export function compAiAnalysisFromRow(r: CompAiAnalysisRow): CompAiAnalysis {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    model: r.model,
+    analysis: r.analysis,
+    confidence: r.confidence,
+    generatedBy: r.generated_by,
+    createdAt: r.created_at,
+  }
+}
+
+export interface CompCandidateAiAnalysisRow {
+  id: string
+  assessment_id: string
+  model: string
+  analysis: CandidateAiAnalysisContent
+  confidence: string | null
+  generated_by: string | null
+  created_at: string
+  competency_basis?: CandidateAiCompetencyBasisRow[] | null
+}
+
+export function compCandidateAiAnalysisFromRow(r: CompCandidateAiAnalysisRow): CandidateAiAnalysis {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    model: r.model,
+    analysis: r.analysis,
+    confidence: r.confidence,
+    generatedBy: r.generated_by,
+    createdAt: r.created_at,
+    competencyBasis: Array.isArray(r.competency_basis) ? r.competency_basis : null,
+  }
+}
+
+export interface CompDevelopmentPlanRow {
+  id: string
+  assessment_id: string
+  status: string
+  owner_id: string | null
+  summary: string
+  target_review_date: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function compDevelopmentPlanFromRow(r: CompDevelopmentPlanRow): CompDevelopmentPlan {
+  return {
+    id: r.id,
+    assessmentId: r.assessment_id,
+    status: r.status as CompDevelopmentPlanStatus,
+    ownerId: r.owner_id,
+    summary: r.summary ?? '',
+    targetReviewDate: r.target_review_date,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+export interface CompDevelopmentActionRow {
+  id: string
+  plan_id: string
+  competency_id: string | null
+  action_type: string
+  title: string
+  description: string
+  current_level: number | string | null
+  target_level: number | string | null
+  priority: string
+  due_date: string | null
+  status: string
+  owner_id: string | null
+  progress_note: string
+  source: string
+  sort_order: number
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+const numericOrNull = (v: number | string | null) => (v == null ? null : Number(v))
+
+export function compDevelopmentActionFromRow(r: CompDevelopmentActionRow): CompDevelopmentAction {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    competencyId: r.competency_id,
+    actionType: r.action_type as CompDevelopmentActionType,
+    title: r.title,
+    description: r.description ?? '',
+    currentLevel: numericOrNull(r.current_level),
+    targetLevel: numericOrNull(r.target_level),
+    priority: r.priority as CompDevelopmentPriority,
+    dueDate: r.due_date,
+    status: r.status as CompDevelopmentActionStatus,
+    ownerId: r.owner_id,
+    progressNote: r.progress_note ?? '',
+    source: r.source as CompDevelopmentActionSource,
     sortOrder: r.sort_order,
-    isActive: r.is_active,
+    completedAt: r.completed_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   }
 }
