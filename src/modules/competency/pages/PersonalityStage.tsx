@@ -53,12 +53,22 @@ export function PersonalityStage({ assessment, onContinue, onGoToExamDesign }: P
     return (
       <div className="glass-panel space-y-3 rounded-2xl p-6 text-center">
         <p className="text-xs text-secondary">آزمون شخصیت و رفتاری این متقاضی هنوز طراحی نشده است.</p>
-        <button
-          onClick={onGoToExamDesign}
-          className="mx-auto flex items-center gap-1.5 rounded-xl bg-pink-500 px-4 py-2 text-xs font-bold text-white hover:bg-pink-400"
-        >
-          <Wand2 size={13} /> رفتن به پنل طراحی آزمون‌ها
-        </button>
+        {/* A second way forward: only a designer can design it from «طراحی آزمون‌ها», so without this a
+            non-designer lead had no button out of this stage at all. */}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={onGoToExamDesign}
+            className="flex items-center gap-1.5 rounded-xl bg-pink-500 px-4 py-2 text-xs font-bold text-white hover:bg-pink-400"
+          >
+            <Wand2 size={13} /> رفتن به پنل طراحی آزمون‌ها
+          </button>
+          <button
+            onClick={onContinue}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-xs text-secondary hover:bg-white/5"
+          >
+            ادامه بدون انتظار <ArrowLeft size={13} />
+          </button>
+        </div>
       </div>
     )
   }

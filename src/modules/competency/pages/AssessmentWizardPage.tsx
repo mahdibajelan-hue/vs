@@ -391,18 +391,42 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         <PersonalityStage assessment={assessment} onContinue={() => setStage('questions')} onGoToExamDesign={() => setStage('examDesign')} />
       )}
 
-      {activeStage === 'questions' && !isPM && (
+      {/* The exam design left the technical exam out: without this the stage fell through to the
+          "no questions selected yet → design the exam" card (or, for project_manager, the legacy
+          rubric) with no way forward except the sidebar — the personality stage's «رفتن به ارزیابی
+          فنی» button led straight into that dead end. */}
+      {activeStage === 'questions' && !assessment.needsTechnicalAssessment && (
+        <div className="glass-panel space-y-3 rounded-2xl p-6 text-center">
+          <p className="text-xs text-secondary">آزمون فنی تخصصی در طرح ارزیابی این متقاضی قرار ندارد.</p>
+          <button
+            onClick={() => setStage('interview')}
+            className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+          >
+            مصاحبه ساختاریافته <ArrowLeft size={13} />
+          </button>
+        </div>
+      )}
+
+      {activeStage === 'questions' && assessment.needsTechnicalAssessment && !isPM && (
         <div className="space-y-3">
           {roleSectionIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
           {roleQuestions.length === 0 ? (
             <div className="glass-panel rounded-2xl p-6 text-center">
               <p className="mb-3 text-xs text-secondary">هنوز سؤالی برای این ارزیابی («{jobRoleLabel(jobRoleConfigs, assessment.jobRole)}») انتخاب نشده است.</p>
-              <button
-                onClick={() => setDesignerOpen(true)}
-                className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
-              >
-                <Wand2 size={13} /> طراحی آزمون شایستگی
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={() => setDesignerOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+                >
+                  <Wand2 size={13} /> طراحی آزمون شایستگی
+                </button>
+                <button
+                  onClick={() => setStage('interview')}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-xs text-secondary hover:bg-white/5"
+                >
+                  رفتن به مصاحبه ساختاریافته <ArrowLeft size={13} />
+                </button>
+              </div>
               {designerOpen && (
                 <AssessmentDesignerModal assessmentId={assessment.id} jobRole={assessment.jobRole} onClose={() => setDesignerOpen(false)} />
               )}
@@ -474,7 +498,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         </div>
       )}
 
-      {activeStage === 'questions' && isPM && (
+      {activeStage === 'questions' && assessment.needsTechnicalAssessment && isPM && (
         <div className="space-y-3">
           <ScoringGuideBanner />
           {domainIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
