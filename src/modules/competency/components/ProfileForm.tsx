@@ -6,6 +6,8 @@ import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../typ
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
+import { DocSlotHeading, DocumentSlot } from './EntryDocuments'
+import { docsFor, type ProfileDocuments } from '../lib/profileDocuments'
 
 const EMPTY: CandidateProfileInput = {
   jobRole: 'project_manager',
@@ -38,6 +40,24 @@ interface ProfileFormProps {
   onSubmit: (profile: CandidateProfileInput) => void
   /** Self-service mode hides interview-internal fields (position/interview date) that the candidate shouldn't set. */
   candidateMode?: boolean
+  /** Per-item documents (schema.sql Section 55) — the national ID card, the résumé and one
+   * «بارگذاری مدرک» per education / employment / certification entry. Omitted where the assessment
+   * doesn't exist yet (the create form), which then shows no upload controls. Uploads and removals
+   * take effect immediately; the entry text itself is saved with the form. */
+  documents?: ProfileDocuments
+}
+
+/** Removing an entry that still has documents also removes those documents (after confirming), so
+ * no file is left pointing at an entry that no longer exists. Returns false when the user cancels. */
+async function confirmRemoveEntryDocs(documents: ProfileDocuments | undefined, category: 'EDUCATION' | 'EMPLOYMENT' | 'CERTIFICATION', entryId: string) {
+  const attached = docsFor(documents, category, entryId)
+  if (!documents || attached.length === 0) return true
+  if (!documents.editable) return window.confirm('این ردیف مدرک پیوست دارد که اکنون قابل حذف نیست؛ ردیف بدون حذف مدرک برداشته شود؟')
+  if (!window.confirm(`این ردیف ${attached.length.toLocaleString('fa-IR')} مدرک پیوست دارد. ردیف و مدارک آن حذف شوند؟`)) return false
+  for (const item of attached) {
+    if (documents.canRemove(item)) await documents.remove(item)
+  }
+  return true
 }
 
 /**
@@ -49,7 +69,7 @@ interface ProfileFormProps {
  * of those durations (pipeline-specific total only counting positions flagged as such) — computed
  * fresh at submit time so they can never drift from what's actually in the form.
  */
-export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: ProfileFormProps) {
+export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode, documents }: ProfileFormProps) {
   const [form, setForm] = useState<CandidateProfileInput>(initial ?? EMPTY)
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   // Only active roles are offered for a new/changed assignment — an inactive role can still be the
@@ -129,6 +149,12 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
             <input value={form.currentEmployer} onChange={(e) => set('currentEmployer', e.target.value)} className="input" />
           </Field>
         </div>
+        {documents && (
+          <div className="space-y-1.5 rounded-xl border border-white/10 p-3">
+            <DocSlotHeading title="تصویر کارت ملی" hint="تصویر یا فایل PDF روی (و در صورت نیاز پشت) کارت ملی." />
+            <DocumentSlot docs={documents} category="NATIONAL_ID" buttonLabel="بارگذاری کارت ملی" />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-3">
           <SummaryStat label="کل سابقه اشتغال" value={formatDurationFa(totalExperienceMonths)} />
           <SummaryStat label="سابقه اجرای خط لوله" value={formatDurationFa(pipelineMonths)} />
@@ -149,9 +175,16 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode }: P
         )}
       </section>
 
-      <EducationSection value={form.education} onChange={(v) => set('education', v)} />
-      <EmploymentSection value={form.employmentHistory} onChange={(v) => set('employmentHistory', v)} />
-      <CertificationSection value={form.certifications} onChange={(v) => set('certifications', v)} />
+      <EducationSection value={form.education} onChange={(v) => set('education', v)} documents={documents} />
+      <EmploymentSection value={form.employmentHistory} onChange={(v) => set('employmentHistory', v)} documents={documents} />
+      <CertificationSection value={form.certifications} onChange={(v) => set('certifications', v)} documents={documents} />
+
+      {documents && (
+        <section className="space-y-2">
+          <DocSlotHeading title="رزومه" hint="فایل رزومه‌ی کامل (ترجیحاً PDF)." />
+          <DocumentSlot docs={documents} category="RESUME" buttonLabel="بارگذاری رزومه" />
+        </section>
+      )}
 
       <Field label="پروژه‌های شاخص گذشته">
         <textarea
@@ -211,7 +244,7 @@ function RepeatableSection({ title, onAdd, children }: { title: string; onAdd: (
   )
 }
 
-function RowShell({ onRemove, children }: { onRemove: () => void; children: React.ReactNode }) {
+function RowShell({ onRemove, children }: { onRemove: () => void | Promise<void>; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 rounded-xl border border-white/10 p-3">
       <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">{children}</div>
@@ -222,7 +255,7 @@ function RowShell({ onRemove, children }: { onRemove: () => void; children: Reac
   )
 }
 
-function EducationSection({ value, onChange }: { value: EducationEntry[]; onChange: (v: EducationEntry[]) => void }) {
+function EducationSection({ value, onChange, documents }: { value: EducationEntry[]; onChange: (v: EducationEntry[]) => void; documents?: ProfileDocuments }) {
   const update = (id: string, patch: Partial<EducationEntry>) => onChange(value.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   return (
     <RepeatableSection
@@ -231,18 +264,24 @@ function EducationSection({ value, onChange }: { value: EducationEntry[]; onChan
     >
       {value.length === 0 && <p className="text-[11px] text-muted">مدرکی ثبت نشده است.</p>}
       {value.map((e) => (
-        <RowShell key={e.id} onRemove={() => onChange(value.filter((x) => x.id !== e.id))}>
+        <RowShell
+          key={e.id}
+          onRemove={async () => {
+            if (await confirmRemoveEntryDocs(documents, 'EDUCATION', e.id)) onChange(value.filter((x) => x.id !== e.id))
+          }}
+        >
           <input value={e.degree} onChange={(ev) => update(e.id, { degree: ev.target.value })} className="input" placeholder="مقطع (مثلاً کارشناسی ارشد)" />
           <input value={e.field} onChange={(ev) => update(e.id, { field: ev.target.value })} className="input" placeholder="رشته تحصیلی" />
           <input value={e.institution} onChange={(ev) => update(e.id, { institution: ev.target.value })} className="input" placeholder="دانشگاه/موسسه" />
           <input value={e.year} onChange={(ev) => update(e.id, { year: ev.target.value })} className="input num" placeholder="سال اخذ مدرک" />
+          {documents && <DocumentSlot docs={documents} category="EDUCATION" entryRef={e.id} />}
         </RowShell>
       ))}
     </RepeatableSection>
   )
 }
 
-function EmploymentSection({ value, onChange }: { value: EmploymentEntry[]; onChange: (v: EmploymentEntry[]) => void }) {
+function EmploymentSection({ value, onChange, documents }: { value: EmploymentEntry[]; onChange: (v: EmploymentEntry[]) => void; documents?: ProfileDocuments }) {
   const update = (id: string, patch: Partial<EmploymentEntry>) => onChange(value.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   return (
     <RepeatableSection
@@ -270,7 +309,13 @@ function EmploymentSection({ value, onChange }: { value: EmploymentEntry[]; onCh
                 />
                 <input value={e.note} onChange={(ev) => update(e.id, { note: ev.target.value })} className="input" placeholder="توضیح تکمیلی (اختیاری)" />
               </div>
-              <button type="button" onClick={() => onChange(value.filter((x) => x.id !== e.id))} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-300">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (await confirmRemoveEntryDocs(documents, 'EMPLOYMENT', e.id)) onChange(value.filter((x) => x.id !== e.id))
+                }}
+                className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-300"
+              >
                 <Trash2 size={13} />
               </button>
             </div>
@@ -281,6 +326,11 @@ function EmploymentSection({ value, onChange }: { value: EmploymentEntry[]; onCh
               </label>
               <span className="num text-[11px] text-purple-300">مدت این سمت: {formatDurationFa(duration)}</span>
             </div>
+            {documents && (
+              <div className="mt-2">
+                <DocumentSlot docs={documents} category="EMPLOYMENT" entryRef={e.id} buttonLabel="بارگذاری مدرک (گواهی اشتغال / سابقه بیمه)" />
+              </div>
+            )}
           </div>
         )
       })}
@@ -288,7 +338,7 @@ function EmploymentSection({ value, onChange }: { value: EmploymentEntry[]; onCh
   )
 }
 
-function CertificationSection({ value, onChange }: { value: CertificationEntry[]; onChange: (v: CertificationEntry[]) => void }) {
+function CertificationSection({ value, onChange, documents }: { value: CertificationEntry[]; onChange: (v: CertificationEntry[]) => void; documents?: ProfileDocuments }) {
   const update = (id: string, patch: Partial<CertificationEntry>) => onChange(value.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   const recommendedCount = value.filter((e) => RECOMMENDED_PM_COURSES.includes(e.title.trim())).length
   return (
@@ -313,7 +363,12 @@ function CertificationSection({ value, onChange }: { value: CertificationEntry[]
       {value.map((e) => {
         const isRecommended = RECOMMENDED_PM_COURSES.includes(e.title.trim())
         return (
-          <RowShell key={e.id} onRemove={() => onChange(value.filter((x) => x.id !== e.id))}>
+          <RowShell
+            key={e.id}
+            onRemove={async () => {
+              if (await confirmRemoveEntryDocs(documents, 'CERTIFICATION', e.id)) onChange(value.filter((x) => x.id !== e.id))
+            }}
+          >
             <label className="relative block">
               <input
                 value={e.title}
@@ -337,6 +392,7 @@ function CertificationSection({ value, onChange }: { value: CertificationEntry[]
               <input type="checkbox" checked={e.isPmp} onChange={(ev) => update(e.id, { isPmp: ev.target.checked })} className="h-3.5 w-3.5" />
               صلاحیت حرفه‌ای مدیریت پروژه (مانند PMP)
             </label>
+            {documents && <DocumentSlot docs={documents} category="CERTIFICATION" entryRef={e.id} buttonLabel="بارگذاری گواهی دوره" />}
           </RowShell>
         )
       })}

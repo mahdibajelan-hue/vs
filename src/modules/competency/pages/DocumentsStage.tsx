@@ -169,7 +169,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
               const f = e.target.files?.[0]
               if (f) {
                 setUploading(true)
-                await addAttachment(assessment.id, kind, f)
+                await addAttachment(assessment.id, 'OTHER', null, f)
                 setUploading(false)
               }
               e.target.value = ''

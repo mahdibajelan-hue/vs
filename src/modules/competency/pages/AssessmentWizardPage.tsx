@@ -7,6 +7,7 @@ import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, quest
 import { jobRoleLabel } from '../lib/competencyData'
 import type { QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
+import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -147,6 +148,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   // An assessment designer who isn't the lead still needs the exam-design and personality stages
   // (comp_set_exam_design / the mix designers are gated on the designer role, not on being lead).
   const stages = isLead ? LEAD_STAGES : isDesigner ? DESIGNER_STAGES : PANELIST_STAGES
+  // Per-item documents in the staff profile form — same component and lock rules as the candidate's
+  // self-service form (schema.sql Section 55).
+  const profileDocuments = useStaffProfileDocuments(assessmentId, assessment?.status, isLead || isDesigner)
   // Opening a candidate from the dashboard always lands on their profile first — the natural
   // starting point before assembling the panel or scoring anything.
   const [stage, setStage] = useState<Stage | null>(initialStage ?? null)
@@ -332,6 +336,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         (editingProfile ? (
           <ProfileForm
             initial={profileInput}
+            documents={profileDocuments}
             submitLabel="ذخیره مشخصات"
             onSubmit={async (profile) => {
               await updateProfile(assessment.id, profile)

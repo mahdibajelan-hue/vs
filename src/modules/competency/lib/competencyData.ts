@@ -2,6 +2,7 @@ import type {
   AiAnalysisContent,
   AssessmentStatus,
   AttachmentKind,
+  DocCategory,
   CandidateAiAnalysis,
   CandidateAiAnalysisContent,
   CandidateAiCompetencyBasisRow,
@@ -270,8 +271,11 @@ export interface CompAttachmentRow {
   id: string
   assessment_id: string
   kind: string
+  category?: string | null
+  entry_ref?: string | null
   file_name: string
   storage_path: string
+  file_size?: number | null
   uploaded_by: string | null
   uploaded_by_candidate: boolean
   created_at: string
@@ -282,8 +286,11 @@ export function compAttachmentFromRow(r: CompAttachmentRow): CompAttachment {
     id: r.id,
     assessmentId: r.assessment_id,
     kind: r.kind as AttachmentKind,
+    category: (r.category as DocCategory | null) ?? 'OTHER',
+    entryRef: r.entry_ref ?? null,
     fileName: r.file_name,
     storagePath: r.storage_path,
+    fileSize: r.file_size ?? null,
     uploadedBy: r.uploaded_by,
     uploadedByCandidate: r.uploaded_by_candidate,
     createdAt: r.created_at,

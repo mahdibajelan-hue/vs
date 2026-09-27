@@ -1,20 +1,40 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, FileText, Loader2, Lock, Upload } from 'lucide-react'
-import { supabase } from '../../../lib/supabaseClient'
 import { FARIN_NAME_FA } from '../../../components/common/Logo'
-import { uploadCompDocAsCandidate } from '../lib/compStorage'
-import { getCompDocSignedUrl } from '../lib/compStorage'
+import { compAnonClient, compDocErrorFa, getCompDocSignedUrl, removeCompDocObject, uploadCandidateDocument, uploadCompDocAsCandidate, validateCompDoc } from '../lib/compStorage'
 import { ProfileForm } from '../components/ProfileForm'
 import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
+import type { ProfileDocItem, ProfileDocuments } from '../lib/profileDocuments'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
-import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind } from '../types'
+import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind, type DocCategory } from '../types'
+
+// Every call on this page goes through the session-less client (see compAnonClient): the candidate
+// storage policies are anon-only, and a staff session left in this browser must not change that.
+const supabase = compAnonClient()
 
 interface SelfServiceAttachment {
   id: string
   kind: string
+  category: string | null
+  entry_ref: string | null
   file_name: string
   storage_path: string
+  file_size: number | null
+  uploaded_by_candidate: boolean
   created_at: string
+}
+
+function toDocItem(a: SelfServiceAttachment): ProfileDocItem {
+  return {
+    id: a.id,
+    kind: a.kind as AttachmentKind,
+    category: (a.category as DocCategory | null) ?? 'OTHER',
+    entryRef: a.entry_ref,
+    fileName: a.file_name,
+    storagePath: a.storage_path,
+    fileSize: a.file_size,
+    uploadedByCandidate: a.uploaded_by_candidate,
+  }
 }
 
 interface SelfServiceRow {
@@ -98,7 +118,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         const r = data[0] as SelfServiceRow
         setRow(r)
         if (r.self_service_status === 'submitted' || r.self_service_status === 'reviewed') setSubmitted(true)
-        if (r.photo_url) getCompDocSignedUrl(r.photo_url).then((u) => u && setPhotoPreview(u))
+        if (r.photo_url) getCompDocSignedUrl(r.photo_url, supabase).then((u) => u && setPhotoPreview(u))
       })
     refreshAttachments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,6 +198,44 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     }
     setUploading(null)
   }
+
+  // Per-item documents (national ID, résumé, one per education / employment / course entry) — the
+  // same ProfileDocuments contract the staff form uses, backed by the token RPCs.
+  const documents: ProfileDocuments | undefined = row
+    ? {
+        items: attachments.map(toDocItem),
+        editable: row.self_service_editable,
+        upload: async (category, entryRef, file) => {
+          const invalid = validateCompDoc(file)
+          if (invalid) return invalid
+          const { path, error } = await uploadCandidateDocument(file, row.id, token)
+          if (!path || error) return compDocErrorFa(error)
+          const { error: rpcError } = await supabase.rpc('comp_self_service_add_document', {
+            p_token: token,
+            p_category: category,
+            p_entry_ref: entryRef,
+            p_file_name: file.name,
+            p_storage_path: path,
+          })
+          if (rpcError) {
+            await removeCompDocObject(path, supabase)
+            if (/self_service_closed/.test(rpcError.message)) setRow((r) => (r ? { ...r, self_service_editable: false } : r))
+            return compDocErrorFa(rpcError.message)
+          }
+          refreshAttachments()
+          return null
+        },
+        remove: async (item) => {
+          const { data, error } = await supabase.rpc('comp_self_service_remove_document', { p_token: token, p_attachment_id: item.id })
+          if (error) return compDocErrorFa(error.message)
+          await removeCompDocObject((data as string | null) ?? '', supabase)
+          refreshAttachments()
+          return null
+        },
+        canRemove: (item) => item.uploadedByCandidate,
+        signedUrl: (path) => getCompDocSignedUrl(path, supabase),
+      }
+    : undefined
 
   if (loading) {
     return (
@@ -295,7 +353,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           {photoError && <p className="w-full text-center text-[11px] text-red-300">{photoError}</p>}
         </div>
 
-        {row.self_service_editable && <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode />}
+        {row.self_service_editable && <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode documents={documents} />}
 
         <div className="glass-panel space-y-3 rounded-2xl p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold">

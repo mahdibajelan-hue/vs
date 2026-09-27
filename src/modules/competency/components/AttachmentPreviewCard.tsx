@@ -9,6 +9,7 @@ const KIND_COLOR: Record<AttachmentKind, string> = {
   certification: '#f59e0b',
   national_id: '#34d399',
   insurance: '#fb7185',
+  employment: '#fb7185',
   other: '#94a3b8',
 }
 

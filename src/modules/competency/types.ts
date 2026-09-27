@@ -785,14 +785,32 @@ export interface CompPanelistScore {
   updatedAt: string
 }
 
-export type AttachmentKind = 'resume' | 'education' | 'certification' | 'national_id' | 'insurance' | 'other'
+export type AttachmentKind = 'resume' | 'education' | 'certification' | 'national_id' | 'insurance' | 'employment' | 'other'
+
+/** What a document belongs to (schema.sql Section 55): the national ID card, the résumé, one entry of
+ * the education / employment / certification lists (entryRef = that entry's stable id), or OTHER —
+ * which is also where every attachment uploaded before per-item documents existed ended up. */
+export type DocCategory = 'NATIONAL_ID' | 'RESUME' | 'EDUCATION' | 'EMPLOYMENT' | 'CERTIFICATION' | 'OTHER'
+
+export const DOC_CATEGORY_LABEL_FA: Record<DocCategory, string> = {
+  NATIONAL_ID: 'کارت ملی',
+  RESUME: 'رزومه',
+  EDUCATION: 'مدارک تحصیلی',
+  EMPLOYMENT: 'سوابق شغلی',
+  CERTIFICATION: 'دوره‌ها و گواهینامه‌ها',
+  OTHER: 'سایر',
+}
 
 export interface CompAttachment {
   id: string
   assessmentId: string
   kind: AttachmentKind
+  category: DocCategory
+  /** Id of the education / employment / certification entry this file documents (null otherwise). */
+  entryRef: string | null
   fileName: string
   storagePath: string
+  fileSize: number | null
   uploadedBy: string | null
   uploadedByCandidate: boolean
   createdAt: string
@@ -804,6 +822,7 @@ export const ATTACHMENT_KIND_LABEL_FA: Record<AttachmentKind, string> = {
   certification: 'گواهینامه حرفه‌ای',
   national_id: 'کارت ملی',
   insurance: 'سوابق بیمه',
+  employment: 'سابقه شغلی',
   other: 'سایر مدارک',
 }
 
