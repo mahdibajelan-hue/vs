@@ -11140,3 +11140,110 @@ end;
 $$ language plpgsql security definer set search_path = public;
 
 revoke execute on function personality_score_assessment_core(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- Group 2 — panel/scoring integrity
+-- N-6 Removing a judge from the panel (any path — the PanelStage button or a direct delete) archives
+--     that judge's score sheet in the audit log (JUDGE_REMOVED, previous_value = the sheet) and
+--     deletes it, so it no longer counts in the official average (comp_compute_competency_profile,
+--     resolveOfficialAnswers and comp_public_results_get all average every submitted sheet). On a
+--     completed assessment the sheet delete is refused by the Section 53 lock, so the removal is too.
+--     A cascade from deleting the whole assessment archives nothing (the assessment is gone).
+-- L-6 comp_public_results_get resolves each question's official score exactly like the engine and
+--     the client: round(average of the submitted sheets' numeric scores), else the lead's score.
+
+create or replace function comp_panelists_after_delete()
+returns trigger as $$
+declare
+  v_sheet comp_panelist_scores%rowtype;
+begin
+  if not exists (select 1 from comp_assessments a where a.id = old.assessment_id) then
+    return old;
+  end if;
+  if exists (select 1 from comp_panelists p where p.assessment_id = old.assessment_id and p.user_id = old.user_id) then
+    return old;
+  end if;
+  select * into v_sheet from comp_panelist_scores ps where ps.assessment_id = old.assessment_id and ps.panelist_id = old.user_id;
+  perform comp_log_audit(
+    'JUDGE_REMOVED', 'comp_panelists', old.assessment_id,
+    jsonb_build_object('userId', old.user_id, 'isLead', old.is_lead,
+      'sheet', case when v_sheet.id is not null then to_jsonb(v_sheet) end),
+    jsonb_build_object('sheetDeleted', v_sheet.id is not null)
+  );
+  if v_sheet.id is not null then
+    delete from comp_panelist_scores where id = v_sheet.id;
+  end if;
+  return old;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_panelists_after_delete() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_panelists_after_delete on comp_panelists;
+create trigger trg_comp_panelists_after_delete after delete on comp_panelists
+  for each row execute function comp_panelists_after_delete();
+
+drop function if exists comp_public_results_get(uuid);
+create or replace function comp_public_results_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  job_role text,
+  interview_date date,
+  status text,
+  answers jsonb,
+  capstone_score int,
+  capstone_note text,
+  education_score numeric,
+  experience_score numeric,
+  pm_training_score numeric,
+  pm_certification_score numeric,
+  is_approved boolean,
+  strengths text,
+  development_areas text,
+  resolved_questions jsonb,
+  photo_url text
+) as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_resolved_questions jsonb;
+begin
+  select * into v_assessment from comp_assessments a where a.results_share_token = p_token;
+  if not found then
+    return;
+  end if;
+
+  if jsonb_typeof(v_assessment.selected_question_ids) <> 'array' or jsonb_array_length(v_assessment.selected_question_ids) = 0 then
+    v_resolved_questions := '[]'::jsonb;
+  else
+    select coalesce(jsonb_agg(jsonb_build_object('id', q.id, 'category', q.category, 'score', official.score)), '[]'::jsonb)
+    into v_resolved_questions
+    from comp_question_bank q
+    cross join lateral (
+      select coalesce(
+        (
+          select round(avg((ps.answers -> q.id::text ->> 'score')::numeric))
+          from comp_panelist_scores ps
+          where ps.assessment_id = v_assessment.id
+            and ps.submitted_at is not null
+            and jsonb_typeof(ps.answers -> q.id::text -> 'score') = 'number'
+        ),
+        case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+          then (v_assessment.answers -> q.id::text ->> 'score')::numeric end
+      ) as score
+    ) official
+    where q.id::text in (select jsonb_array_elements_text(v_assessment.selected_question_ids));
+  end if;
+
+  return query select
+    v_assessment.id, v_assessment.candidate_name, v_assessment.candidate_position, v_assessment.job_role,
+    v_assessment.interview_date, v_assessment.status, v_assessment.answers,
+    v_assessment.capstone_score, v_assessment.capstone_note,
+    v_assessment.education_score, v_assessment.experience_score, v_assessment.pm_training_score, v_assessment.pm_certification_score,
+    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions,
+    v_assessment.photo_url;
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_public_results_get(uuid) from public;
+grant execute on function comp_public_results_get(uuid) to anon, authenticated;

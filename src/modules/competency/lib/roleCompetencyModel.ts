@@ -23,8 +23,9 @@ export function resolveOfficialAnswers(fallbackAnswers: CompetencyAnswers, panel
   keys.forEach((key) => {
     const scores = submitted.map((s) => s.answers[key]?.score).filter((v): v is number => typeof v === 'number')
     const score = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : (fallbackAnswers[key]?.score ?? null)
-    const note = fallbackAnswers[key]?.note ?? submitted.find((s) => s.answers[key]?.note)?.answers[key]?.note ?? ''
-    const candidateAnswer = fallbackAnswers[key]?.candidateAnswer ?? submitted.find((s) => s.answers[key]?.candidateAnswer)?.answers[key]?.candidateAnswer
+    // `||`, not `??`: an empty note/answer the lead saved must not hide the judges' ones (L-5).
+    const note = fallbackAnswers[key]?.note || submitted.find((s) => s.answers[key]?.note)?.answers[key]?.note || ''
+    const candidateAnswer = fallbackAnswers[key]?.candidateAnswer || submitted.find((s) => s.answers[key]?.candidateAnswer)?.answers[key]?.candidateAnswer
     result[key] = { score, note, candidateAnswer }
   })
   return result

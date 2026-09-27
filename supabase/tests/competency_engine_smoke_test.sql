@@ -1016,3 +1016,84 @@ exception when others then
   delete from comp_job_role_config where job_role = '__smoke_s53_role__';
   raise;
 end $$;
+
+-- ============================================================================
+-- Section 54 regressions (docs/demo-test-report.md N-6, L-6, …) — independent block with its own
+-- throwaway assessment, cleaned up (audit rows included) on success AND failure:
+--   N-6  removing a judge archives (JUDGE_REMOVED) and deletes their sheet, so it leaves the official
+--        average; refused on a completed assessment.
+--   L-6  the public results link rounds the panel average like the engine/client and falls back to
+--        the lead's score when no submitted sheet scored a question.
+-- ============================================================================
+do $$
+declare
+  v_admin uuid;
+  v_j1 uuid;
+  v_j2 uuid;
+  v_q1 uuid;
+  v_a uuid;
+  v_share uuid;
+  v_score numeric;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  select id into v_j1 from profiles where id <> v_admin order by created_at limit 1;
+  select id into v_j2 from profiles where id not in (v_admin, v_j1) order by created_at limit 1;
+  select id into v_q1 from comp_question_bank where active and approval_status = 'APPROVED' order by id limit 1;
+  if v_admin is null or v_j1 is null or v_j2 is null or v_q1 is null then
+    raise exception 'section 54 smoke precondition failed: need an admin, two more profiles and an approved bank question';
+  end if;
+
+  insert into comp_assessments (job_role, candidate_name, candidate_position, created_by, selected_question_ids, answers)
+  values ('project_manager', '__smoke_test_s54__', 'test', v_admin, jsonb_build_array(v_q1), jsonb_build_object(v_q1::text, jsonb_build_object('score', 2)))
+  returning id, results_share_token into v_a, v_share;
+  insert into comp_panelists (assessment_id, user_id, is_lead, added_by) values (v_a, v_j1, false, v_admin), (v_a, v_j2, false, v_admin);
+  insert into comp_panelist_scores (assessment_id, panelist_id, answers, submitted_at) values
+    (v_a, v_j1, jsonb_build_object(v_q1::text, jsonb_build_object('score', 4)), now()),
+    (v_a, v_j2, jsonb_build_object(v_q1::text, jsonb_build_object('score', 5)), now());
+
+  -- ---- L-6 ----
+  select (q ->> 'score')::numeric into v_score from comp_public_results_get(v_share) r, jsonb_array_elements(r.resolved_questions) q;
+  if v_score is distinct from 5 then
+    raise exception 'ASSERTION FAILED (L-6): public link must round the panel average (4, 5 → 5), got %', v_score;
+  end if;
+
+  -- ---- N-6 ----
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  delete from comp_panelists where assessment_id = v_a and user_id = v_j2;
+  perform set_config('role', 'postgres', true);
+  if exists (select 1 from comp_panelist_scores where assessment_id = v_a and panelist_id = v_j2)
+     or not exists (select 1 from comp_audit_log where entity_id = v_a and action = 'JUDGE_REMOVED'
+                    and previous_value -> 'sheet' ->> 'panelist_id' = v_j2::text) then
+    raise exception 'ASSERTION FAILED (N-6): a removed judge''s sheet must be archived and deleted';
+  end if;
+  select (q ->> 'score')::numeric into v_score from comp_public_results_get(v_share) r, jsonb_array_elements(r.resolved_questions) q;
+  if v_score is distinct from 4 then
+    raise exception 'ASSERTION FAILED (N-6): the removed judge must leave the official average (→ 4), got %', v_score;
+  end if;
+  update comp_panelist_scores set answers = '{}'::jsonb where assessment_id = v_a and panelist_id = v_j1;
+  select (q ->> 'score')::numeric into v_score from comp_public_results_get(v_share) r, jsonb_array_elements(r.resolved_questions) q;
+  if v_score is distinct from 2 then
+    raise exception 'ASSERTION FAILED (L-6): with no scored sheet the lead''s score applies (→ 2), got %', v_score;
+  end if;
+  update comp_assessments set status = 'completed' where id = v_a;
+  perform set_config('role', 'authenticated', true);
+  begin
+    delete from comp_panelists where assessment_id = v_a and user_id = v_j1;
+    raise exception 'ASSERTION FAILED (N-6): a judge with a sheet was removed from a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+
+  raise notice 'competency_engine_smoke_test (section 54): ALL ASSERTIONS PASSED';
+
+  delete from comp_audit_log where entity_id = v_a;
+  delete from comp_assessments where id = v_a;
+
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s54__');
+  delete from comp_assessments where candidate_name = '__smoke_test_s54__';
+  raise;
+end $$;

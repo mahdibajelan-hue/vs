@@ -352,7 +352,23 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                           <ShieldCheck size={12} />
                         </button>
                       )}
-                      <button onClick={() => removePanelist(p.id)} className="text-muted hover:text-red-300">
+                      <button
+                        onClick={() => {
+                          // N-6: removing a judge also deletes their score sheet (archived in the audit
+                          // log) so it no longer counts in the official average — confirm when there is one.
+                          if (
+                            score &&
+                            (answered > 0 || score.submittedAt) &&
+                            !window.confirm(
+                              `با حذف «${profile?.fullName ?? 'این داور'}» از پنل، برگه‌ی امتیاز او${score.submittedAt ? ' (ثبت نهایی‌شده)' : ''} هم حذف می‌شود و دیگر در میانگین رسمی حساب نمی‌شود. یک نسخه از برگه در گزارش رویدادها بایگانی می‌شود. ادامه می‌دهید؟`,
+                            )
+                          )
+                            return
+                          removePanelist(p.id)
+                        }}
+                        className="text-muted hover:text-red-300"
+                        title="حذف از پنل"
+                      >
                         <Trash2 size={12} />
                       </button>
                     </div>

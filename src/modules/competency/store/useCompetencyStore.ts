@@ -991,9 +991,17 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
 
   removePanelist: async (id) => {
     const previous = get().panelists
+    const removed = previous.find((p) => p.id === id)
     set({ panelists: previous.filter((p) => p.id !== id) })
     const { error } = await supabase.from('comp_panelists').delete().eq('id', id)
-    if (reportError('حذف داور', error)) set({ panelists: previous })
+    if (reportError('حذف داور', error)) {
+      set({ panelists: previous })
+      return
+    }
+    // trg_comp_panelists_after_delete archived + deleted the judge's sheet server-side (N-6).
+    if (removed && !previous.some((p) => p.id !== id && p.assessmentId === removed.assessmentId && p.userId === removed.userId)) {
+      set({ panelistScores: get().panelistScores.filter((s) => !(s.assessmentId === removed.assessmentId && s.panelistId === removed.userId)) })
+    }
   },
 
   setPanelistLead: async (assessmentId, panelistRowId) => {
