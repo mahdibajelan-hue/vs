@@ -9180,3 +9180,1543 @@ $$ language plpgsql security definer stable set search_path = public;
 
 revoke execute on function comp_get_reassessment_comparison(uuid) from public, anon;
 grant execute on function comp_get_reassessment_comparison(uuid) to authenticated;
+
+
+-- ============================================================================
+-- Section 53: Security & integrity fixes from the demo end-to-end test
+-- (docs/demo-test-report.md, findings C-1 and M-1 … M-9, plus N-9/N-10).
+--
+-- C-1 Candidate photos. comp_set_photo now requires write standing on the
+--     assessment (comp_is_lead — creator / designated lead / module admin — or
+--     an ASSESSMENT_DESIGNER) and a path that follows the staff upload
+--     convention for THAT assessment ("<assessment id>/<uuid>.<image ext>",
+--     compStorage.uploadCompDoc); comp_self_service_set_photo requires the
+--     self-service convention under the link's own token
+--     ("<assessment id>/<token>/<uuid>.<image ext>"). Neither may point at a
+--     comp_attachments.storage_path, and a self-service attachment may no
+--     longer reuse the current photo path. The anon storage policy
+--     comp_docs_read_public_photo now goes through comp_is_public_photo(): the
+--     object must be some assessment's CURRENT photo_url, follow the photo
+--     path convention of that same assessment and not be an attachment path
+--     (SECURITY DEFINER so the check does not depend on anon's RLS view of
+--     comp_assessments). Every existing real photo_url matched the staff
+--     convention when this was written, so no real photo is affected.
+-- M-1 personality_score_assessment is split: the scoring body lives in
+--     personality_score_assessment_core (no EXECUTE for any API role; called
+--     only by SECURITY DEFINER code such as the candidate finalize), and the
+--     public name is a guarded wrapper (authenticated only; module admin /
+--     designer / creator / competency lead) that refuses LOCKED/ARCHIVED and
+--     any test the candidate has not submitted. The core no longer stamps
+--     submitted_at and never moves a later-stage test back to FINGERPRINT.
+-- M-2 personality_candidate_finalize only from STARTED / IN_PROGRESS.
+-- M-3 personality_candidate_submit_response only for questions in the test's
+--     own selected_question_ids, and only while the test is answerable.
+-- M-4 comp_log_audit is SECURITY INVOKER now: when it runs as a privileged
+--     role (i.e. from a SECURITY DEFINER function owned by postgres, the
+--     service role or a maintenance session) it inserts directly; when an API
+--     role calls it (the client, the AI edge functions, which forward the
+--     user's JWT) it delegates to comp_log_client_audit, which only accepts a
+--     whitelist of client-side actions and checks the caller's standing on
+--     the referenced entity. anon has no EXECUTE at all. The default-blueprint
+--     trigger (which audits from an INSERT by the client) becomes SECURITY
+--     DEFINER so its entry stays a trusted, server-side one.
+-- M-6 A completed assessment is immutable: trg_comp_assessments_lock blocks
+--     leaving 'completed' (except through comp_reopen_assessment) and any
+--     change to scores, question selection, exam design / blueprint, job role
+--     or the evidence-feeding experience fields; trg_*_lock on
+--     comp_panelist_scores / comp_interview_ratings blocks insert/update/
+--     delete while the parent is completed (a cascade delete of the parent is
+--     unaffected — the parent is already gone when the child trigger runs).
+--     comp_reopen_assessment lifts the lock for its own update only and now
+--     also clears is_approved (N-10). comp_ensure_competency_profile computes
+--     the profile only when none is stored yet or — for a non-completed
+--     assessment — when an input changed after the stored computation (N-9);
+--     the explicit recompute button still calls comp_compute_competency_profile.
+-- M-7 Self-service submit / photo / attachment only while the link is still
+--     open (not_sent / pending / submitted — never after 'reviewed') and
+--     never on a completed assessment; comp_self_service_get reports this as
+--     self_service_editable so the page can say so.
+-- M-8 comp_compute_competency_profile treats a TECHNICAL_CATEGORY source whose
+--     category has no active APPROVED bank question for the job role AND no
+--     scored item in the candidate's snapshot as "not assessable": left out of
+--     evidence and the coverage denominator, recorded per competency in
+--     comp_competency_scores.unassessable_sources and in the audit entry, and
+--     flagged per source (noBankQuestions) by comp_get_competency_evidence_detail.
+-- M-9 Regenerating a test once answers exist goes through
+--     comp_set_selected_questions / personality_set_test_questions with an
+--     explicit p_discard_existing = true: the discarded answers/responses are
+--     archived in the audit log (previous_value) and cleared atomically with
+--     the new selection. Triggers refuse any other change of
+--     selected_question_ids while answers exist, and both RPCs refuse a
+--     completed assessment.
+-- ============================================================================
+
+-- ---------------------------------------------------------------- C-1: photos
+
+create or replace function comp_is_photo_path(p_assessment_id uuid, p_path text)
+returns boolean as $$
+  select coalesce(p_path, '') ~* (
+    '^' || p_assessment_id::text || '/'
+    || '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)?'
+    || '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpe?g|jfif|png|webp|gif|heic|heif)$'
+  );
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_is_photo_path(uuid, text) from public, anon;
+grant execute on function comp_is_photo_path(uuid, text) to authenticated;
+
+create or replace function comp_is_public_photo(p_name text)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.photo_url = p_name and comp_is_photo_path(a.id, p_name)
+  ) and not exists (
+    select 1 from comp_attachments t where t.storage_path = p_name
+  );
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_is_public_photo(text) from public;
+grant execute on function comp_is_public_photo(text) to anon, authenticated;
+
+drop policy if exists "comp_docs_read_public_photo" on storage.objects;
+create policy "comp_docs_read_public_photo" on storage.objects
+  for select to anon using (
+    bucket_id = 'comp-docs'
+    and public.comp_is_public_photo(name)
+  );
+
+create or replace function comp_set_photo(p_assessment_id uuid, p_photo_url text)
+returns void as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not (comp_is_lead(p_assessment_id) or comp_is_assessment_designer()) then
+    raise exception 'forbidden';
+  end if;
+  if not exists (select 1 from comp_assessments where id = p_assessment_id) then
+    raise exception 'assessment not found';
+  end if;
+  if coalesce(p_photo_url, '') <> '' and (
+    not comp_is_photo_path(p_assessment_id, p_photo_url)
+    or exists (select 1 from comp_attachments t where t.storage_path = p_photo_url)
+  ) then
+    raise exception 'invalid photo path';
+  end if;
+  update comp_assessments set photo_url = p_photo_url where id = p_assessment_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_set_photo(uuid, text) from public, anon;
+grant execute on function comp_set_photo(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------- M-7 (+ C-1): self-service
+
+create or replace function comp_self_service_is_editable(p_status text, p_self_service_status text)
+returns boolean as $$
+  select coalesce(p_status, '') <> 'completed'
+     and coalesce(p_self_service_status, 'not_sent') in ('not_sent', 'pending', 'submitted');
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_self_service_is_editable(text, text) from public;
+grant execute on function comp_self_service_is_editable(text, text) to anon, authenticated;
+
+drop function if exists comp_self_service_get(uuid);
+create or replace function comp_self_service_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  candidate_national_id text,
+  candidate_phone text,
+  candidate_email text,
+  candidate_birth_date date,
+  candidate_age int,
+  has_disability boolean,
+  disability_note text,
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text,
+  education jsonb,
+  employment_history jsonb,
+  certifications jsonb,
+  notable_projects text,
+  self_service_status text,
+  photo_url text,
+  self_service_editable boolean
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
+         a.years_experience_total, a.years_experience_pipeline, a.current_employer,
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
+         a.photo_url, comp_self_service_is_editable(a.status, a.self_service_status)
+  from comp_assessments a
+  where a.self_service_token = p_token;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_self_service_get(uuid) from public;
+grant execute on function comp_self_service_get(uuid) to anon, authenticated;
+
+create or replace function comp_self_service_submit(
+  p_token uuid,
+  p_candidate_name text,
+  p_candidate_national_id text,
+  p_candidate_phone text,
+  p_candidate_email text,
+  p_candidate_birth_date date,
+  p_candidate_age int,
+  p_has_disability boolean,
+  p_disability_note text,
+  p_years_experience_total numeric,
+  p_years_experience_pipeline numeric,
+  p_current_employer text,
+  p_education jsonb,
+  p_employment_history jsonb,
+  p_certifications jsonb,
+  p_notable_projects text
+)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token for update;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  update comp_assessments set
+    candidate_name = coalesce(nullif(p_candidate_name, ''), candidate_name),
+    candidate_national_id = p_candidate_national_id,
+    candidate_phone = p_candidate_phone,
+    candidate_email = p_candidate_email,
+    candidate_birth_date = p_candidate_birth_date,
+    candidate_age = p_candidate_age,
+    has_disability = p_has_disability,
+    disability_note = p_disability_note,
+    years_experience_total = p_years_experience_total,
+    years_experience_pipeline = p_years_experience_pipeline,
+    current_employer = p_current_employer,
+    education = p_education,
+    employment_history = p_employment_history,
+    certifications = p_certifications,
+    notable_projects = coalesce(nullif(p_notable_projects, ''), notable_projects),
+    self_service_status = 'submitted'
+  where id = v_a.id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_submit(uuid, text, text, text, text, date, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) from public;
+grant execute on function comp_self_service_submit(uuid, text, text, text, text, date, int, boolean, text, numeric, numeric, text, jsonb, jsonb, jsonb, text) to anon, authenticated;
+
+create or replace function comp_self_service_set_photo(p_token uuid, p_storage_path text)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  if not starts_with(coalesce(p_storage_path, ''), v_a.id::text || '/' || p_token::text || '/')
+     or not comp_is_photo_path(v_a.id, p_storage_path)
+     or exists (select 1 from comp_attachments t where t.storage_path = p_storage_path) then
+    raise exception 'invalid photo path';
+  end if;
+  update comp_assessments set photo_url = p_storage_path where id = v_a.id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_set_photo(uuid, text) from public;
+grant execute on function comp_self_service_set_photo(uuid, text) to anon, authenticated;
+
+create or replace function comp_self_service_add_attachment(p_token uuid, p_kind text, p_file_name text, p_storage_path text)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  if not starts_with(coalesce(p_storage_path, ''), v_a.id::text || '/' || p_token::text || '/')
+     or p_storage_path is not distinct from v_a.photo_url then
+    raise exception 'invalid attachment path';
+  end if;
+  insert into comp_attachments (assessment_id, kind, file_name, storage_path, uploaded_by, uploaded_by_candidate)
+  values (v_a.id, p_kind, p_file_name, p_storage_path, null, true);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_add_attachment(uuid, text, text, text) from public;
+grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
+
+-- ---------------------------------------------------------------- M-4: audit log
+
+create or replace function comp_log_client_audit(p_action text, p_entity_type text, p_entity_id uuid, p_previous jsonb, p_new jsonb)
+returns void as $$
+declare
+  v_uid uuid := auth.uid();
+  v_ok boolean;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+  if coalesce(octet_length(p_previous::text), 0) + coalesce(octet_length(p_new::text), 0) > 16384 then
+    raise exception 'audit payload too large';
+  end if;
+  -- The only actions a client (or an edge function acting with the user's JWT) may record, each
+  -- tied to the caller's real standing on the entity it names. Everything else is written by
+  -- SECURITY DEFINER RPCs through comp_log_audit's trusted branch.
+  v_ok := case p_action
+    when 'ASSESSMENT_CREATED' then p_entity_type = 'comp_assessments'
+      and exists (select 1 from comp_assessments a where a.id = p_entity_id and a.created_by = v_uid)
+    when 'ASSESSMENT_FINALIZED' then p_entity_type = 'comp_assessments' and comp_is_lead(p_entity_id)
+      and exists (select 1 from comp_assessments a where a.id = p_entity_id and a.status = 'completed')
+    when 'JUDGE_ASSIGNED' then p_entity_type = 'comp_panelists' and comp_is_lead(p_entity_id)
+    when 'SCORE_SUBMITTED' then p_entity_type = 'comp_panelist_scores'
+      and exists (select 1 from comp_panelist_scores ps where ps.assessment_id = p_entity_id and ps.panelist_id = v_uid and ps.submitted_at is not null)
+    when 'QUESTION_GENERATED' then p_entity_type = 'comp_assessments' and (comp_is_lead(p_entity_id) or comp_is_assessment_designer())
+    when 'DEVELOPMENT_PLAN_STATUS_CHANGED' then p_entity_type = 'comp_assessments' and comp_can_manage_development_plan(p_entity_id)
+    when 'AI_ANALYSIS_GENERATED' then p_entity_type = 'comp_assessments' and comp_can_access_assessment(p_entity_id)
+    when 'CANDIDATE_AI_ANALYSIS_GENERATED' then p_entity_type = 'comp_assessments' and comp_can_access_assessment(p_entity_id)
+    when 'PERSONALITY_AI_ANALYSIS_GENERATED' then p_entity_type = 'personality_assessments' and personality_can_access_assessment(p_entity_id)
+    when 'QUESTION_CREATED' then p_entity_type = 'comp_question_bank' and comp_is_module_admin()
+      and exists (select 1 from comp_question_bank q where q.id = p_entity_id)
+    when 'QUESTION_APPROVED' then p_entity_type = 'comp_question_bank' and comp_is_module_admin()
+      and exists (select 1 from comp_question_bank q where q.id = p_entity_id)
+    when 'QUESTION_REJECTED' then p_entity_type = 'comp_question_bank' and comp_is_module_admin()
+      and exists (select 1 from comp_question_bank q where q.id = p_entity_id)
+    when 'QUESTION_EDITED' then p_entity_type = 'comp_question_bank' and comp_is_module_admin()
+      and exists (select 1 from comp_question_bank q where q.id = p_entity_id)
+    when 'QUESTION_PROPOSED' then p_entity_type = 'comp_question_bank'
+      and exists (select 1 from comp_question_bank q where q.id = p_entity_id and q.created_by = v_uid)
+    when 'JOB_ROLE_CREATED' then p_entity_type = 'comp_job_role_config' and p_entity_id is null and comp_is_module_admin()
+      and exists (select 1 from comp_job_role_config c where c.job_role = p_new ->> 'jobRole')
+    else false
+  end;
+  if not coalesce(v_ok, false) then
+    raise exception 'audit action not allowed';
+  end if;
+  insert into comp_audit_log (action, entity_type, entity_id, actor, previous_value, new_value)
+  values (p_action, p_entity_type, p_entity_id, v_uid, p_previous, p_new);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_log_client_audit(text, text, uuid, jsonb, jsonb) from public, anon;
+grant execute on function comp_log_client_audit(text, text, uuid, jsonb, jsonb) to authenticated;
+
+-- SECURITY INVOKER on purpose: inside a SECURITY DEFINER function owned by postgres, current_user is
+-- postgres (a trusted, server-side caller) — a direct API call runs as authenticated and is routed
+-- through the whitelist above. A client can therefore never forge an arbitrary entry.
+create or replace function comp_log_audit(p_action text, p_entity_type text, p_entity_id uuid, p_previous jsonb, p_new jsonb)
+returns void as $$
+begin
+  if current_user in ('postgres', 'supabase_admin', 'service_role') then
+    insert into comp_audit_log (action, entity_type, entity_id, actor, previous_value, new_value)
+    values (p_action, p_entity_type, p_entity_id, auth.uid(), p_previous, p_new);
+  else
+    perform comp_log_client_audit(p_action, p_entity_type, p_entity_id, p_previous, p_new);
+  end if;
+end;
+$$ language plpgsql security invoker set search_path = public;
+
+revoke execute on function comp_log_audit(text, text, uuid, jsonb, jsonb) from public, anon;
+grant execute on function comp_log_audit(text, text, uuid, jsonb, jsonb) to authenticated, service_role;
+
+-- Fires on the client's own INSERT (as authenticated) and records a server-side decision.
+alter function comp_assessments_apply_default_blueprint() security definer;
+
+-- ---------------------------------------------------------------- M-1 / M-2 / M-3: personality
+
+-- Section 41's scoring engine body, unchanged except for the status/submitted_at handling noted in
+-- this section's header (M-1). Callable only from SECURITY DEFINER code.
+create or replace function personality_score_assessment_core(p_id uuid)
+returns void as $$
+declare
+  pa personality_assessments%rowtype;
+  v_straight_lining boolean := false;
+  v_missing int := 0;
+  v_total_selected int := 0;
+  v_completion_seconds int;
+begin
+  select * into pa from personality_assessments where id = p_id;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+
+  delete from personality_dimension_scores where personality_assessment_id = p_id;
+
+  -- TRAIT scores (Big Five) — average of normalized 0-1 LIKERT/FREQUENCY item scores tied to a
+  -- trait, reverse-scored items mirrored around the scale midpoint first.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, trait_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'TRAIT', x.trait_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 5 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.trait_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.trait_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.trait_id;
+
+  -- FACET scores — same source, grouped by facet.
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, facet_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'FACET', x.facet_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 3 then 'HIGH' when count(*) >= 1 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.facet_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.facet_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.facet_id;
+
+  -- BEHAVIORAL_DIMENSION scores — LIKERT/FREQUENCY items tied directly to a dimension, PLUS
+  -- FORCED_CHOICE/SJT/PRIORITY_CHOICE/EXPERIENCE_ANCHORED items resolved via the chosen option's
+  -- embedded dimension_key/score (SJT/EA/PRIORITY_CHOICE options carry a 0-5 quality score;
+  -- FORCED_CHOICE is ipsative, so a chosen side counts as full credit toward its own construct).
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, dimension_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'BEHAVIORAL_DIMENSION', x.dim_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 4 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.dimension_id as dim_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.dimension_id is not null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+
+    union all
+
+    select d.id as dim_id,
+      case when q.question_type = 'FORCED_CHOICE' then 1.0 else (opt->>'score')::numeric / 5.0 end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    cross join lateral jsonb_array_elements(q.options) as opt
+    join personality_behavioral_dimensions d on d.key = (opt->>'dimension_key')
+    where r.personality_assessment_id = p_id
+      and q.question_type in ('FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')
+      and (r.response_value->>'selected_option') = (opt->>'key')
+  ) x
+  where x.v is not null
+  group by x.dim_id;
+
+  -- Response validity — evidence for review, never an automatic dishonesty verdict.
+  -- Straight-lining: candidate picked the single most common LIKERT/FREQUENCY value on more than
+  -- 90% of those items (only evaluated once there are enough such items to mean anything).
+  select (count(*) filter (where v = mode_v))::numeric / nullif(count(*), 0) > 0.9
+  into v_straight_lining
+  from (
+    select (r.response_value->>'selected')::numeric as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    where r.personality_assessment_id = p_id and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ) vals
+  cross join lateral (select mode() within group (order by v) as mode_v from (
+    select (r2.response_value->>'selected')::numeric as v
+    from personality_responses r2
+    join personality_questions q2 on q2.id = r2.question_id
+    where r2.personality_assessment_id = p_id and q2.question_type in ('LIKERT', 'FREQUENCY') and (r2.response_value ? 'selected')
+  ) inner_vals) m
+  having count(*) >= 8;
+
+  v_straight_lining := coalesce(v_straight_lining, false);
+
+  select jsonb_array_length(pa.selected_question_ids) into v_total_selected;
+  select v_total_selected - count(*) into v_missing from personality_responses where personality_assessment_id = p_id;
+  v_completion_seconds := case when pa.started_at is not null then greatest(0, extract(epoch from (now() - pa.started_at))::int) else null end;
+
+  insert into personality_validity_results (
+    personality_assessment_id, completion_seconds, straight_lining_flag, missing_response_count, overall_status
+  )
+  values (
+    p_id, v_completion_seconds, v_straight_lining, greatest(0, coalesce(v_missing, 0)),
+    case when v_straight_lining or coalesce(v_missing, 0) > 0 then 'REVIEW_REQUIRED' else 'ACCEPTABLE' end
+  )
+  on conflict (personality_assessment_id) do update set
+    completion_seconds = excluded.completion_seconds,
+    straight_lining_flag = excluded.straight_lining_flag,
+    missing_response_count = excluded.missing_response_count,
+    overall_status = excluded.overall_status,
+    computed_at = now();
+
+  -- Deterministic, rule-based watchpoints — never a diagnosis, just a flag for structured-interview
+  -- follow-up when a behavioral dimension scores low.
+  update personality_assessments pa2
+  set computed_watchpoints = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'topic', 'در مصاحبه ساختاریافته، شواهد بیشتری درباره «' || d.label_fa || '» بررسی شود.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score < 40
+  ), '[]'::jsonb),
+  computed_patterns = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'interpretation', 'الگوی پاسخ نشان‌دهنده تمایل نسبتاً قوی در حوزه «' || d.label_fa || '» است.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score >= 80
+  ), '[]'::jsonb),
+  -- Section 53 (M-1): never stamps submitted_at (only the candidate's own finalize does) and never
+  -- moves a later-stage assessment back to FINGERPRINT on a re-score.
+  status = case when pa2.status in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING') then 'FINGERPRINT' else pa2.status end,
+  updated_at = now()
+  where pa2.id = p_id;
+
+  perform comp_log_audit('PERSONALITY_ASSESSMENT_SCORED', 'personality_assessments', p_id, null, jsonb_build_object('status', (select status from personality_assessments where id = p_id)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_score_assessment_core(uuid) from public, anon, authenticated;
+
+create or replace function personality_score_assessment(p_id uuid)
+returns void as $$
+declare
+  v_pa personality_assessments%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  select * into v_pa from personality_assessments where id = p_id;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+  if not (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or coalesce(v_pa.created_by = auth.uid(), false)
+    or (v_pa.assessment_id is not null and comp_is_lead(v_pa.assessment_id))
+  ) then
+    raise exception 'forbidden';
+  end if;
+  if v_pa.status in ('LOCKED', 'ARCHIVED') then
+    raise exception 'personality_locked: a locked or archived personality assessment cannot be re-scored';
+  end if;
+  if v_pa.status not in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW') then
+    raise exception 'personality_not_submitted: the candidate has not submitted this test yet';
+  end if;
+  perform personality_score_assessment_core(p_id);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_score_assessment(uuid) from public, anon;
+grant execute on function personality_score_assessment(uuid) to authenticated;
+
+create or replace function personality_candidate_finalize(p_token uuid)
+returns void as $$
+declare
+  v_id uuid;
+  v_status text;
+begin
+  select id, status into v_id, v_status from personality_assessments where candidate_token = p_token for update;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  if v_status not in ('STARTED', 'IN_PROGRESS') then
+    raise exception 'personality_not_in_progress: this test cannot be submitted (status %)', v_status;
+  end if;
+  update personality_assessments set status = 'SUBMITTED', submitted_at = coalesce(submitted_at, now()) where id = v_id;
+  perform personality_score_assessment_core(v_id);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_candidate_finalize(uuid) from public;
+grant execute on function personality_candidate_finalize(uuid) to anon, authenticated;
+
+create or replace function personality_candidate_submit_response(p_token uuid, p_question_id uuid, p_response jsonb, p_response_time_ms int default null)
+returns void as $$
+declare
+  v_id uuid;
+  v_status text;
+  v_selected jsonb;
+begin
+  select pa.id, pa.status, pa.selected_question_ids into v_id, v_status, v_selected
+  from personality_assessments pa where pa.candidate_token = p_token;
+  if v_id is null then
+    raise exception 'invalid token';
+  end if;
+  if v_status not in ('DESIGNED', 'GENERATED', 'ASSIGNED', 'STARTED', 'IN_PROGRESS') then
+    raise exception 'assessment already submitted';
+  end if;
+  if p_question_id is null or jsonb_typeof(v_selected) is distinct from 'array' or not (v_selected ? p_question_id::text) then
+    raise exception 'question is not part of this assessment';
+  end if;
+  update personality_assessments
+  set status = 'IN_PROGRESS', started_at = coalesce(started_at, now())
+  where id = v_id and status in ('DESIGNED', 'GENERATED', 'ASSIGNED', 'STARTED');
+  insert into personality_responses (personality_assessment_id, question_id, response_value, response_time_ms)
+  values (v_id, p_question_id, p_response, p_response_time_ms)
+  on conflict (personality_assessment_id, question_id)
+  do update set response_value = excluded.response_value, response_time_ms = excluded.response_time_ms, answered_at = now();
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_candidate_submit_response(uuid, uuid, jsonb, int) from public;
+grant execute on function personality_candidate_submit_response(uuid, uuid, jsonb, int) to anon, authenticated;
+
+-- ---------------------------------------------------------------- M-6: completed = immutable
+
+-- Any answer (lead entry or a panelist sheet) keyed by a question of the given selection.
+create or replace function comp_assessment_has_technical_responses(p_assessment_id uuid, p_selected jsonb, p_answers jsonb)
+returns boolean as $$
+  select exists (
+    select 1
+    from jsonb_array_elements_text(case when jsonb_typeof(p_selected) = 'array' then p_selected else '[]'::jsonb end) q(id)
+    where (jsonb_typeof(p_answers) = 'object' and p_answers ? q.id)
+       or exists (
+         select 1 from comp_panelist_scores ps
+         where ps.assessment_id = p_assessment_id and jsonb_typeof(ps.answers) = 'object' and ps.answers ? q.id
+       )
+  );
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_assessment_has_technical_responses(uuid, jsonb, jsonb) from public, anon;
+grant execute on function comp_assessment_has_technical_responses(uuid, jsonb, jsonb) to authenticated;
+
+create or replace function comp_assessments_enforce_lock()
+returns trigger as $$
+begin
+  if coalesce(current_setting('comp.allow_locked_write', true), '') = 'on' then
+    return new;
+  end if;
+  if old.status = 'completed' then
+    if new.status is distinct from old.status then
+      raise exception 'assessment_locked: a completed assessment can only be reopened by a module admin (comp_reopen_assessment)';
+    end if;
+    if new.job_role is distinct from old.job_role
+       or new.selected_question_ids is distinct from old.selected_question_ids
+       or new.answers is distinct from old.answers
+       or new.capstone_score is distinct from old.capstone_score
+       or new.capstone_note is distinct from old.capstone_note
+       or new.education_score is distinct from old.education_score
+       or new.experience_score is distinct from old.experience_score
+       or new.pm_training_score is distinct from old.pm_training_score
+       or new.pm_certification_score is distinct from old.pm_certification_score
+       or new.needs_personality_assessment is distinct from old.needs_personality_assessment
+       or new.needs_technical_assessment is distinct from old.needs_technical_assessment
+       or new.needs_structured_interview is distinct from old.needs_structured_interview
+       or new.includes_experience is distinct from old.includes_experience
+       or new.blueprint_id is distinct from old.blueprint_id
+       or new.years_experience_total is distinct from old.years_experience_total
+       or new.years_experience_pipeline is distinct from old.years_experience_pipeline
+       or new.education is distinct from old.education
+       or new.certifications is distinct from old.certifications then
+      raise exception 'assessment_locked: this assessment is completed; a module admin must reopen it before its scores, question selection, exam design or evidence can change';
+    end if;
+  end if;
+  -- M-9: the frozen question selection cannot silently change under existing answers.
+  if new.selected_question_ids is distinct from old.selected_question_ids
+     and coalesce(current_setting('comp.allow_question_reset', true), '') <> 'on'
+     and comp_assessment_has_technical_responses(old.id, old.selected_question_ids, old.answers) then
+    raise exception 'responses_exist: answers/scores already exist for the current technical questions; regenerate with explicit discard (comp_set_selected_questions)';
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_assessments_lock on comp_assessments;
+create trigger trg_comp_assessments_lock before update on comp_assessments
+  for each row execute function comp_assessments_enforce_lock();
+
+create or replace function comp_assessment_children_enforce_lock()
+returns trigger as $$
+declare
+  v_ids uuid[];
+begin
+  if coalesce(current_setting('comp.allow_locked_write', true), '') <> 'on' then
+    v_ids := case tg_op
+      when 'INSERT' then array[new.assessment_id]
+      when 'DELETE' then array[old.assessment_id]
+      else array[old.assessment_id, new.assessment_id]
+    end;
+    if exists (select 1 from comp_assessments a where a.id = any(v_ids) and a.status = 'completed') then
+      raise exception 'assessment_locked: this assessment is completed; scores and interview ratings cannot change until a module admin reopens it';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_assessment_children_enforce_lock() from public, anon, authenticated;
+revoke execute on function comp_assessments_enforce_lock() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_panelist_scores_lock on comp_panelist_scores;
+create trigger trg_comp_panelist_scores_lock before insert or update or delete on comp_panelist_scores
+  for each row execute function comp_assessment_children_enforce_lock();
+
+drop trigger if exists trg_comp_interview_ratings_lock on comp_interview_ratings;
+create trigger trg_comp_interview_ratings_lock before insert or update or delete on comp_interview_ratings
+  for each row execute function comp_assessment_children_enforce_lock();
+
+-- Section 35's reopen, now the only way out of 'completed' (it lifts the lock for its own status
+-- update only) and also clearing the qualification approval (N-10) — a reopened assessment is a
+-- draft again, so an approval given to the old result no longer stands.
+create or replace function comp_reopen_assessment(p_assessment_id uuid)
+returns void as $$
+declare
+  v_prev comp_assessments%rowtype;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  perform set_config('comp.allow_locked_write', 'on', true);
+  update comp_assessments set status = 'draft', is_approved = false where id = p_assessment_id;
+  perform set_config('comp.allow_locked_write', '', true);
+  update comp_panelist_scores set submitted_at = null where assessment_id = p_assessment_id;
+  perform comp_log_audit(
+    'ASSESSMENT_REOPENED', 'comp_assessments', p_assessment_id,
+    jsonb_build_object('status', v_prev.status, 'isApproved', v_prev.is_approved),
+    jsonb_build_object('status', 'draft', 'isApproved', false)
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_reopen_assessment(uuid) from public, anon;
+grant execute on function comp_reopen_assessment(uuid) to authenticated;
+
+-- N-9: the results page asks for the profile through this instead of recomputing on every visit.
+-- Returns true when it (re)computed.
+create or replace function comp_ensure_competency_profile(p_assessment_id uuid)
+returns boolean as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_last timestamptz;
+  v_inputs timestamptz;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select max(computed_at) into v_last from comp_competency_scores where assessment_id = p_assessment_id;
+  if v_last is not null then
+    -- A completed assessment keeps its stored (final) profile; only the explicit button recomputes it.
+    if v_a.status = 'completed' then
+      return false;
+    end if;
+    select greatest(
+      v_a.updated_at,
+      (select max(ps.updated_at) from comp_panelist_scores ps where ps.assessment_id = p_assessment_id),
+      (select max(ir.updated_at) from comp_interview_ratings ir where ir.assessment_id = p_assessment_id),
+      (select max(pa.updated_at) from personality_assessments pa where pa.assessment_id = p_assessment_id),
+      (select max(r.updated_at) from comp_job_competency_requirements r where r.job_role = v_a.job_role),
+      (select max(s.updated_at) from comp_competency_evidence_sources s
+         join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_a.job_role),
+      (select max(c.updated_at) from comp_competencies c
+         join comp_job_competency_requirements r on r.competency_id = c.id and r.job_role = v_a.job_role)
+    ) into v_inputs;
+    if v_inputs is null or v_inputs <= v_last then
+      return false;
+    end if;
+  end if;
+  perform comp_compute_competency_profile(p_assessment_id);
+  return true;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_ensure_competency_profile(uuid) from public, anon;
+grant execute on function comp_ensure_competency_profile(uuid) to authenticated;
+
+-- ---------------------------------------------------------------- M-8: not-assessable technical sources
+
+alter table comp_competency_scores add column if not exists unassessable_sources jsonb not null default '[]'::jsonb;
+
+-- Section 50's comp_compute_competency_profile, changed ONLY for M-8: v_no_bank_refs (see this
+-- section's header) is dropped from `srcs` and the `cov` denominator, stored per competency in
+-- unassessable_sources and added to the audit entry. Scoring rules/statuses are unchanged.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+  v_excluded_types text[];
+  v_scored_categories text[] := '{}';
+  v_no_bank_refs text[] := '{}';
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Source types whose assessment method is not part of this candidate's design (see the Section 50
+  -- header): dropped from both evidence collection and the coverage denominator below.
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  -- Section 53 (M-8): a TECHNICAL_CATEGORY source whose category has no active APPROVED bank question
+  -- for this job role AND no scored item in this candidate's frozen snapshot can never produce
+  -- evidence — it is "not assessable", not "no evidence". Such sources are dropped from evidence
+  -- collection AND the coverage denominator (like an out-of-design method), and recorded per
+  -- competency in comp_competency_scores.unassessable_sources + the audit entry.
+  if v_assessment.needs_technical_assessment then
+    select coalesce(array_agg(distinct qb.category), '{}') into v_scored_categories
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+    where jsonb_typeof(v_assessment.answers -> sel.qid -> 'score') = 'number'
+       or exists (
+         select 1 from comp_panelist_scores ps
+         where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+           and jsonb_typeof(ps.answers -> sel.qid -> 'score') = 'number'
+       );
+
+    select coalesce(array_agg(distinct s.source_ref), '{}') into v_no_bank_refs
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    where s.source_type = 'TECHNICAL_CATEGORY'
+      and s.source_ref <> all(v_scored_categories)
+      and not exists (
+        select 1 from comp_question_bank q
+        where q.job_role = v_assessment.job_role and q.category = s.source_ref and q.active and q.approval_status = 'APPROVED'
+      );
+  end if;
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+    where s.source_type <> all(v_excluded_types)
+      and not (s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs))
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight / count(*) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status, unassessable_sources
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end,
+    coalesce((
+      select jsonb_agg(jsonb_build_object('sourceType', s.source_type, 'sourceRef', s.source_ref, 'weight', s.weight, 'reason', 'NO_BANK_QUESTIONS')
+        order by s.source_ref)
+      from comp_competency_evidence_sources s
+      where s.competency_id = x.competency_id and s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs)
+    ), '[]'::jsonb)
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id and s.source_type <> all(v_excluded_types)
+        and not (s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs))
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count, 'excludedByDesign', to_jsonb(v_excluded_types),
+    'noBankQuestionCategories', to_jsonb(v_no_bank_refs)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- Section 51's comp_get_competency_evidence_detail, changed ONLY to expose the M-8 marker: the score's
+-- unassessableSources and a per-source noBankQuestions flag.
+create or replace function comp_get_competency_evidence_detail(p_assessment_id uuid, p_competency_id uuid)
+returns jsonb as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_competency comp_competencies%rowtype;
+  v_pa_id uuid;
+  v_personality_access boolean := false;
+  v_excluded_types text[];
+  v_total_weight numeric;
+  v_evidence jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select * into v_competency from comp_competencies where id = p_competency_id;
+  if not found then
+    raise exception 'competency not found';
+  end if;
+
+  -- Same "excluded by design" list as comp_compute_competency_profile (Section 50).
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end
+  ], null);
+
+  select pa.id into v_pa_id from personality_assessments pa where pa.assessment_id = p_assessment_id;
+  if v_pa_id is not null then
+    v_personality_access := personality_can_access_assessment(v_pa_id);
+  end if;
+
+  select coalesce(sum(e.effective_weight), 0) into v_total_weight
+  from comp_competency_evidence e
+  where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id;
+
+  select coalesce(jsonb_agg(row_json order by source_order, normalized_score desc), '[]'::jsonb) into v_evidence
+  from (
+    select
+      array_position(array['TECHNICAL_CATEGORY', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'STRUCTURED_INTERVIEW', 'EXPERIENCE'], e.source_type) as source_order,
+      e.normalized_score,
+      jsonb_build_object(
+        'id', e.id,
+        'sourceType', e.source_type,
+        'sourceRef', e.source_ref,
+        'sourceItemId', e.source_item_id,
+        'sourceLabel', e.source_label,
+        'normalizedScore', e.normalized_score,
+        'effectiveWeight', e.effective_weight,
+        -- Points this row adds to the competency's weighted-average score, and its weight share.
+        'contribution', case when v_total_weight > 0 then round(e.normalized_score * e.effective_weight / v_total_weight, 2) end,
+        'weightShare', case when v_total_weight > 0 then round(e.effective_weight / v_total_weight, 4) end,
+        'rawValue', e.raw_value,
+        'computedAt', e.computed_at,
+        'itemsRestricted', e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT') and not v_personality_access,
+        'items', case
+          when e.source_type = 'TECHNICAL_CATEGORY' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'TECHNICAL_QUESTION',
+              'questionId', qb.id,
+              'questionText', qb.question_text,
+              'category', qb.category,
+              'subCategory', qb.sub_category,
+              'difficulty', qb.difficulty,
+              'candidateAnswer', nullif(v_assessment.answers -> qb.id::text ->> 'candidateAnswer', ''),
+              'leadScore', case when jsonb_typeof(v_assessment.answers -> qb.id::text -> 'score') = 'number'
+                then (v_assessment.answers -> qb.id::text ->> 'score')::numeric end,
+              'leadNote', nullif(v_assessment.answers -> qb.id::text ->> 'note', ''),
+              -- Only SUBMITTED panel sheets count toward the official score, so only those are shown.
+              'ratings', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'raterId', ps.panelist_id,
+                  'raterName', coalesce(nullif(p.full_name, ''), p.email, 'داور'),
+                  'score', case when jsonb_typeof(ps.answers -> qb.id::text -> 'score') = 'number'
+                    then (ps.answers -> qb.id::text ->> 'score')::numeric end,
+                  'note', nullif(ps.answers -> qb.id::text ->> 'note', ''),
+                  'submittedAt', ps.submitted_at
+                ) order by ps.submitted_at), '[]'::jsonb)
+                from comp_panelist_scores ps
+                left join profiles p on p.id = ps.panelist_id
+                where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+              )
+            )), '[]'::jsonb)
+            from comp_question_bank qb
+            where qb.id::text = e.source_item_id
+          )
+          when e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT') and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'PERSONALITY_ITEM',
+              'questionId', pq.id,
+              'questionType', pq.question_type,
+              'questionText', pq.question_text,
+              'reverseScored', pq.reverse_scored,
+              'response', pr.response_value,
+              'chosenOptionLabel', (
+                select o.value ->> 'label_fa'
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+                where o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                limit 1
+              ),
+              'answeredAt', pr.answered_at
+            ) order by pq.question_type, pr.answered_at), '[]'::jsonb)
+            from personality_dimension_scores ds
+            join personality_responses pr on pr.personality_assessment_id = ds.personality_assessment_id
+            join personality_questions pq on pq.id = pr.question_id
+            where ds.id::text = e.source_item_id
+              and ds.personality_assessment_id = v_pa_id
+              and (
+                (e.source_type = 'PERSONALITY_TRAIT' and pq.trait_id = ds.trait_id)
+                or (e.source_type = 'PERSONALITY_DIMENSION' and pq.dimension_id = ds.dimension_id)
+              )
+          )
+          when e.source_type = 'SJT' and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'SJT_ITEM',
+              'questionId', pq.id,
+              'questionText', pq.question_text,
+              'scenarioContext', pq.scenario_context,
+              'selectedOption', pr.response_value ->> 'selected_option',
+              'options', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'key', o.value ->> 'key',
+                  'labelFa', o.value ->> 'label_fa',
+                  'score', case when jsonb_typeof(o.value -> 'score') = 'number' then (o.value ->> 'score')::numeric end,
+                  'dimensionKey', o.value ->> 'dimension_key',
+                  'chosen', o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                ) order by o.ordinality), '[]'::jsonb)
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) with ordinality o(value, ordinality)
+              ),
+              'answeredAt', pr.answered_at
+            )), '[]'::jsonb)
+            from personality_responses pr
+            join personality_questions pq on pq.id = pr.question_id
+            where pr.personality_assessment_id = v_pa_id and pq.id::text = e.source_item_id
+          )
+          when e.source_type = 'STRUCTURED_INTERVIEW' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'INTERVIEW_RATING',
+              'raterId', r.rater_id,
+              'raterName', coalesce(nullif(p.full_name, ''), p.email, 'ارزیاب'),
+              'rating', r.rating,
+              'notes', r.notes,
+              'ratedAt', r.updated_at
+            )), '[]'::jsonb)
+            from comp_interview_ratings r
+            left join profiles p on p.id = r.rater_id
+            where r.assessment_id = p_assessment_id and r.competency_id = p_competency_id and r.rater_id::text = e.source_item_id
+          )
+          when e.source_type = 'EXPERIENCE' then jsonb_build_array(jsonb_build_object(
+            'kind', 'EXPERIENCE',
+            'metric', e.source_ref,
+            'yearsExperienceTotal', v_assessment.years_experience_total,
+            'yearsExperiencePipeline', v_assessment.years_experience_pipeline,
+            'certifications', case when e.source_ref = 'certifications' then v_assessment.certifications end,
+            'education', case when e.source_ref = 'education' then v_assessment.education end,
+            'employmentHistory', case when e.source_ref in ('years_total', 'years_pipeline') then v_assessment.employment_history end
+          ))
+          else '[]'::jsonb
+        end
+      ) as row_json
+    from comp_competency_evidence e
+    where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id
+  ) x;
+
+  return jsonb_build_object(
+    'assessmentId', p_assessment_id,
+    'competency', jsonb_build_object(
+      'id', v_competency.id,
+      'key', v_competency.key,
+      'labelFa', v_competency.label_fa,
+      'description', v_competency.description,
+      'domain', v_competency.domain,
+      'proficiencyLevels', v_competency.proficiency_levels
+    ),
+    'requirement', (
+      select jsonb_build_object('requiredLevel', r.required_level, 'isCritical', r.is_critical, 'weight', r.weight)
+      from comp_job_competency_requirements r
+      where r.job_role = v_assessment.job_role and r.competency_id = p_competency_id
+    ),
+    'score', (
+      select jsonb_build_object(
+        'requiredLevel', s.required_level, 'levelCount', s.level_count, 'actualScore', s.actual_score,
+        'actualLevel', s.actual_level, 'gap', s.gap, 'isCritical', s.is_critical, 'weight', s.weight,
+        'evidenceCount', s.evidence_count, 'sourceTypesCovered', s.source_types_covered, 'coverage', s.coverage,
+        'confidence', s.confidence, 'status', s.status, 'computedAt', s.computed_at,
+        'unassessableSources', s.unassessable_sources
+      )
+      from comp_competency_scores s
+      where s.assessment_id = p_assessment_id and s.competency_id = p_competency_id
+    ),
+    'design', jsonb_build_object(
+      'technical', v_assessment.needs_technical_assessment,
+      'personality', v_assessment.needs_personality_assessment,
+      'structuredInterview', v_assessment.needs_structured_interview,
+      'experience', v_assessment.includes_experience
+    ),
+    'personalityItemsVisible', v_personality_access,
+    -- Every configured source for this competency, so the drawer can show which ones produced
+    -- evidence, which produced none, and which were left out by design (never "missing").
+    'sources', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'sourceType', s.source_type,
+        'sourceRef', s.source_ref,
+        'weight', s.weight,
+        'excludedByDesign', s.source_type = any(v_excluded_types),
+        -- Section 53 (M-8): a technical category with no bank question for this role and nothing
+        -- scored — "not assessable", left out of the coverage denominator by the engine.
+        'noBankQuestions', exists (
+          select 1
+          from comp_competency_scores cs
+          cross join lateral jsonb_array_elements(cs.unassessable_sources) u(value)
+          where cs.assessment_id = p_assessment_id and cs.competency_id = s.competency_id
+            and u.value ->> 'sourceType' = s.source_type and u.value ->> 'sourceRef' = s.source_ref
+        ),
+        'itemCount', (
+          select count(*) from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )
+      ) order by s.source_type, s.source_ref), '[]'::jsonb)
+      from comp_competency_evidence_sources s
+      where s.competency_id = p_competency_id
+    ),
+    'evidence', v_evidence
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_competency_evidence_detail(uuid, uuid) from public, anon;
+grant execute on function comp_get_competency_evidence_detail(uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------- M-9: regeneration with explicit discard
+
+create or replace function comp_set_selected_questions(
+  p_assessment_id uuid,
+  p_question_ids uuid[],
+  p_duration_minutes int default null,
+  p_auto_finish_on_timeout boolean default false,
+  p_discard_existing boolean default false
+)
+returns jsonb as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_ids uuid[] := coalesce(p_question_ids, '{}');
+  v_sel jsonb := to_jsonb(coalesce(p_question_ids, '{}')::text[]);
+  v_old_keys text[];
+  v_bad int;
+  v_has boolean;
+  v_sheets jsonb;
+  v_cleared int := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not (comp_is_lead(p_assessment_id) or comp_is_assessment_designer()) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.status = 'completed' then
+    raise exception 'assessment_locked: a completed assessment''s questions cannot be regenerated';
+  end if;
+  select count(*) into v_bad
+  from unnest(v_ids) q(id)
+  where not exists (
+    select 1 from comp_question_bank b
+    where b.id = q.id and b.job_role = v_a.job_role and b.active and b.approval_status = 'APPROVED'
+  );
+  if v_bad > 0 then
+    raise exception 'invalid question selection: % question(s) are not active approved bank questions of this job role', v_bad;
+  end if;
+
+  select coalesce(array_agg(x), '{}') into v_old_keys
+  from jsonb_array_elements_text(case when jsonb_typeof(v_a.selected_question_ids) = 'array' then v_a.selected_question_ids else '[]'::jsonb end) x;
+  v_has := comp_assessment_has_technical_responses(v_a.id, v_a.selected_question_ids, v_a.answers);
+  if v_has and not coalesce(p_discard_existing, false) then
+    raise exception 'responses_exist: answers/scores already exist for the current technical questions; confirm discarding them to regenerate';
+  end if;
+
+  if v_has then
+    -- Archive everything that is about to be discarded (the audit row is the archive).
+    select coalesce(jsonb_agg(jsonb_build_object('panelistId', ps.panelist_id, 'submittedAt', ps.submitted_at, 'answers', ps.answers)), '[]'::jsonb)
+    into v_sheets
+    from comp_panelist_scores ps
+    where ps.assessment_id = v_a.id and ps.answers ?| v_old_keys;
+    perform comp_log_audit(
+      'QUESTION_RESPONSES_DISCARDED', 'comp_assessments', v_a.id,
+      jsonb_build_object('selectedQuestionIds', v_a.selected_question_ids, 'leadAnswers', v_a.answers, 'panelSheets', v_sheets),
+      jsonb_build_object('reason', 'regenerated')
+    );
+    update comp_panelist_scores ps
+    set answers = ps.answers - v_old_keys, submitted_at = null
+    where ps.assessment_id = v_a.id and ps.answers ?| v_old_keys;
+    get diagnostics v_cleared = row_count;
+  end if;
+
+  perform set_config('comp.allow_question_reset', 'on', true);
+  update comp_assessments
+  set selected_question_ids = v_sel,
+      answers = case when v_has and jsonb_typeof(answers) = 'object' then answers - v_old_keys else answers end,
+      duration_minutes = p_duration_minutes,
+      auto_finish_on_timeout = coalesce(p_auto_finish_on_timeout, false)
+  where id = v_a.id;
+  perform set_config('comp.allow_question_reset', '', true);
+
+  if array_length(v_ids, 1) > 0 then
+    perform comp_increment_question_usage(v_ids);
+  end if;
+  perform comp_log_audit(
+    'QUESTION_GENERATED', 'comp_assessments', v_a.id, null,
+    jsonb_build_object('jobRole', v_a.job_role, 'count', jsonb_array_length(v_sel), 'discardedResponses', v_has, 'clearedPanelSheets', v_cleared)
+  );
+  return jsonb_build_object('count', jsonb_array_length(v_sel), 'discardedResponses', v_has, 'clearedPanelSheets', v_cleared);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_set_selected_questions(uuid, uuid[], int, boolean, boolean) from public, anon;
+grant execute on function comp_set_selected_questions(uuid, uuid[], int, boolean, boolean) to authenticated;
+
+create or replace function personality_test_has_progress(p_personality_assessment_id uuid)
+returns boolean as $$
+  select exists (select 1 from personality_responses r where r.personality_assessment_id = p_personality_assessment_id)
+      or exists (select 1 from personality_dimension_scores d where d.personality_assessment_id = p_personality_assessment_id)
+      or exists (
+        select 1 from personality_assessments pa
+        where pa.id = p_personality_assessment_id
+          and pa.status in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING', 'FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED')
+      );
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function personality_test_has_progress(uuid) from public, anon;
+grant execute on function personality_test_has_progress(uuid) to authenticated;
+
+create or replace function personality_assessments_enforce_lock()
+returns trigger as $$
+begin
+  if new.selected_question_ids is distinct from old.selected_question_ids
+     and coalesce(current_setting('comp.allow_question_reset', true), '') <> 'on' then
+    if exists (select 1 from comp_assessments a where a.id = new.assessment_id and a.status = 'completed') then
+      raise exception 'assessment_locked: the competency assessment is completed; its personality test cannot be regenerated';
+    end if;
+    if personality_test_has_progress(old.id) then
+      raise exception 'responses_exist: the candidate already answered or was scored; regenerate with explicit discard (personality_set_test_questions)';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_assessments_enforce_lock() from public, anon, authenticated;
+
+drop trigger if exists trg_personality_assessments_lock on personality_assessments;
+create trigger trg_personality_assessments_lock before update on personality_assessments
+  for each row execute function personality_assessments_enforce_lock();
+
+create or replace function personality_set_test_questions(
+  p_personality_assessment_id uuid,
+  p_question_ids uuid[],
+  p_discard_existing boolean default false
+)
+returns jsonb as $$
+declare
+  v_pa personality_assessments%rowtype;
+  v_ids uuid[] := coalesce(p_question_ids, '{}');
+  v_sel jsonb := to_jsonb(coalesce(p_question_ids, '{}')::text[]);
+  v_bad int;
+  v_has boolean;
+  v_responses jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  select * into v_pa from personality_assessments where id = p_personality_assessment_id for update;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+  if not (personality_is_module_admin() or personality_is_assessment_designer() or coalesce(v_pa.created_by = auth.uid(), false)) then
+    raise exception 'forbidden';
+  end if;
+  if v_pa.status in ('LOCKED', 'ARCHIVED') then
+    raise exception 'personality_locked: a locked or archived personality assessment cannot be regenerated';
+  end if;
+  if exists (select 1 from comp_assessments a where a.id = v_pa.assessment_id and a.status = 'completed') then
+    raise exception 'assessment_locked: the competency assessment is completed; its personality test cannot be regenerated';
+  end if;
+  select count(*) into v_bad
+  from unnest(v_ids) q(id)
+  where not exists (
+    select 1 from personality_questions pq
+    where pq.id = q.id and pq.active and pq.approval_status = 'APPROVED' and (pq.job_role is null or pq.job_role = v_pa.job_role)
+  );
+  if v_bad > 0 then
+    raise exception 'invalid question selection: % question(s) are not active approved personality questions for this job role', v_bad;
+  end if;
+
+  v_has := personality_test_has_progress(v_pa.id);
+  if v_has and not coalesce(p_discard_existing, false) then
+    raise exception 'responses_exist: the candidate already answered or was scored; confirm discarding the responses to regenerate';
+  end if;
+
+  if v_has then
+    select coalesce(jsonb_agg(jsonb_build_object('questionId', r.question_id, 'response', r.response_value, 'responseTimeMs', r.response_time_ms, 'answeredAt', r.answered_at)), '[]'::jsonb)
+    into v_responses
+    from personality_responses r where r.personality_assessment_id = v_pa.id;
+    perform comp_log_audit(
+      'PERSONALITY_RESPONSES_DISCARDED', 'personality_assessments', v_pa.id,
+      jsonb_build_object(
+        'status', v_pa.status, 'selectedQuestionIds', v_pa.selected_question_ids,
+        'startedAt', v_pa.started_at, 'submittedAt', v_pa.submitted_at, 'responses', v_responses,
+        'dimensionScoreCount', (select count(*) from personality_dimension_scores d where d.personality_assessment_id = v_pa.id),
+        'validity', (select to_jsonb(v) from personality_validity_results v where v.personality_assessment_id = v_pa.id)
+      ),
+      jsonb_build_object('status', 'GENERATED', 'reason', 'regenerated')
+    );
+    delete from personality_dimension_scores where personality_assessment_id = v_pa.id;
+    delete from personality_validity_results where personality_assessment_id = v_pa.id;
+    delete from personality_responses where personality_assessment_id = v_pa.id;
+  end if;
+
+  perform set_config('comp.allow_question_reset', 'on', true);
+  update personality_assessments
+  set selected_question_ids = v_sel,
+      status = 'GENERATED',
+      started_at = case when v_has then null else started_at end,
+      submitted_at = case when v_has then null else submitted_at end,
+      computed_patterns = case when v_has then '[]'::jsonb else computed_patterns end,
+      computed_watchpoints = case when v_has then '[]'::jsonb else computed_watchpoints end
+  where id = v_pa.id;
+  perform set_config('comp.allow_question_reset', '', true);
+
+  if array_length(v_ids, 1) > 0 then
+    perform personality_increment_question_usage(v_ids);
+  end if;
+  perform comp_log_audit(
+    'PERSONALITY_TEST_GENERATED', 'personality_assessments', v_pa.id, null,
+    jsonb_build_object('count', jsonb_array_length(v_sel), 'discardedResponses', v_has)
+  );
+  return jsonb_build_object('count', jsonb_array_length(v_sel), 'discardedResponses', v_has);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_set_test_questions(uuid, uuid[], boolean) from public, anon;
+grant execute on function personality_set_test_questions(uuid, uuid[], boolean) to authenticated;
