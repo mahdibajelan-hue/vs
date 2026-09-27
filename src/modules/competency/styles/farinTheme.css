@@ -179,3 +179,19 @@
 :root[data-theme='light'] .fx-remap :is(.border-white\/10, .border-white\/5, .border-white\/15) { border-color: rgba(15, 23, 42, 0.11); }
 :root[data-theme='light'] .fx-remap :is(.hover\:bg-white\/5:hover, .hover\:bg-white\/10:hover) { background-color: rgba(15, 23, 42, 0.06); }
 :root[data-theme='light'] .fx-remap :is(.bg-\[\#0b0f16\], .bg-\[\#120a1e\]) { background-color: #ffffff; }
+:root[data-theme='light'] .fx-remap :is(.text-red-400, .text-rose-400) { color: #dc2626; }
+:root[data-theme='light'] .fx-remap :is(.text-sky-400, .text-cyan-400) { color: #0284c7; }
+:root[data-theme='light'] .fx-remap :is(.text-purple-400, .text-violet-400, .text-pink-400) { color: #9333ea; }
+
+/* The module sidebar is dark-only markup (bg-[#0b0f16]); under the light theme its secondary text
+   used to fall to near-invisible slate-on-black. Re-skin it light from here (CSS only — the
+   sidebar markup itself is shared and unchanged). */
+:root[data-theme='light'] .comp-shell > aside {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+:root[data-theme='light'] .comp-shell > aside :is(.border-white\/10) { border-color: rgba(15, 23, 42, 0.1); }
+:root[data-theme='light'] .comp-shell > aside :is(.hover\:bg-white\/5:hover) { background-color: rgba(15, 23, 42, 0.05); }
+:root[data-theme='light'] .comp-shell > aside .text-purple-200 { color: #6d28d9; }
+:root[data-theme='light'] .comp-shell > aside .bg-purple-500\/20 { background-color: rgba(124, 58, 237, 0.12); }
+:root[data-theme='light'] .comp-shell > aside .text-red-300 { color: #b91c1c; }

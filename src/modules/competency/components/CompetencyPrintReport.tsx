@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { formatJalali } from '../../../lib/jalali'
+import { formatJalali as formatJalaliDate } from '../../../lib/jalali'
 import { formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type GapRow } from '../lib/competencyGap'
 import { ACTION_STATUS_META, ACTION_TYPE_LABEL_FA, PLAN_STATUS_META, PRIORITY_META, planProgress } from '../lib/developmentPlan'
 import { fa, type InterviewSummaryRow, type ResultsModel } from '../lib/resultsModel'
@@ -18,6 +18,9 @@ import type { CompDevelopmentAction, CompDevelopmentPlan, CompReassessmentCompar
  * break between sections. No store access by design — ResultsStage resolves everything and passes
  * it in, so the PDF can never disagree with the page.
  */
+
+/** Accepts a date or a full timestamp (formatJalali itself only parses YYYY-MM-DD). */
+const formatJalali = (iso: string | null | undefined) => (iso ? formatJalaliDate(iso.slice(0, 10)) : '')
 
 const INK = '#0f172a'
 const SUB = '#475569'
@@ -54,7 +57,7 @@ function inkTone(hex: string): string {
 // ---------------------------------------------------------------- building blocks
 function Section({ n, title, children, breakable, style }: { n: number; title: string; children: ReactNode; breakable?: boolean; style?: CSSProperties }) {
   return (
-    <section data-pdf-block="" {...(breakable ? { 'data-pdf-breakable': '' } : {})} style={{ padding: '10px 0 12px', ...style }}>
+    <section data-pdf-block="" {...(breakable ? { 'data-pdf-breakable': '' } : {})} style={{ padding: '10px 6px 12px', ...style }}>
       <h2 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 800, color: INK, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span
           style={{
@@ -112,7 +115,7 @@ const td: CSSProperties = { padding: '4px 6px', borderBottom: `1px solid ${LINE}
 
 /** Static SVG radar (no animation/measurement, so html2canvas and print capture it complete). */
 function PrintRadar({ labels, values, color = ACCENT, size = 300 }: { labels: string[]; values: (number | null)[]; color?: string; size?: number }) {
-  const width = size + 80
+  const width = size + 150
   const height = size
   const cx = width / 2
   const cy = height / 2
@@ -124,7 +127,7 @@ function PrintRadar({ labels, values, color = ACCENT, size = 300 }: { labels: st
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const
   }
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', margin: '0 auto' }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} direction="ltr" style={{ display: 'block', margin: '0 auto', direction: 'ltr' }}>
       {[25, 50, 75, 100].map((ring) => (
         <polygon key={ring} points={labels.map((_, i) => pointAt(i, ring).join(',')).join(' ')} fill="none" stroke={LINE} strokeWidth={1} />
       ))}
@@ -138,12 +141,21 @@ function PrintRadar({ labels, values, color = ACCENT, size = 300 }: { labels: st
         return <circle key={i} cx={x} cy={y} r={2.6} fill={color} />
       })}
       {labels.map((l, i) => {
-        const [x, y] = pointAt(i, 122)
+        const [x, y] = pointAt(i, 124)
         const anchor = Math.abs(x - cx) < 6 ? 'middle' : x > cx ? 'start' : 'end'
+        // Long (English) labels wrap onto two lines so neighbouring axes never overlap.
+        const words = l.split(' ')
+        const lines = l.length > 13 && words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [l]
+        const value = values[i] != null ? fa(values[i]) : null
+        if (value) lines.push(`(${value})`)
+        const y0 = y - ((lines.length - 1) * 10) / 2
         return (
-          <text key={i} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fontSize={8.5} fill={SUB} fontFamily="Vazirmatn, sans-serif">
-            {l}
-            {values[i] != null ? ` · ${fa(values[i])}` : ''}
+          <text key={i} x={x} y={y0} textAnchor={anchor} dominantBaseline="middle" fontSize={8.5} fill={SUB} fontFamily="Vazirmatn, sans-serif">
+            {lines.map((ln, k) => (
+              <tspan key={k} x={x} dy={k === 0 ? 0 : 10} fontWeight={k === lines.length - 1 && value ? 800 : 400} fill={k === lines.length - 1 && value ? INK : SUB}>
+                {ln}
+              </tspan>
+            ))}
           </text>
         )
       })}
@@ -206,7 +218,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
       <div data-pdf-running="" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '4px 0 6px', borderBottom: `1.5px solid ${ACCENT}` }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 800 }}>
           <img src={logoUrl} alt="" width={18} height={18} style={{ objectFit: 'contain' }} crossOrigin="anonymous" />
-          فرین · FARIN
+          فرین | FARIN
         </span>
         <span style={{ fontSize: 9.5, color: SUB }}>
           گزارش کامل ارزیابی شایستگی — {a.candidateName} — {roleLabel}
@@ -214,12 +226,12 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
       </div>
 
       {/* Branded header */}
-      <header data-pdf-header="" style={{ paddingBottom: 12, marginBottom: 6, borderBottom: `3px solid ${ACCENT}` }}>
+      <header data-pdf-header="" style={{ padding: '0 6px 12px', marginBottom: 6, borderBottom: `3px solid ${ACCENT}` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src={logoUrl} alt="FARIN" width={44} height={44} style={{ objectFit: 'contain' }} crossOrigin="anonymous" />
             <div>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: 0.2 }}>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
                 فرین <span style={{ color: GOLD, fontWeight: 800 }}>FARIN</span>
               </p>
               <p style={{ margin: 0, fontSize: 9.5, color: SUB }}>راهکار جامع مدیریت پروژه و توسعه نیروی انسانی</p>
@@ -242,7 +254,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           <div style={{ flex: 1.3, minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{a.candidateName}</p>
             <p style={{ margin: '2px 0 6px', fontSize: 11, color: SUB, fontWeight: 600 }}>
-              متقاضی سمت: {a.candidatePosition || roleLabel} <span style={{ color: MUTED }}>· شغل مرجع: {roleLabel}</span>
+              متقاضی سمت: {a.candidatePosition || roleLabel} <span style={{ color: MUTED }}>| شغل مرجع: {roleLabel}</span>
             </p>
             <KV
               rows={[
@@ -359,7 +371,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
               <PrintRadar labels={allDomains.map((d) => d.domain.shortTitle)} values={allDomains.map((d) => d.percentScore)} size={250} />
               <p style={{ margin: 0, textAlign: 'center', fontSize: 9, color: MUTED }}>
                 {fa(m.completion.answered)} از {fa(m.completion.total)} سؤال امتیازدهی‌شده (٪{fa(m.completion.percent)})
-                {peers.rank != null && ` · رتبه ${fa(peers.rank)} از ${fa(peers.total)} متقاضی این شغل`}
+                {peers.rank != null && `، رتبه ${fa(peers.rank)} از ${fa(peers.total)} متقاضی این شغل`}
               </p>
             </div>
             <table style={{ flex: 1, borderCollapse: 'collapse', width: '100%' }}>
@@ -586,7 +598,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
                 })}
               </tbody>
             </table>
-            <p style={{ margin: '4px 0 0', fontSize: 8.5, color: MUTED }}>★ شایستگی حیاتی · «شواهد ناکافی» یعنی هنوز داده‌ای ثبت نشده — نه ضعف متقاضی.</p>
+            <p style={{ margin: '4px 0 0', fontSize: 8.5, color: MUTED }}>★ شایستگی حیاتی، «شواهد ناکافی» یعنی هنوز داده‌ای ثبت نشده — نه ضعف متقاضی.</p>
           </>
         )}
       </Section>
@@ -677,7 +689,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           ))}
         </div>
         <p style={{ margin: '14px 0 0', fontSize: 8.5, color: MUTED, textAlign: 'center' }}>
-          تهیه‌شده توسط فرین (FARIN) — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی · ماژول ارزیابی شایستگی. این گزارش محرمانه است.
+          تهیه‌شده توسط فرین (FARIN) — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی، ماژول ارزیابی شایستگی. این گزارش محرمانه است.
         </p>
       </Section>
     </div>
@@ -734,7 +746,7 @@ function PersonalityBlock({ snap, roleLabel }: { snap: FingerprintSnapshot; role
                 v.completionSeconds != null ? `${fa(Math.max(1, Math.round(v.completionSeconds / 60)))} دقیقه` : null,
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join('، ')}
             </p>
           )}
         </div>
@@ -768,7 +780,7 @@ function PersonalityBlock({ snap, roleLabel }: { snap: FingerprintSnapshot; role
                   <b style={{ color: inkTone(t.tone) }}>{t.label.en}</b> ({t.label.fa})
                 </span>
                 <Bar value={t.score} color={t.tone} />
-                <span style={{ width: 62, flexShrink: 0, textAlign: 'left', fontSize: 9.5, color: SUB }}>
+                <span style={{ width: 96, flexShrink: 0, textAlign: 'left', fontSize: 9.5, color: SUB, whiteSpace: 'nowrap' }}>
                   <b style={{ color: INK }}>{t.score != null ? fa(Math.round(t.score)) : '—'}</b> {scoreBandFa(t.score)}
                 </span>
               </div>
@@ -834,8 +846,8 @@ function PersonalityBlock({ snap, roleLabel }: { snap: FingerprintSnapshot; role
 
       {(snap.patterns.length > 0 || snap.watchpoints.length > 0) && (
         <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-          {snap.patterns.length > 0 && <Note color={PRINT_TONE.good} title="الگوهای برجسته" text={snap.patterns.join(' · ')} />}
-          {snap.watchpoints.length > 0 && <Note color={PRINT_TONE.warn} title="نقاط قابل بررسی بیشتر" text={snap.watchpoints.join(' · ')} />}
+          {snap.patterns.length > 0 && <Note color={PRINT_TONE.good} title="الگوهای برجسته" text={snap.patterns.join('، ')} />}
+          {snap.watchpoints.length > 0 && <Note color={PRINT_TONE.warn} title="نقاط قابل بررسی بیشتر" text={snap.watchpoints.join('، ')} />}
         </div>
       )}
     </>
@@ -848,9 +860,9 @@ function IdpBlock({ plan }: { plan: NonNullable<CompetencyPrintReportProps['deve
   return (
     <>
       <p style={{ margin: '0 0 6px', fontSize: 10, color: SUB }}>
-        وضعیت: <b style={{ color: INK }}>{PLAN_STATUS_META[plan.plan.status].label}</b> · پیشرفت: {fa(progress.done)} از {fa(progress.total)} اقدام (٪{fa(progress.percent)})
-        {plan.ownerName ? ` · مسئول پیگیری: ${plan.ownerName}` : ''}
-        {plan.plan.targetReviewDate ? ` · بازبینی: ${formatJalali(plan.plan.targetReviewDate)}` : ''}
+        وضعیت: <b style={{ color: INK }}>{PLAN_STATUS_META[plan.plan.status].label}</b>، پیشرفت: {fa(progress.done)} از {fa(progress.total)} اقدام (٪{fa(progress.percent)})
+        {plan.ownerName ? `، مسئول پیگیری: ${plan.ownerName}` : ''}
+        {plan.plan.targetReviewDate ? `، بازبینی: ${formatJalali(plan.plan.targetReviewDate)}` : ''}
       </p>
       {plan.plan.summary && <p style={{ margin: '0 0 6px', fontSize: 10, color: SUB }}>{plan.plan.summary}</p>}
       {rows.length === 0 ? (

@@ -204,7 +204,7 @@ export function InterpretationCard({ model, roleLabel, paragraphs }: { model: Re
           <Sparkles size={15} className="fx-tone-text" /> تفسیر بلوغ و توصیه استفاده
         </p>
         <p className="fx-tone-bg fx-tone-text mb-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold">
-          سطح بلوغ: {i.bandLabel} · {roleLabel}
+          سطح بلوغ: {i.bandLabel}، {roleLabel}
         </p>
         <p className="fx-text-2 text-[12px] leading-7">{i.guidance}</p>
         {!pending && (
@@ -365,7 +365,7 @@ export function InterviewResults({ rows, inDesign }: { rows: InterviewSummaryRow
             </div>
             <p className="fx-muted num mb-2 text-[10.5px]">
               سطح مورد نیاز: {fa(r.requiredLevel)}
-              {r.requiredLabel ? ` (${r.requiredLabel})` : ''} · {fa(r.ratings.length)} داور
+              {r.requiredLabel ? ` (${r.requiredLabel})` : ''}، {fa(r.ratings.length)} داور
             </p>
             {r.ratings.length === 0 ? (
               <p className="fx-muted text-[11px]">هنوز امتیاز نگرفته</p>

@@ -99,6 +99,7 @@ export async function exportReportPdf(node: HTMLElement, filename: string): Prom
     running.style.display = 'flex'
     runningShot = await capture(running)
     running.style.display = prev
+    if (runningShot.canvas.height === 0) runningShot = null
   }
 
   let y = margin
@@ -108,29 +109,30 @@ export async function exportReportPdf(node: HTMLElement, filename: string): Prom
     page += 1
     y = margin
     if (runningShot) {
-      pdf.addImage(runningShot.canvas.toDataURL('image/png'), 'PNG', margin, y, contentW, runningShot.hMm)
+      pdf.addImage(runningShot.canvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, contentW, runningShot.hMm)
       y += runningShot.hMm + 3
     }
   }
 
   if (header) {
     const shot = await capture(header)
-    pdf.addImage(shot.canvas.toDataURL('image/png'), 'PNG', margin, y, contentW, shot.hMm)
+    if (shot.canvas.height > 0) pdf.addImage(shot.canvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, contentW, shot.hMm)
     y += shot.hMm + 3
   }
 
   for (const block of blocks) {
     const shot = await capture(block)
+    if (shot.canvas.width === 0 || shot.canvas.height === 0) continue
     const gap = 3
     if (shot.hMm <= bottom - y) {
-      pdf.addImage(shot.canvas.toDataURL('image/png'), 'PNG', margin, y, contentW, shot.hMm)
+      pdf.addImage(shot.canvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, contentW, shot.hMm)
       y += shot.hMm + gap
       continue
     }
     const pageArea = bottom - margin - (runningShot ? runningShot.hMm + 3 : 0)
     if (shot.hMm <= pageArea) {
       newPage()
-      pdf.addImage(shot.canvas.toDataURL('image/png'), 'PNG', margin, y, contentW, shot.hMm)
+      pdf.addImage(shot.canvas.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, contentW, shot.hMm)
       y += shot.hMm + gap
       continue
     }
@@ -141,11 +143,15 @@ export async function exportReportPdf(node: HTMLElement, filename: string): Prom
     while (offsetPx < shot.canvas.height) {
       const sliceMm = Math.min(bottom - y, (shot.canvas.height - offsetPx) / pxPerMm)
       const slicePx = Math.floor(sliceMm * pxPerMm)
+      if (slicePx <= 0) {
+        newPage()
+        continue
+      }
       const part = document.createElement('canvas')
       part.width = shot.canvas.width
       part.height = slicePx
       part.getContext('2d')?.drawImage(shot.canvas, 0, offsetPx, shot.canvas.width, slicePx, 0, 0, shot.canvas.width, slicePx)
-      pdf.addImage(part.toDataURL('image/png'), 'PNG', margin, y, contentW, sliceMm)
+      pdf.addImage(part.toDataURL('image/jpeg', 0.9), 'JPEG', margin, y, contentW, sliceMm)
       offsetPx += slicePx
       y += sliceMm + gap
       if (offsetPx < shot.canvas.height) newPage()

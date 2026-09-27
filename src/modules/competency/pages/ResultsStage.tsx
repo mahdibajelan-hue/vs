@@ -388,7 +388,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
   // ---- actions
   const handlePrint = () => {
-    if (printRef.current) printReportNode(printRef.current, `گزارش کامل ارزیابی — ${assessment.candidateName}`)
+    if (printRef.current) printReportNode(printRef.current, `گزارش-کامل-${assessment.candidateName}`)
   }
   const handlePdf = async () => {
     if (!printRef.current) return
@@ -444,11 +444,11 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
       <div className="fx fx-remap space-y-4">
         {/* Toolbar */}
         <div className="no-print flex flex-wrap items-center justify-end gap-2">
-          <button onClick={handlePrint} className={btnGhost}>
-            <Printer size={14} /> پرینت گزارش کامل
+          <button onClick={handlePrint} className={btnGhost} title="در پنجره چاپ، «ذخیره به‌صورت PDF» را انتخاب کنید — متن قابل انتخاب و کیفیت برداری">
+            <Printer size={14} /> چاپ / ذخیره PDF گزارش کامل
           </button>
-          <button onClick={handlePdf} disabled={exporting} className={btnGhost}>
-            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} {exporting ? 'در حال ساخت PDF…' : 'دانلود PDF کامل'}
+          <button onClick={handlePdf} disabled={exporting} className={btnGhost} title="فایل PDF تصویری، بدون پنجره چاپ">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} {exporting ? 'در حال ساخت PDF…' : 'دانلود سریع PDF'}
           </button>
           <button
             onClick={handleSend}
@@ -573,7 +573,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
           <ScoreRing model={model} />
           <StatusCard model={model} roleLabel={roleLabel}>
             <div className="flex items-center gap-1.5">
-              <button onClick={handlePdf} disabled={exporting} className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-2 py-1.5 text-[11.5px] font-bold text-white hover:bg-purple-500 disabled:opacity-50">
+              <button onClick={handlePrint} title="چاپ یا ذخیره به‌صورت PDF (A4)" className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-2 py-1.5 text-[11.5px] font-bold text-white hover:bg-purple-500">
                 <Download size={13} /> گزارش کامل PDF
               </button>
               <button onClick={() => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className={`${btnGhost} flex-1 justify-center text-[11.5px]`}>
@@ -620,7 +620,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                       <div className="h-full rounded-full" style={{ width: `${d.percentScore ?? 0}%`, background: `linear-gradient(90deg, ${accent}99, ${color})` }} />
                     </div>
                     <p className="fx-muted num mt-1 text-[10px]">
-                      {fa(d.answeredCount)}/{fa(d.totalCount)} سؤال {d.domain.weight > 0 ? `· وزن ٪${fa(d.domain.weight)}` : '· نمایشی'}
+                      {fa(d.answeredCount)}/{fa(d.totalCount)} سؤال {d.domain.weight > 0 ? `، وزن ٪${fa(d.domain.weight)}` : '، نمایشی'}
                     </p>
                   </div>
                 )
@@ -755,7 +755,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
         <InterviewResults rows={interviewRows} inDesign={assessment.needsStructuredInterview} />
 
         {/* 5. Behavioral fingerprint + role alignment + validity */}
-        <SectionHeading id="r-behavior" icon={Fingerprint} color="#ec4899" title="اثرانگشت رفتاری و تطابق شغلی" subtitle="Behavioral Fingerprint · Role Alignment · Validity" />
+        <SectionHeading id="r-behavior" icon={Fingerprint} color="#ec4899" title="اثرانگشت رفتاری و تطابق شغلی" subtitle="Behavioral Fingerprint، Role Alignment، Validity" />
         {!assessment.needsPersonalityAssessment ? (
           <EmptyNote>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote>
         ) : showPersonalityFingerprint && personalityAssessment ? (
@@ -916,8 +916,8 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
         {assessment.reviewedAt && (
           <p className="fx-muted text-[10.5px]">
-            بازبینی مشخصات: {profiles.find((p) => p.id === assessment.reviewedBy)?.fullName ?? '—'} — {formatJalali(assessment.reviewedAt)}
-            {assessment.reopenedAt ? ` · آخرین بازگشایی: ${formatJalali(assessment.reopenedAt)}` : ''}
+            بازبینی مشخصات: {profiles.find((p) => p.id === assessment.reviewedBy)?.fullName ?? '—'} — {formatJalali(assessment.reviewedAt.slice(0, 10))}
+            {assessment.reopenedAt ? `، آخرین بازگشایی: ${formatJalali(assessment.reopenedAt.slice(0, 10))}` : ''}
           </p>
         )}
 
