@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Lightbulb, Loader2, MessagesSquare, Save, Star, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDot, Eye, Lightbulb, Loader2, Lock, MessagesSquare, RotateCcw, Save, ShieldAlert, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
+import { tone } from '../lib/tone'
 import type { CandidateAiFollowUpQuestion, CompCompetency, CompInterviewRating, CompJobCompetencyRequirement, CompProfileLite, CompetencyAssessment } from '../types'
+import '../styles/farinTheme.css'
 
 const RATINGS = [1, 2, 3, 4, 5] as const
+/** One hue per rating level (low → high), always shown with its number and anchor label. */
+const RATING_TONE: Record<number, string> = { 1: '#f43f5e', 2: '#f97316', 3: '#eab308', 4: '#0ea5e9', 5: '#10b981' }
+/** A distinct accent per competency card (left bar + icon). */
+const CARD_TONES = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f43f5e']
+
+const LEAVE_WARNING = 'امتیازهای ثبت‌نشده دارید. اگر از این صفحه خارج شوید، تغییرات از بین می‌رود. ادامه می‌دهید؟'
 
 interface StructuredInterviewStageProps {
   assessment: CompetencyAssessment
@@ -22,12 +30,20 @@ interface InterviewItem {
   watchpoints: string[]
 }
 
+interface Draft {
+  rating: number | null
+  notes: string
+}
+
 /**
  * «مصاحبه ساختاریافته» (schema.sql Section 50): every interviewer independently rates each of the
- * job's required competencies that has a STRUCTURED_INTERVIEW evidence source configured, on the
- * competency's own proficiency anchors. Each save is the rater's own comp_interview_ratings row and
- * immediately refreshes the candidate's competency profile, so the results page never shows scores
- * that predate the latest rating.
+ * job's required competencies that has a STRUCTURED_INTERVIEW evidence source, on the competency's
+ * own proficiency anchors. Ratings are edited freely on the page and saved together with one
+ * «ثبت امتیازها» (only the changed rows, in one upsert of the rater's own rows — not every
+ * competency has to be rated), after which the candidate's competency profile is recomputed once.
+ * Unsaved edits are flagged and guarded against leaving the page. Read-only when the assessment is
+ * completed (Section 53 lock) or when the viewer is not on this candidate's panel
+ * (comp_can_rate_interview: panelist or creator, and the interview is in the design).
  */
 export function StructuredInterviewStage({ assessment, isLead, onContinue }: StructuredInterviewStageProps) {
   const competencies = useCompetencyStore((s) => s.competencies)
@@ -38,9 +54,11 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
   const fetchEvidenceSources = useCompetencyStore((s) => s.fetchEvidenceSources)
   const allRatings = useCompetencyStore((s) => s.interviewRatings)
   const fetchInterviewRatings = useCompetencyStore((s) => s.fetchInterviewRatings)
-  const saveInterviewRating = useCompetencyStore((s) => s.saveInterviewRating)
+  const saveInterviewRatings = useCompetencyStore((s) => s.saveInterviewRatings)
   const computeCompetencyProfile = useCompetencyStore((s) => s.computeCompetencyProfile)
   const profiles = useCompetencyStore((s) => s.profiles)
+  const allPanelists = useCompetencyStore((s) => s.panelists)
+  const fetchPanelists = useCompetencyStore((s) => s.fetchPanelists)
   const aiAnalysis = useCompetencyStore((s) => s.candidateAiAnalysisByAssessment[assessment.id])
   const fetchCandidateAiAnalysis = useCompetencyStore((s) => s.fetchCandidateAiAnalysis)
   const personalityAssessments = usePersonalityStore((s) => s.assessments)
@@ -48,23 +66,28 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
   const myId = useAuthStore((s) => s.profile?.id ?? null)
 
   const [loaded, setLoaded] = useState(false)
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [saveFailed, setSaveFailed] = useState(false)
 
   useEffect(() => {
+    setDrafts({})
     if (!assessment.needsStructuredInterview) return
     Promise.all([
       competencies.length === 0 ? fetchCompetencies() : null,
       requirements.length === 0 ? fetchJobCompetencyRequirements() : null,
       evidenceSources.length === 0 ? fetchEvidenceSources() : null,
       fetchInterviewRatings(assessment.id),
+      fetchPanelists(assessment.id),
     ]).then(() => setLoaded(true))
     if (aiAnalysis === undefined) fetchCandidateAiAnalysis(assessment.id)
-    // Always refetch: the store is shared across candidates, so a cached list from an earlier visit
-    // can predate this candidate's personality assessment (created later, or by the candidate link).
+    // Always refetch: the store is shared across candidates.
     fetchPersonalityAssessments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessment.id, assessment.needsStructuredInterview])
 
-  const personalityAssessment = personalityAssessments.find((a) => a.assessmentId === assessment.id)
+  const personalityAssessment = useMemo(() => personalityAssessments.find((a) => a.assessmentId === assessment.id), [personalityAssessments, assessment.id])
 
   const items = useMemo<InterviewItem[]>(() => {
     const competencyById = new Map(competencies.map((c) => [c.id, c]))
@@ -95,93 +118,271 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
       )
   }, [competencies, requirements, evidenceSources, assessment.jobRole, aiAnalysis, personalityAssessment])
 
-  const ratings = allRatings.filter((r) => r.assessmentId === assessment.id)
-  const myRatings = ratings.filter((r) => r.raterId === myId)
-  const ratedByMe = items.filter((i) => myRatings.some((r) => r.competencyId === i.competency.id)).length
+  const ratings = useMemo(() => allRatings.filter((r) => r.assessmentId === assessment.id), [allRatings, assessment.id])
+  const myRatings = useMemo(() => ratings.filter((r) => r.raterId === myId), [ratings, myId])
+
+  // Same rule as comp_can_rate_interview: this candidate's panelist or its creator, interview in design.
+  const canRate =
+    assessment.needsStructuredInterview && !!myId && (assessment.createdBy === myId || allPanelists.some((p) => p.assessmentId === assessment.id && p.userId === myId))
+  const locked = assessment.status === 'completed'
+  const readOnly = locked || !canRate
+
+  const valueOf = (competencyId: string): Draft => {
+    const d = drafts[competencyId]
+    if (d) return d
+    const saved = myRatings.find((r) => r.competencyId === competencyId)
+    return { rating: saved?.rating ?? null, notes: saved?.notes ?? '' }
+  }
+  const changes = useMemo(() => {
+    return Object.entries(drafts)
+      .map(([competencyId, d]) => {
+        const saved = myRatings.find((r) => r.competencyId === competencyId)
+        const changed = d.rating !== (saved?.rating ?? null) || d.notes.trim() !== (saved?.notes ?? '').trim()
+        return { competencyId, draft: d, saved, changed }
+      })
+      .filter((c) => c.changed)
+  }, [drafts, myRatings])
+  const saveable = changes.filter((c) => c.draft.rating != null)
+  const unsaveable = changes.filter((c) => c.draft.rating == null)
+  const dirty = changes.length > 0
+
+  // ---- leave guard: tab close/reload + in-app navigation (sidebar / header / continue)
+  const dirtyRef = useRef(false)
+  useEffect(() => {
+    dirtyRef.current = dirty && !readOnly
+  }, [dirty, readOnly])
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    const onClickCapture = (e: MouseEvent) => {
+      if (!dirtyRef.current) return
+      const target = e.target as HTMLElement | null
+      const nav = target?.closest('.comp-shell > aside button, .comp-shell header button, [data-leave-guard]')
+      if (!nav || nav.closest('[data-no-leave-guard]')) return
+      if (!window.confirm(LEAVE_WARNING)) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    window.addEventListener('click', onClickCapture, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('click', onClickCapture, true)
+    }
+  }, [])
+
+  const setDraft = (competencyId: string, patch: Partial<Draft>) => {
+    if (readOnly) return
+    setSavedAt(null)
+    setDrafts((prev) => ({ ...prev, [competencyId]: { ...valueOf(competencyId), ...prev[competencyId], ...patch } }))
+  }
+
+  const handleSaveAll = async () => {
+    if (readOnly || saveable.length === 0) return
+    setSaving(true)
+    setSaveFailed(false)
+    const ok = await saveInterviewRatings(
+      assessment.id,
+      saveable.map((c) => ({ competencyId: c.competencyId, rating: c.draft.rating as number, notes: c.draft.notes.trim() })),
+    )
+    if (ok) {
+      setDrafts((prev) => {
+        const next = { ...prev }
+        saveable.forEach((c) => delete next[c.competencyId])
+        return next
+      })
+      setSavedAt(Date.now())
+      computeCompetencyProfile(assessment.id)
+    } else setSaveFailed(true)
+    setSaving(false)
+  }
+
+  const discardAll = () => setDrafts({})
 
   if (!assessment.needsStructuredInterview) {
     return (
-      <div className="glass-panel space-y-3 rounded-2xl p-6 text-center">
-        <p className="text-xs text-secondary">مصاحبه ساختاریافته در طرح ارزیابی این متقاضی قرار ندارد.</p>
-        {onContinue && (
-          <button
-            onClick={onContinue}
-            className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
-          >
-            رفتن به نتیجه <ArrowLeft size={13} />
-          </button>
-        )}
+      <div className="fx fx-remap">
+        <div className="fx-card space-y-3 p-6 text-center">
+          <MessagesSquare size={28} className="fx-muted mx-auto" />
+          <p className="fx-text-2 text-[13px]">مصاحبه ساختاریافته در طرح ارزیابی این متقاضی قرار ندارد.</p>
+          {onContinue && (
+            <button onClick={onContinue} className="mx-auto flex min-h-11 items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-500">
+              رفتن به نتیجه <ArrowLeft size={13} />
+            </button>
+          )}
+        </div>
       </div>
     )
   }
 
   if (!loaded) {
     return (
-      <div className="glass-panel flex items-center justify-center gap-2 rounded-2xl p-6 text-xs text-muted">
-        <Loader2 size={14} className="animate-spin" /> در حال بارگذاری شایستگی‌های مصاحبه…
+      <div className="fx">
+        <div className="fx-card fx-muted flex items-center justify-center gap-2 p-6 text-xs">
+          <Loader2 size={14} className="animate-spin" /> در حال بارگذاری شایستگی‌های مصاحبه…
+        </div>
       </div>
     )
   }
 
-  const handleSave = async (competencyId: string, rating: number, notes: string) => {
-    const ok = await saveInterviewRating(assessment.id, competencyId, rating, notes)
-    if (ok) computeCompetencyProfile(assessment.id)
-    return ok
-  }
+  const ratedByMe = items.filter((i) => valueOf(i.competency.id).rating != null).length
+  const savedByMe = items.filter((i) => myRatings.some((r) => r.competencyId === i.competency.id)).length
+  const progress = items.length === 0 ? 0 : Math.round((ratedByMe / items.length) * 100)
+  const raters = new Set(ratings.map((r) => r.raterId)).size
 
   return (
-    <div className="space-y-4">
-      <div className="glass-panel rounded-2xl p-4">
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-sm font-bold">
-            <MessagesSquare size={15} className="text-sky-300" /> مصاحبه ساختاریافته
-          </p>
-          {items.length > 0 && (
-            <span className="num rounded-full bg-sky-500/15 px-2.5 py-1 text-[10.5px] font-bold text-sky-200">
-              {ratedByMe.toLocaleString('fa-IR')} از {items.length.toLocaleString('fa-IR')} شایستگی را امتیاز داده‌اید
+    <div className="fx fx-remap space-y-4 pb-2">
+      {/* Hero */}
+      <div className="fx-card fx-tone-wash overflow-hidden p-5" style={tone('#0ea5e9')}>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="fx-tone-bg-strong fx-tone-text flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+              <MessagesSquare size={22} />
             </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-black">مصاحبه ساختاریافته</h2>
+              <p className="fx-text-2 mt-1 text-[12px] leading-6">
+                هر شایستگی را مستقل از سایر داوران و بر اساس شواهد رفتاری مشخصی که در مصاحبه دیده‌اید، روی سطوح مهارت همان شایستگی امتیاز دهید. لازم نیست همه را
+                یک‌جا امتیاز دهید؛ هر زمان با «ثبت امتیازها» تغییرات ذخیره می‌شود.
+              </p>
+            </div>
+          </div>
+          {items.length > 0 && (
+            <div className="grid shrink-0 grid-cols-3 gap-2 text-center md:w-[330px]">
+              <Stat label="امتیاز شما" value={`${ratedByMe.toLocaleString('fa-IR')}/${items.length.toLocaleString('fa-IR')}`} color="#0ea5e9" />
+              <Stat label="ثبت‌شده" value={savedByMe.toLocaleString('fa-IR')} color="#10b981" />
+              <Stat label="داوران فعال" value={raters.toLocaleString('fa-IR')} color="#8b5cf6" />
+            </div>
           )}
         </div>
-        <p className="text-[11px] leading-6 text-muted">
-          هر شایستگی را مستقل از سایر داوران و بر اساس شواهد رفتاری مشخصی که در مصاحبه مشاهده کرده‌اید، روی سطوح مهارت همان شایستگی امتیاز دهید.
-          امتیاز هر داور جداگانه ثبت می‌شود و میانگین آن‌ها به‌عنوان شواهد مصاحبه در پروفایل شایستگی متقاضی لحاظ می‌شود.
-        </p>
-        {assessment.status === 'completed' && (
-          <p className="mt-1.5 text-[11px] text-amber-300">این ارزیابی ثبت نهایی شده و امتیازهای مصاحبه قفل است؛ اصلاح فقط پس از بازگشایی توسط ادمین ماژول ممکن است.</p>
+        {items.length > 0 && (
+          <div className="mt-4">
+            <div className="fx-muted mb-1 flex justify-between text-[11px]">
+              <span>پیشرفت امتیازدهی شما</span>
+              <span className="num font-bold">٪{progress.toLocaleString('fa-IR')}</span>
+            </div>
+            <div
+              className="fx-track h-2.5 overflow-hidden rounded-full"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+              aria-label="پیشرفت امتیازدهی"
+            >
+              <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #0ea5e9, #10b981)' }} />
+            </div>
+          </div>
+        )}
+        {locked && (
+          <p className="mt-3 flex items-center gap-1.5 text-[12px] font-bold" style={tone('#f59e0b')}>
+            <Lock size={14} className="fx-tone-text" />
+            <span className="fx-tone-text">این ارزیابی ثبت نهایی شده و امتیازهای مصاحبه قفل است؛ اصلاح فقط پس از بازگشایی توسط ادمین ماژول ممکن است.</span>
+          </p>
+        )}
+        {!locked && !canRate && (
+          <p className="mt-3 flex items-center gap-1.5 text-[12px] font-bold" style={tone('#6366f1')}>
+            <Eye size={14} className="fx-tone-text" />
+            <span className="fx-tone-text">فقط اعضای پنل این متقاضی می‌توانند در مصاحبه امتیاز ثبت کنند؛ این صفحه برای شما فقط‌خواندنی است.</span>
+          </p>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-6 text-center text-xs text-secondary">
+        <div className="fx-card fx-text-2 p-6 text-center text-[12px]">
           برای شغل این متقاضی هیچ شایستگی‌ای با منبع شواهد «مصاحبه ساختاریافته» تعریف نشده است (تنظیمات ← مدل شایستگی و مشاغل).
         </div>
       ) : (
         <>
-          {isLead && <PanelSummary items={items} ratings={ratings} profiles={profiles} />}
-          <div className="space-y-3">
-            {items.map((item) => {
-              const mine = myRatings.find((r) => r.competencyId === item.competency.id)
-              return (
+          {(isLead || !canRate) && <PanelSummary items={items} ratings={ratings} profiles={profiles} />}
+          {canRate && (
+            <div className="space-y-3">
+              {items.map((item, idx) => (
                 <InterviewCompetencyCard
-                  key={`${item.competency.id}:${mine?.id ?? 'new'}`}
+                  key={item.competency.id}
                   item={item}
-                  mine={mine}
-                  locked={assessment.status === 'completed'}
-                  onSave={handleSave}
+                  accent={CARD_TONES[idx % CARD_TONES.length]}
+                  value={valueOf(item.competency.id)}
+                  saved={myRatings.find((r) => r.competencyId === item.competency.id)}
+                  changed={changes.some((c) => c.competencyId === item.competency.id)}
+                  readOnly={readOnly}
+                  onChange={(patch) => setDraft(item.competency.id, patch)}
                 />
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </>
+      )}
+
+      {/* Sticky save bar */}
+      {canRate && !locked && items.length > 0 && (
+        <div className="fx-savebar sticky bottom-3 z-10 flex flex-col gap-2 rounded-2xl p-3 sm:flex-row sm:items-center" role="region" aria-label="ذخیره امتیازها">
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-[12px]" aria-live="polite">
+            {dirty ? (
+              <span className="flex items-center gap-1.5 font-bold" style={tone('#f59e0b')}>
+                <CircleDot size={15} className="fx-tone-text animate-pulse" />
+                <span className="fx-tone-text">
+                  {changes.length.toLocaleString('fa-IR')} تغییر ذخیره‌نشده
+                  {unsaveable.length > 0 && ` (${unsaveable.length.toLocaleString('fa-IR')} مورد بدون امتیاز ذخیره نمی‌شود)`}
+                </span>
+              </span>
+            ) : saveFailed ? (
+              <span className="flex items-center gap-1.5 font-bold" style={tone('#ef4444')}>
+                <ShieldAlert size={15} className="fx-tone-text" />
+                <span className="fx-tone-text">ثبت امتیازها ناموفق بود؛ دوباره تلاش کنید.</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5" style={tone('#10b981')}>
+                <CheckCircle2 size={15} className="fx-tone-text" />
+                <span className="fx-text-2">{savedAt ? 'امتیازها ثبت شد و پروفایل شایستگی به‌روز شد.' : 'همه تغییرات ذخیره شده‌اند.'}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <button type="button" onClick={discardAll} disabled={saving} className="fx-sub flex min-h-11 items-center gap-1.5 px-3.5 text-xs font-bold disabled:opacity-50">
+                <RotateCcw size={14} /> بازگردانی
+              </button>
+            )}
+            <button
+              type="button"
+              data-no-leave-guard
+              onClick={handleSaveAll}
+              disabled={saving || saveable.length === 0}
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-5 text-[13px] font-extrabold text-white shadow-lg shadow-sky-900/20 transition-colors hover:bg-sky-500 disabled:opacity-40 sm:flex-none"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} ثبت امتیازها
+              {saveable.length > 0 && <span className="num rounded-full bg-white/20 px-1.5 text-[11px]">{saveable.length.toLocaleString('fa-IR')}</span>}
+            </button>
+          </div>
+        </div>
       )}
 
       {onContinue && (
         <div className="flex justify-end">
-          <button onClick={onContinue} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+          <button
+            onClick={() => {
+              if (dirtyRef.current && !window.confirm(LEAVE_WARNING)) return
+              onContinue()
+            }}
+            className="flex min-h-11 items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white hover:bg-purple-500"
+          >
             مشاهده نتیجه <ArrowLeft size={13} />
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="fx-sub px-2 py-2" style={tone(color)}>
+      <p className="num fx-tone-text text-lg font-black leading-6">{value}</p>
+      <p className="fx-muted text-[10.5px]">{label}</p>
     </div>
   )
 }
@@ -195,158 +396,191 @@ function anchorLabel(competency: CompCompetency, rating: number): string {
   return levels[index]?.labelFa ?? ''
 }
 
+function anchorLabelForLevel(competency: CompCompetency, level: number): string {
+  return competency.proficiencyLevels.find((l) => l.level === Math.round(level))?.labelFa ?? ''
+}
+
 function InterviewCompetencyCard({
   item,
-  mine,
-  locked,
-  onSave,
+  accent,
+  value,
+  saved,
+  changed,
+  readOnly,
+  onChange,
 }: {
   item: InterviewItem
-  mine: CompInterviewRating | undefined
-  /** The assessment is completed — ratings are frozen (schema.sql Section 53). */
-  locked: boolean
-  onSave: (competencyId: string, rating: number, notes: string) => Promise<boolean>
+  accent: string
+  value: Draft
+  saved: CompInterviewRating | undefined
+  changed: boolean
+  readOnly: boolean
+  onChange: (patch: Partial<Draft>) => void
 }) {
   const { competency, requirement, followUps, watchpoints } = item
-  const [rating, setRating] = useState<number | null>(mine?.rating ?? null)
-  const [notes, setNotes] = useState(mine?.notes ?? '')
-  const [saving, setSaving] = useState(false)
-  const dirty = rating !== (mine?.rating ?? null) || notes !== (mine?.notes ?? '')
+  const groupRef = useRef<HTMLDivElement>(null)
+  const requiredLabel = anchorLabelForLevel(competency, requirement.requiredLevel)
+  const notesId = `notes-${competency.id}`
 
-  const handleSave = async () => {
-    if (rating == null) return
-    setSaving(true)
-    await onSave(competency.id, rating, notes.trim())
-    setSaving(false)
+  // Radio-group keyboard support: arrows move (RTL: ← is "next"), Home/End jump.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (readOnly) return
+    const current = value.rating ?? 0
+    let next: number | null = null
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.min(5, current + 1)
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.max(1, current - 1 || 1)
+    else if (e.key === 'Home') next = 1
+    else if (e.key === 'End') next = 5
+    if (next == null) return
+    e.preventDefault()
+    onChange({ rating: next })
+    groupRef.current?.querySelector<HTMLButtonElement>(`[data-rating="${next}"]`)?.focus()
   }
 
   return (
-    <div className="glass-panel rounded-2xl p-4">
-      <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        <p className="text-[12.5px] font-bold">{competency.labelFa}</p>
+    <div className="fx-card fx-accent-bar p-4 sm:p-5" style={tone(accent)}>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h3 className="text-[14px] font-extrabold">{competency.labelFa}</h3>
         {requirement.isCritical && (
-          <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[9.5px] font-bold text-red-300">
-            <AlertTriangle size={10} /> حیاتی
+          <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={tone('#ef4444')}>
+            <span className="fx-tone-bg fx-tone-text flex items-center gap-1 rounded-full px-2 py-0.5">
+              <AlertTriangle size={11} /> حیاتی
+            </span>
           </span>
         )}
-        <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-secondary">
-          سطح مورد نیاز: {requirement.requiredLevel.toLocaleString('fa-IR')}
-          {anchorLabelForLevel(competency, requirement.requiredLevel) && ` (${anchorLabelForLevel(competency, requirement.requiredLevel)})`}
+        <span className="fx-sub num px-2 py-0.5 text-[11px]">
+          سطح مورد نیاز: <b>{requirement.requiredLevel.toLocaleString('fa-IR')}</b>
+          {requiredLabel && ` (${requiredLabel})`}
         </span>
-        {mine && !dirty && (
-          <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[9.5px] font-bold text-emerald-300">
-            <CheckCircle2 size={10} /> ثبت‌شده
-          </span>
-        )}
+        <span className="mr-auto">
+          {changed ? (
+            <span className="fx-tone-bg fx-tone-text flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold" style={tone('#f59e0b')}>
+              <CircleDot size={11} /> ذخیره‌نشده
+            </span>
+          ) : saved ? (
+            <span className="fx-tone-bg fx-tone-text flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] font-bold" style={tone('#10b981')}>
+              <CheckCircle2 size={11} /> ثبت‌شده
+            </span>
+          ) : (
+            <span className="fx-muted text-[10.5px]">هنوز امتیاز نداده‌اید</span>
+          )}
+        </span>
       </div>
-      {competency.description && <p className="mb-3 text-[11px] leading-6 text-muted">{competency.description}</p>}
+      {competency.description && <p className="fx-text-2 mb-3 text-[12px] leading-6">{competency.description}</p>}
 
       {(followUps.length > 0 || watchpoints.length > 0) && (
-        <div className="mb-3 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] p-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-bold text-amber-200">
-            <Lightbulb size={12} /> پیشنهاد برای کاوش در مصاحبه
+        <div className="fx-sub mb-3 p-3" style={tone('#f59e0b')}>
+          <p className="fx-tone-text mb-1.5 flex items-center gap-1.5 text-[11.5px] font-bold">
+            <Lightbulb size={13} /> پیشنهاد برای کاوش در مصاحبه
           </p>
-          <ul className="space-y-1.5 text-[10.5px] leading-5 text-secondary">
+          <ul className="fx-text-2 space-y-1.5 text-[11.5px] leading-6">
             {followUps.map((q, i) => (
               <li key={`q${i}`}>
-                <span className="font-bold text-primary">{q.question}</span>
-                {q.evidence_to_look_for && <span className="text-muted"> — شواهد مورد انتظار: {q.evidence_to_look_for}</span>}
+                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {q.question}
+                </span>
+                {q.evidence_to_look_for && <span className="fx-muted"> — شواهد مورد انتظار: {q.evidence_to_look_for}</span>}
               </li>
             ))}
             {watchpoints.map((topic, i) => (
-              <li key={`w${i}`} className="text-amber-100/90">
-                نکته قابل توجه (آزمون شخصیت): {topic}
+              <li key={`w${i}`}>
+                <span className="fx-tone-text font-bold">نکته آزمون شخصیت: </span>
+                {topic}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <div className="mb-2 grid grid-cols-5 gap-1.5">
+      <p id={`lbl-${competency.id}`} className="fx-muted mb-1.5 text-[11px] font-bold">
+        امتیاز شما (۱ تا ۵)
+      </p>
+      <div
+        ref={groupRef}
+        role="radiogroup"
+        aria-labelledby={`lbl-${competency.id}`}
+        aria-readonly={readOnly || undefined}
+        onKeyDown={onKeyDown}
+        className="mb-3 grid grid-cols-5 gap-1.5 sm:gap-2"
+      >
         {RATINGS.map((r) => {
-          const active = rating === r
+          const active = value.rating === r
+          const focusable = value.rating == null ? r === 1 : active
           return (
             <button
               key={r}
               type="button"
-              disabled={locked}
-              onClick={() => setRating(r)}
-              className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 text-center transition-colors ${
-                active ? 'border-sky-400/60 bg-sky-500/20 text-sky-100' : 'border-white/10 text-secondary hover:bg-white/5'
-              }`}
+              role="radio"
+              aria-checked={active}
+              data-rating={r}
+              tabIndex={focusable ? 0 : -1}
+              disabled={readOnly}
+              onClick={() => onChange({ rating: active && !saved ? null : r })}
+              className="fx-chip flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-center"
+              style={tone(RATING_TONE[r])}
             >
-              <span className="num flex items-center gap-1 text-[13px] font-extrabold">
-                {r.toLocaleString('fa-IR')} {active && <Star size={11} className="fill-current" />}
-              </span>
-              <span className="text-[9.5px] leading-4">{anchorLabel(competency, r)}</span>
+              <span className="num fx-tone-text text-[18px] font-black leading-6">{r.toLocaleString('fa-IR')}</span>
+              <span className="text-[10.5px] font-bold leading-4">{anchorLabel(competency, r)}</span>
             </button>
           )
         })}
       </div>
 
+      <label htmlFor={notesId} className="fx-muted mb-1 block text-[11px] font-bold">
+        شواهد رفتاری و دلیل امتیاز
+      </label>
       <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        readOnly={locked}
+        id={notesId}
+        value={value.notes}
+        onChange={(e) => onChange({ notes: e.target.value })}
+        readOnly={readOnly}
         rows={2}
-        placeholder="شواهد رفتاری مشاهده‌شده و دلیل امتیاز…"
-        className="input mb-2 w-full text-[11px] leading-6"
+        placeholder="رفتار مشاهده‌شده، مثال مشخص، نتیجه…"
+        className="input w-full text-[12px] leading-6"
       />
-
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving || rating == null || !dirty || locked}
-          className="flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2 text-xs font-bold text-white hover:bg-sky-400 disabled:opacity-40"
-        >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} ثبت امتیاز
-        </button>
-      </div>
+      {changed && value.rating == null && value.notes.trim() && (
+        <p className="mt-1 text-[11px]" style={tone('#f59e0b')}>
+          <span className="fx-tone-text">برای ثبت یادداشت، یک امتیاز هم انتخاب کنید.</span>
+        </p>
+      )}
     </div>
   )
-}
-
-function anchorLabelForLevel(competency: CompCompetency, level: number): string {
-  return competency.proficiencyLevels.find((l) => l.level === Math.round(level))?.labelFa ?? ''
 }
 
 function PanelSummary({ items, ratings, profiles }: { items: InterviewItem[]; ratings: CompInterviewRating[]; profiles: CompProfileLite[] }) {
   const raterIds = [...new Set(ratings.map((r) => r.raterId))]
   return (
-    <div className="glass-panel rounded-2xl p-4">
-      <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
-        <Users size={14} className="text-sky-300" /> خلاصه امتیازهای پنل
+    <div className="fx-card p-4" style={tone('#8b5cf6')}>
+      <p className="mb-1 flex items-center gap-1.5 text-[13px] font-extrabold">
+        <Users size={15} className="fx-tone-text" /> خلاصه امتیازهای پنل
       </p>
-      <p className="mb-2 text-[10.5px] text-muted">
+      <p className="fx-muted mb-3 text-[11px]">
         {raterIds.length === 0
           ? 'هنوز هیچ داوری امتیازی ثبت نکرده است.'
           : `داوران: ${raterIds.map((id) => profiles.find((p) => p.id === id)?.fullName ?? 'داور').join('، ')}`}
       </p>
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-[11px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/[0.02] text-muted">
-              <th className="p-2 text-right font-bold">شایستگی</th>
-              <th className="num p-2 text-center font-bold">تعداد داور</th>
-              <th className="num p-2 text-center font-bold">میانگین (۱ تا ۵)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map(({ competency }) => {
-              const rows = ratings.filter((r) => r.competencyId === competency.id)
-              const average = rows.length > 0 ? rows.reduce((sum, r) => sum + r.rating, 0) / rows.length : null
-              return (
-                <tr key={competency.id} className="border-b border-white/5 last:border-0">
-                  <td className="p-2 font-bold">{competency.labelFa}</td>
-                  <td className="num p-2 text-center">{rows.length.toLocaleString('fa-IR')}</td>
-                  <td className="num p-2 text-center">
-                    {average == null ? '—' : average.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map(({ competency, requirement }) => {
+          const rows = ratings.filter((r) => r.competencyId === competency.id)
+          const average = rows.length > 0 ? rows.reduce((sum, r) => sum + r.rating, 0) / rows.length : null
+          const t = average == null ? '#94a3b8' : RATING_TONE[Math.max(1, Math.min(5, Math.round(average)))]
+          return (
+            <div key={competency.id} className="fx-sub flex items-center gap-3 p-2.5" style={tone(t)}>
+              <span className="fx-tone-bg-strong fx-tone-text num flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[15px] font-black">
+                {average == null ? '—' : average.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-bold">
+                  {competency.labelFa}
+                  {requirement.isCritical && <span style={{ color: '#ef4444' }}> ★</span>}
+                </p>
+                <p className="fx-muted num text-[10.5px]">
+                  {rows.length.toLocaleString('fa-IR')} داور، میانگین از ۵
+                </p>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

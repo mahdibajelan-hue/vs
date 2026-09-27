@@ -502,6 +502,8 @@ interface CompetencyState {
   /** Upserts the CURRENT user's own rating of one competency (RLS only ever allows writing your own
    * row — unique on assessment + competency + rater). */
   saveInterviewRating: (assessmentId: string, competencyId: string, rating: number, notes: string) => Promise<boolean>
+  /** «ثبت امتیازها» — the current rater's changed rows for one assessment in a single upsert. */
+  saveInterviewRatings: (assessmentId: string, rows: { competencyId: string; rating: number; notes: string }[]) => Promise<boolean>
 
   fetchPanelGroups: () => Promise<void>
   createPanelGroup: (name: string, jobRole: JobRole | null, memberUserIds: string[], leadUserId: string | null) => Promise<void>
@@ -1182,6 +1184,41 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       interviewRatings: [
         ...get().interviewRatings.filter((r) => !(r.assessmentId === assessmentId && r.competencyId === competencyId && r.raterId === uid)),
         merged,
+      ],
+    })
+    return true
+  },
+
+  saveInterviewRatings: async (assessmentId, rows) => {
+    const uid = currentUserId()
+    if (!uid) return false
+    if (rows.length === 0) return true
+    const existing = get().interviewRatings.filter((r) => r.assessmentId === assessmentId && r.raterId === uid)
+    const payload = rows.map((row) => ({
+      id: existing.find((r) => r.competencyId === row.competencyId)?.id ?? crypto.randomUUID(),
+      assessment_id: assessmentId,
+      competency_id: row.competencyId,
+      rater_id: uid,
+      rating: row.rating,
+      notes: row.notes,
+    }))
+    const { error } = await supabase.from('comp_interview_ratings').upsert(payload, { onConflict: 'assessment_id,competency_id,rater_id' })
+    if (reportError('ثبت امتیازهای مصاحبه ساختاریافته', error)) return false
+    const now = new Date().toISOString()
+    const saved: CompInterviewRating[] = payload.map((p) => ({
+      id: p.id,
+      assessmentId,
+      competencyId: p.competency_id,
+      raterId: uid,
+      rating: p.rating,
+      notes: p.notes,
+      createdAt: existing.find((r) => r.competencyId === p.competency_id)?.createdAt ?? now,
+      updatedAt: now,
+    }))
+    set({
+      interviewRatings: [
+        ...get().interviewRatings.filter((r) => !(r.assessmentId === assessmentId && r.raterId === uid && rows.some((x) => x.competencyId === r.competencyId))),
+        ...saved,
       ],
     })
     return true
