@@ -45,12 +45,12 @@ export function RootApp() {
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
   // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
-  // auth-gated rendering below, since it must never require a RASTA login.
+  // auth-gated rendering below, since it must never require a FARIN login.
   const candidateToken = new URLSearchParams(window.location.search).get('candidate')
   if (candidateToken) return <CandidateSelfServicePage token={candidateToken} />
 
   // Public "view results online" link (?results=<token>) — same idea, but for sharing a read-only
-  // results report with anyone holding the link, never requiring a RASTA login either.
+  // results report with anyone holding the link, never requiring a FARIN login either.
   const resultsToken = new URLSearchParams(window.location.search).get('results')
   if (resultsToken) return <PublicResultsPage token={resultsToken} />
 

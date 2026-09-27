@@ -538,7 +538,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
 }
 
 /** Lets the lead apply a saved specialty interview group to this assessment's panel in one click,
- * and build new groups (e.g. "گروه مصاحبه برق و ابزار دقیق") from the pool of RASTA users — a
+ * and build new groups (e.g. "گروه مصاحبه برق و ابزار دقیق") from the pool of FARIN users — a
  * one-time setup that then works for every future candidate of that specialty. */
 function PanelGroupPicker({
   groups,

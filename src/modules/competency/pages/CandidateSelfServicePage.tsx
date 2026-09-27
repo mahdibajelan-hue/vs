@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, FileText, Loader2, Lock, Upload } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
+import { FARIN_NAME_FA } from '../../../components/common/Logo'
 import { uploadCompDocAsCandidate } from '../lib/compStorage'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { ProfileForm } from '../components/ProfileForm'
@@ -45,7 +46,7 @@ const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'nation
 
 /**
  * Public, unauthenticated page reached via a secret-link token (?candidate=<token>). Lets a
- * candidate fill their own profile and upload documents without a RASTA login — everything goes
+ * candidate fill their own profile and upload documents without a FARIN login — everything goes
  * through the comp_self_service_* SECURITY DEFINER RPC functions, which only ever touch the one
  * row matching this exact token (see supabase/schema.sql section 19), never the interview
  * questions or any other candidate's data.
@@ -231,7 +232,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     <div className="comp-shell min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="glass-panel rounded-2xl p-4 text-center">
-          <p className="text-sm font-bold">فرم ثبت مشخصات نامزد — ارزیابی شایستگی RASTA</p>
+          <p className="text-sm font-bold">فرم ثبت مشخصات نامزد — ارزیابی شایستگی {FARIN_NAME_FA}</p>
           <p className="mt-1 text-[11px] text-muted">لطفاً مشخصات و سوابق خود را با دقت تکمیل کرده و مدارک لازم را پیوست کنید.</p>
         </div>
 

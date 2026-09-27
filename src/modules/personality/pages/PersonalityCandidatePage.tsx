@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, BrainCircuit, CheckCircle2, Loader2, RotateCw } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
+import { FARIN_NAME_FA } from '../../../components/common/Logo'
 
 interface CandidateGetRow {
   id: string
@@ -187,7 +188,7 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
         <div className="glass-panel rounded-2xl p-4 text-center">
           <div className="mb-1.5 flex items-center justify-center gap-1.5 text-pink-300">
             <BrainCircuit size={16} />
-            <p className="text-sm font-bold text-primary">ارزیابی شخصیت و رفتاری RASTA</p>
+            <p className="text-sm font-bold text-primary">ارزیابی شخصیت و رفتاری {FARIN_NAME_FA}</p>
           </div>
           <p className="text-[11px] text-muted">برای هر گویه، گزینه‌ای را انتخاب کنید که بیشترین شباهت را به شما دارد. پاسخ درست یا غلط وجود ندارد.</p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5">

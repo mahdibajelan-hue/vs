@@ -65,7 +65,7 @@ interface CompetencySidebarShellProps {
    * on module-wide pages (Dashboard, Question Bank, Reports, Settings) where there's no single
    * candidate in context. */
   stageStrip?: EvaluationStage[]
-  /** Leaves the module entirely, back to the RASTA module hub — rendered once, in the sidebar
+  /** Leaves the module entirely, back to the FARIN module hub — rendered once, in the sidebar
    * footer, instead of every page threading its own exit button. */
   onExitToHub: () => void
   /** Extra controls at the end of the top bar (e.g. a "New" button, export/print actions). */

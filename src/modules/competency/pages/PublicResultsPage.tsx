@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Award, Briefcase, BookOpen, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
+import { FARIN_NAME_FA } from '../../../components/common/Logo'
 import { formatJalali } from '../../../lib/jalali'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
@@ -111,7 +112,7 @@ export function PublicResultsPage({ token }: { token: string }) {
     <div className="comp-shell min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="glass-panel rounded-2xl p-4 text-center">
-          <p className="text-sm font-bold">نتیجه ارزیابی شایستگی — سامانه RASTA</p>
+          <p className="text-sm font-bold">نتیجه ارزیابی شایستگی — سامانه {FARIN_NAME_FA}</p>
           <p className="mt-1 text-[11px] text-muted">این نمای فقط‌خواندنی نتیجهٔ ارزیابی است.</p>
         </div>
 

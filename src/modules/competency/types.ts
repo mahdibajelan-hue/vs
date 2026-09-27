@@ -718,7 +718,7 @@ export interface CompProfileLite {
 }
 
 /** A user granted full admin-equivalent standing within the Competency module specifically —
- * independent of the global RASTA profiles.is_admin flag (see comp_is_module_admin() in schema.sql). */
+ * independent of the global FARIN profiles.is_admin flag (see comp_is_module_admin() in schema.sql). */
 export interface CompModuleAdmin {
   userId: string
   addedBy: string | null
