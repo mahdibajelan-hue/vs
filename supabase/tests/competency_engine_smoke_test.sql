@@ -630,6 +630,8 @@ begin
   -- The role now has an ACTIVE default blueprint again (tech/exp off) — the reassessment must still copy
   -- the previous design (everything on, no blueprint) instead.
   update comp_assessment_blueprints set active = true where id = v_bp_default;
+  -- Section 54 (L-10): a reassessment only follows a finalized assessment.
+  update comp_assessments set status = 'completed' where id = v_comp_id;
   v_re := comp_create_reassessment(v_comp_id);
   select * into v_assessment from comp_assessments where id = v_re;
   if v_assessment.previous_assessment_id is distinct from v_comp_id or v_assessment.candidate_name <> '__smoke_test_competency__'
