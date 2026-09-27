@@ -97,6 +97,8 @@ export interface PersonalityTraitRow {
   framework_id: string
   key: string
   label_fa: string
+  /** Section 57 — may be absent on an older select or an unmigrated DB. */
+  label_en?: string | null
   description: string
   display_order: number
   active: boolean
@@ -111,6 +113,7 @@ export function personalityTraitFromRow(r: PersonalityTraitRow): PersonalityTrai
     frameworkId: r.framework_id,
     key: r.key,
     labelFa: r.label_fa,
+    labelEn: r.label_en ?? '',
     description: r.description,
     displayOrder: r.display_order,
     active: r.active,
@@ -150,6 +153,8 @@ export interface PersonalityBehavioralDimensionRow {
   id: string
   key: string
   label_fa: string
+  /** Section 57 — may be absent on an older select or an unmigrated DB. */
+  label_en?: string | null
   description: string
   default_weight: number
   related_trait_ids: string[] | null
@@ -165,6 +170,7 @@ export function personalityBehavioralDimensionFromRow(r: PersonalityBehavioralDi
     id: r.id,
     key: r.key,
     labelFa: r.label_fa,
+    labelEn: r.label_en ?? '',
     description: r.description,
     defaultWeight: r.default_weight,
     relatedTraitIds: r.related_trait_ids ?? [],

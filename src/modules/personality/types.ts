@@ -110,6 +110,8 @@ export interface PersonalityTrait {
   frameworkId: string
   key: string
   labelFa: string
+  /** English name (schema.sql Section 57) — '' when not set; see lib/bilingual.ts for the fallback. */
+  labelEn?: string
   description: string
   displayOrder: number
   active: boolean
@@ -136,6 +138,8 @@ export interface PersonalityBehavioralDimension {
   id: string
   key: string
   labelFa: string
+  /** English name (schema.sql Section 57) — '' when not set; see lib/bilingual.ts for the fallback. */
+  labelEn?: string
   description: string
   defaultWeight: number
   relatedTraitIds: string[]

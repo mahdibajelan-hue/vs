@@ -6,7 +6,9 @@ import { formatJalali } from '../../../lib/jalali'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { ApprovalMedal } from '../components/ApprovalMedal'
-import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
+import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, tierColor } from '../lib/competencyModel'
+import { computeResultStatus, interpretMaturity } from '../lib/maturityGuidance'
+import { useRoleGuidanceStore } from '../store/useRoleGuidanceStore'
 import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
 import type { CompetencyAnswers, JobRole, QuestionType } from '../types'
 
@@ -47,6 +49,12 @@ export function PublicResultsPage({ token }: { token: string }) {
   const [row, setRow] = useState<PublicResultsRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // Role- and band-specific interpretation text (Section 57; readable anonymously).
+  const guidanceRows = useRoleGuidanceStore((s) => s.rows)
+  const fetchGuidance = useRoleGuidanceStore((s) => s.fetch)
+  useEffect(() => {
+    fetchGuidance()
+  }, [fetchGuidance])
 
   useEffect(() => {
     supabase
@@ -90,7 +98,6 @@ export function PublicResultsPage({ token }: { token: string }) {
     : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))
   const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(row.resolved_questions, officialAnswers)
   const overall = computeOverallPercent(domainScores)
-  const band = maturityBand(overall)
   const completion = isPM
     ? computeCompletion(officialAnswers)
     : {
@@ -99,6 +106,17 @@ export function PublicResultsPage({ token }: { token: string }) {
         percent: row.resolved_questions.length === 0 ? 0 : Math.round((row.resolved_questions.filter((q) => q.score != null).length / row.resolved_questions.length) * 100),
       }
   const { strengths, weaknesses } = domainFlags(domainScores)
+  // Never a band/grade from missing data: «در انتظار تکمیل» until enough is scored (maturityGuidance.ts).
+  const resultStatus = computeResultStatus(domainScores, overall, completion)
+  const interp = interpretMaturity({
+    jobRole: row.job_role,
+    roleLabel: row.candidate_position || row.job_role,
+    overall,
+    domainScores,
+    guidanceRows,
+    sufficient: resultStatus.state === 'final',
+  })
+  const band = { label: interp.bandLabel, guidance: interp.guidance, suggestedPositions: interp.suggestedPositions }
 
   const qualificationChips = [
     { label: 'مدرک تحصیلی', icon: GraduationCap, value: row.education_score },
@@ -179,7 +197,10 @@ export function PublicResultsPage({ token }: { token: string }) {
                 <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
               </p>
               <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
+              {interp.source !== 'pending' && (
+                <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
+              )}
+              {interp.focusAreas.length > 0 && <p className="mt-2 text-[11px] leading-6 text-amber-200">اولویت‌های توسعه: {interp.focusAreas.join('، ')}</p>}
             </div>
 
             {row.capstone_score != null && (

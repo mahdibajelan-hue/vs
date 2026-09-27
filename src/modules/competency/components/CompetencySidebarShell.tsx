@@ -3,6 +3,8 @@ import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashb
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
+import { ThemeToggle } from './ThemeToggle'
+import '../styles/farinTheme.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
 
 export type CompetencySection =
@@ -118,13 +120,19 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
       </aside>
 
       <div className="flex-1 overflow-y-auto">
-        <header className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#0b0f16]/90 px-5 py-3.5 backdrop-blur">
+        <header
+          className="fx-remap no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5 backdrop-blur"
+          style={{ borderColor: 'var(--border-soft)', background: 'color-mix(in srgb, var(--bg-panel-solid) 90%, transparent)' }}
+        >
           <div className="flex min-w-0 items-center gap-2.5">
-            <Sparkles size={16} className="shrink-0 text-purple-300" />
+            <Sparkles size={16} className="shrink-0" style={{ color: COMPETENCY_ACCENT }} />
             <h1 className="truncate text-sm font-extrabold">{title}</h1>
             {stageStrip && <StageStrip stages={stageStrip} />}
           </div>
-          {headerRight && <div className="flex flex-wrap items-center gap-2">{headerRight}</div>}
+          <div className="flex flex-wrap items-center gap-2">
+            {headerRight}
+            <ThemeToggle />
+          </div>
         </header>
 
         <StorageErrorBanner />
