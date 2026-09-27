@@ -45,6 +45,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
   const fetchModuleAdmins = useCompetencyStore((s) => s.fetchModuleAdmins)
+  const fetchAssessmentDesigners = useCompetencyStore((s) => s.fetchAssessmentDesigners)
   // Fetched once here, app-wide, so every page under this tree (dashboard, wizard stages, question
   // bank, reports, settings) can read the job-role catalog straight from the store instead of each
   // needing its own fetch — replaces the old always-available JOB_ROLE_LABEL_FA/JOB_ROLES constants.
@@ -62,6 +63,8 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   useEffect(() => {
     fetchAll()
     fetchModuleAdmins()
+    // The dashboard's designer-only actions/next-steps read this list too, not just the wizard.
+    fetchAssessmentDesigners()
     fetchPersonalityModuleAdmins()
     fetchJobRoleConfigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps

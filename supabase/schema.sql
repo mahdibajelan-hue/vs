@@ -11551,3 +11551,19 @@ begin
   perform comp_log_audit('AUDIT_SMOKE_ROWS_PURGED', 'comp_audit_log', null, jsonb_build_object('rows', v_rows),
     jsonb_build_object('count', jsonb_array_length(v_rows), 'reason', 'L-7: PERSONALITY_ASSESSMENT_SCORED rows left by smoke/dev test runs (entity no longer exists)'));
 end $$;
+
+-- =============================================================================================
+-- Role-list visibility fix (applied live as migration comp_list_role_assignments_include_own_row):
+-- module admins see every assignment of a role (to manage it); everyone else now sees their OWN
+-- row, so the UI can recognise a non-admin ASSESSMENT_DESIGNER / REPORT_VIEWER holding the role.
+-- Before, a designer who wasn't also a module admin got an empty list and the UI never treated
+-- them as a designer even though comp_is_assessment_designer() was true in the DB.
+-- =============================================================================================
+create or replace function comp_list_role_assignments(p_role_name text)
+returns table(user_id uuid, created_by uuid, created_at timestamptz) as $$
+  select ur.user_id, ur.created_by, ur.created_at
+  from rasta_user_roles ur
+  join rasta_roles r on r.id = ur.role_id
+  where r.name = p_role_name
+    and (comp_is_module_admin() or ur.user_id = auth.uid());
+$$ language sql security definer stable set search_path = public;

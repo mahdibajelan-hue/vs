@@ -83,6 +83,7 @@ const SECTION_TITLE: Record<Stage, string> = {
  */
 const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
 const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'interview']
+const DESIGNER_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'interview']
 
 /**
  * Profile -> documents (self-service link) -> panel -> questions flow for one assessment. The
@@ -134,12 +135,18 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const submittedScores = allPanelistScores.filter((p) => p.assessmentId === assessmentId && p.submittedAt)
 
   const myPanelistRow = allPanelists.find((p) => p.assessmentId === assessmentId && p.userId === myId)
-  const isLead = assessment != null && (assessment.createdBy === myId || isAdmin || myPanelistRow?.isLead === true)
+  // Module admins are leads of every assessment — exactly what comp_is_lead() / comp_can_access_assessment()
+  // grant them in the DB. Without this a module admin who didn't create the candidate only got the
+  // panelist view (profile/panel/documents) and "had no access" despite the role.
+  const isModuleAdminViewer = isAdmin || moduleAdmins.some((m) => m.userId === myId)
+  const isLead = assessment != null && (assessment.createdBy === myId || isModuleAdminViewer || myPanelistRow?.isLead === true)
   // Same standing as CompetencyApp's isModuleAdmin, but for the ASSESSMENT_DESIGNER role — gates the
   // interactive controls inside the examDesign/personality stages (toggling what's needed, opening
   // either mix designer). A non-designer lead still reaches both stages, just read-only.
-  const isDesigner = isAdmin || moduleAdmins.some((m) => m.userId === myId) || assessmentDesigners.some((d) => d.userId === myId)
-  const stages = isLead ? LEAD_STAGES : PANELIST_STAGES
+  const isDesigner = isModuleAdminViewer || assessmentDesigners.some((d) => d.userId === myId)
+  // An assessment designer who isn't the lead still needs the exam-design and personality stages
+  // (comp_set_exam_design / the mix designers are gated on the designer role, not on being lead).
+  const stages = isLead ? LEAD_STAGES : isDesigner ? DESIGNER_STAGES : PANELIST_STAGES
   // Opening a candidate from the dashboard always lands on their profile first — the natural
   // starting point before assembling the panel or scoring anything.
   const [stage, setStage] = useState<Stage | null>(initialStage ?? null)
