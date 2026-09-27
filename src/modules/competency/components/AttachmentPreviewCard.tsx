@@ -25,12 +25,17 @@ interface AttachmentPreviewCardProps {
   storagePath: string
   uploadedByCandidate?: boolean
   onDelete?: () => void
+  /** Overrides how the signed URL is made (the self-service page uses its session-less client). */
+  signedUrl?: (path: string) => Promise<string | null>
+  /** Optional second line under the kind label, e.g. the file size. */
+  detail?: string
 }
 
 /** Small thumbnail card for one uploaded document — an actual image preview for image files, a
  * colored file-type icon otherwise, with the document kind written bold in its own accent color so
  * a row of attachments reads at a glance instead of as a plain list of filenames. */
-export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByCandidate, onDelete }: AttachmentPreviewCardProps) {
+export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByCandidate, onDelete, signedUrl, detail }: AttachmentPreviewCardProps) {
+  const sign = signedUrl ?? ((p: string) => getCompDocSignedUrl(p))
   const [url, setUrl] = useState<string | null>(null)
   const [opening, setOpening] = useState(false)
   const color = KIND_COLOR[kind] ?? KIND_COLOR.other
@@ -39,7 +44,7 @@ export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByC
 
   useEffect(() => {
     let active = true
-    if (isImage) getCompDocSignedUrl(storagePath).then((u) => active && setUrl(u))
+    if (isImage) sign(storagePath).then((u) => active && setUrl(u))
     return () => {
       active = false
     }
@@ -48,7 +53,7 @@ export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByC
 
   const handleOpen = async () => {
     setOpening(true)
-    const signed = url ?? (await getCompDocSignedUrl(storagePath))
+    const signed = url ?? (await sign(storagePath))
     setOpening(false)
     if (signed) window.open(signed, '_blank', 'noopener')
   }
@@ -82,7 +87,13 @@ export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByC
         <p className="truncate text-[10px] text-muted" dir="ltr">
           {fileName}
         </p>
-        {uploadedByCandidate && <span className="text-[9.5px] text-amber-300">توسط نامزد</span>}
+        {(detail || uploadedByCandidate) && (
+          <p className="text-[9.5px] text-muted">
+            {detail}
+            {detail && uploadedByCandidate && ' · '}
+            {uploadedByCandidate && <span className="text-amber-300">توسط نامزد</span>}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <button onClick={handleOpen} disabled={opening} className="text-muted hover:text-purple-300" title="باز کردن">

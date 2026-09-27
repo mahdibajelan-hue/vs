@@ -3,10 +3,10 @@ import { Camera, CheckCircle2, FileText, Loader2, Lock, Upload } from 'lucide-re
 import { FARIN_NAME_FA } from '../../../components/common/Logo'
 import { compAnonClient, compDocErrorFa, getCompDocSignedUrl, removeCompDocObject, uploadCandidateDocument, uploadCompDocAsCandidate, validateCompDoc } from '../lib/compStorage'
 import { ProfileForm } from '../components/ProfileForm'
-import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
+import { DocumentsGallery } from '../components/DocumentsGallery'
 import type { ProfileDocItem, ProfileDocuments } from '../lib/profileDocuments'
 import type { CandidateProfileInput } from '../store/useCompetencyStore'
-import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind, type DocCategory } from '../types'
+import type { AttachmentKind, DocCategory } from '../types'
 
 // Every call on this page goes through the session-less client (see compAnonClient): the candidate
 // storage policies are anon-only, and a staff session left in this browser must not change that.
@@ -62,8 +62,6 @@ interface SelfServiceRow {
   self_service_editable: boolean
 }
 
-const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
-
 /**
  * Public, unauthenticated page reached via a secret-link token (?candidate=<token>). Lets a
  * candidate fill their own profile and upload documents without a FARIN login — everything goes
@@ -79,14 +77,10 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<SelfServiceAttachment[]>([])
-  const [uploading, setUploading] = useState<AttachmentKind | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [pendingKind, setPendingKind] = useState<AttachmentKind>('resume')
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   // N-13: upload / registration failures are shown to the candidate instead of failing silently.
   const [photoError, setPhotoError] = useState<string | null>(null)
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const photoRef = useRef<HTMLInputElement>(null)
 
   // Re-fetched after every upload (not just once on mount) so the list on screen always reflects
@@ -178,25 +172,6 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       setPhotoPreview(previous)
     }
     setUploadingPhoto(false)
-  }
-
-  const handleUpload = async (file: File) => {
-    setUploading(pendingKind)
-    setUploadError(null)
-    const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
-    if (!path || error) {
-      setUploadError(uploadFailure(error))
-    } else {
-      const { error: rpcError } = await supabase.rpc('comp_self_service_add_attachment', {
-        p_token: token,
-        p_kind: pendingKind,
-        p_file_name: file.name,
-        p_storage_path: path,
-      })
-      if (rpcError) setUploadError(uploadFailure(rpcError.message))
-      else refreshAttachments()
-    }
-    setUploading(null)
   }
 
   // Per-item documents (national ID, résumé, one per education / employment / course entry) — the
@@ -355,50 +330,23 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
 
         {row.self_service_editable && <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode documents={documents} />}
 
-        <div className="glass-panel space-y-3 rounded-2xl p-4">
-          <p className="flex items-center gap-1.5 text-sm font-bold">
-            <FileText size={14} className="text-purple-300" /> پیوست مدارک
-          </p>
-          {row.self_service_editable && (
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={pendingKind} onChange={(e) => setPendingKind(e.target.value as AttachmentKind)} className="input max-w-[12rem]">
-              {KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {ATTACHMENT_KIND_LABEL_FA[k]}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={uploading != null}
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-2 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-50"
-            >
-              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              {uploading ? 'در حال بارگذاری…' : 'بارگذاری مدرک'}
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) handleUpload(f)
-                e.target.value = ''
-              }}
+        {/* Uploads live per item inside the form now (Section 55). What stays here: a read-only view of
+            everything on file once the form is closed, and — while it is open — files that belong to
+            no item (e.g. uploaded through the old general «پیوست مدارک» box). */}
+        {documents && (!row.self_service_editable || documents.items.some((d) => d.category === 'OTHER')) && (
+          <div className="glass-panel space-y-3 rounded-2xl p-4">
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <FileText size={14} className="text-purple-300" /> {row.self_service_editable ? 'سایر مدارک ثبت‌شده' : 'مدارک ثبت‌شده'}
+            </p>
+            <DocumentsGallery
+              items={row.self_service_editable ? documents.items.filter((d) => d.category === 'OTHER') : documents.items}
+              education={row.education ?? []}
+              employment={row.employment_history ?? []}
+              certifications={row.certifications ?? []}
+              signedUrl={documents.signedUrl}
             />
           </div>
-          )}
-          {uploadError && <p className="rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-[11px] text-red-200">{uploadError}</p>}
-          {attachments.length > 0 && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {attachments.map((a) => (
-                <AttachmentPreviewCard key={a.id} kind={a.kind as AttachmentKind} fileName={a.file_name} storagePath={a.storage_path} />
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   )

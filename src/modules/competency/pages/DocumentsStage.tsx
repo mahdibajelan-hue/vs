@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Camera, CheckCircle2, Copy, FileText, Link2, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { getCompDocSignedUrl } from '../lib/compStorage'
-import { AttachmentPreviewCard } from '../components/AttachmentPreviewCard'
-import { ATTACHMENT_KIND_LABEL_FA, type AttachmentKind, type CompetencyAssessment } from '../types'
+import { COMP_DOC_ACCEPT, getCompDocSignedUrl } from '../lib/compStorage'
+import { DocumentsGallery } from '../components/DocumentsGallery'
+import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
+import type { CompetencyAssessment } from '../types'
 
 interface DocumentsStageProps {
   assessment: CompetencyAssessment
   /** Only the team lead may confirm the candidate's self-declared documents/profile are correct. */
   isLead: boolean
-  /** Lead or assessment designer — the only standing comp_set_photo accepts (schema.sql Section 53). */
+  /** Lead or assessment designer — the only standing comp_set_photo accepts (schema.sql Section 53),
+   * and the same standing comp_add_attachment / comp_remove_attachment require (Section 55). */
   canSetPhoto: boolean
   /** Advances the wizard to the next stage (پنل مصاحبه‌گران) — omitted only when the caller has no
    * further stage to send this viewer to. */
   onContinue?: () => void
 }
-
-const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
 
 const SELF_SERVICE_STATUS_LABEL: Record<string, string> = {
   not_sent: 'ارسال نشده',
@@ -27,25 +27,18 @@ const SELF_SERVICE_STATUS_LABEL: Record<string, string> = {
 
 /** Document attachments (resume, national ID, education/certification scans, insurance records) plus the candidate self-service link — the interview team just reviews what the candidate submits through that link. */
 export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: DocumentsStageProps) {
-  const attachments = useCompetencyStore((s) => s.attachments).filter((a) => a.assessmentId === assessment.id)
-  const fetchAttachments = useCompetencyStore((s) => s.fetchAttachments)
-  const addAttachment = useCompetencyStore((s) => s.addAttachment)
-  const deleteAttachment = useCompetencyStore((s) => s.deleteAttachment)
+  const canManageDocuments = canSetPhoto
+  const documents = useStaffProfileDocuments(assessment.id, assessment.status, canManageDocuments)
   const uploadPhoto = useCompetencyStore((s) => s.uploadPhoto)
   const regenerateSelfServiceLink = useCompetencyStore((s) => s.regenerateSelfServiceLink)
   const markSelfServiceSent = useCompetencyStore((s) => s.markSelfServiceSent)
   const markReviewed = useCompetencyStore((s) => s.markReviewed)
 
-  const [kind, setKind] = useState<AttachmentKind>('other')
+  const [docError, setDocError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [copied, setCopied] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const photoRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    fetchAttachments(assessment.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assessment.id])
 
   const selfServiceUrl = `${window.location.origin}${window.location.pathname}?candidate=${assessment.selfServiceToken}`
 
@@ -141,57 +134,48 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
 
       <div className="glass-panel space-y-3 rounded-2xl p-4">
         <p className="flex items-center gap-1.5 text-sm font-bold">
-          <FileText size={14} className="text-purple-300" /> مدارک پیوست‌شده
+          <FileText size={14} className="text-purple-300" /> مدارک نامزد
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <select value={kind} onChange={(e) => setKind(e.target.value as AttachmentKind)} className="input max-w-[12rem]">
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {ATTACHMENT_KIND_LABEL_FA[k]}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-2 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-50"
-          >
-            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-            {uploading ? 'در حال بارگذاری…' : 'بارگذاری مدرک'}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0]
-              if (f) {
+        <p className="text-[10.5px] leading-5 text-muted">
+          مدارک هر ردیف (تحصیلات، سوابق شغلی، دوره‌ها) و کارت ملی و رزومه در خود فرم مشخصات بارگذاری می‌شوند — توسط نامزد از طریق لینک خوداظهاری یا
+          توسط مسئول ارزیابی در «ویرایش» مشخصات. این‌جا همه‌ی آن‌ها به تفکیک دسته و ردیف دیده می‌شوند.
+        </p>
+        <DocumentsGallery
+          items={documents.items}
+          education={assessment.education}
+          employment={assessment.employmentHistory}
+          certifications={assessment.certifications}
+          onDelete={documents.editable ? (d) => documents.remove(d).then((err) => setDocError(err)) : undefined}
+        />
+        {documents.editable && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-3">
+            <span className="text-[10.5px] text-muted">مدرک دیگری که به ردیف خاصی مربوط نیست:</span>
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-50"
+            >
+              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+              {uploading ? 'در حال بارگذاری…' : 'بارگذاری در «سایر»'}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={COMP_DOC_ACCEPT}
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (!f) return
                 setUploading(true)
-                await addAttachment(assessment.id, 'OTHER', null, f)
+                setDocError(await documents.upload('OTHER', null, f))
                 setUploading(false)
-              }
-              e.target.value = ''
-            }}
-          />
-        </div>
-        {attachments.length === 0 ? (
-          <p className="text-[11px] text-muted">مدرکی بارگذاری نشده است.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {attachments.map((a) => (
-              <AttachmentPreviewCard
-                key={a.id}
-                kind={a.kind}
-                fileName={a.fileName}
-                storagePath={a.storagePath}
-                uploadedByCandidate={a.uploadedByCandidate}
-                onDelete={() => deleteAttachment(a.id)}
-              />
-            ))}
+              }}
+            />
           </div>
         )}
+        {docError && <p className="rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-[11px] text-red-200">{docError}</p>}
       </div>
 
       {onContinue && (
