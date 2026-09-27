@@ -60,6 +60,51 @@ interface SelfServiceRow {
   /** False once staff marked the form reviewed or the assessment is completed (schema.sql Section 53,
    * M-7) — every write RPC refuses then, so the page stops offering the form. */
   self_service_editable: boolean
+  /** Why the form is closed: 'reviewed' (staff confirmed and closed it) or 'completed' (Section 55). */
+  self_service_closed_reason?: 'reviewed' | 'completed' | null
+}
+
+type LinkIssue = 'malformed' | 'rotated' | 'unknown' | 'network'
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+/** The token is a uuid, but links pass through messengers and RTL text: a trailing «.»/«)», an
+ * invisible RTL mark (U+200F), spaces or a second copy of the URL glued on used to reach the RPC
+ * verbatim, fail the uuid cast and show «لینک نامعتبر». Take the first uuid in the value instead. */
+function normalizeToken(raw: string): string | null {
+  const cleaned = raw
+    .normalize('NFKC')
+    // Persian / Arabic-Indic digits some keyboards and messengers substitute.
+    .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\s]/g, '')
+  const m = cleaned.match(UUID_RE)
+  return m ? m[0].toLowerCase() : null
+}
+
+const LINK_ISSUE_TEXT: Record<LinkIssue, { title: string; body: string }> = {
+  malformed: {
+    title: 'لینک ناقص است',
+    body: 'به نظر می‌رسد بخشی از لینک هنگام کپی یا ارسال جا افتاده است. لطفاً لینک کامل را دوباره از پیام اصلی باز کنید یا از تیم ارزیابی بخواهید آن را دوباره ارسال کند.',
+  },
+  rotated: {
+    title: 'لینک جدیدی برای شما صادر شده است',
+    body: 'این لینک قدیمی است و تیم ارزیابی لینک تازه‌ای برای همین فرم صادر کرده است. لطفاً از آخرین لینکی که برایتان ارسال شده استفاده کنید؛ اطلاعات و مدارکی که قبلاً ثبت کرده‌اید حفظ شده‌اند.',
+  },
+  unknown: {
+    title: 'این لینک معتبر نیست',
+    body: 'فرمی با این لینک پیدا نشد (ممکن است لینک اشتباه وارد شده یا پرونده حذف شده باشد). لطفاً با تیم مصاحبه‌کننده تماس بگیرید.',
+  },
+  network: {
+    title: 'ارتباط با سامانه برقرار نشد',
+    body: 'لینک شما معتبر است اما اطلاعات بارگذاری نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.',
+  },
+}
+
+const CLOSED_TEXT: Record<'reviewed' | 'completed', string> = {
+  reviewed:
+    'این فرم توسط کارشناس بررسی و بسته شده است؛ اطلاعات و مدارک شما دریافت و تأیید شده و دیگر نیازی به تکمیل آن نیست. اگر نیاز به اصلاح دارید، با تیم ارزیابی تماس بگیرید تا فرم را برایتان بازگشایی کنند.',
+  completed: 'ارزیابی شما تکمیل شده است و این فرم دیگر قابل ویرایش نیست. اطلاعات ثبت‌شده‌ی شما در زیر قابل مشاهده است.',
 }
 
 /**
@@ -69,10 +114,12 @@ interface SelfServiceRow {
  * row matching this exact token (see supabase/schema.sql section 19), never the interview
  * questions or any other candidate's data.
  */
-export function CandidateSelfServicePage({ token }: { token: string }) {
+export function CandidateSelfServicePage({ token: rawToken }: { token: string }) {
+  const token = normalizeToken(rawToken) ?? ''
   const [row, setRow] = useState<SelfServiceRow | null>(null)
   const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const [linkIssue, setLinkIssue] = useState<LinkIssue | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -93,22 +140,32 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   }
 
   useEffect(() => {
+    if (!token) {
+      setLoading(false)
+      setLinkIssue('malformed')
+      return
+    }
+    setLoading(true)
+    setLinkIssue(null)
     supabase
       .rpc('comp_self_service_get', { p_token: token })
-      .then(({ data, error }) => {
-        setLoading(false)
+      .then(async ({ data, error }) => {
         if (error) {
-          setNotFound(true)
-          // Surfaced only in the "جزئیات فنی" disclosure below — this is the one place that can
-          // tell us WHY the link failed (wrong/rolled-back schema, revoked grant, bad token) instead
-          // of leaving both of us guessing at "invalid or expired" again.
+          setLoading(false)
+          setLinkIssue('network')
+          // Surfaced only in the "جزئیات فنی" disclosure below — the one place that can tell us WHY
+          // the page failed (network, revoked grant, schema) instead of «invalid or expired».
           setLoadErrorDetail(`${error.code ?? ''} ${error.message}`.trim())
           return
         }
         if (!data || data.length === 0) {
-          setNotFound(true)
+          // No form for this token: a link replaced by «لینک جدید» says so instead of «invalid».
+          const { data: state } = await supabase.rpc('comp_self_service_link_state', { p_token: token })
+          setLoading(false)
+          setLinkIssue(state === 'rotated' ? 'rotated' : 'unknown')
           return
         }
+        setLoading(false)
         const r = data[0] as SelfServiceRow
         setRow(r)
         if (r.self_service_status === 'submitted' || r.self_service_status === 'reviewed') setSubmitted(true)
@@ -116,7 +173,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       })
     refreshAttachments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [token, reloadKey])
 
   const handleSubmit = async (profile: CandidateProfileInput) => {
     setSubmitError(null)
@@ -140,7 +197,8 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     })
     if (error) {
       if (/self_service_closed/.test(error.message)) {
-        setRow((r) => (r ? { ...r, self_service_editable: false } : r))
+        // Closed while the candidate was filling it in — reload to show the specific reason.
+        setReloadKey((k) => k + 1)
         return
       }
       setSubmitError(`${error.code ?? ''} ${error.message}`.trim())
@@ -194,7 +252,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           })
           if (rpcError) {
             await removeCompDocObject(path, supabase)
-            if (/self_service_closed/.test(rpcError.message)) setRow((r) => (r ? { ...r, self_service_editable: false } : r))
+            if (/self_service_closed/.test(rpcError.message)) setReloadKey((k) => k + 1)
             return compDocErrorFa(rpcError.message)
           }
           refreshAttachments()
@@ -220,11 +278,22 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     )
   }
 
-  if (notFound || !row) {
+  if (linkIssue || !row) {
+    const text = LINK_ISSUE_TEXT[linkIssue ?? 'unknown']
     return (
-      <div className="flex h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-        <div className="max-w-sm">
-          <p className="text-sm text-secondary">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
+      <div className="flex min-h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+        <div className="glass-panel max-w-md space-y-2 rounded-2xl p-5">
+          <p className="text-sm font-bold">{text.title}</p>
+          <p className="text-xs leading-6 text-secondary">{text.body}</p>
+          {linkIssue === 'network' && (
+            <button
+              type="button"
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="mx-auto mt-1 rounded-lg bg-purple-500 px-4 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
+            >
+              تلاش دوباره
+            </button>
+          )}
           {loadErrorDetail && (
             <details className="mt-3 text-right text-[10px] text-muted">
               <summary className="cursor-pointer">جزئیات فنی</summary>
@@ -272,10 +341,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
         {!row.self_service_editable && (
           <div className="glass-panel flex items-start gap-2 rounded-2xl border border-amber-400/25 bg-amber-500/[0.06] p-4 text-xs leading-6 text-amber-200">
             <Lock size={16} className="mt-0.5 shrink-0" />
-            <span>
-              این فرم دیگر قابل ویرایش نیست — اطلاعات شما توسط تیم ارزیابی بررسی و تأیید شده یا ارزیابی شما نهایی شده است. اگر نیاز به اصلاح دارید، لطفاً با
-              تیم مصاحبه‌کننده تماس بگیرید.
-            </span>
+            <span>{CLOSED_TEXT[row.self_service_closed_reason ?? 'reviewed']}</span>
           </div>
         )}
 

@@ -41,7 +41,23 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
   const fileRef = useRef<HTMLInputElement>(null)
   const photoRef = useRef<HTMLInputElement>(null)
 
-  const selfServiceUrl = `${window.location.origin}${window.location.pathname}?candidate=${assessment.selfServiceToken}`
+  const linkFor = (token: string) => `${window.location.origin}${window.location.pathname}?candidate=${encodeURIComponent(token)}`
+  const selfServiceUrl = linkFor(assessment.selfServiceToken)
+
+  // Copies the CURRENT link: comp_mark_self_service_sent returns the token stored right now, so a tab
+  // opened before someone pressed «لینک جدید» (or before the new-candidate read-back) can no longer
+  // hand the candidate a link that is already dead.
+  const copyLink = async () => {
+    const fresh = await markSelfServiceSent(assessment.id)
+    const url = linkFor(fresh ?? assessment.selfServiceToken)
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // Clipboard blocked (non-secure context / permissions): the field below still shows the link.
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <div className="space-y-4">
@@ -56,25 +72,33 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           <input readOnly value={selfServiceUrl} dir="ltr" className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
           <button
             type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(selfServiceUrl)
-              setCopied(true)
-              markSelfServiceSent(assessment.id)
-              setTimeout(() => setCopied(false), 2000)
-            }}
+            onClick={copyLink}
             className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400"
           >
             <Copy size={12} /> {copied ? 'کپی شد' : 'کپی لینک'}
           </button>
-          <button
-            type="button"
-            onClick={() => regenerateSelfServiceLink(assessment.id)}
-            title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
-          >
-            <RefreshCw size={12} /> لینک جدید
-          </button>
+          {isLead && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'با صدور لینک جدید، لینک قبلی دیگر فرم را باز نمی‌کند (نامزد با باز کردن آن پیام «لینک جدیدی برای شما صادر شده است» می‌بیند). اطلاعات و مدارک ثبت‌شده حفظ می‌شوند. ادامه می‌دهید؟',
+                  )
+                )
+                  regenerateSelfServiceLink(assessment.id)
+              }}
+              title="صدور لینک جدید (لینک قبلی غیرفعال می‌شود)"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-secondary hover:bg-white/5"
+            >
+              <RefreshCw size={12} /> لینک جدید
+            </button>
+          )}
         </div>
+        <p className="text-[10px] leading-5 text-muted">
+          لینک تاریخ انقضا ندارد. فقط در این حالت‌ها فرم را باز نمی‌کند: صدور «لینک جدید» (لینک قبلی باطل می‌شود)، تأیید و بستن فرم توسط مسئول ارزیابی، یا
+          نهایی شدن ارزیابی — و در هر حالت نامزد پیام مشخص همان حالت را می‌بیند.
+        </p>
         <div className="flex items-center justify-between">
           <span
             className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
