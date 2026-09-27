@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BrainCircuit, CheckCircle2, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, BrainCircuit, CheckCircle2, Loader2, RotateCw } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 
 interface CandidateGetRow {
@@ -45,7 +45,32 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
   const [saving, setSaving] = useState<Record<string, boolean>>({})
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
-  const [startTimes] = useState<Record<string, number>>({})
+  // N-2: per-question save failures (shown with a retry) and the finalize error.
+  const [saveErrors, setSaveErrors] = useState<Record<string, ResponseDraft>>({})
+  const [finishError, setFinishError] = useState<string | null>(null)
+  // When each question first became visible on screen (≥60% in view) — response_time_ms is measured
+  // from then to the answer, so the engine's fast-answer (random pattern) check has real timings.
+  const shownAt = useRef<Record<string, number>>({})
+  const observer = useRef<IntersectionObserver | null>(null)
+  const pageShownAt = useRef<number>(Date.now())
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const id = (e.target as HTMLElement).dataset.qid
+          if (id && e.isIntersecting && shownAt.current[id] == null) shownAt.current[id] = Date.now()
+        }
+      },
+      { threshold: 0.6 },
+    )
+    return () => observer.current?.disconnect()
+  }, [])
+
+  const observe = useCallback((el: HTMLDivElement | null) => {
+    if (el) observer.current?.observe(el)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -89,27 +114,42 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
     }
   }, [token])
 
-  const answeredCount = useMemo(() => questions.filter((q) => answers[q.id] != null).length, [questions, answers])
-  const allAnswered = questions.length > 0 && answeredCount === questions.length
+  const answeredCount = useMemo(() => questions.filter((q) => answers[q.id] != null && saveErrors[q.id] == null).length, [questions, answers, saveErrors])
+  const pendingSaves = Object.values(saving).some(Boolean)
+  const failedCount = Object.keys(saveErrors).length
+  const allAnswered = questions.length > 0 && answeredCount === questions.length && !pendingSaves
 
   const submitAnswer = async (questionId: string, value: ResponseDraft) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
     setSaving((prev) => ({ ...prev, [questionId]: true }))
-    const startedAt = startTimes[questionId] ?? Date.now()
-    const responseTimeMs = Date.now() - startedAt
-    await supabase.rpc('personality_candidate_submit_response', {
+    const startedAt = shownAt.current[questionId] ?? pageShownAt.current
+    const responseTimeMs = Math.max(0, Math.min(Date.now() - startedAt, 2_000_000_000))
+    const { error } = await supabase.rpc('personality_candidate_submit_response', {
       p_token: token,
       p_question_id: questionId,
       p_response: value,
       p_response_time_ms: responseTimeMs,
     })
     setSaving((prev) => ({ ...prev, [questionId]: false }))
+    setSaveErrors((prev) => {
+      const next = { ...prev }
+      if (error) next[questionId] = value
+      else delete next[questionId]
+      return next
+    })
+    // The test was already submitted/closed elsewhere (e.g. a second tab) — show the closing screen.
+    if (error && /already submitted/.test(error.message)) setDone(true)
   }
 
   const handleFinish = async () => {
     setSubmitting(true)
-    await supabase.rpc('personality_candidate_finalize', { p_token: token })
+    setFinishError(null)
+    const { error } = await supabase.rpc('personality_candidate_finalize', { p_token: token })
     setSubmitting(false)
+    if (error && !/personality_not_in_progress/.test(error.message)) {
+      setFinishError('ثبت نهایی انجام نشد. اتصال اینترنت را بررسی کنید و دوباره تلاش کنید؛ پاسخ‌های ذخیره‌شده‌ی شما از بین نمی‌روند.')
+      return
+    }
     setDone(true)
   }
 
@@ -159,7 +199,7 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
         </div>
 
         {questions.map((q, i) => (
-          <div key={q.id} className="glass-panel rounded-2xl p-4">
+          <div key={q.id} ref={observe} data-qid={q.id} className={`glass-panel rounded-2xl p-4 ${saveErrors[q.id] ? 'border border-red-400/40' : ''}`}>
             <p className="mb-3 text-[12.5px] font-bold leading-6">
               {(i + 1).toLocaleString('fa-IR')}. {q.question_text}
             </p>
@@ -201,17 +241,37 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
               </div>
             )}
             {saving[q.id] && <p className="mt-1.5 text-[9.5px] text-muted">در حال ذخیره…</p>}
+            {!saving[q.id] && saveErrors[q.id] && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px] text-red-300">
+                <AlertTriangle size={12} /> این پاسخ ذخیره نشد.
+                <button
+                  onClick={() => submitAnswer(q.id, saveErrors[q.id])}
+                  className="flex items-center gap-1 rounded-lg border border-red-400/30 px-2 py-0.5 font-bold text-red-200 hover:bg-red-500/10"
+                >
+                  <RotateCw size={11} /> تلاش دوباره
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
-        <div className="sticky bottom-4">
+        <div className="sticky bottom-4 space-y-2">
+          {(failedCount > 0 || finishError) && (
+            <p className="rounded-xl border border-red-400/30 bg-red-500/15 p-2.5 text-center text-[11px] leading-6 text-red-100">
+              {finishError ?? `${failedCount.toLocaleString('fa-IR')} پاسخ ذخیره نشده است؛ روی «تلاش دوباره» زیر همان سؤال بزنید.`}
+            </p>
+          )}
           <button
             onClick={handleFinish}
             disabled={!allAnswered || submitting}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-pink-500 py-3 text-sm font-bold text-white shadow-lg hover:bg-pink-400 disabled:opacity-40"
           >
             {submitting ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-            {allAnswered ? 'ثبت نهایی پاسخ‌ها' : `ابتدا به همه سؤالات پاسخ دهید (${answeredCount.toLocaleString('fa-IR')}/${questions.length.toLocaleString('fa-IR')})`}
+            {allAnswered
+              ? 'ثبت نهایی پاسخ‌ها'
+              : pendingSaves
+                ? 'در حال ذخیره‌ی پاسخ‌ها…'
+                : `ابتدا به همه سؤالات پاسخ دهید (${answeredCount.toLocaleString('fa-IR')}/${questions.length.toLocaleString('fa-IR')})`}
           </button>
         </div>
       </div>

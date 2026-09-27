@@ -29,7 +29,9 @@ import type {
   PersonalityRoleAssignment,
   PersonalityScoreKind,
   PersonalityTrait,
+  PersonalityValidityDetails,
   PersonalityValidityResult,
+  PersonalityValidityScale,
   PersonalityValidityStatus,
   JobRole,
 } from '../types'
@@ -265,8 +267,9 @@ export interface PersonalityQuestionRow {
   question_text: string
   scenario_context: string
   scale_id: string | null
-  options: PersonalityQuestionOption[] | null
+  options: PersonalityQuestionOptionRow[] | null
   reverse_scored: boolean
+  validity_scale?: string | null
   job_role: string | null
   complexity: string
   weight: number
@@ -278,6 +281,36 @@ export interface PersonalityQuestionRow {
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+/** How an option is stored in personality_questions.options (snake_case — the scoring engine, the
+ * candidate RPC and the validation trigger all read these keys). */
+export interface PersonalityQuestionOptionRow {
+  key: string
+  label_fa: string
+  dimension_key?: string | null
+  score?: number | null
+  facet_key?: string | null
+}
+
+export function personalityQuestionOptionFromRow(o: PersonalityQuestionOptionRow): PersonalityQuestionOption {
+  return {
+    key: o.key,
+    labelFa: o.label_fa ?? '',
+    ...(o.dimension_key ? { dimensionKey: o.dimension_key } : {}),
+    ...(typeof o.score === 'number' ? { score: o.score } : {}),
+    ...(o.facet_key ? { facetKey: o.facet_key } : {}),
+  }
+}
+
+export function personalityQuestionOptionToRow(o: PersonalityQuestionOption): PersonalityQuestionOptionRow {
+  return {
+    key: o.key,
+    label_fa: o.labelFa.trim(),
+    ...(o.dimensionKey ? { dimension_key: o.dimensionKey } : {}),
+    ...(typeof o.score === 'number' ? { score: o.score } : {}),
+    ...(o.facetKey ? { facet_key: o.facetKey } : {}),
+  }
 }
 
 export function personalityQuestionFromRow(r: PersonalityQuestionRow): PersonalityQuestion {
@@ -294,8 +327,9 @@ export function personalityQuestionFromRow(r: PersonalityQuestionRow): Personali
     questionText: r.question_text,
     scenarioContext: r.scenario_context,
     scaleId: r.scale_id,
-    options: r.options ?? [],
+    options: (r.options ?? []).map(personalityQuestionOptionFromRow),
     reverseScored: r.reverse_scored,
+    validityScale: (r.validity_scale as PersonalityValidityScale | null | undefined) ?? null,
     jobRole: (r.job_role as JobRole | null) ?? null,
     complexity: r.complexity as PersonalityComplexity,
     weight: r.weight,
@@ -454,6 +488,7 @@ export interface PersonalityValidityResultRow {
   missing_response_count: number
   contradiction_count: number
   overall_status: string
+  details?: PersonalityValidityDetails | null
   computed_at: string
 }
 
@@ -470,6 +505,7 @@ export function personalityValidityResultFromRow(r: PersonalityValidityResultRow
     missingResponseCount: r.missing_response_count,
     contradictionCount: r.contradiction_count,
     overallStatus: r.overall_status as PersonalityValidityStatus,
+    details: r.details ?? {},
     computedAt: r.computed_at,
   }
 }

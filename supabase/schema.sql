@@ -10724,3 +10724,419 @@ grant execute on function personality_set_test_questions(uuid, uuid[], boolean) 
 -- Trigger-only / internal helpers need no EXECUTE for API roles (triggers fire regardless of it).
 revoke execute on function comp_assessments_apply_default_blueprint() from public, anon, authenticated;
 revoke execute on function personality_test_has_progress(uuid) from authenticated;
+
+-- ============================================================================
+-- Section 54: Medium / minor findings from the demo end-to-end test
+-- (docs/demo-test-report.md, N-2 … N-15 and L-1 … L-10). Applied live in groups; each group's
+-- block below is idempotent and self-contained.
+--
+-- Group 1 — personality data & engine (N-3, N-4, L-2; N-2/N-5 are client-side):
+-- N-3 personality_score_assessment_core now fills every validity index the bank can support:
+--     extreme_response_rate (share of scale answers at either end), consistency_score (agreement
+--     between each answered reverse-keyed item and the forward items of the same facet — or of the
+--     same trait when the facet has no forward item in the test), contradiction_count (reverse
+--     items whose answer flatly contradicts their forward partners), random_pattern_flag (very low
+--     consistency over >= 3 pairs, or most measured answers faster than a second) and
+--     social_desirability_score from a new 8-item SOCIAL_DESIRABILITY validity scale
+--     (personality_questions.validity_scale; these items measure no trait/facet/dimension and are
+--     never part of any dimension score). A per-index breakdown is kept in
+--     personality_validity_results.details. REVIEW_REQUIRED only on clear signals: straight-lining,
+--     missing answers, random pattern, >= 2 contradictions, or a social-desirability score >= 80
+--     over >= 3 answered items.
+-- N-4 Nine FORCED_CHOICE options pointed at facet keys (ORGANIZATION, ASSERTIVENESS, …) that are not
+--     behavioral dimensions and were silently ignored by scoring; they are remapped to the closest
+--     real dimension (the original key is kept in the option as facet_key, and every change is in
+--     the audit log as PERSONALITY_QUESTION_DATA_FIX). trg_personality_questions_validate now
+--     rejects, on insert or when options/type change, an option without key/label_fa, camelCase
+--     option keys, and any dimension_key that is not a behavioral dimension.
+-- L-2 personality_assessments.created_by defaults to auth.uid() and is forced to the caller on insert.
+-- ============================================================================
+
+-- ---------------------------------------------------------------- N-3: validity scale items
+
+alter table personality_questions add column if not exists validity_scale text;
+alter table personality_questions drop constraint if exists personality_questions_validity_scale_check;
+alter table personality_questions add constraint personality_questions_validity_scale_check check (
+  validity_scale is null
+  or (validity_scale in ('SOCIAL_DESIRABILITY') and question_type = 'LIKERT'
+      and trait_id is null and facet_id is null and dimension_id is null)
+);
+alter table personality_questions drop constraint if exists personality_questions_check;
+alter table personality_questions add constraint personality_questions_check check (
+  trait_id is not null or dimension_id is not null or validity_scale is not null
+);
+
+alter table personality_validity_results add column if not exists details jsonb not null default '{}'::jsonb;
+
+-- Eight improbable-virtue ("lie scale") statements: agreeing with most of them is a sign of
+-- presenting oneself favourably, not of the trait itself. Agreement = higher score (none reversed).
+insert into personality_questions (question_type, question_text, scale_id, reverse_scored, complexity, weight, active, approval_status, validity_scale)
+select 'LIKERT', t.txt, (select id from personality_response_scales where key = 'likert_7'), false, 'L1', 1, true, 'APPROVED', 'SOCIAL_DESIRABILITY'
+from (values
+  ('هرگز پیش نیامده که قولی بدهم و به آن عمل نکنم.'),
+  ('تا به حال حتی یک بار هم از دست همکارانم عصبانی نشده‌ام.'),
+  ('هیچ‌وقت کاری را که باید انجام می‌دادم به تعویق نینداخته‌ام.'),
+  ('همیشه و بدون استثنا همه‌ی مقررات را رعایت کرده‌ام، حتی مقررات کوچک و کم‌اهمیت را.'),
+  ('هرگز پشت سر کسی از او بد نگفته‌ام.'),
+  ('هیچ‌وقت از موفقیت دیگران احساس حسادت نکرده‌ام.'),
+  ('تا به حال هیچ اشتباهی در کارم نکرده‌ام که بخواهم آن را از دیگران پنهان کنم.'),
+  ('با هر کسی که روبه‌رو شده‌ام، صرف‌نظر از رفتار او، همیشه مؤدب و خوش‌برخورد بوده‌ام.')
+) t(txt)
+where not exists (select 1 from personality_questions q where q.question_text = t.txt);
+
+-- ---------------------------------------------------------------- N-4: option dimension keys
+
+do $$
+declare
+  v_q uuid;
+  v_prev jsonb;
+  v_new jsonb;
+begin
+  create temporary table n4_map (qid uuid, opt_key text, old_key text, new_key text) on commit drop;
+  insert into n4_map values
+    ('b2db8cd0-c501-4f66-b93c-d57397b0e789', 'A', 'ORGANIZATION', 'DISCIPLINE'),
+    ('8abdc151-75cd-4427-8dda-78ed2a52e70a', 'A', 'ASSERTIVENESS', 'COMMUNICATION'),
+    ('8abdc151-75cd-4427-8dda-78ed2a52e70a', 'B', 'INTERPERSONAL_FLEXIBILITY', 'CONFLICT_MANAGEMENT'),
+    ('9d14c269-e36e-41b2-a1bf-ca3f3780f1b6', 'A', 'ASSERTIVENESS', 'DECISION_CONFIDENCE'),
+    ('9d14c269-e36e-41b2-a1bf-ca3f3780f1b6', 'B', 'COOPERATION', 'TEAMWORK'),
+    ('30cb1fbc-3147-4acc-8d96-d5d8be7418fd', 'B', 'INNOVATION', 'INITIATIVE'),
+    ('14867759-5617-4323-bd03-0c16df1bf8fd', 'A', 'PLANNING_ORIENTATION', 'DISCIPLINE'),
+    ('f73a05a6-50db-484b-ada7-c235f4714a6e', 'A', 'COMPOSURE', 'DECISION_CONFIDENCE'),
+    ('f73a05a6-50db-484b-ada7-c235f4714a6e', 'B', 'SOCIAL_ENGAGEMENT', 'COMMUNICATION');
+  for v_q in select distinct qid from n4_map loop
+    select options into v_prev from personality_questions where id = v_q;
+    continue when v_prev is null or jsonb_typeof(v_prev) <> 'array';
+    select jsonb_agg(
+      case when m.new_key is not null
+        then e.o || jsonb_build_object('dimension_key', m.new_key, 'facet_key', lower(m.old_key))
+        else e.o end
+      order by e.ord)
+    into v_new
+    from jsonb_array_elements(v_prev) with ordinality e(o, ord)
+    left join n4_map m on m.qid = v_q and m.opt_key = e.o ->> 'key' and m.old_key = e.o ->> 'dimension_key';
+    if v_new is distinct from v_prev then
+      update personality_questions set options = v_new where id = v_q;
+      perform comp_log_audit(
+        'PERSONALITY_QUESTION_DATA_FIX', 'personality_questions', v_q,
+        jsonb_build_object('options', v_prev),
+        jsonb_build_object('options', v_new, 'reason', 'N-4: a FORCED_CHOICE option pointed at a facet key, not a behavioral dimension; remapped to the closest dimension')
+      );
+    end if;
+  end loop;
+end $$;
+
+create or replace function personality_questions_validate()
+returns trigger as $$
+declare
+  v_bad text;
+begin
+  if tg_op = 'UPDATE' and new.options is not distinct from old.options and new.question_type is not distinct from old.question_type then
+    return new;
+  end if;
+  if new.options is null or jsonb_typeof(new.options) <> 'array' then
+    raise exception 'invalid_question_options: options must be a JSON array';
+  end if;
+  select string_agg(coalesce(o ->> 'key', '?'), ', ') into v_bad
+  from jsonb_array_elements(new.options) o
+  where jsonb_typeof(o) <> 'object' or coalesce(o ->> 'key', '') = '' or coalesce(btrim(o ->> 'label_fa'), '') = ''
+     or o ? 'labelFa' or o ? 'dimensionKey';
+  if v_bad is not null then
+    raise exception 'invalid_question_options: every option needs key and label_fa (snake_case): %', v_bad;
+  end if;
+  select string_agg(o ->> 'dimension_key', ', ') into v_bad
+  from jsonb_array_elements(new.options) o
+  where coalesce(o ->> 'dimension_key', '') <> ''
+    and not exists (select 1 from personality_behavioral_dimensions d where d.key = o ->> 'dimension_key');
+  if v_bad is not null then
+    raise exception 'invalid_dimension_key: not a behavioral dimension: %', v_bad;
+  end if;
+  if new.question_type in ('FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED') and jsonb_array_length(new.options) < 2 then
+    raise exception 'invalid_question_options: a % question needs at least two options', new.question_type;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+revoke execute on function personality_questions_validate() from public, anon, authenticated;
+
+drop trigger if exists trg_personality_questions_validate on personality_questions;
+create trigger trg_personality_questions_validate before insert or update on personality_questions
+  for each row execute function personality_questions_validate();
+
+-- ---------------------------------------------------------------- L-2: personality creator
+
+alter table personality_assessments alter column created_by set default auth.uid();
+
+create or replace function personality_assessments_set_creator()
+returns trigger as $$
+begin
+  if auth.uid() is not null then
+    new.created_by := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+revoke execute on function personality_assessments_set_creator() from public, anon, authenticated;
+
+drop trigger if exists trg_personality_assessments_creator on personality_assessments;
+create trigger trg_personality_assessments_creator before insert on personality_assessments
+  for each row execute function personality_assessments_set_creator();
+
+-- ---------------------------------------------------------------- N-3: scoring engine
+
+-- Section 53's personality_score_assessment_core, changed ONLY to (a) keep validity-scale items out
+-- of every TRAIT/FACET/BEHAVIORAL_DIMENSION score and (b) compute the validity indices described in
+-- this section's header. Status/submitted_at handling is unchanged.
+create or replace function personality_score_assessment_core(p_id uuid)
+returns void as $$
+declare
+  pa personality_assessments%rowtype;
+  v_straight_lining boolean := false;
+  v_missing int := 0;
+  v_total_selected int := 0;
+  v_completion_seconds int;
+  v_scale_n int := 0;
+  v_extreme numeric;
+  v_pairs int := 0;
+  v_consistency numeric;
+  v_contradictions int := 0;
+  v_sd_n int := 0;
+  v_sd numeric;
+  v_timed int := 0;
+  v_fast int := 0;
+  v_random boolean := false;
+  v_review text[] := '{}';
+begin
+  select * into pa from personality_assessments where id = p_id;
+  if not found then
+    raise exception 'personality assessment not found';
+  end if;
+
+  delete from personality_dimension_scores where personality_assessment_id = p_id;
+
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, trait_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'TRAIT', x.trait_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 5 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.trait_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.trait_id is not null and q.validity_scale is null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.trait_id;
+
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, facet_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'FACET', x.facet_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 3 then 'HIGH' when count(*) >= 1 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.facet_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.facet_id is not null and q.validity_scale is null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+  ) x
+  where x.v is not null
+  group by x.facet_id;
+
+  insert into personality_dimension_scores (personality_assessment_id, score_kind, dimension_id, raw_score, normalized_score, weighted_score, coverage_count, confidence)
+  select p_id, 'BEHAVIORAL_DIMENSION', x.dim_id, avg(x.v), avg(x.v) * 100, avg(x.v) * 100, count(*),
+    case when count(*) >= 4 then 'HIGH' when count(*) >= 2 then 'MEDIUM' else 'LOW' end
+  from (
+    select q.dimension_id as dim_id,
+      case when q.reverse_scored
+        then 1.0 - (((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0))
+        else ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)
+      end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id
+      and q.dimension_id is not null and q.validity_scale is null
+      and q.question_type in ('LIKERT', 'FREQUENCY')
+      and (r.response_value ? 'selected')
+
+    union all
+
+    select d.id as dim_id,
+      case when q.question_type = 'FORCED_CHOICE' then 1.0 else (opt->>'score')::numeric / 5.0 end as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    cross join lateral jsonb_array_elements(q.options) as opt
+    join personality_behavioral_dimensions d on d.key = (opt->>'dimension_key')
+    where r.personality_assessment_id = p_id
+      and q.question_type in ('FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED')
+      and (r.response_value->>'selected_option') = (opt->>'key')
+  ) x
+  where x.v is not null
+  group by x.dim_id;
+
+  -- Response validity — evidence for review, never an automatic dishonesty verdict.
+  -- Straight-lining: the single most common LIKERT/FREQUENCY value on more than 90% of those items
+  -- (only once there are >= 8 such answers).
+  select (count(*) filter (where v = mode_v))::numeric / nullif(count(*), 0) > 0.9
+  into v_straight_lining
+  from (
+    select (r.response_value->>'selected')::numeric as v
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    where r.personality_assessment_id = p_id and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ) vals
+  cross join lateral (select mode() within group (order by v) as mode_v from (
+    select (r2.response_value->>'selected')::numeric as v
+    from personality_responses r2
+    join personality_questions q2 on q2.id = r2.question_id
+    where r2.personality_assessment_id = p_id and q2.question_type in ('LIKERT', 'FREQUENCY') and (r2.response_value ? 'selected')
+  ) inner_vals) m
+  having count(*) >= 8;
+  v_straight_lining := coalesce(v_straight_lining, false);
+
+  -- Extreme responding: share of scale answers (validity items excluded) at either end of the scale.
+  select count(*), (count(*) filter (where v in (s_min, s_max)))::numeric / nullif(count(*), 0)
+  into v_scale_n, v_extreme
+  from (
+    select (r.response_value->>'selected')::numeric as v, s.min_value as s_min, s.max_value as s_max
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id and q.validity_scale is null
+      and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ) x;
+  if v_scale_n < 8 then
+    v_extreme := null;
+  end if;
+
+  -- Consistency: each answered reverse-keyed item against the forward items of the same facet (or,
+  -- when the test has no forward item of that facet, of the same trait). diff = 0 means perfectly
+  -- consistent answers, 1 means opposite ends; a reverse item whose mean diff >= 0.75 is a
+  -- contradiction (e.g. "strongly agree" with a statement and with its opposite).
+  with lik as (
+    select q.id, q.trait_id, q.facet_id, q.reverse_scored,
+      ((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0) as raw
+    from personality_responses r
+    join personality_questions q on q.id = r.question_id
+    join personality_response_scales s on s.id = q.scale_id
+    where r.personality_assessment_id = p_id and q.validity_scale is null
+      and q.question_type in ('LIKERT', 'FREQUENCY') and (r.response_value ? 'selected')
+  ),
+  per_rev as (
+    select rv.id, avg(abs(fw.raw - (1 - rv.raw))) as diff
+    from lik rv
+    join lik fw on not fw.reverse_scored and fw.id <> rv.id
+      and (
+        (rv.facet_id is not null and fw.facet_id = rv.facet_id)
+        or (
+          rv.trait_id is not null and fw.trait_id = rv.trait_id
+          and not exists (select 1 from lik f2 where not f2.reverse_scored and rv.facet_id is not null and f2.facet_id = rv.facet_id)
+        )
+      )
+    where rv.reverse_scored and rv.raw is not null and fw.raw is not null
+    group by rv.id
+  )
+  select count(*), round(1 - avg(diff), 4), count(*) filter (where diff >= 0.75)
+  into v_pairs, v_consistency, v_contradictions
+  from per_rev;
+  if v_pairs < 2 then
+    v_consistency := null;
+  end if;
+
+  -- Social desirability: mean agreement (0-100) with the improbable-virtue items answered.
+  select count(*), round(avg(((r.response_value->>'selected')::numeric - s.min_value) / nullif(s.max_value - s.min_value, 0)) * 100, 2)
+  into v_sd_n, v_sd
+  from personality_responses r
+  join personality_questions q on q.id = r.question_id
+  join personality_response_scales s on s.id = q.scale_id
+  where r.personality_assessment_id = p_id and q.validity_scale = 'SOCIAL_DESIRABILITY' and (r.response_value ? 'selected');
+
+  -- Random pattern: very low consistency over >= 3 pairs, or most measured answers under a second
+  -- (response times below 150 ms are treated as unmeasured — older clients never timed answers).
+  select count(*) filter (where response_time_ms >= 150), count(*) filter (where response_time_ms >= 150 and response_time_ms < 1000)
+  into v_timed, v_fast
+  from personality_responses where personality_assessment_id = p_id;
+  v_random := (v_pairs >= 3 and coalesce(v_consistency, 1) < 0.5) or (v_timed >= 10 and v_fast::numeric / v_timed > 0.5);
+
+  select jsonb_array_length(pa.selected_question_ids) into v_total_selected;
+  select v_total_selected - count(*) into v_missing from personality_responses where personality_assessment_id = p_id;
+  v_missing := greatest(0, coalesce(v_missing, 0));
+  v_completion_seconds := case when pa.started_at is not null then greatest(0, extract(epoch from (now() - pa.started_at))::int) else null end;
+
+  v_review := array_remove(array[
+    case when v_straight_lining then 'STRAIGHT_LINING' end,
+    case when v_missing > 0 then 'MISSING_RESPONSES' end,
+    case when v_random then 'RANDOM_PATTERN' end,
+    case when v_contradictions >= 2 then 'CONTRADICTIONS' end,
+    case when v_sd_n >= 3 and v_sd >= 80 then 'SOCIAL_DESIRABILITY' end
+  ], null);
+
+  insert into personality_validity_results (
+    personality_assessment_id, completion_seconds, straight_lining_flag, missing_response_count,
+    extreme_response_rate, consistency_score, social_desirability_score, random_pattern_flag, contradiction_count,
+    overall_status, details
+  )
+  values (
+    p_id, v_completion_seconds, v_straight_lining, v_missing,
+    round(v_extreme, 4), v_consistency, v_sd, v_random, coalesce(v_contradictions, 0),
+    case when cardinality(v_review) > 0 then 'REVIEW_REQUIRED' else 'ACCEPTABLE' end,
+    jsonb_build_object(
+      'scaleAnswerCount', v_scale_n, 'reversePairCount', v_pairs, 'socialDesirabilityItemCount', v_sd_n,
+      'timedAnswerCount', v_timed, 'fastAnswerCount', v_fast, 'reviewReasons', to_jsonb(v_review)
+    )
+  )
+  on conflict (personality_assessment_id) do update set
+    completion_seconds = excluded.completion_seconds,
+    straight_lining_flag = excluded.straight_lining_flag,
+    missing_response_count = excluded.missing_response_count,
+    extreme_response_rate = excluded.extreme_response_rate,
+    consistency_score = excluded.consistency_score,
+    social_desirability_score = excluded.social_desirability_score,
+    random_pattern_flag = excluded.random_pattern_flag,
+    contradiction_count = excluded.contradiction_count,
+    overall_status = excluded.overall_status,
+    details = excluded.details,
+    computed_at = now();
+
+  update personality_assessments pa2
+  set computed_watchpoints = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'topic', 'در مصاحبه ساختاریافته، شواهد بیشتری درباره «' || d.label_fa || '» بررسی شود.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score < 40
+  ), '[]'::jsonb),
+  computed_patterns = coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'dimensionKeys', jsonb_build_array(d.key),
+      'interpretation', 'الگوی پاسخ نشان‌دهنده تمایل نسبتاً قوی در حوزه «' || d.label_fa || '» است.'
+    ))
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = p_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score >= 80
+  ), '[]'::jsonb),
+  status = case when pa2.status in ('SUBMITTED', 'VALIDITY_CHECK', 'SCORING') then 'FINGERPRINT' else pa2.status end,
+  updated_at = now()
+  where pa2.id = p_id;
+
+  perform comp_log_audit('PERSONALITY_ASSESSMENT_SCORED', 'personality_assessments', p_id, null,
+    jsonb_build_object('status', (select status from personality_assessments where id = p_id), 'validityReview', to_jsonb(v_review)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function personality_score_assessment_core(uuid) from public, anon, authenticated;

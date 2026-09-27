@@ -6,7 +6,7 @@ import { jobRoleLabel } from '../../competency/lib/competencyData'
 import { PersonalityPrintReport } from './PersonalityPrintReport'
 import { RoleAlignmentCard } from './RoleAlignmentCard'
 import { computeRoleAlignment } from '../lib/roleAlignment'
-import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
+import { PERSONALITY_VALIDITY_STATUS_LABEL_FA, type PersonalityValidityResult } from '../types'
 
 interface PersonalityFingerprintPanelProps {
   personalityAssessmentId: string
@@ -159,18 +159,7 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
         </>
       )}
 
-      {validityResult && (
-        <div
-          className={`glass-panel flex flex-wrap items-center gap-2 rounded-2xl border p-3.5 text-[11px] ${
-            validityResult.overallStatus === 'REVIEW_REQUIRED' ? 'border-amber-400/25 text-amber-200' : 'border-emerald-400/25 text-emerald-200'
-          }`}
-        >
-          <AlertTriangle size={14} />
-          وضعیت اعتبار پاسخ‌ها: {PERSONALITY_VALIDITY_STATUS_LABEL_FA[validityResult.overallStatus]}
-          {validityResult.straightLiningFlag && ' — الگوی پاسخ یکنواخت مشاهده شد'}
-          {validityResult.missingResponseCount > 0 && ` — ${validityResult.missingResponseCount.toLocaleString('fa-IR')} سؤال بی‌پاسخ`}
-        </div>
-      )}
+      {validityResult && <ValidityBanner result={validityResult} />}
 
       <SectionHeading icon={Fingerprint}>اثرانگشت رفتاری</SectionHeading>
 
@@ -267,6 +256,79 @@ function ScoreBar({ label, value, color, marker, critical }: { label: string; va
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
         {marker != null && <div className="absolute top-0 h-full w-px bg-white/40" style={{ right: `${100 - marker}%` }} title={`حداقل الزام: ${marker}`} />}
       </div>
+    </div>
+  )
+}
+
+const REVIEW_REASON_LABEL_FA: Record<string, string> = {
+  STRAIGHT_LINING: 'الگوی پاسخ یکنواخت',
+  MISSING_RESPONSES: 'سؤال بی‌پاسخ',
+  RANDOM_PATTERN: 'الگوی پاسخ تصادفی/شتاب‌زده',
+  CONTRADICTIONS: 'پاسخ‌های متناقض',
+  SOCIAL_DESIRABILITY: 'تمایل بالا به ارائه‌ی تصویر مطلوب',
+}
+
+const pct = (v: number) => `${Math.round(v * 100).toLocaleString('fa-IR')}٪`
+
+/** Response-validity summary (Section 54, N-3): the verdict, why a review is suggested, and every
+ * index the test could support — evidence for the reviewer, never a verdict on honesty. */
+function ValidityBanner({ result }: { result: PersonalityValidityResult }) {
+  const review = result.overallStatus === 'REVIEW_REQUIRED'
+  const d = result.details ?? {}
+  const reasons = d.reviewReasons ?? []
+  const chips: { label: string; value: string; warn: boolean; hint?: string }[] = []
+  if (result.consistencyScore != null)
+    chips.push({
+      label: 'سازگاری پاسخ‌ها',
+      value: pct(result.consistencyScore),
+      warn: result.consistencyScore < 0.5,
+      hint: d.reversePairCount != null ? `بر اساس ${d.reversePairCount.toLocaleString('fa-IR')} گویه‌ی معکوس` : undefined,
+    })
+  if (result.contradictionCount > 0 || result.consistencyScore != null)
+    chips.push({ label: 'تناقض', value: result.contradictionCount.toLocaleString('fa-IR'), warn: result.contradictionCount >= 2 })
+  if (result.socialDesirabilityScore != null)
+    chips.push({
+      label: 'مطلوبیت اجتماعی',
+      value: `${Math.round(result.socialDesirabilityScore).toLocaleString('fa-IR')} از ۱۰۰`,
+      warn: reasons.includes('SOCIAL_DESIRABILITY'),
+      hint: d.socialDesirabilityItemCount != null ? `${d.socialDesirabilityItemCount.toLocaleString('fa-IR')} گویه‌ی مقیاس اعتبار` : undefined,
+    })
+  if (result.extremeResponseRate != null)
+    chips.push({ label: 'پاسخ‌های حدی', value: pct(result.extremeResponseRate), warn: result.extremeResponseRate >= 0.8 })
+  if (d.timedAnswerCount != null && d.timedAnswerCount > 0)
+    chips.push({
+      label: 'پاسخ‌های زیر یک ثانیه',
+      value: `${(d.fastAnswerCount ?? 0).toLocaleString('fa-IR')} از ${d.timedAnswerCount.toLocaleString('fa-IR')}`,
+      warn: result.randomPatternFlag,
+    })
+  if (result.completionSeconds != null)
+    chips.push({ label: 'مدت پاسخ‌گویی', value: `${Math.max(1, Math.round(result.completionSeconds / 60)).toLocaleString('fa-IR')} دقیقه`, warn: false })
+
+  return (
+    <div className={`glass-panel space-y-2 rounded-2xl border p-3.5 text-[11px] ${review ? 'border-amber-400/25 text-amber-200' : 'border-emerald-400/25 text-emerald-200'}`}>
+      <p className="flex flex-wrap items-center gap-2 font-bold">
+        <AlertTriangle size={14} />
+        وضعیت اعتبار پاسخ‌ها: {PERSONALITY_VALIDITY_STATUS_LABEL_FA[result.overallStatus]}
+        {reasons.length > 0 && <span className="font-normal">— {reasons.map((r) => REVIEW_REASON_LABEL_FA[r] ?? r).join('، ')}</span>}
+        {reasons.length === 0 && result.straightLiningFlag && <span className="font-normal">— الگوی پاسخ یکنواخت</span>}
+        {reasons.length === 0 && result.missingResponseCount > 0 && (
+          <span className="font-normal">— {result.missingResponseCount.toLocaleString('fa-IR')} سؤال بی‌پاسخ</span>
+        )}
+      </p>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map((c) => (
+            <span
+              key={c.label}
+              title={c.hint}
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${c.warn ? 'border-amber-400/40 bg-amber-500/10 text-amber-100' : 'border-white/10 bg-white/[0.03] text-secondary'}`}
+            >
+              {c.label}: <span className="num font-bold">{c.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-muted">این شاخص‌ها فقط برای بررسی بیشتر در مصاحبه هستند و به‌تنهایی نشانه‌ی عدم صداقت نیستند.</p>
     </div>
   )
 }

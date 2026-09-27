@@ -229,6 +229,9 @@ export interface PersonalityQuestionOption {
   labelFa: string
   dimensionKey?: string
   score?: number
+  /** The facet an option originally pointed at, kept for traceability when it was remapped to a
+   * behavioral dimension (Section 54, N-4). */
+  facetKey?: string
 }
 
 export interface PersonalityQuestionQuality {
@@ -255,6 +258,10 @@ export interface PersonalityQuestion {
   scaleId: string | null
   options: PersonalityQuestionOption[]
   reverseScored: boolean
+  /** Set for response-validity items (e.g. the social-desirability "lie scale"): they measure no
+   * trait/facet/dimension, are never part of any dimension score, and the test generator adds a few
+   * to every test on top of the designed mix (schema.sql Section 54, N-3). */
+  validityScale: PersonalityValidityScale | null
   jobRole: JobRole | null
   complexity: PersonalityComplexity
   weight: number
@@ -362,6 +369,20 @@ export interface PersonalityDimensionScore {
   updatedAt: string
 }
 
+export type PersonalityValidityScale = 'SOCIAL_DESIRABILITY'
+
+export type PersonalityValidityReviewReason = 'STRAIGHT_LINING' | 'MISSING_RESPONSES' | 'RANDOM_PATTERN' | 'CONTRADICTIONS' | 'SOCIAL_DESIRABILITY'
+
+/** How each validity index was computed (personality_validity_results.details). */
+export interface PersonalityValidityDetails {
+  scaleAnswerCount?: number
+  reversePairCount?: number
+  socialDesirabilityItemCount?: number
+  timedAnswerCount?: number
+  fastAnswerCount?: number
+  reviewReasons?: PersonalityValidityReviewReason[]
+}
+
 export interface PersonalityValidityResult {
   id: string
   personalityAssessmentId: string
@@ -374,6 +395,7 @@ export interface PersonalityValidityResult {
   missingResponseCount: number
   contradictionCount: number
   overallStatus: PersonalityValidityStatus
+  details: PersonalityValidityDetails
   computedAt: string
 }
 

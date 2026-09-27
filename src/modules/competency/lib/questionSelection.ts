@@ -1,3 +1,4 @@
+import { shuffle } from '../../../lib/utils'
 import type { CompQuestionBankItem } from '../types'
 
 /**
@@ -77,12 +78,13 @@ export function pickDiverseQuestions(pool: CompQuestionBankItem[], count: number
     list.push(q)
     byTopic.set(key, list)
   }
-  // Within each topic, prefer least-used first (stable ordering), with a random shuffle inside
-  // equal-usage ties so repeated generations don't always draw the exact same question first.
-  for (const list of byTopic.values()) {
-    list.sort((a, b) => a.usageCount - b.usageCount || Math.random() - 0.5)
+  // Within each topic, prefer least-used first, with equal-usage ties in random order so repeated
+  // generations don't always draw the exact same question first (shuffle, then a stable sort —
+  // a Math.random() comparator is inconsistent and biased; L-8).
+  for (const [topic, list] of byTopic) {
+    byTopic.set(topic, shuffle(list).sort((a, b) => a.usageCount - b.usageCount))
   }
-  const topics = [...byTopic.keys()].sort(() => Math.random() - 0.5)
+  const topics = shuffle([...byTopic.keys()])
 
   const picked: CompQuestionBankItem[] = []
   const pickedTexts = [...alreadyPickedTexts]

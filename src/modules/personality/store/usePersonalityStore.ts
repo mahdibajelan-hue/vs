@@ -16,6 +16,7 @@ import {
   personalityProfileLiteFromRow,
   personalityQuestionFromRow,
   personalityQuestionMixToRowPayload,
+  personalityQuestionOptionToRow,
   personalityResponseScaleFromRow,
   personalityRoleAssignmentFromRow,
   personalityTraitFromRow,
@@ -37,6 +38,7 @@ import {
   type PersonalityTraitRow,
   type PersonalityValidityResultRow,
 } from '../lib/personalityData'
+import { selectPersonalityQuestions, type PersonalityCoverageTargets } from '../lib/personalitySelection'
 import type {
   JobRole,
   PersonalityAiAnalysis,
@@ -168,6 +170,10 @@ interface PersonalityStoreState {
     mix: PersonalityQuestionMixCell[],
     discardExisting?: boolean,
   ) => Promise<'ok' | 'responses_exist' | 'error'>
+
+  /** The behavioral dimensions/traits a test for this role must cover: the role's active behavioral
+   * profile requirements plus the personality evidence sources of its competency model. */
+  loadCoverageTargets: (jobRole: JobRole) => Promise<PersonalityCoverageTargets>
 
   fetchDimensionScores: (personalityAssessmentId: string) => Promise<void>
   fetchValidityResult: (personalityAssessmentId: string) => Promise<void>
@@ -312,7 +318,9 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
       question_text: input.questionText,
       scenario_context: input.scenarioContext ?? '',
       scale_id: input.scaleId ?? null,
-      options: input.options ?? [],
+      // Stored snake_case (key/label_fa/dimension_key/score) — the scoring engine and the
+      // trg_personality_questions_validate trigger only understand that shape.
+      options: (input.options ?? []).map(personalityQuestionOptionToRow),
       reverse_scored: input.reverseScored ?? false,
       job_role: input.jobRole ?? null,
       complexity: input.complexity ?? 'L1',
@@ -388,7 +396,8 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
   createAssessment: async (assessmentId, jobRole, frameworkId, jobProfileId) => {
     const { data, error } = await supabase
       .from('personality_assessments')
-      .insert({ assessment_id: assessmentId, job_role: jobRole, framework_id: frameworkId, job_profile_id: jobProfileId, status: 'DRAFT' })
+      // created_by is also forced to the caller server-side (trg_personality_assessments_creator, L-2).
+      .insert({ assessment_id: assessmentId, job_role: jobRole, framework_id: frameworkId, job_profile_id: jobProfileId, status: 'DRAFT', created_by: currentUserId() })
       .select('*')
       .single()
     if (reportError('ایجاد ارزیابی شخصیت', error)) return null
@@ -404,38 +413,11 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
       if (reportError('بارگذاری بانک سؤالات شخصیت', error)) return 'error'
       bank = ((data ?? []) as PersonalityQuestionRow[]).map(personalityQuestionFromRow).filter((q) => q.jobRole == null || q.jobRole === jobRole)
     }
-    // Diversity-aware pick per (type, complexity) cell: shuffles, spreads across dimension/trait so
-    // one construct never dominates a cell, and avoids picking near-duplicate question text.
-    const usedTexts: string[] = []
-    const selected = mix
-      .filter((c) => c.count > 0)
-      .flatMap((cell) => {
-        const pool = bank.filter((q) => q.questionType === cell.questionType && q.complexity === cell.complexity)
-        const shuffled = [...pool].sort(() => Math.random() - 0.5)
-        const picked: PersonalityQuestion[] = []
-        for (const q of shuffled) {
-          if (picked.length >= cell.count) break
-          const words = new Set(q.questionText.split(/\s+/))
-          const tooSimilar = usedTexts.some((t) => {
-            const tw = new Set(t.split(/\s+/))
-            const overlap = [...words].filter((w) => tw.has(w)).length
-            return overlap / Math.max(words.size, tw.size, 1) > 0.7
-          })
-          if (tooSimilar) continue
-          picked.push(q)
-          usedTexts.push(q.questionText)
-        }
-        // If diversity filtering left a cell short, top it up from the remaining pool rather than
-        // silently under-filling the assessment.
-        if (picked.length < cell.count) {
-          for (const q of shuffled) {
-            if (picked.length >= cell.count) break
-            if (!picked.includes(q)) picked.push(q)
-          }
-        }
-        return picked
-      })
-    const ids = selected.map((q) => q.id)
+    // Dimension-aware selection (N-5): every behavioral dimension the job's behavioral profile or its
+    // competency model reads gets a minimum number of items, then a few reverse-keyed pairs for the
+    // consistency index, then the diversity-aware random fill, plus the validity-scale items (N-3).
+    const targets = await get().loadCoverageTargets(jobRole)
+    const { ids } = selectPersonalityQuestions(bank, mix, targets)
     // One atomic server call: validates the ids, refuses silently orphaning existing responses
     // unless discardExisting (then archives + clears them), resets the status to GENERATED and bumps
     // usage_count itself.
@@ -457,6 +439,45 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
       })
     }
     return 'ok'
+  },
+
+  loadCoverageTargets: async (jobRole) => {
+    if (get().dimensions.length === 0 || get().jobProfiles.length === 0) await get().fetchCatalog()
+    const { dimensions, jobProfiles, jobRequirements, traits } = get()
+    const profile = jobProfiles.filter((p) => p.active && p.jobRole === jobRole).sort((a, b) => b.version - a.version)[0]
+    const reqs = profile ? jobRequirements.filter((r) => r.profileId === profile.id) : []
+    const priority = new Map<string, number>()
+    for (const r of reqs) priority.set(r.dimensionId, (r.isCritical ? 1000 : 0) + r.weight)
+
+    // Competency evidence sources for the role — best effort: without them the profile still applies.
+    const sjtKeys = new Set<string>()
+    const traitIds = new Set<string>()
+    const { data: reqRows, error: reqErr } = await supabase.from('comp_job_competency_requirements').select('competency_id').eq('job_role', jobRole)
+    const competencyIds = ((reqRows ?? []) as { competency_id: string }[]).map((r) => r.competency_id)
+    if (!reqErr && competencyIds.length > 0) {
+      const { data: srcRows } = await supabase
+        .from('comp_competency_evidence_sources')
+        .select('source_type, source_ref, weight')
+        .in('competency_id', competencyIds)
+        .in('source_type', ['PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT'])
+      for (const src of (srcRows ?? []) as { source_type: string; source_ref: string; weight: number }[]) {
+        if (src.source_type === 'PERSONALITY_TRAIT') {
+          const trait = traits.find((t) => t.key === src.source_ref)
+          if (trait) traitIds.add(trait.id)
+          continue
+        }
+        const dim = dimensions.find((d) => d.key === src.source_ref)
+        if (!dim) continue
+        if (src.source_type === 'SJT') sjtKeys.add(dim.key)
+        else priority.set(dim.id, Math.max(priority.get(dim.id) ?? 0, 0) + Number(src.weight ?? 1))
+      }
+    }
+    const ordered = [...priority.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => dimensions.find((d) => d.id === id))
+    return {
+      dimensions: ordered.filter((d): d is PersonalityBehavioralDimension => d != null).map((d) => ({ id: d.id, key: d.key })),
+      sjtDimensionKeys: [...sjtKeys],
+      traitIds: [...traitIds],
+    }
   },
 
   fetchDimensionScores: async (personalityAssessmentId) => {

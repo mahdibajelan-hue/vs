@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Wand2, X } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
+import { MIN_ITEMS_PER_DIMENSION, VALIDITY_ITEMS_PER_TEST } from '../lib/personalitySelection'
 import {
   PERSONALITY_COMPLEXITY_LABEL_FA,
   PERSONALITY_QUESTION_TYPE_LABEL_FA,
@@ -94,7 +95,8 @@ export function PersonalityDesignerModal({
   }, [initialTemplate, appliedTemplateId])
 
   const approvedBank = useMemo(
-    () => questionBank.filter((q) => q.active && q.approvalStatus === 'APPROVED' && (q.jobRole == null || q.jobRole === jobRole)),
+    // Validity-scale items are added by the generator on top of the mix — never counted as supply.
+    () => questionBank.filter((q) => q.active && q.approvalStatus === 'APPROVED' && q.validityScale == null && (q.jobRole == null || q.jobRole === jobRole)),
     [questionBank, jobRole],
   )
 
@@ -197,6 +199,11 @@ export function PersonalityDesignerModal({
             </table>
           </div>
           <p className="num mt-2 text-left text-xs font-bold text-secondary">مجموع سؤالات: {grandTotal.toLocaleString('fa-IR')}</p>
+          <p className="mt-1 text-[10.5px] leading-6 text-muted">
+            انتخاب سؤال‌ها بُعدمحور است: برای هر بُعد رفتاری که نیم‌رخ شغلی یا مدل شایستگی این شغل به آن نیاز دارد حداقل {MIN_ITEMS_PER_DIMENSION.toLocaleString('fa-IR')} گویه
+            (در صورت وجود در بانک) و چند جفت گویه‌ی معکوس برای سنجش سازگاری انتخاب می‌شود. علاوه بر این مجموع، {VALIDITY_ITEMS_PER_TEST.toLocaleString('fa-IR')} گویه‌ی
+            مقیاس اعتبار (مطلوبیت اجتماعی) به آزمون اضافه می‌شود که در امتیاز هیچ بُعدی حساب نمی‌شود.
+          </p>
 
           {shortfalls.length > 0 && (
             <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-200">

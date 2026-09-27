@@ -633,6 +633,7 @@ function PersonalityQuestionBank({ isModuleAdmin, onNavSettings }: { isModuleAdm
   const dimensionById = useMemo(() => new Map(dimensions.map((d) => [d.id, d])), [dimensions])
 
   const constructLabel = (q: PersonalityQuestion) => {
+    if (q.validityScale === 'SOCIAL_DESIRABILITY') return 'مقیاس اعتبار — مطلوبیت اجتماعی (در امتیاز ابعاد حساب نمی‌شود)'
     const parts: string[] = []
     if (q.traitId) parts.push(traitById.get(q.traitId)?.labelFa ?? 'ویژگی نامشخص')
     if (q.facetId) parts.push(facetById.get(q.facetId)?.labelFa ?? 'زیرمؤلفه نامشخص')
@@ -808,6 +809,9 @@ function PersonalityApprovalBadge({ status }: { status: PersonalityApprovalStatu
 }
 
 function PersonalityOptionsEditor({ options, onChange }: { options: PersonalityQuestionOption[]; onChange: (next: PersonalityQuestionOption[]) => void }) {
+  // Only real behavioral dimensions may be picked (trg_personality_questions_validate rejects any
+  // other key — a facet key here used to be silently ignored by scoring; N-4).
+  const dimensions = usePersonalityStore((s) => s.dimensions)
   return (
     <div className="space-y-2">
       {options.map((opt, i) => (
@@ -818,12 +822,21 @@ function PersonalityOptionsEditor({ options, onChange }: { options: PersonalityQ
             placeholder="متن گزینه"
             className="input min-w-[10rem] flex-1"
           />
-          <input
+          <select
             value={opt.dimensionKey ?? ''}
             onChange={(e) => onChange(options.map((o, j) => (j === i ? { ...o, dimensionKey: e.target.value || undefined } : o)))}
-            placeholder="کلید بعد رفتاری (اختیاری)"
-            className="input w-40"
-          />
+            className="input w-44"
+          >
+            <option value="">بدون بُعد رفتاری</option>
+            {opt.dimensionKey && !dimensions.some((d) => d.key === opt.dimensionKey) && (
+              <option value={opt.dimensionKey}>{opt.dimensionKey} (نامعتبر)</option>
+            )}
+            {dimensions.map((d) => (
+              <option key={d.id} value={d.key}>
+                {d.labelFa}
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             min={0}
@@ -892,7 +905,10 @@ function PersonalityQuestionEditorModal({
 
   const facetsForTrait = facets.filter((f) => f.traitId === form.traitId)
   const needsOptions = OPTION_BASED_TYPES.includes(form.questionType)
-  const canSubmit = form.questionText.trim().length > 5 && (form.traitId || form.dimensionId)
+  // A validity-scale item (e.g. social desirability) measures no trait/dimension by design.
+  const isValidityItem = initial?.validityScale != null
+  const canSubmit =
+    form.questionText.trim().length > 5 && (isValidityItem ? !form.traitId && !form.dimensionId && !form.facetId : form.traitId || form.dimensionId)
 
   const submit = async () => {
     if (!canSubmit) return
@@ -911,6 +927,11 @@ function PersonalityQuestionEditorModal({
               <X size={16} />
             </button>
           </div>
+          {isValidityItem && (
+            <p className="mb-3 rounded-lg border border-sky-400/25 bg-sky-500/10 p-2 text-[10.5px] leading-6 text-sky-200">
+              این گویه‌ی مقیاس اعتبار (مطلوبیت اجتماعی) است: ویژگی، زیرمؤلفه یا بُعد رفتاری نمی‌گیرد و در امتیاز هیچ بُعدی حساب نمی‌شود.
+            </p>
+          )}
           {!isModuleAdmin && !initial && (
             <p className="mb-3 text-[10.5px] text-muted">سؤال پیشنهادی شما پس از بررسی و تأیید ادمین ماژول، وارد بانک سؤالات فعال می‌شود.</p>
           )}

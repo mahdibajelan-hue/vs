@@ -38,7 +38,7 @@ begin
   end if;
 
   select array_agg(id) into v_likert_ids from (
-    select id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' limit 8
+    select id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and validity_scale is null limit 8
   ) x;
   select id into v_fc_id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'FORCED_CHOICE' limit 1;
   select id into v_sjt_id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'SJT' limit 1;
@@ -180,7 +180,7 @@ begin
     and not rasta_has_permission(p.id, 'personality', 'configure')
   order by p.created_at limit 1;
   select array_agg(id) into v_ids from (
-    select id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and job_role is null order by id limit 8
+    select id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and job_role is null and validity_scale is null order by id limit 8
   ) x;
   select id into v_foreign from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and id <> all(v_ids) order by id limit 1;
   if v_admin is null or v_out is null or coalesce(array_length(v_ids, 1), 0) < 8 or v_foreign is null then
@@ -335,5 +335,122 @@ exception when others then
   ) or entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_p53__');
   delete from personality_assessments where assessment_id in (select id from comp_assessments where candidate_name = '__smoke_test_p53__');
   delete from comp_assessments where candidate_name = '__smoke_test_p53__';
+  raise;
+end $$;
+
+-- ============================================================================
+-- Section 54 regressions (docs/demo-test-report.md N-3, N-4, L-2) — independent block, own rows,
+-- cleaned up (audit rows included) on success AND failure:
+--   N-4  no option points at a non-dimension key, and the validation trigger rejects one.
+--   N-3  validity-scale items exist and measure nothing; answering "strongly agree" to every item
+--        (forward, reverse and lie-scale alike) yields contradictions, a high social-desirability
+--        score and REVIEW_REQUIRED; consistent, unhurried answers yield consistency 1 and ACCEPTABLE;
+--        validity items never produce a dimension score.
+--   L-2  created_by is forced to the inserting user.
+-- ============================================================================
+do $$
+declare
+  v_admin uuid;
+  v_comp uuid;
+  v_pa uuid;
+  v_tok uuid;
+  v_creator uuid;
+  v_pairs uuid[];
+  v_sd uuid[];
+  v_q uuid;
+  v_v personality_validity_results%rowtype;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  select array_agg(q.id) into v_pairs
+  from personality_questions q
+  where q.question_type = 'LIKERT' and q.active and q.approval_status = 'APPROVED' and q.validity_scale is null
+    and q.facet_id in (
+      select facet_id from personality_questions where question_type = 'LIKERT' and active and approval_status = 'APPROVED' and facet_id is not null
+      group by facet_id having bool_or(reverse_scored) and bool_or(not reverse_scored)
+    );
+  select array_agg(id) into v_sd from (
+    select id from personality_questions where validity_scale = 'SOCIAL_DESIRABILITY' and active and approval_status = 'APPROVED' order by id limit 4
+  ) x;
+  if v_admin is null or coalesce(array_length(v_pairs, 1), 0) < 6 or coalesce(array_length(v_sd, 1), 0) < 4 then
+    raise exception 'section 54 smoke precondition failed: need an admin, >= 3 reverse-keyed facet pairs and >= 4 social-desirability items';
+  end if;
+
+  -- ---- N-4 ----
+  if exists (
+    select 1 from personality_questions q cross join lateral jsonb_array_elements(q.options) o
+    where coalesce(o ->> 'dimension_key', '') <> ''
+      and not exists (select 1 from personality_behavioral_dimensions d where d.key = o ->> 'dimension_key')
+  ) then
+    raise exception 'ASSERTION FAILED (N-4): an option still points at a key that is not a behavioral dimension';
+  end if;
+  begin
+    update personality_questions set options = options || '[{"key":"Z","label_fa":"x","dimension_key":"COMPOSURE"}]'::jsonb
+    where id = (select id from personality_questions where question_type = 'FORCED_CHOICE' order by id limit 1);
+    raise exception 'ASSERTION FAILED (N-4): a facet key was accepted as an option dimension_key';
+  exception when others then
+    if sqlerrm not like 'invalid_dimension_key%' then raise; end if;
+  end;
+  if exists (select 1 from personality_questions where validity_scale is not null and (trait_id is not null or facet_id is not null or dimension_id is not null)) then
+    raise exception 'ASSERTION FAILED (N-3): a validity-scale item is tied to a trait/facet/dimension';
+  end if;
+
+  -- ---- L-2 ----
+  insert into comp_assessments (job_role, candidate_name, candidate_position, created_by)
+  values ('project_manager', '__smoke_test_p54__', 'test', v_admin)
+  returning id into v_comp;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  insert into personality_assessments (assessment_id, job_role, created_by, selected_question_ids, status)
+  values (v_comp, 'project_manager', null, to_jsonb(v_pairs || v_sd), 'GENERATED')
+  returning id, candidate_token, created_by into v_pa, v_tok, v_creator;
+  perform set_config('request.jwt.claims', '', true);
+  if v_creator is distinct from v_admin then
+    raise exception 'ASSERTION FAILED (L-2): created_by must be the inserting user, got %', v_creator;
+  end if;
+
+  -- ---- N-3: agree with everything ----
+  perform personality_candidate_start(v_tok);
+  foreach v_q in array v_pairs || v_sd loop
+    perform personality_candidate_submit_response(v_tok, v_q, '{"selected": 7}', 3000);
+  end loop;
+  perform personality_candidate_finalize(v_tok);
+  select * into v_v from personality_validity_results where personality_assessment_id = v_pa;
+  if v_v.overall_status <> 'REVIEW_REQUIRED' or v_v.contradiction_count < 2 or v_v.social_desirability_score < 80
+     or v_v.consistency_score is null or v_v.consistency_score > 0.25 or v_v.extreme_response_rate <> 1
+     or not (v_v.details -> 'reviewReasons') ? 'CONTRADICTIONS' or not (v_v.details -> 'reviewReasons') ? 'SOCIAL_DESIRABILITY' then
+    raise exception 'ASSERTION FAILED (N-3): all-agree answers must be flagged, got %', to_jsonb(v_v);
+  end if;
+
+  -- ---- N-3: consistent, unhurried, modest answers ----
+  update personality_responses pr
+  set response_value = jsonb_build_object('selected', case when q.validity_scale is not null then 2 when q.reverse_scored then 2 else 6 end)
+  from personality_questions q
+  where q.id = pr.question_id and pr.personality_assessment_id = v_pa;
+  perform personality_score_assessment_core(v_pa);
+  select * into v_v from personality_validity_results where personality_assessment_id = v_pa;
+  if v_v.overall_status <> 'ACCEPTABLE' or v_v.consistency_score <> 1 or v_v.contradiction_count <> 0 or v_v.random_pattern_flag
+     or v_v.social_desirability_score >= 80 then
+    raise exception 'ASSERTION FAILED (N-3): consistent answers must be acceptable, got %', to_jsonb(v_v);
+  end if;
+  if (select coalesce(sum(coverage_count), 0) from personality_dimension_scores where personality_assessment_id = v_pa and score_kind = 'TRAIT')
+     <> (select count(*) from personality_questions where id = any(v_pairs) and trait_id is not null) then
+    raise exception 'ASSERTION FAILED (N-3): validity items leaked into a dimension score';
+  end if;
+
+  raise notice 'personality_engine_smoke_test (section 54): ALL ASSERTIONS PASSED';
+
+  delete from comp_audit_log where entity_id in (v_pa, v_comp);
+  delete from personality_dimension_scores where personality_assessment_id = v_pa;
+  delete from personality_validity_results where personality_assessment_id = v_pa;
+  delete from personality_responses where personality_assessment_id = v_pa;
+  delete from personality_assessments where id = v_pa;
+  delete from comp_assessments where id = v_comp;
+
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_audit_log where entity_id in (
+    select pa.id from personality_assessments pa join comp_assessments a on a.id = pa.assessment_id where a.candidate_name = '__smoke_test_p54__'
+  ) or entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_p54__');
+  delete from personality_assessments where assessment_id in (select id from comp_assessments where candidate_name = '__smoke_test_p54__');
+  delete from comp_assessments where candidate_name = '__smoke_test_p54__';
   raise;
 end $$;
