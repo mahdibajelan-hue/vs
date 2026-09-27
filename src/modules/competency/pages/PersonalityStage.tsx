@@ -29,7 +29,9 @@ export function PersonalityStage({ assessment, onContinue, onGoToExamDesign }: P
   const fetchPersonalityAssessments = usePersonalityStore((s) => s.fetchAssessments)
 
   useEffect(() => {
-    if (personalityAssessments.length === 0) fetchPersonalityAssessments()
+    // Always refetch: the store is shared across candidates, so a cached list from an earlier visit
+    // can predate this candidate's personality assessment (created later, or by the candidate link).
+    fetchPersonalityAssessments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

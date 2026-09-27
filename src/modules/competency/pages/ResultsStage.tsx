@@ -177,7 +177,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
-    if (personalityAssessments.length === 0) fetchPersonalityAssessments()
+    // Always refetch: the store is shared across candidates, so a cached list from an earlier visit
+    // can predate this candidate's personality assessment (created later, or by the candidate link).
+    fetchPersonalityAssessments()
     if (candidateAiAnalysis === undefined) fetchCandidateAiAnalysis(assessment.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

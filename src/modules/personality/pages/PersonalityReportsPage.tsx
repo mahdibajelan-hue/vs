@@ -83,7 +83,7 @@ export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuest
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
 
   useEffect(() => {
-    if (assessments.length === 0) fetchAssessments()
+    fetchAssessments()
     if (traits.length === 0) fetchCatalog()
     fetchAllScoresForReports()
     // eslint-disable-next-line react-hooks/exhaustive-deps
