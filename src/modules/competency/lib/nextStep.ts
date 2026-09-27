@@ -39,7 +39,7 @@ export function computeNextStep(a: CompetencyAssessment, ctx: NextStepContext): 
   const prefix = a.reopenedAt ? 'بازگشایی‌شده — ' : ''
   const step = (label: string, tone: NextStep['tone'], mine: boolean): NextStep => ({ label: prefix + label, tone, mine })
 
-  if (a.selfServiceStatus === 'submitted') return step('بررسی خوداظهاری', 'action', isLead)
+  if (a.selfServiceStatus === 'submitted') return step('تأیید فرم خوداظهاری', 'action', isLead)
   if (a.needsTechnicalAssessment && a.selectedQuestionIds.length === 0) return step('طراحی آزمون فنی', 'action', canDesign)
   // A missing personality test only means "not designed yet" for viewers who could see it (RLS).
   if (
