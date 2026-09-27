@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeft, Camera, CheckCircle2, Copy, FileText, Link2, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { COMP_DOC_ACCEPT, getCompDocSignedUrl } from '../lib/compStorage'
+import { COMP_DOC_ACCEPT } from '../lib/compStorage'
+import { CandidatePhoto } from '../components/CandidatePhoto'
 import { DocumentsGallery } from '../components/DocumentsGallery'
 import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
 import type { CompetencyAssessment } from '../types'
@@ -106,7 +107,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           <Camera size={14} className="text-purple-300" /> عکس پرسنلی
         </p>
         <div className="flex items-center gap-3">
-          <PhotoPreview path={assessment.photoUrl} />
+          <CandidatePhoto path={assessment.photoUrl} size={56} />
           {canSetPhoto ? (
           <button
             type="button"
@@ -185,22 +186,6 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           </button>
         </div>
       )}
-    </div>
-  )
-}
-
-function PhotoPreview({ path }: { path: string }) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    let active = true
-    if (path) getCompDocSignedUrl(path).then((u) => active && setUrl(u))
-    return () => {
-      active = false
-    }
-  }, [path])
-  return (
-    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5">
-      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Camera size={18} className="text-muted" />}
     </div>
   )
 }

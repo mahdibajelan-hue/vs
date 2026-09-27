@@ -8,6 +8,7 @@ import { jobRoleLabel } from '../lib/competencyData'
 import type { QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
 import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
+import { CandidatePhoto } from '../components/CandidatePhoto'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
@@ -291,6 +292,8 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
 
   const headerRight = (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-secondary">
+      {/* The candidate's photo on every wizard stage, for every judge — not only on the lead-only results page. */}
+      <CandidatePhoto path={assessment.photoUrl} size={26} />
       <AssessmentChainNav assessment={assessment} onOpen={(id) => openAssessment(id, 'profile')} />
       <User size={13} className="text-purple-300" />
       <span className="font-bold text-primary">{myName ?? '—'}</span>
@@ -345,11 +348,17 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           />
         ) : (
           <div className="glass-panel space-y-3 rounded-2xl p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
-              <button onClick={() => setEditingProfile(true)} className="flex items-center gap-1 text-xs text-purple-300 hover:text-purple-200">
-                <Pencil size={12} /> ویرایش
-              </button>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <CandidatePhoto path={assessment.photoUrl} size={64} />
+                <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
+              </div>
+              {/* Only the lead can save the profile (comp_assessments update = comp_is_lead). */}
+              {isLead && (
+                <button onClick={() => setEditingProfile(true)} className="flex items-center gap-1 text-xs text-purple-300 hover:text-purple-200">
+                  <Pencil size={12} /> ویرایش
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
               <InfoRow label="نام و نام خانوادگی" value={assessment.candidateName} />
