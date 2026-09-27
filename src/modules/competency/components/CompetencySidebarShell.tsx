@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
+import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import type { EvaluationStage } from '../lib/evaluationStages'
 
 export type CompetencySection =
@@ -128,7 +129,13 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
 
         <StorageErrorBanner />
 
-        <div className="space-y-4 p-4 sm:p-5">{children}</div>
+        <div className="space-y-4 p-4 sm:p-5">
+          {/* A crash in one page's content stays inside this box (sidebar still works) instead of
+              blanking the whole app; keyed so navigating to another page/candidate resets it. */}
+          <ErrorBoundary key={`${active}:${title}`} area={title}>
+            {children}
+          </ErrorBoundary>
+        </div>
       </div>
     </div>
   )

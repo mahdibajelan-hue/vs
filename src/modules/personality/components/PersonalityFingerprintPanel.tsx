@@ -45,7 +45,14 @@ function SectionHeading({ icon: Icon, children }: { icon: typeof Fingerprint; ch
  */
 export function PersonalityFingerprintPanel({ personalityAssessmentId, candidateName, candidatePosition, onContinue, showPrintButton = true }: PersonalityFingerprintPanelProps) {
   const assessment = usePersonalityStore((s) => s.assessments.find((a) => a.id === personalityAssessmentId))
-  const dimensionScores = usePersonalityStore((s) => s.dimensionScores.filter((d) => d.personalityAssessmentId === personalityAssessmentId))
+  // Select the stable store array and filter in a memo: a selector that returns a fresh array on
+  // every call (`s.dimensionScores.filter(...)`) makes zustand 5's useSyncExternalStore see a new
+  // snapshot each render → infinite re-render → React unmounts the whole app (black screen).
+  const allDimensionScores = usePersonalityStore((s) => s.dimensionScores)
+  const dimensionScores = useMemo(
+    () => allDimensionScores.filter((d) => d.personalityAssessmentId === personalityAssessmentId),
+    [allDimensionScores, personalityAssessmentId],
+  )
   const validityResult = usePersonalityStore((s) => s.validityResults.find((v) => v.personalityAssessmentId === personalityAssessmentId))
   const fetchDimensionScores = usePersonalityStore((s) => s.fetchDimensionScores)
   const fetchValidityResult = usePersonalityStore((s) => s.fetchValidityResult)
