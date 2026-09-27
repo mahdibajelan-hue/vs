@@ -10,6 +10,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { PLAN_STATUS_META } from '../lib/developmentPlan'
 import { computeNextStep, type NextStep } from '../lib/nextStep'
+import { DemoBadge, DemoDataToggle } from '../components/DemoDataToggle'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
@@ -26,7 +27,10 @@ interface CompetencyDashboardPageProps {
  * leads each specialty) plus the full candidate grid to open one. Replaces the old plain list page:
  * item 9 of the redesign asked for exactly this comparison view instead of a bare list. */
 export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: CompetencyDashboardPageProps) {
-  const assessments = useCompetencyStore((s) => s.assessments)
+  const allAssessments = useCompetencyStore((s) => s.assessments)
+  // N-15: demo/test candidates stay out of every number on this page unless the viewer opts in.
+  const showDemoData = useCompetencyStore((s) => s.showDemoData)
+  const assessments = useMemo(() => (showDemoData ? allAssessments : allAssessments.filter((a) => !a.isDemo)), [allAssessments, showDemoData])
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
   // The dashboard only ever needs a question's category/weight to bucket an already-recorded score
   // into a domain — never the evaluator-only reference-answer material — so it reads the safe
@@ -202,6 +206,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-bold">همه متقاضیان</p>
+          <div className="flex flex-wrap items-center gap-2">
+          <DemoDataToggle />
           <button
             onClick={() => setMineOnly((v) => !v)}
             className={`rounded-full px-3 py-1 text-[10.5px] font-bold transition-colors ${
@@ -210,6 +216,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
           >
             نیازمند اقدام من ({mineCount.toLocaleString('fa-IR')})
           </button>
+          </div>
         </div>
 
         {usedRoles.length > 1 && (
@@ -360,6 +367,7 @@ function CandidateCard({
         <div className="min-w-0 w-full">
           <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
           <p className="truncate text-[10px] text-muted">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+          {a.isDemo && <DemoBadge />}
         </div>
         <div className="mt-0.5 flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: tier }}>

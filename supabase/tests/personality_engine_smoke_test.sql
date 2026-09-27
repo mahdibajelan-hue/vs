@@ -132,6 +132,10 @@ begin
   delete from personality_responses where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_assessments where id in (v_pa_varied, v_pa_uniform);
   delete from comp_assessments where candidate_name in ('__smoke_test_varied__', '__smoke_test_uniform__');
+  -- L-7: the test must leave no audit trail behind (e.g. PERSONALITY_ASSESSMENT_SCORED).
+  if exists (select 1 from comp_audit_log where entity_id in (v_pa_varied, v_pa_uniform)) then
+    raise exception 'ASSERTION FAILED (L-7): smoke-test audit rows were left behind';
+  end if;
 
 exception when others then
   -- Clean up test rows even on assertion failure, then re-raise so the caller still sees the failure.
@@ -444,6 +448,9 @@ begin
   delete from personality_responses where personality_assessment_id = v_pa;
   delete from personality_assessments where id = v_pa;
   delete from comp_assessments where id = v_comp;
+  if exists (select 1 from comp_audit_log where entity_id in (v_pa, v_comp)) then
+    raise exception 'ASSERTION FAILED (L-7): smoke-test audit rows were left behind';
+  end if;
 
 exception when others then
   perform set_config('role', 'postgres', true);

@@ -250,9 +250,11 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   // the comparison bar chart, and the rank card. Each peer's own domain scores are computed with the
   // exact same official (panel-averaged) resolution used above, over its own answers (and, for
   // role-based assessments, its own selected questions) — never guessed or interpolated.
+  // N-15: demo/test candidates are not peers of real ones unless the viewer opts in.
+  const showDemoData = useCompetencyStore((s) => s.showDemoData)
   const peers = useMemo(() => {
     return allAssessments
-      .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole)
+      .filter((a) => a.id !== assessment.id && a.jobRole === assessment.jobRole && (showDemoData || !a.isDemo))
       .map((a) => {
         const aIsPM = usesLegacyPmRubric(a)
         const aRoleQuestions = aIsPM ? [] : questionsForAssessment(a, questionBank)
@@ -266,7 +268,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
       .filter((p) => p.overall != null)
       .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
       // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank])
+  }, [allAssessments, allPanelistScores, assessment.id, assessment.jobRole, questionBank, showDemoData])
 
   const benchmarkScores: DomainScore[] | undefined =
     peers.length > 0

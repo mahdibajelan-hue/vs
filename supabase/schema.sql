@@ -11462,3 +11462,92 @@ $$ language plpgsql security definer set search_path = public;
 
 revoke execute on function comp_create_reassessment(uuid) from public, anon;
 grant execute on function comp_create_reassessment(uuid) to authenticated;
+
+-- ---------------------------------------------------------------- Group 5 — demo data flag (N-15)
+-- comp_assessments.is_demo marks demo/test candidates (supabase/seed/demo_candidates.sql). The UI
+-- leaves them out of the dashboard stats, the "top per role" list, peer rank/averages and both
+-- report pages unless the viewer turns on «نمایش داده‌های آزمایشی». A reassessment inherits the
+-- flag from the assessment it follows; only a module admin (or a server-side/maintenance session)
+-- may set or clear it otherwise. Existing rows: every assessment recorded in
+-- comp_demo_seed_registry plus reassessments chained from them that carry the «[آزمایشی] »
+-- prefix (the same rule as demo_candidates_cleanup.sql) — one DEMO_FLAG_SET audit row per row.
+
+alter table comp_assessments add column if not exists is_demo boolean not null default false;
+create index if not exists idx_comp_assessments_is_demo on comp_assessments (is_demo) where is_demo;
+
+-- SECURITY INVOKER on purpose: current_user must be the API role for the guard below.
+create or replace function comp_assessments_demo_flag()
+returns trigger as $$
+declare
+  v_prev boolean;
+begin
+  if tg_op = 'INSERT' and new.previous_assessment_id is not null then
+    select is_demo into v_prev from comp_assessments where id = new.previous_assessment_id;
+    new.is_demo := coalesce(v_prev, false);
+    return new;
+  end if;
+  if (tg_op = 'INSERT' and new.is_demo) or (tg_op = 'UPDATE' and new.is_demo is distinct from old.is_demo) then
+    if current_user not in ('postgres', 'supabase_admin', 'service_role') and not comp_is_module_admin() then
+      raise exception 'forbidden: only a module admin can change the demo-data flag';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+revoke execute on function comp_assessments_demo_flag() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_assessments_demo_flag on comp_assessments;
+create trigger trg_comp_assessments_demo_flag before insert or update on comp_assessments
+  for each row execute function comp_assessments_demo_flag();
+
+do $$
+declare
+  v_id uuid;
+begin
+  if to_regclass('public.comp_demo_seed_registry') is null then
+    return;
+  end if;
+  for v_id in
+    with recursive chain as (
+      select a.id from comp_assessments a
+      join comp_demo_seed_registry r on r.entity = 'comp_assessments' and r.id = a.id
+      where a.candidate_name like '[آزمایشی] %'
+      union
+      select a.id from comp_assessments a join chain c on a.previous_assessment_id = c.id
+      where a.candidate_name like '[آزمایشی] %'
+    )
+    select a.id from comp_assessments a join chain c on c.id = a.id where not a.is_demo
+  loop
+    update comp_assessments set is_demo = true where id = v_id;
+    perform comp_log_audit('DEMO_FLAG_SET', 'comp_assessments', v_id, jsonb_build_object('isDemo', false),
+      jsonb_build_object('isDemo', true, 'reason', 'N-15: demo seed row (comp_demo_seed_registry / demo chain)'));
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------- L-7: stale smoke-test audit rows
+-- Development/smoke-test runs of the personality engine (2026-09-23/24, before the smoke test
+-- cleaned its own audit rows) left PERSONALITY_ASSESSMENT_SCORED entries behind. Only rows that are
+-- provably from such throwaway runs are removed: the personality assessment they name no longer
+-- exists, no actor was recorded (server-side scoring), and NO other audit row mentions that entity
+-- (a real, later-deleted test would at least have its generation/AI rows). The removed rows are
+-- archived in one AUDIT_SMOKE_ROWS_PURGED entry. Idempotent.
+do $$
+declare
+  v_rows jsonb;
+begin
+  select jsonb_agg(to_jsonb(l) order by l.created_at) into v_rows
+  from comp_audit_log l
+  where l.action = 'PERSONALITY_ASSESSMENT_SCORED'
+    and l.actor is null
+    and not exists (select 1 from personality_assessments pa where pa.id = l.entity_id)
+    and not exists (select 1 from comp_assessments a where a.id = l.entity_id)
+    and not exists (select 1 from comp_audit_log o where o.entity_id = l.entity_id and o.id <> l.id and o.action <> 'PERSONALITY_ASSESSMENT_SCORED');
+  if v_rows is null then
+    return;
+  end if;
+  delete from comp_audit_log l
+  where l.id in (select (r ->> 'id')::uuid from jsonb_array_elements(v_rows) r);
+  perform comp_log_audit('AUDIT_SMOKE_ROWS_PURGED', 'comp_audit_log', null, jsonb_build_object('rows', v_rows),
+    jsonb_build_object('count', jsonb_array_length(v_rows), 'reason', 'L-7: PERSONALITY_ASSESSMENT_SCORED rows left by smoke/dev test runs (entity no longer exists)'));
+end $$;

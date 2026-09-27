@@ -114,6 +114,15 @@ function reportError(action: string, error: { message: string } | null): boolean
   return true
 }
 
+const SHOW_DEMO_KEY = 'comp.showDemoData'
+function readShowDemoData(): boolean {
+  try {
+    return localStorage.getItem(SHOW_DEMO_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 function currentUserId(): string | null {
   return useAuthStore.getState().profile?.id ?? null
 }
@@ -616,6 +625,10 @@ interface CompetencyState {
   reopenAssessment: (assessmentId: string) => Promise<void>
   /** A lead (not module admin) asks a module admin to reopen a completed assessment (N-10). */
   requestReopen: (assessmentId: string, reason: string) => Promise<boolean>
+  /** N-15: whether demo/test candidates are included in stats, peer rank/averages and reports
+   * (per viewer, remembered in this browser; off by default). */
+  showDemoData: boolean
+  setShowDemoData: (show: boolean) => void
 
   /** Gemini AI Analysis (spec section 18-27) — keyed by assessment id, holding the latest generated
    * analysis (if any) for whichever assessments have been fetched. */
@@ -780,6 +793,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reopenRequestedBy: null,
       reopenRequestReason: null,
       isApproved: false,
+      isDemo: false,
       strengths: '',
       developmentAreas: '',
       durationMinutes: null,
@@ -1892,6 +1906,16 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     // fetchAll() re-pulls both comp_assessments and comp_panelist_scores in one go, so the
     // now-cleared status and submitted_at flags show up everywhere without a second round trip.
     await get().fetchAll()
+  },
+
+  showDemoData: readShowDemoData(),
+  setShowDemoData: (show) => {
+    try {
+      localStorage.setItem(SHOW_DEMO_KEY, show ? '1' : '0')
+    } catch {
+      // storage unavailable (private window etc.) — the toggle still works for this session
+    }
+    set({ showDemoData: show })
   },
 
   requestReopen: async (assessmentId, reason) => {

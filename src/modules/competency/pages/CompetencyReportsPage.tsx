@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileBarChart2, Printer } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
+import { DemoDataToggle } from '../components/DemoDataToggle'
 import { computeDomainScores, computeOverallPercent } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { formatJalali } from '../../../lib/jalali'
@@ -18,7 +19,10 @@ const STATUS_LABEL_FA: Record<string, string> = { draft: 'در حال انجام
 /** A printable roster of candidates grouped by job role, with full contact details — for HR/team
  * leads who need a hand-off list rather than the interactive dashboard. */
 export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPageProps) {
-  const assessments = useCompetencyStore((s) => s.assessments)
+  const allAssessments = useCompetencyStore((s) => s.assessments)
+  const showDemoData = useCompetencyStore((s) => s.showDemoData)
+  // N-15: demo/test candidates are left out of the roster unless the viewer opts in.
+  const assessments = useMemo(() => (showDemoData ? allAssessments : allAssessments.filter((a) => !a.isDemo)), [allAssessments, showDemoData])
   // Category/weight-only classification for scoring, not the evaluator-only reference-answer
   // material — see the same note in CompetencyDashboardPage.tsx.
   const questionBank = useCompetencyStore((s) => s.questionBankPublic)
@@ -110,6 +114,7 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
             ))}
           </select>
           <span className="num text-[11px] text-muted">{rows.length.toLocaleString('fa-IR')} متقاضی</span>
+          <DemoDataToggle className="mr-auto" />
         </div>
 
         <div className="overflow-x-auto">

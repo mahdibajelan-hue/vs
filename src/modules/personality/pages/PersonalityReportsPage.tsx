@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { AlertTriangle, BarChart3, BrainCircuit, ClipboardList, FileBarChart2, Home, ShieldAlert, Users } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
+import { DemoDataToggle } from '../../competency/components/DemoDataToggle'
 import { jobRoleLabel, sortedJobRoles } from '../../competency/lib/competencyData'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
@@ -72,10 +73,25 @@ function Bar({ label, value, count, color }: { label: string; value: number | nu
  * admin-gated there).
  */
 export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuestionBank, onNavSettings }: PersonalityReportsPageProps) {
-  const assessments = usePersonalityStore((s) => s.assessments)
+  const allAssessments = usePersonalityStore((s) => s.assessments)
   const fetchAssessments = usePersonalityStore((s) => s.fetchAssessments)
-  const dimensionScores = usePersonalityStore((s) => s.dimensionScores)
-  const validityResults = usePersonalityStore((s) => s.validityResults)
+  const allDimensionScores = usePersonalityStore((s) => s.dimensionScores)
+  const allValidityResults = usePersonalityStore((s) => s.validityResults)
+  // N-15: personality tests of demo/test candidates (comp_assessments.is_demo) are left out of
+  // every aggregate here unless the viewer opts in.
+  const showDemoData = useCompetencyStore((s) => s.showDemoData)
+  const compAssessments = useCompetencyStore((s) => s.assessments)
+  const { assessments, dimensionScores, validityResults } = useMemo(() => {
+    if (showDemoData) return { assessments: allAssessments, dimensionScores: allDimensionScores, validityResults: allValidityResults }
+    const demoCompIds = new Set(compAssessments.filter((a) => a.isDemo).map((a) => a.id))
+    const visible = allAssessments.filter((a) => !a.assessmentId || !demoCompIds.has(a.assessmentId))
+    const ids = new Set(visible.map((a) => a.id))
+    return {
+      assessments: visible,
+      dimensionScores: allDimensionScores.filter((d) => ids.has(d.personalityAssessmentId)),
+      validityResults: allValidityResults.filter((v) => ids.has(v.personalityAssessmentId)),
+    }
+  }, [showDemoData, allAssessments, allDimensionScores, allValidityResults, compAssessments])
   const fetchAllScoresForReports = usePersonalityStore((s) => s.fetchAllScoresForReports)
   const traits = usePersonalityStore((s) => s.traits)
   const dimensions = usePersonalityStore((s) => s.dimensions)
@@ -201,6 +217,9 @@ export function PersonalityReportsPage({ onExitToHub, onNavDashboard, onNavQuest
       <StorageErrorBanner />
 
       <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
+        <div className="flex justify-end">
+          <DemoDataToggle />
+        </div>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <div className="glass-panel rounded-2xl p-3.5">
             <p className="flex items-center gap-1.5 text-[10.5px] text-muted">

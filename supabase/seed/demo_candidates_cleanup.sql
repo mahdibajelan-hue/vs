@@ -4,7 +4,8 @@
 -- What is removed (only ids recorded in public.comp_demo_seed_registry, plus anything that hangs
 -- off them):
 --   * the demo comp_assessments (+ any reassessment later created FROM a demo candidate in the UI,
---     i.e. the previous_assessment_id chain, as long as it still carries the «[آزمایشی] » prefix).
+--     i.e. the previous_assessment_id chain, and any row flagged is_demo — Section 54 N-15 — as long
+--     as it still carries the «[آزمایشی] » prefix).
 --     ON DELETE CASCADE then removes their panel, panel score sheets, attachments rows, interview
 --     ratings, evidence rows, competency scores, AI analyses (comp_ai_analysis /
 --     comp_candidate_ai_analysis), development plans + actions and personality assessments
@@ -23,9 +24,10 @@
 -- NOT removable from SQL (reported as notices): files a tester uploaded to the private
 -- `comp-docs` storage bucket under a demo candidate's folder — delete those folders from the
 -- Supabase Storage UI (the notice lists the paths). The seed itself uploads no files.
--- Residual trace: comp_question_bank.updated_at and personality_questions.updated_at/updated_by of
--- the drawn questions were bumped by their updated_at triggers when the usage counters changed
--- (the same thing every real question draw does); they cannot be restored.
+-- Residual trace (only for a seed run before schema.sql Section 54, L-4): comp_question_bank.updated_at
+-- and personality_questions.updated_at/updated_by of the drawn questions were bumped by their
+-- updated_at triggers when the usage counters changed; they cannot be restored. Since Section 54 a
+-- usage bump no longer touches those columns.
 --
 -- Run as `postgres` (Supabase SQL editor / MCP execute_sql). Idempotent: a second run is a no-op.
 -- To preview, wrap it in `begin; … rollback;`.
@@ -51,12 +53,21 @@ begin
     select a.id from public.comp_assessments a join chain c on a.previous_assessment_id = c.id
     where a.candidate_name like '[آزمایشی] %'
   )
-  select array_agg(id) into v_ids from chain;
+  select array_agg(id) into v_ids from (
+    select id from chain
+    -- Section 54 (N-15): anything flagged is_demo with the demo prefix is demo data too.
+    union
+    select id from public.comp_assessments where is_demo and candidate_name like '[آزمایشی] %'
+  ) x;
   v_ids := coalesce(v_ids, '{}');
 
   select count(*) into v_bad from public.comp_assessments where id = any(v_ids) and candidate_name not like '[آزمایشی] %';
   if v_bad > 0 then
     raise exception 'demo cleanup safety stop: % registered assessment(s) do not carry the «[آزمایشی] » prefix — nothing was changed', v_bad;
+  end if;
+  select count(*) into v_bad from public.comp_assessments where is_demo and not (id = any(v_ids));
+  if v_bad > 0 then
+    raise notice 'demo cleanup: % assessment(s) are flagged is_demo but are not demo seed rows (no prefix) — left untouched; review them in the UI', v_bad;
   end if;
 
   select array_agg(id) into v_pids from (

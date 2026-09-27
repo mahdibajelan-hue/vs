@@ -74,9 +74,17 @@ begin
   perform set_config('role', 'anon', true);
 end $f$;
 
-create or replace function pg_temp.demo_reg(p_entity text, p_id uuid, p_meta jsonb default '{}'::jsonb) returns void language sql as $f$
+-- Also flags a registered assessment as demo data (comp_assessments.is_demo, schema.sql Section 54
+-- N-15) so every aggregate (dashboard stats, peer rank/averages, reports) leaves it out by default.
+-- Runs as postgres (the registry has no grants), which the is_demo guard trigger allows.
+create or replace function pg_temp.demo_reg(p_entity text, p_id uuid, p_meta jsonb default '{}'::jsonb) returns void language plpgsql as $f$
+begin
   insert into public.comp_demo_seed_registry (entity, id, meta) values (p_entity, p_id, coalesce(p_meta, '{}'::jsonb))
   on conflict (entity, id) do update set meta = public.comp_demo_seed_registry.meta || excluded.meta;
+  if p_entity = 'comp_assessments' then
+    update public.comp_assessments set is_demo = true where id = p_id and not is_demo;
+  end if;
+end;
 $f$;
 
 -- Records one usage increment per id (called as postgres, right after the real RPC bumped it).
@@ -965,6 +973,10 @@ begin
   perform pg_temp.demo_compute(A, r03);
 
   perform pg_temp.demo_as(null);
+  -- Belt and braces: every registered demo assessment carries is_demo (reassessments inherit it).
+  update public.comp_assessments a set is_demo = true
+  from public.comp_demo_seed_registry r
+  where r.entity = 'comp_assessments' and r.id = a.id and not a.is_demo;
   raise notice 'demo candidates seeded: %', (select count(*) from public.comp_demo_seed_registry where entity = 'comp_assessments');
 end $seed$;
 

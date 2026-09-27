@@ -708,14 +708,20 @@ begin
   raise notice 'competency_engine_smoke_test: ALL ASSERTIONS PASSED';
 
   -- ---- Cleanup (success path) ----
-  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%');
+  -- L-7: also the audit rows of the throwaway personality assessments (e.g. PERSONALITY_ASSESSMENT_SCORED).
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%')
+    or entity_id in (select pa.id from personality_assessments pa join comp_assessments a on a.id = pa.assessment_id
+                     where a.candidate_name like '\_\_smoke\_test\_competency%');
   delete from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%';
   delete from comp_competencies where key in ('__smoke_tech__', '__smoke_behav__', '__smoke_meets__', '__smoke_gap__', '__smoke_empty__');
   delete from comp_job_role_config where job_role = v_role;
 
 exception when others then
   -- Clean up even on assertion failure, then re-raise so the caller still sees the failure.
-  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%');
+  -- L-7: also the audit rows of the throwaway personality assessments (e.g. PERSONALITY_ASSESSMENT_SCORED).
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%')
+    or entity_id in (select pa.id from personality_assessments pa join comp_assessments a on a.id = pa.assessment_id
+                     where a.candidate_name like '\_\_smoke\_test\_competency%');
   delete from comp_assessments where candidate_name like '\_\_smoke\_test\_competency%';
   delete from comp_competencies where key in ('__smoke_tech__', '__smoke_behav__', '__smoke_meets__', '__smoke_gap__', '__smoke_empty__');
   delete from comp_job_role_config where job_role = '__smoke_competency_role__';
@@ -1003,14 +1009,17 @@ begin
 
   raise notice 'competency_engine_smoke_test (section 53): ALL ASSERTIONS PASSED';
 
-  delete from comp_audit_log where entity_id = v_a;
+  delete from comp_audit_log where entity_id = v_a
+    or entity_id in (select pa.id from personality_assessments pa where pa.assessment_id = v_a);
   delete from comp_assessments where id = v_a;
   delete from comp_competencies where key = '__smoke_s53_c__';
   delete from comp_job_role_config where job_role = v_role;
 
 exception when others then
   perform set_config('role', 'postgres', true);
-  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s53__');
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s53__')
+    or entity_id in (select pa.id from personality_assessments pa join comp_assessments a on a.id = pa.assessment_id
+                     where a.candidate_name = '__smoke_test_s53__');
   delete from comp_assessments where candidate_name = '__smoke_test_s53__';
   delete from comp_competencies where key = '__smoke_s53_c__';
   delete from comp_job_role_config where job_role = '__smoke_s53_role__';
@@ -1026,6 +1035,7 @@ end $$;
 --        the lead's score when no submitted sheet scored a question.
 --   N-10 a lead's reopen request is recorded; the admin's reopen clears it and the approval.
 --   L-10 no reassessment from a non-completed assessment.   L-3 staff uploads carry uploaded_by.
+--   N-15 only a module admin may flag demo data; a reassessment inherits the flag.
 -- ============================================================================
 do $$
 declare
@@ -1036,13 +1046,20 @@ declare
   v_a uuid;
   v_share uuid;
   v_score numeric;
+  v_out uuid;
+  v_re uuid;
 begin
   select id into v_admin from profiles where is_admin order by created_at limit 1;
+  select p.id into v_out from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+    and not rasta_has_permission(p.id, 'competency', 'configure')
+  order by p.created_at limit 1;
   select id into v_j1 from profiles where id <> v_admin order by created_at limit 1;
   select id into v_j2 from profiles where id not in (v_admin, v_j1) order by created_at limit 1;
   select id into v_q1 from comp_question_bank where active and approval_status = 'APPROVED' order by id limit 1;
-  if v_admin is null or v_j1 is null or v_j2 is null or v_q1 is null then
-    raise exception 'section 54 smoke precondition failed: need an admin, two more profiles and an approved bank question';
+  if v_admin is null or v_out is null or v_j1 is null or v_j2 is null or v_q1 is null then
+    raise exception 'section 54 smoke precondition failed: need an admin, a plain profile, two more profiles and an approved bank question';
   end if;
 
   insert into comp_assessments (job_role, candidate_name, candidate_position, created_by, selected_question_ids, answers)
@@ -1122,14 +1139,36 @@ begin
     raise exception 'ASSERTION FAILED (L-3): uploaded_by must be the uploading user';
   end if;
 
+  -- ---- N-15: demo flag — only a module admin may set it; a reassessment inherits it ----
+  perform set_config('request.jwt.claims', json_build_object('sub', v_out, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into comp_assessments (job_role, candidate_name, candidate_position, created_by, is_demo)
+    values ('project_manager', '__smoke_test_s54__', 'test', v_out, true);
+    raise exception 'ASSERTION FAILED (N-15): a non-admin created a demo-flagged assessment';
+  exception when others then
+    if sqlerrm not like 'forbidden%' and sqlerrm not like '%row-level security%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  update comp_assessments set is_demo = true, status = 'completed' where id = v_a;
+  perform set_config('role', 'authenticated', true);
+  v_re := comp_create_reassessment(v_a);
+  perform set_config('role', 'postgres', true);
+  if (select is_demo from comp_assessments where id = v_re) is distinct from true then
+    raise exception 'ASSERTION FAILED (N-15): a reassessment of a demo assessment must be demo too';
+  end if;
+
   raise notice 'competency_engine_smoke_test (section 54): ALL ASSERTIONS PASSED';
 
-  delete from comp_audit_log where entity_id = v_a;
-  delete from comp_assessments where id = v_a;
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s54__');
+  delete from comp_assessments where candidate_name = '__smoke_test_s54__' and previous_assessment_id is not null;
+  delete from comp_assessments where candidate_name = '__smoke_test_s54__';
 
 exception when others then
   perform set_config('role', 'postgres', true);
   delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s54__');
+  delete from comp_assessments where candidate_name = '__smoke_test_s54__' and previous_assessment_id is not null;
   delete from comp_assessments where candidate_name = '__smoke_test_s54__';
   raise;
 end $$;

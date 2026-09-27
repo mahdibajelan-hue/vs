@@ -678,6 +678,9 @@ export interface CompetencyAssessment {
   reopenRequestReason: string | null
   /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */
   isApproved: boolean
+  /** Demo/test candidate (schema.sql Section 54, N-15) — left out of stats, peer rank/averages and
+   * reports unless the viewer turns on «نمایش داده‌های آزمایشی». */
+  isDemo: boolean
   /** Lead's own narrative judgment — distinct from the per-domain strengths/weaknesses derived automatically from question scores (see domainFlags in competencyModel.ts). */
   strengths: string
   developmentAreas: string

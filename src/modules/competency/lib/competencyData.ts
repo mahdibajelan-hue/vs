@@ -96,6 +96,7 @@ export interface CompAssessmentRow {
   reopen_requested_by?: string | null
   reopen_request_reason?: string | null
   is_approved: boolean
+  is_demo?: boolean | null
   strengths: string
   development_areas: string
   duration_minutes: number | null
@@ -156,6 +157,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     reopenRequestedBy: r.reopen_requested_by ?? null,
     reopenRequestReason: r.reopen_request_reason ?? null,
     isApproved: r.is_approved,
+    isDemo: r.is_demo ?? false,
     strengths: r.strengths ?? '',
     developmentAreas: r.development_areas ?? '',
     durationMinutes: r.duration_minutes,
