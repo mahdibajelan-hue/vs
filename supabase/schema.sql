@@ -11567,3 +11567,1641 @@ returns table(user_id uuid, created_by uuid, created_at timestamptz) as $$
   where r.name = p_role_name
     and (comp_is_module_admin() or ur.user_id = auth.uid());
 $$ language sql security definer stable set search_path = public;
+
+-- ============================================================================
+-- Section 56 — online technical MCQ test («آزمون تستی آنلاین»)
+--
+-- The candidate's assessment plan now has TWO online parts — the personality & behavioral test
+-- (its own candidate link, Sections 38-41) and this technical multiple-choice test — next to the
+-- IN-PERSON technical part («ارزیابی فنی تخصصی — حضوری»: the bank questions scored by the panel).
+-- The MCQ test measures breadth ("جامعیت") of the candidate's technical knowledge.
+--
+--   comp_mcq_questions   The MCQ bank: per job role, a category aligned with the in-person bank's
+--                        categories (TECHNICAL / GENERAL / HSE / SCENARIO / PROBLEM_SOLVING /
+--                        CASE_STUDY — the same keys comp_competency_evidence_sources uses, so the
+--                        results feed the same competencies), a finer `topic` for the breadth
+--                        report, difficulty 1-3, four options, the correct option, a short
+--                        explanation, approval/active/version/usage and audit columns. Read by
+--                        module admins / assessment designers (whole bank) and by staff who can
+--                        access an assessment whose test contains the question. Written by admins
+--                        and designers; only a module admin can approve (trigger), every content
+--                        edit bumps `version`, and every change is audited server-side.
+--   comp_mcq_tests       One test per assessment: frozen question snapshot (order + per-question
+--                        option permutation), candidate token, status NOT_STARTED → IN_PROGRESS →
+--                        SUBMITTED → SCORED, time limit, timestamps and the stored result (overall,
+--                        per topic / category / difficulty). Staff read it through
+--                        comp_can_access_assessment (candidate_token is NOT column-granted —
+--                        leads/designers get it from comp_mcq_get_test_detail). No write policy:
+--                        only the RPCs below write.
+--   comp_mcq_responses   One row per (test, question): chosen option (original option index),
+--                        cumulative response time; correct_option/is_correct are stamped at scoring.
+--
+-- The anonymous candidate reaches the test ONLY through the comp_mcq_candidate_* token RPCs, which
+-- never return correct_option, explanations, topic or category — before or after submit. Timing is
+-- enforced server-side: an answer after the deadline (+30 s grace) is refused and the test is scored
+-- as TIMEOUT; an expired test is also scored when the candidate or staff next open it.
+-- Scoring: unanswered = incorrect; overall % and per-topic/category/difficulty %.
+--
+-- Exam design: comp_assessments.needs_online_mcq (+ comp_assessment_blueprints.includes_online_mcq,
+-- copied by the default-blueprint trigger and by reassessments). Design-aware evidence: the engine
+-- gets a new source type TECHNICAL_MCQ (source_ref = the category) — seeded for every competency
+-- that already uses that TECHNICAL_CATEGORY, at half its weight — excluded from evidence AND
+-- coverage when the MCQ is not in the candidate's design, and "not assessable" (like M-8) when the
+-- role has no approved MCQ in that category. Section 53's completed-assessment lock covers the new
+-- flag, the test and its responses.
+-- ============================================================================
+
+-- ---------------------------------------------------------------- bank
+
+create table if not exists comp_mcq_questions (
+  id uuid primary key default gen_random_uuid(),
+  job_role text not null references comp_job_role_config (job_role) on delete cascade,
+  category text not null default 'TECHNICAL'
+    check (category in ('TECHNICAL', 'GENERAL', 'HSE', 'SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'JUDGMENT')),
+  topic text not null check (btrim(topic) <> ''),
+  difficulty smallint not null check (difficulty between 1 and 3),
+  stem_fa text not null check (btrim(stem_fa) <> ''),
+  -- Exactly four option texts, in their canonical order; correct_option indexes into it (0-3).
+  options jsonb not null check (jsonb_typeof(options) = 'array' and jsonb_array_length(options) = 4),
+  correct_option smallint not null check (correct_option between 0 and 3),
+  explanation_fa text not null default '',
+  standard_ref text not null default '',
+  approval_status text not null default 'PENDING_REVIEW'
+    check (approval_status in ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'NEEDS_REVISION')),
+  active boolean not null default true,
+  version int not null default 1 check (version >= 1),
+  usage_count int not null default 0,
+  last_used_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles (id)
+);
+
+create unique index if not exists idx_comp_mcq_questions_role_stem on comp_mcq_questions (job_role, md5(stem_fa));
+create index if not exists idx_comp_mcq_questions_pool on comp_mcq_questions (job_role, category, topic) where active and approval_status = 'APPROVED';
+create index if not exists idx_comp_mcq_questions_created_by on comp_mcq_questions (created_by);
+create index if not exists idx_comp_mcq_questions_updated_by on comp_mcq_questions (updated_by);
+
+-- ---------------------------------------------------------------- tests / responses
+
+create table if not exists comp_mcq_tests (
+  id uuid primary key default gen_random_uuid(),
+  assessment_id uuid not null unique references comp_assessments (id) on delete cascade,
+  job_role text not null,
+  candidate_token uuid not null unique default gen_random_uuid(),
+  status text not null default 'NOT_STARTED' check (status in ('NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'SCORED')),
+  -- Frozen snapshot: question ids in the order the candidate sees them, and per question the order
+  -- its four options are shown in ({"<qid>": [2,0,3,1]}). Answers always store the ORIGINAL index.
+  question_ids jsonb not null default '[]'::jsonb check (jsonb_typeof(question_ids) = 'array'),
+  option_orders jsonb not null default '{}'::jsonb check (jsonb_typeof(option_orders) = 'object'),
+  time_limit_minutes int not null check (time_limit_minutes between 5 and 240),
+  -- The generation request and what was actually drawn (per difficulty / topic).
+  generation jsonb not null default '{}'::jsonb,
+  started_at timestamptz,
+  submitted_at timestamptz,
+  submit_reason text check (submit_reason in ('CANDIDATE', 'TIMEOUT', 'STAFF')),
+  scored_at timestamptz,
+  total_questions int,
+  answered_count int,
+  correct_count int,
+  score_percent numeric,
+  time_spent_seconds int,
+  topic_scores jsonb not null default '[]'::jsonb,
+  category_scores jsonb not null default '[]'::jsonb,
+  difficulty_scores jsonb not null default '[]'::jsonb,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_comp_mcq_tests_created_by on comp_mcq_tests (created_by);
+
+create table if not exists comp_mcq_responses (
+  id uuid primary key default gen_random_uuid(),
+  test_id uuid not null references comp_mcq_tests (id) on delete cascade,
+  question_id uuid not null references comp_mcq_questions (id) on delete restrict,
+  chosen_option smallint check (chosen_option between 0 and 3),
+  response_time_ms int check (response_time_ms >= 0),
+  answered_at timestamptz,
+  -- Stamped by scoring from the question as it was then, so later bank edits never rescore a test.
+  correct_option smallint,
+  is_correct boolean,
+  unique (test_id, question_id)
+);
+create index if not exists idx_comp_mcq_responses_question on comp_mcq_responses (question_id);
+
+alter table comp_mcq_questions enable row level security;
+alter table comp_mcq_tests enable row level security;
+alter table comp_mcq_responses enable row level security;
+
+-- Least privilege: anon never touches these tables directly (only the token RPCs below), and the
+-- API role authenticated gets exactly what its policies need. candidate_token is deliberately not
+-- column-granted: a panelist can read the result, but only a lead/designer gets the link (RPC).
+revoke all on comp_mcq_questions, comp_mcq_tests, comp_mcq_responses from anon, public;
+revoke all on comp_mcq_questions, comp_mcq_tests, comp_mcq_responses from authenticated;
+grant select, insert, update, delete on comp_mcq_questions to authenticated;
+grant select (
+  id, assessment_id, job_role, status, question_ids, time_limit_minutes, generation, started_at, submitted_at,
+  submit_reason, scored_at, total_questions, answered_count, correct_count, score_percent, time_spent_seconds,
+  topic_scores, category_scores, difficulty_scores, created_by, created_at, updated_at
+) on comp_mcq_tests to authenticated;
+grant select on comp_mcq_responses to authenticated;
+
+drop policy if exists "comp_mcq_questions_select" on comp_mcq_questions;
+create policy "comp_mcq_questions_select" on comp_mcq_questions for select using (
+  comp_is_module_admin() or comp_is_assessment_designer() or created_by = auth.uid()
+  or exists (
+    select 1 from comp_mcq_tests t
+    where t.question_ids ? comp_mcq_questions.id::text and comp_can_access_assessment(t.assessment_id)
+  )
+);
+drop policy if exists "comp_mcq_questions_insert" on comp_mcq_questions;
+create policy "comp_mcq_questions_insert" on comp_mcq_questions for insert
+  with check (comp_is_module_admin() or comp_is_assessment_designer());
+drop policy if exists "comp_mcq_questions_update" on comp_mcq_questions;
+create policy "comp_mcq_questions_update" on comp_mcq_questions for update
+  using (comp_is_module_admin() or comp_is_assessment_designer())
+  with check (comp_is_module_admin() or comp_is_assessment_designer());
+drop policy if exists "comp_mcq_questions_delete" on comp_mcq_questions;
+create policy "comp_mcq_questions_delete" on comp_mcq_questions for delete using (comp_is_module_admin());
+
+drop policy if exists "comp_mcq_tests_select_access" on comp_mcq_tests;
+create policy "comp_mcq_tests_select_access" on comp_mcq_tests for select using (comp_can_access_assessment(assessment_id));
+
+drop policy if exists "comp_mcq_responses_select_access" on comp_mcq_responses;
+create policy "comp_mcq_responses_select_access" on comp_mcq_responses for select using (
+  exists (select 1 from comp_mcq_tests t where t.id = comp_mcq_responses.test_id and comp_can_access_assessment(t.assessment_id))
+);
+
+-- ---------------------------------------------------------------- bank guard + audit
+
+-- SECURITY INVOKER on purpose (like Section 54's demo flag): current_user must be the API role.
+-- Only a module admin (or a server-side session) approves; a designer's new/edited question goes to
+-- review. Content edits bump version; usage bumps leave updated_at/by alone (like Section 54 L-4).
+create or replace function comp_mcq_questions_guard()
+returns trigger as $$
+declare
+  v_trusted boolean := current_user in ('postgres', 'supabase_admin', 'service_role') or comp_is_module_admin();
+  v_content_changed boolean;
+begin
+  if (select count(distinct btrim(o)) from jsonb_array_elements_text(new.options) o where btrim(o) <> '') <> 4 then
+    raise exception 'invalid options: an MCQ needs four distinct, non-empty options';
+  end if;
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then
+      new.created_by := auth.uid();
+    end if;
+    new.version := 1;
+    new.usage_count := 0;
+    if not v_trusted then
+      new.approval_status := 'PENDING_REVIEW';
+    end if;
+    return new;
+  end if;
+  v_content_changed := (new.job_role, new.category, new.topic, new.difficulty, new.stem_fa, new.options, new.correct_option, new.explanation_fa, new.standard_ref)
+    is distinct from (old.job_role, old.category, old.topic, old.difficulty, old.stem_fa, old.options, old.correct_option, old.explanation_fa, old.standard_ref);
+  if not v_trusted then
+    if new.approval_status = 'APPROVED' and old.approval_status <> 'APPROVED' then
+      raise exception 'forbidden: only a module admin can approve an MCQ';
+    end if;
+    if new.usage_count is distinct from old.usage_count or new.last_used_at is distinct from old.last_used_at then
+      raise exception 'forbidden: usage counters are maintained by test generation';
+    end if;
+    if v_content_changed then
+      new.approval_status := 'PENDING_REVIEW';
+    end if;
+  end if;
+  new.created_by := old.created_by;
+  new.created_at := old.created_at;
+  if v_content_changed then
+    new.version := old.version + 1;
+  else
+    new.version := old.version;
+  end if;
+  if (to_jsonb(new) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by'])
+     = (to_jsonb(old) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by']) then
+    new.updated_at := old.updated_at;
+    new.updated_by := old.updated_by;
+  else
+    new.updated_at := now();
+    new.updated_by := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_mcq_questions_guard on comp_mcq_questions;
+create trigger trg_comp_mcq_questions_guard before insert or update on comp_mcq_questions
+  for each row execute function comp_mcq_questions_guard();
+
+-- Server-side audit of every bank change made by a person (seed/maintenance sessions have no
+-- auth.uid() and are skipped — the seed file itself is the record).
+create or replace function comp_mcq_questions_audit()
+returns trigger as $$
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+  if tg_op = 'INSERT' then
+    perform comp_log_audit('MCQ_QUESTION_CREATED', 'comp_mcq_questions', new.id, null,
+      jsonb_build_object('jobRole', new.job_role, 'category', new.category, 'topic', new.topic, 'approvalStatus', new.approval_status));
+  elsif tg_op = 'DELETE' then
+    perform comp_log_audit('MCQ_QUESTION_DELETED', 'comp_mcq_questions', old.id, to_jsonb(old) - 'usage_count', null);
+  elsif new.approval_status is distinct from old.approval_status and new.version = old.version then
+    perform comp_log_audit(
+      case new.approval_status when 'APPROVED' then 'MCQ_QUESTION_APPROVED' when 'REJECTED' then 'MCQ_QUESTION_REJECTED' else 'MCQ_QUESTION_STATUS_CHANGED' end,
+      'comp_mcq_questions', new.id, jsonb_build_object('approvalStatus', old.approval_status), jsonb_build_object('approvalStatus', new.approval_status));
+  elsif new.version <> old.version or new.active is distinct from old.active then
+    perform comp_log_audit('MCQ_QUESTION_EDITED', 'comp_mcq_questions', new.id,
+      jsonb_build_object('version', old.version, 'active', old.active, 'stem', left(old.stem_fa, 500), 'options', old.options, 'correctOption', old.correct_option),
+      jsonb_build_object('version', new.version, 'active', new.active, 'approvalStatus', new.approval_status));
+  end if;
+  return null;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_comp_mcq_questions_audit on comp_mcq_questions;
+create trigger trg_comp_mcq_questions_audit after insert or update or delete on comp_mcq_questions
+  for each row execute function comp_mcq_questions_audit();
+
+-- ---------------------------------------------------------------- lock (Section 53 M-6) + submit freeze
+
+create or replace function comp_mcq_tests_enforce_lock()
+returns trigger as $$
+declare
+  v_ids uuid[];
+begin
+  if tg_op = 'UPDATE' then
+    new.updated_at := now();
+  end if;
+  if coalesce(current_setting('comp.allow_locked_write', true), '') = 'on' then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  v_ids := case tg_op when 'INSERT' then array[new.assessment_id] when 'DELETE' then array[old.assessment_id] else array[old.assessment_id, new.assessment_id] end;
+  if exists (select 1 from comp_assessments a where a.id = any(v_ids) and a.status = 'completed') then
+    raise exception 'assessment_locked: this assessment is completed; its online MCQ test cannot change until a module admin reopens it';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_comp_mcq_tests_lock on comp_mcq_tests;
+create trigger trg_comp_mcq_tests_lock before insert or update or delete on comp_mcq_tests
+  for each row execute function comp_mcq_tests_enforce_lock();
+
+create or replace function comp_mcq_responses_enforce_lock()
+returns trigger as $$
+declare
+  v_test_id uuid := case when tg_op = 'DELETE' then old.test_id else new.test_id end;
+  v_status text;
+  v_a_status text;
+begin
+  select t.status, a.status into v_status, v_a_status
+  from comp_mcq_tests t join comp_assessments a on a.id = t.assessment_id
+  where t.id = v_test_id;
+  -- A cascade delete (test or assessment removed) finds no parent: nothing to protect.
+  if v_status is not null and coalesce(current_setting('comp.allow_locked_write', true), '') <> 'on' then
+    if v_a_status = 'completed' then
+      raise exception 'assessment_locked: this assessment is completed; MCQ answers cannot change';
+    end if;
+    if v_status in ('SUBMITTED', 'SCORED') and coalesce(current_setting('comp.mcq_scoring', true), '') <> 'on' then
+      raise exception 'mcq_submitted: this test has been submitted; answers can no longer change';
+    end if;
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_comp_mcq_responses_lock on comp_mcq_responses;
+create trigger trg_comp_mcq_responses_lock before insert or update or delete on comp_mcq_responses
+  for each row execute function comp_mcq_responses_enforce_lock();
+
+revoke execute on function comp_mcq_questions_guard() from public, anon, authenticated;
+revoke execute on function comp_mcq_questions_audit() from public, anon, authenticated;
+revoke execute on function comp_mcq_tests_enforce_lock() from public, anon, authenticated;
+revoke execute on function comp_mcq_responses_enforce_lock() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- scoring (internal)
+
+-- Submits (if needed) and scores one test. Unanswered questions count as incorrect. Callable only
+-- from SECURITY DEFINER code (no API role has EXECUTE).
+create or replace function comp_mcq_score_test_core(p_test_id uuid, p_reason text)
+returns void as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_submitted timestamptz;
+  v_total int;
+  v_answered int;
+  v_correct int;
+  v_topics jsonb;
+  v_categories jsonb;
+  v_difficulties jsonb;
+begin
+  select * into v_t from comp_mcq_tests where id = p_test_id for update;
+  if not found then
+    raise exception 'test not found';
+  end if;
+  if v_t.status = 'SCORED' then
+    return;
+  end if;
+  if v_t.status = 'NOT_STARTED' then
+    raise exception 'mcq_not_started: the candidate has not started this test';
+  end if;
+  v_submitted := coalesce(v_t.submitted_at,
+    case when p_reason = 'TIMEOUT' then least(now(), v_t.started_at + make_interval(mins => v_t.time_limit_minutes)) else now() end);
+
+  perform set_config('comp.mcq_scoring', 'on', true);
+  update comp_mcq_tests set status = 'SUBMITTED', submitted_at = v_submitted, submit_reason = coalesce(submit_reason, p_reason)
+  where id = v_t.id;
+  insert into comp_mcq_responses (test_id, question_id)
+  select v_t.id, q.id
+  from jsonb_array_elements_text(v_t.question_ids) sel(qid)
+  join comp_mcq_questions q on q.id::text = sel.qid
+  on conflict (test_id, question_id) do nothing;
+  update comp_mcq_responses r
+  set correct_option = q.correct_option,
+      is_correct = r.chosen_option is not null and r.chosen_option = q.correct_option
+  from comp_mcq_questions q
+  where r.test_id = v_t.id and q.id = r.question_id;
+  perform set_config('comp.mcq_scoring', '', true);
+
+  with base as (
+    select q.category, q.topic, q.difficulty, coalesce(r.is_correct, false) as ok, r.chosen_option is not null as answered
+    from comp_mcq_responses r
+    join comp_mcq_questions q on q.id = r.question_id
+    where r.test_id = v_t.id and v_t.question_ids ? r.question_id::text
+  )
+  select
+    count(*)::int, count(*) filter (where answered)::int, count(*) filter (where ok)::int,
+    (select coalesce(jsonb_agg(jsonb_build_object('topic', x.topic, 'category', x.category, 'total', x.total, 'answered', x.answered,
+       'correct', x.correct, 'percent', round(x.correct * 100.0 / x.total, 1)) order by x.category, x.topic), '[]'::jsonb)
+     from (select b.category, b.topic, count(*)::int total, count(*) filter (where b.answered)::int answered, count(*) filter (where b.ok)::int correct
+           from base b group by b.category, b.topic) x),
+    (select coalesce(jsonb_agg(jsonb_build_object('category', x.category, 'total', x.total, 'answered', x.answered,
+       'correct', x.correct, 'percent', round(x.correct * 100.0 / x.total, 1)) order by x.category), '[]'::jsonb)
+     from (select b.category, count(*)::int total, count(*) filter (where b.answered)::int answered, count(*) filter (where b.ok)::int correct
+           from base b group by b.category) x),
+    (select coalesce(jsonb_agg(jsonb_build_object('difficulty', x.difficulty, 'total', x.total, 'answered', x.answered,
+       'correct', x.correct, 'percent', round(x.correct * 100.0 / x.total, 1)) order by x.difficulty), '[]'::jsonb)
+     from (select b.difficulty, count(*)::int total, count(*) filter (where b.answered)::int answered, count(*) filter (where b.ok)::int correct
+           from base b group by b.difficulty) x)
+  into v_total, v_answered, v_correct, v_topics, v_categories, v_difficulties
+  from base;
+
+  update comp_mcq_tests
+  set status = 'SCORED', scored_at = now(), total_questions = v_total, answered_count = v_answered, correct_count = v_correct,
+      score_percent = case when v_total > 0 then round(v_correct * 100.0 / v_total, 1) else 0 end,
+      time_spent_seconds = greatest(0, extract(epoch from (v_submitted - v_t.started_at))::int),
+      topic_scores = v_topics, category_scores = v_categories, difficulty_scores = v_difficulties
+  where id = v_t.id;
+
+  perform comp_log_audit('MCQ_TEST_SCORED', 'comp_mcq_tests', v_t.id, null, jsonb_build_object(
+    'assessmentId', v_t.assessment_id, 'reason', p_reason, 'total', v_total, 'answered', v_answered, 'correct', v_correct,
+    'scorePercent', case when v_total > 0 then round(v_correct * 100.0 / v_total, 1) else 0 end));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mcq_score_test_core(uuid, text) from public, anon, authenticated;
+
+-- An IN_PROGRESS test whose time (+30 s grace for the last save in flight) is up gets scored as
+-- TIMEOUT — unless the assessment is completed (then it stays exactly as it was when locked).
+create or replace function comp_mcq_finalize_if_expired(p_test_id uuid)
+returns boolean as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_a_status text;
+begin
+  select t.* into v_t from comp_mcq_tests t where t.id = p_test_id;
+  if not found or v_t.status <> 'IN_PROGRESS' or v_t.started_at is null then
+    return false;
+  end if;
+  select status into v_a_status from comp_assessments where id = v_t.assessment_id;
+  if v_a_status = 'completed' then
+    return false;
+  end if;
+  if now() <= v_t.started_at + make_interval(mins => v_t.time_limit_minutes) + interval '30 seconds' then
+    return false;
+  end if;
+  perform comp_mcq_score_test_core(v_t.id, 'TIMEOUT');
+  return true;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mcq_finalize_if_expired(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- candidate (token) RPCs
+
+-- Everything the candidate page needs, and nothing more: never correct_option, explanation, topic,
+-- category, difficulty or scores. Questions are only returned while the test is IN_PROGRESS.
+create or replace function comp_mcq_candidate_get(p_token uuid)
+returns jsonb as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_a comp_assessments%rowtype;
+  v_label text;
+  v_questions jsonb := '[]'::jsonb;
+  v_answers jsonb := '{}'::jsonb;
+begin
+  select * into v_t from comp_mcq_tests where candidate_token = p_token;
+  if not found then
+    return null;
+  end if;
+  if comp_mcq_finalize_if_expired(v_t.id) then
+    select * into v_t from comp_mcq_tests where id = v_t.id;
+  end if;
+  select * into v_a from comp_assessments where id = v_t.assessment_id;
+  select coalesce(nullif(label_fa, ''), job_role) into v_label from comp_job_role_config where job_role = v_t.job_role;
+
+  if v_t.status = 'IN_PROGRESS' and v_a.status <> 'completed' then
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id', q.id,
+      'stem', q.stem_fa,
+      'options', (
+        select jsonb_agg(jsonb_build_object('key', p.idx::int, 'text', q.options ->> p.idx::int) order by p.ord)
+        from jsonb_array_elements_text(coalesce(v_t.option_orders -> q.id::text, '[0,1,2,3]'::jsonb)) with ordinality p(idx, ord)
+      )
+    ) order by sel.ord), '[]'::jsonb)
+    into v_questions
+    from jsonb_array_elements_text(v_t.question_ids) with ordinality sel(qid, ord)
+    join comp_mcq_questions q on q.id::text = sel.qid;
+
+    select coalesce(jsonb_object_agg(r.question_id::text, jsonb_build_object('option', r.chosen_option, 'timeMs', r.response_time_ms)), '{}'::jsonb)
+    into v_answers
+    from comp_mcq_responses r
+    where r.test_id = v_t.id and r.chosen_option is not null;
+  end if;
+
+  return jsonb_build_object(
+    'status', v_t.status,
+    'locked', v_a.status = 'completed',
+    'candidateName', v_a.candidate_name,
+    'jobRoleLabel', coalesce(v_label, v_t.job_role),
+    'questionCount', jsonb_array_length(v_t.question_ids),
+    'timeLimitMinutes', v_t.time_limit_minutes,
+    'startedAt', v_t.started_at,
+    'deadlineAt', case when v_t.started_at is not null then v_t.started_at + make_interval(mins => v_t.time_limit_minutes) end,
+    'submittedAt', v_t.submitted_at,
+    'serverNow', now(),
+    'questions', v_questions,
+    'answers', v_answers
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create or replace function comp_mcq_candidate_start(p_token uuid)
+returns jsonb as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_a_status text;
+begin
+  select * into v_t from comp_mcq_tests where candidate_token = p_token for update;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  select status into v_a_status from comp_assessments where id = v_t.assessment_id;
+  if v_a_status = 'completed' then
+    raise exception 'assessment_locked: this assessment is closed';
+  end if;
+  if v_t.status = 'NOT_STARTED' then
+    if jsonb_array_length(v_t.question_ids) = 0 then
+      raise exception 'mcq_empty: this test has no questions';
+    end if;
+    update comp_mcq_tests set status = 'IN_PROGRESS', started_at = now() where id = v_t.id;
+    perform comp_log_audit('MCQ_TEST_STARTED', 'comp_mcq_tests', v_t.id, null, jsonb_build_object('assessmentId', v_t.assessment_id));
+  end if;
+  return comp_mcq_candidate_get(p_token);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- Saves (or changes) one answer. p_response_time_ms is the candidate's cumulative time on that
+-- question (client-measured), stored as sent (clamped). Returns {saved, reason?}.
+create or replace function comp_mcq_candidate_answer(p_token uuid, p_question_id uuid, p_option int, p_response_time_ms int default null)
+returns jsonb as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_a_status text;
+begin
+  select * into v_t from comp_mcq_tests where candidate_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  select status into v_a_status from comp_assessments where id = v_t.assessment_id;
+  if v_a_status = 'completed' then
+    raise exception 'assessment_locked: this assessment is closed';
+  end if;
+  if v_t.status <> 'IN_PROGRESS' then
+    raise exception 'mcq_not_in_progress: this test is not open for answers (status %)', v_t.status;
+  end if;
+  if comp_mcq_finalize_if_expired(v_t.id) then
+    return jsonb_build_object('saved', false, 'reason', 'TIME_OVER');
+  end if;
+  if p_question_id is null or not (v_t.question_ids ? p_question_id::text) then
+    raise exception 'question is not part of this test';
+  end if;
+  if p_option is null or p_option not between 0 and 3 then
+    raise exception 'invalid option';
+  end if;
+  insert into comp_mcq_responses (test_id, question_id, chosen_option, response_time_ms, answered_at)
+  values (v_t.id, p_question_id, p_option, least(greatest(coalesce(p_response_time_ms, 0), 0), 86400000), now())
+  on conflict (test_id, question_id)
+  do update set chosen_option = excluded.chosen_option, response_time_ms = excluded.response_time_ms, answered_at = now();
+  return jsonb_build_object('saved', true);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+create or replace function comp_mcq_candidate_submit(p_token uuid)
+returns jsonb as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_a_status text;
+begin
+  select * into v_t from comp_mcq_tests where candidate_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if v_t.status in ('SUBMITTED', 'SCORED') then
+    return jsonb_build_object('status', v_t.status);
+  end if;
+  select status into v_a_status from comp_assessments where id = v_t.assessment_id;
+  if v_a_status = 'completed' then
+    raise exception 'assessment_locked: this assessment is closed';
+  end if;
+  if v_t.status <> 'IN_PROGRESS' then
+    raise exception 'mcq_not_in_progress: this test has not been started';
+  end if;
+  if not comp_mcq_finalize_if_expired(v_t.id) then
+    perform comp_mcq_score_test_core(v_t.id, 'CANDIDATE');
+  end if;
+  return jsonb_build_object('status', (select status from comp_mcq_tests where id = v_t.id));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mcq_candidate_get(uuid) from public;
+revoke execute on function comp_mcq_candidate_start(uuid) from public;
+revoke execute on function comp_mcq_candidate_answer(uuid, uuid, int, int) from public;
+revoke execute on function comp_mcq_candidate_submit(uuid) from public;
+grant execute on function comp_mcq_candidate_get(uuid) to anon, authenticated;
+grant execute on function comp_mcq_candidate_start(uuid) to anon, authenticated;
+grant execute on function comp_mcq_candidate_answer(uuid, uuid, int, int) to anon, authenticated;
+grant execute on function comp_mcq_candidate_submit(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------- exam design flag
+
+alter table comp_assessments add column if not exists needs_online_mcq boolean not null default false;
+alter table comp_assessment_blueprints add column if not exists includes_online_mcq boolean not null default false;
+
+drop function if exists comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid);
+create or replace function comp_set_exam_design(
+  p_assessment_id uuid,
+  p_needs_personality boolean,
+  p_needs_technical boolean,
+  p_needs_structured_interview boolean default null,
+  p_includes_experience boolean default null,
+  p_blueprint_id uuid default null,
+  p_needs_online_mcq boolean default null
+)
+returns void as $$
+declare
+  v_blueprint_version int;
+begin
+  if not (comp_is_assessment_designer() or comp_is_module_admin()) then
+    raise exception 'forbidden';
+  end if;
+  if p_blueprint_id is not null then
+    select b.version into v_blueprint_version
+    from comp_assessment_blueprints b
+    join comp_assessments a on a.id = p_assessment_id and a.job_role = b.job_role
+    where b.id = p_blueprint_id;
+    if not found then
+      raise exception 'blueprint does not belong to this assessment''s job role';
+    end if;
+  end if;
+  update comp_assessments
+  set needs_personality_assessment = coalesce(p_needs_personality, needs_personality_assessment),
+      needs_technical_assessment = coalesce(p_needs_technical, needs_technical_assessment),
+      needs_structured_interview = coalesce(p_needs_structured_interview, needs_structured_interview),
+      includes_experience = coalesce(p_includes_experience, includes_experience),
+      needs_online_mcq = coalesce(p_needs_online_mcq, needs_online_mcq),
+      blueprint_id = coalesce(p_blueprint_id, blueprint_id)
+  where id = p_assessment_id;
+  perform comp_log_audit(
+    'EXAM_DESIGN_SET', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object(
+      'needsPersonalityAssessment', p_needs_personality,
+      'needsTechnicalAssessment', p_needs_technical,
+      'needsStructuredInterview', p_needs_structured_interview,
+      'includesExperience', p_includes_experience,
+      'needsOnlineMcq', p_needs_online_mcq,
+      'blueprintId', p_blueprint_id,
+      'blueprintVersion', v_blueprint_version
+    )
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid, boolean) from public, anon;
+grant execute on function comp_set_exam_design(uuid, boolean, boolean, boolean, boolean, uuid, boolean) to authenticated;
+
+create or replace function comp_assessment_blueprints_bump_version()
+returns trigger as $$
+begin
+  if (new.includes_technical, new.includes_personality, new.includes_structured_interview, new.includes_experience,
+      new.includes_online_mcq, new.technical_template_id, new.personality_template_id)
+     is distinct from
+     (old.includes_technical, old.includes_personality, old.includes_structured_interview, old.includes_experience,
+      old.includes_online_mcq, old.technical_template_id, old.personality_template_id) then
+    new.version := old.version + 1;
+  else
+    new.version := old.version;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+-- Section 52's default-blueprint trigger (SECURITY DEFINER since Section 53), changed ONLY to copy
+-- includes_online_mcq too, and to let a reassessment inherit needs_online_mcq from the assessment it
+-- follows (comp_create_reassessment copies the other four flags itself).
+create or replace function comp_assessments_apply_default_blueprint()
+returns trigger as $$
+declare
+  v_bp comp_assessment_blueprints%rowtype;
+  v_prev_mcq boolean;
+begin
+  if new.previous_assessment_id is not null then
+    select a.needs_online_mcq into v_prev_mcq from comp_assessments a where a.id = new.previous_assessment_id;
+    new.needs_online_mcq := coalesce(v_prev_mcq, false);
+    return new;
+  end if;
+  if new.blueprint_id is not null then
+    return new;
+  end if;
+  select * into v_bp
+  from comp_assessment_blueprints b
+  where b.job_role = new.job_role and b.is_default and b.active
+  limit 1;
+  if not found then
+    return new;
+  end if;
+  new.blueprint_id := v_bp.id;
+  new.needs_technical_assessment := v_bp.includes_technical;
+  new.needs_personality_assessment := v_bp.includes_personality;
+  new.needs_structured_interview := v_bp.includes_structured_interview;
+  new.includes_experience := v_bp.includes_experience;
+  new.needs_online_mcq := v_bp.includes_online_mcq;
+  perform comp_log_audit(
+    'EXAM_DESIGN_DEFAULT_BLUEPRINT_APPLIED', 'comp_assessments', new.id, null,
+    jsonb_build_object(
+      'blueprintId', v_bp.id,
+      'blueprintVersion', v_bp.version,
+      'needsTechnicalAssessment', v_bp.includes_technical,
+      'needsPersonalityAssessment', v_bp.includes_personality,
+      'needsStructuredInterview', v_bp.includes_structured_interview,
+      'includesExperience', v_bp.includes_experience,
+      'needsOnlineMcq', v_bp.includes_online_mcq
+    )
+  );
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- Section 53's lock, changed ONLY to freeze needs_online_mcq with the rest of the exam design.
+create or replace function comp_assessments_enforce_lock()
+returns trigger as $$
+begin
+  if coalesce(current_setting('comp.allow_locked_write', true), '') = 'on' then
+    return new;
+  end if;
+  if old.status = 'completed' then
+    if new.status is distinct from old.status then
+      raise exception 'assessment_locked: a completed assessment can only be reopened by a module admin (comp_reopen_assessment)';
+    end if;
+    if new.job_role is distinct from old.job_role
+       or new.selected_question_ids is distinct from old.selected_question_ids
+       or new.answers is distinct from old.answers
+       or new.capstone_score is distinct from old.capstone_score
+       or new.capstone_note is distinct from old.capstone_note
+       or new.education_score is distinct from old.education_score
+       or new.experience_score is distinct from old.experience_score
+       or new.pm_training_score is distinct from old.pm_training_score
+       or new.pm_certification_score is distinct from old.pm_certification_score
+       or new.needs_personality_assessment is distinct from old.needs_personality_assessment
+       or new.needs_technical_assessment is distinct from old.needs_technical_assessment
+       or new.needs_structured_interview is distinct from old.needs_structured_interview
+       or new.includes_experience is distinct from old.includes_experience
+       or new.needs_online_mcq is distinct from old.needs_online_mcq
+       or new.blueprint_id is distinct from old.blueprint_id
+       or new.years_experience_total is distinct from old.years_experience_total
+       or new.years_experience_pipeline is distinct from old.years_experience_pipeline
+       or new.education is distinct from old.education
+       or new.certifications is distinct from old.certifications then
+      raise exception 'assessment_locked: this assessment is completed; a module admin must reopen it before its scores, question selection, exam design or evidence can change';
+    end if;
+  end if;
+  -- M-9: the frozen question selection cannot silently change under existing answers.
+  if new.selected_question_ids is distinct from old.selected_question_ids
+     and coalesce(current_setting('comp.allow_question_reset', true), '') <> 'on'
+     and comp_assessment_has_technical_responses(old.id, old.selected_question_ids, old.answers) then
+    raise exception 'responses_exist: answers/scores already exist for the current technical questions; regenerate with explicit discard (comp_set_selected_questions)';
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+-- ---------------------------------------------------------------- staff RPCs
+
+-- Draws a balanced test from the role's active APPROVED MCQs: topics breadth-first (every topic's
+-- first question before any topic's second — "جامعیت"), difficulty mix ≈ 30 % easy / 45 % medium /
+-- 25 % hard where the pool allows, then shuffled; each question's options get their own random order.
+-- Regenerating once the candidate has started requires p_discard_existing (the discarded responses
+-- are archived in the audit log and the old link stops working); a not-yet-started test is replaced
+-- in place and keeps its link.
+create or replace function comp_mcq_generate_test(
+  p_assessment_id uuid,
+  p_question_count int default 30,
+  p_time_limit_minutes int default 45,
+  p_discard_existing boolean default false
+)
+returns jsonb as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_old comp_mcq_tests%rowtype;
+  v_token uuid;
+  v_pool int;
+  v_n int;
+  v_quota int[];
+  v_taken int[] := array[0, 0, 0];
+  v_ids uuid[] := '{}';
+  r record;
+  v_order jsonb;
+  v_perms jsonb;
+  v_id uuid;
+  v_archive jsonb;
+  v_had_responses boolean := false;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not (comp_is_lead(p_assessment_id) or comp_is_assessment_designer()) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.status = 'completed' then
+    raise exception 'assessment_locked: a completed assessment''s MCQ test cannot be regenerated';
+  end if;
+  if not v_a.needs_online_mcq then
+    raise exception 'mcq_not_in_design: turn on «آزمون تستی آنلاین» in the exam design first';
+  end if;
+  if p_question_count is null or p_question_count not between 5 and 100 then
+    raise exception 'invalid question count (5-100)';
+  end if;
+  if p_time_limit_minutes is null or p_time_limit_minutes not between 5 and 240 then
+    raise exception 'invalid time limit (5-240 minutes)';
+  end if;
+
+  select count(*) into v_pool from comp_mcq_questions q
+  where q.job_role = v_a.job_role and q.active and q.approval_status = 'APPROVED';
+  if v_pool = 0 then
+    raise exception 'mcq_no_questions: this job role has no approved MCQ questions yet';
+  end if;
+  v_n := least(p_question_count, v_pool);
+  v_quota := array[round(v_n * 0.30)::int, 0, round(v_n * 0.25)::int];
+  v_quota[2] := v_n - v_quota[1] - v_quota[3];
+
+  select * into v_old from comp_mcq_tests where assessment_id = v_a.id for update;
+  if found then
+    v_had_responses := v_old.status <> 'NOT_STARTED' or exists (select 1 from comp_mcq_responses x where x.test_id = v_old.id);
+    if v_had_responses and not coalesce(p_discard_existing, false) then
+      raise exception 'responses_exist: the candidate has already started this test; confirm discarding it to regenerate';
+    end if;
+    if v_had_responses then
+      select coalesce(jsonb_agg(jsonb_build_object('questionId', x.question_id, 'chosenOption', x.chosen_option,
+        'responseTimeMs', x.response_time_ms, 'isCorrect', x.is_correct)), '[]'::jsonb)
+      into v_archive from comp_mcq_responses x where x.test_id = v_old.id;
+      perform comp_log_audit('MCQ_TEST_DISCARDED', 'comp_mcq_tests', v_old.id,
+        jsonb_build_object('assessmentId', v_a.id, 'status', v_old.status, 'startedAt', v_old.started_at, 'scorePercent', v_old.score_percent,
+          'questionIds', v_old.question_ids, 'responses', v_archive),
+        jsonb_build_object('reason', 'regenerated'));
+    else
+      v_token := v_old.candidate_token;
+    end if;
+    delete from comp_mcq_tests where id = v_old.id;
+  end if;
+
+  -- Pass 1: breadth-first over topics, honoring the difficulty quotas.
+  for r in
+    select x.id, x.difficulty
+    from (
+      select q.id, q.difficulty,
+        row_number() over (partition by q.topic order by q.usage_count / 3, random()) as rn, random() as tie
+      from comp_mcq_questions q
+      where q.job_role = v_a.job_role and q.active and q.approval_status = 'APPROVED'
+    ) x
+    order by x.rn, x.tie
+  loop
+    exit when coalesce(array_length(v_ids, 1), 0) >= v_n;
+    if v_taken[r.difficulty] < v_quota[r.difficulty] then
+      v_ids := v_ids || r.id;
+      v_taken[r.difficulty] := v_taken[r.difficulty] + 1;
+    end if;
+  end loop;
+  -- Pass 2: the pool could not meet a quota — fill up breadth-first, any difficulty.
+  if coalesce(array_length(v_ids, 1), 0) < v_n then
+    for r in
+      select x.id, x.difficulty
+      from (
+        select q.id, q.difficulty, row_number() over (partition by q.topic order by random()) as rn, random() as tie
+        from comp_mcq_questions q
+        where q.job_role = v_a.job_role and q.active and q.approval_status = 'APPROVED' and not (q.id = any(v_ids))
+      ) x
+      order by x.rn, x.tie
+    loop
+      exit when coalesce(array_length(v_ids, 1), 0) >= v_n;
+      v_ids := v_ids || r.id;
+      v_taken[r.difficulty] := v_taken[r.difficulty] + 1;
+    end loop;
+  end if;
+
+  select jsonb_agg(u.id::text order by random()) into v_order from unnest(v_ids) u(id);
+  select jsonb_object_agg(u.id::text, p.perm) into v_perms
+  from unnest(v_ids) u(id)
+  cross join lateral (select jsonb_agg(i order by random()) as perm from generate_series(0, 3) i where u.id is not null) p;
+
+  insert into comp_mcq_tests (assessment_id, job_role, candidate_token, question_ids, option_orders, time_limit_minutes, generation)
+  values (
+    v_a.id, v_a.job_role, coalesce(v_token, gen_random_uuid()), v_order, v_perms, p_time_limit_minutes,
+    jsonb_build_object(
+      'requestedCount', p_question_count, 'drawnCount', v_n, 'poolSize', v_pool,
+      'difficultyTarget', jsonb_build_object('1', v_quota[1], '2', v_quota[2], '3', v_quota[3]),
+      'difficultyDrawn', jsonb_build_object('1', v_taken[1], '2', v_taken[2], '3', v_taken[3]),
+      'topicsDrawn', (select jsonb_object_agg(t.topic, t.n) from (
+        select q.topic, count(*) n from comp_mcq_questions q where q.id = any(v_ids) group by q.topic) t),
+      'poolTopics', (select count(distinct q.topic) from comp_mcq_questions q
+        where q.job_role = v_a.job_role and q.active and q.approval_status = 'APPROVED')
+    )
+  )
+  returning id into v_id;
+
+  update comp_mcq_questions set usage_count = usage_count + 1, last_used_at = now() where id = any(v_ids);
+
+  perform comp_log_audit('MCQ_TEST_GENERATED', 'comp_mcq_tests', v_id, null, jsonb_build_object(
+    'assessmentId', v_a.id, 'jobRole', v_a.job_role, 'count', v_n, 'timeLimitMinutes', p_time_limit_minutes,
+    'discardedResponses', v_had_responses, 'keptLink', v_token is not null));
+  return jsonb_build_object('testId', v_id, 'count', v_n, 'poolSize', v_pool, 'discardedResponses', v_had_responses, 'keptLink', v_token is not null);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mcq_generate_test(uuid, int, int, boolean) from public, anon;
+grant execute on function comp_mcq_generate_test(uuid, int, int, boolean) to authenticated;
+
+-- Staff view of one assessment's test: meta, stored result and every question with the chosen and
+-- the correct answer (staff only). The candidate link (token) is returned to leads/designers only.
+create or replace function comp_mcq_get_test_detail(p_assessment_id uuid)
+returns jsonb as $$
+declare
+  v_t comp_mcq_tests%rowtype;
+  v_items jsonb;
+begin
+  if auth.uid() is null or not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_t from comp_mcq_tests where assessment_id = p_assessment_id;
+  if not found then
+    return null;
+  end if;
+  if comp_mcq_finalize_if_expired(v_t.id) then
+    select * into v_t from comp_mcq_tests where id = v_t.id;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'order', sel.ord,
+    'questionId', q.id,
+    'version', q.version,
+    'category', q.category,
+    'topic', q.topic,
+    'difficulty', q.difficulty,
+    'stem', q.stem_fa,
+    'options', q.options,
+    'correctOption', coalesce(r.correct_option, q.correct_option),
+    'chosenOption', r.chosen_option,
+    'isCorrect', case when v_t.status = 'SCORED' then coalesce(r.is_correct, false) end,
+    'responseTimeMs', r.response_time_ms,
+    'answeredAt', r.answered_at,
+    'explanation', q.explanation_fa,
+    'standardRef', q.standard_ref
+  ) order by sel.ord), '[]'::jsonb)
+  into v_items
+  from jsonb_array_elements_text(v_t.question_ids) with ordinality sel(qid, ord)
+  join comp_mcq_questions q on q.id::text = sel.qid
+  left join comp_mcq_responses r on r.test_id = v_t.id and r.question_id = q.id;
+
+  return jsonb_build_object(
+    'id', v_t.id,
+    'assessmentId', v_t.assessment_id,
+    'status', v_t.status,
+    'candidateToken', case when comp_is_lead(p_assessment_id) or comp_is_assessment_designer() then v_t.candidate_token end,
+    'questionCount', jsonb_array_length(v_t.question_ids),
+    'timeLimitMinutes', v_t.time_limit_minutes,
+    'generation', v_t.generation,
+    'startedAt', v_t.started_at,
+    'submittedAt', v_t.submitted_at,
+    'submitReason', v_t.submit_reason,
+    'scoredAt', v_t.scored_at,
+    'totalQuestions', v_t.total_questions,
+    'answeredCount', coalesce(v_t.answered_count, (select count(*) from comp_mcq_responses x where x.test_id = v_t.id and x.chosen_option is not null)),
+    'correctCount', v_t.correct_count,
+    'scorePercent', v_t.score_percent,
+    'timeSpentSeconds', v_t.time_spent_seconds,
+    'topicScores', v_t.topic_scores,
+    'categoryScores', v_t.category_scores,
+    'difficultyScores', v_t.difficulty_scores,
+    'createdAt', v_t.created_at,
+    'items', v_items
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mcq_get_test_detail(uuid) from public, anon;
+grant execute on function comp_mcq_get_test_detail(uuid) to authenticated;
+
+-- ---------------------------------------------------------------- evidence source type
+
+alter table comp_competency_evidence_sources drop constraint if exists comp_competency_evidence_sources_source_type_check;
+alter table comp_competency_evidence_sources add constraint comp_competency_evidence_sources_source_type_check check (source_type in (
+  'TECHNICAL_CATEGORY', 'TECHNICAL_MCQ', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'EXPERIENCE', 'STRUCTURED_INTERVIEW'
+));
+
+-- The MCQ category of every competency that already reads an in-person technical category, at half
+-- that source's weight (breadth-of-knowledge evidence next to the panel's in-depth scoring).
+-- Real, admin-editable configuration (Settings → «مدل شایستگی و مشاغل»); `on conflict do nothing`.
+insert into comp_competency_evidence_sources (competency_id, source_type, source_ref, weight)
+select s.competency_id, 'TECHNICAL_MCQ', s.source_ref, round(s.weight * 0.5, 2)
+from comp_competency_evidence_sources s
+where s.source_type = 'TECHNICAL_CATEGORY'
+  and s.source_ref in ('TECHNICAL', 'GENERAL', 'HSE', 'SCENARIO', 'PROBLEM_SOLVING', 'CASE_STUDY', 'JUDGMENT')
+on conflict (competency_id, source_type, source_ref) do nothing;
+
+-- ---------------------------------------------------------------- Competency Engine (design-aware MCQ evidence)
+
+-- Section 53's comp_compute_competency_profile, changed ONLY for the online MCQ test (this section's
+-- header): TECHNICAL_MCQ joins the design-exclusion list (needs_online_mcq), MCQ categories with no
+-- approved MCQ for the role are "not assessable" (v_no_mcq_refs, reason NO_MCQ_QUESTIONS), a scored
+-- test contributes one evidence item per topic (normalized = % correct, item weight = its question
+-- count), and the audit entry records both. Every other rule is unchanged.
+create or replace function comp_compute_competency_profile(p_assessment_id uuid)
+returns void as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_pa_id uuid;
+  v_count int;
+  v_excluded_types text[];
+  v_scored_categories text[] := '{}';
+  v_no_bank_refs text[] := '{}';
+  v_mcq_test_id uuid;
+  v_mcq_question_ids jsonb := '[]'::jsonb;
+  v_mcq_scored_categories text[] := '{}';
+  v_no_mcq_refs text[] := '{}';
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  -- Source types whose assessment method is not part of this candidate's design (see the Section 50
+  -- header): dropped from both evidence collection and the coverage denominator below.
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end,
+    case when not v_assessment.needs_online_mcq then 'TECHNICAL_MCQ' end
+  ], null);
+
+  -- Section 53 (M-8): a TECHNICAL_CATEGORY source whose category has no active APPROVED bank question
+  -- for this job role AND no scored item in this candidate's frozen snapshot can never produce
+  -- evidence — it is "not assessable", not "no evidence". Such sources are dropped from evidence
+  -- collection AND the coverage denominator (like an out-of-design method), and recorded per
+  -- competency in comp_competency_scores.unassessable_sources + the audit entry.
+  if v_assessment.needs_technical_assessment then
+    select coalesce(array_agg(distinct qb.category), '{}') into v_scored_categories
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+    where jsonb_typeof(v_assessment.answers -> sel.qid -> 'score') = 'number'
+       or exists (
+         select 1 from comp_panelist_scores ps
+         where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+           and jsonb_typeof(ps.answers -> sel.qid -> 'score') = 'number'
+       );
+
+    select coalesce(array_agg(distinct s.source_ref), '{}') into v_no_bank_refs
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    where s.source_type = 'TECHNICAL_CATEGORY'
+      and s.source_ref <> all(v_scored_categories)
+      and not exists (
+        select 1 from comp_question_bank q
+        where q.job_role = v_assessment.job_role and q.category = s.source_ref and q.active and q.approval_status = 'APPROVED'
+      );
+  end if;
+
+  -- Section 56: the candidate's SCORED online MCQ test (if the design includes it), and the MCQ
+  -- categories that are "not assessable" — no active APPROVED MCQ of that category for the role and
+  -- none in the candidate's test — dropped from evidence and coverage exactly like M-8 above.
+  if v_assessment.needs_online_mcq then
+    select t.id, t.question_ids into v_mcq_test_id, v_mcq_question_ids
+    from comp_mcq_tests t where t.assessment_id = p_assessment_id and t.status = 'SCORED';
+    v_mcq_question_ids := coalesce(v_mcq_question_ids, '[]'::jsonb);
+    select coalesce(array_agg(distinct q.category), '{}') into v_mcq_scored_categories
+    from jsonb_array_elements_text(v_mcq_question_ids) sel(qid)
+    join comp_mcq_questions q on q.id::text = sel.qid;
+
+    select coalesce(array_agg(distinct s.source_ref), '{}') into v_no_mcq_refs
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    where s.source_type = 'TECHNICAL_MCQ'
+      and s.source_ref <> all(v_mcq_scored_categories)
+      and not exists (
+        select 1 from comp_mcq_questions q
+        where q.job_role = v_assessment.job_role and q.category = s.source_ref and q.active and q.approval_status = 'APPROVED'
+      );
+  end if;
+
+  delete from comp_competency_evidence where assessment_id = p_assessment_id;
+  delete from comp_competency_scores where assessment_id = p_assessment_id;
+
+  -- personality_assessments.assessment_id is unique, so there is at most one; only a scored one counts.
+  select pa.id into v_pa_id
+  from personality_assessments pa
+  where pa.assessment_id = p_assessment_id
+    and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED');
+
+  with srcs as (
+    select s.id, s.competency_id, s.source_type, s.source_ref, s.weight
+    from comp_competency_evidence_sources s
+    join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_assessment.job_role
+    join comp_competencies c on c.id = s.competency_id and c.active
+    where s.source_type <> all(v_excluded_types)
+      and not (s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs))
+      and not (s.source_type = 'TECHNICAL_MCQ' and s.source_ref = any(v_no_mcq_refs))
+  ),
+  submitted as (
+    select ps.answers
+    from comp_panelist_scores ps
+    where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+  ),
+  selected_questions as (
+    select qb.id, qb.category, qb.question_text
+    from jsonb_array_elements_text(
+      case when jsonb_typeof(v_assessment.selected_question_ids) = 'array' then v_assessment.selected_question_ids else '[]'::jsonb end
+    ) sel(qid)
+    join comp_question_bank qb on qb.id::text = sel.qid
+  ),
+  technical as (
+    select
+      q.id, q.category, q.question_text, panel.avg_score, panel.panelist_count, panel.notes,
+      case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+        then (v_assessment.answers -> q.id::text ->> 'score')::numeric end as lead_score,
+      coalesce(nullif(v_assessment.answers -> q.id::text ->> 'candidateAnswer', ''), panel.candidate_answer) as candidate_answer,
+      nullif(v_assessment.answers -> q.id::text ->> 'note', '') as lead_note
+    from selected_questions q
+    cross join lateral (
+      select
+        avg(case when jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number' then (s.answers -> q.id::text ->> 'score')::numeric end) as avg_score,
+        count(*) filter (where jsonb_typeof(s.answers -> q.id::text -> 'score') = 'number')::int as panelist_count,
+        coalesce(jsonb_agg(left(s.answers -> q.id::text ->> 'note', 300)) filter (where coalesce(s.answers -> q.id::text ->> 'note', '') <> ''), '[]'::jsonb) as notes,
+        (array_agg(s.answers -> q.id::text ->> 'candidateAnswer') filter (where coalesce(s.answers -> q.id::text ->> 'candidateAnswer', '') <> ''))[1] as candidate_answer
+      from submitted s
+    ) panel
+  ),
+  technical_official as (
+    select t.*, coalesce(round(t.avg_score), t.lead_score) as official_score
+    from technical t
+  ),
+  personality as (
+    select 'PERSONALITY_TRAIT'::text as source_type, t.key as source_ref, ds.id::text as item_id, t.label_fa as label,
+      ds.normalized_score as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence) as raw
+    from personality_dimension_scores ds
+    join personality_traits t on t.id = ds.trait_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'TRAIT' and ds.normalized_score is not null
+    union all
+    select 'PERSONALITY_DIMENSION'::text, d.key, ds.id::text, d.label_fa,
+      ds.normalized_score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'scoreKind', ds.score_kind, 'rawScore', ds.raw_score,
+        'coverageCount', ds.coverage_count, 'confidence', ds.confidence)
+    from personality_dimension_scores ds
+    join personality_behavioral_dimensions d on d.id = ds.dimension_id
+    where ds.personality_assessment_id = v_pa_id and ds.score_kind = 'BEHAVIORAL_DIMENSION' and ds.normalized_score is not null
+  ),
+  sjt as (
+    select
+      o.value ->> 'dimension_key' as source_ref, pr.question_id::text as item_id, left(pq.question_text, 160) as label,
+      (o.value ->> 'score')::numeric / 5 * 100 as score,
+      jsonb_build_object('personalityAssessmentId', v_pa_id, 'selectedOption', o.value ->> 'key',
+        'optionLabel', left(o.value ->> 'label_fa', 300), 'optionScore', (o.value ->> 'score')::numeric) as raw
+    from personality_responses pr
+    join personality_questions pq on pq.id = pr.question_id and pq.question_type = 'SJT'
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+    where pr.personality_assessment_id = v_pa_id
+      and o.value ->> 'key' = pr.response_value ->> 'selected_option'
+      and jsonb_typeof(o.value -> 'score') = 'number'
+  ),
+  experience as (
+    select 'years_total'::text as source_ref, 'سابقه کاری کل'::text as label,
+      least(greatest(v_assessment.years_experience_total, 0) / 15, 1) * 100 as score,
+      jsonb_build_object('years', v_assessment.years_experience_total, 'saturatesAt', 15) as raw
+    where v_assessment.years_experience_total is not null
+    union all
+    select 'years_pipeline', 'سابقه کاری در خطوط لوله',
+      least(greatest(v_assessment.years_experience_pipeline, 0) / 10, 1) * 100,
+      jsonb_build_object('years', v_assessment.years_experience_pipeline, 'saturatesAt', 10)
+    where v_assessment.years_experience_pipeline is not null
+    union all
+    select 'certifications', 'گواهینامه‌ها و دوره‌های تخصصی', least(x.n / 5.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'titles', x.titles, 'saturatesAt', 5)
+    from (
+      select count(*)::int as n, jsonb_agg(c.value ->> 'title') as titles
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.certifications) = 'array' then v_assessment.certifications else '[]'::jsonb end) c(value)
+      where btrim(coalesce(c.value ->> 'title', '')) <> ''
+    ) x
+    where x.n > 0
+    union all
+    select 'education', 'سوابق تحصیلی', least(x.n / 3.0, 1) * 100,
+      jsonb_build_object('count', x.n, 'degrees', x.degrees, 'saturatesAt', 3)
+    from (
+      select count(*)::int as n, jsonb_agg(btrim(coalesce(e.value ->> 'degree', '') || ' ' || coalesce(e.value ->> 'field', ''))) as degrees
+      from jsonb_array_elements(case when jsonb_typeof(v_assessment.education) = 'array' then v_assessment.education else '[]'::jsonb end) e(value)
+      where btrim(coalesce(e.value ->> 'degree', '')) <> '' or btrim(coalesce(e.value ->> 'field', '')) <> ''
+    ) x
+    where x.n > 0
+  ),
+  interview as (
+    select r.competency_id, r.rater_id::text as item_id,
+      'مصاحبه ساختاریافته — ' || coalesce(nullif(p.full_name, ''), 'ارزیاب') as label,
+      (r.rating - 1) / 4 * 100 as score,
+      jsonb_build_object('rating', r.rating, 'raterId', r.rater_id, 'notes', left(r.notes, 300), 'ratedAt', r.updated_at) as raw
+    from comp_interview_ratings r
+    left join profiles p on p.id = r.rater_id
+    where r.assessment_id = p_assessment_id
+  ),
+  -- Section 56: one item per topic of the scored MCQ test (unanswered = incorrect, stamped at scoring).
+  mcq as (
+    select q.category, q.topic,
+      count(*)::int as total,
+      count(*) filter (where r.chosen_option is not null)::int as answered,
+      count(*) filter (where coalesce(r.is_correct, false))::int as correct
+    from jsonb_array_elements_text(v_mcq_question_ids) sel(qid)
+    join comp_mcq_questions q on q.id::text = sel.qid
+    left join comp_mcq_responses r on r.test_id = v_mcq_test_id and r.question_id = q.id
+    where v_mcq_test_id is not null
+    group by q.category, q.topic
+  ),
+  items as (
+    select s.id as source_id, s.competency_id, s.source_type, s.source_ref, s.weight, x.item_id, x.label, x.score, x.raw,
+      -- An MCQ topic item weighs by its question count, so the source's weighted average equals the
+      -- category's overall MCQ %; every other item weighs 1 (unchanged split).
+      case when s.source_type = 'TECHNICAL_MCQ' then greatest((x.raw ->> 'total')::numeric, 1) else 1 end as item_weight
+    from srcs s
+    cross join lateral (
+      select t.id::text as item_id, left(t.question_text, 160) as label, t.official_score / 5 * 100 as score,
+        jsonb_build_object(
+          'score', t.official_score,
+          'scoreOrigin', case when t.avg_score is not null then 'PANEL_AVERAGE' else 'LEAD_ENTRY' end,
+          'panelistCount', t.panelist_count,
+          'panelAverage', round(t.avg_score, 2),
+          'leadScore', t.lead_score,
+          'category', t.category,
+          'candidateAnswer', left(t.candidate_answer, 300),
+          'leadNote', left(t.lead_note, 300),
+          'panelNotes', t.notes
+        ) as raw
+      from technical_official t
+      where s.source_type = 'TECHNICAL_CATEGORY' and t.category = s.source_ref and t.official_score is not null
+      union all
+      select p.item_id, p.label, p.score, p.raw
+      from personality p
+      where p.source_type = s.source_type and p.source_ref = s.source_ref
+      union all
+      select j.item_id, j.label, j.score, j.raw
+      from sjt j
+      where s.source_type = 'SJT' and j.source_ref = s.source_ref
+      union all
+      select e.source_ref, e.label, e.score, e.raw
+      from experience e
+      where s.source_type = 'EXPERIENCE' and e.source_ref = s.source_ref
+      union all
+      select i.item_id, i.label, i.score, i.raw
+      from interview i
+      where s.source_type = 'STRUCTURED_INTERVIEW' and i.competency_id = s.competency_id
+      union all
+      select v_mcq_test_id::text || ':' || m.topic, 'آزمون تستی — ' || m.topic, m.correct * 100.0 / m.total,
+        jsonb_build_object('testId', v_mcq_test_id, 'category', m.category, 'topic', m.topic, 'total', m.total,
+          'answered', m.answered, 'correct', m.correct, 'percent', round(m.correct * 100.0 / m.total, 1))
+      from mcq m
+      where s.source_type = 'TECHNICAL_MCQ' and m.category = s.source_ref and m.total > 0
+    ) x
+  )
+  insert into comp_competency_evidence (
+    assessment_id, competency_id, source_type, source_ref, source_item_id, source_label, normalized_score, effective_weight, raw_value
+  )
+  select
+    p_assessment_id, competency_id, source_type, source_ref, item_id, coalesce(label, ''),
+    least(greatest(score, 0), 100),
+    weight * item_weight / sum(item_weight) over (partition by source_id),
+    raw
+  from items;
+
+  insert into comp_competency_scores (
+    assessment_id, competency_id, required_level, level_count, actual_score, actual_level, gap, is_critical, weight,
+    evidence_count, source_types_covered, coverage, confidence, status, unassessable_sources
+  )
+  select
+    p_assessment_id, x.competency_id, x.required_level, x.level_count,
+    round(x.raw_score, 2), x.actual_level, x.required_level - x.actual_level,
+    x.is_critical, x.weight, x.evidence_count, x.source_types_covered, x.coverage,
+    case
+      when x.evidence_count = 0 then 'NONE'
+      when x.coverage >= 0.75 and x.evidence_count >= 3 and x.source_types_covered >= 2 then 'HIGH'
+      when x.coverage >= 0.5 and x.evidence_count >= 2 then 'MEDIUM'
+      else 'LOW'
+    end,
+    -- No evidence is never a gap — it's reported as its own status so a reviewer knows to go gather
+    -- evidence rather than conclude the candidate lacks the competency.
+    case
+      when x.actual_level is null then 'INSUFFICIENT_EVIDENCE'
+      when x.actual_level >= x.required_level + 1 then 'EXCEEDS'
+      when x.actual_level >= x.required_level then 'MEETS'
+      when x.is_critical then 'CRITICAL_GAP'
+      else 'GAP'
+    end,
+    coalesce((
+      select jsonb_agg(jsonb_build_object('sourceType', s.source_type, 'sourceRef', s.source_ref, 'weight', s.weight,
+          'reason', case when s.source_type = 'TECHNICAL_MCQ' then 'NO_MCQ_QUESTIONS' else 'NO_BANK_QUESTIONS' end)
+        order by s.source_type, s.source_ref)
+      from comp_competency_evidence_sources s
+      where s.competency_id = x.competency_id
+        and ((s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs))
+          or (s.source_type = 'TECHNICAL_MCQ' and s.source_ref = any(v_no_mcq_refs)))
+    ), '[]'::jsonb)
+  from (
+    select
+      r.competency_id, r.required_level, r.is_critical, r.weight, lc.level_count, ev.raw_score,
+      case when ev.raw_score is not null
+        then round(1 + ev.raw_score / 100 * (greatest(lc.level_count, 1) - 1), 1) end as actual_level,
+      ev.evidence_count, ev.source_types_covered,
+      case when cov.total_weight > 0 then round(cov.covered_weight / cov.total_weight, 4) else 0 end as coverage
+    from comp_job_competency_requirements r
+    join comp_competencies c on c.id = r.competency_id and c.active
+    cross join lateral (
+      select case when jsonb_typeof(c.proficiency_levels) = 'array' then jsonb_array_length(c.proficiency_levels) else 0 end as level_count
+    ) lc
+    cross join lateral (
+      select
+        sum(e.normalized_score * e.effective_weight) / nullif(sum(e.effective_weight), 0) as raw_score,
+        count(*)::int as evidence_count,
+        count(distinct e.source_type)::int as source_types_covered
+      from comp_competency_evidence e
+      where e.assessment_id = p_assessment_id and e.competency_id = r.competency_id
+    ) ev
+    cross join lateral (
+      select
+        coalesce(sum(s.weight), 0) as total_weight,
+        coalesce(sum(s.weight) filter (where exists (
+          select 1 from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )), 0) as covered_weight
+      from comp_competency_evidence_sources s
+      where s.competency_id = r.competency_id and s.source_type <> all(v_excluded_types)
+        and not (s.source_type = 'TECHNICAL_CATEGORY' and s.source_ref = any(v_no_bank_refs))
+        and not (s.source_type = 'TECHNICAL_MCQ' and s.source_ref = any(v_no_mcq_refs))
+    ) cov
+    where r.job_role = v_assessment.job_role
+  ) x;
+
+  get diagnostics v_count = row_count;
+
+  perform comp_log_audit('COMPETENCY_PROFILE_COMPUTED', 'comp_assessments', p_assessment_id, null, jsonb_build_object('competencies', v_count, 'excludedByDesign', to_jsonb(v_excluded_types),
+    'noBankQuestionCategories', to_jsonb(v_no_bank_refs), 'noMcqQuestionCategories', to_jsonb(v_no_mcq_refs), 'mcqTestId', v_mcq_test_id));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_compute_competency_profile(uuid) from public, anon;
+grant execute on function comp_compute_competency_profile(uuid) to authenticated;
+
+-- Section 53's comp_get_competency_evidence_detail, changed ONLY for TECHNICAL_MCQ: design exclusion,
+-- source order, the per-topic MCQ items (with chosen/correct answer — staff only) and design.onlineMcq.
+create or replace function comp_get_competency_evidence_detail(p_assessment_id uuid, p_competency_id uuid)
+returns jsonb as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_competency comp_competencies%rowtype;
+  v_pa_id uuid;
+  v_personality_access boolean := false;
+  v_excluded_types text[];
+  v_total_weight numeric;
+  v_evidence jsonb;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+
+  select * into v_assessment from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select * into v_competency from comp_competencies where id = p_competency_id;
+  if not found then
+    raise exception 'competency not found';
+  end if;
+
+  -- Same "excluded by design" list as comp_compute_competency_profile (Section 50).
+  v_excluded_types := array_remove(array[
+    case when not v_assessment.needs_technical_assessment then 'TECHNICAL_CATEGORY' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_DIMENSION' end,
+    case when not v_assessment.needs_personality_assessment then 'PERSONALITY_TRAIT' end,
+    case when not v_assessment.needs_personality_assessment then 'SJT' end,
+    case when not v_assessment.needs_structured_interview then 'STRUCTURED_INTERVIEW' end,
+    case when not v_assessment.includes_experience then 'EXPERIENCE' end,
+    case when not v_assessment.needs_online_mcq then 'TECHNICAL_MCQ' end
+  ], null);
+
+  select pa.id into v_pa_id from personality_assessments pa where pa.assessment_id = p_assessment_id;
+  if v_pa_id is not null then
+    v_personality_access := personality_can_access_assessment(v_pa_id);
+  end if;
+
+  select coalesce(sum(e.effective_weight), 0) into v_total_weight
+  from comp_competency_evidence e
+  where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id;
+
+  select coalesce(jsonb_agg(row_json order by source_order, normalized_score desc), '[]'::jsonb) into v_evidence
+  from (
+    select
+      array_position(array['TECHNICAL_CATEGORY', 'TECHNICAL_MCQ', 'PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT', 'STRUCTURED_INTERVIEW', 'EXPERIENCE'], e.source_type) as source_order,
+      e.normalized_score,
+      jsonb_build_object(
+        'id', e.id,
+        'sourceType', e.source_type,
+        'sourceRef', e.source_ref,
+        'sourceItemId', e.source_item_id,
+        'sourceLabel', e.source_label,
+        'normalizedScore', e.normalized_score,
+        'effectiveWeight', e.effective_weight,
+        -- Points this row adds to the competency's weighted-average score, and its weight share.
+        'contribution', case when v_total_weight > 0 then round(e.normalized_score * e.effective_weight / v_total_weight, 2) end,
+        'weightShare', case when v_total_weight > 0 then round(e.effective_weight / v_total_weight, 4) end,
+        'rawValue', e.raw_value,
+        'computedAt', e.computed_at,
+        'itemsRestricted', e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT', 'SJT') and not v_personality_access,
+        'items', case
+          when e.source_type = 'TECHNICAL_CATEGORY' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'TECHNICAL_QUESTION',
+              'questionId', qb.id,
+              'questionText', qb.question_text,
+              'category', qb.category,
+              'subCategory', qb.sub_category,
+              'difficulty', qb.difficulty,
+              'candidateAnswer', nullif(v_assessment.answers -> qb.id::text ->> 'candidateAnswer', ''),
+              'leadScore', case when jsonb_typeof(v_assessment.answers -> qb.id::text -> 'score') = 'number'
+                then (v_assessment.answers -> qb.id::text ->> 'score')::numeric end,
+              'leadNote', nullif(v_assessment.answers -> qb.id::text ->> 'note', ''),
+              -- Only SUBMITTED panel sheets count toward the official score, so only those are shown.
+              'ratings', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'raterId', ps.panelist_id,
+                  'raterName', coalesce(nullif(p.full_name, ''), p.email, 'داور'),
+                  'score', case when jsonb_typeof(ps.answers -> qb.id::text -> 'score') = 'number'
+                    then (ps.answers -> qb.id::text ->> 'score')::numeric end,
+                  'note', nullif(ps.answers -> qb.id::text ->> 'note', ''),
+                  'submittedAt', ps.submitted_at
+                ) order by ps.submitted_at), '[]'::jsonb)
+                from comp_panelist_scores ps
+                left join profiles p on p.id = ps.panelist_id
+                where ps.assessment_id = p_assessment_id and ps.submitted_at is not null
+              )
+            )), '[]'::jsonb)
+            from comp_question_bank qb
+            where qb.id::text = e.source_item_id
+          )
+          when e.source_type = 'TECHNICAL_MCQ' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'MCQ_ITEM',
+              'questionId', q.id,
+              'questionText', q.stem_fa,
+              'topic', q.topic,
+              'difficulty', q.difficulty,
+              'options', q.options,
+              'chosenOption', r.chosen_option,
+              'correctOption', coalesce(r.correct_option, q.correct_option),
+              'isCorrect', coalesce(r.is_correct, false),
+              'responseTimeMs', r.response_time_ms,
+              'explanation', q.explanation_fa
+            ) order by q.difficulty, q.id), '[]'::jsonb)
+            from comp_mcq_responses r
+            join comp_mcq_questions q on q.id = r.question_id
+            where r.test_id = nullif(e.raw_value ->> 'testId', '')::uuid
+              and q.category = e.source_ref and q.topic = e.raw_value ->> 'topic'
+          )
+          when e.source_type in ('PERSONALITY_DIMENSION', 'PERSONALITY_TRAIT') and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'PERSONALITY_ITEM',
+              'questionId', pq.id,
+              'questionType', pq.question_type,
+              'questionText', pq.question_text,
+              'reverseScored', pq.reverse_scored,
+              'response', pr.response_value,
+              'chosenOptionLabel', (
+                select o.value ->> 'label_fa'
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) o(value)
+                where o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                limit 1
+              ),
+              'answeredAt', pr.answered_at
+            ) order by pq.question_type, pr.answered_at), '[]'::jsonb)
+            from personality_dimension_scores ds
+            join personality_responses pr on pr.personality_assessment_id = ds.personality_assessment_id
+            join personality_questions pq on pq.id = pr.question_id
+            where ds.id::text = e.source_item_id
+              and ds.personality_assessment_id = v_pa_id
+              and (
+                (e.source_type = 'PERSONALITY_TRAIT' and pq.trait_id = ds.trait_id)
+                or (e.source_type = 'PERSONALITY_DIMENSION' and pq.dimension_id = ds.dimension_id)
+              )
+          )
+          when e.source_type = 'SJT' and v_personality_access then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'SJT_ITEM',
+              'questionId', pq.id,
+              'questionText', pq.question_text,
+              'scenarioContext', pq.scenario_context,
+              'selectedOption', pr.response_value ->> 'selected_option',
+              'options', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                  'key', o.value ->> 'key',
+                  'labelFa', o.value ->> 'label_fa',
+                  'score', case when jsonb_typeof(o.value -> 'score') = 'number' then (o.value ->> 'score')::numeric end,
+                  'dimensionKey', o.value ->> 'dimension_key',
+                  'chosen', o.value ->> 'key' = pr.response_value ->> 'selected_option'
+                ) order by o.ordinality), '[]'::jsonb)
+                from jsonb_array_elements(case when jsonb_typeof(pq.options) = 'array' then pq.options else '[]'::jsonb end) with ordinality o(value, ordinality)
+              ),
+              'answeredAt', pr.answered_at
+            )), '[]'::jsonb)
+            from personality_responses pr
+            join personality_questions pq on pq.id = pr.question_id
+            where pr.personality_assessment_id = v_pa_id and pq.id::text = e.source_item_id
+          )
+          when e.source_type = 'STRUCTURED_INTERVIEW' then (
+            select coalesce(jsonb_agg(jsonb_build_object(
+              'kind', 'INTERVIEW_RATING',
+              'raterId', r.rater_id,
+              'raterName', coalesce(nullif(p.full_name, ''), p.email, 'ارزیاب'),
+              'rating', r.rating,
+              'notes', r.notes,
+              'ratedAt', r.updated_at
+            )), '[]'::jsonb)
+            from comp_interview_ratings r
+            left join profiles p on p.id = r.rater_id
+            where r.assessment_id = p_assessment_id and r.competency_id = p_competency_id and r.rater_id::text = e.source_item_id
+          )
+          when e.source_type = 'EXPERIENCE' then jsonb_build_array(jsonb_build_object(
+            'kind', 'EXPERIENCE',
+            'metric', e.source_ref,
+            'yearsExperienceTotal', v_assessment.years_experience_total,
+            'yearsExperiencePipeline', v_assessment.years_experience_pipeline,
+            'certifications', case when e.source_ref = 'certifications' then v_assessment.certifications end,
+            'education', case when e.source_ref = 'education' then v_assessment.education end,
+            'employmentHistory', case when e.source_ref in ('years_total', 'years_pipeline') then v_assessment.employment_history end
+          ))
+          else '[]'::jsonb
+        end
+      ) as row_json
+    from comp_competency_evidence e
+    where e.assessment_id = p_assessment_id and e.competency_id = p_competency_id
+  ) x;
+
+  return jsonb_build_object(
+    'assessmentId', p_assessment_id,
+    'competency', jsonb_build_object(
+      'id', v_competency.id,
+      'key', v_competency.key,
+      'labelFa', v_competency.label_fa,
+      'description', v_competency.description,
+      'domain', v_competency.domain,
+      'proficiencyLevels', v_competency.proficiency_levels
+    ),
+    'requirement', (
+      select jsonb_build_object('requiredLevel', r.required_level, 'isCritical', r.is_critical, 'weight', r.weight)
+      from comp_job_competency_requirements r
+      where r.job_role = v_assessment.job_role and r.competency_id = p_competency_id
+    ),
+    'score', (
+      select jsonb_build_object(
+        'requiredLevel', s.required_level, 'levelCount', s.level_count, 'actualScore', s.actual_score,
+        'actualLevel', s.actual_level, 'gap', s.gap, 'isCritical', s.is_critical, 'weight', s.weight,
+        'evidenceCount', s.evidence_count, 'sourceTypesCovered', s.source_types_covered, 'coverage', s.coverage,
+        'confidence', s.confidence, 'status', s.status, 'computedAt', s.computed_at,
+        'unassessableSources', s.unassessable_sources
+      )
+      from comp_competency_scores s
+      where s.assessment_id = p_assessment_id and s.competency_id = p_competency_id
+    ),
+    'design', jsonb_build_object(
+      'technical', v_assessment.needs_technical_assessment,
+      'personality', v_assessment.needs_personality_assessment,
+      'structuredInterview', v_assessment.needs_structured_interview,
+      'experience', v_assessment.includes_experience,
+      'onlineMcq', v_assessment.needs_online_mcq
+    ),
+    'personalityItemsVisible', v_personality_access,
+    -- Every configured source for this competency, so the drawer can show which ones produced
+    -- evidence, which produced none, and which were left out by design (never "missing").
+    'sources', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'sourceType', s.source_type,
+        'sourceRef', s.source_ref,
+        'weight', s.weight,
+        'excludedByDesign', s.source_type = any(v_excluded_types),
+        -- Section 53 (M-8): a technical category with no bank question for this role and nothing
+        -- scored — "not assessable", left out of the coverage denominator by the engine.
+        'noBankQuestions', exists (
+          select 1
+          from comp_competency_scores cs
+          cross join lateral jsonb_array_elements(cs.unassessable_sources) u(value)
+          where cs.assessment_id = p_assessment_id and cs.competency_id = s.competency_id
+            and u.value ->> 'sourceType' = s.source_type and u.value ->> 'sourceRef' = s.source_ref
+        ),
+        'itemCount', (
+          select count(*) from comp_competency_evidence e
+          where e.assessment_id = p_assessment_id and e.competency_id = s.competency_id
+            and e.source_type = s.source_type and e.source_ref = s.source_ref
+        )
+      ) order by s.source_type, s.source_ref), '[]'::jsonb)
+      from comp_competency_evidence_sources s
+      where s.competency_id = p_competency_id
+    ),
+    'evidence', v_evidence
+  );
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_get_competency_evidence_detail(uuid, uuid) from public, anon;
+grant execute on function comp_get_competency_evidence_detail(uuid, uuid) to authenticated;
+
+-- Section 53's comp_ensure_competency_profile, changed ONLY to treat a change of the online MCQ test as an input change.
+create or replace function comp_ensure_competency_profile(p_assessment_id uuid)
+returns boolean as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_last timestamptz;
+  v_inputs timestamptz;
+begin
+  if not comp_can_access_assessment(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  select max(computed_at) into v_last from comp_competency_scores where assessment_id = p_assessment_id;
+  if v_last is not null then
+    -- A completed assessment keeps its stored (final) profile; only the explicit button recomputes it.
+    if v_a.status = 'completed' then
+      return false;
+    end if;
+    select greatest(
+      v_a.updated_at,
+      (select max(ps.updated_at) from comp_panelist_scores ps where ps.assessment_id = p_assessment_id),
+      (select max(ir.updated_at) from comp_interview_ratings ir where ir.assessment_id = p_assessment_id),
+      (select max(pa.updated_at) from personality_assessments pa where pa.assessment_id = p_assessment_id),
+      (select max(t.updated_at) from comp_mcq_tests t where t.assessment_id = p_assessment_id),
+      (select max(r.updated_at) from comp_job_competency_requirements r where r.job_role = v_a.job_role),
+      (select max(s.updated_at) from comp_competency_evidence_sources s
+         join comp_job_competency_requirements r on r.competency_id = s.competency_id and r.job_role = v_a.job_role),
+      (select max(c.updated_at) from comp_competencies c
+         join comp_job_competency_requirements r on r.competency_id = c.id and r.job_role = v_a.job_role)
+    ) into v_inputs;
+    if v_inputs is null or v_inputs <= v_last then
+      return false;
+    end if;
+  end if;
+  perform comp_compute_competency_profile(p_assessment_id);
+  return true;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_ensure_competency_profile(uuid) from public, anon;
+grant execute on function comp_ensure_competency_profile(uuid) to authenticated;
