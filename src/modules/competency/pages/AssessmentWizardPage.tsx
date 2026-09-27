@@ -303,9 +303,14 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           <span className="text-muted">وضعیت پنل:</span>
           <span className="num font-bold">
             {submittedScores.length.toLocaleString('fa-IR')} از {panelists.length.toLocaleString('fa-IR')} داور امتیاز خود را نهایی کرده‌اند
+            {assessment.panelSize > 0 && panelists.length !== assessment.panelSize && (
+              <span className="font-normal text-muted"> (اندازه‌ی پنل: {assessment.panelSize.toLocaleString('fa-IR')} داور)</span>
+            )}
           </span>
           {panelists.length === 0 ? (
-            <span className="text-amber-300">— ابتدا در بخش «پنل مصاحبه‌گران» سه داور را اضافه کنید.</span>
+            <span className="text-amber-300">
+              — ابتدا در بخش «پنل مصاحبه‌گران» {Math.max(1, assessment.panelSize).toLocaleString('fa-IR')} داور را اضافه کنید.
+            </span>
           ) : !hasOfficialScore ? (
             <span className="text-amber-300">— تا ثبت نهایی حداقل یک داور، امتیاز هر سوال را خودتان در بخش «ارزیابی» ثبت می‌کنید.</span>
           ) : (

@@ -670,6 +670,12 @@ export interface CompetencyAssessment {
   resultsShareToken: string
   reviewedBy: string | null
   reviewedAt: string | null
+  /** Last time a module admin reopened this assessment (schema.sql Section 54, N-10/N-12). */
+  reopenedAt: string | null
+  /** A lead's pending request that a module admin reopen this completed assessment (N-10). */
+  reopenRequestedAt: string | null
+  reopenRequestedBy: string | null
+  reopenRequestReason: string | null
   /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */
   isApproved: boolean
   /** Lead's own narrative judgment — distinct from the per-domain strengths/weaknesses derived automatically from question scores (see domainFlags in competencyModel.ts). */

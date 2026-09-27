@@ -91,6 +91,10 @@ export interface CompAssessmentRow {
   results_share_token: string
   reviewed_by: string | null
   reviewed_at: string | null
+  reopened_at?: string | null
+  reopen_requested_at?: string | null
+  reopen_requested_by?: string | null
+  reopen_request_reason?: string | null
   is_approved: boolean
   strengths: string
   development_areas: string
@@ -147,6 +151,10 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     resultsShareToken: r.results_share_token,
     reviewedBy: r.reviewed_by,
     reviewedAt: r.reviewed_at,
+    reopenedAt: r.reopened_at ?? null,
+    reopenRequestedAt: r.reopen_requested_at ?? null,
+    reopenRequestedBy: r.reopen_requested_by ?? null,
+    reopenRequestReason: r.reopen_request_reason ?? null,
     isApproved: r.is_approved,
     strengths: r.strengths ?? '',
     developmentAreas: r.development_areas ?? '',

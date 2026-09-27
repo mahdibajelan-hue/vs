@@ -614,6 +614,8 @@ interface CompetencyState {
   /** The only way out of a locked/completed assessment (spec section 30) — admin-only, clears the
    * assessment status and every panelist's submitted_at so judges can score again. */
   reopenAssessment: (assessmentId: string) => Promise<void>
+  /** A lead (not module admin) asks a module admin to reopen a completed assessment (N-10). */
+  requestReopen: (assessmentId: string, reason: string) => Promise<boolean>
 
   /** Gemini AI Analysis (spec section 18-27) — keyed by assessment id, holding the latest generated
    * analysis (if any) for whichever assessments have been fetched. */
@@ -773,6 +775,10 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       resultsShareToken: crypto.randomUUID(),
       reviewedBy: null,
       reviewedAt: null,
+      reopenedAt: null,
+      reopenRequestedAt: null,
+      reopenRequestedBy: null,
+      reopenRequestReason: null,
       isApproved: false,
       strengths: '',
       developmentAreas: '',
@@ -1292,7 +1298,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     }
     const id = crypto.randomUUID()
     const uid = currentUserId()
-    const { error } = await supabase.from('comp_attachments').insert({ id, assessment_id: assessmentId, kind, file_name: file.name, storage_path: path })
+    // uploaded_by is also forced to the caller server-side (trg_comp_attachments_uploader, L-3).
+    const { error } = await supabase.from('comp_attachments').insert({ id, assessment_id: assessmentId, kind, file_name: file.name, storage_path: path, uploaded_by: uid })
     if (reportError('ثبت مدرک', error)) return
     const created: CompAttachment = {
       id,
@@ -1885,6 +1892,18 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     // fetchAll() re-pulls both comp_assessments and comp_panelist_scores in one go, so the
     // now-cleared status and submitted_at flags show up everywhere without a second round trip.
     await get().fetchAll()
+  },
+
+  requestReopen: async (assessmentId, reason) => {
+    const { error } = await supabase.rpc('comp_request_reopen', { p_assessment_id: assessmentId, p_reason: reason })
+    if (reportError('درخواست بازگشایی', error)) return false
+    const now = new Date().toISOString()
+    set({
+      assessments: get().assessments.map((a) =>
+        a.id === assessmentId ? { ...a, reopenRequestedAt: now, reopenRequestedBy: currentUserId(), reopenRequestReason: reason.trim() } : a,
+      ),
+    })
+    return true
   },
 
   fetchAiAnalysis: async (assessmentId) => {

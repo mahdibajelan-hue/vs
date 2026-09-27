@@ -9,6 +9,10 @@ import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { PLAN_STATUS_META } from '../lib/developmentPlan'
+import { computeNextStep, type NextStep } from '../lib/nextStep'
+import { supabase } from '../../../lib/supabaseClient'
+import { useAuthStore } from '../../../store/useAuthStore'
+import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import type { CompDevelopmentPlan, CompetencyAssessment, JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
@@ -36,6 +40,29 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchDevelopmentPlans = useCompetencyStore((s) => s.fetchDevelopmentPlans)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
+  const [mineOnly, setMineOnly] = useState(false)
+  // N-12: the next step per candidate — from the loaded rows plus two light lists: every panel
+  // assignment (assessment/user/lead only) and the personality tests' statuses.
+  const myProfile = useAuthStore((s) => s.profile)
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
+  const personalityAssessments = usePersonalityStore((s) => s.assessments)
+  const fetchPersonalityAssessments = usePersonalityStore((s) => s.fetchAssessments)
+  const [panelRows, setPanelRows] = useState<{ assessment_id: string; user_id: string; is_lead: boolean }[]>([])
+  const [personalityLoaded, setPersonalityLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('comp_panelists')
+      .select('assessment_id, user_id, is_lead')
+      .then(({ data }) => active && setPanelRows((data ?? []) as { assessment_id: string; user_id: string; is_lead: boolean }[]))
+    fetchPersonalityAssessments().then(() => active && setPersonalityLoaded(true))
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
@@ -78,7 +105,39 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     })
     return map
   }, [scored, usedRoles])
-  const filteredAssessments = roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)
+  const nextStepById = useMemo(() => {
+    const myId = myProfile?.id ?? null
+    const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myId)
+    const isDesigner = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myId)
+    const myPanel = new Map<string, { isLead: boolean }>()
+    const panelCount = new Map<string, number>()
+    for (const r of panelRows) {
+      panelCount.set(r.assessment_id, (panelCount.get(r.assessment_id) ?? 0) + 1)
+      if (r.user_id === myId) myPanel.set(r.assessment_id, { isLead: r.is_lead })
+    }
+    const map = new Map<string, NextStep>()
+    for (const a of assessments) {
+      map.set(
+        a.id,
+        computeNextStep(a, {
+          myId,
+          isModuleAdmin,
+          isDesigner,
+          myPanel,
+          panelCount: panelCount.get(a.id) ?? 0,
+          sheets: panelistScores.filter((s) => s.assessmentId === a.id),
+          personalityStatus: personalityAssessments.find((p) => p.assessmentId === a.id)?.status,
+          personalityLoaded,
+        }),
+      )
+    }
+    return map
+  }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, myProfile, moduleAdmins, assessmentDesigners])
+  const mineCount = assessments.filter((a) => nextStepById.get(a.id)?.mine).length
+
+  const filteredAssessments = (roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)).filter(
+    (a) => !mineOnly || nextStepById.get(a.id)?.mine,
+  )
 
   const totalInterviews = assessments.length
   const acceptedCount = assessments.filter((a) => a.isApproved).length
@@ -143,6 +202,14 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-bold">همه متقاضیان</p>
+          <button
+            onClick={() => setMineOnly((v) => !v)}
+            className={`rounded-full px-3 py-1 text-[10.5px] font-bold transition-colors ${
+              mineOnly ? 'bg-rose-500/25 text-rose-200' : 'bg-white/5 text-secondary hover:bg-white/10'
+            }`}
+          >
+            نیازمند اقدام من ({mineCount.toLocaleString('fa-IR')})
+          </button>
         </div>
 
         {usedRoles.length > 1 && (
@@ -181,6 +248,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                 assessment={a}
                 overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
                 rank={rankById.get(a.id)}
+                nextStep={nextStepById.get(a.id)}
                 plan={developmentPlans.find((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
                 followUp={assessments.find((x) => x.previousAssessmentId === a.id)}
                 onOpen={() => onOpen(a.id)}
@@ -234,6 +302,7 @@ function CandidateCard({
   assessment: a,
   overall,
   rank,
+  nextStep,
   plan,
   followUp,
   onOpen,
@@ -242,6 +311,7 @@ function CandidateCard({
   assessment: CompetencyAssessment
   overall: number | null
   rank?: number
+  nextStep?: NextStep
   /** This assessment's open Individual Development Plan, if any (Phase 5). */
   plan?: CompDevelopmentPlan
   /** The reassessment that follows this one up, if any. */
@@ -299,9 +369,18 @@ function CandidateCard({
         </div>
         <div className="flex flex-wrap items-center justify-center gap-1">
           <span
-            className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${a.status === 'completed' ? 'bg-green-500/15 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}
+            className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+              nextStep?.mine
+                ? 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40'
+                : nextStep?.tone === 'done' || (!nextStep && a.status === 'completed')
+                  ? 'bg-green-500/15 text-green-300'
+                  : nextStep?.tone === 'waiting'
+                    ? 'bg-slate-500/20 text-slate-300'
+                    : 'bg-amber-500/15 text-amber-300'
+            }`}
+            title={nextStep?.mine ? 'این مرحله منتظر اقدام شماست' : 'مرحله‌ی بعدی'}
           >
-            {a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام'}
+            {nextStep?.label ?? (a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام')}
           </span>
           <span className="text-[9px] text-muted">{formatJalali(a.interviewDate)}</span>
         </div>

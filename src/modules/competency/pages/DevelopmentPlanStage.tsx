@@ -193,7 +193,18 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
             profiles={profiles}
             canManage={canManage}
             progress={progress}
-            onChange={(patch) => updateDevelopmentPlan(plan.id, patch)}
+            onChange={(patch) => {
+              // L-9: cancelling hides the plan from this page (and offers creating a new one), so it
+              // needs an explicit confirmation.
+              if (
+                patch.status === 'CANCELLED' &&
+                !window.confirm(
+                  'با لغو، این برنامه‌ی توسعه از این صفحه کنار می‌رود (با وضعیت «لغوشده» نگه داشته می‌شود و حذف نمی‌شود) و می‌توانید برنامه‌ی جدیدی بسازید. برنامه لغو شود؟',
+                )
+              )
+                return
+              updateDevelopmentPlan(plan.id, patch)
+            }}
           />
         )}
       </div>
@@ -244,6 +255,9 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
           >
             مشاهده ارزیابی مجدد ({formatJalali(nextAssessment.interviewDate)}) <ArrowLeft size={13} />
           </button>
+        ) : canManage && assessment.status !== 'completed' ? (
+          // L-10: a reassessment only follows a finalized assessment (the RPC enforces it too).
+          <p className="shrink-0 text-[10.5px] text-amber-300/90">ارزیابی مجدد پس از «ثبت نهایی» همین ارزیابی ممکن است.</p>
         ) : canManage ? (
           <button
             onClick={handleReassess}

@@ -11308,3 +11308,157 @@ create trigger trg_set_updated_at before update on comp_question_bank
 drop trigger if exists trg_set_updated_at on personality_questions;
 create trigger trg_set_updated_at before update on personality_questions
   for each row execute function personality_questions_touch();
+
+-- ---------------------------------------------------------------- Group 4 — flow / UX
+-- N-10 (second half) A lead who is not a module admin can ask for a reopen: comp_request_reopen
+--      records who/why/when on the assessment (reopen_requested_*) and in the audit log; the module
+--      admin sees it on the dashboard ("needs my action") and on the results page. comp_reopen_
+--      assessment (Section 53, which already clears is_approved) now also stamps reopened_at and
+--      clears the request. The lock itself is unchanged — only a module admin can reopen.
+-- L-3  comp_attachments.uploaded_by defaults to, and for staff uploads is forced to, auth.uid().
+-- L-10 comp_create_reassessment only from a completed assessment (an existing follow-up is still
+--      returned as before).
+-- (N-9: comp_ensure_competency_profile from Section 53 already stops per-visit recomputation.)
+
+alter table comp_assessments add column if not exists reopened_at timestamptz;
+alter table comp_assessments add column if not exists reopen_requested_at timestamptz;
+alter table comp_assessments add column if not exists reopen_requested_by uuid references profiles(id) on delete set null;
+alter table comp_assessments add column if not exists reopen_request_reason text;
+
+create or replace function comp_request_reopen(p_assessment_id uuid, p_reason text)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not comp_is_lead(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.status <> 'completed' then
+    raise exception 'assessment_not_completed: only a completed assessment needs reopening';
+  end if;
+  if coalesce(btrim(p_reason), '') = '' or length(p_reason) > 1000 then
+    raise exception 'invalid reason: give a short reason (1–1000 characters)';
+  end if;
+  update comp_assessments
+  set reopen_requested_at = now(), reopen_requested_by = auth.uid(), reopen_request_reason = btrim(p_reason)
+  where id = p_assessment_id;
+  perform comp_log_audit('ASSESSMENT_REOPEN_REQUESTED', 'comp_assessments', p_assessment_id, null,
+    jsonb_build_object('reason', btrim(p_reason)));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_request_reopen(uuid, text) from public, anon;
+grant execute on function comp_request_reopen(uuid, text) to authenticated;
+
+-- Section 53's comp_reopen_assessment, changed ONLY to stamp reopened_at and clear a pending request.
+create or replace function comp_reopen_assessment(p_assessment_id uuid)
+returns void as $$
+declare
+  v_prev comp_assessments%rowtype;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  perform set_config('comp.allow_locked_write', 'on', true);
+  update comp_assessments
+  set status = 'draft', is_approved = false, reopened_at = now(),
+      reopen_requested_at = null, reopen_requested_by = null, reopen_request_reason = null
+  where id = p_assessment_id;
+  perform set_config('comp.allow_locked_write', '', true);
+  update comp_panelist_scores set submitted_at = null where assessment_id = p_assessment_id;
+  perform comp_log_audit(
+    'ASSESSMENT_REOPENED', 'comp_assessments', p_assessment_id,
+    jsonb_build_object('status', v_prev.status, 'isApproved', v_prev.is_approved,
+      'reopenRequestedBy', v_prev.reopen_requested_by, 'reopenRequestReason', v_prev.reopen_request_reason),
+    jsonb_build_object('status', 'draft', 'isApproved', false)
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_reopen_assessment(uuid) from public, anon;
+grant execute on function comp_reopen_assessment(uuid) to authenticated;
+
+alter table comp_attachments alter column uploaded_by set default auth.uid();
+
+create or replace function comp_attachments_set_uploader()
+returns trigger as $$
+begin
+  if auth.uid() is not null and not coalesce(new.uploaded_by_candidate, false) then
+    new.uploaded_by := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+revoke execute on function comp_attachments_set_uploader() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_attachments_uploader on comp_attachments;
+create trigger trg_comp_attachments_uploader before insert on comp_attachments
+  for each row execute function comp_attachments_set_uploader();
+
+-- Section 52's comp_create_reassessment, changed ONLY to refuse an assessment that is not completed.
+create or replace function comp_create_reassessment(p_assessment_id uuid)
+returns uuid as $$
+declare
+  v_prev comp_assessments%rowtype;
+  v_id uuid;
+begin
+  if not comp_can_manage_development_plan(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_prev from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+
+  select id into v_id from comp_assessments where previous_assessment_id = p_assessment_id;
+  if v_id is not null then
+    return v_id;
+  end if;
+  if v_prev.status <> 'completed' then
+    raise exception 'assessment_not_completed: a reassessment can only follow a completed (finalized) assessment';
+  end if;
+
+  insert into comp_assessments (
+    previous_assessment_id, job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone,
+    candidate_email, candidate_birth_date, candidate_age, has_disability, disability_note, photo_url,
+    years_experience_total, years_experience_pipeline, current_employer, education, employment_history,
+    certifications, notable_projects, interview_date, status, answers, panel_size,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience,
+    blueprint_id, created_by
+  ) values (
+    p_assessment_id, v_prev.job_role, v_prev.candidate_name, v_prev.candidate_position, v_prev.candidate_national_id, v_prev.candidate_phone,
+    v_prev.candidate_email, v_prev.candidate_birth_date, v_prev.candidate_age, v_prev.has_disability, v_prev.disability_note, v_prev.photo_url,
+    v_prev.years_experience_total, v_prev.years_experience_pipeline, v_prev.current_employer, v_prev.education, v_prev.employment_history,
+    v_prev.certifications, v_prev.notable_projects, current_date, 'draft', '{}'::jsonb, v_prev.panel_size,
+    v_prev.needs_technical_assessment, v_prev.needs_personality_assessment, v_prev.needs_structured_interview, v_prev.includes_experience,
+    v_prev.blueprint_id, auth.uid()
+  )
+  returning id into v_id;
+
+  perform comp_log_audit(
+    'REASSESSMENT_CREATED', 'comp_assessments', v_id,
+    jsonb_build_object('previousAssessmentId', p_assessment_id),
+    jsonb_build_object(
+      'candidateName', v_prev.candidate_name, 'jobRole', v_prev.job_role, 'blueprintId', v_prev.blueprint_id,
+      'needsTechnicalAssessment', v_prev.needs_technical_assessment, 'needsPersonalityAssessment', v_prev.needs_personality_assessment,
+      'needsStructuredInterview', v_prev.needs_structured_interview, 'includesExperience', v_prev.includes_experience
+    )
+  );
+  return v_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_create_reassessment(uuid) from public, anon;
+grant execute on function comp_create_reassessment(uuid) to authenticated;

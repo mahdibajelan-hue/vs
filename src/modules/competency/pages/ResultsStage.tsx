@@ -146,6 +146,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   const myProfile = useAuthStore((s) => s.profile)
   const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
   const [reopening, setReopening] = useState(false)
+  const requestReopen = useCompetencyStore((s) => s.requestReopen)
+  const [reopenReason, setReopenReason] = useState('')
+  const [requestingReopen, setRequestingReopen] = useState(false)
   const [finalizeOpen, setFinalizeOpen] = useState(false)
   const allAssessments = useCompetencyStore((s) => s.assessments)
   const allPanelists = useCompetencyStore((s) => s.panelists)
@@ -917,6 +920,12 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             {isModuleAdmin && assessment.status === 'completed' && (
               <div className="glass-panel flex flex-col items-start gap-2 rounded-2xl border border-amber-400/20 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[11px] leading-6 text-muted">
+                  {assessment.reopenRequestedAt && (
+                    <span className="mb-1 block font-bold text-amber-200">
+                      درخواست بازگشایی از {profiles.find((pr) => pr.id === assessment.reopenRequestedBy)?.fullName ?? 'مسئول ارزیابی'}
+                      {assessment.reopenRequestReason ? `: «${assessment.reopenRequestReason}»` : ''}
+                    </span>
+                  )}
                   این ارزیابی قفل و نهایی‌شده است — امتیاز داوران، امتیازهای مصاحبه، سؤالات و طرح آزمون دیگر تغییر نمی‌کنند. در صورت نیاز به اصلاح، آن را
                   بازگشایی کنید (این اقدام ثبت می‌شود و تأیید صلاحیت هم برداشته می‌شود).
                 </p>
@@ -931,6 +940,45 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                 >
                   <RotateCcw size={14} /> {reopening ? 'در حال بازگشایی…' : 'بازگشایی ارزیابی برای اصلاح'}
                 </button>
+              </div>
+            )}
+
+            {/* N-10: a lead who is not a module admin cannot reopen — but can ask for it, with a reason
+                the module admin sees here and on the dashboard ("needs my action"). */}
+            {!isModuleAdmin && isLeadViewer && assessment.status === 'completed' && (
+              <div className="glass-panel space-y-2 rounded-2xl border border-amber-400/20 p-4 text-[11px] leading-6">
+                {assessment.reopenRequestedAt ? (
+                  <p className="text-amber-200">
+                    درخواست بازگشایی شما ثبت شده و منتظر ادمین ماژول است{assessment.reopenRequestReason ? ` («${assessment.reopenRequestReason}»)` : ''}.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-muted">
+                      این ارزیابی قفل و نهایی‌شده است و فقط ادمین ماژول می‌تواند آن را بازگشایی کند. اگر اصلاحی لازم است، دلیل را بنویسید تا درخواست برای ادمین
+                      ثبت شود.
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        value={reopenReason}
+                        onChange={(e) => setReopenReason(e.target.value)}
+                        maxLength={1000}
+                        placeholder="دلیل درخواست بازگشایی…"
+                        className="input flex-1"
+                      />
+                      <button
+                        disabled={requestingReopen || reopenReason.trim().length === 0}
+                        onClick={async () => {
+                          setRequestingReopen(true)
+                          if (await requestReopen(assessment.id, reopenReason)) setReopenReason('')
+                          setRequestingReopen(false)
+                        }}
+                        className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                      >
+                        <RotateCcw size={14} /> {requestingReopen ? 'در حال ثبت…' : 'درخواست بازگشایی'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

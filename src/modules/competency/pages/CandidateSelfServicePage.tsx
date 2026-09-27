@@ -63,6 +63,9 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
   const [pendingKind, setPendingKind] = useState<AttachmentKind>('resume')
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  // N-13: upload / registration failures are shown to the candidate instead of failing silently.
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const photoRef = useRef<HTMLInputElement>(null)
 
   // Re-fetched after every upload (not just once on mount) so the list on screen always reflects
@@ -131,22 +134,46 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
     setSubmitted(true)
   }
 
+  const uploadFailure = (message: string | null | undefined) =>
+    message && /self_service_closed/.test(message)
+      ? 'این فرم دیگر قابل ویرایش نیست (بررسی شده یا ارزیابی تکمیل شده است).'
+      : 'بارگذاری انجام نشد. اتصال اینترنت و حجم/نوع فایل را بررسی کنید و دوباره تلاش کنید.'
+
   const handlePhotoUpload = async (file: File) => {
+    const previous = photoPreview
     setPhotoPreview(URL.createObjectURL(file))
+    setPhotoError(null)
     setUploadingPhoto(true)
     const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
-    if (path && !error) {
-      await supabase.rpc('comp_self_service_set_photo', { p_token: token, p_storage_path: path })
+    let failed: string | null = null
+    if (!path || error) {
+      failed = uploadFailure(error)
+    } else {
+      const { error: rpcError } = await supabase.rpc('comp_self_service_set_photo', { p_token: token, p_storage_path: path })
+      if (rpcError) failed = uploadFailure(rpcError.message)
+    }
+    if (failed) {
+      setPhotoError(failed)
+      setPhotoPreview(previous)
     }
     setUploadingPhoto(false)
   }
 
   const handleUpload = async (file: File) => {
     setUploading(pendingKind)
+    setUploadError(null)
     const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
-    if (path && !error) {
-      await supabase.rpc('comp_self_service_add_attachment', { p_token: token, p_kind: pendingKind, p_file_name: file.name, p_storage_path: path })
-      refreshAttachments()
+    if (!path || error) {
+      setUploadError(uploadFailure(error))
+    } else {
+      const { error: rpcError } = await supabase.rpc('comp_self_service_add_attachment', {
+        p_token: token,
+        p_kind: pendingKind,
+        p_file_name: file.name,
+        p_storage_path: path,
+      })
+      if (rpcError) setUploadError(uploadFailure(rpcError.message))
+      else refreshAttachments()
     }
     setUploading(null)
   }
@@ -264,6 +291,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
               e.target.value = ''
             }}
           />
+          {photoError && <p className="w-full text-center text-[11px] text-red-300">{photoError}</p>}
         </div>
 
         {row.self_service_editable && <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode />}
@@ -303,6 +331,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
             />
           </div>
           )}
+          {uploadError && <p className="rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-[11px] text-red-200">{uploadError}</p>}
           {attachments.length > 0 && (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {attachments.map((a) => (

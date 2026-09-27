@@ -1024,6 +1024,8 @@ end $$;
 --        average; refused on a completed assessment.
 --   L-6  the public results link rounds the panel average like the engine/client and falls back to
 --        the lead's score when no submitted sheet scored a question.
+--   N-10 a lead's reopen request is recorded; the admin's reopen clears it and the approval.
+--   L-10 no reassessment from a non-completed assessment.   L-3 staff uploads carry uploaded_by.
 -- ============================================================================
 do $$
 declare
@@ -1085,6 +1087,40 @@ begin
     if sqlerrm not like 'assessment_locked%' then raise; end if;
   end;
   perform set_config('role', 'postgres', true);
+
+  -- ---- N-10: reopen request, then reopen clears it and the approval ----
+  update comp_assessments set is_approved = true where id = v_a;
+  perform set_config('role', 'authenticated', true);
+  perform comp_request_reopen(v_a, '__smoke reason__');
+  perform set_config('role', 'postgres', true);
+  if (select reopen_requested_by from comp_assessments where id = v_a) is distinct from v_admin
+     or not exists (select 1 from comp_audit_log where entity_id = v_a and action = 'ASSESSMENT_REOPEN_REQUESTED') then
+    raise exception 'ASSERTION FAILED (N-10): the reopen request must be recorded';
+  end if;
+  perform set_config('role', 'authenticated', true);
+  perform comp_reopen_assessment(v_a);
+  perform set_config('role', 'postgres', true);
+  if exists (select 1 from comp_assessments where id = v_a
+             and (status <> 'draft' or is_approved or reopened_at is null or reopen_requested_at is not null)) then
+    raise exception 'ASSERTION FAILED (N-10): reopen must clear approval and request and stamp reopened_at';
+  end if;
+
+  -- ---- L-10: no reassessment from a non-completed assessment ----
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform comp_create_reassessment(v_a);
+    raise exception 'ASSERTION FAILED (L-10): a reassessment was created from a draft';
+  exception when others then
+    if sqlerrm not like 'assessment_not_completed%' then raise; end if;
+  end;
+
+  -- ---- L-3: staff uploads are attributed to the caller ----
+  insert into comp_attachments (assessment_id, kind, file_name, storage_path, uploaded_by)
+  values (v_a, 'resume', '__smoke__.pdf', v_a::text || '/__smoke__.pdf', v_j1);
+  perform set_config('role', 'postgres', true);
+  if (select uploaded_by from comp_attachments where assessment_id = v_a and file_name = '__smoke__.pdf') is distinct from v_admin then
+    raise exception 'ASSERTION FAILED (L-3): uploaded_by must be the uploading user';
+  end if;
 
   raise notice 'competency_engine_smoke_test (section 54): ALL ASSERTIONS PASSED';
 
