@@ -11552,6 +11552,150 @@ begin
     jsonb_build_object('count', jsonb_array_length(v_rows), 'reason', 'L-7: PERSONALITY_ASSESSMENT_SCORED rows left by smoke/dev test runs (entity no longer exists)'));
 end $$;
 
+-- ============================================================================
+-- Section 57 — results & interview
+-- ----------------------------------------------------------------------------
+-- (1) comp_role_maturity_guidance: the «تفسیر بلوغ و توصیه استفاده» text on the results page and
+--     the full PDF report, keyed by job role + maturity band. Before this the results page and PDF
+--     always showed the fixed project-manager bands from competencyModel.ts (e.g. «توان مدیریت پروژه
+--     با پیچیدگی متوسط» / «مدیر پروژه خط لوله با پیچیدگی متوسط و تک‌پیمانکار») for every role.
+--     Seeded once per active role from a role-family template (management / supervisor /
+--     inspector / specialist); module admins can edit any row. A role or band without a row falls
+--     back to the same family template in code (lib/maturityGuidance.ts). Idempotent: seeding
+--     never overwrites an edited row.
+-- (2) label_en on personality_traits / personality_behavioral_dimensions: the English half of the
+--     bilingual «English (فارسی)» labels on the behavioral fingerprint. Filled only where empty.
+-- ============================================================================
+
+create table if not exists comp_role_maturity_guidance (
+  job_role text not null,
+  band text not null check (band in ('high_risk', 'basic', 'acceptable', 'capable', 'strategic')),
+  guidance text not null default '',
+  suggested_positions text not null default '',
+  updated_by uuid,
+  updated_at timestamptz not null default now(),
+  primary key (job_role, band)
+);
+
+alter table comp_role_maturity_guidance enable row level security;
+
+-- Non-sensitive interpretation text: also read by the anonymous public results link
+-- (PublicResultsPage), which has no session.
+drop policy if exists "comp_role_maturity_guidance_select_all" on comp_role_maturity_guidance;
+create policy "comp_role_maturity_guidance_select_all" on comp_role_maturity_guidance
+  for select using (true);
+
+drop policy if exists "comp_role_maturity_guidance_write_admin" on comp_role_maturity_guidance;
+create policy "comp_role_maturity_guidance_write_admin" on comp_role_maturity_guidance
+  for all using (comp_is_module_admin()) with check (comp_is_module_admin());
+
+grant select on comp_role_maturity_guidance to anon, authenticated;
+grant insert, update, delete on comp_role_maturity_guidance to authenticated;
+
+create or replace function comp_role_maturity_guidance_touch()
+returns trigger as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_comp_role_maturity_guidance_touch on comp_role_maturity_guidance;
+create trigger trg_comp_role_maturity_guidance_touch before update on comp_role_maturity_guidance
+  for each row execute function comp_role_maturity_guidance_touch();
+
+with tpl(family, band, guidance, positions) as (
+  values
+    ('management', 'high_risk', 'برای ایفای مستقل نقش «%s» آماده نیست؛ در صورت جذب، فقط در نقش معاون یا دستیار و با راهبری فشرده (Mentoring) توصیه می‌شود.', 'دستیار «%s» زیر نظر مستقیم مدیر ارشد؛ بدون واگذاری تصمیم‌گیری مستقل'),
+    ('management', 'basic', 'مناسب ایفای نقش «%s» در محدوده‌ای کوچک‌تر یا زیر نظر یک مدیر ارشد، با نظارت نزدیک و برنامه توسعه مشخص.', '«%s» در پروژه یا واحدی کوچک، یا معاون «%s» در پروژه بزرگ'),
+    ('management', 'acceptable', 'توان ایفای نقش «%s» در پروژه‌هایی با پیچیدگی و مقیاس متوسط؛ برای پروژه‌های بزرگ‌تر، تقویت حوزه‌های ضعیف‌تر لازم است.', '«%s» در پروژه‌ای با پیچیدگی و مقیاس متوسط'),
+    ('management', 'capable', 'توانمند در ایفای مستقل نقش «%s» در پروژه‌های بزرگ با اختیار و کنترل مستقل.', '«%s» پروژه‌های بزرگ (از جمله EPC) با اختیار تصمیم‌گیری مستقل'),
+    ('management', 'strategic', 'توان راهبری در سطح «%s» برای پروژه‌های پیچیده، چندپیمانکاری و بحران‌محور؛ گزینه مناسب جانشین‌پروری.', '«%s» ارشد/راهبردی؛ راهبری چند پروژه یا مربی‌گری سایر مدیران'),
+    ('supervisor', 'high_risk', 'برای سرپرستی مستقل در نقش «%s» آماده نیست؛ فقط به‌عنوان عضو تیم اجرایی و زیر نظر یک سرپرست باتجربه توصیه می‌شود.', 'عضو تیم اجرایی یا تکنسین زیر نظر سرپرست ارشد'),
+    ('supervisor', 'basic', 'مناسب سرپرستی یک جبهه یا تیم کوچک در نقش «%s» با نظارت نزدیک سرپرست ارشد.', 'کمک‌سرپرست یا سرپرست یک جبهه کاری کوچک'),
+    ('supervisor', 'acceptable', 'توان سرپرستی مستقل یک جبهه کاری در نقش «%s» با حجم و پیچیدگی متوسط.', '«%s» یک جبهه کاری با پیچیدگی متوسط'),
+    ('supervisor', 'capable', 'توانمند در سرپرستی هم‌زمان چند تیم یا جبهه در نقش «%s» با کمترین نیاز به نظارت.', '«%s» ارشد برای چند جبهه یا تیم کاری'),
+    ('supervisor', 'strategic', 'سطح برتر در نقش «%s»؛ آماده ارتقا به نقش‌های مدیریتی و آموزش سایر سرپرستان.', 'سرپرست ارشد یا مسئول واحد اجرایی؛ گزینه ارتقا به مدیریت'),
+    ('inspector', 'high_risk', 'برای انجام مستقل بازرسی یا تفسیر در نقش «%s» صلاحیت کافی نشان نداده است؛ کار او باید توسط بازرس ارشد تأیید شود.', 'کمک‌بازرس زیر نظر بازرس ارشد، بدون امضای مستقل گزارش'),
+    ('inspector', 'basic', 'مناسب انجام بازرسی‌های روتین در نقش «%s» با بازبینی گزارش‌ها توسط بازرس ارشد.', '«%s» سطح پایه برای فعالیت‌های روتین با بازبینی ارشد'),
+    ('inspector', 'acceptable', 'توان انجام مستقل بازرسی‌های متعارف در نقش «%s»؛ در موارد حساس و نقاط توقف (Hold Point) حیاتی بهتر است با بازرس ارشد هماهنگ شود.', '«%s» مستقل برای فعالیت‌های متعارف'),
+    ('inspector', 'capable', 'توانمند در انجام مستقل بازرسی‌ها و تصمیم‌گیری در موارد حساس در نقش «%s».', '«%s» ارشد با اختیار امضای گزارش و تصمیم در نقاط توقف'),
+    ('inspector', 'strategic', 'سطح برتر در نقش «%s»؛ مناسب هدایت تیم بازرسی، ممیزی و آموزش سایر بازرسان.', 'سرپرست تیم بازرسی یا ممیز ارشد کیفیت'),
+    ('specialist', 'high_risk', 'برای ایفای مستقل نقش «%s» آماده نیست؛ در صورت جذب، در سطح کارآموز و با راهنمایی نزدیک توصیه می‌شود.', 'کارآموز یا کمک‌کارشناس زیر نظر کارشناس ارشد'),
+    ('specialist', 'basic', 'مناسب انجام وظایف روتین نقش «%s» با بازبینی خروجی‌ها توسط کارشناس ارشد.', '«%s» سطح پایه با بازبینی ارشد'),
+    ('specialist', 'acceptable', 'توان ایفای مستقل نقش «%s» در وظایف متعارف و پروژه‌هایی با پیچیدگی متوسط.', '«%s» مستقل در پروژه‌ای با پیچیدگی متوسط'),
+    ('specialist', 'capable', 'توانمند در ایفای مستقل نقش «%s» در پروژه‌های بزرگ و حل مسائل غیرمتعارف.', '«%s» ارشد در پروژه‌های بزرگ'),
+    ('specialist', 'strategic', 'سطح برتر در نقش «%s»؛ مناسب مرجع فنی واحد و هدایت و آموزش سایر کارشناسان.', 'کارشناس ارشد، مرجع فنی و سرپرست واحد')
+),
+roles as (
+  select job_role, label_fa,
+    case
+      when job_role like '%\_manager' or job_role = 'project_director' then 'management'
+      when job_role like '%supervisor' then 'supervisor'
+      when job_role like '%inspector' or job_role like '%interpreter' then 'inspector'
+      else 'specialist'
+    end as family
+  from comp_job_role_config
+  where job_role <> 'project_manager'
+)
+insert into comp_role_maturity_guidance (job_role, band, guidance, suggested_positions)
+select r.job_role, t.band, replace(t.guidance, '%s', r.label_fa), replace(t.positions, '%s', r.label_fa)
+from roles r join tpl t on t.family = r.family
+on conflict (job_role, band) do nothing;
+
+-- The project manager keeps the original, PM-specific bands (they were written for that role).
+insert into comp_role_maturity_guidance (job_role, band, guidance, suggested_positions) values
+  ('project_manager', 'high_risk', 'برای نقش مدیر پروژه مناسب نیست یا به راهنمایی و پشتیبانی فشرده (Mentoring) نیاز دارد', 'دستیار مدیر پروژه (Deputy PM) تحت نظارت مستقیم مدیر ارشد؛ عدم واگذاری مسئولیت مستقل جبهه کاری'),
+  ('project_manager', 'basic', 'مناسب نقش محدودتر یا پروژه با نظارت نزدیک', 'مدیر پروژه در پروژه‌های کوچک یا زیرمجموعه یک مدیر پروژه ارشد؛ مسئول یک جبهه کاری (Spread) واحد'),
+  ('project_manager', 'acceptable', 'توان مدیریت پروژه با پیچیدگی متوسط', 'مدیر پروژه خط لوله با پیچیدگی متوسط و تک‌پیمانکار'),
+  ('project_manager', 'capable', 'مناسب پروژه طراحی-تأمین-ساخت (EPC) خط انتقال با کنترل مستقل', 'مدیر پروژه طراحی-تأمین-ساخت (EPC) خط انتقال گاز با کنترل مستقل و چندپیمانکاری محدود'),
+  ('project_manager', 'strategic', 'توان راهبری پروژه پیچیده، چندپیمانکاری و بحران‌محور', 'مدیر پروژه/برنامه راهبردی؛ راهبری چند پروژه یا چندپیمانکاری بزرگ و مدیریت بحران')
+on conflict (job_role, band) do nothing;
+
+-- ---------------------------------------------------------------- (2) bilingual fingerprint labels
+alter table personality_traits add column if not exists label_en text not null default '';
+alter table personality_behavioral_dimensions add column if not exists label_en text not null default '';
+
+update personality_traits t set label_en = v.en
+from (values
+  ('conscientiousness', 'Conscientiousness'),
+  ('emotional_stability', 'Emotional Stability'),
+  ('agreeableness', 'Agreeableness'),
+  ('extraversion', 'Extraversion'),
+  ('openness', 'Openness to Experience')
+) as v(key, en)
+where t.key = v.key and coalesce(t.label_en, '') = '';
+
+update personality_behavioral_dimensions d set label_en = v.en
+from (values
+  ('ACCOUNTABILITY', 'Accountability'),
+  ('ADAPTABILITY', 'Adaptability'),
+  ('ANALYTICAL_THINKING', 'Analytical Thinking'),
+  ('COMMERCIAL_AWARENESS', 'Commercial Awareness'),
+  ('COMMUNICATION', 'Communication'),
+  ('CONFLICT_MANAGEMENT', 'Conflict Management'),
+  ('DECISION_CONFIDENCE', 'Decision Confidence'),
+  ('DECISION_QUALITY', 'Decision Quality'),
+  ('DETAIL_ORIENTATION', 'Detail Orientation'),
+  ('DISCIPLINE', 'Work Discipline'),
+  ('DOCUMENTATION_DISCIPLINE', 'Documentation Discipline'),
+  ('ESCALATION_JUDGMENT', 'Escalation Judgment'),
+  ('INITIATIVE', 'Initiative'),
+  ('INTEGRITY_ORIENTATION', 'Integrity Orientation'),
+  ('LEADERSHIP', 'Leadership'),
+  ('LEARNING_AGILITY', 'Learning Agility'),
+  ('OWNERSHIP', 'Ownership'),
+  ('PERSISTENCE', 'Persistence'),
+  ('PROBLEM_OWNERSHIP', 'Problem Ownership'),
+  ('RISK_AWARENESS', 'Risk Awareness'),
+  ('RULE_ORIENTATION', 'Rule Orientation'),
+  ('SAFETY_ORIENTATION', 'Safety Orientation'),
+  ('STAKEHOLDER_ORIENTATION', 'Stakeholder Orientation'),
+  ('TEAMWORK', 'Teamwork')
+) as v(key, en)
+where d.key = v.key and coalesce(d.label_en, '') = '';
+
 -- =============================================================================================
 -- Role-list visibility fix (applied live as migration comp_list_role_assignments_include_own_row):
 -- module admins see every assignment of a role (to manage it); everyone else now sees their OWN
@@ -11567,6 +11711,775 @@ returns table(user_id uuid, created_by uuid, created_at timestamptz) as $$
   where r.name = p_role_name
     and (comp_is_module_admin() or ur.user_id = auth.uid());
 $$ language sql security definer stable set search_path = public;
+
+-- ============================================================================
+-- Section 55 — candidate documents
+--
+-- Per-item candidate documents, the 300 KB document limit, document read
+-- access scoped to the assessment's own team, and the self-service link's
+-- lifecycle (docs/demo-test-report.md, «Section 55»). Idempotent.
+--
+-- D-1 comp_attachments gains category (NATIONAL_ID / RESUME / EDUCATION /
+--     EMPLOYMENT / CERTIFICATION / OTHER), entry_ref (the stable "id" of the
+--     education / employment_history / certifications JSON entry the file
+--     belongs to) and file_size. Every attachment that existed before this
+--     section is category OTHER («سایر») with no entry_ref and keeps working
+--     unchanged. kind stays (derived from the category for new rows; 'employment'
+--     added). JSON entries always carry a non-empty unique "id": entries without
+--     one get a uuid (migration below + trg_comp_assessments_entry_ids for every
+--     later write, both the staff form and comp_self_service_submit).
+-- D-2 New documents live under a "docs" folder — staff "<assessment>/docs/<uuid>.<ext>",
+--     self-service "<assessment>/<token>/docs/<uuid>.<ext>", ext pdf/jpg/jpeg/png —
+--     and are registered only through comp_add_attachment /
+--     comp_self_service_add_document, which check the path, the category/entry,
+--     the lock rules and the stored object's real size (storage.objects metadata).
+--     Direct INSERT/DELETE on comp_attachments is no longer granted;
+--     comp_remove_attachment / comp_self_service_remove_document are the removal
+--     path (a candidate can only remove what the candidate uploaded). All four
+--     write comp_log_audit server-side.
+-- D-3 300 KB (307200 bytes) per document, enforced in three places: the client,
+--     trg_comp_docs_upload_rules on storage.objects (refuses any comp-docs
+--     object over the limit unless it is shaped like a personnel photo path —
+--     comp_is_photo_path, whose rules/limit are unchanged — so a direct API
+--     upload is blocked at the storage layer), and the registration RPCs
+--     (including Section 53's legacy comp_self_service_add_attachment).
+-- D-4 Lock rules: the candidate may add/remove documents only while the form is
+--     open (comp_self_service_is_editable — Section 53 M-7); staff may add/remove
+--     until the assessment is completed (trg_comp_attachments_lock, same bypass
+--     setting as Section 53's M-6 lock).
+-- D-5 Storage access (bucket comp-docs). Before this section every signed-in
+--     user could read, upload and delete every object, and the anon candidate
+--     policies depended on anon reading comp_assessments — which RLS never
+--     allows — so candidate uploads without a login were refused. Now:
+--       read   (authenticated) — the assessment's creator / panelists / module
+--              admins / ASSESSMENT_DESIGNERs (comp_can_view_documents), or the
+--              assessment's CURRENT personnel photo (comp_is_public_photo — already
+--              anon-readable through the public results link) for any signed-in user;
+--       write / delete (authenticated) — lead or designer (comp_can_manage_documents);
+--       candidate (anon only — the self-service page always talks to the API
+--              without a session, and every signed-in user can read tokens
+--              through comp_assessments, so a token path must never grant a
+--              signed-in user anything) — read their own token folder, upload
+--              while the form is open, delete only their own unregistered
+--              "docs" objects — through SECURITY DEFINER helpers.
+--     comp_attachments SELECT follows comp_can_view_documents.
+-- D-6 Self-service link lifecycle. Token changes are recorded in
+--     comp_self_service_retired_tokens (trigger — whatever path rotates it), so
+--     comp_self_service_link_state can tell a rotated link from an unknown one;
+--     comp_self_service_get reports self_service_closed_reason ('reviewed' /
+--     'completed'). comp_regenerate_self_service_link (lead; keeps a submitted /
+--     reviewed status instead of resetting it), comp_mark_self_service_sent (only
+--     not_sent → pending, never downgrading a submitted / reviewed form),
+--     comp_close_self_service («تأیید و بستن فرم خوداظهاری») and
+--     comp_reopen_self_service (back to pending, not on a completed assessment).
+-- ============================================================================
+
+-- ---------------------------------------------------------------- D-1: attachment columns
+
+alter table comp_attachments add column if not exists category text not null default 'OTHER';
+alter table comp_attachments add column if not exists entry_ref text;
+alter table comp_attachments add column if not exists file_size bigint;
+
+alter table comp_attachments drop constraint if exists comp_attachments_category_check;
+alter table comp_attachments add constraint comp_attachments_category_check
+  check (category in ('NATIONAL_ID', 'RESUME', 'EDUCATION', 'EMPLOYMENT', 'CERTIFICATION', 'OTHER'));
+alter table comp_attachments drop constraint if exists comp_attachments_entry_ref_check;
+alter table comp_attachments add constraint comp_attachments_entry_ref_check
+  check (entry_ref is null or entry_ref ~ '^[A-Za-z0-9_-]{1,64}$');
+alter table comp_attachments drop constraint if exists comp_attachments_kind_check;
+alter table comp_attachments add constraint comp_attachments_kind_check
+  check (kind in ('resume', 'education', 'certification', 'national_id', 'insurance', 'employment', 'other'));
+
+create index if not exists idx_comp_attachments_entry on comp_attachments (assessment_id, category, entry_ref);
+
+-- ---------------------------------------------------------------- D-1: stable JSON entry ids
+
+create or replace function comp_ensure_entry_ids(p_entries jsonb)
+returns jsonb as $$
+  select case
+    when p_entries is null or jsonb_typeof(p_entries) <> 'array' then p_entries
+    else coalesce((
+      select jsonb_agg(
+        case when jsonb_typeof(x.e) = 'object' and coalesce(x.e ->> 'id', '') = ''
+             then x.e || jsonb_build_object('id', gen_random_uuid()::text)
+             else x.e end
+        order by x.ord)
+      from jsonb_array_elements(p_entries) with ordinality as x(e, ord)
+    ), '[]'::jsonb)
+  end;
+$$ language sql volatile set search_path = public;
+
+revoke execute on function comp_ensure_entry_ids(jsonb) from public, anon, authenticated;
+
+create or replace function comp_entries_missing_ids(p_entries jsonb)
+returns boolean as $$
+  select coalesce(jsonb_typeof(p_entries) = 'array' and exists (
+    select 1 from jsonb_array_elements(p_entries) e
+    where jsonb_typeof(e) = 'object' and coalesce(e ->> 'id', '') = ''
+  ), false);
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_entries_missing_ids(jsonb) from public, anon, authenticated;
+
+create or replace function comp_assessments_entry_ids()
+returns trigger as $$
+begin
+  if comp_entries_missing_ids(new.education) then
+    new.education := comp_ensure_entry_ids(new.education);
+  end if;
+  if comp_entries_missing_ids(new.employment_history) then
+    new.employment_history := comp_ensure_entry_ids(new.employment_history);
+  end if;
+  if comp_entries_missing_ids(new.certifications) then
+    new.certifications := comp_ensure_entry_ids(new.certifications);
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_assessments_entry_ids() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_assessments_entry_ids on comp_assessments;
+create trigger trg_comp_assessments_entry_ids before insert or update of education, employment_history, certifications on comp_assessments
+  for each row execute function comp_assessments_entry_ids();
+
+-- One-off migration: only rows that actually lack an id are touched (none did when this was written —
+-- every real entry already carried the client-generated uuid), and the completed-assessment lock is
+-- lifted for this statement only, since adding an id changes no evidence.
+do $$
+begin
+  perform set_config('comp.allow_locked_write', 'on', true);
+  update comp_assessments set
+    education = comp_ensure_entry_ids(education),
+    employment_history = comp_ensure_entry_ids(employment_history),
+    certifications = comp_ensure_entry_ids(certifications)
+  where comp_entries_missing_ids(education) or comp_entries_missing_ids(employment_history) or comp_entries_missing_ids(certifications);
+  perform set_config('comp.allow_locked_write', '', true);
+end $$;
+
+-- ---------------------------------------------------------------- D-2 / D-5: helpers
+
+create or replace function comp_try_uuid(p text)
+returns uuid as $$
+  select case when p ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then p::uuid end;
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_try_uuid(text) from public;
+grant execute on function comp_try_uuid(text) to anon, authenticated;
+
+create or replace function comp_doc_max_bytes()
+returns bigint as $$ select 307200::bigint; $$ language sql immutable set search_path = public;
+
+revoke execute on function comp_doc_max_bytes() from public;
+grant execute on function comp_doc_max_bytes() to anon, authenticated;
+
+-- Who may SEE an assessment's documents: its creator, panelists (lead or not), module admins and
+-- ASSESSMENT_DESIGNERs. Not every signed-in user any more (see D-5).
+create or replace function comp_can_view_documents(p_assessment_id uuid)
+returns boolean as $$
+  select auth.uid() is not null and p_assessment_id is not null
+     and (comp_can_access_assessment(p_assessment_id) or comp_is_assessment_designer());
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_can_view_documents(uuid) from public, anon;
+grant execute on function comp_can_view_documents(uuid) to authenticated;
+
+-- Who may ADD / REMOVE them on the staff side: the same standing as the profile form and comp_set_photo.
+create or replace function comp_can_manage_documents(p_assessment_id uuid)
+returns boolean as $$
+  select auth.uid() is not null and p_assessment_id is not null
+     and (comp_is_lead(p_assessment_id) or comp_is_assessment_designer());
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_can_manage_documents(uuid) from public, anon;
+grant execute on function comp_can_manage_documents(uuid) to authenticated;
+
+create or replace function comp_is_doc_path(p_assessment_id uuid, p_token uuid, p_path text)
+returns boolean as $$
+  select p_assessment_id is not null and coalesce(p_path, '') ~* (
+    '^' || p_assessment_id::text || '/'
+    || case when p_token is null then '' else p_token::text || '/' end
+    || 'docs/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(pdf|jpe?g|png)$'
+  );
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_is_doc_path(uuid, uuid, text) from public, anon;
+grant execute on function comp_is_doc_path(uuid, uuid, text) to authenticated;
+
+create or replace function comp_doc_object_size(p_path text)
+returns bigint as $$
+  select case when (o.metadata ->> 'size') ~ '^[0-9]+$' then (o.metadata ->> 'size')::bigint end
+  from storage.objects o
+  where o.bucket_id = 'comp-docs' and o.name = p_path;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_doc_object_size(text) from public, anon, authenticated;
+
+create or replace function comp_doc_category_kind(p_category text)
+returns text as $$
+  select case p_category
+    when 'NATIONAL_ID' then 'national_id'
+    when 'RESUME' then 'resume'
+    when 'EDUCATION' then 'education'
+    when 'EMPLOYMENT' then 'employment'
+    when 'CERTIFICATION' then 'certification'
+    else 'other'
+  end;
+$$ language sql immutable set search_path = public;
+
+revoke execute on function comp_doc_category_kind(text) from public, anon, authenticated;
+
+-- Staff read on comp-docs: the assessment's own team, or the current personnel photo of any assessment
+-- (a photo is already readable without login through the public results link; documents never are).
+create or replace function comp_docs_staff_can_read(p_name text)
+returns boolean as $$
+  select comp_can_view_documents(comp_try_uuid((storage.foldername(p_name))[1]))
+      or comp_is_public_photo(p_name);
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_docs_staff_can_read(text) from public, anon;
+grant execute on function comp_docs_staff_can_read(text) to authenticated;
+
+create or replace function comp_docs_staff_can_write(p_name text)
+returns boolean as $$
+  select comp_can_manage_documents(comp_try_uuid((storage.foldername(p_name))[1]));
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_docs_staff_can_write(text) from public, anon;
+grant execute on function comp_docs_staff_can_write(text) to authenticated;
+
+-- Candidate side: the object lives under "<assessment id>/<that assessment's CURRENT token>/…".
+-- SECURITY DEFINER because anon cannot read comp_assessments through RLS (this is why the old inline
+-- policies refused every candidate upload made without a login).
+create or replace function comp_docs_candidate_path_ok(p_name text, p_require_editable boolean)
+returns boolean as $$
+  select exists (
+    select 1 from comp_assessments a
+    where a.id = comp_try_uuid((storage.foldername(p_name))[1])
+      and a.self_service_token = comp_try_uuid((storage.foldername(p_name))[2])
+      and (not p_require_editable or comp_self_service_is_editable(a.status, a.self_service_status))
+  );
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_docs_candidate_path_ok(text, boolean) from public;
+grant execute on function comp_docs_candidate_path_ok(text, boolean) to anon, authenticated;
+
+-- A candidate may delete only a "docs" object of their own that is no longer registered (the RPC
+-- removes the comp_attachments row first), never the photo or a file staff still reference.
+create or replace function comp_docs_candidate_can_delete(p_name text)
+returns boolean as $$
+  select (storage.foldername(p_name))[3] = 'docs'
+     and comp_docs_candidate_path_ok(p_name, true)
+     and not exists (select 1 from comp_attachments t where t.storage_path = p_name)
+     and not exists (select 1 from comp_assessments a where a.photo_url = p_name);
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_docs_candidate_can_delete(text) from public;
+grant execute on function comp_docs_candidate_can_delete(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------- D-5: storage policies
+
+drop policy if exists "comp_docs_read_staff" on storage.objects;
+create policy "comp_docs_read_staff" on storage.objects
+  for select to authenticated using (bucket_id = 'comp-docs' and public.comp_docs_staff_can_read(name));
+
+drop policy if exists "comp_docs_write_staff" on storage.objects;
+create policy "comp_docs_write_staff" on storage.objects
+  for insert to authenticated with check (bucket_id = 'comp-docs' and public.comp_docs_staff_can_write(name));
+
+drop policy if exists "comp_docs_delete_staff" on storage.objects;
+create policy "comp_docs_delete_staff" on storage.objects
+  for delete to authenticated using (bucket_id = 'comp-docs' and public.comp_docs_staff_can_write(name));
+
+drop policy if exists "comp_docs_read_candidate" on storage.objects;
+create policy "comp_docs_read_candidate" on storage.objects
+  for select to anon using (bucket_id = 'comp-docs' and public.comp_docs_candidate_path_ok(name, false));
+
+drop policy if exists "comp_docs_write_candidate" on storage.objects;
+create policy "comp_docs_write_candidate" on storage.objects
+  for insert to anon with check (bucket_id = 'comp-docs' and public.comp_docs_candidate_path_ok(name, true));
+
+drop policy if exists "comp_docs_delete_candidate" on storage.objects;
+create policy "comp_docs_delete_candidate" on storage.objects
+  for delete to anon using (bucket_id = 'comp-docs' and public.comp_docs_candidate_can_delete(name));
+
+-- ---------------------------------------------------------------- D-3: 300 KB at the storage layer
+
+create or replace function comp_docs_enforce_upload_rules()
+returns trigger as $$
+declare
+  v_size bigint;
+  v_old_size bigint;
+  v_aid uuid;
+begin
+  if new.bucket_id is distinct from 'comp-docs' then
+    return new;
+  end if;
+  v_size := case when (new.metadata ->> 'size') ~ '^[0-9]+$' then (new.metadata ->> 'size')::bigint end;
+  if tg_op = 'UPDATE' then
+    v_old_size := case when (old.metadata ->> 'size') ~ '^[0-9]+$' then (old.metadata ->> 'size')::bigint end;
+    -- Bookkeeping updates of an existing object (same name, same size) are never re-judged.
+    if new.name = old.name and v_size is not distinct from v_old_size then
+      return new;
+    end if;
+  end if;
+  v_aid := comp_try_uuid((storage.foldername(new.name))[1]);
+  -- Personnel photos keep their own rules (comp_set_photo / comp_self_service_set_photo, Section 53).
+  if v_aid is not null and comp_is_photo_path(v_aid, new.name) then
+    return new;
+  end if;
+  if v_size is not null and v_size > comp_doc_max_bytes() then
+    raise exception 'file_too_large: documents are limited to 300 KB (% bytes)', comp_doc_max_bytes()
+      using errcode = '22023';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_docs_enforce_upload_rules() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_docs_upload_rules on storage.objects;
+create trigger trg_comp_docs_upload_rules before insert or update on storage.objects
+  for each row execute function public.comp_docs_enforce_upload_rules();
+
+-- ---------------------------------------------------------------- D-4 / D-5: comp_attachments access + lock
+
+drop policy if exists "comp_attachments_select" on comp_attachments;
+create policy "comp_attachments_select" on comp_attachments
+  for select to authenticated using (comp_can_view_documents(assessment_id));
+
+-- Writes go through the RPCs below only.
+drop policy if exists "comp_attachments_insert" on comp_attachments;
+drop policy if exists "comp_attachments_delete" on comp_attachments;
+revoke insert, update, delete on comp_attachments from anon, authenticated;
+
+create or replace function comp_attachments_enforce_lock()
+returns trigger as $$
+declare
+  v_aid uuid := case when tg_op = 'DELETE' then old.assessment_id else new.assessment_id end;
+begin
+  if coalesce(current_setting('comp.allow_locked_write', true), '') <> 'on'
+     and exists (select 1 from comp_assessments a where a.id = v_aid and a.status = 'completed') then
+    raise exception 'assessment_locked: this assessment is completed; its documents cannot change until a module admin reopens it';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_attachments_enforce_lock() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_attachments_lock on comp_attachments;
+create trigger trg_comp_attachments_lock before insert or update or delete on comp_attachments
+  for each row execute function comp_attachments_enforce_lock();
+
+-- ---------------------------------------------------------------- D-2: registration / removal RPCs
+
+-- Shared validation for both registration paths; returns the normalized entry_ref.
+create or replace function comp_doc_validate(p_category text, p_entry_ref text, p_path text)
+returns text as $$
+declare
+  v_size bigint;
+begin
+  if p_category is null or p_category not in ('NATIONAL_ID', 'RESUME', 'EDUCATION', 'EMPLOYMENT', 'CERTIFICATION', 'OTHER') then
+    raise exception 'invalid document category';
+  end if;
+  if p_category in ('EDUCATION', 'EMPLOYMENT', 'CERTIFICATION') then
+    if coalesce(p_entry_ref, '') !~ '^[A-Za-z0-9_-]{1,64}$' then
+      raise exception 'invalid entry reference';
+    end if;
+  else
+    p_entry_ref := null;
+  end if;
+  if exists (select 1 from comp_attachments t where t.storage_path = p_path)
+     or exists (select 1 from comp_assessments a where a.photo_url = p_path) then
+    raise exception 'invalid attachment path';
+  end if;
+  v_size := comp_doc_object_size(p_path);
+  if v_size is null then
+    raise exception 'document not found in storage';
+  end if;
+  if v_size > comp_doc_max_bytes() then
+    raise exception 'file_too_large: documents are limited to 300 KB';
+  end if;
+  return p_entry_ref;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_doc_validate(text, text, text) from public, anon, authenticated;
+
+create or replace function comp_add_attachment(p_assessment_id uuid, p_category text, p_entry_ref text, p_file_name text, p_storage_path text)
+returns uuid as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_ref text;
+  v_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not comp_can_manage_documents(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.status = 'completed' then
+    raise exception 'assessment_locked: this assessment is completed; its documents cannot change until a module admin reopens it';
+  end if;
+  if not comp_is_doc_path(v_a.id, null, p_storage_path) then
+    raise exception 'invalid attachment path';
+  end if;
+  v_ref := comp_doc_validate(p_category, p_entry_ref, p_storage_path);
+  insert into comp_attachments (assessment_id, kind, category, entry_ref, file_name, storage_path, file_size, uploaded_by_candidate)
+  values (v_a.id, comp_doc_category_kind(p_category), p_category, v_ref, left(coalesce(nullif(p_file_name, ''), 'document'), 200),
+          p_storage_path, comp_doc_object_size(p_storage_path), false)
+  returning id into v_id;
+  perform comp_log_audit('ATTACHMENT_ADDED', 'comp_assessments', v_a.id, null,
+    jsonb_build_object('attachmentId', v_id, 'category', p_category, 'entryRef', v_ref, 'byCandidate', false));
+  return v_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_add_attachment(uuid, text, text, text, text) from public, anon;
+grant execute on function comp_add_attachment(uuid, text, text, text, text) to authenticated;
+
+create or replace function comp_remove_attachment(p_attachment_id uuid)
+returns text as $$
+declare
+  v_t comp_attachments%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  select * into v_t from comp_attachments where id = p_attachment_id;
+  if not found then
+    raise exception 'attachment not found';
+  end if;
+  if not comp_can_manage_documents(v_t.assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  delete from comp_attachments where id = v_t.id;  -- trg_comp_attachments_lock refuses a completed assessment
+  perform comp_log_audit('ATTACHMENT_REMOVED', 'comp_assessments', v_t.assessment_id,
+    jsonb_build_object('attachmentId', v_t.id, 'category', v_t.category, 'entryRef', v_t.entry_ref, 'fileName', v_t.file_name,
+                       'byCandidate', v_t.uploaded_by_candidate),
+    null);
+  return v_t.storage_path;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_remove_attachment(uuid) from public, anon;
+grant execute on function comp_remove_attachment(uuid) to authenticated;
+
+create or replace function comp_self_service_add_document(p_token uuid, p_category text, p_entry_ref text, p_file_name text, p_storage_path text)
+returns uuid as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_ref text;
+  v_id uuid;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  if not comp_is_doc_path(v_a.id, p_token, p_storage_path) then
+    raise exception 'invalid attachment path';
+  end if;
+  if (select count(*) from comp_attachments t where t.assessment_id = v_a.id and t.uploaded_by_candidate) >= 100 then
+    raise exception 'too_many_documents';
+  end if;
+  v_ref := comp_doc_validate(p_category, p_entry_ref, p_storage_path);
+  insert into comp_attachments (assessment_id, kind, category, entry_ref, file_name, storage_path, file_size, uploaded_by, uploaded_by_candidate)
+  values (v_a.id, comp_doc_category_kind(p_category), p_category, v_ref, left(coalesce(nullif(p_file_name, ''), 'document'), 200),
+          p_storage_path, comp_doc_object_size(p_storage_path), null, true)
+  returning id into v_id;
+  perform comp_log_audit('ATTACHMENT_ADDED', 'comp_assessments', v_a.id, null,
+    jsonb_build_object('attachmentId', v_id, 'category', p_category, 'entryRef', v_ref, 'byCandidate', true));
+  return v_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_add_document(uuid, text, text, text, text) from public;
+grant execute on function comp_self_service_add_document(uuid, text, text, text, text) to anon, authenticated;
+
+create or replace function comp_self_service_remove_document(p_token uuid, p_attachment_id uuid)
+returns text as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_t comp_attachments%rowtype;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  select * into v_t from comp_attachments where id = p_attachment_id and assessment_id = v_a.id and uploaded_by_candidate;
+  if not found then
+    raise exception 'attachment not found';
+  end if;
+  delete from comp_attachments where id = v_t.id;
+  perform comp_log_audit('ATTACHMENT_REMOVED', 'comp_assessments', v_a.id,
+    jsonb_build_object('attachmentId', v_t.id, 'category', v_t.category, 'entryRef', v_t.entry_ref, 'fileName', v_t.file_name, 'byCandidate', true),
+    null);
+  return v_t.storage_path;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_remove_document(uuid, uuid) from public;
+grant execute on function comp_self_service_remove_document(uuid, uuid) to anon, authenticated;
+
+-- Section 53's legacy registration (an old cached self-service page): unchanged except that the file
+-- is now category OTHER and must also respect the 300 KB limit.
+create or replace function comp_self_service_add_attachment(p_token uuid, p_kind text, p_file_name text, p_storage_path text)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_size bigint;
+begin
+  select * into v_a from comp_assessments where self_service_token = p_token;
+  if not found then
+    raise exception 'invalid token';
+  end if;
+  if not comp_self_service_is_editable(v_a.status, v_a.self_service_status) then
+    raise exception 'self_service_closed: this self-service form has already been reviewed or the assessment is completed';
+  end if;
+  if not starts_with(coalesce(p_storage_path, ''), v_a.id::text || '/' || p_token::text || '/')
+     or p_storage_path is not distinct from v_a.photo_url then
+    raise exception 'invalid attachment path';
+  end if;
+  v_size := comp_doc_object_size(p_storage_path);
+  if v_size is null or v_size > comp_doc_max_bytes() then
+    raise exception 'file_too_large: documents are limited to 300 KB';
+  end if;
+  insert into comp_attachments (assessment_id, kind, category, file_name, storage_path, file_size, uploaded_by, uploaded_by_candidate)
+  values (v_a.id, case when p_kind in ('resume', 'education', 'certification', 'national_id', 'insurance', 'employment') then p_kind else 'other' end,
+          'OTHER', left(coalesce(nullif(p_file_name, ''), 'document'), 200), p_storage_path, v_size, null, true);
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_self_service_add_attachment(uuid, text, text, text) from public;
+grant execute on function comp_self_service_add_attachment(uuid, text, text, text) to anon, authenticated;
+
+drop function if exists comp_self_service_list_attachments(uuid);
+create or replace function comp_self_service_list_attachments(p_token uuid)
+returns table (
+  id uuid,
+  kind text,
+  category text,
+  entry_ref text,
+  file_name text,
+  storage_path text,
+  file_size bigint,
+  uploaded_by_candidate boolean,
+  created_at timestamptz
+) as $$
+  select att.id, att.kind, att.category, att.entry_ref, att.file_name, att.storage_path, att.file_size, att.uploaded_by_candidate, att.created_at
+  from comp_attachments att
+  join comp_assessments a on a.id = att.assessment_id
+  where a.self_service_token = p_token
+  order by att.created_at;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_self_service_list_attachments(uuid) from public;
+grant execute on function comp_self_service_list_attachments(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------- D-6: self-service link lifecycle
+
+create table if not exists comp_self_service_retired_tokens (
+  token uuid primary key,
+  assessment_id uuid not null references comp_assessments (id) on delete cascade,
+  retired_at timestamptz not null default now(),
+  retired_by uuid
+);
+
+alter table comp_self_service_retired_tokens enable row level security;
+revoke all on comp_self_service_retired_tokens from anon, authenticated;
+
+create or replace function comp_assessments_retire_token()
+returns trigger as $$
+begin
+  if new.self_service_token is distinct from old.self_service_token then
+    insert into comp_self_service_retired_tokens (token, assessment_id, retired_by)
+    values (old.self_service_token, old.id, auth.uid())
+    on conflict (token) do nothing;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_assessments_retire_token() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_assessments_retire_token on comp_assessments;
+create trigger trg_comp_assessments_retire_token after update of self_service_token on comp_assessments
+  for each row execute function comp_assessments_retire_token();
+
+-- 'active' | 'rotated' (a newer link was issued for the same candidate) | 'unknown'. Reveals nothing
+-- about the assessment itself.
+create or replace function comp_self_service_link_state(p_token uuid)
+returns text as $$
+  select case
+    when exists (select 1 from comp_assessments a where a.self_service_token = p_token) then 'active'
+    when exists (select 1 from comp_self_service_retired_tokens r where r.token = p_token) then 'rotated'
+    else 'unknown'
+  end;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_self_service_link_state(uuid) from public;
+grant execute on function comp_self_service_link_state(uuid) to anon, authenticated;
+
+drop function if exists comp_self_service_get(uuid);
+create or replace function comp_self_service_get(p_token uuid)
+returns table (
+  id uuid,
+  candidate_name text,
+  candidate_position text,
+  candidate_national_id text,
+  candidate_phone text,
+  candidate_email text,
+  candidate_birth_date date,
+  candidate_age int,
+  has_disability boolean,
+  disability_note text,
+  years_experience_total numeric,
+  years_experience_pipeline numeric,
+  current_employer text,
+  education jsonb,
+  employment_history jsonb,
+  certifications jsonb,
+  notable_projects text,
+  self_service_status text,
+  photo_url text,
+  self_service_editable boolean,
+  self_service_closed_reason text
+) as $$
+  select a.id, a.candidate_name, a.candidate_position, a.candidate_national_id, a.candidate_phone, a.candidate_email,
+         a.candidate_birth_date, a.candidate_age, a.has_disability, a.disability_note,
+         a.years_experience_total, a.years_experience_pipeline, a.current_employer,
+         a.education, a.employment_history, a.certifications, a.notable_projects, a.self_service_status,
+         a.photo_url, comp_self_service_is_editable(a.status, a.self_service_status),
+         case when a.status = 'completed' then 'completed'
+              when a.self_service_status = 'reviewed' then 'reviewed' end
+  from comp_assessments a
+  where a.self_service_token = p_token;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_self_service_get(uuid) from public;
+grant execute on function comp_self_service_get(uuid) to anon, authenticated;
+
+create or replace function comp_regenerate_self_service_link(p_assessment_id uuid)
+returns uuid as $$
+declare
+  v_a comp_assessments%rowtype;
+  v_token uuid := gen_random_uuid();
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not comp_is_lead(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  -- A form the candidate already submitted (or staff already closed) keeps that status: a new link is
+  -- a new address for the same form, not a reset of it. Only "sent" goes back to "not sent yet".
+  update comp_assessments set
+    self_service_token = v_token,
+    self_service_status = case when self_service_status = 'pending' then 'not_sent' else self_service_status end
+  where id = v_a.id;
+  perform comp_log_audit('SELF_SERVICE_LINK_REGENERATED', 'comp_assessments', v_a.id,
+    jsonb_build_object('selfServiceStatus', v_a.self_service_status), null);
+  return v_token;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_regenerate_self_service_link(uuid) from public, anon;
+grant execute on function comp_regenerate_self_service_link(uuid) to authenticated;
+
+-- Copying the link marks it sent — only ever not_sent → pending, so copying it again never reopens a
+-- reviewed form or hides a submitted one. Returns the status and the CURRENT token (a stale tab
+-- must not hand out a link that was already rotated).
+create or replace function comp_mark_self_service_sent(p_assessment_id uuid)
+returns table (self_service_status text, self_service_token uuid) as $$
+begin
+  if not comp_can_view_documents(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  update comp_assessments a set self_service_status = 'pending'
+  where a.id = p_assessment_id and a.self_service_status = 'not_sent' and a.status <> 'completed';
+  return query select a.self_service_status, a.self_service_token from comp_assessments a where a.id = p_assessment_id;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_mark_self_service_sent(uuid) from public, anon;
+grant execute on function comp_mark_self_service_sent(uuid) to authenticated;
+
+create or replace function comp_close_self_service(p_assessment_id uuid)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not comp_is_lead(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.self_service_status = 'reviewed' then
+    return;
+  end if;
+  update comp_assessments set self_service_status = 'reviewed', reviewed_by = auth.uid(), reviewed_at = now() where id = v_a.id;
+  perform comp_log_audit('SELF_SERVICE_CLOSED', 'comp_assessments', v_a.id,
+    jsonb_build_object('selfServiceStatus', v_a.self_service_status), jsonb_build_object('selfServiceStatus', 'reviewed'));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_close_self_service(uuid) from public, anon;
+grant execute on function comp_close_self_service(uuid) to authenticated;
+
+create or replace function comp_reopen_self_service(p_assessment_id uuid)
+returns void as $$
+declare
+  v_a comp_assessments%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  if not comp_is_lead(p_assessment_id) then
+    raise exception 'forbidden';
+  end if;
+  select * into v_a from comp_assessments where id = p_assessment_id for update;
+  if not found then
+    raise exception 'assessment not found';
+  end if;
+  if v_a.status = 'completed' then
+    raise exception 'assessment_locked: this assessment is completed; a module admin must reopen it first';
+  end if;
+  if v_a.self_service_status <> 'reviewed' then
+    return;
+  end if;
+  update comp_assessments set self_service_status = 'pending', reviewed_by = null, reviewed_at = null where id = v_a.id;
+  perform comp_log_audit('SELF_SERVICE_REOPENED', 'comp_assessments', v_a.id,
+    jsonb_build_object('selfServiceStatus', 'reviewed', 'reviewedBy', v_a.reviewed_by, 'reviewedAt', v_a.reviewed_at),
+    jsonb_build_object('selfServiceStatus', 'pending'));
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_reopen_self_service(uuid) from public, anon;
+grant execute on function comp_reopen_self_service(uuid) to authenticated;
 
 -- ============================================================================
 -- Section 56 — online technical MCQ test («آزمون تستی آنلاین»)
@@ -13205,3 +14118,31 @@ $$ language plpgsql security definer set search_path = public;
 
 revoke execute on function comp_ensure_competency_profile(uuid) from public, anon;
 grant execute on function comp_ensure_competency_profile(uuid) to authenticated;
+
+-- =============================================================================================
+-- Section 55 transitional compatibility (applied live as section55_compat_staff_attachment_policies
+-- + section55_compat_staff_attachment_grants). The deployed frontend still inserts/deletes
+-- comp_attachments rows directly; Section 55 had moved staff writes behind comp_add_attachment /
+-- comp_remove_attachment and removed the table's insert/delete policy + grants before the new UI
+-- shipped, which broke staff document upload/delete. Same authority as the RPCs (lead / designer /
+-- module admin), path under the assessment (new docs/ layout or legacy flat layout); the completed
+-- lock and 300 KB limit stay enforced by trg_comp_attachments_lock and the storage trigger.
+-- Can be dropped once every client uses the RPCs.
+-- =============================================================================================
+grant insert, delete on comp_attachments to authenticated;
+
+drop policy if exists "comp_attachments_insert_staff_compat" on comp_attachments;
+create policy "comp_attachments_insert_staff_compat" on comp_attachments
+  for insert to authenticated
+  with check (
+    comp_can_manage_documents(assessment_id)
+    and (
+      comp_is_doc_path(assessment_id, null, storage_path)
+      or storage_path ~* ('^' || assessment_id::text || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]{1,8}$')
+    )
+  );
+
+drop policy if exists "comp_attachments_delete_staff_compat" on comp_attachments;
+create policy "comp_attachments_delete_staff_compat" on comp_attachments
+  for delete to authenticated
+  using (comp_can_manage_documents(assessment_id));
