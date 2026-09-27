@@ -14146,3 +14146,40 @@ drop policy if exists "comp_attachments_delete_staff_compat" on comp_attachments
 create policy "comp_attachments_delete_staff_compat" on comp_attachments
   for delete to authenticated
   using (comp_can_manage_documents(assessment_id));
+
+-- =============================================================================================
+-- Structured-interview raters = the candidate's own panel (applied live as
+-- comp_interview_ratings_panel_only). Before, any user who could ACCESS the assessment — which
+-- includes every module admin — could insert/update ratings, even without being on that
+-- candidate's panel, and nothing checked that the interview was part of the candidate's design.
+-- Now: rater must be a panelist of the assessment (or its creator), and needs_structured_interview
+-- must be on. Reading is unchanged (everyone with access); the completed lock stays a trigger.
+-- =============================================================================================
+create or replace function comp_can_rate_interview(p_assessment_id uuid)
+returns boolean as $$
+  select auth.uid() is not null and exists (
+    select 1 from comp_assessments a
+    where a.id = p_assessment_id
+      and a.needs_structured_interview
+      and (
+        a.created_by = auth.uid()
+        or exists (select 1 from comp_panelists p where p.assessment_id = a.id and p.user_id = auth.uid())
+      )
+  );
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_can_rate_interview(uuid) from public, anon;
+grant execute on function comp_can_rate_interview(uuid) to authenticated;
+
+drop policy if exists "comp_interview_ratings_insert_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_insert_own" on comp_interview_ratings
+  for insert with check (rater_id = auth.uid() and comp_can_rate_interview(assessment_id));
+
+drop policy if exists "comp_interview_ratings_update_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_update_own" on comp_interview_ratings
+  for update using (rater_id = auth.uid() and comp_can_rate_interview(assessment_id))
+  with check (rater_id = auth.uid() and comp_can_rate_interview(assessment_id));
+
+drop policy if exists "comp_interview_ratings_delete_own" on comp_interview_ratings;
+create policy "comp_interview_ratings_delete_own" on comp_interview_ratings
+  for delete using (rater_id = auth.uid() and comp_can_rate_interview(assessment_id));
