@@ -11247,3 +11247,64 @@ $$ language plpgsql security definer stable set search_path = public;
 
 revoke execute on function comp_public_results_get(uuid) from public;
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------- Group 3 — assessment design & bank
+-- N-8 comp_question_bank_public also returns approval_status, so the Assessment Designer counts
+--     availability exactly like generation draws (active AND APPROVED). The function now has a
+--     pinned search_path and no anon EXECUTE (it returned nothing to anon anyway).
+-- L-4 Bumping usage_count / last_used_at (every test generation) no longer touches updated_at /
+--     updated_by of comp_question_bank / personality_questions — those now mean "content edited".
+-- (N-7 and N-14 are client-side; the completed-assessment design lock is Section 53's trigger.)
+
+drop function if exists comp_question_bank_public();
+create or replace function comp_question_bank_public()
+returns table (
+  id uuid, job_role text, category text, sub_category text, difficulty text,
+  question_text text, image_url text, weight numeric, question_group_id uuid,
+  version int, active boolean, created_at timestamptz, updated_at timestamptz, approval_status text
+) as $$
+  select id, job_role, category, sub_category, difficulty, question_text, image_url, weight,
+         question_group_id, version, active, created_at, updated_at, approval_status
+  from comp_question_bank
+  where auth.uid() is not null;
+$$ language sql security definer stable set search_path = public;
+
+revoke execute on function comp_question_bank_public() from public, anon;
+grant execute on function comp_question_bank_public() to authenticated;
+
+create or replace function comp_question_bank_touch()
+returns trigger as $$
+begin
+  if (to_jsonb(new) - array['usage_count', 'last_used_at', 'updated_at']) = (to_jsonb(old) - array['usage_count', 'last_used_at', 'updated_at']) then
+    new.updated_at := old.updated_at;
+  else
+    new.updated_at := now();
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+create or replace function personality_questions_touch()
+returns trigger as $$
+begin
+  if (to_jsonb(new) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by'])
+     = (to_jsonb(old) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by']) then
+    new.updated_at := old.updated_at;
+    new.updated_by := old.updated_by;
+  else
+    new.updated_at := now();
+    new.updated_by := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+revoke execute on function comp_question_bank_touch() from public, anon, authenticated;
+revoke execute on function personality_questions_touch() from public, anon, authenticated;
+
+drop trigger if exists trg_set_updated_at on comp_question_bank;
+create trigger trg_set_updated_at before update on comp_question_bank
+  for each row execute function comp_question_bank_touch();
+drop trigger if exists trg_set_updated_at on personality_questions;
+create trigger trg_set_updated_at before update on personality_questions
+  for each row execute function personality_questions_touch();

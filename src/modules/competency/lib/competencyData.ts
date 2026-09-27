@@ -365,6 +365,8 @@ export interface CompQuestionBankPublicRow {
   question_group_id: string
   version: number | null
   active: boolean
+  /** Added in schema.sql Section 54 (N-8) so availability can be counted like generation draws. */
+  approval_status?: string | null
   created_at: string
   updated_at: string
 }
@@ -392,7 +394,7 @@ export function compQuestionBankPublicFromRow(r: CompQuestionBankPublicRow): Com
     evaluatorNoteRequired: false,
     active: r.active,
     weight: r.weight ?? 1,
-    approvalStatus: 'APPROVED',
+    approvalStatus: (r.approval_status ?? 'APPROVED') as CompQuestionBankItem['approvalStatus'],
     questionGroupId: r.question_group_id ?? r.id,
     version: r.version ?? 1,
     supersededBy: null,

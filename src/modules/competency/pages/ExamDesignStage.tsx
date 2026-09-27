@@ -45,6 +45,12 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
   const [creatingPersonality, setCreatingPersonality] = useState(false)
   const [pickedBlueprintId, setPickedBlueprintId] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
+  const panelistScores = useCompetencyStore((s) => s.panelistScores)
+  const interviewRatings = useCompetencyStore((s) => s.interviewRatings)
+  const fetchInterviewRatings = useCompetencyStore((s) => s.fetchInterviewRatings)
+  // N-14: a completed assessment's design is frozen (the server refuses it too — Section 53 lock).
+  const completed = assessment.status === 'completed'
+  const canEdit = isDesigner && !completed
 
   useEffect(() => {
     if (frameworks.length === 0) fetchCatalog()
@@ -53,6 +59,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
     fetchPersonalityAssessments()
     fetchAssessmentBlueprints()
     if (assessmentTemplates.length === 0) fetchAssessmentTemplates()
+    fetchInterviewRatings(assessment.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -79,18 +86,60 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
       appliedBlueprint.includesStructuredInterview !== assessment.needsStructuredInterview ||
       appliedBlueprint.includesExperience !== assessment.includesExperience)
 
+  // N-14: which methods already produced evidence for this candidate — switching one of those off
+  // makes that evidence "out of design" (it stops counting), so it needs an explicit confirmation.
+  const personalityForEvidence = personalityAssessments.find((a) => a.assessmentId === assessment.id)
+  const methodEvidence: Record<'personality' | 'technical' | 'interview' | 'experience', string | null> = {
+    technical:
+      assessment.selectedQuestionIds.some((id) => assessment.answers[id]?.score != null) ||
+      panelistScores.some((ps) => ps.assessmentId === assessment.id && assessment.selectedQuestionIds.some((id) => ps.answers[id]?.score != null))
+        ? 'امتیازهای ثبت‌شده‌ی آزمون فنی'
+        : null,
+    interview: interviewRatings.some((r) => r.assessmentId === assessment.id) ? 'امتیازهای مصاحبه‌ی ساختاریافته' : null,
+    personality:
+      personalityForEvidence && !['DRAFT', 'DESIGNED', 'GENERATED', 'ASSIGNED'].includes(personalityForEvidence.status)
+        ? 'پاسخ‌ها/نتیجه‌ی آزمون شخصیت'
+        : null,
+    experience:
+      assessment.yearsExperienceTotal != null || assessment.yearsExperiencePipeline != null || assessment.certifications.length > 0 || assessment.education.length > 0
+        ? 'سوابق و تجربه‌ی ثبت‌شده'
+        : null,
+  }
+  const confirmDroppingEvidence = (turnedOff: (keyof typeof methodEvidence)[]) => {
+    const lost = turnedOff.map((k) => methodEvidence[k]).filter((x): x is string => x != null)
+    if (lost.length === 0) return true
+    return window.confirm(
+      `برای این متقاضی ${lost.join('، ')} ثبت شده است. با خارج کردن این روش از طرح، این شواهد دیگر در محاسبه‌ی شایستگی حساب نمی‌شوند (حذف نمی‌شوند و با برگرداندن روش دوباره حساب می‌شوند). ادامه می‌دهید؟`,
+    )
+  }
+
   const handleApplyBlueprint = async () => {
-    if (!selectedBlueprint) return
+    if (!selectedBlueprint || !canEdit) return
+    const turnedOff = (
+      [
+        ['personality', assessment.needsPersonalityAssessment && !selectedBlueprint.includesPersonality],
+        ['technical', assessment.needsTechnicalAssessment && !selectedBlueprint.includesTechnical],
+        ['interview', assessment.needsStructuredInterview && !selectedBlueprint.includesStructuredInterview],
+        ['experience', assessment.includesExperience && !selectedBlueprint.includesExperience],
+      ] as const
+    )
+      .filter(([, off]) => off)
+      .map(([k]) => k)
+    if (!confirmDroppingEvidence([...turnedOff])) return
     setApplying(true)
     await applyBlueprint(assessment.id, selectedBlueprint)
     setApplying(false)
   }
 
-  const toggle = (patch: { personality?: boolean; technical?: boolean; interview?: boolean; experience?: boolean }) =>
-    setExamDesign(assessment.id, patch.personality ?? assessment.needsPersonalityAssessment, patch.technical ?? assessment.needsTechnicalAssessment, {
+  const toggle = (patch: { personality?: boolean; technical?: boolean; interview?: boolean; experience?: boolean }) => {
+    if (!canEdit) return
+    const turnedOff = (Object.keys(patch) as (keyof typeof patch)[]).filter((k) => patch[k] === false)
+    if (!confirmDroppingEvidence(turnedOff)) return
+    return setExamDesign(assessment.id, patch.personality ?? assessment.needsPersonalityAssessment, patch.technical ?? assessment.needsTechnicalAssessment, {
       needsStructuredInterview: patch.interview,
       includesExperience: patch.experience,
     })
+  }
 
   const personalityAssessment = personalityAssessments.find((a) => a.assessmentId === assessment.id)
 
@@ -136,7 +185,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
                 <select
                   value={selectedBlueprint?.id ?? ''}
                   onChange={(e) => setPickedBlueprintId(e.target.value)}
-                  disabled={!isDesigner}
+                  disabled={!canEdit}
                   className="input !py-1.5 text-[11px]"
                 >
                   {roleBlueprints.map((b) => (
@@ -147,7 +196,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
                   ))}
                 </select>
               </label>
-              {isDesigner && (
+              {canEdit && (
                 <button
                   onClick={handleApplyBlueprint}
                   disabled={applying || !selectedBlueprint}
@@ -175,6 +224,11 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
         <p className="mb-3 text-[11px] leading-6 text-muted">
           مشخص کنید این متقاضی به کدام بخش‌های ارزیابی نیاز دارد؛ ترتیب مراحل بعدی ویزارد بر همین اساس تنظیم می‌شود.
         </p>
+        {completed && isDesigner && (
+          <p className="mb-3 rounded-xl border border-slate-400/25 bg-white/[0.03] p-2.5 text-[11px] leading-6 text-secondary">
+            این ارزیابی ثبت نهایی شده و طرح آن قفل است. برای تغییر، ادمین ماژول باید ابتدا ارزیابی را بازگشایی کند.
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ExamDesignToggle
@@ -183,7 +237,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             title="ارزیابی شخصیت و رفتاری"
             description="سنجش تمایلات رفتاری حرفه‌ای مکمل ارزیابی فنی."
             checked={assessment.needsPersonalityAssessment}
-            isDesigner={isDesigner}
+            isDesigner={canEdit}
             onChange={(checked) => toggle({ personality: checked })}
           />
           <ExamDesignToggle
@@ -192,7 +246,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             title="آزمون فنی تخصصی (مصاحبه + سؤالات)"
             description="پنل مصاحبه‌گران و سؤالات تخصصی شغل مورد ارزیابی."
             checked={assessment.needsTechnicalAssessment}
-            isDesigner={isDesigner}
+            isDesigner={canEdit}
             onChange={(checked) => toggle({ technical: checked })}
           />
           <ExamDesignToggle
@@ -201,7 +255,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             title="مصاحبه ساختاریافته"
             description="امتیازدهی مستقیم هر داور به شایستگی‌های کلیدی شغل بر اساس سطوح مهارت."
             checked={assessment.needsStructuredInterview}
-            isDesigner={isDesigner}
+            isDesigner={canEdit}
             onChange={(checked) => toggle({ interview: checked })}
           />
           <ExamDesignToggle
@@ -210,7 +264,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             title="سوابق و تجربه"
             description="سابقه کاری، گواهینامه‌ها و سوابق تحصیلی ثبت‌شده به‌عنوان شواهد شایستگی."
             checked={assessment.includesExperience}
-            isDesigner={isDesigner}
+            isDesigner={canEdit}
             onChange={(checked) => toggle({ experience: checked })}
           />
         </div>

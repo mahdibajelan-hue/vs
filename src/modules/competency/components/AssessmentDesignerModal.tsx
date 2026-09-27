@@ -37,6 +37,9 @@ const DEFAULT_COUNTS_PER_TYPE: Record<QuestionDifficulty, number> = { L1: 2, L2:
 
 const STEPS = ['تنظیمات آزمون', 'ترکیب سؤال', 'بررسی موجودی بانک سؤال', 'پیش‌نمایش و تولید'] as const
 
+/** N-7: what "generate" does with the mix — never touches a shared template unless asked to. */
+type TemplateSaveMode = 'none' | 'update' | 'new'
+
 /**
  * "طراحی آزمون شایستگی" wizard (spec section 6-9/36-37): configure how many questions of each
  * type/difficulty an assessment should draw from the bank, check that against real availability,
@@ -65,6 +68,10 @@ export function AssessmentDesignerModal({
   const fetchAssessmentTemplates = useCompetencyStore((s) => s.fetchAssessmentTemplates)
   const upsertAssessmentTemplate = useCompetencyStore((s) => s.upsertAssessmentTemplate)
   const assignQuestionsFromMix = useCompetencyStore((s) => s.assignQuestionsFromMix)
+  const assessmentBlueprints = useCompetencyStore((s) => s.assessmentBlueprints)
+  const fetchAssessmentBlueprints = useCompetencyStore((s) => s.fetchAssessmentBlueprints)
+  const [bankLoaded, setBankLoaded] = useState(questionBankPublic.length > 0)
+  const [saveMode, setSaveMode] = useState<TemplateSaveMode>('none')
 
   const [step, setStep] = useState(0)
   const [generating, setGenerating] = useState(false)
@@ -94,8 +101,9 @@ export function AssessmentDesignerModal({
 
   useEffect(() => {
     if (jobRoleConfigs.length === 0) fetchJobRoleConfigs()
-    if (questionBankPublic.length === 0) fetchQuestionBankPublic()
+    if (questionBankPublic.length === 0) fetchQuestionBankPublic().then(() => setBankLoaded(true))
     if (assessmentTemplates.length === 0) fetchAssessmentTemplates()
+    if (assessmentBlueprints.length === 0) fetchAssessmentBlueprints()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -104,19 +112,32 @@ export function AssessmentDesignerModal({
     return config && config.allowedQuestionTypes.length > 0 ? config.allowedQuestionTypes : ALL_QUESTION_TYPES
   }, [jobRoleConfigs, jobRole])
 
+  // N-8: availability is counted exactly like generation draws (active AND approved questions of
+  // this role) — an active but unapproved question is never offered, so it can't cause a silent
+  // under-delivery.
+  const availableFor = (type: QuestionType, difficulty: QuestionDifficulty) =>
+    questionBankPublic.filter(
+      (q) => q.jobRole === jobRole && q.category === type && q.difficulty === difficulty && q.active && q.approvalStatus === 'APPROVED',
+    ).length
+  const bankTotal = useMemo(
+    () => questionBankPublic.filter((q) => q.jobRole === jobRole && q.active && q.approvalStatus === 'APPROVED').length,
+    [questionBankPublic, jobRole],
+  )
+
   // Pre-fill a default mix so the designer starts from something reasonable rather than an empty
   // grid — only while no saved template for this role has taken over yet (see the auto-apply effect
   // below, which fires afterwards on the same render once templatesForRole actually loads and wins
-  // if a real template exists) and only before the designer has touched anything themselves.
+  // if a real template exists) and only before the designer has touched anything themselves. The
+  // default is capped at what the bank really has per cell (N-8), so it never starts in shortage.
   useEffect(() => {
-    if (templatesForRole.length > 0 || Object.keys(counts).length > 0) return
+    if (!bankLoaded || templatesForRole.length > 0 || Object.keys(counts).length > 0) return
     const next: Record<string, number> = {}
     for (const t of allowedTypes) {
-      for (const d of ALL_DIFFICULTIES) next[cellKey(t, d)] = DEFAULT_COUNTS_PER_TYPE[d]
+      for (const d of ALL_DIFFICULTIES) next[cellKey(t, d)] = Math.min(DEFAULT_COUNTS_PER_TYPE[d], availableFor(t, d))
     }
     setCounts(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowedTypes, templatesForRole.length])
+  }, [allowedTypes, templatesForRole.length, bankLoaded])
 
   const applyTemplate = (id: string | null) => {
     setTemplateId(id)
@@ -143,9 +164,6 @@ export function AssessmentDesignerModal({
 
   const totalByType = (type: QuestionType) => ALL_DIFFICULTIES.reduce((sum, d) => sum + (counts[cellKey(type, d)] ?? 0), 0)
   const grandTotal = allowedTypes.reduce((sum, t) => sum + totalByType(t), 0)
-
-  const availableFor = (type: QuestionType, difficulty: QuestionDifficulty) =>
-    questionBankPublic.filter((q) => q.jobRole === jobRole && q.category === type && q.difficulty === difficulty && q.active).length
 
   const shortfalls = useMemo(() => {
     const list: { type: QuestionType; difficulty: QuestionDifficulty; required: number; available: number }[] = []
@@ -175,6 +193,10 @@ export function AssessmentDesignerModal({
   const canGoToAvailability = grandTotal > 0
   const canGenerate = grandTotal > 0 && shortfalls.length === 0
 
+  const selectedTemplate = templatesForRole.find((t) => t.id === templateId)
+  const linkedBlueprints = templateId ? assessmentBlueprints.filter((b) => b.technicalTemplateId === templateId) : []
+  const shortTotal = shortfalls.reduce((sum, x) => sum + (x.required - x.available), 0)
+
   const handleGenerate = async (discardExisting: boolean) => {
     if (locked) return
     if (hasResponses && !discardExisting) {
@@ -183,7 +205,13 @@ export function AssessmentDesignerModal({
     }
     setGenerating(true)
     const mix = buildMix()
-    await upsertAssessmentTemplate({ id: templateId ?? undefined, jobRole, title, durationMinutes, autoFinishOnTimeout, panelSizeDefault, questionMix: mix })
+    // N-7: the shared template is only written when the designer explicitly chose to.
+    if (saveMode === 'update' && templateId) {
+      await upsertAssessmentTemplate({ id: templateId, jobRole, title, durationMinutes, autoFinishOnTimeout, panelSizeDefault, questionMix: mix })
+    } else if (saveMode === 'new') {
+      const newId = await upsertAssessmentTemplate({ jobRole, title, durationMinutes, autoFinishOnTimeout, panelSizeDefault, questionMix: mix })
+      if (newId) setTemplateId(newId)
+    }
     const result = await assignQuestionsFromMix(assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout, discardExisting)
     setGenerating(false)
     if (result === 'responses_exist') {
@@ -318,8 +346,12 @@ export function AssessmentDesignerModal({
                             onChange={(e) =>
                               setCounts((prev) => ({ ...prev, [cellKey(t, d)]: Math.max(0, Number(e.target.value) || 0) }))
                             }
-                            className="num h-7 w-14 rounded-lg border border-white/10 bg-white/5 text-center outline-none focus:border-purple-400"
+                            title={`موجود در بانک: ${availableFor(t, d).toLocaleString('fa-IR')}`}
+                            className={`num h-7 w-14 rounded-lg border bg-white/5 text-center outline-none focus:border-purple-400 ${
+                              (counts[cellKey(t, d)] ?? 0) > availableFor(t, d) ? 'border-amber-400/60 text-amber-200' : 'border-white/10'
+                            }`}
                           />
+                          <span className="num mt-0.5 block text-[9px] text-muted">از {availableFor(t, d).toLocaleString('fa-IR')}</span>
                         </td>
                       ))}
                       <td className="num p-2 text-center font-bold text-purple-300">{totalByType(t).toLocaleString('fa-IR')}</td>
@@ -329,6 +361,19 @@ export function AssessmentDesignerModal({
               </table>
             </div>
             <p className="num text-left text-xs font-bold text-secondary">مجموع سؤالات: {grandTotal.toLocaleString('fa-IR')}</p>
+            <p className="text-[10.5px] text-muted">
+              موجودی تأییدشده و فعال بانک برای این شغل: <span className="num font-bold">{bankTotal.toLocaleString('fa-IR')}</span> سؤال
+              {shortfalls.length > 0 && (
+                <span className="text-amber-300">
+                  {' '}— در {shortfalls.length.toLocaleString('fa-IR')} خانه در مجموع {shortTotal.toLocaleString('fa-IR')} سؤال کم است (جزئیات در مرحله‌ی بعد).
+                </span>
+              )}
+            </p>
+            {bankLoaded && bankTotal === 0 && (
+              <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-2.5 text-[11px] text-amber-200">
+                برای این شغل هیچ سؤال فعال و تأییدشده‌ای در بانک نیست؛ ابتدا از «بانک سؤالات» سؤال اضافه یا تأیید کنید.
+              </p>
+            )}
           </div>
         )}
 
@@ -341,9 +386,13 @@ export function AssessmentDesignerModal({
             ) : (
               <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-200">
                 <p className="mb-1.5 flex items-center gap-1.5 font-bold">
-                  <AlertTriangle size={14} /> برای این ترکیب سؤال، بانک سؤال کافی نیست.
+                  <AlertTriangle size={14} /> برای این ترکیب {shortTotal.toLocaleString('fa-IR')} سؤال کم است ({shortfalls.length.toLocaleString('fa-IR')} خانه‌ی
+                  نوع/دشواری) — تا رفع کمبود، تولید آزمون ممکن نیست.
                 </p>
-                <p className="mb-2 text-amber-200/80">می‌توانید تعداد را کاهش دهید، سطح دشواری را تغییر دهید، ترکیب را عوض کنید یا سؤال جدید به بانک اضافه کنید.</p>
+                <p className="mb-2 text-amber-200/80">
+                  فقط سؤال‌های «فعال و تأییدشده»ی این شغل شمرده می‌شوند (همان‌هایی که تولید آزمون برمی‌دارد). می‌توانید تعداد را کاهش دهید، سطح دشواری را تغییر
+                  دهید، ترکیب را عوض کنید یا سؤال جدید به بانک اضافه/تأیید کنید.
+                </p>
                 <button
                   onClick={clampToAvailable}
                   className="rounded-lg border border-amber-300/30 bg-amber-500/15 px-2.5 py-1 text-[10.5px] font-bold text-amber-100 hover:bg-amber-500/25"
@@ -413,8 +462,36 @@ export function AssessmentDesignerModal({
                   </span>
                 ))}
             </div>
+            <div className="space-y-1.5 rounded-xl border border-white/10 p-3 text-[11px]">
+              <p className="font-bold">ذخیره‌ی این ترکیب</p>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="tpl-save" checked={saveMode === 'none'} onChange={() => setSaveMode('none')} className="h-3.5 w-3.5" />
+                فقط برای این متقاضی (هیچ قالبی تغییر نمی‌کند)
+              </label>
+              <label className={`flex items-center gap-1.5 ${selectedTemplate ? '' : 'text-muted/50'}`}>
+                <input
+                  type="radio"
+                  name="tpl-save"
+                  disabled={!selectedTemplate}
+                  checked={saveMode === 'update'}
+                  onChange={() => setSaveMode('update')}
+                  className="h-3.5 w-3.5"
+                />
+                به‌روزرسانی قالب{selectedTemplate ? ` «${selectedTemplate.title}»` : ' (ابتدا در مرحله‌ی اول یک قالب ذخیره‌شده انتخاب کنید)'}
+              </label>
+              {saveMode === 'update' && selectedTemplate && (
+                <p className="mr-5 text-[10.5px] leading-5 text-amber-200">
+                  ترکیب همه‌ی متقاضیان بعدی که از این قالب استفاده می‌کنند عوض می‌شود
+                  {linkedBlueprints.length > 0 && ` (از جمله ${linkedBlueprints.length.toLocaleString('fa-IR')} الگوی ارزیابی متصل: ${linkedBlueprints.map((b) => b.title).join('، ')})`}.
+                </p>
+              )}
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="tpl-save" checked={saveMode === 'new'} onChange={() => setSaveMode('new')} className="h-3.5 w-3.5" />
+                ذخیره به‌عنوان قالب جدید با عنوان «{title}»
+              </label>
+            </div>
             <p className="flex items-center gap-1.5 text-[10.5px] text-muted">
-              <Sparkles size={12} /> با تولید، این ترکیب به‌عنوان طرح «{title}» ذخیره می‌شود و سؤالات به‌صورت تصادفی از بانک انتخاب و برای این ارزیابی قفل می‌شوند.
+              <Sparkles size={12} /> سؤالات به‌صورت تصادفی از بانک انتخاب و برای این ارزیابی قفل می‌شوند.
             </p>
           </div>
         )}
