@@ -10720,3 +10720,7 @@ $$ language plpgsql security definer set search_path = public;
 
 revoke execute on function personality_set_test_questions(uuid, uuid[], boolean) from public, anon;
 grant execute on function personality_set_test_questions(uuid, uuid[], boolean) to authenticated;
+
+-- Trigger-only / internal helpers need no EXECUTE for API roles (triggers fire regardless of it).
+revoke execute on function comp_assessments_apply_default_blueprint() from public, anon, authenticated;
+revoke execute on function personality_test_has_progress(uuid) from authenticated;

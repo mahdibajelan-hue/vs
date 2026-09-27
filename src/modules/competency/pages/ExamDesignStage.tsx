@@ -280,6 +280,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
               personalityAssessmentId={personalityDesignerId}
               jobRole={assessment.jobRole}
               initialTemplateId={templateSource?.personalityTemplateId}
+              assessmentCompleted={assessment.status === 'completed'}
               onClose={() => setPersonalityDesignerId(null)}
               onGenerated={() => {
                 setPersonalityDesignerId(null)

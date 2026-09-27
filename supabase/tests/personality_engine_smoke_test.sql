@@ -125,6 +125,8 @@ begin
   raise notice 'personality_engine_smoke_test: ALL ASSERTIONS PASSED';
 
   -- ---- Cleanup (both cases) — always runs when every assertion above passed ----
+  delete from comp_audit_log where entity_id in (v_pa_varied, v_pa_uniform)
+    or entity_id in (select id from comp_assessments where candidate_name in ('__smoke_test_varied__', '__smoke_test_uniform__'));
   delete from personality_dimension_scores where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_validity_results where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_responses where personality_assessment_id in (v_pa_varied, v_pa_uniform);
@@ -133,10 +135,205 @@ begin
 
 exception when others then
   -- Clean up test rows even on assertion failure, then re-raise so the caller still sees the failure.
+  delete from comp_audit_log where entity_id in (v_pa_varied, v_pa_uniform)
+    or entity_id in (select id from comp_assessments where candidate_name in ('__smoke_test_varied__', '__smoke_test_uniform__'));
   delete from personality_dimension_scores where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_validity_results where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_responses where personality_assessment_id in (v_pa_varied, v_pa_uniform);
   delete from personality_assessments where id in (v_pa_varied, v_pa_uniform);
   delete from comp_assessments where candidate_name in ('__smoke_test_varied__', '__smoke_test_uniform__');
+  raise;
+end $$;
+
+-- ============================================================================
+-- Section 53 regressions (docs/demo-test-report.md M-1, M-2, M-3, M-9) — a second, independent
+-- block with its own throwaway rows, cleaned up on success AND failure:
+--   M-1  personality_score_assessment / _core are not executable by anon; an outsider is refused;
+--        staff may re-score a submitted test (status kept) but never a LOCKED or unsubmitted one.
+--   M-2  finalize only from STARTED/IN_PROGRESS — refused before start, after scoring and on LOCKED.
+--   M-3  a response to a question outside the test's own selection is refused, as is any response
+--        once the test is submitted.
+--   M-9  the selection cannot change under existing responses except through
+--        personality_set_test_questions with explicit discard (archived in the audit log, then
+--        cleared); always refused once the competency assessment is completed.
+-- ============================================================================
+do $$
+declare
+  v_admin uuid;
+  v_out uuid;
+  v_comp_id uuid;
+  v_pa uuid;
+  v_token uuid;
+  v_ids uuid[];
+  v_foreign uuid;
+  v_status text;
+  v_sub timestamptz;
+  v_missing int;
+  v_json jsonb;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  select p.id into v_out from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+    and not exists (select 1 from personality_module_admins m where m.user_id = p.id)
+    and not rasta_has_permission(p.id, 'competency', 'configure')
+    and not rasta_has_permission(p.id, 'personality', 'configure')
+  order by p.created_at limit 1;
+  select array_agg(id) into v_ids from (
+    select id from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and job_role is null order by id limit 8
+  ) x;
+  select id into v_foreign from personality_questions where approval_status = 'APPROVED' and active and question_type = 'LIKERT' and id <> all(v_ids) order by id limit 1;
+  if v_admin is null or v_out is null or coalesce(array_length(v_ids, 1), 0) < 8 or v_foreign is null then
+    raise exception 'section 53 smoke precondition failed: need an admin, a plain profile and >= 9 approved generic LIKERT questions';
+  end if;
+
+  insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by)
+  values ('project_manager', '__smoke_test_p53__', 'test', '0000000054', '09120000054', 'smoke-p53@example.com', v_admin)
+  returning id into v_comp_id;
+  insert into personality_assessments (assessment_id, job_role, created_by, selected_question_ids, status)
+  values (v_comp_id, 'project_manager', v_admin, to_jsonb(v_ids), 'GENERATED')
+  returning id, candidate_token into v_pa, v_token;
+
+  -- ---- anon: candidate link ----
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  perform set_config('role', 'anon', true);
+  begin
+    perform personality_score_assessment(v_pa);
+    raise exception 'ASSERTION FAILED (M-1): anon could run personality_score_assessment';
+  exception when insufficient_privilege then
+    null;
+  end;
+  begin
+    perform personality_score_assessment_core(v_pa);
+    raise exception 'ASSERTION FAILED (M-1): anon could run personality_score_assessment_core';
+  exception when insufficient_privilege then
+    null;
+  end;
+  begin
+    perform personality_candidate_finalize(v_token);
+    raise exception 'ASSERTION FAILED (M-2): a test that was never started could be finalized';
+  exception when others then
+    if sqlerrm not like 'personality_not_in_progress%' then raise; end if;
+  end;
+  perform personality_candidate_start(v_token);
+  begin
+    perform personality_candidate_submit_response(v_token, v_foreign, jsonb_build_object('selected', 7), 500);
+    raise exception 'ASSERTION FAILED (M-3): a question outside the selection was accepted';
+  exception when others then
+    if sqlerrm <> 'question is not part of this assessment' then raise; end if;
+  end;
+  for i in 1..4 loop
+    perform personality_candidate_submit_response(v_token, v_ids[i], jsonb_build_object('selected', case when i % 2 = 0 then 2 else 6 end), 900);
+  end loop;
+  perform personality_candidate_finalize(v_token);
+  perform set_config('role', 'postgres', true);
+  select status, submitted_at into v_status, v_sub from personality_assessments where id = v_pa;
+  select missing_response_count into v_missing from personality_validity_results where personality_assessment_id = v_pa;
+  if v_status <> 'FINGERPRINT' or v_sub is null or v_missing <> 4 then
+    raise exception 'ASSERTION FAILED (M-2): a partial but legitimately finalized test must score (FINGERPRINT, submitted, 4 missing), got % / % / %', v_status, v_sub, v_missing;
+  end if;
+  perform set_config('role', 'anon', true);
+  begin
+    perform personality_candidate_finalize(v_token);
+    raise exception 'ASSERTION FAILED (M-2): an already-scored test could be finalized again';
+  exception when others then
+    if sqlerrm not like 'personality_not_in_progress%' then raise; end if;
+  end;
+  begin
+    perform personality_candidate_submit_response(v_token, v_ids[5], jsonb_build_object('selected', 7), 500);
+    raise exception 'ASSERTION FAILED (M-3): a response was accepted after submission';
+  exception when others then
+    if sqlerrm <> 'assessment already submitted' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+
+  -- ---- staff re-scoring ----
+  perform set_config('request.jwt.claims', json_build_object('sub', v_out, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform personality_score_assessment(v_pa);
+    raise exception 'ASSERTION FAILED (M-1): an outsider could re-score';
+  exception when others then
+    if sqlerrm <> 'forbidden' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform personality_score_assessment(v_pa);
+  perform set_config('role', 'postgres', true);
+  if (select status from personality_assessments where id = v_pa) <> 'FINGERPRINT' then
+    raise exception 'ASSERTION FAILED (M-1): a staff re-score must keep the status';
+  end if;
+  update personality_assessments set status = 'LOCKED' where id = v_pa;
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform personality_score_assessment(v_pa);
+    raise exception 'ASSERTION FAILED (M-1): a LOCKED test was re-scored';
+  exception when others then
+    if sqlerrm not like 'personality_locked%' then raise; end if;
+  end;
+  perform set_config('role', 'anon', true);
+  begin
+    perform personality_candidate_finalize(v_token);
+    raise exception 'ASSERTION FAILED (M-2): a LOCKED test could be finalized via the candidate link';
+  exception when others then
+    if sqlerrm not like 'personality_not_in_progress%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  if (select status from personality_assessments where id = v_pa) <> 'LOCKED' then
+    raise exception 'ASSERTION FAILED (M-2): the LOCKED status must survive';
+  end if;
+  update personality_assessments set status = 'FINGERPRINT' where id = v_pa;
+
+  -- ---- M-9: regeneration ----
+  perform set_config('role', 'authenticated', true);
+  begin
+    update personality_assessments set selected_question_ids = to_jsonb(v_ids[1:4]) where id = v_pa;
+    raise exception 'ASSERTION FAILED (M-9): the selection changed under existing responses';
+  exception when others then
+    if sqlerrm not like 'responses_exist%' then raise; end if;
+  end;
+  begin
+    perform personality_set_test_questions(v_pa, v_ids, false);
+    raise exception 'ASSERTION FAILED (M-9): regeneration without explicit discard was accepted';
+  exception when others then
+    if sqlerrm not like 'responses_exist%' then raise; end if;
+  end;
+  v_json := personality_set_test_questions(v_pa, v_ids, true);
+  perform set_config('role', 'postgres', true);
+  if (v_json ->> 'discardedResponses')::boolean is distinct from true
+     or (select status from personality_assessments where id = v_pa) <> 'GENERATED'
+     or exists (select 1 from personality_responses where personality_assessment_id = v_pa)
+     or exists (select 1 from personality_dimension_scores where personality_assessment_id = v_pa)
+     or not exists (select 1 from comp_audit_log where entity_id = v_pa and action = 'PERSONALITY_RESPONSES_DISCARDED'
+                    and jsonb_array_length(previous_value -> 'responses') = 4) then
+    raise exception 'ASSERTION FAILED (M-9): an explicit discard must archive and clear responses and scores, got %', v_json;
+  end if;
+  update comp_assessments set status = 'completed' where id = v_comp_id;
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform personality_set_test_questions(v_pa, v_ids, true);
+    raise exception 'ASSERTION FAILED (M-9): regeneration was accepted on a completed competency assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+
+  raise notice 'personality_engine_smoke_test (section 53): ALL ASSERTIONS PASSED';
+
+  delete from comp_audit_log where entity_id in (v_pa, v_comp_id);
+  delete from personality_dimension_scores where personality_assessment_id = v_pa;
+  delete from personality_validity_results where personality_assessment_id = v_pa;
+  delete from personality_responses where personality_assessment_id = v_pa;
+  delete from personality_assessments where id = v_pa;
+  delete from comp_assessments where id = v_comp_id;
+
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_audit_log where entity_id in (
+    select pa.id from personality_assessments pa join comp_assessments a on a.id = pa.assessment_id where a.candidate_name = '__smoke_test_p53__'
+  ) or entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_p53__');
+  delete from personality_assessments where assessment_id in (select id from comp_assessments where candidate_name = '__smoke_test_p53__');
+  delete from comp_assessments where candidate_name = '__smoke_test_p53__';
   raise;
 end $$;

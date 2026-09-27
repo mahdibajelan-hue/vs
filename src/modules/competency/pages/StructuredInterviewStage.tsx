@@ -146,6 +146,9 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
           هر شایستگی را مستقل از سایر داوران و بر اساس شواهد رفتاری مشخصی که در مصاحبه مشاهده کرده‌اید، روی سطوح مهارت همان شایستگی امتیاز دهید.
           امتیاز هر داور جداگانه ثبت می‌شود و میانگین آن‌ها به‌عنوان شواهد مصاحبه در پروفایل شایستگی متقاضی لحاظ می‌شود.
         </p>
+        {assessment.status === 'completed' && (
+          <p className="mt-1.5 text-[11px] text-amber-300">این ارزیابی ثبت نهایی شده و امتیازهای مصاحبه قفل است؛ اصلاح فقط پس از بازگشایی توسط ادمین ماژول ممکن است.</p>
+        )}
       </div>
 
       {items.length === 0 ? (
@@ -158,7 +161,15 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
           <div className="space-y-3">
             {items.map((item) => {
               const mine = myRatings.find((r) => r.competencyId === item.competency.id)
-              return <InterviewCompetencyCard key={`${item.competency.id}:${mine?.id ?? 'new'}`} item={item} mine={mine} onSave={handleSave} />
+              return (
+                <InterviewCompetencyCard
+                  key={`${item.competency.id}:${mine?.id ?? 'new'}`}
+                  item={item}
+                  mine={mine}
+                  locked={assessment.status === 'completed'}
+                  onSave={handleSave}
+                />
+              )
             })}
           </div>
         </>
@@ -187,10 +198,13 @@ function anchorLabel(competency: CompCompetency, rating: number): string {
 function InterviewCompetencyCard({
   item,
   mine,
+  locked,
   onSave,
 }: {
   item: InterviewItem
   mine: CompInterviewRating | undefined
+  /** The assessment is completed — ratings are frozen (schema.sql Section 53). */
+  locked: boolean
   onSave: (competencyId: string, rating: number, notes: string) => Promise<boolean>
 }) {
   const { competency, requirement, followUps, watchpoints } = item
@@ -255,6 +269,7 @@ function InterviewCompetencyCard({
             <button
               key={r}
               type="button"
+              disabled={locked}
               onClick={() => setRating(r)}
               className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 text-center transition-colors ${
                 active ? 'border-sky-400/60 bg-sky-500/20 text-sky-100' : 'border-white/10 text-secondary hover:bg-white/5'
@@ -272,6 +287,7 @@ function InterviewCompetencyCard({
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
+        readOnly={locked}
         rows={2}
         placeholder="شواهد رفتاری مشاهده‌شده و دلیل امتیاز…"
         className="input mb-2 w-full text-[11px] leading-6"
@@ -280,7 +296,7 @@ function InterviewCompetencyCard({
       <div className="flex justify-end">
         <button
           onClick={handleSave}
-          disabled={saving || rating == null || !dirty}
+          disabled={saving || rating == null || !dirty || locked}
           className="flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2 text-xs font-bold text-white hover:bg-sky-400 disabled:opacity-40"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} ثبت امتیاز

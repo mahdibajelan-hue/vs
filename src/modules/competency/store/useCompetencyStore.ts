@@ -100,8 +100,10 @@ import { uploadCompDoc } from '../lib/compStorage'
 import { pickDiverseQuestions } from '../lib/questionSelection'
 
 // Fire-and-forget audit logging (spec section 31) — never blocks or fails the primary action it
-// documents; comp_log_audit is a security-definer RPC any authenticated user may call, so this
-// never needs its own error handling beyond "don't let it throw into the caller".
+// documents. A client call to comp_log_audit is routed server-side through comp_log_client_audit
+// (schema.sql Section 53), which only accepts a whitelist of client actions and checks the caller's
+// standing on the referenced entity — a rejected entry simply isn't written, so this never needs
+// its own error handling beyond "don't let it throw into the caller".
 function logAudit(action: string, entityType: string, entityId: string | null, previous: unknown, next: unknown) {
   supabase.rpc('comp_log_audit', { p_action: action, p_entity_type: entityType, p_entity_id: entityId, p_previous: previous, p_new: next }).then()
 }
@@ -124,6 +126,10 @@ async function clearOtherDefaultBlueprints(jobRole: string, keepId: string | nul
   const { error } = await query
   return reportError('تغییر الگوی پیش‌فرض', error)
 }
+
+/** Outcome of a test (re)generation — 'responses_exist' means the server refused because answers
+ * already exist and the caller must ask for explicit confirmation to discard them (M-9). */
+export type RegenerateResult = 'ok' | 'responses_exist' | 'error'
 
 export interface CandidateProfileInput {
   jobRole: JobRole
@@ -565,7 +571,12 @@ interface CompetencyState {
    * keyed by assessment id. Rows are only ever written server-side by comp_compute_competency_profile. */
   competencyProfileByAssessment: Record<string, CompCompetencyProfile>
   fetchCompetencyProfile: (assessmentId: string) => Promise<void>
+  /** Explicit recompute (the gap-analysis "recompute" button). */
   computeCompetencyProfile: (assessmentId: string) => Promise<void>
+  /** Results-page load: comp_ensure_competency_profile computes only when nothing is stored yet or —
+   * for a non-completed assessment — an input changed since the stored computation (N-9), then
+   * loads the stored profile. A completed assessment's stored profile is never silently replaced. */
+  ensureCompetencyProfile: (assessmentId: string) => Promise<void>
   /** Candidate → Competency → Evidence → Assessment Item drill-down (comp_get_competency_evidence_detail,
    * schema.sql Section 51) — read on demand when a competency is opened, never cached. */
   fetchCompetencyEvidenceDetail: (assessmentId: string, competencyId: string) => Promise<CompCompetencyEvidenceDetail | null>
@@ -577,16 +588,20 @@ interface CompetencyState {
   upsertAssessmentTemplate: (input: AssessmentTemplateInput) => Promise<string | null>
   deleteAssessmentTemplate: (id: string) => Promise<void>
   /** Generates one assessment's frozen question snapshot from a question-mix grid (replaces the old
-   * fixed hardcoded target counts) — written once; re-running it on an assessment that already has
-   * a selection is a no-op from the UI (guarded by callers). Also copies the template's target
-   * duration/auto-finish choice onto this specific assessment. */
+   * fixed hardcoded target counts) through comp_set_selected_questions (schema.sql Section 53), which
+   * also copies the template's target duration/auto-finish choice onto this assessment. Once any
+   * lead/panelist answer exists for the current selection the server refuses unless
+   * `discardExisting` is true — then those answers are archived in the audit log and cleared
+   * atomically with the new selection ('responses_exist' tells the caller to ask for that
+   * confirmation). Always refused on a completed assessment. */
   assignQuestionsFromMix: (
     assessmentId: string,
     jobRole: JobRole,
     mix: QuestionMixCell[],
     durationMinutes: number | null,
     autoFinishOnTimeout: boolean,
-  ) => Promise<void>
+    discardExisting?: boolean,
+  ) => Promise<RegenerateResult>
   /** Start/pause/reset the live, judge-controllable interview timer (comp_set_interview_timer) —
    * any panelist may call this, not just the lead, since whoever is actually running the interview
    * in the room needs control. Elapsed time is always computed server-side from real clock time. */
@@ -913,9 +928,10 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reportError('بارگذاری عکس پرسنلی', { message: uploadErr ?? 'خطای نامشخص' })
       return
     }
-    // A narrow RPC rather than a direct table update: any authenticated staff member may set a
-    // candidate's photo (comp_assessments UPDATE itself stays lead-only, since it also guards the
-    // final scores/status) — see comp_set_photo in schema.sql.
+    // A narrow RPC rather than a direct table update — see comp_set_photo in schema.sql (Section 53):
+    // only the assessment's lead / an assessment designer may set it, and only to a photo path of
+    // this very assessment that is not one of its documents (the photo is readable via the public
+    // results link, documents never are).
     const { error } = await supabase.rpc('comp_set_photo', { p_assessment_id: id, p_photo_url: path })
     if (reportError('ثبت عکس پرسنلی', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, photoUrl: path } : a)) })
@@ -1531,7 +1547,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       createdAt: now,
     }
     set({ jobRoleConfigs: [...get().jobRoleConfigs, created] })
-    logAudit('JOB_ROLE_CREATED', 'comp_job_role_config', jobRole, null, { jobRole, labelFa: input.labelFa })
+    logAudit('JOB_ROLE_CREATED', 'comp_job_role_config', null, null, { jobRole, labelFa: input.labelFa })
   },
 
   updateJobRole: async (jobRole, input) => {
@@ -1695,6 +1711,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     await get().fetchCompetencyProfile(assessmentId)
   },
 
+  ensureCompetencyProfile: async (assessmentId) => {
+    const { error } = await supabase.rpc('comp_ensure_competency_profile', { p_assessment_id: assessmentId })
+    if (reportError('محاسبه پروفایل شایستگی', error)) return
+    await get().fetchCompetencyProfile(assessmentId)
+  },
+
   fetchCompetencyEvidenceDetail: async (assessmentId, competencyId) => {
     const { data, error } = await supabase.rpc('comp_get_competency_evidence_detail', {
       p_assessment_id: assessmentId,
@@ -1709,7 +1731,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   // active+approved bank rows of exactly that type/difficulty (or every one available if the bank
   // has fewer than requested — the designer's own availability-check step is what should have
   // caught that beforehand). Replaces the old fixed hardcoded target counts entirely.
-  assignQuestionsFromMix: async (assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout) => {
+  assignQuestionsFromMix: async (assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout, discardExisting = false) => {
     let bank = get().questionBank.filter((q) => q.jobRole === jobRole && q.active && q.approvalStatus === 'APPROVED')
     if (bank.length === 0) {
       const { data, error } = await supabase
@@ -1718,7 +1740,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
         .eq('job_role', jobRole)
         .eq('active', true)
         .eq('approval_status', 'APPROVED')
-      if (reportError('بارگذاری بانک سؤالات', error)) return
+      if (reportError('بارگذاری بانک سؤالات', error)) return 'error'
       bank = ((data ?? []) as CompQuestionBankRow[]).map(compQuestionBankFromRow)
     }
     // Cross-cell running list of already-picked question texts, so the similarity check also
@@ -1734,27 +1756,26 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
         return picked
       })
     const selected = selectedItems.map((q) => q.id)
-    const current = get().assessments.find((a) => a.id === assessmentId)
-    if (!current) return
-    set({
-      assessments: get().assessments.map((a) =>
-        a.id === assessmentId ? { ...a, selectedQuestionIds: selected, durationMinutes, autoFinishOnTimeout } : a,
-      ),
+    // One atomic server call (schema.sql Section 53, M-9): validates the ids against the role's
+    // active+approved bank, refuses a completed assessment, refuses to silently orphan existing
+    // answers unless discardExisting (then archives + clears them), bumps usage_count and writes the
+    // QUESTION_GENERATED audit entry itself.
+    const { error } = await supabase.rpc('comp_set_selected_questions', {
+      p_assessment_id: assessmentId,
+      p_question_ids: selected,
+      p_duration_minutes: durationMinutes,
+      p_auto_finish_on_timeout: autoFinishOnTimeout,
+      p_discard_existing: discardExisting,
     })
-    const { error } = await supabase
-      .from('comp_assessments')
-      .update({ selected_question_ids: selected, duration_minutes: durationMinutes, auto_finish_on_timeout: autoFinishOnTimeout })
-      .eq('id', assessmentId)
-    if (reportError('تولید آزمون از روی طرح سؤال', error)) {
-      set({ assessments: get().assessments.map((a) => (a.id === assessmentId ? current : a)) })
-      return
+    if (error) {
+      if (/responses_exist/.test(error.message)) return 'responses_exist'
+      reportError('تولید آزمون از روی طرح سؤال', error)
+      return 'error'
     }
-    if (selected.length > 0) {
-      // Best-effort — a failure here only means the "previous usage" preference is slightly stale
-      // next time, never a reason to roll back the assessment's actual question selection above.
-      await supabase.rpc('comp_increment_question_usage', { p_ids: selected })
-    }
-    logAudit('QUESTION_GENERATED', 'comp_assessments', assessmentId, null, { jobRole, count: selected.length })
+    // fetchAll() re-pulls comp_assessments and comp_panelist_scores, so the new selection and any
+    // cleared panel sheets show up everywhere.
+    await get().fetchAll()
+    return 'ok'
   },
 
   // comp_set_interview_timer computes elapsed time server-side from real clock time, so the

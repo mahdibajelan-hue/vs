@@ -73,6 +73,7 @@ import {
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
 import { buildGapRows, isAiAnalysisStale } from '../lib/competencyGap'
 import { CompetencyGapAnalysis } from '../components/CompetencyGapAnalysis'
+import { FinalizeAssessmentDialog } from '../components/FinalizeAssessmentDialog'
 import { DevelopmentPlanSummary } from '../components/DevelopmentPlanSummary'
 import { ReassessmentComparison } from '../components/ReassessmentComparison'
 import { AssessmentChainNav } from '../components/AssessmentChainNav'
@@ -145,6 +146,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   const myProfile = useAuthStore((s) => s.profile)
   const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
   const [reopening, setReopening] = useState(false)
+  const [finalizeOpen, setFinalizeOpen] = useState(false)
   const allAssessments = useCompetencyStore((s) => s.assessments)
   const allPanelists = useCompetencyStore((s) => s.panelists)
   const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
@@ -184,12 +186,14 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Evidence/Competency Engine (schema.sql Section 49): opening results refreshes this candidate's
-  // evidence-backed competency profile so it always reflects the latest scores. Mirrors
-  // comp_can_access_assessment (creator, module admin, or panelist) so viewers the RPC would reject
-  // never trigger it; moduleAdmins/panelists may load after mount, hence the one-shot ref rather
-  // than a mount-only effect.
-  const computeCompetencyProfile = useCompetencyStore((s) => s.computeCompetencyProfile)
+  // Evidence/Competency Engine (schema.sql Section 49): opening results makes sure this candidate's
+  // evidence-backed competency profile exists and is current — comp_ensure_competency_profile
+  // (Section 53, N-9) recomputes only when nothing is stored yet or an input changed since, and never
+  // silently replaces a COMPLETED assessment's stored profile (M-6; the explicit recompute button in
+  // the gap analysis still does). Mirrors comp_can_access_assessment (creator, module admin, or
+  // panelist) so viewers the RPC would reject never trigger it; moduleAdmins/panelists may load after
+  // mount, hence the one-shot ref rather than a mount-only effect.
+  const ensureCompetencyProfile = useCompetencyStore((s) => s.ensureCompetencyProfile)
   const canComputeCompetencyProfile =
     isModuleAdmin ||
     (!!myProfile?.id && assessment.createdBy === myProfile.id) ||
@@ -215,8 +219,8 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   useEffect(() => {
     if (!canComputeCompetencyProfile || competencyProfileRequestedRef.current) return
     competencyProfileRequestedRef.current = true
-    computeCompetencyProfile(assessment.id)
-  }, [canComputeCompetencyProfile, assessment.id, computeCompetencyProfile])
+    ensureCompetencyProfile(assessment.id)
+  }, [canComputeCompetencyProfile, assessment.id, ensureCompetencyProfile])
 
   const isPM = usesLegacyPmRubric(assessment)
   const roleQuestions = isPM ? [] : questionsForAssessment(assessment, questionBank)
@@ -302,6 +306,20 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
   const submittedScores = allPanelistScores.filter((s) => s.assessmentId === assessment.id && s.submittedAt)
   const panelists = allPanelists.filter((p) => p.assessmentId === assessment.id)
+  // «ثبت نهایی» checklist (M-6): who hasn't submitted, what's unscored, whether the personality test
+  // in the design has a scored result. Interview ratings are checked inside the dialog itself.
+  const finalizeChecklist = {
+    pendingPanelists: panelists
+      .filter((p) => !submittedScores.some((s) => s.panelistId === p.userId))
+      .map((p) => {
+        const prof = profiles.find((pr) => pr.id === p.userId)
+        return prof?.fullName || prof?.email || 'داور'
+      }),
+    unscoredQuestions: completion.total - completion.answered,
+    totalQuestions: completion.total,
+    personalityUnfinished:
+      assessment.needsPersonalityAssessment && (!personalityAssessment || !PERSONALITY_SCORED_STATUSES.includes(personalityAssessment.status)),
+  }
   const stages = computeEvaluationStages(assessment, completion.percent, panelists.length, submittedScores.length)
 
   const qualificationChips = [
@@ -466,7 +484,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             </button>
             {assessment.status !== 'completed' && (
               <button
-                onClick={() => setStatus(assessment.id, 'completed')}
+                onClick={() => setFinalizeOpen(true)}
                 className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400"
               >
                 <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
@@ -899,8 +917,8 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             {isModuleAdmin && assessment.status === 'completed' && (
               <div className="glass-panel flex flex-col items-start gap-2 rounded-2xl border border-amber-400/20 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[11px] leading-6 text-muted">
-                  این ارزیابی قفل و نهایی‌شده است — داوران دیگر نمی‌توانند امتیاز خود را تغییر دهند. در صورت نیاز به اصلاح، آن را بازگشایی کنید (این اقدام ثبت
-                  می‌شود).
+                  این ارزیابی قفل و نهایی‌شده است — امتیاز داوران، امتیازهای مصاحبه، سؤالات و طرح آزمون دیگر تغییر نمی‌کنند. در صورت نیاز به اصلاح، آن را
+                  بازگشایی کنید (این اقدام ثبت می‌شود و تأیید صلاحیت هم برداشته می‌شود).
                 </p>
                 <button
                   disabled={reopening}
@@ -949,6 +967,18 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               <FingerprintSectionHeading icon={GitCompareArrows} accent="#38bdf8">مقایسه با ارزیابی قبلی</FingerprintSectionHeading>
               <ReassessmentComparison assessment={assessment} onOpenPrevious={(id) => onOpenAssessment(id, 'results')} />
             </>
+          )}
+
+          {finalizeOpen && (
+            <FinalizeAssessmentDialog
+              assessment={assessment}
+              checklist={finalizeChecklist}
+              onCancel={() => setFinalizeOpen(false)}
+              onConfirm={async () => {
+                await setStatus(assessment.id, 'completed')
+                setFinalizeOpen(false)
+              }}
+            />
           )}
 
           <FingerprintSectionHeading icon={Sprout} accent="#2dd4bf">برنامه توسعه فردی</FingerprintSectionHeading>

@@ -17,6 +17,7 @@ import type {
   CompCompetencyEvidence,
   CompCompetencyEvidenceSource,
   CompCompetencyScore,
+  CompUnassessableSource,
   CompCompetencyStatus,
   CompDevelopmentAction,
   CompDevelopmentActionSource,
@@ -636,6 +637,7 @@ export interface CompCompetencyScoreRow {
   confidence: string
   status: string
   computed_at: string
+  unassessable_sources: CompUnassessableSource[] | null
 }
 
 const numOrNull = (v: number | null): number | null => (v == null ? null : Number(v))
@@ -658,6 +660,7 @@ export function compCompetencyScoreFromRow(r: CompCompetencyScoreRow): CompCompe
     confidence: r.confidence as CompCompetencyConfidence,
     status: r.status as CompCompetencyStatus,
     computedAt: r.computed_at,
+    unassessableSources: Array.isArray(r.unassessable_sources) ? r.unassessable_sources : [],
   }
 }
 

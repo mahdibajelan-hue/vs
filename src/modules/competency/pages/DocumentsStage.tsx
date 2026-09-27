@@ -9,6 +9,8 @@ interface DocumentsStageProps {
   assessment: CompetencyAssessment
   /** Only the team lead may confirm the candidate's self-declared documents/profile are correct. */
   isLead: boolean
+  /** Lead or assessment designer — the only standing comp_set_photo accepts (schema.sql Section 53). */
+  canSetPhoto: boolean
   /** Advances the wizard to the next stage (پنل مصاحبه‌گران) — omitted only when the caller has no
    * further stage to send this viewer to. */
   onContinue?: () => void
@@ -24,7 +26,7 @@ const SELF_SERVICE_STATUS_LABEL: Record<string, string> = {
 }
 
 /** Document attachments (resume, national ID, education/certification scans, insurance records) plus the candidate self-service link — the interview team just reviews what the candidate submits through that link. */
-export function DocumentsStage({ assessment, isLead, onContinue }: DocumentsStageProps) {
+export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: DocumentsStageProps) {
   const attachments = useCompetencyStore((s) => s.attachments).filter((a) => a.assessmentId === assessment.id)
   const fetchAttachments = useCompetencyStore((s) => s.fetchAttachments)
   const addAttachment = useCompetencyStore((s) => s.addAttachment)
@@ -112,6 +114,7 @@ export function DocumentsStage({ assessment, isLead, onContinue }: DocumentsStag
         </p>
         <div className="flex items-center gap-3">
           <PhotoPreview path={assessment.photoUrl} />
+          {canSetPhoto ? (
           <button
             type="button"
             onClick={() => photoRef.current?.click()}
@@ -119,6 +122,9 @@ export function DocumentsStage({ assessment, isLead, onContinue }: DocumentsStag
           >
             <Upload size={13} /> بارگذاری عکس
           </button>
+          ) : (
+            <span className="text-[10.5px] text-muted">بارگذاری عکس توسط مسئول ارزیابی یا طراح آزمون انجام می‌شود.</span>
+          )}
           <input
             ref={photoRef}
             type="file"

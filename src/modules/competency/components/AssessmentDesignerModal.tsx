@@ -68,6 +68,20 @@ export function AssessmentDesignerModal({
 
   const [step, setStep] = useState(0)
   const [generating, setGenerating] = useState(false)
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+
+  // M-9: once anyone answered/scored the current questions, regenerating discards those answers —
+  // only after explicit confirmation (the server enforces the same rule). A completed assessment is
+  // frozen altogether.
+  const assessment = useCompetencyStore((s) => s.assessments.find((a) => a.id === assessmentId))
+  const panelistScores = useCompetencyStore((s) => s.panelistScores)
+  const locked = assessment?.status === 'completed'
+  const hasResponses = useMemo(() => {
+    if (!assessment) return false
+    const ids = assessment.selectedQuestionIds
+    if (ids.some((id) => assessment.answers[id] != null)) return true
+    return panelistScores.some((ps) => ps.assessmentId === assessmentId && ids.some((id) => ps.answers[id] != null))
+  }, [assessment, panelistScores, assessmentId])
 
   const templatesForRole = useMemo(() => assessmentTemplates.filter((t) => t.jobRole === jobRole), [assessmentTemplates, jobRole])
   const [templateId, setTemplateId] = useState<string | null>(null)
@@ -161,13 +175,22 @@ export function AssessmentDesignerModal({
   const canGoToAvailability = grandTotal > 0
   const canGenerate = grandTotal > 0 && shortfalls.length === 0
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (discardExisting: boolean) => {
+    if (locked) return
+    if (hasResponses && !discardExisting) {
+      setConfirmingDiscard(true)
+      return
+    }
     setGenerating(true)
     const mix = buildMix()
     await upsertAssessmentTemplate({ id: templateId ?? undefined, jobRole, title, durationMinutes, autoFinishOnTimeout, panelSizeDefault, questionMix: mix })
-    await assignQuestionsFromMix(assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout)
+    const result = await assignQuestionsFromMix(assessmentId, jobRole, mix, durationMinutes, autoFinishOnTimeout, discardExisting)
     setGenerating(false)
-    onClose()
+    if (result === 'responses_exist') {
+      setConfirmingDiscard(true)
+      return
+    }
+    if (result === 'ok') onClose()
   }
 
   return (
@@ -396,6 +419,37 @@ export function AssessmentDesignerModal({
           </div>
         )}
 
+        {locked && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-400/25 bg-white/[0.03] p-3 text-[11px] leading-6 text-secondary">
+            <AlertTriangle size={14} className="mt-1 shrink-0" />
+            این ارزیابی ثبت نهایی شده و سؤالات آن قفل است. برای تولید مجدد، ادمین ماژول باید ابتدا ارزیابی را بازگشایی کند.
+          </div>
+        )}
+
+        {confirmingDiscard && !locked && (
+          <div className="mt-4 space-y-2 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-[11px] leading-6 text-red-100">
+            <p className="flex items-center gap-1.5 font-bold">
+              <AlertTriangle size={14} /> برای سؤالات فعلی این متقاضی پاسخ یا امتیاز ثبت شده است.
+            </p>
+            <p>
+              تولید مجدد، <b>امتیازها، یادداشت‌ها و پاسخ‌های ثبت‌شده‌ی مسئول ارزیابی و همه‌ی داوران برای سؤالات فعلی</b> را حذف می‌کند (یک نسخه در گزارش
+              رویدادها بایگانی می‌شود) و «ثبت نهایی» برگه‌ی داورانی که برای این سؤالات امتیاز داده‌اند لغو می‌شود تا روی سؤالات جدید دوباره امتیاز دهند.
+            </p>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button onClick={() => setConfirmingDiscard(false)} className="rounded-lg border border-white/15 px-3 py-1 text-[11px] text-secondary hover:bg-white/5">
+                انصراف
+              </button>
+              <button
+                onClick={() => handleGenerate(true)}
+                disabled={!canGenerate || generating}
+                className="rounded-lg bg-red-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-400 disabled:opacity-40"
+              >
+                {generating ? 'در حال تولید…' : 'حذف امتیازها و تولید مجدد'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
@@ -414,8 +468,8 @@ export function AssessmentDesignerModal({
             </button>
           ) : (
             <button
-              onClick={handleGenerate}
-              disabled={!canGenerate || generating}
+              onClick={() => handleGenerate(false)}
+              disabled={!canGenerate || generating || locked || confirmingDiscard}
               className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40"
             >
               <Wand2 size={14} /> {generating ? 'در حال تولید…' : 'تولید و اعمال آزمون'}

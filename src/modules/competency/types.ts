@@ -420,6 +420,17 @@ export interface CompCompetencyScore {
   confidence: CompCompetencyConfidence
   status: CompCompetencyStatus
   computedAt: string
+  /** Evidence sources that could not produce evidence for this candidate and were therefore left out
+   * of the coverage denominator (schema.sql Section 53, M-8) — today only technical categories with no
+   * approved bank question for the role and nothing scored. Never a gap in itself. */
+  unassessableSources: CompUnassessableSource[]
+}
+
+export interface CompUnassessableSource {
+  sourceType: CompEvidenceSourceType
+  sourceRef: string
+  weight: number
+  reason: 'NO_BANK_QUESTIONS'
 }
 
 export interface CompCompetencyProfile {
@@ -524,6 +535,9 @@ export interface CompEvidenceDetailSource {
   sourceRef: string
   weight: number
   excludedByDesign: boolean
+  /** Technical category with no approved bank question for this role and nothing scored — "not
+   * assessable", left out of the coverage denominator (Section 53, M-8). */
+  noBankQuestions?: boolean
   itemCount: number
 }
 
@@ -553,6 +567,7 @@ export interface CompCompetencyEvidenceDetail {
     confidence: CompCompetencyConfidence
     status: CompCompetencyStatus
     computedAt: string
+    unassessableSources?: CompUnassessableSource[]
   } | null
   design: { technical: boolean; personality: boolean; structuredInterview: boolean; experience: boolean }
   personalityItemsVisible: boolean

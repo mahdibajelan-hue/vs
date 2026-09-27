@@ -721,3 +721,298 @@ exception when others then
   delete from comp_job_role_config where job_role = '__smoke_competency_role__';
   raise;
 end $$;
+
+-- ============================================================================
+-- Section 53 regressions (docs/demo-test-report.md C-1, M-4, M-6, M-7, M-8, M-9) — a second,
+-- independent block with its own throwaway role/competency/candidate, same conventions as above
+-- (impersonation via request.jwt.claims + `role`, cleanup on success AND failure).
+--   M-8  a TECHNICAL_CATEGORY source with no bank question for the role and nothing scored is left
+--        out of the coverage denominator and recorded in unassessable_sources (+ drill-down flag +
+--        audit); once a scored item of that category exists it counts again.
+--   C-1  comp_set_photo: outsider refused, attachment path refused, own photo path accepted and
+--        publicly readable only while it is not an attachment; self-service photo only under the
+--        link's own token folder.
+--   M-7  self-service submit accepted while pending, refused after 'reviewed' and on a completed
+--        assessment.
+--   M-4  anon cannot execute comp_log_audit; an authenticated caller cannot log a non-whitelisted
+--        action or claim an entity it has no standing on; a whitelisted own entry is accepted.
+--   M-6  completed ⇒ panelist sheets, interview ratings, question selection and exam design are
+--        frozen and the lead cannot un-complete directly; comp_ensure_competency_profile keeps the
+--        stored profile; comp_reopen_assessment unlocks again and clears is_approved.
+--   M-9  the question selection cannot change under existing answers except through
+--        comp_set_selected_questions with explicit discard, which archives + clears them.
+-- ============================================================================
+do $$
+declare
+  v_role constant text := '__smoke_s53_role__';
+  v_admin uuid;
+  v_out uuid;
+  v_p2 uuid;
+  v_q1 uuid;
+  v_c uuid;
+  v_a uuid;
+  v_token uuid;
+  v_row comp_competency_scores%rowtype;
+  v_detail jsonb;
+  v_json jsonb;
+  v_path text;
+  v_n int;
+  v_b boolean;
+  v_status text;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  select p.id into v_out from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+    and not exists (select 1 from personality_module_admins m where m.user_id = p.id)
+    and not rasta_has_permission(p.id, 'competency', 'configure')
+    and not rasta_has_permission(p.id, 'personality', 'configure')
+  order by p.created_at limit 1;
+  select id into v_p2 from profiles where id not in (v_admin, coalesce(v_out, v_admin)) order by created_at limit 1;
+  select id into v_q1 from comp_question_bank where category = 'TECHNICAL' order by id limit 1;
+  if v_admin is null or v_out is null or v_p2 is null or v_q1 is null then
+    raise exception 'section 53 smoke precondition failed: need an admin, a plain (outsider) profile, a third profile and a TECHNICAL bank question';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  insert into comp_job_role_config (job_role, label_fa, active, sort_order) values (v_role, '__smoke_s53__', false, 9998);
+  insert into comp_competencies (key, label_fa, domain) values ('__smoke_s53_c__', '__smoke_s53_c__', 'TECHNICAL') returning id into v_c;
+  insert into comp_competency_evidence_sources (competency_id, source_type, source_ref, weight) values
+    (v_c, 'TECHNICAL_CATEGORY', 'TECHNICAL', 2),
+    (v_c, 'EXPERIENCE', 'years_total', 1);
+  insert into comp_job_competency_requirements (job_role, competency_id, required_level, is_critical, weight) values (v_role, v_c, 4, false, 1);
+  insert into comp_assessments (
+    job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by,
+    years_experience_total, needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience
+  ) values (
+    v_role, '__smoke_test_s53__', 'test', '0000000053', '09120000053', 'smoke-s53@example.com', v_admin,
+    6, true, false, true, true
+  ) returning id, self_service_token into v_a, v_token;
+
+  -- ---- M-8: no bank question for the role + nothing scored → not assessable ----
+  perform comp_compute_competency_profile(v_a);
+  select * into v_row from comp_competency_scores where assessment_id = v_a and competency_id = v_c;
+  if v_row.coverage <> 1 or v_row.actual_score <> 40 or jsonb_array_length(v_row.unassessable_sources) <> 1
+     or v_row.unassessable_sources -> 0 ->> 'sourceRef' <> 'TECHNICAL' or v_row.unassessable_sources -> 0 ->> 'reason' <> 'NO_BANK_QUESTIONS' then
+    raise exception 'ASSERTION FAILED (M-8): an unassessable technical source must leave the denominator (coverage 1, score 40) and be recorded, got cov % score % unassessable %',
+      v_row.coverage, v_row.actual_score, v_row.unassessable_sources;
+  end if;
+  v_detail := comp_get_competency_evidence_detail(v_a, v_c);
+  select s into v_json from jsonb_array_elements(v_detail -> 'sources') s where s ->> 'sourceType' = 'TECHNICAL_CATEGORY';
+  if (v_json ->> 'noBankQuestions')::boolean is distinct from true or jsonb_array_length(v_detail -> 'score' -> 'unassessableSources') <> 1 then
+    raise exception 'ASSERTION FAILED (M-8): drill-down must flag the no-bank source, got %', v_json;
+  end if;
+  if not exists (select 1 from comp_audit_log where entity_id = v_a and action = 'COMPETENCY_PROFILE_COMPUTED'
+                 and new_value -> 'noBankQuestionCategories' ? 'TECHNICAL') then
+    raise exception 'ASSERTION FAILED (M-8): the audit entry must record the not-assessable category';
+  end if;
+  -- A scored snapshot item of that category makes the source assessable again (lead score 5 → 100).
+  update comp_assessments set selected_question_ids = jsonb_build_array(v_q1), answers = jsonb_build_object(v_q1::text, jsonb_build_object('score', 5)) where id = v_a;
+  perform comp_compute_competency_profile(v_a);
+  select * into v_row from comp_competency_scores where assessment_id = v_a and competency_id = v_c;
+  if v_row.unassessable_sources <> '[]'::jsonb or v_row.actual_score <> 80 or v_row.coverage <> 1 or v_row.evidence_count <> 2 then
+    raise exception 'ASSERTION FAILED (M-8): a scored item must make the source count again ((100×2+40)/3 = 80, 2 items), got score % items % unassessable %',
+      v_row.actual_score, v_row.evidence_count, v_row.unassessable_sources;
+  end if;
+
+  -- ---- C-1: photo paths ----
+  v_path := v_a::text || '/' || gen_random_uuid()::text || '.jpg';
+  perform set_config('request.jwt.claims', json_build_object('sub', v_out, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform comp_set_photo(v_a, v_path);
+    raise exception 'ASSERTION FAILED (C-1): an outsider could set the photo';
+  exception when others then
+    if sqlerrm <> 'forbidden' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  insert into comp_attachments (assessment_id, kind, file_name, storage_path, uploaded_by) values (v_a, 'resume', 'cv.jpg', v_a::text || '/11111111-1111-4111-8111-111111111111.jpg', v_admin);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform comp_set_photo(v_a, v_a::text || '/11111111-1111-4111-8111-111111111111.jpg');
+    raise exception 'ASSERTION FAILED (C-1): an attachment path was accepted as the photo';
+  exception when others then
+    if sqlerrm <> 'invalid photo path' then raise; end if;
+  end;
+  begin
+    perform comp_set_photo(v_a, '00000000-0000-4000-8000-000000000000/' || gen_random_uuid()::text || '.jpg');
+    raise exception 'ASSERTION FAILED (C-1): another assessment''s folder was accepted as the photo';
+  exception when others then
+    if sqlerrm <> 'invalid photo path' then raise; end if;
+  end;
+  perform comp_set_photo(v_a, v_path);
+  perform set_config('role', 'postgres', true);
+  if not comp_is_public_photo(v_path) or comp_is_public_photo(v_a::text || '/11111111-1111-4111-8111-111111111111.jpg') then
+    raise exception 'ASSERTION FAILED (C-1): only the current, non-attachment photo may be public';
+  end if;
+  -- Even a photo_url written directly (bypassing the RPC) never makes a document public.
+  update comp_assessments set photo_url = v_a::text || '/11111111-1111-4111-8111-111111111111.jpg' where id = v_a;
+  if comp_is_public_photo(v_a::text || '/11111111-1111-4111-8111-111111111111.jpg') then
+    raise exception 'ASSERTION FAILED (C-1): an attachment set as photo_url became publicly readable';
+  end if;
+
+  -- ---- C-1 / M-7: self-service ----
+  update comp_assessments set self_service_status = 'pending' where id = v_a;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  perform set_config('role', 'anon', true);
+  perform comp_self_service_set_photo(v_token, v_a::text || '/' || v_token::text || '/' || gen_random_uuid()::text || '.png');
+  begin
+    perform comp_self_service_set_photo(v_token, v_a::text || '/' || gen_random_uuid()::text || '.png');
+    raise exception 'ASSERTION FAILED (C-1): a self-service photo outside the token folder was accepted';
+  exception when others then
+    if sqlerrm <> 'invalid photo path' then raise; end if;
+  end;
+  perform comp_self_service_submit(v_token, '__smoke_test_s53__', '0000000053', '0912', 'smoke-s53@example.com', null, 30, false, '', 6, null, 'x', '[]', '[]', '[]', 'p');
+  if (select self_service_editable from comp_self_service_get(v_token)) is distinct from true then
+    raise exception 'ASSERTION FAILED (M-7): a submitted-but-unreviewed form must still be editable';
+  end if;
+  perform set_config('role', 'postgres', true);
+  update comp_assessments set self_service_status = 'reviewed' where id = v_a;
+  perform set_config('role', 'anon', true);
+  begin
+    perform comp_self_service_submit(v_token, 'x', '', '', '', null, null, false, '', null, null, '', '[]', '[]', '[]', '');
+    raise exception 'ASSERTION FAILED (M-7): a reviewed self-service form could be resubmitted';
+  exception when others then
+    if sqlerrm not like 'self_service_closed%' then raise; end if;
+  end;
+  if (select self_service_editable from comp_self_service_get(v_token)) is distinct from false then
+    raise exception 'ASSERTION FAILED (M-7): comp_self_service_get must report a reviewed form as not editable';
+  end if;
+
+  -- ---- M-4: audit log ----
+  begin
+    perform comp_log_audit('FORGED', 'comp_assessments', v_a, null, '{}'::jsonb);
+    raise exception 'ASSERTION FAILED (M-4): anon could execute comp_log_audit';
+  exception when insufficient_privilege then
+    null;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_out, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    perform comp_log_audit('ASSESSMENT_REOPENED', 'comp_assessments', v_a, null, '{}'::jsonb);
+    raise exception 'ASSERTION FAILED (M-4): a client could forge a server-side action';
+  exception when others then
+    if sqlerrm <> 'audit action not allowed' then raise; end if;
+  end;
+  begin
+    perform comp_log_audit('ASSESSMENT_CREATED', 'comp_assessments', v_a, null, '{}'::jsonb);
+    raise exception 'ASSERTION FAILED (M-4): an outsider could log an entry for someone else''s assessment';
+  exception when others then
+    if sqlerrm <> 'audit action not allowed' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform comp_log_audit('ASSESSMENT_CREATED', 'comp_assessments', v_a, null, '{"smoke": true}'::jsonb);
+  perform set_config('role', 'postgres', true);
+  if not exists (select 1 from comp_audit_log where entity_id = v_a and action = 'ASSESSMENT_CREATED' and actor = v_admin) then
+    raise exception 'ASSERTION FAILED (M-4): a whitelisted own entry must be written';
+  end if;
+
+  -- ---- M-6: completed = immutable, reopen unlocks ----
+  insert into comp_panelists (assessment_id, user_id, is_lead) values (v_a, v_p2, false);
+  insert into comp_panelist_scores (assessment_id, panelist_id, answers, submitted_at)
+  values (v_a, v_p2, jsonb_build_object(v_q1::text, jsonb_build_object('score', 4)), now());
+  insert into comp_interview_ratings (assessment_id, competency_id, rater_id, rating, notes) values (v_a, v_c, v_admin, 3, 'smoke s53');
+  perform set_config('role', 'authenticated', true);
+  update comp_assessments set status = 'completed', is_approved = true where id = v_a;
+  perform comp_log_audit('ASSESSMENT_FINALIZED', 'comp_assessments', v_a, '{"status":"draft"}'::jsonb, '{"status":"completed"}'::jsonb);
+  begin
+    update comp_interview_ratings set rating = 5 where assessment_id = v_a;
+    raise exception 'ASSERTION FAILED (M-6): an interview rating changed on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  begin
+    update comp_assessments set selected_question_ids = '[]'::jsonb where id = v_a;
+    raise exception 'ASSERTION FAILED (M-6): the question selection changed on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  begin
+    perform comp_set_exam_design(v_a, true, true, false, true, null);
+    raise exception 'ASSERTION FAILED (M-6): the exam design changed on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  begin
+    update comp_assessments set status = 'draft' where id = v_a;
+    raise exception 'ASSERTION FAILED (M-6): the lead un-completed the assessment without comp_reopen_assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  update comp_assessments set strengths = 'final review note' where id = v_a; -- the final-review fields stay editable
+  if comp_ensure_competency_profile(v_a) then
+    raise exception 'ASSERTION FAILED (M-6/N-9): a completed assessment''s stored profile must not be recomputed on load';
+  end if;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_p2, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into comp_panelist_scores (assessment_id, panelist_id, answers) values (v_a, v_p2, '{}'::jsonb)
+    on conflict (assessment_id, panelist_id) do update set answers = excluded.answers;
+    raise exception 'ASSERTION FAILED (M-6): a panelist sheet changed on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  perform comp_reopen_assessment(v_a);
+  perform set_config('role', 'postgres', true);
+  select status, is_approved into v_status, v_b from comp_assessments where id = v_a;
+  if v_status <> 'draft' or v_b or exists (select 1 from comp_panelist_scores where assessment_id = v_a and submitted_at is not null) then
+    raise exception 'ASSERTION FAILED (M-6/N-10): reopen must return to draft, clear is_approved and every submission, got % / %', v_status, v_b;
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_p2, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  update comp_panelist_scores set answers = jsonb_build_object(v_q1::text, jsonb_build_object('score', 3)) where assessment_id = v_a and panelist_id = v_p2;
+  get diagnostics v_n = row_count;
+  perform set_config('role', 'postgres', true);
+  if v_n <> 1 then
+    raise exception 'ASSERTION FAILED (M-6): after reopen the panelist must be able to edit their sheet again';
+  end if;
+
+  -- ---- M-9: no silent regeneration under existing answers ----
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    update comp_assessments set selected_question_ids = '[]'::jsonb where id = v_a;
+    raise exception 'ASSERTION FAILED (M-9): the selection changed under existing answers';
+  exception when others then
+    if sqlerrm not like 'responses_exist%' then raise; end if;
+  end;
+  begin
+    perform comp_set_selected_questions(v_a, '{}'::uuid[], null, false, false);
+    raise exception 'ASSERTION FAILED (M-9): regeneration without explicit discard was accepted';
+  exception when others then
+    if sqlerrm not like 'responses_exist%' then raise; end if;
+  end;
+  v_json := comp_set_selected_questions(v_a, '{}'::uuid[], null, false, true);
+  perform set_config('role', 'postgres', true);
+  if (v_json ->> 'discardedResponses')::boolean is distinct from true
+     or exists (select 1 from comp_panelist_scores where assessment_id = v_a and answers ? v_q1::text)
+     or (select answers ? v_q1::text from comp_assessments where id = v_a)
+     or not exists (select 1 from comp_audit_log where entity_id = v_a and action = 'QUESTION_RESPONSES_DISCARDED'
+                    and previous_value -> 'leadAnswers' ? v_q1::text) then
+    raise exception 'ASSERTION FAILED (M-9): an explicit discard must archive and clear the old answers, got %', v_json;
+  end if;
+
+  raise notice 'competency_engine_smoke_test (section 53): ALL ASSERTIONS PASSED';
+
+  delete from comp_audit_log where entity_id = v_a;
+  delete from comp_assessments where id = v_a;
+  delete from comp_competencies where key = '__smoke_s53_c__';
+  delete from comp_job_role_config where job_role = v_role;
+
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name = '__smoke_test_s53__');
+  delete from comp_assessments where candidate_name = '__smoke_test_s53__';
+  delete from comp_competencies where key = '__smoke_s53_c__';
+  delete from comp_job_role_config where job_role = '__smoke_s53_role__';
+  raise;
+end $$;

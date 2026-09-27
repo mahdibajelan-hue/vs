@@ -365,7 +365,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         ))}
 
       {activeStage === 'documents' && (
-        <DocumentsStage assessment={assessment} isLead={isLead} onContinue={() => setStage('panel')} />
+        <DocumentsStage assessment={assessment} isLead={isLead} canSetPhoto={isLead || isDesigner} onContinue={() => setStage('panel')} />
       )}
 
       {activeStage === 'panel' && (

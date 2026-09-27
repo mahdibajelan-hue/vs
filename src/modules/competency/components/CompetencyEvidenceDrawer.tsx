@@ -7,6 +7,8 @@ import { PERSONALITY_QUESTION_TYPE_LABEL_FA, type PersonalityQuestionType } from
 import {
   COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA,
   COMP_EXPERIENCE_METRIC_LABEL_FA,
+  QUESTION_TYPE_LABEL_FA,
+  type QuestionType,
   type CompCompetencyEvidenceDetail,
   type CompEvidenceDetailItem,
   type CompEvidenceDetailRow,
@@ -123,16 +125,25 @@ export function CompetencyEvidenceDrawer({ assessmentId, competencyId, onClose }
                 <div className="flex flex-wrap gap-1.5">
                   {detail.sources.map((s) => {
                     const chip = EVIDENCE_SOURCE_CHIP[s.sourceType]
-                    const state = s.excludedByDesign ? 'excluded' : s.itemCount > 0 ? 'covered' : 'missing'
+                    const state = s.excludedByDesign ? 'excluded' : s.noBankQuestions ? 'nobank' : s.itemCount > 0 ? 'covered' : 'missing'
                     return (
                       <span
                         key={`${s.sourceType}:${s.sourceRef}`}
-                        title={state === 'excluded' ? 'این روش در طرح آزمون متقاضی نبوده (ارزیابی‌نشده به انتخاب طراح)' : state === 'missing' ? 'هنوز شاهدی از این منبع ثبت نشده' : undefined}
-                        className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${state === 'excluded' ? 'border-dashed border-white/15 text-muted line-through' : state === 'missing' ? 'border-dashed border-slate-400/30 text-muted' : ''}`}
+                        title={
+                          state === 'excluded'
+                            ? 'این روش در طرح آزمون متقاضی نبوده (ارزیابی‌نشده به انتخاب طراح)'
+                            : state === 'nobank'
+                              ? 'بانک سؤال این شغل برای این نوع سؤال هیچ سؤال تأییدشده‌ای ندارد؛ این منبع قابل سنجش نبود و در محاسبه پوشش کنار گذاشته شد (به معنای ضعف متقاضی نیست)'
+                              : state === 'missing'
+                                ? 'هنوز شاهدی از این منبع ثبت نشده'
+                                : undefined
+                        }
+                        className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${state === 'excluded' ? 'border-dashed border-white/15 text-muted line-through' : state === 'nobank' ? 'border-dashed border-white/15 text-muted' : state === 'missing' ? 'border-dashed border-slate-400/30 text-muted' : ''}`}
                         style={state === 'covered' ? { borderColor: `${chip.color}50`, background: `${chip.color}14`, color: chip.color } : undefined}
                       >
-                        {state === 'excluded' && <Ban size={10} />}
+                        {(state === 'excluded' || state === 'nobank') && <Ban size={10} />}
                         {sourceTitle(s.sourceType, s.sourceRef)}
+                        {state === 'nobank' && <span>(منبع بدون سؤال در بانک)</span>}
                         <span className="num">
                           · وزن {fa(s.weight)}
                           {state === 'covered' ? ` · ${fa(s.itemCount, 0)} مورد` : ''}
@@ -173,6 +184,7 @@ function sourceTitle(sourceType: CompEvidenceDetailRow['sourceType'], sourceRef:
   const base = EVIDENCE_SOURCE_CHIP[sourceType].label
   if (!sourceRef) return base
   if (sourceType === 'EXPERIENCE') return `${base}: ${COMP_EXPERIENCE_METRIC_LABEL_FA[sourceRef as CompExperienceMetric]?.split(' (')[0] ?? sourceRef}`
+  if (sourceType === 'TECHNICAL_CATEGORY') return `${base}: ${QUESTION_TYPE_LABEL_FA[sourceRef as QuestionType] ?? sourceRef}`
   return `${base}: ${sourceRef}`
 }
 

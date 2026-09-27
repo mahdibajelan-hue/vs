@@ -3,7 +3,7 @@ import { BookOpenCheck, CheckCircle2, ChevronDown, ClipboardEdit, Eye, History, 
 import { useCompetencyStore, type AssessmentBlueprintInput, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { sortedJobRoles } from '../lib/competencyData'
+import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import {
   COMP_COMPETENCY_DOMAIN_LABEL_FA,
@@ -751,6 +751,29 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
   const removeEvidenceSource = useCompetencyStore((s) => s.removeEvidenceSource)
   const traits = usePersonalityStore((s) => s.traits)
   const dimensions = usePersonalityStore((s) => s.dimensions)
+  const questionBank = useCompetencyStore((s) => s.questionBank)
+  const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBank)
+  const jobCompetencyRequirements = useCompetencyStore((s) => s.jobCompetencyRequirements)
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+
+  useEffect(() => {
+    if (questionBank.length === 0) fetchQuestionBank()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // M-8: roles that require this competency but whose bank has no active APPROVED question of a
+  // technical source's category — for those candidates the source can never produce evidence (the
+  // engine then treats it as "not assessable" rather than lowering the coverage).
+  const rolesRequiring = useMemo(
+    () => jobCompetencyRequirements.filter((r) => r.competencyId === competency.id).map((r) => r.jobRole),
+    [jobCompetencyRequirements, competency.id],
+  )
+  const noBankRolesFor = (row: CompCompetencyEvidenceSource): string[] => {
+    if (row.sourceType !== 'TECHNICAL_CATEGORY' || questionBank.length === 0) return []
+    return rolesRequiring
+      .filter((role) => !questionBank.some((q) => q.jobRole === role && q.category === row.sourceRef && q.active && q.approvalStatus === 'APPROVED'))
+      .map((role) => jobRoleLabel(jobRoleConfigs, role))
+  }
 
   const [sourceType, setSourceType] = useState<CompEvidenceSourceType>('TECHNICAL_CATEGORY')
   const [sourceRef, setSourceRef] = useState('')
@@ -867,6 +890,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
               key={row.id}
               row={row}
               refLabel={refLabel(row)}
+              noBankRoles={noBankRolesFor(row)}
               share={totalWeight > 0 ? row.weight / totalWeight : 0}
               onSaveWeight={(w) => updateEvidenceSourceWeight(row.id, w)}
               onRemove={() => removeEvidenceSource(row.id)}
@@ -881,12 +905,15 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
 function EvidenceSourceRow({
   row,
   refLabel,
+  noBankRoles,
   share,
   onSaveWeight,
   onRemove,
 }: {
   row: CompCompetencyEvidenceSource
   refLabel: string
+  /** Roles requiring this competency whose bank has no approved question of this category (M-8). */
+  noBankRoles: string[]
   share: number
   onSaveWeight: (weight: number) => Promise<void>
   onRemove: () => Promise<void>
@@ -900,6 +927,14 @@ function EvidenceSourceRow({
         {COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA[row.sourceType]}
       </span>
       <span className="min-w-[8rem] flex-1 font-bold text-secondary">{refLabel}</span>
+      {noBankRoles.length > 0 && (
+        <span
+          className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9.5px] font-bold text-amber-200"
+          title={`بانک سؤال این مشاغل هیچ سؤال تأییدشده‌ای از این نوع ندارد: ${noBankRoles.join('، ')}. برای داوطلبان این مشاغل این منبع «قابل سنجش نیست» و از محاسبه پوشش کنار گذاشته می‌شود — برای استفاده از آن، سؤال این نوع را به بانک اضافه کنید.`}
+        >
+          منبع بدون سؤال در بانک ({noBankRoles.length.toLocaleString('fa-IR')} شغل)
+        </span>
+      )}
       <span className="num text-[10px] text-muted">سهم {Math.round(share * 100)}٪</span>
       <input
         type="number"

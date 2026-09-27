@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, CheckCircle2, FileText, Loader2, Upload } from 'lucide-react'
+import { Camera, CheckCircle2, FileText, Loader2, Lock, Upload } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { uploadCompDocAsCandidate } from '../lib/compStorage'
 import { getCompDocSignedUrl } from '../lib/compStorage'
@@ -36,6 +36,9 @@ interface SelfServiceRow {
   notable_projects: string
   self_service_status: string
   photo_url: string | null
+  /** False once staff marked the form reviewed or the assessment is completed (schema.sql Section 53,
+   * M-7) — every write RPC refuses then, so the page stops offering the form. */
+  self_service_editable: boolean
 }
 
 const KINDS: AttachmentKind[] = ['resume', 'education', 'certification', 'national_id', 'insurance', 'other']
@@ -118,6 +121,10 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
       p_notable_projects: profile.notableProjects,
     })
     if (error) {
+      if (/self_service_closed/.test(error.message)) {
+        setRow((r) => (r ? { ...r, self_service_editable: false } : r))
+        return
+      }
       setSubmitError(`${error.code ?? ''} ${error.message}`.trim())
       return
     }
@@ -201,7 +208,17 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           <p className="mt-1 text-[11px] text-muted">لطفاً مشخصات و سوابق خود را با دقت تکمیل کرده و مدارک لازم را پیوست کنید.</p>
         </div>
 
-        {submitted && (
+        {!row.self_service_editable && (
+          <div className="glass-panel flex items-start gap-2 rounded-2xl border border-amber-400/25 bg-amber-500/[0.06] p-4 text-xs leading-6 text-amber-200">
+            <Lock size={16} className="mt-0.5 shrink-0" />
+            <span>
+              این فرم دیگر قابل ویرایش نیست — اطلاعات شما توسط تیم ارزیابی بررسی و تأیید شده یا ارزیابی شما نهایی شده است. اگر نیاز به اصلاح دارید، لطفاً با
+              تیم مصاحبه‌کننده تماس بگیرید.
+            </span>
+          </div>
+        )}
+
+        {submitted && row.self_service_editable && (
           <div className="glass-panel flex items-center gap-2 rounded-2xl border border-green-400/25 bg-green-500/[0.05] p-4 text-xs text-green-300">
             <CheckCircle2 size={16} /> اطلاعات شما ثبت شد. می‌توانید در صورت نیاز دوباره فرم را تکمیل و ثبت کنید یا مدارک بیشتری پیوست نمایید.
           </div>
@@ -229,7 +246,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           </div>
           <button
             type="button"
-            disabled={uploadingPhoto}
+            disabled={uploadingPhoto || !row.self_service_editable}
             onClick={() => photoRef.current?.click()}
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-2 text-[11px] text-secondary hover:bg-white/5 disabled:opacity-50"
           >
@@ -249,12 +266,13 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
           />
         </div>
 
-        <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode />
+        {row.self_service_editable && <ProfileForm initial={initial} submitLabel="ثبت اطلاعات" onSubmit={handleSubmit} candidateMode />}
 
         <div className="glass-panel space-y-3 rounded-2xl p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold">
             <FileText size={14} className="text-purple-300" /> پیوست مدارک
           </p>
+          {row.self_service_editable && (
           <div className="flex flex-wrap items-center gap-2">
             <select value={pendingKind} onChange={(e) => setPendingKind(e.target.value as AttachmentKind)} className="input max-w-[12rem]">
               {KINDS.map((k) => (
@@ -284,6 +302,7 @@ export function CandidateSelfServicePage({ token }: { token: string }) {
               }}
             />
           </div>
+          )}
           {attachments.length > 0 && (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {attachments.map((a) => (

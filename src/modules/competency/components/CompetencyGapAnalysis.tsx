@@ -19,7 +19,7 @@ import {
   type GapSortKey,
 } from '../lib/competencyGap'
 import { CompetencyEvidenceDrawer } from './CompetencyEvidenceDrawer'
-import type { CompCompetencyStatus, CompEvidenceSourceType, CompetencyAssessment } from '../types'
+import { QUESTION_TYPE_LABEL_FA, type CompCompetencyStatus, type CompEvidenceSourceType, type CompetencyAssessment, type QuestionType } from '../types'
 
 const SORT_LABEL: Record<GapSortKey, string> = {
   severity: 'شدت وضعیت',
@@ -238,6 +238,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
                     <span className="flex items-center gap-1 font-bold">
                       {row.labelFa} <ChevronLeft size={12} className="text-muted" />
                     </span>
+                    <NoBankQuestionsNote row={row} />
                   </td>
                   <td className="num px-2 py-2.5 text-center">{formatLevel(row.score.requiredLevel)}</td>
                   <td className="px-2 py-2.5 text-center">
@@ -282,6 +283,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
                 </span>
                 <StatusBadge status={row.score.status} />
               </div>
+              <NoBankQuestionsNote row={row} />
               <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="rounded-lg bg-white/[0.03] p-1.5">
                   <p className="text-muted">الزامی</p>
@@ -413,6 +415,22 @@ export function ConfidenceBadge({ confidence, coverage }: { confidence: keyof ty
         {meta.label}
       </span>
       {coverage != null && confidence !== 'NONE' && <span className="num text-[9px] text-muted">پوشش {formatPercent(coverage)}</span>}
+    </span>
+  )
+}
+
+/** M-8: a technical source whose category has no approved bank question for this role (and nothing
+ * scored) was left out of this competency's coverage — "not assessable", never evidence of a gap. */
+function NoBankQuestionsNote({ row }: { row: GapRow }) {
+  const sources = row.score.unassessableSources ?? []
+  if (sources.length === 0) return null
+  const names = sources.map((s) => QUESTION_TYPE_LABEL_FA[s.sourceRef as QuestionType] ?? s.sourceRef).join('، ')
+  return (
+    <span
+      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400/30 px-1.5 py-0.5 text-[9.5px] text-muted"
+      title={`این منبع در بانک سؤال این شغل هیچ سؤال تأییدشده‌ای ندارد و در محاسبه پوشش کنار گذاشته شد: ${names}. نبود شاهد به معنای ضعف متقاضی نیست.`}
+    >
+      <HelpCircle size={10} /> منبع بدون سؤال در بانک ({names})
     </span>
   )
 }

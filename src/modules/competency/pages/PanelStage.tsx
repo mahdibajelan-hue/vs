@@ -172,6 +172,9 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const myPanelistRow = panelists.find((p) => p.userId === myId)
   const isLead = assessment?.createdBy === myId || isAdmin || myPanelistRow?.isLead === true
+  const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
+  const isModuleAdmin = isAdmin || moduleAdmins.some((m) => m.userId === myId)
+  const assessmentLocked = assessment?.status === 'completed'
   const isPM = assessment != null && usesLegacyPmRubric(assessment)
 
   const [pickUserId, setPickUserId] = useState('')
@@ -192,6 +195,10 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
   const myScore = panelistScores.find((p) => p.panelistId === myId)
   const amPanelist = panelists.some((p) => p.userId === myId)
   const canSubmitMyScore = Boolean(myScore?.strengths.trim()) && Boolean(myScore?.developmentAreas.trim())
+  // Mirrors comp_panelist_scores_update (Section 35) + the completed lock (Section 53): after my own
+  // final submit only a module admin may still edit my sheet, and nobody may once the assessment is
+  // completed (until a module admin reopens it).
+  const canEditMySheet = !assessmentLocked && (!myScore?.submittedAt || isModuleAdmin)
 
   const availableProfiles = profiles.filter((p) => !panelists.some((pl) => pl.userId === p.id))
   const panelSize = assessment?.panelSize ?? 3
@@ -388,11 +395,17 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
             </p>
             {myScore?.submittedAt && (
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-green-300">
-                <CheckCircle2 size={12} /> امتیاز شما ثبت نهایی شده و برای مسئول ارزیابی قابل مشاهده است. ویرایش‌های بعدی هم برای ایشان دیده می‌شود.
+                <CheckCircle2 size={12} />
+                {isModuleAdmin && !assessmentLocked
+                  ? 'امتیاز شما ثبت نهایی شده و برای مسئول ارزیابی قابل مشاهده است. به‌عنوان ادمین ماژول همچنان می‌توانید آن را اصلاح کنید؛ هر تغییر مستقیماً در میانگین رسمی اثر می‌گذارد.'
+                  : 'امتیاز شما ثبت نهایی شده و برای مسئول ارزیابی قابل مشاهده است. برگهٔ ثبت‌شده دیگر قابل ویرایش نیست؛ برای اصلاح با ادمین ماژول هماهنگ کنید.'}
               </p>
             )}
+            {assessmentLocked && (
+              <p className="mt-1.5 text-[11px] text-amber-300">این ارزیابی ثبت نهایی شده و برگه‌های امتیاز قفل است؛ اصلاح فقط پس از بازگشایی توسط ادمین ماژول ممکن است.</p>
+            )}
           </div>
-          <MyQualificationScorecard myScore={myScore} onChange={(patch) => setMyPanelistQualificationScores(assessmentId, patch)} />
+          <MyQualificationScorecard myScore={myScore} readOnly={!canEditMySheet} onChange={(patch) => setMyPanelistQualificationScores(assessmentId, patch)} />
           <ScoringGuideBanner />
           {isPM ? (
             <>
@@ -406,7 +419,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                       question={q}
                       hint={domain.excellentAnswerHint}
                       answer={myScore?.answers[q.key]}
-                      editable
+                      editable={canEditMySheet}
                       onChange={(score, note) => setMyPanelistAnswer(assessmentId, q.key, score, note)}
                       bankItem={pmBankByText.get(q.text)}
                     />
@@ -416,7 +429,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
               <CapstoneCard
                 score={myScore?.capstoneScore ?? null}
                 note={myScore?.capstoneNote ?? ''}
-                editable
+                editable={canEditMySheet}
                 onChange={(score, note) => setMyPanelistCapstone(assessmentId, score, note)}
               />
             </>
@@ -448,7 +461,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                 index={i}
                 question={q}
                 answer={myScore?.answers[q.id]}
-                editable
+                editable={canEditMySheet}
                 onChange={(score, note, candidateAnswer) => setMyPanelistAnswer(assessmentId, q.id, score, note, candidateAnswer)}
               />
             ))
@@ -456,6 +469,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
           <MyStrengthsCard
             key={myScore?.id ?? 'draft'}
             myScore={myScore}
+            readOnly={!canEditMySheet}
             onSave={(strengths, developmentAreas) => setMyPanelistStrengths(assessmentId, strengths, developmentAreas)}
           />
           <div className="flex items-center justify-end gap-2">
@@ -469,7 +483,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                   <p className="text-[10.5px] text-amber-300">پیش از ثبت نهایی، نقاط قوت و زمینه‌های قابل بهبود را تکمیل کنید.</p>
                 )}
                 <button
-                  disabled={!canSubmitMyScore}
+                  disabled={!canSubmitMyScore || assessmentLocked}
                   onClick={() => submitMyPanelistScore(assessmentId)}
                   className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -660,7 +674,15 @@ const QUALIFICATION_CHIP_CONFIG: { key: keyof QualificationScoresInput; icon: Lu
  * scores it independently on their own comp_panelist_scores row, and the final value shown in
  * results is the panel's average. Colorful per-component cards so the card reads as inviting
  * rather than another gray form. */
-function MyQualificationScorecard({ myScore, onChange }: { myScore: CompPanelistScore | undefined; onChange: (patch: QualificationScoresInput) => void }) {
+function MyQualificationScorecard({
+  myScore,
+  readOnly,
+  onChange,
+}: {
+  myScore: CompPanelistScore | undefined
+  readOnly: boolean
+  onChange: (patch: QualificationScoresInput) => void
+}) {
   const current: QualificationScoresInput = {
     educationScore: myScore?.educationScore ?? null,
     experienceScore: myScore?.experienceScore ?? null,
@@ -684,8 +706,9 @@ function MyQualificationScorecard({ myScore, onChange }: { myScore: CompPanelist
                   <button
                     key={s}
                     type="button"
+                    disabled={readOnly}
                     onClick={() => onChange({ ...current, [key]: value === s ? null : s })}
-                    className="num flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-bold transition-colors"
+                    className="num flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-bold transition-colors disabled:cursor-not-allowed"
                     style={{
                       borderColor: value === s ? color : `${color}35`,
                       background: value === s ? color : `${color}12`,
@@ -707,7 +730,15 @@ function MyQualificationScorecard({ myScore, onChange }: { myScore: CompPanelist
 /** Mandatory wrap-up for a panelist's own score sheet — strengths/development-areas must both be
  * filled before "ثبت نهایی امتیاز من" is enabled (see canSubmitMyScore above). Keyed by myScore's
  * id from the parent so local draft state resets cleanly once the fetched row actually arrives. */
-function MyStrengthsCard({ myScore, onSave }: { myScore: CompPanelistScore | undefined; onSave: (strengths: string, developmentAreas: string) => void }) {
+function MyStrengthsCard({
+  myScore,
+  readOnly,
+  onSave,
+}: {
+  myScore: CompPanelistScore | undefined
+  readOnly: boolean
+  onSave: (strengths: string, developmentAreas: string) => void
+}) {
   const [strengths, setStrengths] = useState(myScore?.strengths ?? '')
   const [developmentAreas, setDevelopmentAreas] = useState(myScore?.developmentAreas ?? '')
 
@@ -722,7 +753,8 @@ function MyStrengthsCard({ myScore, onSave }: { myScore: CompPanelistScore | und
           <textarea
             value={strengths}
             onChange={(e) => setStrengths(e.target.value)}
-            onBlur={() => onSave(strengths, developmentAreas)}
+            onBlur={() => !readOnly && onSave(strengths, developmentAreas)}
+            readOnly={readOnly}
             rows={3}
             className="input resize-none"
             placeholder="نقاط قوت برجستهٔ نامزد از دید شما…"
@@ -735,7 +767,8 @@ function MyStrengthsCard({ myScore, onSave }: { myScore: CompPanelistScore | und
           <textarea
             value={developmentAreas}
             onChange={(e) => setDevelopmentAreas(e.target.value)}
-            onBlur={() => onSave(strengths, developmentAreas)}
+            onBlur={() => !readOnly && onSave(strengths, developmentAreas)}
+            readOnly={readOnly}
             rows={3}
             className="input resize-none"
             placeholder="زمینه‌هایی که نیاز به توسعه دارند…"

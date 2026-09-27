@@ -1,10 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Wand2, X } from 'lucide-react'
 import { usePersonalityStore } from '../store/usePersonalityStore'
-import { PERSONALITY_COMPLEXITY_LABEL_FA, PERSONALITY_QUESTION_TYPE_LABEL_FA, type JobRole, type PersonalityComplexity, type PersonalityQuestionType } from '../types'
+import {
+  PERSONALITY_COMPLEXITY_LABEL_FA,
+  PERSONALITY_QUESTION_TYPE_LABEL_FA,
+  type JobRole,
+  type PersonalityAssessmentStatus,
+  type PersonalityComplexity,
+  type PersonalityQuestionType,
+} from '../types'
 
 const ALL_TYPES: PersonalityQuestionType[] = ['LIKERT', 'FREQUENCY', 'FORCED_CHOICE', 'SJT', 'PRIORITY_CHOICE', 'EXPERIENCE_ANCHORED']
 const ALL_COMPLEXITIES: PersonalityComplexity[] = ['L1', 'L2', 'L3', 'L4']
+
+// Statuses in which the candidate has (or may have) already answered — regenerating then discards
+// those responses and any scores, so it needs explicit confirmation (the server enforces the same
+// rule and reports 'responses_exist' for anything this list misses).
+const PROGRESS_STATUSES: PersonalityAssessmentStatus[] = [
+  'IN_PROGRESS',
+  'SUBMITTED',
+  'VALIDITY_CHECK',
+  'SCORING',
+  'FINGERPRINT',
+  'AI_ANALYSIS',
+  'FINAL_REVIEW',
+]
 
 function cellKey(t: PersonalityQuestionType, c: PersonalityComplexity) {
   return `${t}__${c}`
@@ -32,6 +52,7 @@ export function PersonalityDesignerModal({
   onClose,
   onGenerated,
   initialTemplateId,
+  assessmentCompleted = false,
 }: {
   personalityAssessmentId: string
   jobRole: JobRole
@@ -40,6 +61,8 @@ export function PersonalityDesignerModal({
   /** A saved personality_assessment_templates row (e.g. from the candidate's Assessment Blueprint)
    * whose question mix replaces DEFAULT_COUNTS as the starting grid. */
   initialTemplateId?: string | null
+  /** The competency assessment is completed — the test is then frozen and cannot be regenerated. */
+  assessmentCompleted?: boolean
 }) {
   const questionBank = usePersonalityStore((s) => s.questionBank)
   const fetchQuestionBank = usePersonalityStore((s) => s.fetchQuestionBank)
@@ -50,6 +73,10 @@ export function PersonalityDesignerModal({
   const [counts, setCounts] = useState<Record<string, number>>(DEFAULT_COUNTS)
   const [generating, setGenerating] = useState(false)
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+  const personalityAssessment = usePersonalityStore((s) => s.assessments.find((a) => a.id === personalityAssessmentId))
+  const locked = assessmentCompleted || personalityAssessment?.status === 'LOCKED' || personalityAssessment?.status === 'ARCHIVED'
+  const hasProgress = personalityAssessment != null && PROGRESS_STATUSES.includes(personalityAssessment.status)
 
   useEffect(() => {
     if (questionBank.length === 0) fetchQuestionBank()
@@ -101,12 +128,21 @@ export function PersonalityDesignerModal({
 
   const canGenerate = grandTotal > 0 && shortfalls.length === 0
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (discardExisting: boolean) => {
+    if (locked) return
+    if (hasProgress && !discardExisting) {
+      setConfirmingDiscard(true)
+      return
+    }
     setGenerating(true)
     const mix = ALL_TYPES.flatMap((t) => ALL_COMPLEXITIES.map((c) => ({ questionType: t, complexity: c, count: counts[cellKey(t, c)] ?? 0 })).filter((cell) => cell.count > 0))
-    await generateFromMix(personalityAssessmentId, jobRole, mix)
+    const result = await generateFromMix(personalityAssessmentId, jobRole, mix, discardExisting)
     setGenerating(false)
-    onGenerated()
+    if (result === 'responses_exist') {
+      setConfirmingDiscard(true)
+      return
+    }
+    if (result === 'ok') onGenerated()
   }
 
   return (
@@ -186,10 +222,43 @@ export function PersonalityDesignerModal({
             </div>
           )}
 
+          {locked && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-slate-400/25 bg-white/[0.03] p-3 text-[11px] leading-6 text-secondary">
+              <AlertTriangle size={14} className="mt-1 shrink-0" />
+              {assessmentCompleted
+                ? 'این ارزیابی ثبت نهایی شده است؛ آزمون شخصیت آن قفل است و قابل تولید مجدد نیست. برای اصلاح، ادمین ماژول باید ارزیابی را بازگشایی کند.'
+                : 'این آزمون شخصیت قفل یا بایگانی شده است و قابل تولید مجدد نیست.'}
+            </div>
+          )}
+
+          {confirmingDiscard && !locked && (
+            <div className="mt-3 space-y-2 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-[11px] leading-6 text-red-100">
+              <p className="flex items-center gap-1.5 font-bold">
+                <AlertTriangle size={14} /> متقاضی به این آزمون پاسخ داده یا آزمون نمره‌دهی شده است.
+              </p>
+              <p>
+                تولید مجدد، <b>همه‌ی پاسخ‌های ثبت‌شده‌ی متقاضی، امتیازهای ابعاد و نتیجه‌ی اعتبارسنجی</b> را حذف می‌کند (یک نسخه در گزارش رویدادها بایگانی می‌شود)،
+                وضعیت آزمون به «تولیدشده» برمی‌گردد و متقاضی باید با همان لینک از ابتدا پاسخ دهد. شواهد شخصیت تا پاسخ‌گویی دوباره در پروفایل شایستگی حساب نمی‌شود.
+              </p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button onClick={() => setConfirmingDiscard(false)} className="rounded-lg border border-white/15 px-3 py-1 text-[11px] text-secondary hover:bg-white/5">
+                  انصراف
+                </button>
+                <button
+                  onClick={() => handleGenerate(true)}
+                  disabled={!canGenerate || generating}
+                  className="rounded-lg bg-red-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-400 disabled:opacity-40"
+                >
+                  {generating ? 'در حال تولید…' : 'حذف پاسخ‌ها و تولید مجدد'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 flex items-center justify-end border-t border-white/10 pt-4">
             <button
-              onClick={handleGenerate}
-              disabled={!canGenerate || generating}
+              onClick={() => handleGenerate(false)}
+              disabled={!canGenerate || generating || locked || confirmingDiscard}
               className="flex items-center gap-1.5 rounded-lg bg-pink-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-pink-400 disabled:opacity-40"
             >
               <Wand2 size={14} /> {generating ? 'در حال تولید…' : 'تولید و اعمال آزمون'}

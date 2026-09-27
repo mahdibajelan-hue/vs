@@ -157,7 +157,17 @@ interface PersonalityStoreState {
 
   fetchAssessments: () => Promise<void>
   createAssessment: (assessmentId: string, jobRole: JobRole, frameworkId: string | null, jobProfileId: string | null) => Promise<string | null>
-  generateFromMix: (personalityAssessmentId: string, jobRole: JobRole, mix: PersonalityQuestionMixCell[]) => Promise<void>
+  /** Picks the test's questions from a mix and saves them through personality_set_test_questions
+   * (schema.sql Section 53, M-9). Once the candidate answered or the test was scored the server
+   * refuses ('responses_exist') unless `discardExisting` — then the old responses/scores are archived
+   * in the audit log and cleared atomically. Always refused when the competency assessment is
+   * completed or the test is LOCKED/ARCHIVED. */
+  generateFromMix: (
+    personalityAssessmentId: string,
+    jobRole: JobRole,
+    mix: PersonalityQuestionMixCell[],
+    discardExisting?: boolean,
+  ) => Promise<'ok' | 'responses_exist' | 'error'>
 
   fetchDimensionScores: (personalityAssessmentId: string) => Promise<void>
   fetchValidityResult: (personalityAssessmentId: string) => Promise<void>
@@ -387,11 +397,11 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
     return created.id
   },
 
-  generateFromMix: async (personalityAssessmentId, jobRole, mix) => {
+  generateFromMix: async (personalityAssessmentId, jobRole, mix, discardExisting = false) => {
     let bank = get().questionBank.filter((q) => q.active && q.approvalStatus === 'APPROVED' && (q.jobRole == null || q.jobRole === jobRole))
     if (bank.length === 0) {
       const { data, error } = await supabase.from('personality_questions').select('*').eq('approval_status', 'APPROVED').eq('active', true)
-      if (reportError('بارگذاری بانک سؤالات شخصیت', error)) return
+      if (reportError('بارگذاری بانک سؤالات شخصیت', error)) return 'error'
       bank = ((data ?? []) as PersonalityQuestionRow[]).map(personalityQuestionFromRow).filter((q) => q.jobRole == null || q.jobRole === jobRole)
     }
     // Diversity-aware pick per (type, complexity) cell: shuffles, spreads across dimension/trait so
@@ -426,22 +436,27 @@ export const usePersonalityStore = create<PersonalityStoreState>((set, get) => (
         return picked
       })
     const ids = selected.map((q) => q.id)
-    const current = get().assessments.find((a) => a.id === personalityAssessmentId)
-    if (!current) return
-    set({ assessments: get().assessments.map((a) => (a.id === personalityAssessmentId ? { ...a, selectedQuestionIds: ids, status: 'GENERATED' } : a)) })
-    const { error } = await supabase
-      .from('personality_assessments')
-      .update({ selected_question_ids: ids, status: 'GENERATED' })
-      .eq('id', personalityAssessmentId)
-    if (reportError('تولید آزمون شخصیت از روی طرح سؤال', error)) {
-      set({ assessments: get().assessments.map((a) => (a.id === personalityAssessmentId ? current : a)) })
-      return
+    // One atomic server call: validates the ids, refuses silently orphaning existing responses
+    // unless discardExisting (then archives + clears them), resets the status to GENERATED and bumps
+    // usage_count itself.
+    const { error } = await supabase.rpc('personality_set_test_questions', {
+      p_personality_assessment_id: personalityAssessmentId,
+      p_question_ids: ids,
+      p_discard_existing: discardExisting,
+    })
+    if (error) {
+      if (/responses_exist/.test(error.message)) return 'responses_exist'
+      reportError('تولید آزمون شخصیت از روی طرح سؤال', error)
+      return 'error'
     }
-    if (ids.length > 0) {
-      // Best-effort — a failure here only means the "previous usage" preference is slightly stale
-      // next time, never a reason to roll back the assessment's actual question selection above.
-      await supabase.rpc('personality_increment_question_usage', { p_ids: ids })
+    await get().fetchAssessments()
+    if (discardExisting) {
+      set({
+        dimensionScores: get().dimensionScores.filter((s) => s.personalityAssessmentId !== personalityAssessmentId),
+        validityResults: get().validityResults.filter((v) => v.personalityAssessmentId !== personalityAssessmentId),
+      })
     }
+    return 'ok'
   },
 
   fetchDimensionScores: async (personalityAssessmentId) => {
