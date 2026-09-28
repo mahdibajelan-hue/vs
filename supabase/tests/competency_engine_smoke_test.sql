@@ -1651,3 +1651,119 @@ exception when others then
   delete from comp_job_role_config where job_role = v_role;
   raise;
 end $$;
+
+-- ------------------------------------------------------------------------------------------------
+-- Section 58 follow-up (product request: "پاسخ هر یک از آزمون‌های آنلاین ... تنها برای ادمین سامانه
+-- قابل رویت باشد") — comp_mcq_get_test_detail's raw per-item answers (`items`: stem, options,
+-- correctOption, chosenOption) must be populated ONLY for a module admin (comp_is_module_admin()) —
+-- a non-lead panelist who can otherwise see this assessment must get items: [] while every aggregate
+-- field (topicScores/categoryScores/difficultyScores/scorePercent/totalQuestions/answeredCount/
+-- correctCount/status) stays fully populated for them exactly as for the admin. Regression cover for
+-- the earlier version of this RPC, which returned `items` in full to any viewer who could access the
+-- assessment at all (any panelist included) — see this RPC's own comment in schema.sql.
+-- ------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin uuid;
+  v_panelist uuid;
+  v_role constant text := '__smoke_mcq_admin_only_role__';
+  v_a uuid;
+  v_q1 uuid;
+  v_q2 uuid;
+  v_q3 uuid;
+  v_q4 uuid;
+  v_q5 uuid;
+  v_token uuid;
+  v_detail jsonb;
+  v_get jsonb;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  if v_admin is null then
+    raise exception 'smoke test precondition failed: no admin profile exists to impersonate';
+  end if;
+
+  -- Genuinely NOT a module admin either way (is_admin false AND no comp_module_admins row) — a real
+  -- panelist, not an accidental second admin, or this test would pass for the wrong reason.
+  select p.id into v_panelist
+  from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+  order by p.created_at
+  limit 1;
+
+  if v_panelist is null then
+    raise notice 'competency_engine_smoke_test (mcq admin-only items): no non-admin profile available — skipped';
+  else
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform set_config('role', 'postgres', true);
+
+    insert into comp_job_role_config (job_role, label_fa, active, sort_order) values (v_role, '__smoke__', false, 9999);
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_admin_only_q1__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q1;
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_admin_only_q2__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q2;
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_admin_only_q3__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q3;
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_admin_only_q4__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q4;
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_admin_only_q5__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q5;
+    insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by, needs_online_mcq)
+      values (v_role, '__smoke_admin_only_test__', 'test', '000', '000', 'x@example.com', v_admin, true) returning id into v_a;
+    insert into comp_panelists (assessment_id, user_id, is_lead) values (v_a, v_panelist, false);
+
+    perform set_config('role', 'authenticated', true);
+    perform comp_mcq_generate_test(v_a, 5, 30, false);
+    v_detail := comp_mcq_get_test_detail(v_a);
+    v_token := (v_detail ->> 'candidateToken')::uuid;
+
+    -- Answer + submit via the token RPCs so scorePercent/answeredCount/correctCount are non-trivial,
+    -- not just defaults: 3 of 5 correct = 60%.
+    perform comp_mcq_candidate_start(v_token);
+    perform comp_mcq_candidate_answer(v_token, v_q1, 0, 100); -- correct
+    perform comp_mcq_candidate_answer(v_token, v_q2, 0, 100); -- correct
+    perform comp_mcq_candidate_answer(v_token, v_q3, 0, 100); -- correct
+    perform comp_mcq_candidate_answer(v_token, v_q4, 1, 100); -- wrong (correct_option is 0)
+    perform comp_mcq_candidate_answer(v_token, v_q5, 1, 100); -- wrong (correct_option is 0)
+    v_get := comp_mcq_candidate_submit(v_token);
+    if v_get ->> 'status' <> 'SCORED' then
+      raise exception 'ASSERTION FAILED (mcq admin-only items): expected SCORED, got %', v_get;
+    end if;
+
+    -- As the non-lead panelist: items must be empty, aggregates must still be populated.
+    perform set_config('request.jwt.claims', json_build_object('sub', v_panelist, 'role', 'authenticated')::text, true);
+    v_detail := comp_mcq_get_test_detail(v_a);
+    if jsonb_array_length(v_detail -> 'items') <> 0 then
+      raise exception 'ASSERTION FAILED (mcq admin-only items): a non-admin panelist received % raw items, expected 0', jsonb_array_length(v_detail -> 'items');
+    end if;
+    if v_detail ->> 'status' <> 'SCORED' or (v_detail ->> 'scorePercent')::numeric <> 60 or (v_detail ->> 'totalQuestions')::int <> 5
+       or (v_detail ->> 'answeredCount')::int <> 5 or (v_detail ->> 'correctCount')::int <> 3 or v_detail -> 'topicScores' is null then
+      raise exception 'ASSERTION FAILED (mcq admin-only items): panelist''s aggregates were not fully populated, got %', v_detail;
+    end if;
+
+    -- As the module admin: the raw items must be there, one per question.
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+    v_detail := comp_mcq_get_test_detail(v_a);
+    if jsonb_array_length(v_detail -> 'items') <> 5 then
+      raise exception 'ASSERTION FAILED (mcq admin-only items): module admin received % raw items, expected 5', jsonb_array_length(v_detail -> 'items');
+    end if;
+    if not exists (select 1 from jsonb_array_elements(v_detail -> 'items') it where it ? 'stem' and it ? 'chosenOption' and it ? 'correctOption') then
+      raise exception 'ASSERTION FAILED (mcq admin-only items): module admin''s items were missing stem/chosenOption/correctOption, got %', v_detail -> 'items';
+    end if;
+
+    raise notice 'competency_engine_smoke_test (mcq admin-only items): PASSED';
+
+    perform set_config('role', 'postgres', true);
+    delete from comp_assessments where candidate_name = '__smoke_admin_only_test__';
+    delete from comp_mcq_questions where job_role = v_role;
+    delete from comp_job_role_config where job_role = v_role;
+  end if;
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_assessments where candidate_name = '__smoke_admin_only_test__';
+  delete from comp_mcq_questions where job_role = v_role;
+  delete from comp_job_role_config where job_role = v_role;
+  raise;
+end $$;

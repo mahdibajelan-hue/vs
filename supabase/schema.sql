@@ -13371,6 +13371,16 @@ grant execute on function comp_mcq_generate_test(uuid, int, int, boolean) to aut
 
 -- Staff view of one assessment's test: meta, stored result and every question with the chosen and
 -- the correct answer (staff only). The candidate link (token) is returned to leads/designers only.
+-- Section 58 follow-up (product request, "پاسخ هر یک از آزمون‌های آنلاین ... تنها برای ادمین سامانه
+-- قابل رویت باشد"): comp_mcq_get_test_detail used to return every item (stem, options, correctOption,
+-- chosenOption) to ANY viewer who could access the assessment at all — that includes a plain
+-- panelist, who has no business seeing the candidate's raw item-by-item MCQ answers, only the
+-- aggregate scores. "ادمین سامانه" here is this module's existing module-admin standing
+-- (comp_is_module_admin(): a true profiles.is_admin OR a comp_module_admins row) — deliberately NOT
+-- the assessment's lead and NOT an ASSESSMENT_DESIGNER unless they separately also hold that
+-- standing, same as candidateToken just below. Every aggregate field (topicScores, categoryScores,
+-- difficultyScores, scorePercent, totalQuestions, answeredCount, correctCount, status, ...) stays
+-- populated for everyone exactly as before — only the raw per-question detail is now admin-gated.
 create or replace function comp_mcq_get_test_detail(p_assessment_id uuid)
 returns jsonb as $$
 declare
@@ -13388,27 +13398,31 @@ begin
     select * into v_t from comp_mcq_tests where id = v_t.id;
   end if;
 
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'order', sel.ord,
-    'questionId', q.id,
-    'version', q.version,
-    'category', q.category,
-    'topic', q.topic,
-    'difficulty', q.difficulty,
-    'stem', q.stem_fa,
-    'options', q.options,
-    'correctOption', coalesce(r.correct_option, q.correct_option),
-    'chosenOption', r.chosen_option,
-    'isCorrect', case when v_t.status = 'SCORED' then coalesce(r.is_correct, false) end,
-    'responseTimeMs', r.response_time_ms,
-    'answeredAt', r.answered_at,
-    'explanation', q.explanation_fa,
-    'standardRef', q.standard_ref
-  ) order by sel.ord), '[]'::jsonb)
-  into v_items
-  from jsonb_array_elements_text(v_t.question_ids) with ordinality sel(qid, ord)
-  join comp_mcq_questions q on q.id::text = sel.qid
-  left join comp_mcq_responses r on r.test_id = v_t.id and r.question_id = q.id;
+  if comp_is_module_admin() then
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'order', sel.ord,
+      'questionId', q.id,
+      'version', q.version,
+      'category', q.category,
+      'topic', q.topic,
+      'difficulty', q.difficulty,
+      'stem', q.stem_fa,
+      'options', q.options,
+      'correctOption', coalesce(r.correct_option, q.correct_option),
+      'chosenOption', r.chosen_option,
+      'isCorrect', case when v_t.status = 'SCORED' then coalesce(r.is_correct, false) end,
+      'responseTimeMs', r.response_time_ms,
+      'answeredAt', r.answered_at,
+      'explanation', q.explanation_fa,
+      'standardRef', q.standard_ref
+    ) order by sel.ord), '[]'::jsonb)
+    into v_items
+    from jsonb_array_elements_text(v_t.question_ids) with ordinality sel(qid, ord)
+    join comp_mcq_questions q on q.id::text = sel.qid
+    left join comp_mcq_responses r on r.test_id = v_t.id and r.question_id = q.id;
+  else
+    v_items := '[]'::jsonb;
+  end if;
 
   return jsonb_build_object(
     'id', v_t.id,

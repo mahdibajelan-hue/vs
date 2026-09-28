@@ -114,15 +114,22 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
         </div>
       )}
 
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        className="fx-sub flex w-full items-center justify-between px-3.5 py-2.5 text-[11.5px] font-bold hover:brightness-110"
-      >
-        نمایش پاسخ به تفکیک هر سؤال (پاسخ متقاضی و پاسخ درست)
-        <ChevronDown size={15} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
+      {/* Per-item breakdown is only ever present for a module admin — comp_mcq_get_test_detail
+          (schema.sql) returns `items: []` to everyone else (the assessment lead, a designer, any
+          panelist), by product requirement: raw question-and-answer detail is admin-only, never the
+          aggregate scores above. Hiding the toggle entirely when there's nothing to show also keeps
+          a non-admin from wondering why the button does nothing. */}
+      {test.items.length > 0 && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="fx-sub flex w-full items-center justify-between px-3.5 py-2.5 text-[11.5px] font-bold hover:brightness-110"
+        >
+          نمایش پاسخ به تفکیک هر سؤال (پاسخ متقاضی و پاسخ درست) — فقط ادمین سامانه
+          <ChevronDown size={15} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
-      {expanded && (
+      {expanded && test.items.length > 0 && (
         <div className="space-y-2">
           {test.items.map((item) => (
             <div key={item.questionId} className="fx-card p-3.5" style={tone(item.isCorrect ? '#34d399' : '#f87171')}>
