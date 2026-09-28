@@ -1,5 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { computeRoleAlignment } from '../lib/roleAlignment'
+import { bilingual } from '../lib/bilingual'
+import { REPORT_WIDTH_PX } from '../../competency/lib/reportExport'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
 import type {
   PersonalityAiAnalysis,
@@ -67,13 +69,14 @@ export function PersonalityPrintReport({
   if (validityResult?.randomPatternFlag) validityReasons.push('الگوی پاسخ تصادفی محتمل است')
   if (validityResult?.missingResponseCount) validityReasons.push(`${validityResult.missingResponseCount.toLocaleString('fa-IR')} سؤال بی‌پاسخ مانده`)
   if (validityResult?.contradictionCount) validityReasons.push(`${validityResult.contradictionCount.toLocaleString('fa-IR')} مورد تناقض در پاسخ‌ها`)
-  if (validityResult?.extremeResponseRate != null && validityResult.extremeResponseRate > 40)
-    validityReasons.push(`نرخ پاسخ‌های حدی: ٪${Math.round(validityResult.extremeResponseRate).toLocaleString('fa-IR')}`)
+  // extremeResponseRate is a 0-1 fraction (personality_validity_results).
+  if (validityResult?.extremeResponseRate != null && validityResult.extremeResponseRate >= 0.4)
+    validityReasons.push(`نرخ پاسخ‌های حدی: ٪${Math.round(validityResult.extremeResponseRate * 100).toLocaleString('fa-IR')}`)
 
   const alignment = computeRoleAlignment(jobRequirements, behavioralScores, dimensions)
 
   return (
-    <div style={{ background: '#ffffff', color: ink, width: 900, padding: '36px 40px', fontFamily: '"Vazirmatn", "Segoe UI", sans-serif', direction: 'rtl' }}>
+    <div style={{ background: '#ffffff', color: ink, width: REPORT_WIDTH_PX, padding: '30px 32px', fontFamily: '"Vazirmatn", "Segoe UI", sans-serif', direction: 'rtl' }}>
       <div style={{ borderBottom: `2px solid ${ink}`, paddingBottom: 16, marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <p style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>گزارش ارزیابی شخصیت و رفتاری — {candidateName}</p>
@@ -145,13 +148,13 @@ export function PersonalityPrintReport({
 
       {traitScores.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>ویژگی‌های شخصیتی (پنج عامل بزرگ)</p>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>Big Five Traits (ویژگی‌های شخصیتی — پنج عامل بزرگ)</p>
           {traitScores.map((s) => {
             const trait = traits.find((t) => t.id === s.traitId)
             const pct = Math.max(0, Math.min(100, s.normalizedScore ?? 0))
             return (
               <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-                <span style={{ width: 150, flexShrink: 0, fontSize: 10.5, color: sub }}>{trait?.labelFa ?? '—'}</span>
+                <span style={{ width: 220, flexShrink: 0, fontSize: 10.5, color: sub }}>{bilingual('trait', trait).full}</span>
                 <div style={{ flex: 1, height: 8, borderRadius: 5, background: '#f1f5f9', overflow: 'hidden' }}>
                   <div style={{ height: '100%', borderRadius: 5, background: accent, width: `${pct}%` }} />
                 </div>
@@ -166,7 +169,7 @@ export function PersonalityPrintReport({
 
       {behavioralScores.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>ابعاد رفتاری حرفه‌ای (با الزام شغلی)</p>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800 }}>Professional Behavioral Dimensions (ابعاد رفتاری حرفه‌ای — با الزام شغلی)</p>
           {behavioralScores.map((s) => {
             const dim = dimensions.find((d) => d.id === s.dimensionId)
             const req = jobRequirements.find((r) => r.dimensionId === s.dimensionId)
@@ -174,8 +177,8 @@ export function PersonalityPrintReport({
             const below = req?.minThreshold != null && s.normalizedScore != null && s.normalizedScore < req.minThreshold
             return (
               <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-                <span style={{ width: 150, flexShrink: 0, fontSize: 10.5, color: sub }}>
-                  {dim?.labelFa ?? '—'} {req?.isCritical && <span style={{ color: '#b45309' }}>★</span>}
+                <span style={{ width: 220, flexShrink: 0, fontSize: 10.5, color: sub }}>
+                  {bilingual('dimension', dim).full} {req?.isCritical && <span style={{ color: '#b45309' }}>★</span>}
                 </span>
                 <div style={{ flex: 1, height: 8, borderRadius: 5, background: '#f1f5f9', overflow: 'hidden', position: 'relative' }}>
                   <div style={{ height: '100%', borderRadius: 5, background: below ? '#dc2626' : '#0284c7', width: `${pct}%` }} />
@@ -231,7 +234,7 @@ export function PersonalityPrintReport({
         </div>
       )}
 
-      <p style={{ marginTop: 26, fontSize: 9.5, color: '#94a3b8' }}>تهیه‌شده توسط سامانه مدیریت پروژه RASTA — ماژول ارزیابی شخصیت و رفتاری.</p>
+      <p style={{ marginTop: 26, fontSize: 9.5, color: '#94a3b8' }}>تهیه‌شده توسط فرین (FARIN) — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی، ماژول ارزیابی شخصیت و رفتاری.</p>
     </div>
   )
 }

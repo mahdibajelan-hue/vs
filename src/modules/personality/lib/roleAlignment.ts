@@ -103,3 +103,12 @@ export function computeRoleAlignment(
 
   return { rows, overallAlignmentPercent, criticalGapCount }
 }
+
+/** Overall verdict for the role-fit percentage — shared by RoleAlignmentCard and the fingerprint hero. */
+export function overallVerdict(percent: number | null, criticalGapCount: number): { label: string; color: string } {
+  if (percent == null) return { label: 'داده کافی برای تعیین تطابق وجود ندارد', color: '#94a3b8' }
+  if (criticalGapCount > 0) return { label: 'نیازمند بررسی دقیق — کمبود در الزامات حیاتی', color: '#ef4444' }
+  if (percent >= 80) return { label: 'تطابق قوی با الزامات رفتاری شغل', color: '#10b981' }
+  if (percent >= 60) return { label: 'تطابق متوسط با الزامات رفتاری شغل', color: '#f59e0b' }
+  return { label: 'تطابق ضعیف — نیازمند بررسی بیشتر', color: '#ef4444' }
+}
