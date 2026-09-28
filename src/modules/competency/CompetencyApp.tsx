@@ -45,6 +45,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
   const fetchModuleAdmins = useCompetencyStore((s) => s.fetchModuleAdmins)
+  const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
   const fetchAssessmentDesigners = useCompetencyStore((s) => s.fetchAssessmentDesigners)
   // Fetched once here, app-wide, so every page under this tree (dashboard, wizard stages, question
   // bank, reports, settings) can read the job-role catalog straight from the store instead of each
@@ -74,6 +75,11 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // comp_is_module_admin in schema.sql) — both can manage the question bank and module settings.
   const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myProfile?.id)
   const isPersonalityModuleAdmin = Boolean(myProfile?.isAdmin) || personalityModuleAdmins.some((m) => m.userId === myProfile?.id)
+  // بانک سؤالات (question bank) is now admin/designer-only — a plain panelist or lead still reads
+  // their own candidate's already-selected questions fine via RLS (comp_question_bank_select_scoped),
+  // but browsing/proposing across the whole bank is reserved for module admins and assessment
+  // designers, so the sidebar link is only wired up for them.
+  const isQuestionBankViewer = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id)
 
   // Settings is only ever reachable via an admin-gated nav button, but the module-admin flag can
   // still change under a viewer already sitting on this view (e.g. someone else revokes their
@@ -81,19 +87,20 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // PersonalityApp's own guard.
   useEffect(() => {
     if (view.name === 'personalitySettings' && !isPersonalityModuleAdmin) setView({ name: 'list' })
-  }, [view.name, isPersonalityModuleAdmin])
+    if (view.name === 'questionBank' && !isQuestionBankViewer) setView({ name: 'list' })
+  }, [view.name, isPersonalityModuleAdmin, isQuestionBankViewer])
 
   // The module-wide sidebar destinations beyond "داشبورد" — shared by every page that builds its
   // own nav map (dashboard, the assessment wizard, results), so all of them light up identically.
-  // Question Bank is reachable by everyone now (spec section 12's Question Proposal Workflow — a
-  // non-admin can propose a question there, just not edit the bank directly) and now hosts the
-  // personality bank as its second tab too; Settings stays admin-only. personalityReports follows
-  // the same everyone-can-open pattern as its competency counterpart — the personality page behind
-  // it does its own admin-vs-proposer gating via isPersonalityModuleAdmin.
+  // Question Bank browsing/proposing is admin/designer-only (isQuestionBankViewer above) — a plain
+  // panelist or lead never sees this link, though RLS already scoped their own read access to just
+  // their live assessment's selected questions regardless. Settings stays admin-only.
+  // personalityReports follows the same everyone-can-open pattern as its competency counterpart —
+  // the personality page behind it does its own admin-vs-proposer gating via isPersonalityModuleAdmin.
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
-    questionBank: () => setView({ name: 'questionBank' }),
     personalityReports: () => setView({ name: 'personalityReports' }),
+    ...(isQuestionBankViewer ? { questionBank: () => setView({ name: 'questionBank' }) } : {}),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
   }
 
