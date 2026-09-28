@@ -81,8 +81,8 @@ export interface ResultsModel {
 
 export function assessmentMethods(a: CompetencyAssessment): AssessmentMethod[] {
   return [
-    { key: 'technical', label: 'ارزیابی فنی و تخصصی (حضوری)', enabled: a.needsTechnicalAssessment },
     { key: 'personality', label: 'ارزیابی شخصیت و رفتاری', enabled: a.needsPersonalityAssessment },
+    { key: 'technical', label: 'ارزیابی فنی و تخصصی (حضوری)', enabled: a.needsTechnicalAssessment },
     { key: 'interview', label: 'مصاحبه ساختاریافته', enabled: a.needsStructuredInterview },
     { key: 'experience', label: 'سوابق و مدارک به‌عنوان شواهد', enabled: a.includesExperience },
   ]

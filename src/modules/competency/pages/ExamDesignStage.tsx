@@ -1,30 +1,36 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BrainCircuit, Briefcase, CheckCircle2, Copy, LayoutTemplate, Link2, ListChecks, Loader2, MessagesSquare, RotateCw, Wand2 } from 'lucide-react'
+import { ArrowLeft, BrainCircuit, Briefcase, CheckCircle2, LayoutTemplate, ListChecks, Loader2, MessagesSquare, Wand2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { PersonalityDesignerModal } from '../../personality/components/PersonalityDesignerModal'
 import { PERSONALITY_ASSESSMENT_STATUS_LABEL_FA } from '../../personality/types'
 import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 import type { CompAssessmentBlueprint, CompetencyAssessment } from '../types'
-import { fetchMcqTestDetail, generateMcqTest, mcqCandidateUrl, mcqErrorFa, MCQ_TEST_STATUS_LABEL_FA, type McqTestDetail } from '../lib/mcqData'
+import { fetchMcqTestDetail, type McqTestDetail } from '../lib/mcqData'
 
 interface ExamDesignStageProps {
   assessment: CompetencyAssessment
-  /** Only an ASSESSMENT_DESIGNER (or module admin) may toggle the two switches below or open either
-   * mix designer — everyone else sees the same panel as read-only status badges. */
+  /** Only an ASSESSMENT_DESIGNER (or module admin) may toggle the switches below or open either mix
+   * designer — everyone else sees the same panel as read-only status badges. */
   isDesigner: boolean
   /** Advances the wizard to the next stage (ارزیابی شخصیت و رفتاری). */
   onContinue: () => void
 }
 
 /**
- * "پنل طراحی آزمون‌ها" (spec follow-up, schema.sql Section 44): the assessment designer decides,
- * per candidate, whether a personality/behavioral assessment and/or the technical assessment are
- * required, then configures each one's own question mix from here — the technical mix via the
- * existing AssessmentDesignerModal (unchanged), the personality mix via the personality module's own
- * PersonalityDesignerModal, embedded rather than reached through a separate top-level module.
- * An Assessment Blueprint (schema.sql Section 50) sets all four method toggles at once; the toggles
+ * "طراحی آزمون‌ها" (spec follow-up, schema.sql Section 44): the assessment designer decides, per
+ * candidate, which of the five assessment methods are required, then configures each one's own
+ * question mix from here — the technical mix via the existing AssessmentDesignerModal (unchanged),
+ * the personality mix via the personality module's own PersonalityDesignerModal, embedded rather than
+ * reached through a separate top-level module. Generating/managing the actual online MCQ test (once
+ * its toggle is on) has its own dedicated wizard stage (McqStage.tsx), same as the personality
+ * assessment itself does — this component only ever holds the plan-level toggle for it.
+ * An Assessment Blueprint (schema.sql Section 50) sets all five method toggles at once; the toggles
  * stay individually adjustable afterwards.
+ * Rendered stacked directly under the panel-assembly UI (PanelStage) inside the wizard's single,
+ * merged "پنل مصاحبه‌گران" stage — see AssessmentWizardPage — rather than as its own top-level stage,
+ * so a panelist can never reach it and start deciding/scoring the technical exam from inside panel
+ * assembly.
  */
 export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesignStageProps) {
   const setExamDesign = useCompetencyStore((s) => s.setExamDesign)
@@ -53,13 +59,13 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
   const completed = assessment.status === 'completed'
   const canEdit = isDesigner && !completed
 
+  // Only the test's status is needed here (for the N-14 evidence-drop confirmation below) — the
+  // generate/regenerate panel, candidate link, and scored results now live in their own dedicated
+  // "mcq" stage (McqStage.tsx), same as the personality assessment gets its own "personality" stage.
   const [mcqTest, setMcqTest] = useState<McqTestDetail | null>(null)
-  const [mcqLoading, setMcqLoading] = useState(false)
   const refreshMcqTest = async () => {
-    setMcqLoading(true)
     const { data } = await fetchMcqTestDetail(assessment.id)
     setMcqTest(data)
-    setMcqLoading(false)
   }
 
   useEffect(() => {
@@ -250,15 +256,6 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ExamDesignToggle
-            icon={<ListChecks size={14} />}
-            color="#a855f7"
-            title="ارزیابی فنی تخصصی — حضوری"
-            description="پرسش‌های تخصصی و مصاحبه با پنل مصاحبه‌گران، در جلسه‌ی حضوری."
-            checked={assessment.needsTechnicalAssessment}
-            isDesigner={canEdit}
-            onChange={(checked) => toggle({ technical: checked })}
-          />
-          <ExamDesignToggle
             icon={<BrainCircuit size={14} />}
             color="#f472b6"
             title="شخصیت و رفتاری — آنلاین"
@@ -275,6 +272,15 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             checked={assessment.needsOnlineMcq}
             isDesigner={canEdit}
             onChange={(checked) => toggle({ onlineMcq: checked })}
+          />
+          <ExamDesignToggle
+            icon={<ListChecks size={14} />}
+            color="#a855f7"
+            title="ارزیابی فنی تخصصی — حضوری"
+            description="پرسش‌های تخصصی و مصاحبه با پنل مصاحبه‌گران، در جلسه‌ی حضوری."
+            checked={assessment.needsTechnicalAssessment}
+            isDesigner={canEdit}
+            onChange={(checked) => toggle({ technical: checked })}
           />
           <ExamDesignToggle
             icon={<MessagesSquare size={14} />}
@@ -326,29 +332,6 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
               initialTemplateId={templateSource?.technicalTemplateId}
               onClose={() => setTechnicalDesignerOpen(false)}
             />
-          )}
-        </div>
-      )}
-
-      {assessment.needsOnlineMcq && (
-        <div className="glass-panel rounded-2xl p-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-xs font-bold">
-              <ListChecks size={14} className="text-teal-300" /> آزمون تستی آنلاین
-            </p>
-            {mcqTest && (
-              <span className="rounded-full bg-teal-500/15 px-2.5 py-1 text-[10.5px] font-bold text-teal-200">
-                {MCQ_TEST_STATUS_LABEL_FA[mcqTest.status]}
-                {mcqTest.status === 'SCORED' && mcqTest.scorePercent != null && <span className="num"> — {mcqTest.scorePercent.toLocaleString('fa-IR')}٪</span>}
-              </span>
-            )}
-          </div>
-          {mcqLoading ? (
-            <Loader2 size={14} className="animate-spin text-muted" />
-          ) : isDesigner ? (
-            <McqGeneratePanel assessment={assessment} mcqTest={mcqTest} onGenerated={refreshMcqTest} />
-          ) : (
-            <p className="text-[11px] text-muted">طراحی و تولید آزمون فقط توسط طراح آزمون انجام می‌شود.</p>
           )}
         </div>
       )}
@@ -408,9 +391,9 @@ const BLUEPRINT_METHODS: {
   key: keyof Pick<CompAssessmentBlueprint, 'includesTechnical' | 'includesPersonality' | 'includesStructuredInterview' | 'includesExperience' | 'includesOnlineMcq'>
   label: string
 }[] = [
-  { key: 'includesTechnical', label: 'آزمون فنی (حضوری)' },
   { key: 'includesPersonality', label: 'شخصیت و رفتاری (آنلاین، با SJT)' },
   { key: 'includesOnlineMcq', label: 'آزمون تستی (آنلاین)' },
+  { key: 'includesTechnical', label: 'آزمون فنی (حضوری)' },
   { key: 'includesStructuredInterview', label: 'مصاحبه ساختاریافته' },
   { key: 'includesExperience', label: 'سوابق و تجربه' },
 ]
@@ -482,117 +465,6 @@ function ExamDesignToggle({
       </div>
       <p className="text-[10.5px] leading-5 text-muted">{description}</p>
       {!isDesigner && <p className="mt-1 text-[10px] text-muted/70">توسط طراح آزمون تنظیم می‌شود.</p>}
-    </div>
-  )
-}
-
-/**
- * Generate/regenerate button (with a configurable question count + time limit) and the candidate's
- * copyable link for the online MCQ test — mirrors PersonalityStage's copy-link card. A test the
- * candidate has already started can only be regenerated with an explicit discard confirmation
- * (comp_mcq_generate_test's p_discard_existing), matching the technical designer's own pattern.
- */
-function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: CompetencyAssessment; mcqTest: McqTestDetail | null; onGenerated: () => void }) {
-  const [questionCount, setQuestionCount] = useState(30)
-  const [timeLimitMinutes, setTimeLimitMinutes] = useState(45)
-  const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  const started = mcqTest != null && mcqTest.status !== 'NOT_STARTED'
-
-  const handleGenerate = async (discardExisting: boolean) => {
-    setError(null)
-    setGenerating(true)
-    const { error: err } = await generateMcqTest(assessment.id, questionCount, timeLimitMinutes, discardExisting)
-    setGenerating(false)
-    if (err) {
-      setError(mcqErrorFa(err))
-      return
-    }
-    onGenerated()
-  }
-
-  const handleGenerateClick = () => {
-    if (started && !window.confirm('متقاضی این آزمون را شروع کرده یا به پایان رسانده است. با تولید آزمون جدید، پاسخ‌های فعلی کنار گذاشته می‌شوند (در گزارش ممیزی بایگانی می‌مانند). ادامه می‌دهید؟')) {
-      return
-    }
-    handleGenerate(started)
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">تعداد سؤال</span>
-          <input
-            type="number"
-            min={5}
-            max={100}
-            value={questionCount}
-            onChange={(e) => setQuestionCount(Math.min(100, Math.max(5, Number(e.target.value) || 0)))}
-            className="num input w-24 !py-1.5 text-center text-[11px]"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">زمان (دقیقه)</span>
-          <input
-            type="number"
-            min={5}
-            max={240}
-            value={timeLimitMinutes}
-            onChange={(e) => setTimeLimitMinutes(Math.min(240, Math.max(5, Number(e.target.value) || 0)))}
-            className="num input w-24 !py-1.5 text-center text-[11px]"
-          />
-        </label>
-        <button
-          onClick={handleGenerateClick}
-          disabled={generating}
-          className="flex items-center gap-1.5 rounded-xl bg-teal-500 px-4 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40"
-        >
-          {generating ? <Loader2 size={13} className="animate-spin" /> : started ? <RotateCw size={13} /> : <Wand2 size={13} />}
-          {started ? 'تولید مجدد آزمون' : 'تولید آزمون'}
-        </button>
-      </div>
-      {mcqTest && (
-        <p className="text-[10.5px] text-muted">
-          {mcqTest.questionCount != null && (
-            <>
-              آخرین آزمون تولیدشده: <span className="num font-bold text-secondary">{mcqTest.questionCount.toLocaleString('fa-IR')}</span> سؤال، زمان{' '}
-              <span className="num font-bold text-secondary">{mcqTest.timeLimitMinutes.toLocaleString('fa-IR')}</span> دقیقه
-              {mcqTest.generation.poolSize != null && (
-                <>
-                  {' '}
-                  (از میان <span className="num">{mcqTest.generation.poolSize.toLocaleString('fa-IR')}</span> سؤال تأییدشده‌ی بانک)
-                </>
-              )}
-              .
-            </>
-          )}
-        </p>
-      )}
-      {error && <p className="text-[10.5px] text-red-300">{error}</p>}
-
-      {mcqTest?.candidateToken && (
-        <div className="space-y-1.5 rounded-xl border border-teal-400/20 bg-teal-500/[0.05] p-3">
-          <p className="flex items-center gap-1.5 text-[10.5px] font-bold text-teal-200">
-            <Link2 size={12} /> لینک آزمون تستی متقاضی
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input readOnly dir="ltr" value={mcqCandidateUrl(mcqTest.candidateToken)} className="input flex-1 text-[11px]" onFocus={(e) => e.target.select()} />
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(mcqCandidateUrl(mcqTest.candidateToken!))
-                setCopied(true)
-                setTimeout(() => setCopied(false), 2000)
-              }}
-              className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-400"
-            >
-              <Copy size={12} /> {copied ? 'کپی شد' : 'کپی لینک'}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

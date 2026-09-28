@@ -59,7 +59,7 @@ export function RootApp() {
   // the competency links above, kept as a separate query param so the two modules' tokens never
   // collide. The personality module no longer has a standalone top-level presence (its dashboard/
   // results/question-bank/settings/reports pages are now reached through the Competency module —
-  // see CompetencyApp.tsx and AssessmentWizardPage's examDesign/personality stages), but this one
+  // see CompetencyApp.tsx and AssessmentWizardPage's panel/personality stages), but this one
   // route survives: an unauthenticated candidate must still be able to answer via their link. The
   // old public "view results online" link (?p_results=<token>, PersonalityPublicResultsPage) is no
   // longer routed — staff now view personality results inline in the competency wizard instead.

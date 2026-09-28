@@ -12,8 +12,8 @@ export type CompetencySection =
   | 'profile'
   | 'panel'
   | 'documents'
-  | 'examDesign'
   | 'personality'
+  | 'mcq'
   | 'questions'
   | 'interview'
   | 'results'
@@ -33,8 +33,8 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   profile: { label: 'مشخصات', icon: User },
   panel: { label: 'پنل مصاحبه‌گران', icon: Users },
   documents: { label: 'بارگذاری مدارک', icon: FileUp },
-  examDesign: { label: 'طراحی آزمون‌ها', icon: ListTree },
   personality: { label: 'ارزیابی شخصیت و رفتاری', icon: BrainCircuit },
+  mcq: { label: 'آزمون تستی آنلاین', icon: ListTree },
   questions: { label: 'ارزیابی فنی تخصصی', icon: ListChecks },
   interview: { label: 'مصاحبه ساختاریافته', icon: MessagesSquare },
   results: { label: 'نتیجه', icon: Award },
@@ -48,11 +48,12 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 
 // Candidate-specific sections vs. module-wide sections — rendered as two visually separated groups
 // so it's clear "مشخصات"/"پنل"/... belong to whichever candidate is currently open while
-// "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole. examDesign/personality
-// sit between panel and questions — see AssessmentWizardPage's LEAD_STAGES for the full ordering.
-// "بانک سؤالات" now covers both the technical and the personality question banks as tabs on one
-// page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
+// "بانک سؤالات"/"گزارش‌ها"/"تنظیمات" are always about the module as a whole. "panel" is a single
+// merged screen (panel assembly + the exam-design plan, lead/designer-only for the latter half) —
+// personality/mcq sit between it and questions — see AssessmentWizardPage's LEAD_STAGES for the full
+// ordering. "بانک سؤالات" now covers both the technical and the personality question banks as tabs on
+// one page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
+const CANDIDATE_SECTIONS: CompetencySection[] = ['dashboard', 'profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
 const MODULE_SECTIONS: CompetencySection[] = ['questionBank', 'reports', 'settings', 'personalityReports']
 
 interface CompetencySidebarShellProps {

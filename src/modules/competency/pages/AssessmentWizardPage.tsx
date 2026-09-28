@@ -13,6 +13,7 @@ import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCa
 import { RoleQuestionScoreCard } from '../components/RoleQuestionScoreCard'
 import { CapstoneCard } from '../components/CapstoneCard'
 import { ScoringGuideBanner } from '../components/ScoringGuideBanner'
+import { PanelistScoreSheet } from '../components/PanelistScoreSheet'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { AssessmentDesignerModal } from '../components/AssessmentDesignerModal'
 import { computeEvaluationStages } from '../lib/evaluationStages'
@@ -20,6 +21,7 @@ import { EducationCards, EmploymentCards, CertificationCards } from '../componen
 import { PanelStage } from './PanelStage'
 import { DocumentsStage } from './DocumentsStage'
 import { ExamDesignStage } from './ExamDesignStage'
+import { McqStage } from './McqStage'
 import { PersonalityStage } from './PersonalityStage'
 import { StructuredInterviewStage } from './StructuredInterviewStage'
 import { QualificationScorecardCard, EvaluationSummaryCard } from './QualificationStage'
@@ -54,14 +56,14 @@ interface AssessmentWizardPageProps {
   initialStage?: 'results' | 'idp' | 'profile'
 }
 
-type Stage = 'profile' | 'panel' | 'documents' | 'examDesign' | 'personality' | 'questions' | 'interview' | 'results' | 'aiAnalysis' | 'idp'
+type Stage = 'profile' | 'panel' | 'documents' | 'personality' | 'mcq' | 'questions' | 'interview' | 'results' | 'aiAnalysis' | 'idp'
 
 const SECTION_TITLE: Record<Stage, string> = {
   profile: 'مشخصات و سوابق نامزد',
-  panel: 'پنل مصاحبه‌گران',
+  panel: 'پنل مصاحبه‌گران و طراحی آزمون‌ها',
   documents: 'بارگذاری مدارک',
-  examDesign: 'طراحی آزمون‌ها',
   personality: 'ارزیابی شخصیت و رفتاری',
+  mcq: 'آزمون تستی آنلاین',
   questions: 'ارزیابی فنی تخصصی',
   interview: 'مصاحبه ساختاریافته',
   results: 'نتیجه',
@@ -70,22 +72,26 @@ const SECTION_TITLE: Record<Stage, string> = {
 }
 
 /**
- * Who sees which stages. The three interviewers only ever record their own independent scores
- * (the "panel" stage); the final verdict, scorecard, and report belong to the assessment lead.
- * This matters beyond tidiness: the database rejects writes to comp_assessments from anyone but
- * the lead, so showing an interviewer the final-verdict screen would only hand them a form whose
- * every save fails. "examDesign"/"personality" sit right after the panel is assembled — see the
- * Exam Design Panel note in schema.sql Section 44 — and are lead-only exactly like
- * questions/results, whether or not this particular lead also holds ASSESSMENT_DESIGNER standing
- * (see isDesigner below, which only gates the interactive controls within those two stages).
+ * Who sees which stages. "panel" (schema.sql Section 44) is a single merged screen: panel assembly
+ * (add/remove panelists, mark a lead — PanelStage) stacked with the exam-design plan (which of the
+ * five assessment methods are required, and each one's mix — ExamDesignStage), for lead/designer
+ * viewers only; a plain panelist sees only the panel-assembly half (ExamDesignStage is never rendered
+ * for them — see the render logic below). Deciding/scoring the technical exam is a different job from
+ * assembling who is on the panel, so it never lives here: every panelist's own independent scoring
+ * sheet is rendered inside "questions" instead (PanelistScoreSheet) — the lead sees the panel-vote
+ * average there too, via resolveOfficialAnswers. This matters beyond tidiness: the database rejects
+ * writes to comp_assessments from anyone but the lead, so showing an interviewer the final-verdict
+ * screen would only hand them a form whose every save fails. "personality" and "mcq" sit right after
+ * the panel is assembled and are lead/designer-only exactly like results (see isDesigner below, which
+ * only gates the interactive controls within those two stages plus the exam-design half of "panel").
  * "interview" (schema.sql Section 50) is the one scoring stage panelists share with the lead: every
  * panelist rates each competency independently (one comp_interview_ratings row per rater), which
  * RLS already scopes to their own row. "idp" (Individual Development Plan, schema.sql Section 52) comes
  * last, after the AI analysis whose training recommendations it can merge in.
  */
-const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
-const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'interview']
-const DESIGNER_STAGES: Stage[] = ['profile', 'documents', 'panel', 'examDesign', 'personality', 'interview']
+const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
+const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'questions', 'interview']
+const DESIGNER_STAGES: Stage[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'interview']
 
 /**
  * Profile -> documents (self-service link) -> panel -> questions flow for one assessment. The
@@ -143,8 +149,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const isModuleAdminViewer = isAdmin || moduleAdmins.some((m) => m.userId === myId)
   const isLead = assessment != null && (assessment.createdBy === myId || isModuleAdminViewer || myPanelistRow?.isLead === true)
   // Same standing as CompetencyApp's isModuleAdmin, but for the ASSESSMENT_DESIGNER role — gates the
-  // interactive controls inside the examDesign/personality stages (toggling what's needed, opening
-  // either mix designer). A non-designer lead still reaches both stages, just read-only.
+  // interactive controls inside the exam-design half of "panel" and the personality/mcq stages
+  // (toggling what's needed, opening either mix designer). A non-designer lead still reaches all of
+  // them, just read-only.
   const isDesigner = isModuleAdminViewer || assessmentDesigners.some((d) => d.userId === myId)
   // An assessment designer who isn't the lead still needs the exam-design and personality stages
   // (comp_set_exam_design / the mix designers are gated on the designer role, not on being lead).
@@ -158,19 +165,24 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const activeStage: Stage = stage && stages.includes(stage) ? stage : 'profile'
 
   // Which of the shared shell's sections this viewer can reach from here — a panelist only ever
-  // sees profile/panel/documents (see PANELIST_STAGES above); the lead sees every stage.
+  // sees profile/documents/panel/questions/interview (see PANELIST_STAGES above); the lead sees
+  // every stage.
   const nav: Partial<Record<CompetencySection, () => void>> = { dashboard: onDone, ...moduleNav }
   if (stages.includes('profile')) nav.profile = () => setStage('profile')
   if (stages.includes('panel')) nav.panel = () => setStage('panel')
   if (stages.includes('documents')) nav.documents = () => setStage('documents')
-  if (stages.includes('examDesign')) nav.examDesign = () => setStage('examDesign')
   if (stages.includes('personality')) nav.personality = () => setStage('personality')
+  if (stages.includes('mcq')) nav.mcq = () => setStage('mcq')
   if (stages.includes('questions')) nav.questions = () => setStage('questions')
   if (stages.includes('interview')) nav.interview = () => setStage('interview')
   if (stages.includes('results')) nav.results = () => setStage('results')
   if (stages.includes('aiAnalysis')) nav.aiAnalysis = () => setStage('aiAnalysis')
   if (stages.includes('idp')) nav.idp = () => setStage('idp')
   const openAssessment = onOpenAssessment ?? (() => undefined)
+  // Only a lead or a designer sees the exam-design half of the merged "panel" screen (the toggles +
+  // mix builders) — a plain panelist reaches "panel" purely to assemble the interview panel, exactly
+  // as before this stage absorbed examDesign's content.
+  const showExamDesign = isLead || isDesigner
 
   // What each interviewer recorded, per question — the lead reads this while setting the final
   // score. Only submitted sheets count, so a half-finished interviewer doesn't sway the verdict.
@@ -395,10 +407,14 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       )}
 
       {activeStage === 'panel' && (
-        <PanelStage
-          assessmentId={assessment.id}
-          onContinue={stages.includes('examDesign') ? () => setStage('examDesign') : () => setStage('interview')}
-        />
+        <div className="space-y-4">
+          {/* Panel assembly only — deciding/scoring the technical exam moved out to "questions" (see
+              PanelistScoreSheet below) so a panelist can never start scoring from in here. When the
+              exam-design half also renders (lead/designer), it carries its own "ادامه" button, so the
+              panel-assembly component's own continue button is only wired up for a plain panelist. */}
+          <PanelStage assessmentId={assessment.id} onContinue={showExamDesign ? undefined : () => setStage('questions')} />
+          {showExamDesign && <ExamDesignStage assessment={assessment} isDesigner={isDesigner} onContinue={() => setStage('personality')} />}
+        </div>
       )}
 
       {activeStage === 'interview' && (
@@ -409,19 +425,24 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         />
       )}
 
-      {activeStage === 'examDesign' && (
-        <ExamDesignStage assessment={assessment} isDesigner={isDesigner} onContinue={() => setStage('personality')} />
+      {activeStage === 'personality' && (
+        <PersonalityStage assessment={assessment} onContinue={() => setStage('mcq')} onGoToExamDesign={() => setStage('panel')} />
       )}
 
-      {activeStage === 'personality' && (
-        <PersonalityStage assessment={assessment} onContinue={() => setStage('questions')} onGoToExamDesign={() => setStage('examDesign')} />
-      )}
+      {activeStage === 'mcq' && <McqStage assessment={assessment} isDesigner={isDesigner} onContinue={() => setStage('questions')} />}
+
+      {/* Every panelist's own independent technical-scoring sheet (moved out of the "panel" stage,
+          which now only assembles who is on the panel) — renders nothing when the current viewer
+          isn't on this assessment's panel, e.g. a lead who isn't also a panelist. */}
+      {activeStage === 'questions' && <PanelistScoreSheet assessmentId={assessment.id} />}
 
       {/* The exam design left the technical exam out: without this the stage fell through to the
           "no questions selected yet → design the exam" card (or, for project_manager, the legacy
           rubric) with no way forward except the sidebar — the personality stage's «رفتن به ارزیابی
-          فنی» button led straight into that dead end. */}
-      {activeStage === 'questions' && !assessment.needsTechnicalAssessment && (
+          فنی» button led straight into that dead end. The official-answers views below write directly
+          to comp_assessments (RLS: lead only), so they stay lead-gated — a panelist's own sheet is
+          PanelistScoreSheet above, not this. */}
+      {activeStage === 'questions' && isLead && !assessment.needsTechnicalAssessment && (
         <div className="glass-panel space-y-3 rounded-2xl p-6 text-center">
           <p className="text-xs text-secondary">آزمون فنی تخصصی در طرح ارزیابی این متقاضی قرار ندارد.</p>
           <button
@@ -433,7 +454,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         </div>
       )}
 
-      {activeStage === 'questions' && assessment.needsTechnicalAssessment && !isPM && (
+      {activeStage === 'questions' && isLead && assessment.needsTechnicalAssessment && !isPM && (
         <div className="space-y-3">
           {roleSectionIndex === 0 && <QualificationScorecardCard assessment={assessment} />}
           {roleQuestions.length === 0 ? (
@@ -524,7 +545,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
         </div>
       )}
 
-      {activeStage === 'questions' && assessment.needsTechnicalAssessment && isPM && (
+      {activeStage === 'questions' && isLead && assessment.needsTechnicalAssessment && isPM && (
         <div className="space-y-3">
           <ScoringGuideBanner />
           {domainIndex === 0 && <QualificationScorecardCard assessment={assessment} />}

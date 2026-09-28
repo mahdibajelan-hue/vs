@@ -622,8 +622,9 @@ export interface CompetencyAssessment {
   selectedQuestionIds: string[]
   /** Exam Design Panel decision (see comp_set_exam_design in schema.sql) — whether this candidate's
    * flow needs the personality/behavioral assessment and/or the technical assessment+interview.
-   * Set only by an ASSESSMENT_DESIGNER (or module admin) in the "examDesign" wizard stage; drives
-   * whether the "personality" stage shows a real assessment or a "not required" message. */
+   * Set only by an ASSESSMENT_DESIGNER (or module admin), in the exam-design half of the merged
+   * "panel" wizard stage; drives whether the "personality" stage shows a real assessment or a "not
+   * required" message. */
   needsPersonalityAssessment: boolean
   needsTechnicalAssessment: boolean
   /** Whether the panel rates this candidate's competencies directly in the "interview" stage

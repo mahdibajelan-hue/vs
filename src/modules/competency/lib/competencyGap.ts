@@ -108,8 +108,8 @@ const summaryWeight = (s: CompCompetencyScore) => s.weight * (s.isCritical ? 2 :
 export type AssessmentMethodKey = 'technical' | 'personality' | 'structuredInterview' | 'experience'
 
 export const ASSESSMENT_METHOD_LABEL_FA: Record<AssessmentMethodKey, string> = {
-  technical: 'آزمون فنی',
   personality: 'شخصیت و SJT',
+  technical: 'آزمون فنی',
   structuredInterview: 'مصاحبه ساختاریافته',
   experience: 'سوابق و تجربه',
 }

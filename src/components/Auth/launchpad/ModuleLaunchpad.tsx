@@ -17,7 +17,7 @@ type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => Reac
  * five fill areas a/b/c/d/e around it in this order. New modules are added here as one more
  * `{ key, Card, area }` entry (pick any still-open area). The Personality & Behavioral Assessment
  * module used to have its own card/area-f here; it's now reached through the Competency module's
- * own candidate wizard instead (see AssessmentWizardPage's examDesign/personality stages) rather
+ * own candidate wizard instead (see AssessmentWizardPage's panel/personality stages) rather
  * than as an independently-navigable top-level module. */
 const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] = [
   { key: 'executive', Card: PortfolioManagementCard, area: 'area-a' },
