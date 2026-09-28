@@ -14225,3 +14225,28 @@ grant select (
   submit_reason, scored_at, total_questions, answered_count, correct_count, score_percent, time_spent_seconds,
   topic_scores, category_scores, difficulty_scores, created_by, created_at, updated_at
 ) on comp_mcq_tests to authenticated;
+
+-- comp_panelist_scores_update never had an explicit WITH CHECK, so Postgres reused its USING
+-- expression as the check on the *new* row too: "comp_is_module_admin() or (panelist_id = auth.uid()
+-- and submitted_at is null)". That's fine for every edit before submission (both old and new row have
+-- submitted_at is null), but it silently made the actual submit action — the only place that sets
+-- submitted_at to a non-null value — impossible for a non-admin: the new row fails "submitted_at is
+-- null", so a plain panelist's own "ثبت نهایی امتیاز من" click always errored with a bare RLS
+-- violation ("permission denied", shown to the user as "شما دسترسی لازم برای انجام این عملیات را
+-- ندارید"), while the same click succeeded for a module admin every time — which is exactly why this
+-- went unnoticed until a genuine non-admin panelist tried to submit for real.
+--
+-- Split USING (who may touch a row at all: admin any time, a panelist only their own still-open
+-- sheet) from WITH CHECK (what the resulting row must look like: admin anything, otherwise still that
+-- same panelist's row) so the submit transition itself is allowed while the existing lock-after-
+-- submit behavior is unchanged — once submitted_at is set, USING no longer matches for a non-admin,
+-- so further edits by that panelist are still blocked. Verified live via rolled-back impersonation:
+-- before this fix, `update comp_panelist_scores set submitted_at = now() ...` as the affected
+-- non-admin panelist raised "new row violates row-level security policy"; after, the same submit
+-- succeeds, and a follow-up edit attempt by that panelist on the now-submitted row still affects 0
+-- rows (unchanged lock behavior). Applied live.
+drop policy if exists "comp_panelist_scores_update" on comp_panelist_scores;
+create policy "comp_panelist_scores_update" on comp_panelist_scores
+  for update
+  using (comp_is_module_admin() or (panelist_id = auth.uid() and submitted_at is null))
+  with check (comp_is_module_admin() or panelist_id = auth.uid());
