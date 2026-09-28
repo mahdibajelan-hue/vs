@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Award, CheckCircle2, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, Trophy, User, Users } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
@@ -31,7 +31,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const allAssessments = useCompetencyStore((s) => s.assessments)
   // N-15: demo/test candidates stay out of every number on this page unless the viewer opts in.
   const showDemoData = useCompetencyStore((s) => s.showDemoData)
-  const assessments = useMemo(() => (showDemoData ? allAssessments : allAssessments.filter((a) => !a.isDemo)), [allAssessments, showDemoData])
   const deleteAssessment = useCompetencyStore((s) => s.deleteAssessment)
   // The dashboard only ever needs a question's category/weight to bucket an already-recorded score
   // into a domain — never the evaluator-only reference-answer material — so it reads the safe
@@ -57,6 +56,19 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const [personalityLoaded, setPersonalityLoaded] = useState(false)
   const [mcqStatuses, setMcqStatuses] = useState<Map<string, McqTestStatus>>(new Map())
   const [mcqLoaded, setMcqLoaded] = useState(false)
+
+  const myId = myProfile?.id ?? null
+  const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myId)
+  const isDesigner = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myId)
+  // A plain judge (neither module admin nor assessment designer) only ever needs their own
+  // work here — everyone else's candidates would just be noise they can't act on anyway. An
+  // admin/designer still sees the full cross-role picture, unchanged.
+  const myPanelAssessmentIds = useMemo(() => new Set(panelRows.filter((r) => r.user_id === myId).map((r) => r.assessment_id)), [panelRows, myId])
+  const assessments = useMemo(() => {
+    const demoFiltered = showDemoData ? allAssessments : allAssessments.filter((a) => !a.isDemo)
+    if (isModuleAdmin || isDesigner) return demoFiltered
+    return demoFiltered.filter((a) => a.createdBy === myId || myPanelAssessmentIds.has(a.id))
+  }, [allAssessments, showDemoData, isModuleAdmin, isDesigner, myId, myPanelAssessmentIds])
 
   useEffect(() => {
     let active = true
@@ -119,9 +131,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     return map
   }, [scored, usedRoles])
   const nextStepById = useMemo(() => {
-    const myId = myProfile?.id ?? null
-    const isModuleAdmin = Boolean(myProfile?.isAdmin) || moduleAdmins.some((m) => m.userId === myId)
-    const isDesigner = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myId)
     const myPanel = new Map<string, { isLead: boolean }>()
     const panelCount = new Map<string, number>()
     for (const r of panelRows) {
@@ -147,7 +156,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
       )
     }
     return map
-  }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myProfile, moduleAdmins, assessmentDesigners])
+  }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myId, isModuleAdmin, isDesigner])
   const mineCount = assessments.filter((a) => nextStepById.get(a.id)?.mine).length
 
   const filteredAssessments = (roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)).filter(
@@ -159,17 +168,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const completedCount = assessments.filter((a) => a.status === 'completed').length
   const acceptanceRate = totalInterviews > 0 ? Math.round((acceptedCount / totalInterviews) * 100) : null
 
-  // Best-scoring candidate per role that actually has candidates — the cross-role comparison item 9
-  // asked for, computed from the same scoring pipeline every other page uses (no separate ranking logic).
-  const topPerRole = usedRoles
-    .map((role) => {
-      const inRole = scored.filter((s) => s.assessment.jobRole === role && s.overall != null)
-      if (inRole.length === 0) return null
-      const top = inRole.reduce((best, cur) => (cur.overall! > best.overall! ? cur : best))
-      return { role, ...top }
-    })
-    .filter((x): x is { role: JobRole; assessment: CompetencyAssessment; overall: number | null } => x != null)
-    .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
+  const myActionItems = assessments.filter((a) => nextStepById.get(a.id)?.mine)
 
   const headerRight = (
     <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
@@ -187,27 +186,24 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
         <StatTile icon={TrendingUp} label="نرخ پذیرش" value={acceptanceRate != null ? `٪${acceptanceRate.toLocaleString('fa-IR')}` : '—'} color="#fbbf24" />
       </div>
 
-      {topPerRole.length > 0 && (
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
-            <Trophy size={14} className="text-amber-300" /> نفر برتر هر شغل
+      {myActionItems.length > 0 && (
+        <div className="glass-panel rounded-2xl border border-rose-400/25 bg-rose-500/[0.04] p-4">
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold text-rose-200">
+            <AlertCircle size={14} /> نیازمند اقدام من ({myActionItems.length.toLocaleString('fa-IR')})
           </p>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {topPerRole.map(({ role, assessment: a, overall }) => (
-              <button
-                key={role}
-                onClick={() => onOpen(a.id)}
-                className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-right transition-colors hover:bg-white/5"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
-                  <Award size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-bold">{a.candidateName}</p>
-                  <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, role)}</p>
-                </div>
-                <span className="num shrink-0 text-sm font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
-              </button>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {myActionItems.map((a) => (
+              <CandidateCard
+                key={a.id}
+                assessment={a}
+                overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
+                rank={rankById.get(a.id)}
+                nextStep={nextStepById.get(a.id)}
+                plan={developmentPlans.find((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
+                followUp={assessments.find((x) => x.previousAssessmentId === a.id)}
+                onOpen={() => onOpen(a.id)}
+                onDelete={() => setConfirmId(a.id)}
+              />
             ))}
           </div>
         </div>
@@ -216,7 +212,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
       {/* Candidate list */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-bold">همه متقاضیان</p>
+          <p className="text-sm font-bold">{isModuleAdmin || isDesigner ? 'همه متقاضیان' : 'متقاضیان من'}</p>
           <div className="flex flex-wrap items-center gap-2">
           <DemoDataToggle />
           <button
