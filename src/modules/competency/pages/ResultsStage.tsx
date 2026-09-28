@@ -19,6 +19,7 @@ import {
   GraduationCap,
   HardHat,
   History,
+  ListChecks,
   ListTree,
   Loader2,
   Mail,
@@ -65,6 +66,7 @@ import { FinalizeAssessmentDialog } from '../components/FinalizeAssessmentDialog
 import { DevelopmentPlanSummary } from '../components/DevelopmentPlanSummary'
 import { ReassessmentComparison } from '../components/ReassessmentComparison'
 import { AssessmentChainNav } from '../components/AssessmentChainNav'
+import { McqResultsSection } from '../components/results/McqResultsSection'
 import {
   EmptyNote,
   ExamDesignCard,
@@ -428,6 +430,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     { id: 'r-profile', label: 'مشخصات', color: '#38bdf8' },
     { id: 'r-design', label: 'طرح ارزیابی', color: '#6366f1' },
     { id: 'r-technical', label: 'فنی و تخصصی', color: '#a855f7' },
+    { id: 'r-mcq', label: 'آزمون تستی', color: '#2dd4bf' },
     { id: 'r-interview', label: 'مصاحبه', color: '#0ea5e9' },
     { id: 'r-behavior', label: 'اثرانگشت رفتاری', color: '#ec4899' },
     { id: 'r-gap', label: 'شکاف شایستگی', color: '#8b5cf6' },
@@ -748,7 +751,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
           </>
         )}
 
-        {/* Online technical MCQ test results (McqResultsSection) are inserted here by that feature. */}
+        {/* Online technical MCQ test results */}
+        <SectionHeading id="r-mcq" icon={ListChecks} color="#2dd4bf" title="نتایج آزمون تستی آنلاین" subtitle="جامعیت پاسخ‌گویی به موضوعات فنی، به تفکیک هر سؤال" />
+        {!assessment.needsOnlineMcq ? <EmptyNote>آزمون تستی آنلاین در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote> : <McqResultsSection assessmentId={assessment.id} />}
 
         {/* 4. Structured interview */}
         <SectionHeading id="r-interview" icon={MessagesSquare} color="#0ea5e9" title="نتایج مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی" />
