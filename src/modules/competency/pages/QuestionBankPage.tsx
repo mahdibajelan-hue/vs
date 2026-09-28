@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BrainCircuit, CheckCircle2, Clock, ListChecks, Pencil, Plus, RotateCcw, Search, Settings, ShieldAlert, Trash2, X, XCircle } from 'lucide-react'
+import { BrainCircuit, CheckCircle2, Clock, ClipboardCheck, Pencil, Plus, RotateCcw, Search, Settings, ShieldAlert, ListChecks, Trash2, X, XCircle } from 'lucide-react'
 import { useCompetencyStore, type QuestionBankInput } from '../store/useCompetencyStore'
 import { usePersonalityStore, type PersonalityQuestionInput } from '../../personality/store/usePersonalityStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
@@ -11,9 +11,25 @@ import {
   QUESTION_TYPE_LABEL_FA,
   type CompQuestionBankItem,
   type JobRole,
+  type QuestionApprovalStatus,
   type QuestionDifficulty,
   type QuestionType,
 } from '../types'
+import {
+  fetchMcqBank,
+  saveMcqQuestion,
+  setMcqApproval,
+  setMcqActive,
+  mcqErrorFa,
+  MCQ_CATEGORIES,
+  MCQ_DIFFICULTY_COLOR,
+  MCQ_DIFFICULTY_LABEL_FA,
+  MCQ_OPTION_LETTERS,
+  type McqCategory,
+  type McqDifficulty,
+  type McqQuestion,
+  type McqQuestionInput,
+} from '../lib/mcqData'
 import {
   PERSONALITY_APPROVAL_STATUS_LABEL_FA,
   PERSONALITY_COMPLEXITY_LABEL_FA,
@@ -80,7 +96,7 @@ const PERSONALITY_EMPTY_INPUT: PersonalityQuestionInput = {
   weight: 1,
 }
 
-type QuestionBankTab = 'technical' | 'personality'
+type QuestionBankTab = 'technical' | 'personality' | 'mcq'
 
 interface QuestionBankPageProps {
   onExitToHub: () => void
@@ -121,12 +137,22 @@ export function QuestionBankPage({ onExitToHub, nav, isModuleAdmin, isPersonalit
         >
           <BrainCircuit size={14} /> بانک سؤالات شخصیت و رفتاری
         </button>
+        <button
+          onClick={() => setTab('mcq')}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-colors ${
+            tab === 'mcq' ? 'bg-teal-500/20 text-teal-200' : 'border border-white/10 text-secondary hover:bg-white/5'
+          }`}
+        >
+          <ClipboardCheck size={14} /> آزمون تستی
+        </button>
       </div>
 
       {tab === 'technical' ? (
         <TechnicalQuestionBank isModuleAdmin={isModuleAdmin} />
-      ) : (
+      ) : tab === 'personality' ? (
         <PersonalityQuestionBank isModuleAdmin={isPersonalityModuleAdmin} onNavSettings={onNavPersonalitySettings} />
+      ) : (
+        <McqQuestionBank isModuleAdmin={isModuleAdmin} />
       )}
     </CompetencySidebarShell>
   )
@@ -1061,5 +1087,431 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
       <span className="mb-1 block text-[11px] text-muted">{label}</span>
       {children}
     </label>
+  )
+}
+
+const MCQ_EMPTY_INPUT: McqQuestionInput = {
+  jobRole: 'welding_inspector',
+  category: 'TECHNICAL',
+  topic: '',
+  difficulty: 2,
+  stemFa: '',
+  options: ['', '', '', ''],
+  correctOption: 0,
+  explanationFa: '',
+  standardRef: '',
+  active: true,
+}
+
+/**
+ * «آزمون تستی» tab — the online MCQ bank (comp_mcq_questions, schema.sql Section 56): filter by
+ * role/topic/difficulty, add/edit and approve/reject, with the correct option always shown here
+ * (staff-only — RLS never lets the candidate token RPCs return it). Mirrors TechnicalQuestionBank's
+ * shape but talks to mcqData.ts directly since the MCQ bank has no store slice of its own.
+ */
+function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const editableRoles = useMemo(() => sortedJobRoles(jobRoleConfigs), [jobRoleConfigs])
+
+  const [bank, setBank] = useState<McqQuestion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
+  const [categoryFilter, setCategoryFilter] = useState<McqCategory | 'all'>('all')
+  const [difficultyFilter, setDifficultyFilter] = useState<McqDifficulty | 'all'>('all')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState<McqQuestion | 'new' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    const { data, error: err } = await fetchMcqBank()
+    if (err) setError(mcqErrorFa(err))
+    setBank(data)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const filtered = useMemo(() => {
+    return bank.filter((q) => {
+      if (roleFilter !== 'all' && q.jobRole !== roleFilter) return false
+      if (categoryFilter !== 'all' && q.category !== categoryFilter) return false
+      if (difficultyFilter !== 'all' && q.difficulty !== difficultyFilter) return false
+      if (activeFilter === 'active' && !q.active) return false
+      if (activeFilter === 'inactive' && q.active) return false
+      if (search.trim() && !q.stemFa.includes(search.trim()) && !q.topic.includes(search.trim())) return false
+      return true
+    })
+  }, [bank, roleFilter, categoryFilter, difficultyFilter, activeFilter, search])
+
+  const countsByRole = useMemo(() => {
+    const map = new Map<JobRole, { total: number; approved: number }>()
+    for (const q of bank) {
+      const entry = map.get(q.jobRole) ?? { total: 0, approved: 0 }
+      entry.total += 1
+      if (q.active && q.approvalStatus === 'APPROVED') entry.approved += 1
+      map.set(q.jobRole, entry)
+    }
+    return map
+  }, [bank])
+
+  const topicsForRole = useMemo(() => {
+    if (roleFilter === 'all') return []
+    return [...new Set(bank.filter((q) => q.jobRole === roleFilter).map((q) => q.topic))].sort((a, b) => a.localeCompare(b, 'fa'))
+  }, [bank, roleFilter])
+
+  const handleApproval = async (id: string, status: QuestionApprovalStatus) => {
+    const err = await setMcqApproval(id, status)
+    if (err) {
+      setError(mcqErrorFa(err))
+      return
+    }
+    await load()
+  }
+
+  const handleToggleActive = async (id: string, active: boolean) => {
+    const err = await setMcqActive(id, active)
+    if (err) {
+      setError(mcqErrorFa(err))
+      return
+    }
+    await load()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted">
+          بانک آزمون تستی آنلاین («آزمون تستی») — همان دسته‌بندی‌های ارزیابی فنی حضوری را به کار می‌برد تا نتیجه‌ی هر موضوع به همان شایستگی‌ها
+          افزوده شود.
+        </p>
+        {isModuleAdmin && (
+          <button
+            onClick={() => setEditing('new')}
+            className="flex items-center gap-1.5 rounded-xl bg-teal-500 px-4 py-2 text-xs font-bold text-white hover:bg-teal-400"
+          >
+            <Plus size={14} /> سؤال جدید
+          </button>
+        )}
+      </div>
+
+      {error && <p className="rounded-xl border border-red-400/30 bg-red-500/10 p-2.5 text-[11px] text-red-200">{error}</p>}
+
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
+        {editableRoles.map(({ jobRole: role, labelFa }) => {
+          const c = countsByRole.get(role)
+          return (
+            <button
+              key={role}
+              onClick={() => setRoleFilter(roleFilter === role ? 'all' : role)}
+              className={`rounded-xl border p-2 text-right transition-colors ${
+                roleFilter === role ? 'border-teal-400/50 bg-teal-500/15' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
+              }`}
+            >
+              <p className="truncate text-[10px] font-bold">{labelFa}</p>
+              <p className="num text-[10px] text-muted">
+                {(c?.approved ?? 0).toLocaleString('fa-IR')} تأییدشده / {(c?.total ?? 0).toLocaleString('fa-IR')} کل
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجو در متن سؤال یا موضوع…" className="input w-56 pr-7" />
+        </div>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as McqCategory | 'all')} className="input w-auto">
+          <option value="all">همه دسته‌ها</option>
+          {MCQ_CATEGORIES.map((t) => (
+            <option key={t} value={t}>
+              {QUESTION_TYPE_LABEL_FA[t]}
+            </option>
+          ))}
+        </select>
+        <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value === 'all' ? 'all' : (Number(e.target.value) as McqDifficulty))} className="input w-auto">
+          <option value="all">همه سطوح دشواری</option>
+          {([1, 2, 3] as McqDifficulty[]).map((d) => (
+            <option key={d} value={d}>
+              {MCQ_DIFFICULTY_LABEL_FA[d]}
+            </option>
+          ))}
+        </select>
+        <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)} className="input w-auto">
+          <option value="all">همه وضعیت‌ها</option>
+          <option value="active">فقط فعال</option>
+          <option value="inactive">فقط غیرفعال</option>
+        </select>
+        {roleFilter !== 'all' && (
+          <button onClick={() => setRoleFilter('all')} className="text-[11px] text-teal-300 hover:text-teal-200">
+            پاک‌کردن فیلتر شغل ({jobRoleLabel(jobRoleConfigs, roleFilter)})
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="p-6 text-center text-xs text-muted">در حال بارگذاری…</p>
+      ) : filtered.length === 0 ? (
+        <div className="glass-panel rounded-2xl p-8 text-center text-xs text-muted">سؤالی با این فیلتر یافت نشد.</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((q) => (
+            <div key={q.id} className="glass-panel rounded-xl p-3.5">
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
+                <span className="rounded-full bg-teal-500/12 px-2 py-0.5 text-[9.5px] font-bold text-teal-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.topic}</span>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[9.5px] font-bold"
+                  style={{ background: `${MCQ_DIFFICULTY_COLOR[q.difficulty]}1c`, color: MCQ_DIFFICULTY_COLOR[q.difficulty] }}
+                >
+                  {MCQ_DIFFICULTY_LABEL_FA[q.difficulty]}
+                </span>
+                {q.standardRef && (
+                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[9.5px] text-amber-300">
+                    <ShieldAlert size={10} /> {q.standardRef}
+                  </span>
+                )}
+                {q.version > 1 && (
+                  <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
+                )}
+                {q.usageCount > 0 && (
+                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.usageCount.toLocaleString('fa-IR')} بار استفاده‌شده</span>
+                )}
+                {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
+                <span
+                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
+                    q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
+                  }`}
+                >
+                  {q.active ? <CheckCircle2 size={10} /> : <XCircle size={10} />} {q.active ? 'فعال' : 'غیرفعال'}
+                </span>
+              </div>
+              <p className="text-xs leading-6">{q.stemFa}</p>
+              <div className="mt-2 space-y-1">
+                {q.options.map((opt, i) => (
+                  <p
+                    key={i}
+                    className={`flex items-start gap-1.5 text-[11px] leading-6 ${i === q.correctOption ? 'font-bold text-emerald-300' : 'text-secondary'}`}
+                  >
+                    <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{MCQ_OPTION_LETTERS[i]}.</span>
+                    {opt}
+                    {i === q.correctOption && <CheckCircle2 size={11} className="mt-0.5 shrink-0" />}
+                  </p>
+                ))}
+              </div>
+              {q.explanationFa && <p className="mt-1.5 text-[10.5px] leading-6 text-muted">توضیح: {q.explanationFa}</p>}
+              {isModuleAdmin && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {q.approvalStatus === 'PENDING_REVIEW' && (
+                    <>
+                      <button
+                        onClick={() => handleApproval(q.id, 'APPROVED')}
+                        className="flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold text-emerald-200 hover:bg-emerald-500/20"
+                      >
+                        <CheckCircle2 size={11} /> تأیید
+                      </button>
+                      <button
+                        onClick={() => handleApproval(q.id, 'REJECTED')}
+                        className="flex items-center gap-1 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-[10.5px] font-bold text-red-200 hover:bg-red-500/20"
+                      >
+                        <XCircle size={11} /> رد
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => setEditing(q)} className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-secondary hover:bg-white/5">
+                    <Pencil size={11} /> ویرایش
+                  </button>
+                  <button
+                    onClick={() => handleToggleActive(q.id, !q.active)}
+                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[10.5px] ${
+                      q.active ? 'border-white/10 text-muted hover:bg-red-500/10 hover:text-red-300' : 'border-white/10 text-secondary hover:bg-white/5'
+                    }`}
+                  >
+                    {q.active ? (
+                      <>
+                        <Trash2 size={11} /> غیرفعال‌کردن
+                      </>
+                    ) : (
+                      'فعال‌کردن'
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <McqQuestionEditorModal
+          initial={editing === 'new' ? null : editing}
+          defaultJobRole={roleFilter !== 'all' ? roleFilter : MCQ_EMPTY_INPUT.jobRole}
+          existingTopics={topicsForRole}
+          onClose={() => setEditing(null)}
+          onSave={async (input) => {
+            // Module-admin authored/edited rows land APPROVED directly, mirroring the technical
+            // bank's createQuestion/updateQuestion (comp_question_bank) exactly.
+            const err = await saveMcqQuestion(editing === 'new' ? null : editing.id, { ...input, approvalStatus: 'APPROVED' })
+            if (err) {
+              setError(mcqErrorFa(err))
+              return
+            }
+            setEditing(null)
+            await load()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function McqQuestionEditorModal({
+  initial,
+  defaultJobRole,
+  existingTopics,
+  onClose,
+  onSave,
+}: {
+  initial: McqQuestion | null
+  defaultJobRole: JobRole
+  existingTopics: string[]
+  onClose: () => void
+  onSave: (input: McqQuestionInput) => Promise<void>
+}) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const [form, setForm] = useState<McqQuestionInput>(
+    initial
+      ? {
+          jobRole: initial.jobRole,
+          category: initial.category,
+          topic: initial.topic,
+          difficulty: initial.difficulty,
+          stemFa: initial.stemFa,
+          options: [...initial.options],
+          correctOption: initial.correctOption,
+          explanationFa: initial.explanationFa,
+          standardRef: initial.standardRef,
+          active: initial.active,
+        }
+      : { ...MCQ_EMPTY_INPUT, jobRole: defaultJobRole },
+  )
+  const [saving, setSaving] = useState(false)
+
+  const setOption = (i: number, value: string) => setForm((f) => ({ ...f, options: f.options.map((o, idx) => (idx === i ? value : o)) }))
+  const optionsOk = form.options.every((o) => o.trim().length > 0) && new Set(form.options.map((o) => o.trim())).size === 4
+  const canSubmit = form.topic.trim() && form.stemFa.trim().length > 10 && optionsOk
+
+  const submit = async () => {
+    if (!canSubmit) return
+    setSaving(true)
+    await onSave(form)
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="glass-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="mb-1 text-sm font-bold">{initial ? 'ویرایش سؤال تستی' : 'سؤال تستی جدید'}</p>
+        {initial && (
+          <p className="mb-3 text-[10.5px] text-muted">
+            ذخیره یک نسخه جدید (نسخه {(initial.version + 1).toLocaleString('fa-IR')}) ثبت و وضعیت تأیید را بازنشانی می‌کند (مگر تغییری در متن/گزینه‌ها
+            نباشد)؛ آزمون‌هایی که قبلاً از این سؤال استفاده کرده‌اند تحت تأثیر قرار نمی‌گیرند.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <FormField label="شغل">
+            <select value={form.jobRole} onChange={(e) => setForm((f) => ({ ...f, jobRole: e.target.value as JobRole }))} className="input">
+              {sortedJobRoles(jobRoleConfigs).map((c) => (
+                <option key={c.jobRole} value={c.jobRole}>
+                  {c.labelFa}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="دسته‌بندی">
+            <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as McqCategory }))} className="input">
+              {MCQ_CATEGORIES.map((t) => (
+                <option key={t} value={t}>
+                  {QUESTION_TYPE_LABEL_FA[t]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="سطح دشواری">
+            <select value={form.difficulty} onChange={(e) => setForm((f) => ({ ...f, difficulty: Number(e.target.value) as McqDifficulty }))} className="input">
+              {([1, 2, 3] as McqDifficulty[]).map((d) => (
+                <option key={d} value={d}>
+                  {MCQ_DIFFICULTY_LABEL_FA[d]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="موضوع (برای گزارش جامعیت — مثلاً «WPS/PQR»)">
+          <input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} className="input" list="mcq-existing-topics" />
+          <datalist id="mcq-existing-topics">
+            {existingTopics.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        </FormField>
+
+        <FormField label="متن سؤال *">
+          <textarea value={form.stemFa} onChange={(e) => setForm((f) => ({ ...f, stemFa: e.target.value }))} rows={3} className="input resize-none" />
+        </FormField>
+
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] text-muted">چهار گزینه — گزینه‌ی درست را با دکمه‌ی کنار آن مشخص کنید *</p>
+          {form.options.map((opt, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, correctOption: i }))}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold ${
+                  form.correctOption === i ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-white/10 text-muted hover:bg-white/5'
+                }`}
+                title="این گزینه پاسخ درست است"
+              >
+                {MCQ_OPTION_LETTERS[i]}
+              </button>
+              <input value={opt} onChange={(e) => setOption(i, e.target.value)} className="input flex-1" placeholder={`متن گزینه ${MCQ_OPTION_LETTERS[i]}`} />
+            </div>
+          ))}
+          {!optionsOk && form.options.some((o) => o.trim()) && (
+            <p className="text-[10.5px] text-amber-300">هر چهار گزینه باید پر و از یکدیگر متفاوت باشند.</p>
+          )}
+        </div>
+
+        <FormField label="توضیح کوتاه پاسخ (اختیاری — فقط برای کارکنان نمایش داده می‌شود)">
+          <textarea value={form.explanationFa} onChange={(e) => setForm((f) => ({ ...f, explanationFa: e.target.value }))} rows={2} className="input resize-none" />
+        </FormField>
+
+        <FormField label="مرجع/استاندارد (در صورت اطمینان کامل — در غیر این صورت خالی بگذارید)">
+          <input value={form.standardRef} onChange={(e) => setForm((f) => ({ ...f, standardRef: e.target.value }))} className="input" placeholder="مثلاً API 1104" />
+        </FormField>
+
+        <label className="mt-2 flex items-center gap-1.5 text-xs text-secondary">
+          <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} className="h-3.5 w-3.5" />
+          این سؤال فعال باشد (در تولید آزمون‌های جدید استفاده شود)
+        </label>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-white/10 px-3.5 py-1.5 text-xs">
+            انصراف
+          </button>
+          <button onClick={submit} disabled={saving || !canSubmit} className="rounded-lg bg-teal-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-50">
+            {saving ? 'در حال ذخیره…' : 'ذخیره سؤال'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
