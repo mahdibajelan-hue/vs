@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDot, Eye, Lightbulb, Load
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
+import { StructuredInterviewGuidance } from '../components/StructuredInterviewGuidance'
 import { tone } from '../lib/tone'
 import type { CandidateAiFollowUpQuestion, CompCompetency, CompInterviewRating, CompJobCompetencyRequirement, CompProfileLite, CompetencyAssessment } from '../types'
 import '../styles/farinTheme.css'
@@ -297,6 +298,10 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
         </div>
       ) : (
         <>
+          {/* Product owner: judges didn't know what basis to score on — real guidance, shown right
+              before the scoring UI, collapsible per viewer so an experienced judge isn't slowed down
+              on repeat visits. */}
+          <StructuredInterviewGuidance />
           {(isLead || !canRate) && <PanelSummary items={items} ratings={ratings} profiles={profiles} />}
           {canRate && (
             <div className="space-y-3">
