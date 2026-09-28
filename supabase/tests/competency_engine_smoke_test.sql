@@ -1174,3 +1174,411 @@ exception when others then
   delete from comp_assessments where candidate_name = '__smoke_test_s54__';
   raise;
 end $$;
+
+-- ================================================================================================
+-- Section 56 — online technical MCQ test («آزمون تستی»): token isolation, scoring, design-aware
+-- evidence, and the completed-assessment lock.
+--
+-- Same self-contained, re-runnable DO-block convention as the blocks above. Independent throwaway
+-- job role/competencies/bank so it can never depend on (or clobber) the seeded MCQ content.
+--
+-- Setup: role __smoke_mcq_role__, 6 APPROVED+active questions (category TECHNICAL) split into two
+-- topics — __smoke_topic_a__ (4 questions, difficulty 1/1/2/2) and __smoke_topic_b__ (2 questions,
+-- difficulty 3/3) — plus one PENDING_REVIEW and one inactive question that must never be drawn.
+-- Two competencies read TECHNICAL_MCQ: __smoke_mcq__ (source_ref TECHNICAL, weight 2, required
+-- level 3, critical) and __smoke_mcq_empty__ (source_ref HSE — no HSE-category MCQ exists for this
+-- role at all, so it must come back "not assessable" rather than a zero).
+--
+-- Candidate #1 (__smoke_test_mcq__, needs_online_mcq true, every other method off): a 6-question
+-- test is generated (the whole pool, so drawing is deterministic regardless of randomv order),
+-- answered via the token RPCs only (4/4 topic A correct, 1/2 topic B correct) and submitted:
+--   score: 6 total / 6 answered / 5 correct / 83.3% overall; topic A 100%, topic B 50%.
+--   evidence: exactly 2 comp_competency_evidence rows for __smoke_mcq__ (one per topic), normalized
+--     100 / 50, effective weight split by question count (2×4/6=1.3333 / 2×2/6=0.6667, summing to
+--     the configured weight 2) — never one row per raw item weighted 1 (M-8's old equal split).
+--   roll-up (level_count 5, default proficiency scale): raw_score = weighted mean = 500/6 = 83.33 →
+--     actual_level round(1+0.8333×4,1)=4.3 → gap 3−4.3=−1.3 → EXCEEDS (critical, but exceeded);
+--     coverage 1 (its only source is fully covered), 2 evidence items / 1 source type → MEDIUM.
+--   __smoke_mcq_empty__ stays INSUFFICIENT_EVIDENCE/NONE/coverage 0 with an HSE/NO_MCQ_QUESTIONS
+--     marker in unassessable_sources — never miscounted as a gap.
+--   turning needs_online_mcq OFF and recomputing removes every TECHNICAL_MCQ evidence row for this
+--     candidate and the audit entry records TECHNICAL_MCQ under excludedByDesign (M-8's exclusion
+--     rule, extended to the online test).
+--
+-- Exploit checks (all against the real RPCs/RLS, in this same rolled-back transaction):
+--   • the candidate payload (comp_mcq_candidate_get/start) never carries correctOption/explanation/
+--     standardRef or a per-option "correct" flag, before OR after answering;
+--   • an unknown token resolves to null, never an error that would reveal a row exists;
+--   • this candidate's token cannot answer a question that belongs to assessment #2's test
+--     ("question is not part of this test");
+--   • once SCORED, neither the token RPC nor a direct table write can change an answer;
+--   • anon has no grant on comp_mcq_questions/tests/responses at all — a raw select is refused
+--     before RLS even evaluates row visibility, so correct_option can never leak that way;
+--   • an outsider (neither creator, panelist nor module admin) is refused by comp_mcq_generate_test
+--     and comp_mcq_get_test_detail alike.
+--
+-- Candidate #2 (__smoke_test_mcq2__) exists only for the completed-assessment lock: its test is
+-- started, the assessment is then marked completed, and comp_mcq_candidate_answer, _submit,
+-- comp_mcq_generate_test and a direct UPDATE of comp_mcq_tests must all be refused
+-- (assessment_locked), exactly like Section 53's lock for the in-person technical/personality data.
+
+do $$
+declare
+  v_role constant text := '__smoke_mcq_role__';
+  -- A second, disjoint job role/pool purely so candidate #2's test contains question ids that are
+  -- genuinely foreign to candidate #1's — the "cross-test" exploit check needs a qid that truly
+  -- belongs to a different test, which two same-role pools of exactly the same size cannot give it.
+  v_role2 constant text := '__smoke_mcq_role2__';
+  v_admin uuid;
+  v_outsider uuid;
+  v_c_mcq uuid;
+  v_c_mcq_empty uuid;
+  v_a uuid;
+  v_a2 uuid;
+  v_qa1 uuid;
+  v_qa2 uuid;
+  v_qa3 uuid;
+  v_qa4 uuid;
+  v_qb1 uuid;
+  v_qb2 uuid;
+  v_qc uuid;
+  v_gen jsonb;
+  v_test_id uuid;
+  v_test_id2 uuid;
+  v_token uuid;
+  v_token2 uuid;
+  v_detail jsonb;
+  v_get jsonb;
+  v_row comp_competency_scores%rowtype;
+  v_ev_a numeric;
+  v_ev_b numeric;
+  v_n int;
+  v_t comp_mcq_tests%rowtype;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  if v_admin is null then
+    raise exception 'smoke test precondition failed: no admin profile exists to impersonate';
+  end if;
+
+  select p.id into v_outsider
+  from profiles p
+  where not coalesce(p.is_admin, false)
+    and not exists (select 1 from comp_module_admins m where m.user_id = p.id)
+  order by p.created_at
+  limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  if auth.uid() is distinct from v_admin then
+    raise exception 'smoke test setup failed: could not impersonate admin (auth.uid() = %)', auth.uid();
+  end if;
+  perform set_config('role', 'postgres', true);
+
+  -- ---- Throwaway model: role, two competencies, six approved MCQs across two topics ----
+  insert into comp_job_role_config (job_role, label_fa, active, sort_order) values (v_role, '__smoke__', false, 9999);
+  insert into comp_job_role_config (job_role, label_fa, active, sort_order) values (v_role2, '__smoke__', false, 9999);
+
+  insert into comp_competencies (key, label_fa, domain) values ('__smoke_mcq__', '__smoke_mcq__', 'TECHNICAL') returning id into v_c_mcq;
+  insert into comp_competencies (key, label_fa, domain) values ('__smoke_mcq_empty__', '__smoke_mcq_empty__', 'TECHNICAL') returning id into v_c_mcq_empty;
+
+  insert into comp_competency_evidence_sources (competency_id, source_type, source_ref, weight) values
+    (v_c_mcq, 'TECHNICAL_MCQ', 'TECHNICAL', 2),
+    (v_c_mcq_empty, 'TECHNICAL_MCQ', 'HSE', 1);
+
+  insert into comp_job_competency_requirements (job_role, competency_id, required_level, is_critical, weight) values
+    (v_role, v_c_mcq, 3, true, 1),
+    (v_role, v_c_mcq_empty, 3, false, 1);
+
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 1, '__smoke_mcq_qa1__', '["a0","a1","a2","a3"]'::jsonb, 0, 'exp a1', 'APPROVED', true) returning id into v_qa1;
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 1, '__smoke_mcq_qa2__', '["a0","a1","a2","a3"]'::jsonb, 0, 'exp a2', 'APPROVED', true) returning id into v_qa2;
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 2, '__smoke_mcq_qa3__', '["a0","a1","a2","a3"]'::jsonb, 0, 'exp a3', 'APPROVED', true) returning id into v_qa3;
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 2, '__smoke_mcq_qa4__', '["a0","a1","a2","a3"]'::jsonb, 0, 'exp a4', 'APPROVED', true) returning id into v_qa4;
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_b__', 3, '__smoke_mcq_qb1__', '["b0","b1","b2","b3"]'::jsonb, 0, 'exp b1', 'APPROVED', true) returning id into v_qb1;
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_b__', 3, '__smoke_mcq_qb2__', '["b0","b1","b2","b3"]'::jsonb, 0, 'exp b2', 'APPROVED', true) returning id into v_qb2;
+
+  -- A PENDING_REVIEW question and an inactive (approved) question must never be drawn.
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 1, '__smoke_mcq_pending__', '["x0","x1","x2","x3"]'::jsonb, 0, 'PENDING_REVIEW', true);
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active) values
+    (v_role, 'TECHNICAL', '__smoke_topic_a__', 1, '__smoke_mcq_inactive__', '["x0","x1","x2","x3"]'::jsonb, 0, 'APPROVED', false);
+
+  -- The second role's lone question — its pool is disjoint from v_role's, so candidate #2's test
+  -- can never share a question id with candidate #1's.
+  insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active) values
+    (v_role2, 'TECHNICAL', '__smoke_topic_c__', 1, '__smoke_mcq_qc__', '["c0","c1","c2","c3"]'::jsonb, 0, 'APPROVED', true) returning id into v_qc;
+
+  -- ---- Candidate #1 (design-aware evidence + token isolation + scoring) ----
+  insert into comp_assessments (
+    job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience, needs_online_mcq
+  ) values (
+    v_role, '__smoke_test_mcq__', 'test', '0000000010', '09120000010', 'smoke-mcq@example.com', v_admin,
+    false, false, false, false, true
+  ) returning id into v_a;
+
+  -- ---- Candidate #2, purely for the completed-assessment lock ----
+  insert into comp_assessments (
+    job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by,
+    needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience, needs_online_mcq
+  ) values (
+    v_role2, '__smoke_test_mcq2__', 'test', '0000000011', '09120000011', 'smoke-mcq2@example.com', v_admin,
+    false, false, false, false, true
+  ) returning id into v_a2;
+
+  perform set_config('role', 'authenticated', true);
+
+  -- ---- Access guard: an outsider may not generate or read this candidate's MCQ test ----
+  if v_outsider is null then
+    raise notice 'competency_engine_smoke_test (mcq): no non-admin profile available — outsider access-guard checks skipped';
+  else
+    perform set_config('request.jwt.claims', json_build_object('sub', v_outsider, 'role', 'authenticated')::text, true);
+    begin
+      perform comp_mcq_generate_test(v_a, 6, 30, false);
+      raise exception 'ASSERTION FAILED (mcq outsider/generate): a non-lead/non-designer generated the MCQ test';
+    exception when others then
+      if sqlerrm not like 'forbidden%' then raise; end if;
+    end;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  end if;
+
+  -- ---- Generate a balanced 6-question test (the whole approved pool) ----
+  v_gen := comp_mcq_generate_test(v_a, 6, 30, false);
+  if (v_gen ->> 'count')::int <> 6 or (v_gen ->> 'poolSize')::int <> 6 then
+    raise exception 'ASSERTION FAILED (mcq generate): expected count=6 poolSize=6 (PENDING/inactive excluded), got %', v_gen;
+  end if;
+  select id, question_ids into v_test_id, v_gen from comp_mcq_tests where assessment_id = v_a;
+  if not (v_gen ? v_qa1::text and v_gen ? v_qa2::text and v_gen ? v_qa3::text and v_gen ? v_qa4::text and v_gen ? v_qb1::text and v_gen ? v_qb2::text) then
+    raise exception 'ASSERTION FAILED (mcq generate): all 6 approved/active questions must be drawn when the pool equals the request';
+  end if;
+
+  -- ---- Staff detail before any answers: the token is returned to a lead, refused to an outsider ----
+  v_detail := comp_mcq_get_test_detail(v_a);
+  if v_detail ->> 'candidateToken' is null or v_detail ->> 'status' <> 'NOT_STARTED' or (v_detail ->> 'questionCount')::int <> 6 then
+    raise exception 'ASSERTION FAILED (mcq detail/lead): expected a token and NOT_STARTED/6, got %', v_detail;
+  end if;
+  v_token := (v_detail ->> 'candidateToken')::uuid;
+
+  if v_outsider is not null then
+    perform set_config('request.jwt.claims', json_build_object('sub', v_outsider, 'role', 'authenticated')::text, true);
+    begin
+      perform comp_mcq_get_test_detail(v_a);
+      raise exception 'ASSERTION FAILED (mcq outsider/detail): an outsider read another candidate''s MCQ test';
+    exception when others then
+      if sqlerrm not like 'forbidden%' then raise; end if;
+    end;
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  end if;
+
+  -- ---- Generate candidate #2's test up front (needed for the cross-test exploit check below) ----
+  perform comp_mcq_generate_test(v_a2, 6, 30, false); -- role2's pool is only 1 question; drawn count clamps to it
+
+  -- ---- Candidate flow via the token RPCs only (never a direct table read) ----
+  v_get := comp_mcq_candidate_start(v_token);
+  if v_get ->> 'status' <> 'IN_PROGRESS' or jsonb_array_length(v_get -> 'questions') <> 6 then
+    raise exception 'ASSERTION FAILED (mcq start): expected IN_PROGRESS with 6 questions, got %', v_get;
+  end if;
+
+  -- Exploit check: the candidate-facing payload must NEVER carry the answer key or explanation.
+  if exists (
+    select 1 from jsonb_array_elements(v_get -> 'questions') qq
+    where qq ? 'correctOption' or qq ? 'explanation' or qq ? 'standardRef'
+       or exists (select 1 from jsonb_array_elements(qq -> 'options') oo where oo ? 'correct' or oo ? 'isCorrect')
+  ) then
+    raise exception 'ASSERTION FAILED (mcq leak): the candidate payload exposed the correct answer or explanation before submit';
+  end if;
+
+  -- Exploit check: a bogus token must resolve to nothing (never an error revealing a row exists).
+  if comp_mcq_candidate_get(gen_random_uuid()) is not null then
+    raise exception 'ASSERTION FAILED (mcq leak): an unknown token returned a test payload';
+  end if;
+
+  -- Exploit check: this candidate's token cannot answer a question belonging to assessment #2's test.
+  select question_ids into v_gen from comp_mcq_tests where assessment_id = v_a2;
+  begin
+    perform comp_mcq_candidate_answer(v_token, (v_gen ->> 0)::uuid, 0, 100);
+    raise exception 'ASSERTION FAILED (mcq cross-test): a token answered a DIFFERENT assessment''s MCQ question';
+  exception when others then
+    if sqlerrm not like 'question is not part of this test%' then raise; end if;
+  end;
+
+  -- Now answer for real: all of topic A correct, topic B one right / one wrong.
+  perform comp_mcq_candidate_answer(v_token, v_qa1, 0, 500);
+  perform comp_mcq_candidate_answer(v_token, v_qa2, 0, 300);
+  perform comp_mcq_candidate_answer(v_token, v_qa3, 0, 300);
+  perform comp_mcq_candidate_answer(v_token, v_qa4, 0, 300);
+  perform comp_mcq_candidate_answer(v_token, v_qb1, 0, 300); -- correct
+  perform comp_mcq_candidate_answer(v_token, v_qb2, 1, 300); -- wrong (correct_option is 0)
+
+  -- ---- Submit + scoring ----
+  v_get := comp_mcq_candidate_submit(v_token);
+  if v_get ->> 'status' <> 'SCORED' then
+    raise exception 'ASSERTION FAILED (mcq submit): expected SCORED, got %', v_get;
+  end if;
+  select * into v_t from comp_mcq_tests where id = v_test_id;
+  if v_t.total_questions <> 6 or v_t.answered_count <> 6 or v_t.correct_count <> 5 or v_t.score_percent <> 83.3 then
+    raise exception 'ASSERTION FAILED (mcq score): expected 6/6/5/83.3, got %/%/%/%', v_t.total_questions, v_t.answered_count, v_t.correct_count, v_t.score_percent;
+  end if;
+  if not exists (select 1 from jsonb_array_elements(v_t.topic_scores) t where t ->> 'topic' = '__smoke_topic_a__' and (t ->> 'percent')::numeric = 100) then
+    raise exception 'ASSERTION FAILED (mcq score): topic A should be 100%%, got %', v_t.topic_scores;
+  end if;
+  if not exists (select 1 from jsonb_array_elements(v_t.topic_scores) t where t ->> 'topic' = '__smoke_topic_b__' and (t ->> 'percent')::numeric = 50) then
+    raise exception 'ASSERTION FAILED (mcq score): topic B should be 50%%, got %', v_t.topic_scores;
+  end if;
+
+  -- Exploit check: nothing changes after submit — the RPC path and a direct write both refuse.
+  begin
+    perform comp_mcq_candidate_answer(v_token, v_qa1, 1, 100);
+    raise exception 'ASSERTION FAILED (mcq post-submit/rpc): an answer was accepted after SCORED';
+  exception when others then
+    if sqlerrm not like 'mcq_not_in_progress%' then raise; end if;
+  end;
+  perform set_config('role', 'postgres', true);
+  begin
+    update comp_mcq_responses set chosen_option = 2 where test_id = v_test_id and question_id = v_qa1;
+    raise exception 'ASSERTION FAILED (mcq post-submit/direct): a response row was edited after SCORED';
+  exception when others then
+    if sqlerrm not like 'mcq_submitted%' then raise; end if;
+  end;
+
+  -- Exploit check: anon has no privilege on the bank/test tables at all (RLS + revoke all) — the
+  -- candidate must reach everything through the token RPCs, never a direct select.
+  perform set_config('role', 'anon', true);
+  begin
+    perform 1 from comp_mcq_questions where id = v_qa1;
+    raise exception 'ASSERTION FAILED (mcq anon): anon read comp_mcq_questions directly (correct_option would leak)';
+  exception when others then
+    if sqlerrm not like '%permission denied%' then raise; end if;
+  end;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- ---- Design-aware evidence: TECHNICAL_MCQ produces one item per topic, weight split by question count ----
+  perform comp_compute_competency_profile(v_a);
+
+  select count(*) into v_n from comp_competency_evidence where assessment_id = v_a and competency_id = v_c_mcq;
+  if v_n <> 2 then
+    raise exception 'ASSERTION FAILED (mcq evidence): expected exactly 2 evidence items (one per topic), got %', v_n;
+  end if;
+
+  select effective_weight into v_ev_a from comp_competency_evidence
+    where assessment_id = v_a and competency_id = v_c_mcq and raw_value ->> 'topic' = '__smoke_topic_a__';
+  select effective_weight into v_ev_b from comp_competency_evidence
+    where assessment_id = v_a and competency_id = v_c_mcq and raw_value ->> 'topic' = '__smoke_topic_b__';
+  if v_ev_a is null or v_ev_b is null or abs(v_ev_a - 1.3333) > 0.001 or abs(v_ev_b - 0.6667) > 0.001 or abs((v_ev_a + v_ev_b) - 2) > 0.0001 then
+    raise exception 'ASSERTION FAILED (mcq evidence weight): expected topic weights ~1.3333/0.6667 summing to 2, got %/%', v_ev_a, v_ev_b;
+  end if;
+
+  if not exists (select 1 from comp_competency_evidence where assessment_id = v_a and competency_id = v_c_mcq
+                 and raw_value ->> 'topic' = '__smoke_topic_a__' and normalized_score = 100) then
+    raise exception 'ASSERTION FAILED (mcq evidence score): topic A evidence should be normalized_score 100';
+  end if;
+  if not exists (select 1 from comp_competency_evidence where assessment_id = v_a and competency_id = v_c_mcq
+                 and raw_value ->> 'topic' = '__smoke_topic_b__' and normalized_score = 50) then
+    raise exception 'ASSERTION FAILED (mcq evidence score): topic B evidence should be normalized_score 50';
+  end if;
+
+  -- ---- Competency Engine roll-up (single source ⇒ weighted mean == overall test percentage) ----
+  select * into v_row from comp_competency_scores where assessment_id = v_a and competency_id = v_c_mcq;
+  if v_row.actual_score <> 83.33 or v_row.actual_level <> 4.3 or v_row.gap <> -1.3 or v_row.status <> 'EXCEEDS'
+     or v_row.coverage <> 1 or v_row.evidence_count <> 2 or v_row.source_types_covered <> 1 or v_row.confidence <> 'MEDIUM' then
+    raise exception 'ASSERTION FAILED (mcq rollup): expected 83.33 / 4.3 / gap -1.3 / EXCEEDS / cov 1 / 2 items / 1 type / MEDIUM, got % / % / % / % / % / % / % / %',
+      v_row.actual_score, v_row.actual_level, v_row.gap, v_row.status, v_row.coverage, v_row.evidence_count, v_row.source_types_covered, v_row.confidence;
+  end if;
+
+  -- ---- "Not assessable" (M-8's rule, extended to the online test): no HSE-category MCQ exists for
+  -- this role at all, so __smoke_mcq_empty__ must be INSUFFICIENT_EVIDENCE with a NO_MCQ_QUESTIONS
+  -- marker — never a critical gap just because nobody wrote HSE questions for this role yet.
+  select * into v_row from comp_competency_scores where assessment_id = v_a and competency_id = v_c_mcq_empty;
+  if v_row.status <> 'INSUFFICIENT_EVIDENCE' or v_row.confidence <> 'NONE' or v_row.coverage <> 0
+     or not exists (select 1 from jsonb_array_elements(v_row.unassessable_sources) u where u ->> 'sourceRef' = 'HSE' and u ->> 'reason' = 'NO_MCQ_QUESTIONS') then
+    raise exception 'ASSERTION FAILED (mcq not-assessable): expected INSUFFICIENT_EVIDENCE/NONE/cov 0 with an HSE/NO_MCQ_QUESTIONS marker, got % / % / % / %',
+      v_row.status, v_row.confidence, v_row.coverage, v_row.unassessable_sources;
+  end if;
+
+  -- ---- Design exclusion: turning the online MCQ test off drops all of its evidence ----
+  update comp_assessments set needs_online_mcq = false where id = v_a;
+  perform comp_compute_competency_profile(v_a);
+  select count(*) into v_n from comp_competency_evidence where assessment_id = v_a and competency_id = v_c_mcq;
+  if v_n <> 0 then
+    raise exception 'ASSERTION FAILED (mcq exclude): TECHNICAL_MCQ evidence survived after needs_online_mcq was turned off, got % row(s)', v_n;
+  end if;
+  select * into v_row from comp_competency_scores where assessment_id = v_a and competency_id = v_c_mcq;
+  if v_row.status <> 'INSUFFICIENT_EVIDENCE' or v_row.confidence <> 'NONE' or v_row.coverage <> 0 then
+    raise exception 'ASSERTION FAILED (mcq exclude): expected INSUFFICIENT_EVIDENCE/NONE/cov 0 once excluded by design, got % / % / %',
+      v_row.status, v_row.confidence, v_row.coverage;
+  end if;
+  if not exists (select 1 from comp_audit_log where action = 'COMPETENCY_PROFILE_COMPUTED' and entity_id = v_a
+                 and new_value -> 'excludedByDesign' ? 'TECHNICAL_MCQ') then
+    raise exception 'ASSERTION FAILED (mcq exclude): audit entry must record TECHNICAL_MCQ under excludedByDesign';
+  end if;
+
+  -- ---- Completed-assessment lock (candidate #2) ----
+  v_detail := comp_mcq_get_test_detail(v_a2);
+  v_test_id2 := (v_detail ->> 'id')::uuid;
+  v_token2 := (v_detail ->> 'candidateToken')::uuid;
+  perform comp_mcq_candidate_start(v_token2);
+
+  perform set_config('role', 'postgres', true);
+  update comp_assessments set status = 'completed' where id = v_a2;
+  perform set_config('role', 'authenticated', true);
+
+  begin
+    perform comp_mcq_candidate_answer(v_token2, v_qc, 0, 100);
+    raise exception 'ASSERTION FAILED (mcq lock/answer): an answer was accepted on a completed assessment''s MCQ test';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+
+  begin
+    perform comp_mcq_candidate_submit(v_token2);
+    raise exception 'ASSERTION FAILED (mcq lock/submit): a submit was accepted on a completed assessment''s MCQ test';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+
+  begin
+    perform comp_mcq_generate_test(v_a2, 6, 30, true);
+    raise exception 'ASSERTION FAILED (mcq lock/generate): the test was regenerated on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+
+  perform set_config('role', 'postgres', true);
+  begin
+    update comp_mcq_tests set time_limit_minutes = 99 where id = v_test_id2;
+    raise exception 'ASSERTION FAILED (mcq lock/direct): a direct write to comp_mcq_tests succeeded on a completed assessment';
+  exception when others then
+    if sqlerrm not like 'assessment_locked%' then raise; end if;
+  end;
+
+  raise notice 'competency_engine_smoke_test (section 56 — online MCQ test): ALL ASSERTIONS PASSED';
+
+  perform set_config('comp.allow_locked_write', 'on', true);
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name in ('__smoke_test_mcq__', '__smoke_test_mcq2__'));
+  delete from comp_assessments where candidate_name in ('__smoke_test_mcq__', '__smoke_test_mcq2__');
+  delete from comp_competency_evidence_sources where competency_id in (v_c_mcq, v_c_mcq_empty);
+  delete from comp_job_competency_requirements where job_role = v_role;
+  delete from comp_mcq_questions where job_role in (v_role, v_role2);
+  delete from comp_competencies where id in (v_c_mcq, v_c_mcq_empty);
+  delete from comp_job_role_config where job_role in (v_role, v_role2);
+  perform set_config('comp.allow_locked_write', '', true);
+
+exception when others then
+  perform set_config('role', 'postgres', true);
+  perform set_config('comp.allow_locked_write', 'on', true);
+  delete from comp_audit_log where entity_id in (select id from comp_assessments where candidate_name in ('__smoke_test_mcq__', '__smoke_test_mcq2__'));
+  delete from comp_assessments where candidate_name in ('__smoke_test_mcq__', '__smoke_test_mcq2__');
+  delete from comp_competency_evidence_sources where competency_id in (v_c_mcq, v_c_mcq_empty);
+  delete from comp_job_competency_requirements where job_role = v_role;
+  delete from comp_mcq_questions where job_role in (v_role, v_role2);
+  delete from comp_competencies where id in (v_c_mcq, v_c_mcq_empty);
+  delete from comp_job_role_config where job_role in (v_role, v_role2);
+  perform set_config('comp.allow_locked_write', '', true);
+  raise;
+end $$;

@@ -14183,3 +14183,10 @@ create policy "comp_interview_ratings_update_own" on comp_interview_ratings
 drop policy if exists "comp_interview_ratings_delete_own" on comp_interview_ratings;
 create policy "comp_interview_ratings_delete_own" on comp_interview_ratings
   for delete using (rater_id = auth.uid() and comp_can_rate_interview(assessment_id));
+
+-- comp_mcq_tests had an RLS SELECT policy (comp_mcq_tests_select_access, scoped via
+-- comp_can_access_assessment) but no table-level GRANT for authenticated, so any direct
+-- `.from('comp_mcq_tests').select(...)` from the client (fetchMcqTestStatuses, the dashboard's
+-- MCQ-status column) failed with "permission denied for table comp_mcq_tests" before RLS was even
+-- evaluated. Applied live.
+grant select on comp_mcq_tests to authenticated;
