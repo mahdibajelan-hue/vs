@@ -332,6 +332,7 @@ export interface AssessmentBlueprintInput {
   includesPersonality: boolean
   includesStructuredInterview: boolean
   includesExperience: boolean
+  includesOnlineMcq: boolean
   technicalTemplateId: string | null
   personalityTemplateId: string | null
 }
@@ -342,6 +343,8 @@ export interface ExamDesignExtras {
   needsStructuredInterview?: boolean
   includesExperience?: boolean
   blueprintId?: string
+  /** Section 56 — the online technical MCQ test. */
+  needsOnlineMcq?: boolean
 }
 
 function blueprintToRowPayload(input: AssessmentBlueprintInput) {
@@ -355,6 +358,7 @@ function blueprintToRowPayload(input: AssessmentBlueprintInput) {
     includes_personality: input.includesPersonality,
     includes_structured_interview: input.includesStructuredInterview,
     includes_experience: input.includesExperience,
+    includes_online_mcq: input.includesOnlineMcq,
     technical_template_id: input.technicalTemplateId,
     personality_template_id: input.personalityTemplateId,
   }
@@ -776,6 +780,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       needsTechnicalAssessment: true,
       needsStructuredInterview: false,
       includesExperience: true,
+      needsOnlineMcq: false,
       blueprintId: null,
       previousAssessmentId: null,
       panelSize: 3,
@@ -832,7 +837,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     // are only the column defaults — read back what the trigger actually set.
     const { data: design } = await supabase
       .from('comp_assessments')
-      .select('blueprint_id, needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience, self_service_token, results_share_token')
+      .select('blueprint_id, needs_technical_assessment, needs_personality_assessment, needs_structured_interview, includes_experience, needs_online_mcq, self_service_token, results_share_token')
       .eq('id', id)
       .maybeSingle()
     if (design) {
@@ -846,6 +851,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       created.needsPersonalityAssessment = design.needs_personality_assessment
       created.needsStructuredInterview = design.needs_structured_interview
       created.includesExperience = design.includes_experience
+      created.needsOnlineMcq = design.needs_online_mcq ?? false
     }
     set({ assessments: [created, ...get().assessments] })
     logAudit('ASSESSMENT_CREATED', 'comp_assessments', id, null, { candidateName: profile.candidateName, jobRole: profile.jobRole })
@@ -1103,6 +1109,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
               needsTechnicalAssessment: needsTechnical,
               needsStructuredInterview: extras?.needsStructuredInterview ?? a.needsStructuredInterview,
               includesExperience: extras?.includesExperience ?? a.includesExperience,
+              needsOnlineMcq: extras?.needsOnlineMcq ?? a.needsOnlineMcq,
               blueprintId: extras?.blueprintId ?? a.blueprintId,
             }
           : a,
@@ -1114,6 +1121,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       p_needs_technical: needsTechnical,
       p_needs_structured_interview: extras?.needsStructuredInterview ?? null,
       p_includes_experience: extras?.includesExperience ?? null,
+      p_needs_online_mcq: extras?.needsOnlineMcq ?? null,
       p_blueprint_id: extras?.blueprintId ?? null,
     })
     if (reportError('ثبت طرح آزمون', error)) set({ assessments: previous })
@@ -1123,6 +1131,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     await get().setExamDesign(assessmentId, blueprint.includesPersonality, blueprint.includesTechnical, {
       needsStructuredInterview: blueprint.includesStructuredInterview,
       includesExperience: blueprint.includesExperience,
+      needsOnlineMcq: blueprint.includesOnlineMcq,
       blueprintId: blueprint.id,
     })
   },

@@ -279,6 +279,7 @@ export interface CompJobCompetencyRequirement {
  * schema.sql Section 49). */
 export type CompEvidenceSourceType =
   | 'TECHNICAL_CATEGORY'
+  | 'TECHNICAL_MCQ'
   | 'PERSONALITY_DIMENSION'
   | 'PERSONALITY_TRAIT'
   | 'SJT'
@@ -287,6 +288,7 @@ export type CompEvidenceSourceType =
 
 export const COMP_EVIDENCE_SOURCE_TYPES: CompEvidenceSourceType[] = [
   'TECHNICAL_CATEGORY',
+  'TECHNICAL_MCQ',
   'PERSONALITY_DIMENSION',
   'PERSONALITY_TRAIT',
   'SJT',
@@ -295,7 +297,8 @@ export const COMP_EVIDENCE_SOURCE_TYPES: CompEvidenceSourceType[] = [
 ]
 
 export const COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA: Record<CompEvidenceSourceType, string> = {
-  TECHNICAL_CATEGORY: 'سؤالات فنی (به تفکیک نوع سؤال)',
+  TECHNICAL_CATEGORY: 'سؤالات فنی حضوری (به تفکیک نوع سؤال)',
+  TECHNICAL_MCQ: 'آزمون تستی آنلاین (به تفکیک نوع سؤال)',
   PERSONALITY_DIMENSION: 'بُعد رفتاری (آزمون شخصیت)',
   PERSONALITY_TRAIT: 'ویژگی شخصیتی',
   SJT: 'آزمون موقعیتی (SJT)',
@@ -344,6 +347,8 @@ export interface CompAssessmentBlueprint {
   includesPersonality: boolean
   includesStructuredInterview: boolean
   includesExperience: boolean
+  /** The online technical multiple-choice test («آزمون تستی آنلاین», schema.sql Section 56). */
+  includesOnlineMcq: boolean
   technicalTemplateId: string | null
   personalityTemplateId: string | null
   createdBy: string | null
@@ -628,6 +633,10 @@ export interface CompetencyAssessment {
    * evidence. Like the three flags above, a method switched off here is excluded from the
    * Competency Engine's coverage denominator — "not assessed by design", not "missing evidence". */
   includesExperience: boolean
+  /** Whether the candidate takes the online technical MCQ test («آزمون تستی آنلاین», schema.sql
+   * Section 56) — a second ONLINE part next to the personality test; like the flags above, when off
+   * its evidence (TECHNICAL_MCQ) is excluded from the Competency Engine's coverage. */
+  needsOnlineMcq: boolean
   /** The blueprint whose toggles were last applied — informational only; the flags above are the
    * candidate's own copy and never change when the blueprint is later edited. */
   blueprintId: string | null

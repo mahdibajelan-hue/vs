@@ -57,6 +57,7 @@ export interface CompAssessmentRow {
   needs_personality_assessment: boolean
   needs_technical_assessment: boolean
   needs_structured_interview: boolean | null
+  needs_online_mcq?: boolean | null
   includes_experience: boolean | null
   blueprint_id: string | null
   previous_assessment_id?: string | null
@@ -119,6 +120,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     needsTechnicalAssessment: r.needs_technical_assessment ?? true,
     needsStructuredInterview: r.needs_structured_interview ?? false,
     includesExperience: r.includes_experience ?? true,
+    needsOnlineMcq: r.needs_online_mcq ?? false,
     blueprintId: r.blueprint_id ?? null,
     previousAssessmentId: r.previous_assessment_id ?? null,
     panelSize: r.panel_size ?? 3,
@@ -554,6 +556,7 @@ export interface CompAssessmentBlueprintRow {
   includes_technical: boolean
   includes_personality: boolean
   includes_structured_interview: boolean
+  includes_online_mcq?: boolean | null
   includes_experience: boolean
   technical_template_id: string | null
   personality_template_id: string | null
@@ -576,6 +579,7 @@ export function compAssessmentBlueprintFromRow(r: CompAssessmentBlueprintRow): C
     includesPersonality: r.includes_personality,
     includesStructuredInterview: r.includes_structured_interview,
     includesExperience: r.includes_experience,
+    includesOnlineMcq: r.includes_online_mcq ?? false,
     technicalTemplateId: r.technical_template_id,
     personalityTemplateId: r.personality_template_id,
     createdBy: r.created_by,

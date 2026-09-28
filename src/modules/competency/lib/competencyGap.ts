@@ -37,7 +37,8 @@ export const GAP_CONFIDENCE_META: Record<CompCompetencyConfidence, { label: stri
 }
 
 export const EVIDENCE_SOURCE_CHIP: Record<CompEvidenceSourceType, { label: string; color: string }> = {
-  TECHNICAL_CATEGORY: { label: 'فنی', color: '#a855f7' },
+  TECHNICAL_CATEGORY: { label: 'فنی (حضوری)', color: '#a855f7' },
+  TECHNICAL_MCQ: { label: 'آزمون تستی', color: '#14b8a6' },
   PERSONALITY_DIMENSION: { label: 'بعد رفتاری', color: '#f472b6' },
   PERSONALITY_TRAIT: { label: 'شخصیت', color: '#e879f9' },
   SJT: { label: 'موقعیتی', color: '#818cf8' },

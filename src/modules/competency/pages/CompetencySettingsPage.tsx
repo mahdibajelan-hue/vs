@@ -4,6 +4,7 @@ import { useCompetencyStore, type AssessmentBlueprintInput, type CompetencyCatal
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import { MCQ_CATEGORIES } from '../lib/mcqData'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import {
   COMP_COMPETENCY_DOMAIN_LABEL_FA,
@@ -723,6 +724,7 @@ function CompetencyCatalogTab({
 
 const SOURCE_TYPE_TONE: Record<CompEvidenceSourceType, string> = {
   TECHNICAL_CATEGORY: 'bg-amber-500/12 text-amber-300',
+  TECHNICAL_MCQ: 'bg-teal-500/12 text-teal-300',
   PERSONALITY_DIMENSION: 'bg-purple-500/12 text-purple-300',
   PERSONALITY_TRAIT: 'bg-fuchsia-500/12 text-fuchsia-300',
   SJT: 'bg-sky-500/12 text-sky-300',
@@ -788,6 +790,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
     const traitOptions = [...new Map(traits.filter((t) => t.active).map((t) => [t.key, { value: t.key, label: t.labelFa }])).values()]
     return {
       TECHNICAL_CATEGORY: ALL_QUESTION_TYPES.map((t) => ({ value: t, label: QUESTION_TYPE_LABEL_FA[t] })),
+      TECHNICAL_MCQ: MCQ_CATEGORIES.map((t) => ({ value: t, label: QUESTION_TYPE_LABEL_FA[t] })),
       PERSONALITY_DIMENSION: dimensionOptions,
       PERSONALITY_TRAIT: traitOptions,
       SJT: dimensionOptions,
@@ -1240,11 +1243,12 @@ function RequirementRow({
 }
 
 const BLUEPRINT_METHOD_FIELDS: {
-  key: 'includesTechnical' | 'includesPersonality' | 'includesStructuredInterview' | 'includesExperience'
+  key: 'includesTechnical' | 'includesPersonality' | 'includesStructuredInterview' | 'includesExperience' | 'includesOnlineMcq'
   label: string
 }[] = [
-  { key: 'includesTechnical', label: 'آزمون فنی تخصصی' },
-  { key: 'includesPersonality', label: 'شخصیت و رفتاری (شامل SJT)' },
+  { key: 'includesTechnical', label: 'ارزیابی فنی تخصصی (حضوری)' },
+  { key: 'includesPersonality', label: 'شخصیت و رفتاری (آنلاین، شامل SJT)' },
+  { key: 'includesOnlineMcq', label: 'آزمون تستی آنلاین' },
   { key: 'includesStructuredInterview', label: 'مصاحبه ساختاریافته' },
   { key: 'includesExperience', label: 'سوابق و تجربه' },
 ]
@@ -1297,6 +1301,7 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
     includesPersonality: true,
     includesStructuredInterview: true,
     includesExperience: true,
+    includesOnlineMcq: true,
     technicalTemplateId: null,
     personalityTemplateId: null,
   }
@@ -1423,6 +1428,7 @@ function blueprintToInput(b: CompAssessmentBlueprint): AssessmentBlueprintInput 
     includesPersonality: b.includesPersonality,
     includesStructuredInterview: b.includesStructuredInterview,
     includesExperience: b.includesExperience,
+    includesOnlineMcq: b.includesOnlineMcq,
     technicalTemplateId: b.technicalTemplateId,
     personalityTemplateId: b.personalityTemplateId,
   }
@@ -1444,7 +1450,7 @@ function BlueprintEditor({
   const [draft, setDraft] = useState<AssessmentBlueprintInput>(initial)
   const [saving, setSaving] = useState(false)
   const patch = (p: Partial<AssessmentBlueprintInput>) => setDraft((d) => ({ ...d, ...p }))
-  const noMethod = !draft.includesTechnical && !draft.includesPersonality && !draft.includesStructuredInterview && !draft.includesExperience
+  const noMethod = !draft.includesTechnical && !draft.includesPersonality && !draft.includesStructuredInterview && !draft.includesExperience && !draft.includesOnlineMcq
 
   return (
     <div className="space-y-2.5 rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3">
