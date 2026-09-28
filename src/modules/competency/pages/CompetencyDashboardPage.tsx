@@ -14,6 +14,7 @@ import { DemoBadge, DemoDataToggle } from '../components/DemoDataToggle'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
+import { fetchMcqTestStatuses, type McqTestStatus } from '../lib/mcqData'
 import type { CompDevelopmentPlan, CompetencyAssessment, JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
@@ -54,6 +55,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchPersonalityAssessments = usePersonalityStore((s) => s.fetchAssessments)
   const [panelRows, setPanelRows] = useState<{ assessment_id: string; user_id: string; is_lead: boolean }[]>([])
   const [personalityLoaded, setPersonalityLoaded] = useState(false)
+  const [mcqStatuses, setMcqStatuses] = useState<Map<string, McqTestStatus>>(new Map())
+  const [mcqLoaded, setMcqLoaded] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -62,6 +65,12 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
       .select('assessment_id, user_id, is_lead')
       .then(({ data }) => active && setPanelRows((data ?? []) as { assessment_id: string; user_id: string; is_lead: boolean }[]))
     fetchPersonalityAssessments().then(() => active && setPersonalityLoaded(true))
+    fetchMcqTestStatuses().then((m) => {
+      if (active) {
+        setMcqStatuses(m)
+        setMcqLoaded(true)
+      }
+    })
     return () => {
       active = false
     }
@@ -132,11 +141,13 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
           sheets: panelistScores.filter((s) => s.assessmentId === a.id),
           personalityStatus: personalityAssessments.find((p) => p.assessmentId === a.id)?.status,
           personalityLoaded,
+          mcqStatus: mcqStatuses.get(a.id),
+          mcqLoaded,
         }),
       )
     }
     return map
-  }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, myProfile, moduleAdmins, assessmentDesigners])
+  }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myProfile, moduleAdmins, assessmentDesigners])
   const mineCount = assessments.filter((a) => nextStepById.get(a.id)?.mine).length
 
   const filteredAssessments = (roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)).filter(

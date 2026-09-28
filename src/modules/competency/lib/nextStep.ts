@@ -22,10 +22,16 @@ export interface NextStepContext {
   /** Linked personality test status, or undefined when there is none / it isn't loaded. */
   personalityStatus: string | undefined
   personalityLoaded: boolean
+  /** Online MCQ test status (comp_mcq_tests.status), or undefined when no test row exists yet /
+   * the map isn't loaded. Unlike the personality test, there is no separate "designed" state —
+   * a row only exists once a test has been generated. */
+  mcqStatus: string | undefined
+  mcqLoaded: boolean
 }
 
 const PERSONALITY_UNDESIGNED = ['DRAFT', 'DESIGNED']
 const PERSONALITY_WITH_CANDIDATE = ['GENERATED', 'ASSIGNED', 'STARTED', 'IN_PROGRESS']
+const MCQ_WITH_CANDIDATE = ['NOT_STARTED', 'IN_PROGRESS']
 
 export function computeNextStep(a: CompetencyAssessment, ctx: NextStepContext): NextStep {
   const isLead = ctx.isModuleAdmin || (!!ctx.myId && a.createdBy === ctx.myId) || ctx.myPanel.get(a.id)?.isLead === true
@@ -48,6 +54,8 @@ export function computeNextStep(a: CompetencyAssessment, ctx: NextStepContext): 
     (ctx.personalityStatus == null ? canDesign : PERSONALITY_UNDESIGNED.includes(ctx.personalityStatus))
   )
     return step('طراحی آزمون شخصیت', 'action', canDesign)
+  // No comp_mcq_tests row yet for a design that needs one — mirrors the personality check above.
+  if (a.needsOnlineMcq && ctx.mcqLoaded && ctx.mcqStatus == null) return step('تولید آزمون تستی آنلاین', 'action', canDesign)
 
   if (a.needsTechnicalAssessment) {
     const mySheet = ctx.sheets.find((s) => s.panelistId === ctx.myId)
@@ -62,6 +70,9 @@ export function computeNextStep(a: CompetencyAssessment, ctx: NextStepContext): 
   }
   if (a.needsPersonalityAssessment && ctx.personalityStatus && PERSONALITY_WITH_CANDIDATE.includes(ctx.personalityStatus)) {
     return step(ctx.personalityStatus === 'IN_PROGRESS' || ctx.personalityStatus === 'STARTED' ? 'آزمون شخصیت در حال پاسخ‌گویی' : 'منتظر آزمون شخصیت متقاضی', 'waiting', false)
+  }
+  if (a.needsOnlineMcq && ctx.mcqStatus && MCQ_WITH_CANDIDATE.includes(ctx.mcqStatus)) {
+    return step(ctx.mcqStatus === 'IN_PROGRESS' ? 'آزمون تستی در حال پاسخ‌گویی' : 'منتظر آزمون تستی متقاضی', 'waiting', false)
   }
   if (a.selfServiceStatus === 'pending') return step('لینک خوداظهاری ارسال‌شده', 'waiting', false)
   return step('آماده‌ی ثبت نهایی', 'action', isLead)
