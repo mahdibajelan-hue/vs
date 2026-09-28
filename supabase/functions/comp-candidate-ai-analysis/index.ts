@@ -23,6 +23,10 @@
 // to use exactly those numbers and to treat INSUFFICIENT_EVIDENCE as unknown rather than weak. The
 // exact rows used are stored in comp_candidate_ai_analysis.competency_basis so the UI can tell when a
 // cached analysis no longer matches the candidate's current profile.
+//
+// Section 56: when the exam design includes the online MCQ test and it has been SCORED, its overall
+// and per-topic percentages (comp_mcq_get_test_detail — never the individual questions/answers) are
+// added to the prompt as mcq_test, additional breadth-of-knowledge evidence for technical_analysis.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { GoogleGenAI } from 'npm:@google/genai@1'
@@ -175,7 +179,8 @@ const SYSTEM_INSTRUCTION = `تو یک دستیار تحلیل جامع ارزی�
 11. ورودی competency_profile (در صورت وجود) خروجی موتور شایستگی سامانه است: برای هر شایستگی الزامی شغل، سطح الزامی (required_level)، سطح واقعی (actual_level)، امتیاز ۰ تا ۱۰۰ (actual_score)، شکاف (gap = الزامی − واقعی؛ مثبت یعنی کمبود)، حیاتی‌بودن، وضعیت (status)، اطمینان (confidence) و پوشش شواهد (coverage). دقیقاً از همین اعداد و وضعیت‌ها استفاده کن — هرگز سطح، امتیاز، شکاف یا وضعیت جدیدی محاسبه، گرد یا حدس نزن و با آن‌ها مغایرت نداشته باش.
 12. وضعیت INSUFFICIENT_EVIDENCE (و confidence برابر NONE) یعنی «نامعلوم — شواهدی ثبت نشده»، نه ضعف: هرگز آن را شکاف، نقطه ضعف یا امتیاز پایین تفسیر نکن؛ فقط بنویس که برای آن شایستگی شواهد کافی وجود ندارد و در صورت لزوم برای جمع‌آوری شواهد آن سؤال پیگیری پیشنهاد بده. روش‌هایی که در assessment_methods برابر false هستند عمداً در طرح آزمون نبوده‌اند (ارزیابی‌نشده به انتخاب طراح) — آن‌ها را کمبود شواهد یا ضعف متقاضی تلقی نکن.
 13. competency_gap_narrative را (۳ تا ۶ جمله) فقط بر اساس competency_profile بنویس: شکاف‌های حیاتی (CRITICAL_GAP) را با نام و اعداد دقیق ذکر کن، سپس شکاف‌های توسعه‌ای (GAP) و نقاط قوت (MEETS/EXCEEDS با اطمینان متوسط یا بالا)، و صراحتاً شایستگی‌های دارای شواهد ناکافی را به‌عنوان «نامعلوم» نام ببر. به سطح اطمینان پایین (LOW) در نتیجه‌گیری‌ها اشاره کن. اگر competency_profile در ورودی نبود یا خالی بود، بنویس که تحلیل شکاف شایستگی هنوز برای این متقاضی محاسبه نشده است. development_areas و follow_up_questions نیز باید با همین جدول سازگار باشند.
-14. خروجی را کاملاً به فارسی و دقیقاً مطابق ساختار JSON درخواستی بنویس.`
+14. خروجی را کاملاً به فارسی و دقیقاً مطابق ساختار JSON درخواستی بنویس.
+15. اگر ورودی mcq_test موجود بود (نتیجه‌ی آزمون تستی آنلاین: درصد کلی، درصد هر موضوع و هر دسته)، آن را در technical_analysis به‌عنوان شاهدی برای جامعیت دانش فنی متقاضی در کنار سؤالات مصاحبه‌ی حضوری لحاظ کن — موضوعاتی با درصد پایین را در development_areas و follow_up_questions منعکس کن. mcq_test فقط شامل درصدهاست، نه پاسخ تک‌تک سؤالات؛ چیزی درباره‌ی پاسخ خاص یک سؤال ادعا نکن. اگر mcq_test برابر null بود، فرض کن این بخش هنوز انجام نشده و چیزی درباره‌ی آن حدس نزن.`
 
 function resolveOfficialScore(
   questionId: string,
@@ -233,6 +238,27 @@ Deno.serve(async (req: Request) => {
 
     const PERSONALITY_SCORED_STATUSES = ['FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED']
     const personalityRequested = !!personalityAssessment && PERSONALITY_SCORED_STATUSES.includes(personalityAssessment.status)
+
+    // Section 56: only the aggregate result (never individual questions/answers, which
+    // comp_mcq_get_test_detail otherwise reveals to staff) — a scored test is breadth-of-knowledge
+    // evidence, not raw candidate answers, so it stays out of the same privacy class as the RPC's
+    // full item list.
+    let mcqAvailable = false
+    let mcqPayload: unknown = null
+    if (assessment.needs_online_mcq) {
+      const { data: mcqTest, error: mcqError } = await supabase.rpc('comp_mcq_get_test_detail', { p_assessment_id: assessmentId })
+      if (mcqError) return fail(500, `بارگذاری آزمون تستی ناموفق بود: ${mcqError.message}`, mcqError)
+      if (mcqTest && mcqTest.status === 'SCORED') {
+        mcqAvailable = true
+        mcqPayload = {
+          score_percent: mcqTest.scorePercent,
+          answered_count: mcqTest.answeredCount,
+          total_questions: mcqTest.totalQuestions,
+          category_scores: mcqTest.categoryScores,
+          topic_scores: mcqTest.topicScores,
+        }
+      }
+    }
 
     let technicalAvailable = false
     let technicalPayload: unknown = null
@@ -489,6 +515,7 @@ Deno.serve(async (req: Request) => {
             level_scale: 'actual_level = round(1 + actual_score/100 × (level_count − 1), 1); gap = required_level − actual_level (مثبت = کمبود)',
             assessment_methods: {
               technical: assessment.needs_technical_assessment,
+              online_mcq: assessment.needs_online_mcq,
               personality_and_sjt: assessment.needs_personality_assessment,
               structured_interview: assessment.needs_structured_interview,
               experience: assessment.includes_experience,
@@ -530,7 +557,7 @@ Deno.serve(async (req: Request) => {
       confidence: r.confidence,
     }))
 
-    if (!technicalAvailable && !personalityAvailable && !competencyAvailable) {
+    if (!technicalAvailable && !personalityAvailable && !competencyAvailable && !mcqAvailable) {
       return fail(400, 'هنوز داده‌ای برای تحلیل جامع این متقاضی ثبت نشده است.')
     }
 
@@ -549,6 +576,7 @@ Deno.serve(async (req: Request) => {
     const promptPayload = {
       candidate_profile: candidateProfile,
       technical: technicalAvailable ? technicalPayload : null,
+      mcq_test: mcqAvailable ? mcqPayload : null,
       personality: personalityAvailable ? personalityPayload : null,
       role_alignment: personalityAvailable ? roleAlignmentPayload : null,
       competency_profile: competencyProfilePayload,
