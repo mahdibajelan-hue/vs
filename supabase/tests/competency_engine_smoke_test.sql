@@ -1582,3 +1582,72 @@ exception when others then
   perform set_config('comp.allow_locked_write', '', true);
   raise;
 end $$;
+
+
+-- ------------------------------------------------------------------------------------------------
+-- Section 56 follow-up — the comp_mcq_tests column grant must stay narrow: a non-lead panelist (who
+-- can otherwise see this assessment) must never be able to read candidate_token off the table
+-- directly, even though status/assessment_id (fetchMcqTestStatuses' own columns) remain readable.
+-- Regression cover for the "blanket grant select on comp_mcq_tests" mistake this file's history
+-- once introduced (GRANT is additive — a later column-scoped grant can never narrow a wider one, so
+-- the only fix is REVOKE + a precise re-GRANT, which is what the schema now does).
+-- ------------------------------------------------------------------------------------------------
+
+do $$
+declare
+  v_admin uuid;
+  v_panelist uuid;
+  v_role constant text := '__smoke_mcq_grant_role__';
+  v_a uuid;
+  v_q uuid;
+  v_leaked uuid;
+begin
+  select id into v_admin from profiles where is_admin order by created_at limit 1;
+  if v_admin is null then
+    raise exception 'smoke test precondition failed: no admin profile exists to impersonate';
+  end if;
+  select id into v_panelist from profiles where id <> v_admin order by created_at limit 1;
+  if v_panelist is null then
+    raise notice 'competency_engine_smoke_test (mcq grant): no second profile available — skipped';
+  else
+    perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+    perform set_config('role', 'authenticated', true);
+    perform set_config('role', 'postgres', true);
+
+    insert into comp_job_role_config (job_role, label_fa, active, sort_order) values (v_role, '__smoke__', false, 9999);
+    insert into comp_mcq_questions (job_role, category, topic, difficulty, stem_fa, options, correct_option, approval_status, active)
+      values (v_role, 'TECHNICAL', 't', 1, '__smoke_grant_q__', '["a","b","c","d"]'::jsonb, 0, 'APPROVED', true) returning id into v_q;
+    insert into comp_assessments (job_role, candidate_name, candidate_position, candidate_national_id, candidate_phone, candidate_email, created_by, needs_online_mcq)
+      values (v_role, '__smoke_grant_test__', 'test', '000', '000', 'x@example.com', v_admin, true) returning id into v_a;
+    insert into comp_panelists (assessment_id, user_id, is_lead) values (v_a, v_panelist, false);
+
+    perform set_config('role', 'authenticated', true);
+    perform comp_mcq_generate_test(v_a, 5, 30, false);
+
+    -- A non-lead panelist can see this assessment (comp_can_access_assessment) but must never read
+    -- candidate_token straight off the table — only a lead/designer gets it, via comp_mcq_get_test_detail.
+    perform set_config('request.jwt.claims', json_build_object('sub', v_panelist, 'role', 'authenticated')::text, true);
+    begin
+      select candidate_token into v_leaked from comp_mcq_tests where assessment_id = v_a;
+      raise exception 'ASSERTION FAILED (mcq grant): a non-lead panelist read candidate_token directly, got %', v_leaked;
+    exception when others then
+      if sqlerrm not like '%permission denied%' then raise; end if;
+    end;
+
+    -- Sanity: the columns fetchMcqTestStatuses actually needs remain readable.
+    perform status, assessment_id from comp_mcq_tests where assessment_id = v_a;
+
+    raise notice 'competency_engine_smoke_test (mcq grant): PASSED';
+
+    perform set_config('role', 'postgres', true);
+    delete from comp_assessments where candidate_name = '__smoke_grant_test__';
+    delete from comp_mcq_questions where job_role = v_role;
+    delete from comp_job_role_config where job_role = v_role;
+  end if;
+exception when others then
+  perform set_config('role', 'postgres', true);
+  delete from comp_assessments where candidate_name = '__smoke_grant_test__';
+  delete from comp_mcq_questions where job_role = v_role;
+  delete from comp_job_role_config where job_role = v_role;
+  raise;
+end $$;

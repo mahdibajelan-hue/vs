@@ -14190,3 +14190,24 @@ create policy "comp_interview_ratings_delete_own" on comp_interview_ratings
 -- MCQ-status column) failed with "permission denied for table comp_mcq_tests" before RLS was even
 -- evaluated. Applied live.
 grant select on comp_mcq_tests to authenticated;
+
+-- Section 56 follow-up: a prior fix ("Fix: staff couldn't read comp_mcq_tests") applied a blanket
+-- `grant select on comp_mcq_tests to authenticated`, which (GRANT being additive, not replacing the
+-- earlier column-scoped grant) widened authenticated's access to EVERY column, including
+-- candidate_token and option_orders. That undoes Section 56's deliberate design: "candidate_token is
+-- deliberately not column-granted: a panelist can read the result, but only a lead/designer gets the
+-- link" (comp_mcq_get_test_detail withholds candidateToken unless comp_is_lead()/comp_is_assessment_
+-- designer(), but any authenticated user with comp_can_access_assessment() — e.g. an ordinary
+-- panelist — could then read it straight off the table, bypassing that check entirely).
+--
+-- The only direct (non-RPC) client read of this table is fetchMcqTestStatuses, which selects just
+-- assessment_id + status — both already covered by the original narrower list. Revoking the blanket
+-- grant and re-issuing the precise column list restores least privilege without breaking that query
+-- (or comp_mcq_get_test_detail / the candidate token RPCs, all SECURITY DEFINER and unaffected by
+-- table-level grants).
+revoke select on comp_mcq_tests from authenticated;
+grant select (
+  id, assessment_id, job_role, status, question_ids, time_limit_minutes, generation, started_at, submitted_at,
+  submit_reason, scored_at, total_questions, answered_count, correct_count, score_percent, time_spent_seconds,
+  topic_scores, category_scores, difficulty_scores, created_by, created_at, updated_at
+) on comp_mcq_tests to authenticated;
