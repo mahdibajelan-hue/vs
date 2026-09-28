@@ -20,6 +20,7 @@ import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
+import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -64,6 +65,12 @@ export function RootApp() {
   // longer routed — staff now view personality results inline in the competency wizard instead.
   const personalityCandidateToken = new URLSearchParams(window.location.search).get('p_candidate')
   if (personalityCandidateToken) return <PersonalityCandidatePage token={personalityCandidateToken} />
+
+  // The competency module's online technical MCQ test link (?mcq=<token>, schema.sql Section 56) —
+  // the second ONLINE part of the candidate's plan next to the personality link above, on its own
+  // query param so the three candidate tokens never collide.
+  const mcqCandidateToken = new URLSearchParams(window.location.search).get('mcq')
+  if (mcqCandidateToken) return <McqCandidatePage token={mcqCandidateToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (
