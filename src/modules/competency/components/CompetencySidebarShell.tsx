@@ -4,6 +4,7 @@ import { SignOutButton } from '../../../components/Auth/SignOutButton'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import { ThemeToggle } from './ThemeToggle'
+import { useThemeAttributeSync } from '../lib/useThemeAttributeSync'
 import '../styles/farinTheme.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
 
@@ -83,8 +84,16 @@ interface CompetencySidebarShellProps {
  * assessment) so a user always sees the same six destinations and never a page-specific tab strip.
  */
 export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitToHub, headerRight, children }: CompetencySidebarShellProps) {
+  // Bug fix (product report: "در تم روشن رنگ‌ها اصلا مشخص نیستن"): this wrapper used to hardcode
+  // `colorScheme: 'dark'` regardless of the theme actually selected via ThemeToggle below. The CSS
+  // `color-scheme` property tells the browser which palette to use for anything it renders itself
+  // (native form-control chrome, default text/background for unstyled elements, scrollbars) — forcing
+  // 'dark' here fought every light-theme color this shell's own children carefully define, which is
+  // exactly why colors read as "not distinguishable at all" once someone switched to light. It must
+  // track the real theme, the same one ThemeToggle reads and toggles.
+  const theme = useThemeAttributeSync()
   return (
-    <div className="comp-shell fixed inset-0 z-30 flex" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+    <div className="comp-shell fixed inset-0 z-30 flex" style={{ background: 'var(--bg-app)', colorScheme: theme }}>
       <aside className="no-print flex w-14 shrink-0 flex-col gap-1 border-l border-white/10 bg-[#0b0f16] px-2 py-5 sm:w-56 sm:px-3">
         <div className="mb-5 flex items-center gap-2 px-1 sm:px-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: `${COMPETENCY_ACCENT}22`, color: COMPETENCY_ACCENT }}>

@@ -12,6 +12,7 @@ import { PersonalityReportsPage } from '../personality/pages/PersonalityReportsP
 import { PersonalitySettingsPage } from '../personality/pages/PersonalitySettingsPage'
 import { ProfileForm } from './components/ProfileForm'
 import type { CompetencySection } from './components/CompetencySidebarShell'
+import { useThemeAttributeSync } from './lib/useThemeAttributeSync'
 
 export const COMPETENCY_ACCENT = '#a855f7'
 
@@ -40,6 +41,9 @@ type View =
  * and the cross-role dashboard share the same six destinations.
  */
 export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
+  // Bug fix: these two full-screen wrappers used to hardcode colorScheme: 'dark' — see the same fix
+  // (and its rationale) in CompetencySidebarShell.tsx.
+  const theme = useThemeAttributeSync()
   const loading = useCompetencyStore((s) => s.loading)
   const fetchAll = useCompetencyStore((s) => s.fetchAll)
   const createAssessment = useCompetencyStore((s) => s.createAssessment)
@@ -106,7 +110,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: theme }}>
         <Loader2 size={24} className="animate-spin" style={{ color: COMPETENCY_ACCENT }} />
       </div>
     )
@@ -184,7 +188,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // 'new' (profile intake) sits outside the six-section sidebar — it's a one-off flow reached from
   // the dashboard, not a candidate stage of an assessment that already exists.
   return (
-    <div className="comp-shell flex h-screen w-screen flex-col overflow-y-auto p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
+    <div className="comp-shell flex h-screen w-screen flex-col overflow-y-auto p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: theme }}>
       <button onClick={() => setView({ name: 'list' })} className="mb-4 flex w-fit items-center gap-1.5 text-xs text-secondary hover:text-primary">
         <ArrowRight size={14} /> بازگشت به داشبورد
       </button>
