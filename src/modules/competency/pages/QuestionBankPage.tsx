@@ -4,6 +4,9 @@ import { useCompetencyStore, type QuestionBankInput } from '../store/useCompeten
 import { usePersonalityStore, type PersonalityQuestionInput } from '../../personality/store/usePersonalityStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import { DonutChart, type DonutSlice } from '../components/DonutChart'
+import { CATEGORY_COLOR } from '../components/results/McqResultsSection'
+import '../styles/farinTheme.css'
 import {
   QUESTION_APPROVAL_STATUS_LABEL_FA,
   QUESTION_DIFFICULTY_COLOR,
@@ -1164,6 +1167,20 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
     return [...new Set(bank.filter((q) => q.jobRole === roleFilter).map((q) => q.topic))].sort((a, b) => a.localeCompare(b, 'fa'))
   }, [bank, roleFilter])
 
+  // Whole-bank composition donuts — how the bank breaks down by category and by difficulty, so an
+  // admin can see coverage gaps (e.g. "almost nothing at difficulty 3") at a glance rather than
+  // reading it out of the flat list below.
+  const bankByCategory = useMemo<DonutSlice[]>(() => {
+    const counts = new Map<McqCategory, number>()
+    bank.forEach((q) => counts.set(q.category, (counts.get(q.category) ?? 0) + 1))
+    return [...counts.entries()].map(([category, value]) => ({ key: category, label: QUESTION_TYPE_LABEL_FA[category] ?? category, value, color: CATEGORY_COLOR[category] ?? '#94a3b8' }))
+  }, [bank])
+  const bankByDifficulty = useMemo<DonutSlice[]>(() => {
+    const counts = new Map<McqDifficulty, number>()
+    bank.forEach((q) => counts.set(q.difficulty, (counts.get(q.difficulty) ?? 0) + 1))
+    return [...counts.entries()].map(([difficulty, value]) => ({ key: String(difficulty), label: MCQ_DIFFICULTY_LABEL_FA[difficulty], value, color: MCQ_DIFFICULTY_COLOR[difficulty] }))
+  }, [bank])
+
   const handleApproval = async (id: string, status: QuestionApprovalStatus) => {
     const err = await setMcqApproval(id, status)
     if (err) {
@@ -1200,6 +1217,19 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
       </div>
 
       {error && <p className="rounded-xl border border-red-400/30 bg-red-500/10 p-2.5 text-[11px] text-red-200">{error}</p>}
+
+      {bank.length > 0 && (
+        <div className="fx fx-remap grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="fx-card p-4">
+            <p className="mb-3 text-[12px] font-bold text-primary">ترکیب بانک بر اساس دسته</p>
+            <DonutChart slices={bankByCategory} centerLabel="سؤال" centerValue={bank.length.toLocaleString('fa-IR')} size={116} strokeWidth={16} />
+          </div>
+          <div className="fx-card p-4">
+            <p className="mb-3 text-[12px] font-bold text-primary">ترکیب بانک بر اساس سطح دشواری</p>
+            <DonutChart slices={bankByDifficulty} centerLabel="سؤال" centerValue={bank.length.toLocaleString('fa-IR')} size={116} strokeWidth={16} />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
         {editableRoles.map(({ jobRole: role, labelFa }) => {

@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Copy, Link2, ListChecks, Loader2, RotateCw, Wand2 } from 'lucide-react'
+import { ArrowLeft, Copy, Layers, Link2, Loader2, RotateCw, Sparkles, Wand2 } from 'lucide-react'
 import type { CompetencyAssessment } from '../types'
+import { tone } from '../lib/tone'
 import { fetchMcqTestDetail, generateMcqTest, mcqCandidateUrl, mcqErrorFa, MCQ_TEST_STATUS_LABEL_FA, type McqTestDetail } from '../lib/mcqData'
+import { tierColor } from '../lib/competencyModel'
 import { McqResultsSection } from '../components/results/McqResultsSection'
+import { RingChart } from '../components/DonutChart'
+import '../styles/farinTheme.css'
+
+const STATUS_TONE: Record<McqTestDetail['status'], string> = { NOT_STARTED: '#94a3b8', IN_PROGRESS: '#0ea5e9', SUBMITTED: '#f59e0b', SCORED: '#10b981' }
 
 interface McqStageProps {
   assessment: CompetencyAssessment
@@ -40,32 +46,53 @@ export function McqStage({ assessment, isDesigner, onContinue }: McqStageProps) 
 
   if (!assessment.needsOnlineMcq) {
     return (
-      <div className="glass-panel space-y-3 rounded-2xl p-6 text-center">
-        <p className="text-xs text-secondary">آزمون تستی آنلاین در طرح ارزیابی این متقاضی قرار ندارد.</p>
-        <button
-          onClick={onContinue}
-          className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
-        >
-          ارزیابی فنی تخصصی <ArrowLeft size={13} />
-        </button>
+      <div className="fx fx-remap">
+        <div className="fx-card flex flex-col items-center gap-3 p-8 text-center" style={tone('#94a3b8')}>
+          <span className="fx-tone-bg-strong fx-tone-text flex h-14 w-14 items-center justify-center rounded-2xl">
+            <Layers size={26} />
+          </span>
+          <p className="text-[13px] text-secondary">آزمون تستی آنلاین در طرح ارزیابی این متقاضی قرار ندارد.</p>
+          <button
+            onClick={onContinue}
+            className="mx-auto flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400"
+          >
+            ارزیابی فنی تخصصی <ArrowLeft size={13} />
+          </button>
+        </div>
       </div>
     )
   }
 
+  const statusColor = mcqTest ? STATUS_TONE[mcqTest.status] : '#94a3b8'
+  const scoreColor = mcqTest?.scorePercent != null ? tierColor(mcqTest.scorePercent) : statusColor
+
   return (
-    <div className="space-y-4">
-      <div className="glass-panel rounded-2xl p-4">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-sm font-bold">
-            <ListChecks size={15} className="text-teal-300" /> آزمون تستی آنلاین
-          </p>
-          {mcqTest && (
-            <span className="rounded-full bg-teal-500/15 px-2.5 py-1 text-[10.5px] font-bold text-teal-200">
-              {MCQ_TEST_STATUS_LABEL_FA[mcqTest.status]}
-              {mcqTest.status === 'SCORED' && mcqTest.scorePercent != null && <span className="num"> — {mcqTest.scorePercent.toLocaleString('fa-IR')}٪</span>}
+    <div className="fx fx-remap space-y-4">
+      <div className="fx-card fx-tone-wash overflow-hidden p-4 sm:p-5" style={tone(statusColor)}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="fx-tone-bg-strong fx-tone-text flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+              <Sparkles size={22} />
             </span>
+            <div className="min-w-0">
+              <p className="text-[15px] font-black">آزمون تستی آنلاین</p>
+              <p className="fx-tone-bg fx-tone-text mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                {mcqTest ? MCQ_TEST_STATUS_LABEL_FA[mcqTest.status] : '—'}
+              </p>
+            </div>
+          </div>
+          {mcqTest?.status === 'SCORED' && mcqTest.scorePercent != null && (
+            <RingChart value={mcqTest.scorePercent} color={scoreColor} size={72} strokeWidth={8} label="درصد کل آزمون تستی">
+              <span className="num text-base font-black leading-none" style={{ color: scoreColor }}>
+                {mcqTest.scorePercent.toLocaleString('fa-IR')}
+              </span>
+              <span className="fx-muted text-[8px]">از ۱۰۰</span>
+            </RingChart>
           )}
         </div>
+      </div>
+
+      <div className="fx-card p-4">
         {loading ? (
           <Loader2 size={14} className="animate-spin text-muted" />
         ) : isDesigner ? (
@@ -155,7 +182,7 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
         </button>
       </div>
       {mcqTest && (
-        <p className="text-[10.5px] text-muted">
+        <p className="fx-muted text-[10.5px]">
           {mcqTest.questionCount != null && (
             <>
               آخرین آزمون تولیدشده: <span className="num font-bold text-secondary">{mcqTest.questionCount.toLocaleString('fa-IR')}</span> سؤال، زمان{' '}
@@ -171,11 +198,15 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
           )}
         </p>
       )}
-      {error && <p className="text-[10.5px] text-red-300">{error}</p>}
+      {error && (
+        <p className="fx-tone-text text-[10.5px]" style={tone('#ef4444')}>
+          {error}
+        </p>
+      )}
 
       {mcqTest?.candidateToken && (
-        <div className="space-y-1.5 rounded-xl border border-teal-400/20 bg-teal-500/[0.05] p-3">
-          <p className="flex items-center gap-1.5 text-[10.5px] font-bold text-teal-200">
+        <div className="fx-sub space-y-1.5 p-3" style={tone('#14b8a6')}>
+          <p className="fx-tone-text flex items-center gap-1.5 text-[10.5px] font-bold">
             <Link2 size={12} /> لینک آزمون تستی متقاضی
           </p>
           <div className="flex flex-wrap items-center gap-2">

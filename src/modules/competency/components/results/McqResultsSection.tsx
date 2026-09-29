@@ -1,18 +1,36 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, ChevronDown, Clock, ListChecks, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock, Gauge, ListChecks, PieChart, Target, XCircle } from 'lucide-react'
 import { tierColor } from '../../lib/competencyModel'
 import { fa } from '../../lib/resultsModel'
 import { tone } from '../../lib/tone'
-import { QUESTION_TYPE_LABEL_FA } from '../../types'
-import { fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqTestDetail } from '../../lib/mcqData'
+import { QUESTION_TYPE_LABEL_FA, type QuestionType } from '../../types'
+import { fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
+import { RingChart, DonutChart, type DonutSlice } from '../DonutChart'
 import { EmptyNote } from './ResultsSections'
+
+/** One distinct hue per question category — varied palette so the category donut reads at a glance
+ * rather than everything sharing the same score-tier color. Exported so the MCQ question-bank tab
+ * (QuestionBankPage.tsx) can use the exact same colors for its own bank-composition donut. */
+export const CATEGORY_COLOR: Record<QuestionType, string> = {
+  GENERAL: '#0ea5e9',
+  TECHNICAL: '#a855f7',
+  SCENARIO: '#f59e0b',
+  PROBLEM_SOLVING: '#ec4899',
+  EXPERIENCE_BASED: '#14b8a6',
+  CASE_STUDY: '#6366f1',
+  IMAGE_BASED: '#84cc16',
+  BEHAVIORAL: '#f43f5e',
+  HSE: '#ef4444',
+  JUDGMENT: '#8b5cf6',
+}
 
 /**
  * Self-contained results section for the online technical MCQ test («آزمون تستی آنلاین», schema.sql
- * Section 56): overall %, per-topic bars (the same breadth-of-knowledge the test was designed to
- * measure — "جامعیت"), time taken and unanswered count, with an expandable per-question breakdown
- * (chosen vs. correct answer) for staff. Fetches its own data via comp_mcq_get_test_detail so
- * ResultsStage only needs the few lines that mount it — see McqResultsSection's own default export.
+ * Section 56): overall score as a ring, category mix and difficulty mix as donuts (part-to-whole —
+ * ui-ux-pro-max chart guidance), per-topic bars (topics can run past the ~6-slice donut limit, so a
+ * bar list stays the right shape for "جامعیت" breadth-of-knowledge), time taken and unanswered count,
+ * with an expandable per-question breakdown (chosen vs. correct answer) for staff. Fetches its own
+ * data via comp_mcq_get_test_detail so callers only need the few lines that mount it.
  */
 export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
   const [test, setTest] = useState<McqTestDetail | null>(null)
@@ -48,24 +66,32 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
   const unanswered = total - test.answeredCount
   const overallColor = tierColor(test.scorePercent)
 
+  const categorySlices: DonutSlice[] = test.categoryScores.map((c) => ({
+    key: c.category,
+    label: QUESTION_TYPE_LABEL_FA[c.category] ?? c.category,
+    value: c.total,
+    color: CATEGORY_COLOR[c.category] ?? '#94a3b8',
+  }))
+  const difficultySlices: DonutSlice[] = test.difficultyScores.map((d) => ({
+    key: String(d.difficulty),
+    label: MCQ_DIFFICULTY_LABEL_FA[d.difficulty as McqDifficulty],
+    value: d.total,
+    color: MCQ_DIFFICULTY_COLOR[d.difficulty as McqDifficulty],
+  }))
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr]">
         <div className="fx-card flex flex-col items-center justify-center gap-1.5 p-5" style={tone(overallColor)}>
-          <div
-            className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full"
-            role="img"
-            aria-label={`امتیاز کلی آزمون تستی ${test.scorePercent ?? 0} از ۱۰۰`}
-            style={{ background: `conic-gradient(${overallColor} ${(test.scorePercent ?? 0) * 3.6}deg, var(--fx-track) 0deg)` }}
-          >
-            <div className="fx-card flex h-[70px] w-[70px] flex-col items-center justify-center rounded-full">
-              <span className="num text-xl font-black leading-none" style={{ color: overallColor }}>
-                {fa(test.scorePercent, 0)}
-              </span>
-              <span className="fx-muted text-[9px]">از ۱۰۰</span>
-            </div>
-          </div>
-          <p className="fx-muted text-[10.5px] font-bold">درصد کل آزمون تستی</p>
+          <RingChart value={test.scorePercent} color={overallColor} size={96} strokeWidth={11} label="درصد کل آزمون تستی">
+            <span className="num text-xl font-black leading-none" style={{ color: overallColor }}>
+              {fa(test.scorePercent, 0)}
+            </span>
+            <span className="fx-muted text-[9px]">از ۱۰۰</span>
+          </RingChart>
+          <p className="fx-muted flex items-center gap-1 text-[10.5px] font-bold">
+            <Gauge size={11} /> درصد کل آزمون تستی
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -76,17 +102,24 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
         </div>
       </div>
 
-      {test.categoryScores.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {test.categoryScores.map((c) => (
-            <span key={c.category} className="fx-sub flex items-center gap-1.5 px-2.5 py-1 text-[10.5px] font-bold" style={tone(tierColor(c.percent))}>
-              <span className="fx-tone-text">{QUESTION_TYPE_LABEL_FA[c.category] ?? c.category}</span>
-              <span className="num fx-tone-text">{fa(c.percent, 0)}٪</span>
-              <span className="fx-muted">({fa(c.correct)}/{fa(c.total)})</span>
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {categorySlices.length > 0 && (
+          <div className="fx-card p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-bold">
+              <PieChart size={14} style={{ color: '#a855f7' }} /> ترکیب سؤالات بر اساس دسته
+            </p>
+            <DonutChart slices={categorySlices} centerLabel="سؤال" centerValue={fa(total)} />
+          </div>
+        )}
+        {difficultySlices.length > 0 && (
+          <div className="fx-card p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-bold">
+              <Target size={14} style={{ color: '#f59e0b' }} /> ترکیب سؤالات بر اساس سطح دشواری
+            </p>
+            <DonutChart slices={difficultySlices} centerLabel="سؤال" centerValue={fa(total)} />
+          </div>
+        )}
+      </div>
 
       {test.topicScores.length > 0 && (
         <div className="fx-card p-4">
@@ -135,9 +168,9 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
             <div key={item.questionId} className="fx-card p-3.5" style={tone(item.isCorrect ? '#34d399' : '#f87171')}>
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                 <span className="num fx-muted text-[9.5px]">#{fa(item.order)}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{QUESTION_TYPE_LABEL_FA[item.category] ?? item.category}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{item.topic}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{MCQ_DIFFICULTY_LABEL_FA[item.difficulty]}</span>
+                <span className="fx-sub px-2 py-0.5 text-[9.5px] font-bold text-secondary">{QUESTION_TYPE_LABEL_FA[item.category] ?? item.category}</span>
+                <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{item.topic}</span>
+                <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{MCQ_DIFFICULTY_LABEL_FA[item.difficulty]}</span>
                 <span className="fx-tone-bg fx-tone-text mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold">
                   {item.isCorrect ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {item.isCorrect ? 'پاسخ درست' : item.chosenOption == null ? 'بدون پاسخ' : 'پاسخ نادرست'}
                   {item.responseTimeMs != null && <span className="num"> — {Math.round(item.responseTimeMs / 1000).toLocaleString('fa-IR')} ثانیه</span>}

@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Gauge, TrendingDown, TrendingUp } from 'lu
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
 import { jobRoleLabel } from '../../competency/lib/competencyData'
 import { tone } from '../../competency/lib/tone'
+import { RingChart } from '../../competency/components/DonutChart'
 import type { JobRole } from '../../competency/types'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { bilingual, dimensionFamily } from '../lib/bilingual'
@@ -43,19 +44,12 @@ export function RoleAlignmentCard({ jobRole, hasProfile, alignment }: { jobRole:
   return (
     <div className="fx fx-card p-4 sm:p-5">
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div
-          className="flex h-24 w-24 shrink-0 items-center justify-center self-center rounded-full"
-          role="img"
-          aria-label={pct != null ? `تطابق ${pct} درصد` : 'بدون داده'}
-          style={{ background: `conic-gradient(${verdict.color} ${(pct ?? 0) * 3.6}deg, var(--fx-track) 0deg)` }}
-        >
-          <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full" style={{ background: 'var(--fx-ring-hole)' }}>
-            <span className="num fx-tone-text text-xl font-black" style={tone(verdict.color)}>
-              {pct != null ? `٪${pct.toLocaleString('fa-IR')}` : '—'}
-            </span>
-            <span className="fx-muted text-[9.5px]">Role Fit</span>
-          </div>
-        </div>
+        <RingChart value={pct} color={verdict.color} size={96} strokeWidth={11} label="تطابق شغلی" className="self-center">
+          <span className="num fx-tone-text text-xl font-black" style={tone(verdict.color)}>
+            {pct != null ? `٪${pct.toLocaleString('fa-IR')}` : '—'}
+          </span>
+          <span className="fx-muted text-[9.5px]">Role Fit</span>
+        </RingChart>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-[14px] font-extrabold">
             <Gauge size={16} style={{ color: '#0ea5e9' }} /> Role Alignment (تطابق با الزامات رفتاری شغل «{roleLabel}»)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { AlertTriangle, ArrowLeft, Fingerprint, Gauge, Loader2, Printer, ShieldCheck, ShieldQuestion, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Compass, Fingerprint, Gauge, Loader2, Printer, ShieldCheck, ShieldQuestion, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
@@ -8,6 +8,7 @@ import { tone } from '../../competency/lib/tone'
 import { printReportNode } from '../../competency/lib/reportExport'
 import { PersonalityPrintReport } from './PersonalityPrintReport'
 import { RoleAlignmentCard, ThresholdBar } from './RoleAlignmentCard'
+import { RingChart } from '../../competency/components/DonutChart'
 import { buildFingerprintSnapshot, scoreBandFa, type FingerprintDimensionRow, type FingerprintTraitRow } from '../lib/fingerprintModel'
 import { overallVerdict } from '../lib/roleAlignment'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA, type PersonalityValidityResult, type PersonalityValidityStatus } from '../types'
@@ -265,7 +266,7 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
         </div>
       )}
 
-      <SectionHeading icon={Gauge} color="#10b981" en="Role Alignment" fa="ترکیب شایستگی‌های شغلی و تطابق با شغل" />
+      <SectionHeading icon={Compass} color="#10b981" en="Role Alignment" fa="ترکیب شایستگی‌های شغلی و تطابق با شغل" />
       <RoleAlignmentCard jobRole={assessment.jobRole} hasProfile={assessment.jobProfileId != null} alignment={snapshot.alignment} />
 
       {onContinue && (
@@ -336,21 +337,23 @@ function RadarTick(props: { x?: number | string; y?: number | string; textAnchor
 function TraitCard({ trait: t }: { trait: FingerprintTraitRow }) {
   const pct = Math.max(0, Math.min(100, t.score ?? 0))
   return (
-    <div className="fx-sub fx-accent-bar p-3" style={tone(t.tone)}>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-[12.5px] font-bold">
-          <span className="fx-tone-text" dir="ltr">
-            {t.label.en}
-          </span>{' '}
-          <span className="fx-text-2 font-medium">({t.label.fa})</span>
-        </p>
-        <p className="shrink-0 text-[11px]">
-          <span className="num fx-tone-text text-[17px] font-black">{t.score != null ? Math.round(t.score).toLocaleString('fa-IR') : '—'}</span>{' '}
-          <span className="fx-muted">{scoreBandFa(t.score)}</span>
-        </p>
-      </div>
-      <div className="fx-track h-2.5 overflow-hidden rounded-full">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, marginInlineStart: 0, background: `linear-gradient(270deg, color-mix(in srgb, ${t.tone} 45%, transparent), ${t.tone})` }} />
+    <div className="fx-sub p-3" style={tone(t.tone)}>
+      <div className="flex items-center gap-3">
+        <RingChart value={t.score} color={t.tone} size={46} strokeWidth={6} label={t.label.fa}>
+          <span className="num fx-tone-text text-[13px] font-black leading-none">{t.score != null ? Math.round(t.score).toLocaleString('fa-IR') : '—'}</span>
+        </RingChart>
+        <div className="min-w-0 flex-1">
+          <p className="min-w-0 truncate text-[12.5px] font-bold">
+            <span className="fx-tone-text" dir="ltr">
+              {t.label.en}
+            </span>{' '}
+            <span className="fx-text-2 font-medium">({t.label.fa})</span>
+          </p>
+          <p className="fx-muted text-[10.5px]">{scoreBandFa(t.score)}</p>
+          <div className="fx-track mt-1.5 h-2 overflow-hidden rounded-full">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, marginInlineStart: 0, background: `linear-gradient(270deg, color-mix(in srgb, ${t.tone} 45%, transparent), ${t.tone})` }} />
+          </div>
+        </div>
       </div>
     </div>
   )
