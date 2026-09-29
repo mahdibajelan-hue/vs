@@ -91,7 +91,13 @@ const SECTION_TITLE: Record<Stage, string> = {
  */
 const LEAD_STAGES: Stage[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
 const PANELIST_STAGES: Stage[] = ['profile', 'documents', 'panel', 'questions', 'interview']
-const DESIGNER_STAGES: Stage[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'interview']
+// An ASSESSMENT_DESIGNER is a module-wide role, independent of whether this particular viewer is
+// also on this particular assessment's panel — 'questions' must stay reachable here too (not just
+// in PANELIST_STAGES/LEAD_STAGES), otherwise a designer who is a plain (non-lead) panelist on some
+// assessment can never open their own technical-scoring sheet on it (PanelistScoreSheet already
+// renders nothing for a designer who isn't actually on that assessment's panel, so this is safe to
+// always include).
+const DESIGNER_STAGES: Stage[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview']
 
 /**
  * Profile -> documents (self-service link) -> panel -> questions flow for one assessment. The
