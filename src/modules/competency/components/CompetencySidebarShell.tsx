@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
-import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, UserCircle2, Users } from 'lucide-react'
 import { SignOutButton } from '../../../components/Auth/SignOutButton'
+import { ProfileModal } from '../../../components/Auth/ProfileModal'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { ThemeToggle } from './ThemeToggle'
 import { useThemeAttributeSync } from '../lib/useThemeAttributeSync'
 import '../styles/farinTheme.css'
@@ -92,6 +94,8 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
   // exactly why colors read as "not distinguishable at all" once someone switched to light. It must
   // track the real theme, the same one ThemeToggle reads and toggles.
   const theme = useThemeAttributeSync()
+  const myProfile = useAuthStore((s) => s.profile)
+  const [showProfile, setShowProfile] = useState(false)
   return (
     <div className="comp-shell fixed inset-0 z-30 flex" style={{ background: 'var(--bg-app)', colorScheme: theme }}>
       <aside className="no-print flex w-14 shrink-0 flex-col gap-1 border-l border-white/10 bg-[#0b0f16] px-2 py-5 sm:w-56 sm:px-3">
@@ -141,6 +145,20 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {headerRight}
+            {myProfile && (
+              <button
+                onClick={() => setShowProfile(true)}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary transition-colors hover:bg-white/5"
+                title="پروفایل من — مشخصات و رمز عبور"
+              >
+                {myProfile.avatarUrl ? (
+                  <img src={myProfile.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+                ) : (
+                  <UserCircle2 size={14} />
+                )}
+                <span className="hidden sm:inline">{myProfile.fullName || 'پروفایل من'}</span>
+              </button>
+            )}
             <ThemeToggle />
           </div>
         </header>
@@ -155,6 +173,8 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
           </ErrorBoundary>
         </div>
       </div>
+
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   )
 }
