@@ -1,0 +1,129 @@
+/* ==========================================================================
+   Public results link — "کارت گواهی شایستگی" (competency ID / certificate card).
+   Self-contained (imported only by PublicResultsPage.tsx, an unauthenticated route) rather than
+   built on farinTheme.css's .fx tokens, since this page never mounts the module shell those rely on.
+   Dark-only by design: a shareable certificate should look identical for every viewer regardless of
+   their own device's theme, exactly like the candidate-facing exam pages already do.
+   ========================================================================== */
+
+.id-card-stage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(60% 50% at 50% -10%, rgba(168, 85, 247, 0.22), transparent 60%),
+    radial-gradient(50% 40% at 90% 110%, rgba(56, 189, 248, 0.15), transparent 60%),
+    #070b14;
+}
+
+.id-card-outer {
+  --px: 50;
+  --py: 50;
+  --tier: #a855f7;
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  border-radius: 30px;
+  padding: 1.5px;
+  background: linear-gradient(155deg, var(--tier), rgba(56, 189, 248, 0.55) 45%, rgba(244, 114, 182, 0.55) 100%);
+  box-shadow:
+    0 30px 70px -25px color-mix(in srgb, var(--tier) 55%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  transform: perspective(1100px) rotateY(calc((var(--px) - 50) * 0.18deg)) rotateX(calc((50 - var(--py)) * 0.18deg));
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.id-card-inner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28.5px;
+  background: linear-gradient(165deg, #150c24 0%, #1a1030 55%, #0b0f16 100%);
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+/* Holographic foil sheen — a slow, ever-shifting rainbow wash (auto on touch/no-pointer devices),
+   nudged by the live pointer position when one is present. color-dodge keeps it a light sparkle
+   over the dark card rather than a flat color wash. */
+.id-card-holo {
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(
+    from calc(var(--px) * 3.6deg),
+    rgba(244, 114, 182, 0.5),
+    rgba(168, 85, 247, 0.5),
+    rgba(56, 189, 248, 0.5),
+    rgba(52, 211, 153, 0.5),
+    rgba(251, 191, 36, 0.5),
+    rgba(244, 114, 182, 0.5)
+  );
+  mix-blend-mode: color-dodge;
+  opacity: 0.4;
+  filter: saturate(1.6) blur(4px);
+  animation: id-card-spin 10s linear infinite;
+  pointer-events: none;
+}
+
+/* A soft glossy highlight that actually follows the pointer, for the "tilt the card in the light"
+   feel — purely additive on top of the holo wash above. */
+.id-card-spotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at calc(var(--px) * 1%) calc(var(--py) * 1%), rgba(255, 255, 255, 0.5), transparent 38%);
+  mix-blend-mode: overlay;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+@keyframes id-card-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .id-card-holo {
+    animation: none;
+  }
+  .id-card-outer {
+    transition: none;
+  }
+}
+
+.id-card-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+}
+
+.id-card-photo-ring {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(var(--tier) calc(var(--score, 0) * 3.6deg), rgba(255, 255, 255, 0.1) 0deg);
+  box-shadow: 0 0 24px -4px color-mix(in srgb, var(--tier) 70%, transparent);
+}
+
+.id-card-strength-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--tier) 16%, transparent);
+  color: color-mix(in srgb, var(--tier) 55%, white 45%);
+  border: 1px solid color-mix(in srgb, var(--tier) 35%, transparent);
+}
