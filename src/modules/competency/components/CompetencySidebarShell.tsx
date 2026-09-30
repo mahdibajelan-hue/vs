@@ -165,7 +165,12 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
 
         <StorageErrorBanner />
 
-        <div className="space-y-4 p-4 sm:p-5">
+        {/* fx-remap: the light-theme pastel-text remap (farinTheme.css) applied here once, at the
+            shell level, so every page rendered inside it (dashboard, every wizard stage, question
+            bank, reports, settings) gets legible text on white without opting in individually —
+            see farinTheme.css for why this was previously opt-in per page and missed most of the
+            module. */}
+        <div className="fx-remap space-y-4 p-4 sm:p-5">
           {/* A crash in one page's content stays inside this box (sidebar still works) instead of
               blanking the whole app; keyed so navigating to another page/candidate resets it. */}
           <ErrorBoundary key={`${active}:${title}`} area={title}>

@@ -4,18 +4,18 @@ import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
-import { formatJalali } from '../../../lib/jalali'
 import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { RingChart } from '../components/DonutChart'
+import { tone } from '../lib/tone'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
-import { PLAN_STATUS_META } from '../lib/developmentPlan'
 import { computeNextStep, type NextStep } from '../lib/nextStep'
 import { DemoBadge, DemoDataToggle } from '../components/DemoDataToggle'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { fetchMcqTestStatuses, type McqTestStatus } from '../lib/mcqData'
-import type { CompDevelopmentPlan, CompetencyAssessment, JobRole } from '../types'
+import type { CompetencyAssessment, JobRole } from '../types'
 
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
@@ -188,124 +188,125 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
 
   return (
     <CompetencySidebarShell active="dashboard" nav={nav} title="داشبورد ارزیابی شایستگی" onExitToHub={onExitToHub} headerRight={headerRight}>
-      {/* Aggregate stats */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <StatTile icon={Users} label="کل مصاحبه‌ها" value={totalInterviews.toLocaleString('fa-IR')} color="#a855f7" />
-        <StatTile icon={CheckCircle2} label="پذیرفته‌شده" value={acceptedCount.toLocaleString('fa-IR')} color="#34d399" />
-        <StatTile icon={ClipboardList} label="ارزیابی تکمیل‌شده" value={completedCount.toLocaleString('fa-IR')} color="#38bdf8" />
-        <StatTile icon={TrendingUp} label="نرخ پذیرش" value={acceptanceRate != null ? `٪${acceptanceRate.toLocaleString('fa-IR')}` : '—'} color="#fbbf24" />
-      </div>
-
-      {myActionItems.length > 0 && (
-        <div className="glass-panel rounded-2xl border border-rose-400/25 bg-rose-500/[0.04] p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold text-rose-200">
-            <AlertCircle size={14} /> نیازمند اقدام من ({myActionItems.length.toLocaleString('fa-IR')})
-          </p>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {myActionItems.map((a) => (
-              <CandidateCard
-                key={a.id}
-                assessment={a}
-                overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
-                rank={rankById.get(a.id)}
-                nextStep={nextStepById.get(a.id)}
-                plan={developmentPlans.find((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
-                followUp={assessments.find((x) => x.previousAssessmentId === a.id)}
-                onOpen={() => onOpen(a.id)}
-                onDelete={() => setConfirmId(a.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {topPerRole.length > 0 && (
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
-            <Award size={14} className="text-amber-300" /> متقاضیان برتر هر شغل
-          </p>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {topPerRole.map(({ role, assessment: a, overall }) => (
-              <button
-                key={role}
-                onClick={() => onOpen(a.id)}
-                className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-right transition-colors hover:bg-white/5"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
-                  <Award size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-bold">{a.candidateName}</p>
-                  <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, role)}</p>
-                </div>
-                <span className="num shrink-0 text-sm font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per
-          candidate) so this reads as a scannable roster for succession planning rather than a wall of
-          avatar cards; a candidate's full profile is a click away for whoever needs it. */}
-      <div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-bold">{isModuleAdmin || isDesigner ? 'کل متقاضیان' : 'متقاضیان من'}</p>
-            {(isModuleAdmin || isDesigner) && <p className="text-[10.5px] text-muted">بانک استعداد — مرجعی برای جانشین‌پروری در هر شغل</p>}
-          </div>
-          <DemoDataToggle />
+      {/* A single flex child so the shell's own `space-y-4` no longer stacks these sections — the
+          tighter `gap-3` here is what keeps the whole page's vertical rhythm compact. */}
+      <div className="fx fx-remap flex flex-col gap-3">
+        {/* Aggregate stats */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatTile icon={Users} label="کل مصاحبه‌ها" value={totalInterviews.toLocaleString('fa-IR')} color="#a855f7" />
+          <StatTile icon={CheckCircle2} label="پذیرفته‌شده" value={acceptedCount.toLocaleString('fa-IR')} color="#34d399" />
+          <StatTile icon={ClipboardList} label="ارزیابی تکمیل‌شده" value={completedCount.toLocaleString('fa-IR')} color="#38bdf8" />
+          <AcceptanceRateTile rate={acceptanceRate} />
         </div>
 
-        {usedRoles.length > 1 && (
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setRoleFilter('all')}
-              className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === 'all' ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
-            >
-              همه مشاغل
-            </button>
-            {usedRoles.map((r) => (
-              <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === r ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
-              >
-                {jobRoleLabel(jobRoleConfigs, r)}
-              </button>
-            ))}
-          </div>
+        {myActionItems.length > 0 && (
+          <section className="fx-card fx-accent-bar p-3" style={tone('#fb7185')}>
+            <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[11.5px] font-bold">
+              <AlertCircle size={13} /> نیازمند اقدام من ({myActionItems.length.toLocaleString('fa-IR')})
+            </p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {myActionItems.map((a) => (
+                <ActionCandidateRow
+                  key={a.id}
+                  assessment={a}
+                  overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
+                  rank={rankById.get(a.id)}
+                  nextStep={nextStepById.get(a.id)}
+                  hasPlan={developmentPlans.some((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
+                  reassessmentRelated={!!a.previousAssessmentId || assessments.some((x) => x.previousAssessmentId === a.id)}
+                  onOpen={() => onOpen(a.id)}
+                  onDelete={() => setConfirmId(a.id)}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
-        {filteredAssessments.length === 0 ? (
-          <div className="glass-panel flex flex-col items-center gap-2 rounded-2xl p-10 text-center">
-            <ClipboardList size={28} className="text-muted" />
-            <p className="text-sm text-secondary">هنوز مصاحبه‌ای ثبت نشده است.</p>
-            <button onClick={onNew} className="mt-2 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
-              شروع اولین مصاحبه
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {filteredAssessments.map((a) => (
-              <TalentPoolRow
-                key={a.id}
-                assessment={a}
-                overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
-                nextStep={nextStepById.get(a.id)}
-                onOpen={() => onOpen(a.id)}
-                onDelete={() => setConfirmId(a.id)}
-              />
-            ))}
-          </div>
+        {topPerRole.length > 0 && (
+          <section className="fx-card p-3">
+            <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-bold">
+              <Award size={13} className="text-amber-300" /> متقاضیان برتر هر شغل
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {topPerRole.map(({ role, assessment: a, overall }) => (
+                <button key={role} onClick={() => onOpen(a.id)} className="fx-sub flex items-center gap-2 rounded-lg p-1.5 text-right transition-colors hover:bg-white/5">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
+                    <Award size={12} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11px] font-bold leading-tight">{a.candidateName}</p>
+                    <p className="fx-muted truncate text-[9px] leading-tight">{jobRoleLabel(jobRoleConfigs, role)}</p>
+                  </div>
+                  <span className="num shrink-0 text-xs font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
+
+        {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per
+            candidate) so this reads as a scannable roster for succession planning rather than a wall of
+            avatar cards; a candidate's full profile is a click away for whoever needs it. This is the
+            one section allowed to keep scrolling — it can legitimately run to dozens of rows. */}
+        <section>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-bold">{isModuleAdmin || isDesigner ? 'کل متقاضیان' : 'متقاضیان من'}</p>
+              {(isModuleAdmin || isDesigner) && <p className="fx-muted text-[10.5px]">بانک استعداد — مرجعی برای جانشین‌پروری در هر شغل</p>}
+            </div>
+            <DemoDataToggle />
+          </div>
+
+          {usedRoles.length > 1 && (
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setRoleFilter('all')}
+                className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === 'all' ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+              >
+                همه مشاغل
+              </button>
+              {usedRoles.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${roleFilter === r ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+                >
+                  {jobRoleLabel(jobRoleConfigs, r)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredAssessments.length === 0 ? (
+            <div className="fx-card flex flex-col items-center gap-2 p-10 text-center">
+              <ClipboardList size={28} className="fx-muted" />
+              <p className="text-sm text-secondary">هنوز مصاحبه‌ای ثبت نشده است.</p>
+              <button onClick={onNew} className="mt-2 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400">
+                شروع اولین مصاحبه
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {filteredAssessments.map((a) => (
+                <TalentPoolRow
+                  key={a.id}
+                  assessment={a}
+                  overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
+                  nextStep={nextStepById.get(a.id)}
+                  onOpen={() => onOpen(a.id)}
+                  onDelete={() => setConfirmId(a.id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {confirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmId(null)}>
-          <div className="glass-panel w-full max-w-sm rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="fx-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-bold">حذف این ارزیابی؟</p>
-            <p className="mt-1 text-xs text-muted">این عمل قابل بازگشت نیست.</p>
+            <p className="fx-muted mt-1 text-xs">این عمل قابل بازگشت نیست.</p>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setConfirmId(null)} className="rounded-lg border border-white/10 px-3.5 py-1.5 text-xs">
                 انصراف
@@ -329,13 +330,31 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
 
 function StatTile({ icon: Icon, label, value, color }: { icon: typeof Users; label: string; value: string; color: string }) {
   return (
-    <div className="glass-panel rounded-2xl p-3.5">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
-        <Icon size={13} style={{ color }} /> {label}
+    <div className="fx-card p-2.5">
+      <div className="fx-text-2 mb-1 flex items-center gap-1.5 text-[10.5px]">
+        <Icon size={12} style={{ color }} /> {label}
       </div>
-      <p className="num text-2xl font-extrabold" style={{ color }}>
+      <p className="num text-xl font-extrabold" style={{ color }}>
         {value}
       </p>
+    </div>
+  )
+}
+
+/** The acceptance-rate stat tile earns a small ring (rather than bare text) because, unlike the
+ * other three tiles, it is itself already a percentage of a whole — the ring makes that relationship
+ * visible at a glance instead of needing to be inferred from a lone number. */
+function AcceptanceRateTile({ rate }: { rate: number | null }) {
+  return (
+    <div className="fx-card flex items-center gap-2 p-2.5">
+      <RingChart value={rate} color="#fbbf24" size={38} strokeWidth={5} label="نرخ پذیرش">
+        <span className="num text-[9.5px] font-extrabold" style={{ color: '#fbbf24' }}>
+          {rate != null ? `٪${rate.toLocaleString('fa-IR')}` : '—'}
+        </span>
+      </RingChart>
+      <div className="fx-text-2 flex min-w-0 flex-1 items-center gap-1 text-[10.5px]">
+        <TrendingUp size={12} className="shrink-0" style={{ color: '#fbbf24' }} /> نرخ پذیرش
+      </div>
     </div>
   )
 }
@@ -362,15 +381,15 @@ function TalentPoolRow({
   const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
 
   return (
-    <div className="glass-panel group flex items-center gap-2.5 rounded-xl border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
-      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-right">
+    <div className="fx-sub group flex items-center gap-2.5 rounded-lg border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
+      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5 text-right">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
             {a.isApproved && <ApprovalMedal size="sm" />}
             {a.isDemo && <DemoBadge />}
           </div>
-          <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+          <p className="fx-muted truncate text-[10.5px]">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
         </div>
         <span
           className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold sm:inline-block ${
@@ -389,9 +408,9 @@ function TalentPoolRow({
           <span className="num text-sm font-extrabold" style={{ color: tier }}>
             {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
           </span>
-          <span className="hidden text-[9.5px] text-muted sm:inline">{band.label}</span>
+          <span className="fx-muted hidden text-[9.5px] sm:inline">{band.label}</span>
         </div>
-        <ChevronLeft size={14} className="shrink-0 text-muted" />
+        <ChevronLeft size={14} className="fx-muted shrink-0" />
       </button>
       <button
         onClick={onDelete}
@@ -404,13 +423,19 @@ function TalentPoolRow({
   )
 }
 
-function CandidateCard({
+/** The compact "needs my action" row: one line per candidate (avatar, name/role, a single next-step
+ * chip, the score) instead of the previous vertical avatar card — the same information density as
+ * `TalentPoolRow` but keeping the small avatar and a rank badge, since this list is usually short and
+ * the person opening it is about to act on exactly one of these candidates. Plan/reassessment status,
+ * previously two extra stacked badge rows, collapses to at most two tiny icons next to the name; the
+ * interview date (not shown in the talent-pool row either) is dropped here on purpose. */
+function ActionCandidateRow({
   assessment: a,
   overall,
   rank,
   nextStep,
-  plan,
-  followUp,
+  hasPlan,
+  reassessmentRelated,
   onOpen,
   onDelete,
 }: {
@@ -418,14 +443,11 @@ function CandidateCard({
   overall: number | null
   rank?: number
   nextStep?: NextStep
-  /** This assessment's open Individual Development Plan, if any (Phase 5). */
-  plan?: CompDevelopmentPlan
-  /** The reassessment that follows this one up, if any. */
-  followUp?: CompetencyAssessment
+  hasPlan: boolean
+  reassessmentRelated: boolean
   onOpen: () => void
   onDelete: () => void
 }) {
-  const band = maturityBand(overall)
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
@@ -440,88 +462,49 @@ function CandidateCard({
   const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
 
   return (
-    <div
-      className="glass-panel group relative overflow-hidden rounded-xl border-r-[3px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_-10px_rgba(168,85,247,0.4)]"
-      style={{ borderRightColor: tier }}
-    >
-      <button onClick={onOpen} className="flex w-full flex-col items-center gap-1.5 p-2.5 pt-3 text-center">
-        <div className="relative">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-purple-400/30 bg-purple-500/10 text-purple-300">
-            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={17} />}
+    <div className="fx-sub group flex items-center gap-2 rounded-lg border-r-[3px] p-1.5 pr-2.5 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
+      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-right">
+        <div className="relative shrink-0">
+          <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
+            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
           </div>
           {a.isApproved && (
-            <span className="absolute -bottom-1.5 -left-1.5">
+            <span className="absolute -bottom-1 -left-1 scale-75">
               <ApprovalMedal size="sm" />
             </span>
           )}
           {rank != null && (
             <span
-              className="num absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0b0f16] bg-amber-400 text-[10px] font-extrabold text-amber-950 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+              className="num absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[7.5px] font-extrabold text-amber-950"
               title={`رتبه ${rank} در میان متقاضیان این شغل`}
             >
               {rank.toLocaleString('fa-IR')}
             </span>
           )}
         </div>
-        <div className="min-w-0 w-full">
-          <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
-          <p className="truncate text-[10px] text-muted">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
-          {a.isDemo && <DemoBadge />}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1">
-          <span className="num text-sm font-extrabold" style={{ color: tier }}>
-            {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-          </span>
-          <span className="text-[9.5px] text-muted">{band.label}</span>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-1">
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-              nextStep?.mine
-                ? 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40'
-                : nextStep?.tone === 'done' || (!nextStep && a.status === 'completed')
-                  ? 'bg-green-500/15 text-green-300'
-                  : nextStep?.tone === 'waiting'
-                    ? 'bg-slate-500/20 text-slate-300'
-                    : 'bg-amber-500/15 text-amber-300'
-            }`}
-            title={nextStep?.mine ? 'این مرحله منتظر اقدام شماست' : 'مرحله‌ی بعدی'}
-          >
-            {nextStep?.label ?? (a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام')}
-          </span>
-          <span className="text-[9px] text-muted">{formatJalali(a.interviewDate)}</span>
-        </div>
-        {(plan || a.previousAssessmentId || followUp) && (
-          <div className="flex flex-wrap items-center justify-center gap-1">
-            {plan && (
-              <span
-                className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                style={{ background: `${PLAN_STATUS_META[plan.status].color}1f`, color: PLAN_STATUS_META[plan.status].color }}
-                title={`برنامه توسعه فردی — ${PLAN_STATUS_META[plan.status].label}`}
-              >
-                <Sprout size={9} /> IDP
-              </span>
-            )}
-            {a.previousAssessmentId && (
-              <span className="flex items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-200" title="این ارزیابی، ارزیابی مجدد یک ارزیابی قبلی است">
-                <Repeat size={9} /> ارزیابی مجدد
-              </span>
-            )}
-            {followUp && followUp.status !== 'completed' && (
-              <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title="ارزیابی مجدد این متقاضی در جریان است">
-                ارزیابی مجدد در جریان
-              </span>
-            )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
+            {hasPlan && <Sprout size={9} className="shrink-0 text-emerald-300" aria-label="برنامه توسعه فردی فعال" />}
+            {reassessmentRelated && <Repeat size={9} className="shrink-0 text-sky-300" aria-label="ارزیابی مجدد" />}
+            {a.isDemo && <DemoBadge />}
           </div>
-        )}
+          <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+        </div>
+        <span
+          className="shrink-0 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-200 ring-1 ring-rose-400/40"
+          title="این مرحله منتظر اقدام شماست"
+        >
+          {nextStep?.label ?? 'اقدام'}
+        </span>
+        <span className="num shrink-0 text-xs font-extrabold" style={{ color: tier }}>
+          {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
+        </span>
       </button>
       <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onDelete()
-        }}
+        onClick={onDelete}
         title="حذف"
-        className="absolute left-1 top-1 rounded-lg p-1 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+        className="shrink-0 rounded-md p-1 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
       >
         <Trash2 size={11} />
       </button>
