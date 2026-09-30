@@ -14440,3 +14440,32 @@ create policy "personality_questions_update_admin" on personality_questions
   for update
   using (personality_is_module_admin() or comp_is_question_designer('PERSONALITY'))
   with check (personality_is_module_admin() or comp_is_question_designer('PERSONALITY'));
+
+-- ---------------------------------------------------------------- Section 58: keep personality_assessments.job_role in sync
+--
+-- Editing a candidate's job role after their personality assessment already exists (a plain client
+-- update() on comp_assessments.job_role, e.g. from the profile-edit form) previously left
+-- personality_assessments.job_role/job_profile_id pointing at the OLD role forever — so role_alignment
+-- (and any AI analysis built from it) silently compared the candidate's raw trait/behavioral scores
+-- against the WRONG job's behavioral requirements. Found via a real candidate whose personality
+-- assessment stayed pinned to welding_inspector after they were reassigned to site_supervisor.
+-- security definer because the triggering update() runs as whatever staff role edited the profile,
+-- which may not itself have UPDATE rights on personality_assessments under RLS.
+create or replace function comp_assessments_sync_personality_job_role()
+returns trigger as $$
+begin
+  if new.job_role is distinct from old.job_role then
+    update personality_assessments
+    set job_role = new.job_role,
+        job_profile_id = (select id from personality_job_behavioral_profiles where job_role = new.job_role and active limit 1)
+    where assessment_id = new.id;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+revoke execute on function comp_assessments_sync_personality_job_role() from public, anon, authenticated;
+
+drop trigger if exists trg_comp_assessments_sync_personality_job_role on comp_assessments;
+create trigger trg_comp_assessments_sync_personality_job_role after update on comp_assessments
+  for each row execute function comp_assessments_sync_personality_job_role();
