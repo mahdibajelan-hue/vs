@@ -50,6 +50,10 @@
     0 24px 60px -28px rgba(120, 96, 30, 0.35),
     0 1px 0 rgba(255, 255, 255, 0.6) inset;
   padding: 1.4rem 1.5rem 1.3rem;
+  /* Explicit rather than relying on inheriting body's font-family — a shareable certificate should
+     never silently fall back to a generic system font if it's ever embedded/printed outside the app
+     shell. Vazirmatn is the same elegant Persian face the rest of the app uses (index.html/index.css). */
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
 }
 
 /* Faint gold arcs in the corners, echoing an engraved-line certificate background. */
@@ -107,10 +111,29 @@
   text-align: center;
 }
 
+.cred-medal-wrap {
+  position: relative;
+}
+
 .cred-medal {
-  width: 52px;
+  width: 58px;
   height: auto;
+  display: block;
   filter: drop-shadow(0 4px 8px rgba(120, 96, 30, 0.35));
+}
+
+/* The overall score, set right inside the medal's gold disc rather than as a separate element. The
+ * disc sits in the top ~55% of the medal artwork (the rest is the ribbon tails), so the score is
+ * vertically anchored there, not at true center of the whole image. */
+.cred-medal-score {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  color: #6b3a0a;
 }
 
 .cred-level-label {
@@ -187,8 +210,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
-  width: 64px;
+  gap: 0.35rem;
+  width: 70px;
   text-align: center;
 }
 

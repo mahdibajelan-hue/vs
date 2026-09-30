@@ -40,8 +40,19 @@ interface PublicResultsRow {
 }
 
 // A varied, attractive fixed palette for the per-domain mini rings — cycled by array position
-// (domain order, not score order) so the same domain reads the same color across a re-render.
-const CHART_PALETTE = ['#8b5cf6', '#0ea5e9', '#f59e0b', '#10b981', '#ec4899', '#6366f1', '#ef4444', '#14b8a6']
+// (domain order, not score order) so the same domain reads the same color across a re-render. Each
+// entry pairs a vivid ring color with a darker same-hue shade for the number inside it — the vivid
+// tone alone was too low-contrast to read at this size, especially for the lighter hues (amber, sky).
+const CHART_PALETTE: { ring: string; text: string }[] = [
+  { ring: '#8b5cf6', text: '#5b21b6' },
+  { ring: '#0ea5e9', text: '#075985' },
+  { ring: '#f59e0b', text: '#92400e' },
+  { ring: '#10b981', text: '#065f46' },
+  { ring: '#ec4899', text: '#9d174d' },
+  { ring: '#6366f1', text: '#3730a3' },
+  { ring: '#ef4444', text: '#991b1b' },
+  { ring: '#14b8a6', text: '#115e59' },
+]
 
 /** A short, stable 6-digit credential number derived from the assessment's own (immutable) id — no
  * schema change needed, and it never changes on reload since it's a pure function of the id. */
@@ -143,9 +154,9 @@ export function PublicResultsPage({ token }: { token: string }) {
 
   // The structured interview's own domain-level breakdown — real evidence specific to this candidate
   // (their actual per-domain interview scores), never a generic placeholder set.
-  const chartDomains: (DomainScore & { percentScore: number; color: string })[] = domainScores
+  const chartDomains: (DomainScore & { percentScore: number; ring: string; text: string })[] = domainScores
     .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
-    .map((d, i) => ({ ...d, color: CHART_PALETTE[i % CHART_PALETTE.length] }))
+    .map((d, i) => ({ ...d, ...CHART_PALETTE[i % CHART_PALETTE.length] }))
 
   const { issued, expires } = issueAndExpiry(row.interview_date)
   const cardNo = credentialNumber(row.id)
@@ -168,7 +179,10 @@ export function PublicResultsPage({ token }: { token: string }) {
                 <p className="text-[12.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
                 <p className="text-[9.5px] font-medium text-stone-500">Professional Qualification Card</p>
               </div>
-              <img src={`${import.meta.env.BASE_URL}credential-medal.png`} alt="" className="cred-medal" />
+              <div className="cred-medal-wrap">
+                <img src={`${import.meta.env.BASE_URL}credential-medal.png`} alt="" className="cred-medal" />
+                <span className="cred-medal-score">{overall != null ? overall.toLocaleString('fa-IR') : '—'}</span>
+              </div>
               <p className="cred-level-label text-[10.5px] font-extrabold leading-4 text-stone-800">{interp.bandLabel}</p>
             </div>
           </div>
@@ -178,8 +192,8 @@ export function PublicResultsPage({ token }: { token: string }) {
               <PublicPhoto path={row.photo_url} />
               <div className="cred-identity-text">
                 <p className="text-[16px] font-extrabold leading-6 text-stone-900">{row.candidate_name}</p>
-                {row.candidate_position && <p className="text-[11.5px] font-bold text-stone-500">{row.candidate_position}</p>}
-                <div className="mt-1.5 flex flex-col gap-0.5">
+                {row.candidate_position && <p className="text-[12px] font-semibold leading-5 text-stone-600">{row.candidate_position}</p>}
+                <div className="mt-1.5 flex flex-col gap-1">
                   <div className="cred-meta-row">
                     <span className="num text-[10.5px] font-bold text-stone-600">
                       FAR-{isoToJalali(row.interview_date)?.jy ?? ''}-{cardNo}
@@ -187,40 +201,33 @@ export function PublicResultsPage({ token }: { token: string }) {
                     <IdCard size={11} className="text-stone-400" />
                   </div>
                   <div className="cred-meta-row">
-                    <span className="num text-[10px] text-stone-500">
+                    <span className="num text-[10.5px] font-medium leading-4 text-stone-600">
                       صادر: {issued} — اعتبار تا: {expires}
                     </span>
                     <Calendar size={11} className="text-stone-400" />
                   </div>
                   {row.is_approved && (
                     <div className="cred-meta-row">
-                      <span className="text-[10px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</span>
+                      <span className="text-[10.5px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
-
-            <MiniRing value={overall} color={tier} size={68} strokeWidth={7}>
-              <span className="num text-[15px] font-black leading-none" style={{ color: tier }}>
-                {overall != null ? overall.toLocaleString('fa-IR') : '—'}
-              </span>
-              <span className="text-[8px] font-bold text-stone-500">از ۱۰۰</span>
-            </MiniRing>
           </div>
 
           {chartDomains.length > 0 && (
             <div className="cred-domain-chart">
-              <p className="cred-domain-chart-title text-[10px] font-bold text-stone-500">نتایج مصاحبه ساختاریافته</p>
+              <p className="cred-domain-chart-title text-[10.5px] font-bold text-stone-500">نتایج مصاحبه ساختاریافته</p>
               <div className="cred-domain-grid">
                 {chartDomains.map((d) => (
                   <div key={d.domain.key} className="cred-domain-tile">
-                    <MiniRing value={d.percentScore} color={d.color} size={44} strokeWidth={5}>
-                      <span className="num text-[10px] font-extrabold leading-none" style={{ color: d.color }}>
+                    <MiniRing value={d.percentScore} color={d.ring} size={50} strokeWidth={5}>
+                      <span className="text-[13px] font-black leading-none" style={{ color: d.text }}>
                         {d.percentScore.toLocaleString('fa-IR')}
                       </span>
                     </MiniRing>
-                    <span className="text-[8.5px] font-bold leading-3 text-stone-600">{d.domain.shortTitle}</span>
+                    <span className="text-[9px] font-bold leading-3.5 text-stone-600">{d.domain.shortTitle}</span>
                   </div>
                 ))}
               </div>
