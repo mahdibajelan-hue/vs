@@ -58,7 +58,7 @@ import { generatePersonalityProfile } from '../lib/personalityAnalysis'
 import { computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
 import { computeCategoryScores, questionsForAssessment, resolveOfficialAnswers, usesLegacyPmRubric } from '../lib/roleCompetencyModel'
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
-import { buildGapRows, isAiAnalysisStale, isCriticalGap, isDevelopmentGap } from '../lib/competencyGap'
+import { buildGapRows, evidenceMethodMix, isAiAnalysisStale, isCriticalGap, isDevelopmentGap } from '../lib/competencyGap'
 import { buildInterviewSummary, buildResultsModel, fa } from '../lib/resultsModel'
 import { exportReportPdf, printReportNode } from '../lib/reportExport'
 import { CompetencyGapAnalysis } from '../components/CompetencyGapAnalysis'
@@ -68,13 +68,17 @@ import { ReassessmentComparison } from '../components/ReassessmentComparison'
 import { AssessmentChainNav } from '../components/AssessmentChainNav'
 import { McqResultsSection } from '../components/results/McqResultsSection'
 import {
+  CategoryHeading,
   EmptyNote,
+  EvidenceMixCard,
   ExamDesignCard,
-  InterpretationCard,
   InterviewResults,
   KeyProjects,
+  MaturityCard,
   PanelBreakdown,
+  PatternCard,
   ProfileSummary,
+  QualificationScorecard,
   ScoreRing,
   SectionHeading,
   SectionNav,
@@ -370,6 +374,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
   const patternParagraphs = generatePersonalityProfile(domainScores, overall, assessment, isPM)
   const aiStale = isAiAnalysisStale(candidateAiAnalysis, competencyProfile?.scores)
+  const evidenceMix = useMemo(() => evidenceMethodMix(competencyProfile?.evidence ?? []), [competencyProfile])
 
   const panelists = allPanelists.filter((p) => p.assessmentId === assessment.id)
   const submittedCount = model.panel.filter((p) => p.submitted).length
@@ -426,17 +431,20 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     </>
   )
 
+  // Grouped by category (ResultsStage's five bold-titled sections) so the quick nav reads the same
+  // "topic → sub-topic" structure as the page itself, not a flat, uncategorized list of 11 anchors.
   const navItems = [
-    { id: 'r-profile', label: 'مشخصات', color: '#38bdf8' },
-    { id: 'r-design', label: 'طرح ارزیابی', color: '#6366f1' },
+    { id: 'r-design', label: 'طرح ارزیابی', color: '#64748b' },
     { id: 'r-technical', label: 'فنی و تخصصی', color: '#a855f7' },
-    { id: 'r-mcq', label: 'آزمون تستی', color: '#2dd4bf' },
-    { id: 'r-interview', label: 'مصاحبه', color: '#0ea5e9' },
-    { id: 'r-behavior', label: 'اثرانگشت رفتاری', color: '#ec4899' },
-    { id: 'r-gap', label: 'شکاف شایستگی', color: '#8b5cf6' },
-    { id: 'r-ai', label: 'تحلیل هوشمند', color: '#6366f1' },
-    { id: 'r-idp', label: 'برنامه توسعه', color: '#14b8a6' },
-    ...(assessment.previousAssessmentId ? [{ id: 'r-reassess', label: 'مقایسه', color: '#38bdf8' }] : []),
+    { id: 'r-mcq', label: '↳ آزمون تستی آنلاین', color: '#a855f7' },
+    { id: 'r-behavior', label: 'شخصیت و رفتاری', color: '#ec4899' },
+    { id: 'r-interview', label: 'مصاحبه ساختاریافته', color: '#0ea5e9' },
+    { id: 'r-experience', label: 'سوابق و تجربه', color: '#f59e0b' },
+    { id: 'r-summary', label: 'جمع‌بندی و تحلیل', color: '#6366f1' },
+    { id: 'r-gap', label: '↳ شکاف شایستگی', color: '#6366f1' },
+    { id: 'r-ai', label: '↳ تحلیل هوشمند', color: '#6366f1' },
+    { id: 'r-idp', label: '↳ برنامه توسعه', color: '#6366f1' },
+    ...(assessment.previousAssessmentId ? [{ id: 'r-reassess', label: '↳ مقایسه با قبل', color: '#6366f1' }] : []),
     { id: 'r-final', label: 'تأیید نهایی', color: '#10b981' },
   ]
 
@@ -501,6 +509,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             photoUrl={photoUrl}
             interview={interviewRows}
             personality={personalityForPrint}
+            evidenceMix={evidenceMix}
             competencyGapRows={gapRows}
             developmentPlan={
               developmentPlan
@@ -588,234 +597,241 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
         <SectionNav items={navItems} />
 
-        {/* 1. Profile */}
-        <SectionHeading id="r-profile" icon={User} color="#38bdf8" title="خلاصه مشخصات متقاضی" />
-        <ProfileSummary assessment={assessment} />
-
-        {/* 2. Exam design */}
-        <SectionHeading id="r-design" icon={ListTree} color="#6366f1" title="طرح ارزیابی و روش‌های به‌کاررفته" />
+        {/* Exam design — methodology metadata, not itself a scored topic, so it stays outside the
+            five bold categories below (product ask: group *topics*; this is "how", not "what"). */}
+        <SectionHeading id="r-design" icon={ListTree} color="#64748b" title="طرح ارزیابی و روش‌های به‌کاررفته" />
         <ExamDesignCard model={model} assessment={assessment} />
 
-        {/* 3. Technical */}
-        <SectionHeading id="r-technical" icon={Wrench} color="#a855f7" title="اثرانگشت فنی و تخصصی — ارزیابی حضوری" subtitle="امتیاز رسمی = میانگین داورانی که ثبت نهایی کرده‌اند" />
-        <InterpretationCard model={model} roleLabel={roleLabel} paragraphs={patternParagraphs} />
+        {/* ================= CATEGORY 1 — ارزیابی فنی تخصصی ================= */}
+        <div className="fx-category" style={tone('#a855f7')}>
+          <CategoryHeading icon={Wrench} color="#a855f7" title="ارزیابی فنی تخصصی" subtitle="ارزیابی حضوری پنل داوران + آزمون تستی آنلاین به‌عنوان سنجه‌ی مکمل" />
+          <div id="r-technical" className="scroll-mt-20 space-y-3">
+            <PatternCard paragraphs={patternParagraphs} />
 
-        {completion.total === 0 && overall == null ? (
-          <EmptyNote>ارزیابی فنی حضوری برای این متقاضی هنوز طراحی یا امتیازدهی نشده است.</EmptyNote>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              {kpiTiles.map(({ domain: d, Icon, accent }) => {
-                const color = tierColor(d.percentScore)
-                return (
-                  <div key={d.domain.key} className="fx-card overflow-hidden p-3.5" style={tone(accent)}>
-                    <div className="mb-1.5 flex items-center gap-1.5">
-                      <span className="fx-tone-bg-strong fx-tone-text flex h-7 w-7 items-center justify-center rounded-lg">
-                        <Icon size={14} />
-                      </span>
-                      <span className="fx-text-2 truncate text-[11.5px] font-bold">{d.domain.shortTitle}</span>
-                    </div>
-                    <p className="num text-2xl font-black" style={tone(color)}>
-                      <span className={d.percentScore != null ? 'fx-tone-text' : 'fx-muted'}>{d.percentScore != null ? fa(d.percentScore) : '—'}</span>
-                      <span className="fx-muted text-[11px] font-bold"> /۱۰۰</span>
-                    </p>
-                    <div className="fx-track mt-1.5 h-1.5 overflow-hidden rounded-full">
-                      <div className="h-full rounded-full" style={{ width: `${d.percentScore ?? 0}%`, background: `linear-gradient(90deg, ${accent}99, ${color})` }} />
-                    </div>
-                    <p className="fx-muted num mt-1 text-[10px]">
-                      {fa(d.answeredCount)}/{fa(d.totalCount)} سؤال {d.domain.weight > 0 ? `، وزن ٪${fa(d.domain.weight)}` : '، نمایشی'}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.85fr_1.3fr_0.85fr]">
-              <div className="space-y-3">
-                <div className="fx-card p-4" style={tone('#10b981')}>
-                  <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[12.5px] font-bold">
-                    <Trophy size={14} /> نقاط قوت
-                  </p>
-                  {strengths.length > 0 ? (
-                    <ul className="space-y-1.5">
-                      {strengths.map((s) => (
-                        <li key={s.domain.key} className="fx-text-2 flex items-center gap-1.5 text-[11.5px]">
-                          <CheckCircle2 size={13} className="fx-tone-text shrink-0" /> {s.domain.title}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="fx-muted text-[11px]">حوزه‌ای با امتیاز ۸۵ یا بیشتر ثبت نشده است.</p>
-                  )}
-                </div>
-                <div className="fx-card p-4" style={tone('#f59e0b')}>
-                  <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[12.5px] font-bold">
-                    <AlertTriangle size={14} /> نقاط قابل بهبود
-                  </p>
-                  {weaknesses.length > 0 ? (
-                    <ul className="space-y-1.5">
-                      {weaknesses.map((s) => (
-                        <li key={s.domain.key} className="fx-text-2 flex items-center gap-1.5 text-[11.5px]">
-                          <AlertTriangle size={13} className="fx-tone-text shrink-0" /> {s.domain.title}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="fx-muted text-[11px]">حوزه‌ای زیر ۴۰ امتیاز نیست.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="fx-card p-4">
-                <p className="mb-2 text-center text-[12.5px] font-bold">نمودار شایستگی‌ها</p>
-                <CompetencyRadarChart domainScores={domainScores} benchmarkScores={benchmarkScores} />
-                <p className="fx-muted num text-center text-[11px]">
-                  {fa(completion.answered)} از {fa(completion.total)} سؤال امتیازدهی‌شده (٪{fa(completion.percent)})
-                </p>
-              </div>
-
-              <div className="fx-card p-4" style={tone('#f59e0b')}>
-                <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-bold">
-                  <Trophy size={14} className="fx-tone-text" /> رتبه در میان متقاضیان
-                </p>
-                {rank != null && allOveralls.length > 1 ? (
-                  <>
-                    <p className="text-center">
-                      <span className="num fx-tone-text text-4xl font-black">{fa(rank)}</span>
-                      <span className="num fx-muted text-lg"> / {fa(allOveralls.length)}</span>
-                    </p>
-                    <p className="fx-muted mb-3 text-center text-[10.5px]">در میان متقاضیان شغل «{roleLabel}»</p>
-                    <div className="fx-divider flex items-center justify-between gap-2 border-t pt-3 text-center">
-                      <div className="flex-1">
-                        <p className="num text-sm font-bold">{fa(avgOverall)}</p>
-                        <p className="fx-muted text-[10px]">میانگین کل</p>
-                      </div>
-                      <div className="flex-1">
-                        <p className="num text-sm font-bold">{fa(maxOverall)}</p>
-                        <p className="fx-muted text-[10px]">بالاترین امتیاز</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <p className="fx-muted py-6 text-center text-[11px]">هنوز متقاضی دیگری با این شغل امتیاز نگرفته — رتبه‌بندی بعداً نمایش داده می‌شود.</p>
-                )}
-              </div>
-            </div>
-
-            <div ref={compareRef} className="grid scroll-mt-20 grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
-              <div className="fx-card p-4">
-                <p className="mb-3 text-[12.5px] font-bold">مقایسه با متقاضیان برتر همین شغل</p>
-                {topPeers.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--fx-grid)" />
-                      <XAxis dataKey="domain" tick={{ fill: 'var(--fx-chart-label)', fontSize: 10 }} />
-                      <YAxis domain={[0, 100]} tick={{ fill: 'var(--fx-chart-muted)', fontSize: 10 }} />
-                      <Tooltip contentStyle={{ background: 'var(--fx-tooltip-bg)', border: '1px solid var(--fx-border-strong)', borderRadius: 10, fontSize: 12, color: 'var(--text-primary)' }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey={assessment.candidateName} fill={CANDIDATE_SERIES} radius={[4, 4, 0, 0]} />
-                      {topPeers.map((p, i) => (
-                        <Bar key={p.assessment.id} dataKey={p.assessment.candidateName} fill={PEER_SERIES_COLORS[i]} radius={[4, 4, 0, 0]} />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <EmptyNote>هنوز متقاضی دیگری برای مقایسه در این شغل ثبت نشده است.</EmptyNote>
-                )}
-              </div>
-              <KeyProjects assessment={assessment} />
-            </div>
-
-            {qualificationChips.some((c) => c.value != null) && (
-              <div className="fx-card p-4">
-                <p className="mb-3 text-[13px] font-extrabold">کارت امتیاز صلاحیت</p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {qualificationChips.map((c) => {
-                    const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+            {completion.total === 0 && overall == null ? (
+              <EmptyNote>ارزیابی فنی حضوری برای این متقاضی هنوز طراحی یا امتیازدهی نشده است.</EmptyNote>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  {kpiTiles.map(({ domain: d, Icon, accent }) => {
+                    const color = tierColor(d.percentScore)
                     return (
-                      <div key={c.label} className="fx-sub fx-tone-border border p-3.5 text-center" style={tone(color)}>
-                        <c.icon size={17} className="fx-tone-text mx-auto mb-1.5" />
-                        <p className="num fx-tone-text text-2xl font-black leading-none">
-                          {fa(c.value)}
-                          <span className="fx-muted text-xs font-bold"> /۵</span>
+                      <div key={d.domain.key} className="fx-card overflow-hidden p-3.5" style={tone(accent)}>
+                        <div className="mb-1.5 flex items-center gap-1.5">
+                          <span className="fx-tone-bg-strong fx-tone-text flex h-7 w-7 items-center justify-center rounded-lg">
+                            <Icon size={14} />
+                          </span>
+                          <span className="fx-text-2 truncate text-[11.5px] font-bold">{d.domain.shortTitle}</span>
+                        </div>
+                        <p className="num text-2xl font-black" style={tone(color)}>
+                          <span className={d.percentScore != null ? 'fx-tone-text' : 'fx-muted'}>{d.percentScore != null ? fa(d.percentScore) : '—'}</span>
+                          <span className="fx-muted text-[11px] font-bold"> /۱۰۰</span>
                         </p>
-                        <p className="fx-text-2 mt-1.5 text-[11px] font-bold leading-4">{c.label}</p>
+                        <div className="fx-track mt-1.5 h-1.5 overflow-hidden rounded-full">
+                          <div className="h-full rounded-full" style={{ width: `${d.percentScore ?? 0}%`, background: `linear-gradient(90deg, ${accent}99, ${color})` }} />
+                        </div>
+                        <p className="fx-muted num mt-1 text-[10px]">
+                          {fa(d.answeredCount)}/{fa(d.totalCount)} سؤال {d.domain.weight > 0 ? `، وزن ٪${fa(d.domain.weight)}` : '، نمایشی'}
+                        </p>
                       </div>
                     )
                   })}
                 </div>
-              </div>
+
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.85fr_1.3fr_0.85fr]">
+                  <div className="space-y-3">
+                    <div className="fx-card p-4" style={tone('#10b981')}>
+                      <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[12.5px] font-bold">
+                        <Trophy size={14} /> نقاط قوت
+                      </p>
+                      {strengths.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {strengths.map((s) => (
+                            <li key={s.domain.key} className="fx-text-2 flex items-center gap-1.5 text-[11.5px]">
+                              <CheckCircle2 size={13} className="fx-tone-text shrink-0" /> {s.domain.title}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="fx-muted text-[11px]">حوزه‌ای با امتیاز ۸۵ یا بیشتر ثبت نشده است.</p>
+                      )}
+                    </div>
+                    <div className="fx-card p-4" style={tone('#f59e0b')}>
+                      <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[12.5px] font-bold">
+                        <AlertTriangle size={14} /> نقاط قابل بهبود
+                      </p>
+                      {weaknesses.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {weaknesses.map((s) => (
+                            <li key={s.domain.key} className="fx-text-2 flex items-center gap-1.5 text-[11.5px]">
+                              <AlertTriangle size={13} className="fx-tone-text shrink-0" /> {s.domain.title}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="fx-muted text-[11px]">حوزه‌ای زیر ۴۰ امتیاز نیست.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="fx-card p-4">
+                    <p className="mb-2 text-center text-[12.5px] font-bold">نمودار شایستگی‌ها</p>
+                    <CompetencyRadarChart domainScores={domainScores} benchmarkScores={benchmarkScores} />
+                    <p className="fx-muted num text-center text-[11px]">
+                      {fa(completion.answered)} از {fa(completion.total)} سؤال امتیازدهی‌شده (٪{fa(completion.percent)})
+                    </p>
+                  </div>
+
+                  <div className="fx-card p-4" style={tone('#f59e0b')}>
+                    <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-bold">
+                      <Trophy size={14} className="fx-tone-text" /> رتبه در میان متقاضیان
+                    </p>
+                    {rank != null && allOveralls.length > 1 ? (
+                      <>
+                        <p className="text-center">
+                          <span className="num fx-tone-text text-4xl font-black">{fa(rank)}</span>
+                          <span className="num fx-muted text-lg"> / {fa(allOveralls.length)}</span>
+                        </p>
+                        <p className="fx-muted mb-3 text-center text-[10.5px]">در میان متقاضیان شغل «{roleLabel}»</p>
+                        <div className="fx-divider flex items-center justify-between gap-2 border-t pt-3 text-center">
+                          <div className="flex-1">
+                            <p className="num text-sm font-bold">{fa(avgOverall)}</p>
+                            <p className="fx-muted text-[10px]">میانگین کل</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="num text-sm font-bold">{fa(maxOverall)}</p>
+                            <p className="fx-muted text-[10px]">بالاترین امتیاز</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="fx-muted py-6 text-center text-[11px]">هنوز متقاضی دیگری با این شغل امتیاز نگرفته — رتبه‌بندی بعداً نمایش داده می‌شود.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div ref={compareRef} className="scroll-mt-20">
+                  <div className="fx-card p-4">
+                    <p className="mb-3 text-[12.5px] font-bold">مقایسه با متقاضیان برتر همین شغل</p>
+                    {topPeers.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={comparisonData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--fx-grid)" />
+                          <XAxis dataKey="domain" tick={{ fill: 'var(--fx-chart-label)', fontSize: 10 }} />
+                          <YAxis domain={[0, 100]} tick={{ fill: 'var(--fx-chart-muted)', fontSize: 10 }} />
+                          <Tooltip contentStyle={{ background: 'var(--fx-tooltip-bg)', border: '1px solid var(--fx-border-strong)', borderRadius: 10, fontSize: 12, color: 'var(--text-primary)' }} />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Bar dataKey={assessment.candidateName} fill={CANDIDATE_SERIES} radius={[4, 4, 0, 0]} />
+                          {topPeers.map((p, i) => (
+                            <Bar key={p.assessment.id} dataKey={p.assessment.candidateName} fill={PEER_SERIES_COLORS[i]} radius={[4, 4, 0, 0]} />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <EmptyNote>هنوز متقاضی دیگری برای مقایسه در این شغل ثبت نشده است.</EmptyNote>
+                    )}
+                  </div>
+                </div>
+
+                <PanelBreakdown model={model} />
+              </>
             )}
 
-            <PanelBreakdown model={model} />
-          </>
-        )}
-
-        {/* Online technical MCQ test results */}
-        <SectionHeading id="r-mcq" icon={ListChecks} color="#2dd4bf" title="نتایج آزمون تستی آنلاین" subtitle="جامعیت پاسخ‌گویی به موضوعات فنی، به تفکیک هر سؤال" />
-        {!assessment.needsOnlineMcq ? <EmptyNote>آزمون تستی آنلاین در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote> : <McqResultsSection assessmentId={assessment.id} />}
-
-        {/* 4. Structured interview */}
-        <SectionHeading id="r-interview" icon={MessagesSquare} color="#0ea5e9" title="نتایج مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی" />
-        <InterviewResults rows={interviewRows} inDesign={assessment.needsStructuredInterview} />
-
-        {/* 5. Behavioral fingerprint + role alignment + validity */}
-        <SectionHeading id="r-behavior" icon={Fingerprint} color="#ec4899" title="اثرانگشت رفتاری و تطابق شغلی" subtitle="Behavioral Fingerprint، Role Alignment، Validity" />
-        {!assessment.needsPersonalityAssessment ? (
-          <EmptyNote>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote>
-        ) : showPersonalityFingerprint && personalityAssessment ? (
-          <PersonalityFingerprintPanel
-            personalityAssessmentId={personalityAssessment.id}
-            candidateName={assessment.candidateName}
-            candidatePosition={assessment.candidatePosition}
-            showPrintButton={false}
-          />
-        ) : (
-          <EmptyNote>
-            این متقاضی هنوز ارزیابی شخصیت و رفتاری را کامل نکرده است
-            {personalityAssessment ? ` (وضعیت فعلی: ${PERSONALITY_ASSESSMENT_STATUS_LABEL_FA[personalityAssessment.status]})` : ''}.
-          </EmptyNote>
-        )}
-
-        {/* 6. Competency gap analysis */}
-        <SectionHeading id="r-gap" icon={Target} color="#8b5cf6" title="تحلیل شکاف شایستگی — نمای ۳۶۰ درجه" />
-        <CompetencyGapAnalysis assessment={assessment} canRecompute={canRecomputeCompetencyProfile} />
-
-        {/* 7. AI excerpt */}
-        <SectionHeading id="r-ai" icon={Sparkles} color="#6366f1" title="تحلیل جامع هوش مصنوعی" />
-        <div className="fx-card p-4" style={tone('#6366f1')}>
-          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
-            <button onClick={onGoToAiAnalysis} className="fx-tone-bg fx-tone-text flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold hover:brightness-110">
-              مشاهده تحلیل کامل <ArrowLeft size={12} />
-            </button>
+            {/* Online MCQ — a sub-metric of technical competence, not a peer topic: same category,
+                lighter heading than the categories/SectionHeadings above it. */}
+            <div id="r-mcq" className="scroll-mt-20 pt-1">
+              <p className="fx-text-2 mb-2.5 flex items-center gap-1.5 text-[13px] font-extrabold">
+                <ListChecks size={15} style={{ color: '#a855f7' }} /> آزمون تستی آنلاین <span className="fx-muted text-[11px] font-bold">— مکمل ارزیابی فنی حضوری</span>
+              </p>
+              {!assessment.needsOnlineMcq ? <EmptyNote>آزمون تستی آنلاین در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote> : <McqResultsSection assessmentId={assessment.id} />}
+            </div>
           </div>
-          {aiStale && (
-            <button onClick={onGoToAiAnalysis} className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-right text-[11px] font-bold" style={tone('#f59e0b')}>
-              <span className="fx-tone-bg fx-tone-text flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5">
-                <AlertTriangle size={12} className="shrink-0" /> تحلیل به‌روز نیست — پروفایل شایستگی پس از تولید آن تغییر کرده؛ بازتولید کنید.
-              </span>
-            </button>
-          )}
-          {candidateAiAnalysis ? (
-            <p className="fx-text-2 text-[12px] leading-7">{candidateAiAnalysis.analysis.executive_summary}</p>
+        </div>
+
+        {/* ================= CATEGORY 2 — شخصیت و رفتاری ================= */}
+        <div id="r-behavior" className="fx-category scroll-mt-20" style={tone('#ec4899')}>
+          <CategoryHeading icon={Fingerprint} color="#ec4899" title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، تطابق شغلی (Role Alignment) و اعتبار پاسخ‌ها (Validity)" />
+          {!assessment.needsPersonalityAssessment ? (
+            <EmptyNote>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote>
+          ) : showPersonalityFingerprint && personalityAssessment ? (
+            <PersonalityFingerprintPanel
+              personalityAssessmentId={personalityAssessment.id}
+              candidateName={assessment.candidateName}
+              candidatePosition={assessment.candidatePosition}
+              showPrintButton={false}
+            />
           ) : (
-            <EmptyNote>تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.</EmptyNote>
+            <EmptyNote>
+              این متقاضی هنوز ارزیابی شخصیت و رفتاری را کامل نکرده است
+              {personalityAssessment ? ` (وضعیت فعلی: ${PERSONALITY_ASSESSMENT_STATUS_LABEL_FA[personalityAssessment.status]})` : ''}.
+            </EmptyNote>
           )}
         </div>
 
-        {/* 8. IDP */}
-        <SectionHeading id="r-idp" icon={Sprout} color="#14b8a6" title="برنامه توسعه فردی" />
-        <DevelopmentPlanSummary assessment={assessment} canManage={isLeadViewer || isDesignerViewer} onGoToIdp={onGoToIdp} onOpenAssessment={onOpenAssessment} />
+        {/* ================= CATEGORY 3 — مصاحبه ساختاریافته ================= */}
+        <div id="r-interview" className="fx-category scroll-mt-20" style={tone('#0ea5e9')}>
+          <CategoryHeading icon={MessagesSquare} color="#0ea5e9" title="مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی، در برابر سطح مورد نیاز شغل" />
+          <InterviewResults rows={interviewRows} inDesign={assessment.needsStructuredInterview} />
+        </div>
 
-        {/* 9. Reassessment */}
-        {assessment.previousAssessmentId && (
-          <>
-            <SectionHeading id="r-reassess" icon={GitCompareArrows} color="#38bdf8" title="مقایسه با ارزیابی قبلی" />
-            <ReassessmentComparison assessment={assessment} onOpenPrevious={(id) => onOpenAssessment(id, 'results')} />
-          </>
-        )}
+        {/* ================= CATEGORY 4 — سوابق و تجربه ================= */}
+        <div id="r-experience" className="fx-category scroll-mt-20 space-y-3" style={tone('#f59e0b')}>
+          <CategoryHeading icon={History} color="#f59e0b" title="سوابق و تجربه" subtitle="تحصیلات، سوابق شغلی و گواهینامه‌ها — و سهم آن‌ها در شواهد شایستگی" />
+          <ProfileSummary assessment={assessment} />
+          <QualificationScorecard chips={qualificationChips} />
+          <KeyProjects assessment={assessment} />
+        </div>
 
-        {/* 10. Approval / finalization */}
+        {/* ================= CATEGORY 5 — جمع‌بندی و تحلیل ================= */}
+        <div id="r-summary" className="fx-category scroll-mt-20 space-y-3" style={tone('#6366f1')}>
+          <CategoryHeading icon={Sparkles} color="#6366f1" title="جمع‌بندی و تحلیل" subtitle="سطح بلوغ کلی، شکاف شایستگی، تحلیل هوش مصنوعی و برنامه توسعه فردی" />
+
+          <MaturityCard model={model} roleLabel={roleLabel} />
+          <EvidenceMixCard mix={evidenceMix} />
+
+          <div id="r-gap" className="scroll-mt-20 space-y-3">
+            <SectionHeading icon={Target} color="#8b5cf6" title="تحلیل شکاف شایستگی — نمای ۳۶۰ درجه" />
+            <CompetencyGapAnalysis assessment={assessment} canRecompute={canRecomputeCompetencyProfile} />
+          </div>
+
+          <div id="r-ai" className="scroll-mt-20 space-y-3">
+            <SectionHeading icon={Sparkles} color="#6366f1" title="تحلیل جامع هوش مصنوعی" />
+            <div className="fx-card p-4" style={tone('#6366f1')}>
+              <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+                <button onClick={onGoToAiAnalysis} className="fx-tone-bg fx-tone-text flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold hover:brightness-110">
+                  مشاهده تحلیل کامل <ArrowLeft size={12} />
+                </button>
+              </div>
+              {aiStale && (
+                <button onClick={onGoToAiAnalysis} className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-right text-[11px] font-bold" style={tone('#f59e0b')}>
+                  <span className="fx-tone-bg fx-tone-text flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5">
+                    <AlertTriangle size={12} className="shrink-0" /> تحلیل به‌روز نیست — پروفایل شایستگی پس از تولید آن تغییر کرده؛ بازتولید کنید.
+                  </span>
+                </button>
+              )}
+              {candidateAiAnalysis ? (
+                <p className="fx-text-2 text-[12px] leading-7">{candidateAiAnalysis.analysis.executive_summary}</p>
+              ) : (
+                <EmptyNote>تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.</EmptyNote>
+              )}
+            </div>
+          </div>
+
+          <div id="r-idp" className="scroll-mt-20 space-y-3">
+            <SectionHeading icon={Sprout} color="#14b8a6" title="برنامه توسعه فردی" />
+            <DevelopmentPlanSummary assessment={assessment} canManage={isLeadViewer || isDesignerViewer} onGoToIdp={onGoToIdp} onOpenAssessment={onOpenAssessment} />
+          </div>
+
+          {assessment.previousAssessmentId && (
+            <div id="r-reassess" className="scroll-mt-20 space-y-3">
+              <SectionHeading icon={GitCompareArrows} color="#38bdf8" title="مقایسه با ارزیابی قبلی" />
+              <ReassessmentComparison assessment={assessment} onOpenPrevious={(id) => onOpenAssessment(id, 'results')} />
+            </div>
+          )}
+        </div>
+
+        {/* Approval / finalization — the process outcome, kept as its own un-categorized closing
+            block (it is a workflow action, not an assessment topic). */}
         <SectionHeading id="r-final" icon={ClipboardCheck} color="#10b981" title="جمع‌بندی، تأیید و وضعیت نهایی" />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {[

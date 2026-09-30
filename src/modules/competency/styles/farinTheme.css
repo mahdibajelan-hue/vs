@@ -144,6 +144,25 @@
   -webkit-backdrop-filter: blur(14px);
 }
 
+/* ---- category grouping (results page) ----------------------------------- */
+/* Visually bounds every sub-section under one CategoryHeading (ResultsSections.tsx) into a single
+   region, per --tone, so "ارزیابی فنی تخصصی" / "شخصیت و رفتاری" / "مصاحبه ساختاریافته" /
+   "سوابق و تجربه" / "جمع‌بندی و تحلیل" read as five distinct topics rather than one long scroll. */
+.fx-category {
+  border: 1px solid color-mix(in srgb, var(--tone, #a855f7) 24%, var(--fx-border));
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--tone, #a855f7) 5%, transparent);
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .fx-category {
+    padding: 1.25rem;
+  }
+}
+:root[data-theme='light'] .fx-category {
+  background: color-mix(in srgb, var(--tone, #a855f7) 4.5%, transparent);
+}
+
 /* ---- focus + motion ----------------------------------------------------- */
 .fx :where(button, a, input, textarea, select, [role='radio'], [tabindex]):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--tone, #a855f7), var(--text-primary) 25%);
@@ -182,6 +201,17 @@
 :root[data-theme='light'] .fx-remap :is(.text-red-400, .text-rose-400) { color: #dc2626; }
 :root[data-theme='light'] .fx-remap :is(.text-sky-400, .text-cyan-400) { color: #0284c7; }
 :root[data-theme='light'] .fx-remap :is(.text-purple-400, .text-violet-400, .text-pink-400) { color: #9333ea; }
+
+/* Additional pastel shades found during the module-wide light-theme legibility sweep (dashboard,
+   question bank, settings, IDP stage, reports…) — the original list above only covered the classes
+   used on the four pages that had already opted into .fx-remap; fx-remap is now applied once at the
+   shell level (CompetencySidebarShell) so every admin/panelist-facing page needs its palette covered
+   here, not just those four. */
+:root[data-theme='light'] .fx-remap :is(.text-slate-200, .text-slate-300) { color: #334155; }
+:root[data-theme='light'] .fx-remap :is(.text-fuchsia-200, .text-fuchsia-300) { color: #a21caf; }
+:root[data-theme='light'] .fx-remap .text-teal-100 { color: #115e59; }
+:root[data-theme='light'] .fx-remap .text-teal-400 { color: #0f766e; }
+:root[data-theme='light'] .fx-remap .text-red-100 { color: #b91c1c; }
 
 /* The module sidebar is dark-only markup (bg-[#0b0f16]); under the light theme its secondary text
    used to fall to near-invisible slate-on-black. Re-skin it light from here (CSS only — the

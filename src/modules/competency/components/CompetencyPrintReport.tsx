@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { formatJalali as formatJalaliDate } from '../../../lib/jalali'
-import { formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type GapRow } from '../lib/competencyGap'
+import { EVIDENCE_METHOD_META, formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type EvidenceMethodKey, type GapRow } from '../lib/competencyGap'
 import { ACTION_STATUS_META, ACTION_TYPE_LABEL_FA, PLAN_STATUS_META, PRIORITY_META, planProgress } from '../lib/developmentPlan'
 import { fa, type InterviewSummaryRow, type ResultsModel } from '../lib/resultsModel'
 import { REPORT_WIDTH_PX } from '../lib/reportExport'
@@ -163,6 +163,53 @@ function PrintRadar({ labels, values, color = ACCENT, size = 300 }: { labels: st
   )
 }
 
+/** A bold, colored divider that groups several numbered {@link Section}s under one topic — the
+ * print/PDF equivalent of CategoryHeading on the screen page (product ask: "دسته‌بندی مشخص با تیتر
+ * درشت"). Deliberately unnumbered (categories are not page-counted sections themselves). */
+function CategoryBanner({ title, subtitle, color }: { title: string; subtitle?: string; color: string }) {
+  return (
+    <div data-pdf-block="" style={{ margin: '18px 0 2px', padding: '9px 12px', borderRadius: 10, borderRight: `5px solid ${color}`, background: `${color}0f` }}>
+      <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: inkTone(color) }}>{title}</p>
+      {subtitle && <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>{subtitle}</p>}
+    </div>
+  )
+}
+
+/** Static SVG donut (no animation/measurement, so html2canvas and print capture it complete) — the
+ * print counterpart of the on-screen DonutChart, used for the evidence-source mix below. */
+function PrintDonut({ slices, size = 118, strokeWidth = 18 }: { slices: { label: string; value: number; color: string }[]; size?: number; strokeWidth?: number }) {
+  const r = 42
+  const c = 2 * Math.PI * r
+  const total = slices.reduce((s, x) => s + x.value, 0)
+  let cursor = 0
+  const arcs = slices.map((s) => {
+    const fraction = total > 0 ? s.value / total : 0
+    const dash = fraction * c
+    const offset = -cursor * c
+    cursor += fraction
+    return { ...s, dash, offset, pct: Math.round(fraction * 100) }
+  })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <svg width={size} height={size} viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+        <circle cx={50} cy={50} r={r} fill="none" stroke={LINE} strokeWidth={strokeWidth} />
+        {arcs.map((a) => (
+          <circle key={a.label} cx={50} cy={50} r={r} fill="none" stroke={a.color} strokeWidth={strokeWidth} strokeDasharray={`${a.dash} ${c - a.dash}`} strokeDashoffset={a.offset} />
+        ))}
+      </svg>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {arcs.map((a) => (
+          <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, padding: '2.5px 0' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: a.color, flexShrink: 0 }} />
+            <span style={{ flex: 1, color: SUB }}>{a.label}</span>
+            <b style={{ color: INK }}>٪{fa(a.pct)}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- props
 export interface PrintPersonality {
   /** null = not scored yet; the label says why (status). */
@@ -178,6 +225,10 @@ export interface CompetencyPrintReportProps {
   photoUrl?: string | null
   interview: InterviewSummaryRow[]
   personality: PrintPersonality | null
+  /** Evidence-source mix across the whole competency profile (competencyGap.ts `evidenceMethodMix`)
+   * — same figure as the screen's EvidenceMixCard, computed once by ResultsStage so screen and PDF
+   * never disagree. */
+  evidenceMix: Record<EvidenceMethodKey, number>
   competencyGapRows: GapRow[]
   developmentPlan: {
     plan: CompDevelopmentPlan
@@ -194,7 +245,7 @@ export interface CompetencyPrintReportProps {
 }
 
 export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
-  const { assessment: a, model: m, roleLabel, logoUrl, photoUrl, interview, personality, competencyGapRows, developmentPlan, ai, reassessment, patternParagraphs, peers, approval, generatedAt } = props
+  const { assessment: a, model: m, roleLabel, logoUrl, photoUrl, interview, personality, evidenceMix, competencyGapRows, developmentPlan, ai, reassessment, patternParagraphs, peers, approval, generatedAt } = props
   const status = m.status
   const statusInk = status.state === 'final' ? inkTone(status.color) : SUB
   const interp = m.interpretation
@@ -277,7 +328,9 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         </div>
       </header>
 
-      {/* 1. Candidate profile */}
+      {/* 1. Candidate profile (identity/contact facts only — education, employment history,
+          certifications and the qualification scorecard live together in the «سوابق و تجربه»
+          category below, instead of being split across two unrelated places in the report). */}
       <Section n={next()} title="خلاصه مشخصات متقاضی">
         <KV
           rows={[
@@ -285,24 +338,10 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             ['شماره تماس', a.candidatePhone || '—'],
             ['ایمیل', a.candidateEmail || '—'],
             ['سن', a.candidateAge != null ? `${fa(a.candidateAge)} سال` : '—'],
-            ['سابقه کل کار', a.yearsExperienceTotal != null ? `${fa(a.yearsExperienceTotal, 1)} سال` : '—'],
-            ['سابقه اجرای خط لوله', a.yearsExperiencePipeline != null ? `${fa(a.yearsExperiencePipeline, 1)} سال` : '—'],
             ['کارفرمای فعلی', a.currentEmployer || '—'],
             ['معلولیت جسمی', a.hasDisability ? a.disabilityNote || 'دارد' : 'ندارد'],
           ]}
         />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 10 }}>
-          <MiniList
-            title="تحصیلات"
-            items={a.education.map((e) => `${e.degree || '—'} ${e.field ? `— ${e.field}` : ''}${e.institution ? ` (${e.institution}${e.year ? `، ${e.year}` : ''})` : ''}`)}
-          />
-          <MiniList
-            title="سوابق شغلی"
-            items={a.employmentHistory.slice(0, 6).map((e) => `${e.position || '—'} — ${e.employer || '—'}${e.startDate ? ` (از ${formatJalali(e.startDate)}${e.endDate ? ` تا ${formatJalali(e.endDate)}` : ' تاکنون'})` : ''}`)}
-          />
-          <MiniList title="گواهینامه‌ها و دوره‌ها" items={a.certifications.map((c) => `${c.title}${c.issuer ? ` — ${c.issuer}` : ''}`)} />
-        </div>
-        {a.notableProjects && <p style={{ margin: '8px 0 0', fontSize: 9.5, color: SUB }}>پروژه‌های شاخص: {a.notableProjects}</p>}
       </Section>
 
       {/* 2. Exam design */}
@@ -336,32 +375,12 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         />
       </Section>
 
-      {/* 3. Maturity interpretation */}
-      <Section n={next()} title={`تفسیر بلوغ و توصیه استفاده — ${roleLabel}`}>
-        <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, padding: '10px 12px', background: SOFT }}>
-          <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800 }}>
-            سطح بلوغ: <span style={{ color: interp.source === 'pending' ? SUB : ACCENT }}>{interp.bandLabel}</span>
-          </p>
-          <p style={{ margin: '4px 0 0', fontSize: 10.5, color: SUB }}>{interp.guidance}</p>
-          {interp.source !== 'pending' && (
-            <p style={{ margin: '4px 0 0', fontSize: 10.5, fontWeight: 700, color: ACCENT }}>سمت شغلی پیشنهادی: {interp.suggestedPositions}</p>
-          )}
-          {interp.focusAreas.length > 0 && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.warn }}>اولویت‌های توسعه این متقاضی: {interp.focusAreas.join('، ')}</p>}
-          {status.recommendation?.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.bad }}>{status.recommendation.reason}</p>}
-        </div>
-        {patternParagraphs.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <p style={{ margin: '0 0 2px', fontSize: 10.5, fontWeight: 800 }}>تحلیل الگوی پاسخ‌ها</p>
-            {patternParagraphs.map((p, i) => (
-              <p key={i} style={{ margin: '0 0 3px', fontSize: 10, color: SUB }}>
-                {p}
-              </p>
-            ))}
-          </div>
-        )}
-      </Section>
+      {/* ================= CATEGORY — ارزیابی فنی تخصصی ================= */}
+      <CategoryBanner title="ارزیابی فنی تخصصی" subtitle="ارزیابی حضوری پنل داوران؛ آزمون تستی آنلاین به‌صورت سنجه‌ی مکمل در همین بخش" color={ACCENT} />
 
-      {/* 4. Technical scores */}
+      {/* 3. Technical scores + this candidate's own technical response pattern (kept together —
+          the pattern read is derived only from these domain scores, never from the overall
+          maturity verdict, which now lives in «جمع‌بندی و تحلیل» at the end of the report). */}
       <Section n={next()} title="نتایج ارزیابی فنی و تخصصی (حضوری)">
         {m.completion.total === 0 && m.overall == null ? (
           <Empty>ارزیابی فنی حضوری برای این متقاضی هنوز طراحی یا امتیازدهی نشده است.</Empty>
@@ -409,21 +428,19 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             {m.weaknesses.length > 0 && <Note color={PRINT_TONE.bad} title="نیازمند توسعه (امتیاز زیر ۴۰)" text={m.weaknesses.map((s) => s.domain.title).join('، ')} />}
           </div>
         )}
-        {qualification.some((q) => q.value != null) && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 10 }}>
-            {qualification.map((q) => (
-              <div key={q.label} style={{ border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: toneForPercent(q.value != null ? q.value * 20 : null) }}>
-                  {fa(q.value)} <span style={{ fontSize: 9, color: MUTED }}>/ ۵</span>
-                </p>
-                <p style={{ margin: 0, fontSize: 9, color: SUB }}>{q.label}</p>
-              </div>
+        {patternParagraphs.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <p style={{ margin: '0 0 2px', fontSize: 10.5, fontWeight: 800 }}>تحلیل الگوی پاسخ‌های فنی</p>
+            {patternParagraphs.map((p, i) => (
+              <p key={i} style={{ margin: '0 0 3px', fontSize: 10, color: SUB }}>
+                {p}
+              </p>
             ))}
           </div>
         )}
       </Section>
 
-      {/* 5. Panel breakdown */}
+      {/* 4. Panel breakdown */}
       <Section n={next()} title="امتیاز به تفکیک داوران و جمع‌بندی داوران" breakable>
         {m.panel.length === 0 ? (
           <Empty>هنوز داوری برای این متقاضی ثبت نشده است.</Empty>
@@ -505,6 +522,23 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
+      {/* ================= CATEGORY — شخصیت و رفتاری ================= */}
+      <CategoryBanner title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، تطابق شغلی (Role Alignment) و اعتبار پاسخ‌ها (Validity)" color="#be185d" />
+
+      {/* 5. Personality */}
+      <Section n={next()} title="اثرانگشت رفتاری — Behavioral Fingerprint" breakable>
+        {!personality ? (
+          <Empty>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</Empty>
+        ) : !personality.snapshot ? (
+          <Empty>ارزیابی شخصیت هنوز امتیازدهی نشده است (وضعیت فعلی: {personality.statusLabel}).</Empty>
+        ) : (
+          <PersonalityBlock snap={personality.snapshot} roleLabel={roleLabel} />
+        )}
+      </Section>
+
+      {/* ================= CATEGORY — مصاحبه ساختاریافته ================= */}
+      <CategoryBanner title="مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی، در برابر سطح مورد نیاز شغل (خط سیاه)" color="#0369a1" />
+
       {/* 6. Structured interview */}
       <Section n={next()} title="نتایج مصاحبه ساختاریافته" breakable>
         {!a.needsStructuredInterview && interview.length === 0 ? (
@@ -517,7 +551,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
               <tr>
                 <th style={th}>شایستگی</th>
                 <th style={{ ...th, textAlign: 'center' }}>سطح لازم</th>
-                <th style={{ ...th, textAlign: 'center' }}>میانگین (۱-۵)</th>
+                <th style={{ ...th, width: '22%' }}>میانگین (خط: سطح لازم)</th>
                 <th style={th}>امتیاز و یادداشت داوران</th>
               </tr>
             </thead>
@@ -532,7 +566,12 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
                     {fa(r.requiredLevel)}
                     {r.requiredLabel ? ` (${r.requiredLabel})` : ''}
                   </td>
-                  <td style={{ ...td, textAlign: 'center', fontWeight: 800, color: toneForPercent(r.average != null ? ((r.average - 1) / 4) * 100 : null) }}>{fa(r.average, 1)}</td>
+                  <td style={td}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Bar value={r.average != null ? ((r.average - 1) / 4) * 100 : null} color={toneForPercent(r.average != null ? ((r.average - 1) / 4) * 100 : null)} marker={((r.requiredLevel - 1) / 4) * 100} />
+                      <b style={{ width: 22, textAlign: 'left', color: toneForPercent(r.average != null ? ((r.average - 1) / 4) * 100 : null) }}>{fa(r.average, 1)}</b>
+                    </div>
+                  </td>
                   <td style={{ ...td, color: SUB }}>
                     {r.ratings.length === 0
                       ? '—'
@@ -550,18 +589,84 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
-      {/* 7. Personality */}
-      <Section n={next()} title="اثرانگشت رفتاری — Behavioral Fingerprint" breakable>
-        {!personality ? (
-          <Empty>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</Empty>
-        ) : !personality.snapshot ? (
-          <Empty>ارزیابی شخصیت هنوز امتیازدهی نشده است (وضعیت فعلی: {personality.statusLabel}).</Empty>
-        ) : (
-          <PersonalityBlock snap={personality.snapshot} roleLabel={roleLabel} />
+      {/* ================= CATEGORY — سوابق و تجربه ================= */}
+      <CategoryBanner title="سوابق و تجربه" subtitle="تحصیلات، سوابق شغلی و گواهینامه‌ها — و کارت امتیاز صلاحیت رسمی" color={GOLD} />
+
+      {/* 7. Experience */}
+      <Section n={next()} title="سوابق و تجربه متقاضی">
+        <KV
+          rows={[
+            ['سابقه کل کار', a.yearsExperienceTotal != null ? `${fa(a.yearsExperienceTotal, 1)} سال` : '—'],
+            ['سابقه اجرای خط لوله', a.yearsExperiencePipeline != null ? `${fa(a.yearsExperiencePipeline, 1)} سال` : '—'],
+          ]}
+        />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, margin: '10px 0' }}>
+          <MiniList
+            title="تحصیلات"
+            items={a.education.map((e) => `${e.degree || '—'} ${e.field ? `— ${e.field}` : ''}${e.institution ? ` (${e.institution}${e.year ? `، ${e.year}` : ''})` : ''}`)}
+          />
+          <MiniList
+            title="سوابق شغلی"
+            items={a.employmentHistory.slice(0, 6).map((e) => `${e.position || '—'} — ${e.employer || '—'}${e.startDate ? ` (از ${formatJalali(e.startDate)}${e.endDate ? ` تا ${formatJalali(e.endDate)}` : ' تاکنون'})` : ''}`)}
+          />
+          <MiniList title="گواهینامه‌ها و دوره‌ها" items={a.certifications.map((c) => `${c.title}${c.issuer ? ` — ${c.issuer}` : ''}`)} />
+        </div>
+        {a.notableProjects && <p style={{ margin: '0 0 8px', fontSize: 9.5, color: SUB }}>پروژه‌های شاخص: {a.notableProjects}</p>}
+        {qualification.some((q) => q.value != null) && (
+          <>
+            <p style={{ margin: '4px 0 6px', fontSize: 10, fontWeight: 800 }}>کارت امتیاز صلاحیت</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {qualification.map((q) => (
+                <div key={q.label} style={{ border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: toneForPercent(q.value != null ? q.value * 20 : null) }}>
+                    {fa(q.value)} <span style={{ fontSize: 9, color: MUTED }}>/ ۵</span>
+                  </p>
+                  <p style={{ margin: 0, fontSize: 9, color: SUB }}>{q.label}</p>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </Section>
 
-      {/* 8. Competency gaps */}
+      {/* ================= CATEGORY — جمع‌بندی و تحلیل ================= */}
+      <CategoryBanner title="جمع‌بندی و تحلیل" subtitle="سطح بلوغ کلی، ترکیب شواهد، شکاف شایستگی، تحلیل هوش مصنوعی و برنامه توسعه فردی" color={ACCENT} />
+
+      {/* 8. Maturity interpretation — the overall, whole-assessment verdict, reported once here
+          rather than beside the technical scores (which only ever reflect one of the four methods
+          this verdict is drawn from). */}
+      <Section n={next()} title={`تفسیر بلوغ و توصیه استفاده — ${roleLabel}`}>
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, padding: '10px 12px', background: SOFT }}>
+          <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800 }}>
+            سطح بلوغ: <span style={{ color: interp.source === 'pending' ? SUB : ACCENT }}>{interp.bandLabel}</span>
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 10.5, color: SUB }}>{interp.guidance}</p>
+          {interp.source !== 'pending' && (
+            <p style={{ margin: '4px 0 0', fontSize: 10.5, fontWeight: 700, color: ACCENT }}>سمت شغلی پیشنهادی: {interp.suggestedPositions}</p>
+          )}
+          {interp.focusAreas.length > 0 && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.warn }}>اولویت‌های توسعه این متقاضی: {interp.focusAreas.join('، ')}</p>}
+          {status.recommendation?.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.bad }}>{status.recommendation.reason}</p>}
+        </div>
+        <p style={{ margin: '6px 0 0', fontSize: 8.5, color: MUTED }}>
+          این سطح بلوغ فقط بر پایه‌ی امتیاز فنی-تخصصی محاسبه می‌شود؛ برای آمادگی کلی از ترکیب همه روش‌ها، به «آمادگی برای الزامات شغل» در تحلیل شکاف شایستگی زیر مراجعه کنید.
+        </p>
+      </Section>
+
+      {/* 9. Evidence-source mix — new, aggregated information not shown anywhere else in the
+          report: how much of the whole competency profile rests on each assessment method. */}
+      <Section n={next()} title="ترکیب روش‌های سازنده‌ی پروفایل شایستگی">
+        {Object.values(evidenceMix).every((v) => v === 0) ? (
+          <Empty>پروفایل شایستگی این متقاضی هنوز محاسبه نشده است.</Empty>
+        ) : (
+          <PrintDonut
+            slices={(Object.keys(evidenceMix) as EvidenceMethodKey[])
+              .filter((k) => evidenceMix[k] > 0)
+              .map((k) => ({ label: EVIDENCE_METHOD_META[k].label, value: evidenceMix[k], color: EVIDENCE_METHOD_META[k].color }))}
+          />
+        )}
+      </Section>
+
+      {/* 10. Competency gaps */}
       <Section n={next()} title="تحلیل شکاف شایستگی (نمای ۳۶۰ درجه)" breakable>
         {competencyGapRows.length === 0 ? (
           <Empty>پروفایل شایستگی این متقاضی هنوز محاسبه نشده است.</Empty>
@@ -603,7 +708,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
-      {/* 9. AI analysis */}
+      {/* 11. AI analysis */}
       <Section n={next()} title="خلاصه تحلیل جامع هوش مصنوعی">
         {!ai ? (
           <Empty>تحلیل جامع هوشمند هنوز برای این متقاضی تولید نشده است.</Empty>
@@ -622,7 +727,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
-      {/* 10. IDP */}
+      {/* 12. IDP */}
       <Section n={next()} title="برنامه توسعه فردی (IDP)" breakable>
         {!developmentPlan ? (
           <Empty>برنامه توسعه فردی برای این متقاضی تهیه نشده است.</Empty>
@@ -631,7 +736,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
-      {/* 11. Reassessment */}
+      {/* 13. Reassessment */}
       {a.previousAssessmentId && (
         <Section n={next()} title="مقایسه با ارزیابی قبلی">
           {!reassessment ? (
@@ -662,7 +767,8 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         </Section>
       )}
 
-      {/* 12. Approval / finalization */}
+      {/* 14. Approval / finalization — outside the categories above: this is the workflow outcome,
+          not an assessment topic. */}
       <Section n={next()} title="جمع‌بندی، تأیید و وضعیت نهایی">
         {(a.strengths || a.developmentAreas) && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>

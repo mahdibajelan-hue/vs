@@ -221,3 +221,43 @@ export function isAiAnalysisStale(analysis: CandidateAiAnalysis | null | undefin
 
 export const formatLevel = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('fa-IR', { maximumFractionDigits: 1 }))
 export const formatPercent = (share: number) => `٪${Math.round(share * 100).toLocaleString('fa-IR')}`
+
+// ---- Evidence-source mix (results page «جمع‌بندی و تحلیل» category) --------
+
+/** Which of the four assessment categories an evidence source belongs to — SJT is grouped with
+ * personality (it is administered and reported as part of the personality/behavioral assessment;
+ * see ASSESSMENT_METHOD_LABEL_FA.personality = "شخصیت و SJT"). */
+export type EvidenceMethodKey = 'technical' | 'personality' | 'interview' | 'experience'
+
+export const EVIDENCE_METHOD_META: Record<EvidenceMethodKey, { label: string; color: string }> = {
+  technical: { label: 'فنی و تخصصی (حضوری + آزمون تستی)', color: '#a855f7' },
+  personality: { label: 'شخصیت و رفتاری', color: '#ec4899' },
+  interview: { label: 'مصاحبه ساختاریافته', color: '#0ea5e9' },
+  experience: { label: 'سوابق و تجربه', color: '#f59e0b' },
+}
+
+const EVIDENCE_SOURCE_TO_METHOD: Record<CompEvidenceSourceType, EvidenceMethodKey> = {
+  TECHNICAL_CATEGORY: 'technical',
+  TECHNICAL_MCQ: 'technical',
+  PERSONALITY_DIMENSION: 'personality',
+  PERSONALITY_TRAIT: 'personality',
+  SJT: 'personality',
+  STRUCTURED_INTERVIEW: 'interview',
+  EXPERIENCE: 'experience',
+}
+
+/**
+ * Aggregates every evidence row the Competency Engine used for this candidate — across ALL
+ * required competencies, not one row's `sourceCounts` — into the four assessment categories, by
+ * effective (post-weighting) contribution rather than a raw row count. This is genuinely new,
+ * aggregated information: nowhere else on the results page can a reader see, at a glance, how much
+ * of the whole competency picture rests on the interview vs. the personality test vs. experience.
+ */
+export function evidenceMethodMix(evidence: CompCompetencyEvidence[]): Record<EvidenceMethodKey, number> {
+  const totals: Record<EvidenceMethodKey, number> = { technical: 0, personality: 0, interview: 0, experience: 0 }
+  for (const e of evidence) {
+    const key = EVIDENCE_SOURCE_TO_METHOD[e.sourceType]
+    totals[key] += Math.max(0, e.effectiveWeight)
+  }
+  return totals
+}

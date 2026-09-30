@@ -10,6 +10,7 @@ import {
   Crown,
   GraduationCap,
   Hourglass,
+  PieChart,
   Quote,
   Sparkles,
   Target,
@@ -17,10 +18,30 @@ import {
 } from 'lucide-react'
 import { formatJalali } from '../../../../lib/jalali'
 import { tierColor } from '../../lib/competencyModel'
+import { EVIDENCE_METHOD_META, type EvidenceMethodKey } from '../../lib/competencyGap'
 import { fa, type InterviewSummaryRow, type ResultsModel } from '../../lib/resultsModel'
 import type { CompetencyAssessment } from '../../types'
 import { tone } from '../../lib/tone'
+import { DonutChart, type DonutSlice } from '../DonutChart'
 
+/** A whole-category divider — bigger and bolder than {@link SectionHeading}, used once per major
+ * grouping (فنی، شخصیت و رفتاری، مصاحبه، سوابق و تجربه، جمع‌بندی) so the reader can tell "a new topic
+ * starts here" from "a sub-view of the topic above" at a glance (product ask: "دسته‌بندی مشخص با
+ * تیتر درشت"). Pairs with the `.fx-category` wash in farinTheme.css, which visually bounds every
+ * sub-section that follows until the next CategoryHeading. */
+export function CategoryHeading({ icon: Icon, color, title, subtitle }: { icon: typeof Target; color: string; title: string; subtitle?: string }) {
+  return (
+    <div className="mb-3.5 flex flex-wrap items-center gap-3" style={tone(color)}>
+      <span className="fx-tone-bg-strong fx-tone-text flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+        <Icon size={23} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h2 className="fx-tone-text text-[19px] font-black leading-7 sm:text-[21px]">{title}</h2>
+        {subtitle && <p className="fx-text-2 text-[12px] leading-5">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
 
 export function SectionHeading({ id, icon: Icon, color, title, subtitle }: { id?: string; icon: typeof Target; color: string; title: string; subtitle?: string }) {
   return (
@@ -194,51 +215,113 @@ export function ExamDesignCard({ model, assessment: a }: { model: ResultsModel; 
   )
 }
 
-export function InterpretationCard({ model, roleLabel, paragraphs }: { model: ResultsModel; roleLabel: string; paragraphs: string[] }) {
+/** «جمع‌بندی و تحلیل» — overall maturity band + usage recommendation, derived from the technical
+ * score but reported once, here, rather than repeated near the technical breakdown. */
+export function MaturityCard({ model, roleLabel }: { model: ResultsModel; roleLabel: string }) {
   const i = model.interpretation
   const pending = i.source === 'pending'
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.1fr_1fr]">
-      <div className="fx-card fx-tone-wash p-4" style={tone(pending ? '#94a3b8' : '#a855f7')}>
-        <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
-          <Sparkles size={15} className="fx-tone-text" /> تفسیر بلوغ و توصیه استفاده
+    <div className="fx-card fx-tone-wash p-4" style={tone(pending ? '#94a3b8' : '#6366f1')}>
+      <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
+        <Sparkles size={15} className="fx-tone-text" /> تفسیر بلوغ و توصیه استفاده
+      </p>
+      <p className="fx-tone-bg fx-tone-text mb-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold">
+        سطح بلوغ: {i.bandLabel}، {roleLabel}
+      </p>
+      <p className="fx-text-2 text-[12px] leading-7">{i.guidance}</p>
+      {!pending && (
+        <p className="fx-tone-bg mt-2 rounded-xl p-2.5 text-[12px] leading-6">
+          <b className="fx-tone-text">سمت‌های شغلی پیشنهادی: </b>
+          {i.suggestedPositions}
         </p>
-        <p className="fx-tone-bg fx-tone-text mb-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold">
-          سطح بلوغ: {i.bandLabel}، {roleLabel}
+      )}
+      {i.focusAreas.length > 0 && (
+        <p className="mt-2 text-[11.5px] leading-6" style={tone('#f59e0b')}>
+          <b className="fx-tone-text">اولویت‌های توسعه این متقاضی: </b>
+          <span className="fx-text-2">{i.focusAreas.join('، ')}</span>
         </p>
-        <p className="fx-text-2 text-[12px] leading-7">{i.guidance}</p>
-        {!pending && (
-          <p className="fx-tone-bg mt-2 rounded-xl p-2.5 text-[12px] leading-6">
-            <b className="fx-tone-text">سمت‌های شغلی پیشنهادی: </b>
-            {i.suggestedPositions}
+      )}
+      {model.status.recommendation?.hasCriticalGap && (
+        <p className="mt-2 text-[11.5px] leading-6" style={tone('#ef4444')}>
+          <span className="fx-tone-text">{model.status.recommendation.reason}</span>
+        </p>
+      )}
+      {i.source === 'template' && <p className="fx-muted mt-2 text-[10px]">متن پیش‌فرض خانواده شغلی — قابل ویرایش توسط ادمین ماژول (جدول تفسیر بلوغ نقش‌ها).</p>}
+      <p className="fx-muted mt-2 text-[10px] leading-5">
+        این سطح بلوغ فقط بر پایه‌ی امتیاز فنی-تخصصی محاسبه می‌شود؛ برای برآورد آمادگی کلی از ترکیب همه روش‌های ارزیابی، به «آمادگی برای الزامات شغل» در تحلیل شکاف شایستگی
+        (پایین همین بخش) مراجعه کنید.
+      </p>
+    </div>
+  )
+}
+
+/** «ارزیابی فنی تخصصی» — rule-based read of this candidate's own technical domain-score pattern
+ * (never a job-fit verdict; that lives in {@link MaturityCard} instead). */
+export function PatternCard({ paragraphs }: { paragraphs: string[] }) {
+  return (
+    <div className="fx-card p-4" style={tone('#0ea5e9')}>
+      <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
+        <ClipboardList size={15} className="fx-tone-text" /> تحلیل الگوی پاسخ‌های فنی
+      </p>
+      <div className="space-y-2">
+        {paragraphs.map((p, idx) => (
+          <p key={idx} className="fx-text-2 text-[11.5px] leading-7">
+            {p}
           </p>
-        )}
-        {i.focusAreas.length > 0 && (
-          <p className="mt-2 text-[11.5px] leading-6" style={tone('#f59e0b')}>
-            <b className="fx-tone-text">اولویت‌های توسعه این متقاضی: </b>
-            <span className="fx-text-2">{i.focusAreas.join('، ')}</span>
-          </p>
-        )}
-        {model.status.recommendation?.hasCriticalGap && (
-          <p className="mt-2 text-[11.5px] leading-6" style={tone('#ef4444')}>
-            <span className="fx-tone-text">{model.status.recommendation.reason}</span>
-          </p>
-        )}
-        {i.source === 'template' && <p className="fx-muted mt-2 text-[10px]">متن پیش‌فرض خانواده شغلی — قابل ویرایش توسط ادمین ماژول (جدول تفسیر بلوغ نقش‌ها).</p>}
+        ))}
       </div>
-      <div className="fx-card p-4" style={tone('#0ea5e9')}>
-        <p className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold">
-          <ClipboardList size={15} className="fx-tone-text" /> تحلیل الگوی پاسخ‌ها
-        </p>
-        <div className="space-y-2">
-          {paragraphs.map((p, idx) => (
-            <p key={idx} className="fx-text-2 text-[11.5px] leading-7">
-              {p}
-            </p>
-          ))}
-        </div>
-        <p className="fx-muted mt-2 text-[10px]">این تحلیل صرفاً از الگوی امتیازات ثبت‌شده در همین ارزیابی ساخته شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
+      <p className="fx-muted mt-2 text-[10px]">این تحلیل صرفاً از الگوی امتیازات فنی ثبت‌شده در همین ارزیابی ساخته شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
+    </div>
+  )
+}
+
+/** «سوابق و تجربه» — the official 1-5 qualification scorecard (education/experience/training/
+ * certification), moved out of the technical section: these come from the candidate's declared
+ * background, not from technical question performance. */
+export function QualificationScorecard({ chips }: { chips: { label: string; icon: typeof Target; value: number | null }[] }) {
+  if (!chips.some((c) => c.value != null)) return null
+  return (
+    <div className="fx-card p-4">
+      <p className="mb-3 text-[13px] font-extrabold">کارت امتیاز صلاحیت</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {chips.map((c) => {
+          const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
+          return (
+            <div key={c.label} className="fx-sub fx-tone-border border p-3.5 text-center" style={tone(color)}>
+              <c.icon size={17} className="fx-tone-text mx-auto mb-1.5" />
+              <p className="num fx-tone-text text-2xl font-black leading-none">
+                {fa(c.value)}
+                <span className="fx-muted text-xs font-bold"> /۵</span>
+              </p>
+              <p className="fx-text-2 mt-1.5 text-[11px] font-bold leading-4">{c.label}</p>
+            </div>
+          )
+        })}
       </div>
+    </div>
+  )
+}
+
+/** «جمع‌بندی و تحلیل» — how much of the final, evidence-backed competency picture rests on each
+ * assessment method. Genuinely new aggregated information: nothing else on this page answers "how
+ * much of this candidate's score came from the interview vs. the personality test vs. experience?"
+ * at a glance. Built from every evidence row across every required competency (competencyGap.ts
+ * `evidenceMethodMix`), not any one competency's own breakdown. */
+export function EvidenceMixCard({ mix }: { mix: Record<EvidenceMethodKey, number> }) {
+  const total = Object.values(mix).reduce((a, b) => a + b, 0)
+  const slices: DonutSlice[] = (Object.keys(mix) as EvidenceMethodKey[])
+    .filter((k) => mix[k] > 0)
+    .map((k) => ({ key: k, label: EVIDENCE_METHOD_META[k].label, value: mix[k], color: EVIDENCE_METHOD_META[k].color }))
+  return (
+    <div className="fx-card p-4" style={tone('#6366f1')}>
+      <p className="mb-1 flex items-center gap-1.5 text-[13px] font-extrabold">
+        <PieChart size={15} className="fx-tone-text" /> ترکیب روش‌های سازنده‌ی پروفایل شایستگی
+      </p>
+      <p className="fx-muted mb-3 text-[10.5px] leading-5">
+        سهم هر روش ارزیابی (فنی، شخصیت و رفتاری، مصاحبه، سوابق) از مجموع شواهدی که امتیاز نهایی شایستگی‌های این متقاضی را ساخته‌اند — شاخصی مشتق‌شده از موتور شایستگی، جدا از
+        امتیاز فنی بالای صفحه.
+      </p>
+      {total > 0 ? <DonutChart slices={slices} centerLabel="وزن شواهد" centerValue={fa(Math.round(total))} /> : <EmptyNote>پروفایل شایستگی این متقاضی هنوز محاسبه نشده است.</EmptyNote>}
     </div>
   )
 }
@@ -342,6 +425,20 @@ export function PanelBreakdown({ model }: { model: ResultsModel }) {
   )
 }
 
+/** A 1-5 rating bar (fills from the right, RTL) with the job's required level marked as a tick —
+ * the same "actual vs. required" visual language as {@link ThresholdBar}-style bars elsewhere in
+ * this module, scaled to the interview's 1-5 range instead of 0-100. */
+function RatingBar({ value, required, color }: { value: number | null; required: number; color: string }) {
+  const pct = value != null ? Math.max(0, Math.min(100, ((value - 1) / 4) * 100)) : 0
+  const markerPct = Math.max(0, Math.min(100, ((required - 1) / 4) * 100))
+  return (
+    <div className="fx-track relative overflow-hidden rounded-full" style={{ height: 9 }}>
+      <div className="absolute inset-y-0 right-0 rounded-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(270deg, color-mix(in srgb, ${color} 55%, transparent), ${color})` }} />
+      <div className="absolute inset-y-0 w-[3px] rounded-full" style={{ right: `calc(${markerPct}% - 1.5px)`, background: 'var(--text-primary)', opacity: 0.85 }} />
+    </div>
+  )
+}
+
 export function InterviewResults({ rows, inDesign }: { rows: InterviewSummaryRow[]; inDesign: boolean }) {
   if (!inDesign && rows.length === 0) return <EmptyNote>مصاحبه ساختاریافته در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote>
   if (rows.every((r) => r.ratings.length === 0)) return <EmptyNote>هنوز امتیازی برای مصاحبه ساختاریافته ثبت نشده است.</EmptyNote>
@@ -363,7 +460,8 @@ export function InterviewResults({ rows, inDesign }: { rows: InterviewSummaryRow
               </p>
               <span className="num fx-tone-bg fx-tone-text shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-extrabold">{r.average != null ? `${fa(r.average, 1)} / ۵` : '—'}</span>
             </div>
-            <p className="fx-muted num mb-2 text-[10.5px]">
+            <RatingBar value={r.average} required={r.requiredLevel} color={color} />
+            <p className="fx-muted num mb-2 mt-1 text-[10.5px]">
               سطح مورد نیاز: {fa(r.requiredLevel)}
               {r.requiredLabel ? ` (${r.requiredLabel})` : ''}، {fa(r.ratings.length)} داور
             </p>
