@@ -971,8 +971,19 @@ export interface CandidateAiEvidence {
  * technical_analysis/personality_analysis actually has data for this candidate (each carries its
  * own `available` flag rather than being nullable, so a half not yet completed still renders as an
  * explicit "not yet available" state instead of a missing key). */
+/** A forced, capped synthesis so a reviewer can tell "how is this candidate, overall" without
+ * reading all 20+ individual trait/dimension entries below — the exact complaint that a personality
+ * profile with many near-identical high scores becomes unreadable as a flat list. Optional because
+ * analyses generated before this field existed won't have it. */
+export interface CandidateAiAtAGlance {
+  key_strengths: string[]
+  key_risks: string[]
+  verdict: string
+}
+
 export interface CandidateAiAnalysisContent {
   executive_summary: string
+  at_a_glance?: CandidateAiAtAGlance
   technical_analysis: CandidateAiTechnicalAnalysis
   personality_analysis: CandidateAiPersonalityAnalysis
   /** Evidence-based narrative synthesizing the candidate's fit against the TARGET JOB's required

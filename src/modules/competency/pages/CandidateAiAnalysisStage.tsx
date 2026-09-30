@@ -61,6 +61,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
   const [error, setError] = useState<string | null>(null)
   const [expandedDim, setExpandedDim] = useState<string | null>(null)
   const [expandedFollowUp, setExpandedFollowUp] = useState<number | null>(null)
+  const [showFullPersonality, setShowFullPersonality] = useState(false)
 
   useEffect(() => {
     if (analysis === undefined) fetchCandidateAiAnalysis(assessment.id)
@@ -150,6 +151,23 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
             <p className="text-[11.5px] leading-7 text-secondary">{content.executive_summary}</p>
           </div>
 
+          {content.at_a_glance && (
+            <div className="glass-panel rounded-2xl border border-indigo-400/30 bg-indigo-500/[0.06] p-4">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold text-indigo-200">
+                <Sparkles size={13} /> این متقاضی، خلاصه در یک نگاه
+              </p>
+              <p className="mb-3 rounded-xl border border-indigo-400/20 bg-white/[0.03] p-2.5 text-[11.5px] font-bold leading-7 text-primary">{content.at_a_glance.verdict}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {content.at_a_glance.key_strengths.length > 0 && (
+                  <ListCard icon={<TrendingUp size={13} className="text-emerald-300" />} title="مهم‌ترین نقاط قوت" items={content.at_a_glance.key_strengths} tone="emerald" />
+                )}
+                {content.at_a_glance.key_risks.length > 0 && (
+                  <ListCard icon={<AlertTriangle size={13} className="text-amber-300" />} title="مهم‌ترین نقاط ریسک/بررسی" items={content.at_a_glance.key_risks} tone="amber" />
+                )}
+              </div>
+            </div>
+          )}
+
           {content.competency_gap_narrative && (
             <>
               <SectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی</SectionHeading>
@@ -202,7 +220,20 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
                 </div>
               )}
 
-              {content.personality_analysis.trait_analysis.length > 0 && (
+              {(content.personality_analysis.trait_analysis.length > 0 || content.personality_analysis.behavioral_analysis.length > 0) && (
+                <button
+                  onClick={() => setShowFullPersonality((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-[11px] font-bold text-secondary hover:bg-white/[0.04]"
+                >
+                  <span>
+                    جزئیات کامل {content.personality_analysis.trait_analysis.length + content.personality_analysis.behavioral_analysis.length} ویژگی/بُعد شخصیتی
+                    {content.at_a_glance ? ' (خلاصه بالا را ببینید)' : ''}
+                  </span>
+                  {showFullPersonality ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              )}
+
+              {showFullPersonality && content.personality_analysis.trait_analysis.length > 0 && (
                 <div className="glass-panel rounded-2xl p-4">
                   <p className="mb-2 text-xs font-bold">ویژگی‌های شخصیتی</p>
                   <div className="space-y-2.5">
@@ -221,7 +252,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
                 </div>
               )}
 
-              {content.personality_analysis.behavioral_analysis.length > 0 && (
+              {showFullPersonality && content.personality_analysis.behavioral_analysis.length > 0 && (
                 <div className="glass-panel rounded-2xl p-4">
                   <p className="mb-2 text-xs font-bold">ابعاد رفتاری حرفه‌ای</p>
                   <div className="space-y-2.5">

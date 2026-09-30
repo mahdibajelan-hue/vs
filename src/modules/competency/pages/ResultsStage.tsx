@@ -810,7 +810,9 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                 </button>
               )}
               {candidateAiAnalysis ? (
-                <p className="fx-text-2 text-[12px] leading-7">{candidateAiAnalysis.analysis.executive_summary}</p>
+                <p className="fx-text-2 text-[12px] leading-7">
+                  {candidateAiAnalysis.analysis.at_a_glance?.verdict ?? candidateAiAnalysis.analysis.executive_summary}
+                </p>
               ) : (
                 <EmptyNote>تحلیل جامع هوشمند (شخصیت، رفتار، فنی و تطابق شغلی) هنوز برای این متقاضی تولید نشده است.</EmptyNote>
               )}

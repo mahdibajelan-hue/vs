@@ -140,6 +140,9 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
             Behavioral Fingerprint <span className="fx-text-2 font-bold">(اثرانگشت رفتاری)</span>
           </p>
         </div>
+        {snapshot.verdict && (
+          <p className="fx-sub mb-3 rounded-xl p-3 text-[12px] font-bold leading-7 text-primary">{snapshot.verdict}</p>
+        )}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <HeroTile color={verdict.color} icon={Gauge} title="Role Fit (تطابق شغلی)">
             <p className="num fx-tone-text text-3xl font-black leading-9">
