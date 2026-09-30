@@ -1,24 +1,6 @@
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import {
-  Award,
-  BriefcaseBusiness,
-  Calendar,
-  CheckCircle2,
-  FileText,
-  GraduationCap,
-  HandCoins,
-  History,
-  IdCard,
-  Lightbulb,
-  Settings2,
-  Shield,
-  ShieldAlert,
-  Star,
-  User,
-  Users,
-  Wrench,
-} from 'lucide-react'
+import { Award, BriefcaseBusiness, Calendar, CheckCircle2, FileText, GraduationCap, HandCoins, History, IdCard, Lightbulb, Settings2, Shield, ShieldAlert, Sparkles, User, Users, Wrench } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { FarinMark } from '../../../components/common/Logo'
 import { formatJalali, isoToJalali } from '../../../lib/jalali'
@@ -176,12 +158,24 @@ export function PublicResultsPage({ token }: { token: string }) {
   })
   const tier = tierColor(overall)
 
-  // The candidate's own actual top-scoring evaluated domains — never a generic placeholder set —
-  // exactly the "متناسب با نتیجه مصاحبه" requirement.
-  const topDomains: DomainScore[] = [...domainScores]
-    .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
-    .sort((a, b) => b.percentScore - a.percentScore)
-    .slice(0, 4)
+  // The evaluator's own written strengths are specific to THIS candidate (e.g. "جوشکاری خط لوله",
+  // "مدیریت پیمانکار فرعی") — real, per-candidate content, exactly the "متناسب با نتیجه مصاحبه"
+  // requirement. The 4 category "buckets" every non-PM role is scored against (roleGeneral/
+  // roleTechnical/roleScenario/roleExperience) are the SAME 4 titles for every candidate in that
+  // role family, so they only ever act as a last-resort fallback when no strengths text was written.
+  const strengthTags = row.strengths
+    ? row.strengths
+        .split(/[،,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 4)
+    : null
+  const topDomains: DomainScore[] = strengthTags
+    ? []
+    : [...domainScores]
+        .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
+        .sort((a, b) => b.percentScore - a.percentScore)
+        .slice(0, 4)
 
   const { issued, expires } = issueAndExpiry(row.interview_date)
   const cardNo = credentialNumber(row.id)
@@ -189,82 +183,92 @@ export function PublicResultsPage({ token }: { token: string }) {
 
   return (
     <div className="cred-stage">
-      <div className="cred-card" style={{ '--cred-tier': tier } as React.CSSProperties}>
-        <div className="cred-header">
-          <div className="cred-logo">
-            <FarinMark size={32} />
-            <div className="cred-logo-text">
-              <p className="text-[13px] font-extrabold text-stone-800">فرین</p>
-              <p className="text-[10px] font-medium text-stone-500">Farin</p>
+      <div className="cred-card-wrap">
+        <div className="cred-card" style={{ '--cred-tier': tier } as React.CSSProperties}>
+          <div className="cred-header">
+            <div className="cred-logo">
+              <FarinMark size={32} />
+              <div className="cred-logo-text">
+                <p className="text-[13px] font-extrabold text-stone-800">فرین</p>
+                <p className="text-[10px] font-medium text-stone-500">Farin</p>
+              </div>
+            </div>
+            <div className="cred-title-badge">
+              <div className="cred-title">
+                <p className="text-[12.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
+                <p className="text-[9.5px] font-medium text-stone-500">Professional Qualification Card</p>
+              </div>
+              <img src={`${import.meta.env.BASE_URL}credential-medal.png`} alt="" className="cred-medal" />
+              <p className="cred-level-label text-[10.5px] font-extrabold leading-4 text-stone-800">{interp.bandLabel}</p>
             </div>
           </div>
-          <div className="cred-title">
-            <p className="text-[13px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
-            <p className="text-[10px] font-medium text-stone-500">Professional Qualification Card</p>
-          </div>
-        </div>
 
-        <div className="cred-main">
-          <div className="cred-identity">
-            <PublicPhoto path={row.photo_url} approved={row.is_approved} />
-            <div className="cred-identity-text">
-              <p className="text-[15px] font-extrabold leading-6 text-stone-900">{row.candidate_name}</p>
-              {row.candidate_position && <p className="text-[11px] font-bold text-stone-500">{row.candidate_position}</p>}
-              <div className="mt-1.5 flex flex-col gap-0.5">
-                <div className="cred-meta-row">
-                  <span className="num text-[10.5px] font-bold text-stone-600">
-                    FAR-{isoToJalali(row.interview_date)?.jy ?? ''}-{cardNo}
-                  </span>
-                  <IdCard size={11} className="text-stone-400" />
-                </div>
-                <div className="cred-meta-row">
-                  <span className="num text-[10px] text-stone-500">
-                    صادر: {issued} — اعتبار تا: {expires}
-                  </span>
-                  <Calendar size={11} className="text-stone-400" />
+          <div className="cred-main">
+            <div className="cred-identity">
+              <PublicPhoto path={row.photo_url} approved={row.is_approved} />
+              <div className="cred-identity-text">
+                <p className="text-[16px] font-extrabold leading-6 text-stone-900">{row.candidate_name}</p>
+                {row.candidate_position && <p className="text-[11.5px] font-bold text-stone-500">{row.candidate_position}</p>}
+                <div className="mt-1.5 flex flex-col gap-0.5">
+                  <div className="cred-meta-row">
+                    <span className="num text-[10.5px] font-bold text-stone-600">
+                      FAR-{isoToJalali(row.interview_date)?.jy ?? ''}-{cardNo}
+                    </span>
+                    <IdCard size={11} className="text-stone-400" />
+                  </div>
+                  <div className="cred-meta-row">
+                    <span className="num text-[10px] text-stone-500">
+                      صادر: {issued} — اعتبار تا: {expires}
+                    </span>
+                    <Calendar size={11} className="text-stone-400" />
+                  </div>
+                  {row.is_approved && (
+                    <div className="cred-meta-row">
+                      <span className="text-[10px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</span>
+                      <CheckCircle2 size={11} className="text-emerald-600" />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="cred-badge">
-            <div className="cred-badge-hex">
-              <Star size={26} className="text-white" fill="currentColor" />
+          <div className="cred-footer">
+            <div className="cred-qr-block">
+              <div className="cred-qr-box">
+                <QRCodeSVG value={shareUrl} size={72} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+              </div>
+              <p className="max-w-[92px] text-center text-[9px] leading-4 text-stone-500">برای مشاهده جزئیات اسکن کنید</p>
             </div>
-            <p className="text-[11px] font-extrabold leading-4 text-stone-800">{interp.bandLabel}</p>
-            <p className="text-[9px] font-medium text-stone-500">Qualification Level</p>
-          </div>
-        </div>
 
-        {row.is_approved && (
-          <div className="relative z-[1] mt-2 flex items-center justify-end gap-1.5 text-[10.5px] font-bold text-emerald-700">
-            <CheckCircle2 size={13} /> دارای صلاحیت تأییدشده
-          </div>
-        )}
-
-        <div className="cred-footer">
-          <div className="cred-qr-block">
-            <div className="cred-qr-box">
-              <QRCodeSVG value={shareUrl} size={72} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
-            </div>
-            <p className="max-w-[92px] text-center text-[9px] leading-4 text-stone-500">برای مشاهده جزئیات اسکن کنید</p>
-          </div>
-
-          {topDomains.length > 0 && (
-            <div className="cred-skills">
-              {topDomains.map((d) => {
-                const Icon = DOMAIN_ICON[d.domain.key] ?? GraduationCap
-                return (
-                  <div key={d.domain.key} className="cred-skill-tile">
+            {strengthTags && strengthTags.length > 0 && (
+              <div className="cred-skills">
+                {strengthTags.map((s) => (
+                  <div key={s} className="cred-skill-tile">
                     <span className="cred-skill-icon">
-                      <Icon size={15} />
+                      <Sparkles size={15} />
                     </span>
-                    <span className="text-[9.5px] font-bold leading-3.5 text-stone-700">{d.domain.shortTitle}</span>
+                    <span className="text-[9.5px] font-bold leading-3.5 text-stone-700">{s}</span>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+            {!strengthTags && topDomains.length > 0 && (
+              <div className="cred-skills">
+                {topDomains.map((d) => {
+                  const Icon = DOMAIN_ICON[d.domain.key] ?? GraduationCap
+                  return (
+                    <div key={d.domain.key} className="cred-skill-tile">
+                      <span className="cred-skill-icon">
+                        <Icon size={15} />
+                      </span>
+                      <span className="text-[9.5px] font-bold leading-3.5 text-stone-700">{d.domain.shortTitle}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
