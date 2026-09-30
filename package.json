@@ -19,6 +19,7 @@
     "html2canvas-pro": "^2.3.3",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.28.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.10.1",
