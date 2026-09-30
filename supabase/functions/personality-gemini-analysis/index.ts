@@ -26,6 +26,26 @@ function fail(status: number, message: string, err?: unknown) {
   return json({ error: message }, status)
 }
 
+// Gemini returns 503 UNAVAILABLE ("model is currently experiencing high demand") in short bursts,
+// not as a permanent outage — a single unretried attempt turns those bursts into a hard user-facing
+// failure. Retries only the transient, load-related codes; a genuine 404/400 (bad model name, bad
+// request) still fails immediately since retrying those would only waste the same 7s every time.
+async function withGeminiRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const message = err instanceof Error ? err.message : String(err)
+      const retriable = /"code"\s*:\s*(503|429)|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(message)
+      if (!retriable || attempt === maxAttempts) throw err
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)))
+    }
+  }
+  throw lastErr
+}
+
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -321,15 +341,17 @@ Deno.serve(async (req: Request) => {
     let response
     try {
       const ai = new GoogleGenAI({ apiKey: geminiKey })
-      response = await ai.models.generateContent({
-        model,
-        contents: `داده‌های زیر مربوط به یک ارزیابی شخصیت و رفتاری واقعی است. طبق قوانین ارائه‌شده، آن را تحلیل کن:\n\n${JSON.stringify(promptPayload, null, 2)}`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      })
+      response = await withGeminiRetry(() =>
+        ai.models.generateContent({
+          model,
+          contents: `داده‌های زیر مربوط به یک ارزیابی شخصیت و رفتاری واقعی است. طبق قوانین ارائه‌شده، آن را تحلیل کن:\n\n${JSON.stringify(promptPayload, null, 2)}`,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            responseSchema: RESPONSE_SCHEMA,
+          },
+        }),
+      )
     } catch (geminiErr) {
       const detail = geminiErr instanceof Error ? geminiErr.message : String(geminiErr)
       return fail(502, `فراخوانی Gemini ناموفق بود: ${detail}`, geminiErr)
