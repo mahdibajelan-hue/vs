@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
+import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
@@ -44,7 +44,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchDevelopmentPlans = useCompetencyStore((s) => s.fetchDevelopmentPlans)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
-  const [mineOnly, setMineOnly] = useState(false)
   // N-12: the next step per candidate — from the loaded rows plus two light lists: every panel
   // assignment (assessment/user/lead only) and the personality tests' statuses.
   const myProfile = useAuthStore((s) => s.profile)
@@ -157,11 +156,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     }
     return map
   }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myId, isModuleAdmin, isDesigner])
-  const mineCount = assessments.filter((a) => nextStepById.get(a.id)?.mine).length
-
-  const filteredAssessments = (roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)).filter(
-    (a) => !mineOnly || nextStepById.get(a.id)?.mine,
-  )
+  const filteredAssessments = roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)
 
   const totalInterviews = assessments.length
   const acceptedCount = assessments.filter((a) => a.isApproved).length
@@ -169,6 +164,21 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const acceptanceRate = totalInterviews > 0 ? Math.round((acceptedCount / totalInterviews) * 100) : null
 
   const myActionItems = assessments.filter((a) => nextStepById.get(a.id)?.mine)
+
+  // Best-scoring candidate per role that actually has candidates — admin/designer view only (a plain
+  // judge's own handful of candidates makes a leaderboard meaningless noise, per the product owner's
+  // earlier request to drop it from that view entirely).
+  const topPerRole = (isModuleAdmin || isDesigner
+    ? usedRoles
+        .map((role) => {
+          const inRole = scored.filter((s) => s.assessment.jobRole === role && s.overall != null)
+          if (inRole.length === 0) return null
+          const top = inRole.reduce((best, cur) => (cur.overall! > best.overall! ? cur : best))
+          return { role, ...top }
+        })
+        .filter((x): x is { role: JobRole; assessment: CompetencyAssessment; overall: number | null } => x != null)
+        .sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0))
+    : [])
 
   const headerRight = (
     <button onClick={onNew} className="flex items-center gap-1.5 rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition-colors">
@@ -209,21 +219,42 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
         </div>
       )}
 
-      {/* Candidate list */}
+      {topPerRole.length > 0 && (
+        <div className="glass-panel rounded-2xl p-4">
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold">
+            <Award size={14} className="text-amber-300" /> متقاضیان برتر هر شغل
+          </p>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {topPerRole.map(({ role, assessment: a, overall }) => (
+              <button
+                key={role}
+                onClick={() => onOpen(a.id)}
+                className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-right transition-colors hover:bg-white/5"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300">
+                  <Award size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-bold">{a.candidateName}</p>
+                  <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, role)}</p>
+                </div>
+                <span className="num shrink-0 text-sm font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per
+          candidate) so this reads as a scannable roster for succession planning rather than a wall of
+          avatar cards; a candidate's full profile is a click away for whoever needs it. */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-bold">{isModuleAdmin || isDesigner ? 'همه متقاضیان' : 'متقاضیان من'}</p>
-          <div className="flex flex-wrap items-center gap-2">
-          <DemoDataToggle />
-          <button
-            onClick={() => setMineOnly((v) => !v)}
-            className={`rounded-full px-3 py-1 text-[10.5px] font-bold transition-colors ${
-              mineOnly ? 'bg-rose-500/25 text-rose-200' : 'bg-white/5 text-secondary hover:bg-white/10'
-            }`}
-          >
-            نیازمند اقدام من ({mineCount.toLocaleString('fa-IR')})
-          </button>
+          <div>
+            <p className="text-sm font-bold">{isModuleAdmin || isDesigner ? 'کل متقاضیان' : 'متقاضیان من'}</p>
+            {(isModuleAdmin || isDesigner) && <p className="text-[10.5px] text-muted">بانک استعداد — مرجعی برای جانشین‌پروری در هر شغل</p>}
           </div>
+          <DemoDataToggle />
         </div>
 
         {usedRoles.length > 1 && (
@@ -255,16 +286,13 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {filteredAssessments.map((a) => (
-              <CandidateCard
+              <TalentPoolRow
                 key={a.id}
                 assessment={a}
                 overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
-                rank={rankById.get(a.id)}
                 nextStep={nextStepById.get(a.id)}
-                plan={developmentPlans.find((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
-                followUp={assessments.find((x) => x.previousAssessmentId === a.id)}
                 onOpen={() => onOpen(a.id)}
                 onDelete={() => setConfirmId(a.id)}
               />
@@ -308,6 +336,70 @@ function StatTile({ icon: Icon, label, value, color }: { icon: typeof Users; lab
       <p className="num text-2xl font-extrabold" style={{ color }}>
         {value}
       </p>
+    </div>
+  )
+}
+
+/** One scannable line per candidate for the "کل متقاضیان" talent pool — deliberately no photo (this
+ * list can run to dozens of rows; a wall of avatars was the exact clutter the product owner asked to
+ * remove) and no rank badge (that comparison lives in the leaderboard card above). The whole row is
+ * the "link" to open the candidate. */
+function TalentPoolRow({
+  assessment: a,
+  overall,
+  nextStep,
+  onOpen,
+  onDelete,
+}: {
+  assessment: CompetencyAssessment
+  overall: number | null
+  nextStep?: NextStep
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  const band = maturityBand(overall)
+  const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
+
+  return (
+    <div className="glass-panel group flex items-center gap-2.5 rounded-xl border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
+      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-right">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
+            {a.isApproved && <ApprovalMedal size="sm" />}
+            {a.isDemo && <DemoBadge />}
+          </div>
+          <p className="truncate text-[10.5px] text-muted">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+        </div>
+        <span
+          className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold sm:inline-block ${
+            nextStep?.mine
+              ? 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40'
+              : nextStep?.tone === 'done' || (!nextStep && a.status === 'completed')
+                ? 'bg-green-500/15 text-green-300'
+                : nextStep?.tone === 'waiting'
+                  ? 'bg-slate-500/20 text-slate-300'
+                  : 'bg-amber-500/15 text-amber-300'
+          }`}
+        >
+          {nextStep?.label ?? (a.status === 'completed' ? 'تکمیل‌شده' : 'در حال انجام')}
+        </span>
+        <div className="flex shrink-0 items-baseline gap-1">
+          <span className="num text-sm font-extrabold" style={{ color: tier }}>
+            {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
+          </span>
+          <span className="hidden text-[9.5px] text-muted sm:inline">{band.label}</span>
+        </div>
+        <ChevronLeft size={14} className="shrink-0 text-muted" />
+      </button>
+      <button
+        onClick={onDelete}
+        title="حذف"
+        className="shrink-0 rounded-lg p-1.5 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+      >
+        <Trash2 size={12} />
+      </button>
     </div>
   )
 }
