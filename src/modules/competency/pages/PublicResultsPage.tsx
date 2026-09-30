@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Award, BriefcaseBusiness, Calendar, CheckCircle2, FileText, GraduationCap, HandCoins, History, IdCard, Lightbulb, Settings2, Shield, ShieldAlert, Sparkles, User, Users, Wrench } from 'lucide-react'
+import { Calendar, IdCard, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { FarinMark } from '../../../components/common/Logo'
 import { formatJalali, isoToJalali } from '../../../lib/jalali'
@@ -9,7 +9,7 @@ import { computeCompletion, computeDomainScores, computeOverallPercent, tierColo
 import { computeResultStatus, interpretMaturity } from '../lib/maturityGuidance'
 import { useRoleGuidanceStore } from '../store/useRoleGuidanceStore'
 import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
-import type { CompetencyAnswers, CompetencyDomainKey, DomainScore, JobRole, QuestionType } from '../types'
+import type { CompetencyAnswers, DomainScore, JobRole, QuestionType } from '../types'
 import '../styles/idCard.css'
 
 interface ResolvedQuestion {
@@ -39,26 +39,9 @@ interface PublicResultsRow {
   photo_url: string | null
 }
 
-// A generic icon per evaluated competency domain — covers both the fixed PM rubric's 8 domains and
-// the 4 category "buckets" every other role is scored against (roleCompetencyModel.ts), so whichever
-// domains actually placed in a candidate's top scores always get a sensible icon rather than a guess.
-const DOMAIN_ICON: Record<CompetencyDomainKey, typeof FileText> = {
-  governance: FileText,
-  planning: Calendar,
-  cost: HandCoins,
-  hse: Shield,
-  quality: Award,
-  changeRisk: ShieldAlert,
-  stakeholder: Users,
-  execution: Settings2,
-  roleGeneral: BriefcaseBusiness,
-  roleTechnical: Wrench,
-  roleScenario: Lightbulb,
-  roleExperience: History,
-  roleHse: Shield,
-  roleBehavioral: Users,
-  roleJudgment: Lightbulb,
-}
+// A varied, attractive fixed palette for the per-domain mini rings — cycled by array position
+// (domain order, not score order) so the same domain reads the same color across a re-render.
+const CHART_PALETTE = ['#8b5cf6', '#0ea5e9', '#f59e0b', '#10b981', '#ec4899', '#6366f1', '#ef4444', '#14b8a6']
 
 /** A short, stable 6-digit credential number derived from the assessment's own (immutable) id — no
  * schema change needed, and it never changes on reload since it's a pure function of the id. */
@@ -83,11 +66,11 @@ function issueAndExpiry(iso: string): { issued: string; expires: string } {
  * result itself, never the interviewer panel (who scored, their names, their individual sheets)
  * and never the candidate's contact/personal-profile fields. See supabase/schema.sql section 19.
  *
- * Redesigned (product request) as a permanent, printable-looking "Professional Qualification Card"
- * matching a physical ID-card reference: photo, role, a credential number + issue/expiry date, a
- * qualification-level badge, a QR code pointing back at this same page, and up to 4 tiles for the
- * candidate's own top-scoring competency domains (never generic placeholders) — no radar chart, no
- * development areas. The full report stays available to staff inside the app.
+ * A permanent, printable-looking "Professional Qualification Card" matching a physical-ID-card
+ * reference: photo, role, a credential number + issue/expiry date, a qualification-level medal, a QR
+ * code pointing back at this same page, an overall-score ring, and a compact multi-color mini-chart
+ * of the structured interview's own domain breakdown (never generic placeholder tiles) — no full
+ * radar chart, no development areas. The full report stays available to staff inside the app.
  */
 export function PublicResultsPage({ token }: { token: string }) {
   const [row, setRow] = useState<PublicResultsRow | null>(null)
@@ -158,24 +141,11 @@ export function PublicResultsPage({ token }: { token: string }) {
   })
   const tier = tierColor(overall)
 
-  // The evaluator's own written strengths are specific to THIS candidate (e.g. "جوشکاری خط لوله",
-  // "مدیریت پیمانکار فرعی") — real, per-candidate content, exactly the "متناسب با نتیجه مصاحبه"
-  // requirement. The 4 category "buckets" every non-PM role is scored against (roleGeneral/
-  // roleTechnical/roleScenario/roleExperience) are the SAME 4 titles for every candidate in that
-  // role family, so they only ever act as a last-resort fallback when no strengths text was written.
-  const strengthTags = row.strengths
-    ? row.strengths
-        .split(/[،,\n]/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .slice(0, 4)
-    : null
-  const topDomains: DomainScore[] = strengthTags
-    ? []
-    : [...domainScores]
-        .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
-        .sort((a, b) => b.percentScore - a.percentScore)
-        .slice(0, 4)
+  // The structured interview's own domain-level breakdown — real evidence specific to this candidate
+  // (their actual per-domain interview scores), never a generic placeholder set.
+  const chartDomains: (DomainScore & { percentScore: number; color: string })[] = domainScores
+    .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
+    .map((d, i) => ({ ...d, color: CHART_PALETTE[i % CHART_PALETTE.length] }))
 
   const { issued, expires } = issueAndExpiry(row.interview_date)
   const cardNo = credentialNumber(row.id)
@@ -205,7 +175,7 @@ export function PublicResultsPage({ token }: { token: string }) {
 
           <div className="cred-main">
             <div className="cred-identity">
-              <PublicPhoto path={row.photo_url} approved={row.is_approved} />
+              <PublicPhoto path={row.photo_url} />
               <div className="cred-identity-text">
                 <p className="text-[16px] font-extrabold leading-6 text-stone-900">{row.candidate_name}</p>
                 {row.candidate_position && <p className="text-[11.5px] font-bold text-stone-500">{row.candidate_position}</p>}
@@ -225,49 +195,45 @@ export function PublicResultsPage({ token }: { token: string }) {
                   {row.is_approved && (
                     <div className="cred-meta-row">
                       <span className="text-[10px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</span>
-                      <CheckCircle2 size={11} className="text-emerald-600" />
                     </div>
                   )}
                 </div>
               </div>
             </div>
+
+            <MiniRing value={overall} color={tier} size={68} strokeWidth={7}>
+              <span className="num text-[15px] font-black leading-none" style={{ color: tier }}>
+                {overall != null ? overall.toLocaleString('fa-IR') : '—'}
+              </span>
+              <span className="text-[8px] font-bold text-stone-500">از ۱۰۰</span>
+            </MiniRing>
           </div>
+
+          {chartDomains.length > 0 && (
+            <div className="cred-domain-chart">
+              <p className="cred-domain-chart-title text-[10px] font-bold text-stone-500">نتایج مصاحبه ساختاریافته</p>
+              <div className="cred-domain-grid">
+                {chartDomains.map((d) => (
+                  <div key={d.domain.key} className="cred-domain-tile">
+                    <MiniRing value={d.percentScore} color={d.color} size={44} strokeWidth={5}>
+                      <span className="num text-[10px] font-extrabold leading-none" style={{ color: d.color }}>
+                        {d.percentScore.toLocaleString('fa-IR')}
+                      </span>
+                    </MiniRing>
+                    <span className="text-[8.5px] font-bold leading-3 text-stone-600">{d.domain.shortTitle}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="cred-footer">
             <div className="cred-qr-block">
               <div className="cred-qr-box">
-                <QRCodeSVG value={shareUrl} size={72} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+                <QRCodeSVG value={shareUrl} size={64} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
               </div>
-              <p className="max-w-[92px] text-center text-[9px] leading-4 text-stone-500">برای مشاهده جزئیات اسکن کنید</p>
             </div>
-
-            {strengthTags && strengthTags.length > 0 && (
-              <div className="cred-skills">
-                {strengthTags.map((s) => (
-                  <div key={s} className="cred-skill-tile">
-                    <span className="cred-skill-icon">
-                      <Sparkles size={15} />
-                    </span>
-                    <span className="text-[9.5px] font-bold leading-3.5 text-stone-700">{s}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {!strengthTags && topDomains.length > 0 && (
-              <div className="cred-skills">
-                {topDomains.map((d) => {
-                  const Icon = DOMAIN_ICON[d.domain.key] ?? GraduationCap
-                  return (
-                    <div key={d.domain.key} className="cred-skill-tile">
-                      <span className="cred-skill-icon">
-                        <Icon size={15} />
-                      </span>
-                      <span className="text-[9.5px] font-bold leading-3.5 text-stone-700">{d.domain.shortTitle}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <p className="cred-qr-caption text-[9px] leading-4 text-stone-500">برای مشاهده جزئیات این کارت را اسکن کنید</p>
           </div>
         </div>
       </div>
@@ -279,7 +245,38 @@ export function PublicResultsPage({ token }: { token: string }) {
   )
 }
 
-function PublicPhoto({ path, approved }: { path: string | null; approved: boolean }) {
+/** Self-contained SVG ring (no farinTheme.css token dependency — this page must look identical
+ * regardless of the viewer's own device theme). Used for both the single overall-score ring and the
+ * small per-domain rings in the structured-interview mini-chart. */
+function MiniRing({ value, color, size, strokeWidth, children }: { value: number | null; color: string; size: number; strokeWidth: number; children?: React.ReactNode }) {
+  const r = (size - strokeWidth) / 2
+  const c = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value ?? 0))
+  const offset = c * (1 - pct / 100)
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${value != null ? Math.round(value).toLocaleString('fa-IR') : '—'} از ۱۰۰`}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#ece2bd" strokeWidth={strokeWidth} />
+        {value != null && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+          />
+        )}
+      </svg>
+      {children && <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>}
+    </div>
+  )
+}
+
+function PublicPhoto({ path }: { path: string | null }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -290,11 +287,12 @@ function PublicPhoto({ path, approved }: { path: string | null; approved: boolea
   }, [path])
   return (
     <div className="cred-photo">
-      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center"><User size={26} className="text-stone-300" /></div>}
-      {approved && (
-        <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white">
-          <CheckCircle2 size={11} />
-        </span>
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <User size={26} className="text-stone-300" />
+        </div>
       )}
     </div>
   )
