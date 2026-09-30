@@ -12,7 +12,7 @@ const MODULE_ACCENT = '#6366f1'
  * inside Reporting) so it reads as a distinct executive tool for senior management, reachable in
  * one click from the hub rather than buried inside another module's nav.
  */
-export function ExecutiveApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
@@ -45,7 +45,7 @@ export function ExecutiveApp({ onExitToHub }: { onExitToHub: () => void }) {
           </div>
         </div>
 
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <StorageErrorBanner />

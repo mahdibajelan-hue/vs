@@ -1,27 +1,28 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Award, Briefcase, BookOpen, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { Calendar, IdCard, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
-import { formatJalali } from '../../../lib/jalali'
-import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
-import { ApprovalMedal } from '../components/ApprovalMedal'
-import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
-import type { CompetencyAnswers, CompetencyDomainKey, CompetencyQuestion } from '../types'
+import { FarinMark } from '../../../components/common/Logo'
+import { formatJalali, isoToJalali } from '../../../lib/jalali'
+import { getCompDocSignedUrl } from '../lib/compStorage'
+import { computeCompletion, computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
+import { computeResultStatus, interpretMaturity } from '../lib/maturityGuidance'
+import { useRoleGuidanceStore } from '../store/useRoleGuidanceStore'
+import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
+import type { CompetencyAnswers, DomainScore, JobRole, QuestionType } from '../types'
+import '../styles/idCard.css'
 
-/** The token-scoped question list the RPC returns alongside the result — just enough shape to
- * compute domain scores (key/domain/sortOrder), never text or referenceAnswer: this public link
- * shows aggregate scores only, so there's no reason to expose question wording or model answers. */
-interface PublicResultQuestionRow {
+interface ResolvedQuestion {
   id: string
-  domain_key: string
-  legacy_key: string | null
-  sort_order: number
+  category: QuestionType
+  score: number | null
 }
 
 interface PublicResultsRow {
   id: string
   candidate_name: string
   candidate_position: string
-  job_position_id: string | null
+  job_role: JobRole
   interview_date: string
   status: string
   answers: CompetencyAnswers
@@ -34,7 +35,40 @@ interface PublicResultsRow {
   is_approved: boolean
   strengths: string
   development_areas: string
-  questions: PublicResultQuestionRow[]
+  resolved_questions: ResolvedQuestion[]
+  photo_url: string | null
+}
+
+// A varied, attractive fixed palette for the per-domain mini rings — cycled by array position
+// (domain order, not score order) so the same domain reads the same color across a re-render. Each
+// entry pairs a vivid ring color with a darker same-hue shade for the number inside it — the vivid
+// tone alone was too low-contrast to read at this size, especially for the lighter hues (amber, sky).
+const CHART_PALETTE: { ring: string; text: string }[] = [
+  { ring: '#8b5cf6', text: '#5b21b6' },
+  { ring: '#0ea5e9', text: '#075985' },
+  { ring: '#f59e0b', text: '#92400e' },
+  { ring: '#10b981', text: '#065f46' },
+  { ring: '#ec4899', text: '#9d174d' },
+  { ring: '#6366f1', text: '#3730a3' },
+  { ring: '#ef4444', text: '#991b1b' },
+  { ring: '#14b8a6', text: '#115e59' },
+]
+
+/** A short, stable 6-digit credential number derived from the assessment's own (immutable) id — no
+ * schema change needed, and it never changes on reload since it's a pure function of the id. */
+function credentialNumber(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return String(100000 + (h % 900000))
+}
+
+/** Same Jalali date the rest of the app shows for "issued", plus the same date 2 years later for
+ * "valid until" — a conventional certificate validity window, computed rather than stored. */
+function issueAndExpiry(iso: string): { issued: string; expires: string } {
+  const issued = formatJalali(iso)
+  const j = isoToJalali(iso)
+  const expires = j ? `${j.jy + 2}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}` : ''
+  return { issued, expires }
 }
 
 /**
@@ -42,11 +76,24 @@ interface PublicResultsRow {
  * (?results=<token>). Deliberately shows only what comp_public_results_get returns — the scored
  * result itself, never the interviewer panel (who scored, their names, their individual sheets)
  * and never the candidate's contact/personal-profile fields. See supabase/schema.sql section 19.
+ *
+ * A permanent, printable-looking "Professional Qualification Card" matching a physical-ID-card
+ * reference: photo, role, a credential number + issue/expiry date, a qualification-level medal, a QR
+ * code pointing back at this same page, an overall-score ring, and a compact multi-color mini-chart
+ * of the structured interview's own domain breakdown (never generic placeholder tiles) — no full
+ * radar chart, no development areas. The full report stays available to staff inside the app.
  */
 export function PublicResultsPage({ token }: { token: string }) {
   const [row, setRow] = useState<PublicResultsRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // Role- and band-specific interpretation text (Section 57; readable anonymously) — only the band
+  // label is shown here now, but interpretMaturity is what computes it.
+  const guidanceRows = useRoleGuidanceStore((s) => s.rows)
+  const fetchGuidance = useRoleGuidanceStore((s) => s.fetch)
+  useEffect(() => {
+    fetchGuidance()
+  }, [fetchGuidance])
 
   useEffect(() => {
     supabase
@@ -64,198 +111,196 @@ export function PublicResultsPage({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+      <div className="cred-stage">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
       </div>
     )
   }
 
   if (notFound || !row) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-        <p className="max-w-sm text-sm text-secondary">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
+      <div className="cred-stage">
+        <p className="max-w-sm text-center text-sm text-stone-600">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
       </div>
     )
   }
 
-  const questions: CompetencyQuestion[] = row.questions.map((q) => ({
-    key: q.legacy_key ?? q.id,
-    id: q.id,
-    jobPositionId: row.job_position_id ?? '',
-    domain: q.domain_key as CompetencyDomainKey,
-    text: '',
-    referenceAnswer: '',
-    sortOrder: q.sort_order,
-    isActive: true,
-  }))
-  const domainScores = computeDomainScores(questions, row.answers)
+  // A PM candidate can now be scored either way — the fixed in-code rubric (legacy, resolved_questions
+  // empty) or the DB-backed question bank exactly like every other role (resolved_questions
+  // populated) — see usesLegacyPmRubric/comp_public_results_get.
+  const isPM = isProjectManagerRole(row.job_role) && row.resolved_questions.length === 0
+  const officialAnswers: CompetencyAnswers = isPM
+    ? row.answers
+    : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))
+  const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(row.resolved_questions, officialAnswers)
   const overall = computeOverallPercent(domainScores)
-  const band = maturityBand(overall)
-  const completion = computeCompletion(questions, row.answers)
-  const { strengths, weaknesses } = domainFlags(domainScores)
+  const completion = isPM
+    ? computeCompletion(officialAnswers)
+    : {
+        answered: row.resolved_questions.filter((q) => q.score != null).length,
+        total: row.resolved_questions.length,
+        percent: row.resolved_questions.length === 0 ? 0 : Math.round((row.resolved_questions.filter((q) => q.score != null).length / row.resolved_questions.length) * 100),
+      }
+  const resultStatus = computeResultStatus(domainScores, overall, completion)
+  const interp = interpretMaturity({
+    jobRole: row.job_role,
+    roleLabel: row.candidate_position || row.job_role,
+    overall,
+    domainScores,
+    guidanceRows,
+    sufficient: resultStatus.state === 'final',
+  })
+  const tier = tierColor(overall)
 
-  const qualificationChips = [
-    { label: 'مدرک تحصیلی', icon: GraduationCap, value: row.education_score },
-    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: row.experience_score },
-    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: row.pm_training_score },
-    { label: 'صلاحیت حرفه‌ای', icon: Award, value: row.pm_certification_score },
-    { label: 'نتایج مصاحبه', icon: MessageSquareText, value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
-  ]
+  // The structured interview's own domain-level breakdown — real evidence specific to this candidate
+  // (their actual per-domain interview scores), never a generic placeholder set.
+  const chartDomains: (DomainScore & { percentScore: number; ring: string; text: string })[] = domainScores
+    .filter((d): d is DomainScore & { percentScore: number } => d.percentScore != null)
+    .map((d, i) => ({ ...d, ...CHART_PALETTE[i % CHART_PALETTE.length] }))
+
+  const { issued, expires } = issueAndExpiry(row.interview_date)
+  const cardNo = credentialNumber(row.id)
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
 
   return (
-    <div className="comp-shell min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-      <div className="mx-auto max-w-3xl space-y-4">
-        <div className="glass-panel rounded-2xl p-4 text-center">
-          <p className="text-sm font-bold">نتیجه ارزیابی شایستگی — سامانه RASTA</p>
-          <p className="mt-1 text-[11px] text-muted">این نمای فقط‌خواندنی نتیجهٔ ارزیابی است.</p>
-        </div>
-
-        <div className="glass-panel relative overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-              <User size={28} className="text-muted" />
-            </div>
-            <div className="flex-1 text-center sm:text-right">
-              <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
-                {row.candidate_name}
-                {row.is_approved && <ApprovalMedal />}
-              </p>
-              <p className="text-xs text-muted">{row.candidate_position}</p>
-              <p className="mt-2 text-[11px] text-secondary">تاریخ مصاحبه: {formatJalali(row.interview_date)}</p>
-            </div>
-            <div
-              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
-              style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
-            >
-              <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
-                <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
-                  {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-                </p>
-                <p className="mt-0.5 text-[10px] font-bold">{band.label}</p>
+    <div className="cred-stage">
+      <div className="cred-card-wrap">
+        <div className="cred-card" style={{ '--cred-tier': tier } as React.CSSProperties}>
+          <div className="cred-header">
+            <div className="cred-logo">
+              <FarinMark size={32} />
+              <div className="cred-logo-text">
+                <p className="text-[13px] font-extrabold text-stone-800">فرین</p>
+                <p className="text-[10px] font-medium text-stone-500">Farin</p>
               </div>
             </div>
+            <div className="cred-title-badge">
+              <div className="cred-title">
+                <p className="text-[12.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
+                <p className="text-[9.5px] font-medium text-stone-500">Professional Qualification Card</p>
+              </div>
+              <div className="cred-medal-wrap">
+                <img src={`${import.meta.env.BASE_URL}credential-medal.png`} alt="" className="cred-medal" />
+                <span className="cred-medal-score">{overall != null ? overall.toLocaleString('fa-IR') : '—'}</span>
+              </div>
+              <p className="cred-level-label text-[10.5px] font-extrabold leading-4 text-stone-800">{interp.bandLabel}</p>
+            </div>
           </div>
-        </div>
 
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {qualificationChips.map((c) => {
-              const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
-              return (
-                <div
-                  key={c.label}
-                  className="relative overflow-hidden rounded-2xl border p-3.5 text-center"
-                  style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
-                >
-                  <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
-                  <p className="num text-2xl font-black leading-none" style={{ color }}>
-                    {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
-                    <span className="text-xs font-bold text-muted"> /۵</span>
-                  </p>
-                  <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
+          <div className="cred-main">
+            <div className="cred-identity">
+              <PublicPhoto path={row.photo_url} />
+              <div className="cred-identity-text">
+                <p className="text-[16px] font-extrabold leading-6 text-stone-900">{row.candidate_name}</p>
+                {row.candidate_position && <p className="text-[12px] font-semibold leading-5 text-stone-600">{row.candidate_position}</p>}
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <div className="cred-meta-row">
+                    <span className="num text-[10.5px] font-bold text-stone-600">
+                      FAR-{isoToJalali(row.interview_date)?.jy ?? ''}-{cardNo}
+                    </span>
+                    <IdCard size={11} className="text-stone-400" />
+                  </div>
+                  <div className="cred-meta-row">
+                    <span className="num text-[10.5px] font-medium leading-4 text-stone-600">
+                      صادر: {issued} — اعتبار تا: {expires}
+                    </span>
+                    <Calendar size={11} className="text-stone-400" />
+                  </div>
+                  {row.is_approved && (
+                    <div className="cred-meta-row">
+                      <span className="text-[10.5px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</span>
+                    </div>
+                  )}
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="glass-panel rounded-2xl p-4">
-            <p className="mb-2 text-xs font-bold">نمودار رادار بلوغ شایستگی</p>
-            <CompetencyRadarChart domainScores={domainScores} />
-            <p className="text-center text-[11px] text-muted">
-              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="glass-panel rounded-2xl p-4">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
-                <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
-              </p>
-              <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
+              </div>
             </div>
-
-            {row.capstone_score != null && (
-              <div className="glass-panel rounded-2xl p-4">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
-                  <AlertTriangle size={13} className="text-amber-300" /> امتیاز سناریوی پایانی (بحران چندوجهی)
-                </p>
-                <p className="num text-lg font-extrabold">{row.capstone_score.toLocaleString('fa-IR')} / ۵</p>
-                {row.capstone_note && <p className="mt-1 text-[11px] leading-5 text-secondary">{row.capstone_note}</p>}
-              </div>
-            )}
-
-            {(strengths.length > 0 || weaknesses.length > 0) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                {strengths.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{strengths.map((s) => s.domain.title).join('، ')}</p>
-                  </div>
-                )}
-                {weaknesses.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-300">
-                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{weaknesses.map((s) => s.domain.title).join('، ')}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(row.strengths || row.development_areas) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                <p className="text-[11px] font-bold text-purple-200">جمع‌بندی مسئول ارزیابی</p>
-                {row.strengths && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{row.strengths}</p>
-                  </div>
-                )}
-                {row.development_areas && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
-                      <TrendingDown size={12} /> زمینه‌های قابل بهبود
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{row.development_areas}</p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-        </div>
 
-        <div className="glass-panel space-y-2 rounded-2xl p-4">
-          <p className="mb-1 text-xs font-bold">امتیاز به تفکیک حوزه (با وزن)</p>
-          {domainScores.map((d) => (
-            <div key={d.domain.key} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-[11px] text-secondary">
-                {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
-              </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: tierColor(d.percentScore) }} />
+          {chartDomains.length > 0 && (
+            <div className="cred-domain-chart">
+              <p className="cred-domain-chart-title text-[10.5px] font-bold text-stone-500">نتایج مصاحبه ساختاریافته</p>
+              <div className="cred-domain-grid">
+                {chartDomains.map((d) => (
+                  <div key={d.domain.key} className="cred-domain-tile">
+                    <MiniRing value={d.percentScore} color={d.ring} size={50} strokeWidth={5}>
+                      <span className="text-[13px] font-black leading-none" style={{ color: d.text }}>
+                        {d.percentScore.toLocaleString('fa-IR')}
+                      </span>
+                    </MiniRing>
+                    <span className="text-[9px] font-bold leading-3.5 text-stone-600">{d.domain.shortTitle}</span>
+                  </div>
+                ))}
               </div>
-              <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
-                {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
-              </span>
             </div>
-          ))}
-        </div>
+          )}
 
-        {row.is_approved && (
-          <div className="glass-panel flex items-center justify-center gap-1.5 rounded-2xl p-3 text-[11px] font-bold text-emerald-300">
-            <ShieldCheck size={14} /> صلاحیت این نامزد تایید شده است
+          <div className="cred-footer">
+            <div className="cred-qr-block">
+              <div className="cred-qr-box">
+                <QRCodeSVG value={shareUrl} size={64} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+              </div>
+            </div>
+            <p className="cred-qr-caption text-[9px] leading-4 text-stone-500">برای مشاهده جزئیات این کارت را اسکن کنید</p>
           </div>
-        )}
+        </div>
       </div>
+
+      <p className="max-w-[420px] text-center text-[10.5px] leading-5 text-stone-500">
+        این کارت خلاصه‌ای رسمی از نتیجه ارزیابی صلاحیت حرفه‌ای است؛ جزئیات کامل نزد تیم ارزیابی محفوظ است.
+      </p>
+    </div>
+  )
+}
+
+/** Self-contained SVG ring (no farinTheme.css token dependency — this page must look identical
+ * regardless of the viewer's own device theme). Used for both the single overall-score ring and the
+ * small per-domain rings in the structured-interview mini-chart. */
+function MiniRing({ value, color, size, strokeWidth, children }: { value: number | null; color: string; size: number; strokeWidth: number; children?: React.ReactNode }) {
+  const r = (size - strokeWidth) / 2
+  const c = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value ?? 0))
+  const offset = c * (1 - pct / 100)
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${value != null ? Math.round(value).toLocaleString('fa-IR') : '—'} از ۱۰۰`}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#ece2bd" strokeWidth={strokeWidth} />
+        {value != null && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+          />
+        )}
+      </svg>
+      {children && <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>}
+    </div>
+  )
+}
+
+function PublicPhoto({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    if (path) getCompDocSignedUrl(path).then((u) => active && setUrl(u))
+    return () => {
+      active = false
+    }
+  }, [path])
+  return (
+    <div className="cred-photo">
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <User size={26} className="text-stone-300" />
+        </div>
+      )}
     </div>
   )
 }

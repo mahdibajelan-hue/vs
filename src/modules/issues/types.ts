@@ -58,6 +58,8 @@ export const IM_STATUS_COLOR: Record<ImIssueStatus, string> = {
   rejected: 'var(--im-coral)',
 }
 
+export type ImIssueSource = 'manual' | 'lifecycle_action'
+
 export interface ImIssue {
   id: string
   projectId: string
@@ -74,4 +76,6 @@ export interface ImIssue {
   createdBy: string | null
   createdAt: string
   updatedAt: string
+  source: ImIssueSource
+  relatedActionId: string | null
 }

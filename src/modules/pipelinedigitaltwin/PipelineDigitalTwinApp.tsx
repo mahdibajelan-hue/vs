@@ -22,7 +22,7 @@ const PHASE_OPTIONS: { value: ProjectPhase; label: string }[] = [
  * a real backend later). "See the Pipeline, Understand the Project": there's deliberately no list
  * of forms/tables to land on first — the dashboard *is* the pipeline.
  */
-export function PipelineDigitalTwinApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projectName = usePdtStore((s) => s.projectName)
   const englishTag = usePdtStore((s) => s.englishTag)
   const projectPhase = usePdtStore((s) => s.projectPhase)
@@ -92,7 +92,7 @@ export function PipelineDigitalTwinApp({ onExitToHub }: { onExitToHub: () => voi
           >
             <Settings size={13} /> تنظیمات
           </button>
-          <ModuleHeaderActions onExitToHub={onExitToHub} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         </div>
       </header>
 

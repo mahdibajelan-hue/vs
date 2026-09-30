@@ -5,6 +5,14 @@
  * raw string, since it may leak schema details and is rarely actionable for a non-technical user.
  */
 const KNOWN_PATTERNS: [RegExp, string][] = [
+  // Competency/personality integrity guards (supabase/schema.sql Section 53).
+  [/assessment_locked/i, 'این ارزیابی ثبت نهایی و قفل شده است — برای اصلاح، ادمین ماژول باید ابتدا آن را بازگشایی کند'],
+  [/personality_locked/i, 'این آزمون شخصیت قفل یا بایگانی شده است و قابل تغییر نیست'],
+  [/responses_exist/i, 'برای این آزمون پاسخ یا امتیاز ثبت شده است — تولید مجدد فقط با تأیید صریح حذف پاسخ‌ها ممکن است'],
+  [/self_service_closed/i, 'فرم خوداظهاری بررسی شده یا ارزیابی نهایی شده است و دیگر قابل ویرایش نیست'],
+  [/personality_not_submitted/i, 'متقاضی هنوز آزمون شخصیت را ارسال نکرده است'],
+  [/invalid photo path/i, 'فایل انتخاب‌شده به‌عنوان عکس پرسنلی معتبر نیست — یک تصویر jpg/png بارگذاری کنید'],
+  [/^forbidden$/i, 'شما دسترسی لازم برای انجام این عملیات را ندارید'],
   [/row-level security policy/i, 'شما دسترسی لازم برای انجام این عملیات را ندارید'],
   [/permission denied/i, 'شما دسترسی لازم برای انجام این عملیات را ندارید'],
   [/violates foreign key constraint/i, 'این مورد به رکورد دیگری وابسته است و نمی‌توان آن را حذف یا ثبت کرد'],

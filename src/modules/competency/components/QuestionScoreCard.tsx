@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { BookOpen, ChevronDown } from 'lucide-react'
+import { BookOpenCheck, ChevronDown, ChevronUp, ShieldAlert, Sparkles, XCircle } from 'lucide-react'
 import { SCORE_COLOR, SCORE_GUIDE, SCORE_LABELS_FA } from '../lib/competencyModel'
-import type { CompetencyAnswer, CompetencyQuestion } from '../types'
+import type { CompetencyAnswer, CompetencyQuestion, CompQuestionBankItem } from '../types'
 
 /** One panelist's recorded opinion on a single question, shown to the assessment lead. */
 export interface PanelVote {
@@ -22,13 +22,20 @@ interface QuestionScoreCardProps {
    * screen, where the lead reads what each panelist recorded before setting the final score.
    */
   panelVotes?: PanelVote[]
+  /**
+   * The matching comp_question_bank row for this fixed question (matched by exact text — PM's
+   * questions are seeded into the bank verbatim so they're editable there), if one exists. When
+   * present, an evaluator can reveal its full reference-answer material the same way every other
+   * role's questions already work.
+   */
+  bankItem?: CompQuestionBankItem
 }
 
 /** One interview question with a 0-5 score picker and an optional note — the interviewer reads the question aloud, listens to the candidate, then records the score here. */
-export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, panelVotes }: QuestionScoreCardProps) {
-  const [showReference, setShowReference] = useState(false)
+export function QuestionScoreCard({ index, question, hint, answer, editable, onChange, panelVotes, bankItem }: QuestionScoreCardProps) {
   const score = answer?.score ?? null
   const note = answer?.note ?? ''
+  const [revealed, setRevealed] = useState(false)
 
   const votes = panelVotes?.filter((v) => v.score != null) ?? []
   const average = votes.length > 0 ? Math.round((votes.reduce((sum, v) => sum + (v.score ?? 0), 0) / votes.length) * 10) / 10 : null
@@ -43,22 +50,67 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
       </p>
       {hint && <p className="mt-1 text-[10.5px] leading-5 text-muted">راهنمای پاسخ ممتاز: {hint}</p>}
 
-      {question.referenceAnswer && (
-        <div className="mt-1.5">
+      {bankItem && (
+        <>
           <button
             type="button"
-            onClick={() => setShowReference((v) => !v)}
-            className="flex items-center gap-1 text-[10.5px] font-bold text-emerald-300 hover:text-emerald-200"
+            onClick={() => setRevealed((r) => !r)}
+            className="mt-2 flex items-center gap-1.5 rounded-lg border border-purple-400/25 bg-purple-500/10 px-2.5 py-1.5 text-[10.5px] font-bold text-purple-200 hover:bg-purple-500/20"
           >
-            <BookOpen size={11} /> {showReference ? 'پنهان کردن پاسخ مرجع' : 'نمایش پاسخ مرجع'}
-            <ChevronDown size={11} className={`transition-transform ${showReference ? 'rotate-180' : ''}`} />
+            <BookOpenCheck size={12} /> {revealed ? 'پنهان‌کردن پاسخ مرجع' : 'نمایش پاسخ مرجع'}
+            {revealed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-          {showReference && (
-            <p className="mt-1.5 rounded-lg border border-emerald-400/20 bg-emerald-500/[0.06] p-2.5 text-[10.5px] leading-6 text-secondary">
-              {question.referenceAnswer}
-            </p>
+          {revealed && (
+            <div className="mt-2.5 space-y-2 rounded-lg border border-purple-400/20 bg-purple-500/[0.06] p-3">
+              <p className="text-[11px] leading-6 text-secondary">{bankItem.referenceAnswer}</p>
+              {bankItem.keyPoints.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-bold text-purple-200">نکات کلیدی مورد انتظار</p>
+                  <ul className="space-y-0.5">
+                    {bankItem.keyPoints.map((k, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-5 text-secondary">
+                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-purple-300" /> {k}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {bankItem.excellentAnswerIndicators.length > 0 && (
+                <div>
+                  <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-300">
+                    <Sparkles size={11} /> نشانه‌های پاسخ ممتاز
+                  </p>
+                  <ul className="space-y-0.5">
+                    {bankItem.excellentAnswerIndicators.map((k, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-5 text-secondary">
+                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-emerald-300" /> {k}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {bankItem.commonMistakes.length > 0 && (
+                <div>
+                  <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-red-300">
+                    <XCircle size={11} /> خطاهای رایج
+                  </p>
+                  <ul className="space-y-0.5">
+                    {bankItem.commonMistakes.map((k, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-5 text-secondary">
+                        <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-red-300" /> {k}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {bankItem.standardReference && (
+                <p className="flex items-center gap-1.5 text-[10px] text-muted">
+                  <ShieldAlert size={11} /> مرجع/استاندارد: <span className="font-bold text-secondary">{bankItem.standardReference}</span>
+                </p>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {panelVotes && panelVotes.length > 0 && (

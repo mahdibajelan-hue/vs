@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -113,7 +114,7 @@ const FIN_THEME_KEY = 'rasta-finance-theme'
  * Financial Management — owner-side budget/contract/payment control. Deliberately not
  * accounting: no general ledger, no P&L, no contractor internal cost (see schema.sql section 19).
  */
-export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -133,6 +134,13 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
 
+  // Arrived here from Project Radar with a project already in context (Finance uses
+  // masterProjectId directly, no mapping table needed) — stay locked to it: hide the
+  // portfolio/program/project browse tabs and the cross-project dashboard, landing straight on
+  // this project's contracts instead.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
+
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     if (!financeLoaded) fetchFinance()
@@ -140,8 +148,17 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) setProjectId(projects[0].id)
-  }, [projects, projectId])
+    if (projects.length === 0 || projectId) return
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
+      setProjectId(contextProjectId)
+      setLockedToProject(true)
+      setTab('contracts')
+    } else {
+      setProjectId(projects[0].id)
+    }
+  }, [projects, projectId, contextProjectId])
+
+  const visibleNav = lockedToProject ? NAV.filter((n) => PROJECT_SCOPED_TABS.has(n.id)) : NAV
 
   const toggleFinTheme = () => {
     const next = !finLight
@@ -201,7 +218,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {visibleNav.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => {
@@ -227,7 +244,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
           <div className="mt-3">
-            <ModuleHeaderActions onExitToHub={onExitToHub} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
       </aside>
@@ -244,7 +261,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {PROJECT_SCOPED_TABS.has(tab) && (
+            {PROJECT_SCOPED_TABS.has(tab) && !lockedToProject && (
               <select
                 value={projectId ?? ''}
                 onChange={(e) => setProjectId(e.target.value || null)}

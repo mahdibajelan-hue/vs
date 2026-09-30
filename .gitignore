@@ -20,6 +20,9 @@ dist-ssr
 # Local output of scripts/backup-data.mjs — must never be committed to a branch of this public repo.
 backups/
 
+# Agent-tool worktrees (isolated checkouts for background agents) — never repo content to commit.
+.claude/worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -14,6 +14,8 @@ import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 import { AboutPage } from './pages/AboutPage'
 import { buildSeedProject } from './data/seed'
 import { useAuthStore } from './store/useAuthStore'
+import { useProjectContextStore } from './store/useProjectContextStore'
+import { fetchModuleProjectMappings } from './modules/masterdata/lib/hierarchyRollup'
 import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
@@ -79,6 +81,23 @@ function App() {
         }
       })
   }, [isAuthed, fetchProjects, selectProject])
+
+  // Arrived here from Project Radar with a project already in context: switch straight to that
+  // project's PipePulse station instead of leaving whichever one was last open, and stay locked
+  // to it — hide the project list/switcher and the cross-project portfolio view.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
+  useEffect(() => {
+    if (!contextProjectId) return
+    fetchModuleProjectMappings('pipepulse').then((map) => {
+      const resolved = map.get(contextProjectId)
+      if (resolved) {
+        selectProject(resolved)
+        setLockedToProject(true)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadDemo = async () => {
     setDemoLoading(true)
@@ -170,6 +189,7 @@ function App() {
         onNewProject={() => setShowNewProject(true)}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
+        locked={lockedToProject}
       />
       <div className="flex flex-1 flex-col min-w-0">
         <Topbar project={currentProject} title={PAGE_TITLE[page]} onMenuClick={() => setMobileSidebarOpen(true)} />
@@ -204,7 +224,12 @@ function App() {
                     </div>
                   }
                 >
-                  <Model3DPage project={currentProject} />
+                  {/* Keyed on project id: switching between stations without leaving this tab
+                      otherwise reuses the same component instance, and stale selection/mesh-link
+                      state from the previous station's model would leak into the new one. Keying
+                      forces a clean remount per station, so at most one model is ever loading and
+                      it always starts from a blank slate. */}
+                  <Model3DPage key={currentProject.id} project={currentProject} />
                 </Suspense>
               )}
             </>

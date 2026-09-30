@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { fetchModuleProjectMappings } from '../masterdata/lib/hierarchyRollup'
 import { useIssuesStore } from './store/useIssuesStore'
 import { useIssuesMembersStore } from './store/useIssuesMembersStore'
 import { DashboardPage } from './pages/DashboardPage'
@@ -29,7 +31,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
-export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const currentUser = useAuthStore((s) => s.currentUser())
   const loading = useIssuesStore((s) => s.loading)
   const projects = useIssuesStore((s) => s.projects)
@@ -46,6 +48,27 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Arrived here from Project Radar with a project already in context: open straight into that
+  // project's issue list instead of the dashboard, and stay locked to it — hide every
+  // cross-project view (dashboard, all-issues list, report, portfolio rollup) so there's no way
+  // to wander back to a list of other projects.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
+  useEffect(() => {
+    if (!contextProjectId) return
+    fetchModuleProjectMappings('issues').then((map) => {
+      const resolved = map.get(contextProjectId)
+      if (resolved) {
+        setProjectFilter(resolved)
+        setTab('projects')
+        setLockedToProject(true)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const visibleNav = lockedToProject ? NAV.filter((n) => n.id === 'projects' || n.id === 'about') : NAV
+
   useEffect(() => {
     for (const p of projects) {
       if (!(p.id in membersByProject)) fetchMembersForProject(p.id)
@@ -58,7 +81,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
   return (
     <div className="im-root">
       <div className="im-mobile-topbar">
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
         <div className="im-brand-name" style={{ fontSize: 14 }}>
           رصد
         </div>
@@ -74,7 +97,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
           <nav className="im-grid" style={{ gap: 2 }}>
-            {NAV.map((n) => (
+            {visibleNav.map((n) => (
               <button key={n.id} className={`im-nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
                 <n.icon size={18} />
                 <span>{n.label}</span>
@@ -89,7 +112,7 @@ export function IssuesApp({ onExitToHub }: { onExitToHub: () => void }) {
               </div>
             </div>
             <div className="mt-2">
-              <ModuleHeaderActions onExitToHub={onExitToHub} />
+              <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
             </div>
           </div>
         </aside>
