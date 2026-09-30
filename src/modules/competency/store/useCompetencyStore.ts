@@ -40,9 +40,11 @@ import type {
   CompPanelistScore,
   CompProfileLite,
   CompQuestionBankItem,
+  CompQuestionDesignerAssignment,
   CompRoleAssignment,
   EducationEntry,
   EmploymentEntry,
+  QuestionDesignerSection,
   JobRole,
   QuestionDifficulty,
   QuestionMixCell,
@@ -437,6 +439,7 @@ interface CompetencyState {
   moduleAdmins: CompModuleAdmin[]
   assessmentDesigners: CompRoleAssignment[]
   reportViewers: CompRoleAssignment[]
+  questionDesigners: CompQuestionDesignerAssignment[]
   attachments: CompAttachment[]
   questionBank: CompQuestionBankItem[]
   /** Safe, non-sensitive projection of the bank (no reference answers/key points) — read via
@@ -531,6 +534,12 @@ interface CompetencyState {
   fetchReportViewers: () => Promise<void>
   addReportViewer: (userId: string) => Promise<void>
   removeReportViewer: (userId: string) => Promise<void>
+  /** QUESTION_DESIGNER — same rasta_user_roles-backed role as above, plus a per-user scope
+   * (comp_question_designer_scopes) saying which bank(s) they may author/edit directly. */
+  fetchQuestionDesigners: () => Promise<void>
+  addQuestionDesigner: (userId: string) => Promise<void>
+  removeQuestionDesigner: (userId: string) => Promise<void>
+  setQuestionDesignerScopes: (userId: string, sections: QuestionDesignerSection[]) => Promise<void>
 
   fetchPanelistScores: (assessmentId: string) => Promise<void>
   setMyPanelistAnswer: (assessmentId: string, questionKey: string, score: number | null, note: string, candidateAnswer?: string) => Promise<void>
@@ -709,6 +718,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   panelGroups: [],
   moduleAdmins: [],
   assessmentDesigners: [],
+  questionDesigners: [],
   reportViewers: [],
   attachments: [],
   questionBank: [],
@@ -1327,6 +1337,44 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ reportViewers: previous.filter((m) => m.userId !== userId) })
     const { error } = await supabase.rpc('comp_revoke_role', { p_user_id: userId, p_role_name: 'REPORT_VIEWER' })
     if (reportError('حذف بیننده گزارش', error)) set({ reportViewers: previous })
+  },
+
+  fetchQuestionDesigners: async () => {
+    const [{ data: roleRows, error: roleErr }, { data: scopeRows, error: scopeErr }] = await Promise.all([
+      supabase.rpc('comp_list_role_assignments', { p_role_name: 'QUESTION_DESIGNER' }),
+      supabase.from('comp_question_designer_scopes').select('user_id, section'),
+    ])
+    if (reportError('بارگذاری فهرست طراحان سؤال', roleErr ?? scopeErr)) return
+    const sectionsByUser = new Map<string, QuestionDesignerSection[]>()
+    for (const r of (scopeRows ?? []) as { user_id: string; section: QuestionDesignerSection }[]) {
+      sectionsByUser.set(r.user_id, [...(sectionsByUser.get(r.user_id) ?? []), r.section])
+    }
+    set({
+      questionDesigners: ((roleRows ?? []) as CompRoleAssignmentRow[]).map((r) => ({
+        ...compRoleAssignmentFromRow(r),
+        sections: sectionsByUser.get(r.user_id) ?? [],
+      })) as CompQuestionDesignerAssignment[],
+    })
+  },
+
+  addQuestionDesigner: async (userId) => {
+    const { error } = await supabase.rpc('comp_grant_role', { p_user_id: userId, p_role_name: 'QUESTION_DESIGNER' })
+    if (reportError('افزودن طراح سؤال', error)) return
+    await get().fetchQuestionDesigners()
+  },
+
+  removeQuestionDesigner: async (userId) => {
+    const previous = get().questionDesigners
+    set({ questionDesigners: previous.filter((m) => m.userId !== userId) })
+    const { error } = await supabase.rpc('comp_revoke_role', { p_user_id: userId, p_role_name: 'QUESTION_DESIGNER' })
+    if (reportError('حذف طراح سؤال', error)) set({ questionDesigners: previous })
+  },
+
+  setQuestionDesignerScopes: async (userId, sections) => {
+    const previous = get().questionDesigners
+    set({ questionDesigners: previous.map((m) => (m.userId === userId ? { ...m, sections } : m)) })
+    const { error } = await supabase.rpc('comp_set_question_designer_scopes', { p_user_id: userId, p_sections: sections })
+    if (reportError('تنظیم بخش‌های مجاز طراح سؤال', error)) set({ questionDesigners: previous })
   },
 
   fetchPanelistScores: async (assessmentId) => {

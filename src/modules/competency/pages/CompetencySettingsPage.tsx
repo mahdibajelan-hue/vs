@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { BookOpenCheck, CheckCircle2, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, Pencil, Plus, ShieldCheck, Star, Trash2, UserPlus, X } from 'lucide-react'
+import { BookOpenCheck, CheckCircle2, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, PenSquare, Pencil, Plus, ShieldCheck, Star, Trash2, UserPlus, X } from 'lucide-react'
 import { useCompetencyStore, type AssessmentBlueprintInput, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
@@ -21,6 +21,7 @@ import {
   type CompJobCompetencyRequirement,
   type CompJobRoleConfig,
   type CompProfileLite,
+  type CompQuestionDesignerAssignment,
   type CompRoleAssignment,
   type QuestionType,
 } from '../types'
@@ -120,6 +121,101 @@ function RoleAssignmentSection({
   )
 }
 
+const QUESTION_DESIGNER_SECTIONS: { key: CompQuestionDesignerAssignment['sections'][number]; label: string }[] = [
+  { key: 'TECHNICAL', label: 'ارزیابی فنی تخصصی' },
+  { key: 'MCQ', label: 'آزمون تستی آنلاین' },
+  { key: 'PERSONALITY', label: 'شخصیت و رفتاری' },
+]
+
+/** Same add/remove shape as RoleAssignmentSection, plus a per-holder checkbox row for which bank(s)
+ * (comp_question_designer_scopes) they may actually author/edit — a holder with no section checked
+ * has the role but no real access anywhere yet, so the empty state calls that out explicitly. */
+function QuestionDesignerSection({
+  profiles,
+  holders,
+  onAdd,
+  onRemove,
+  onSetScopes,
+}: {
+  profiles: CompProfileLite[]
+  holders: CompQuestionDesignerAssignment[]
+  onAdd: (userId: string) => void
+  onRemove: (userId: string) => void
+  onSetScopes: (userId: string, sections: CompQuestionDesignerAssignment['sections']) => void
+}) {
+  const [pickUserId, setPickUserId] = useState('')
+  const availableProfiles = profiles.filter((p) => !holders.some((h) => h.userId === p.id))
+
+  return (
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="mb-1 flex items-center gap-1.5 text-sm font-bold">
+        <PenSquare size={15} className="text-teal-300" /> طراحان سؤالات آزمون (Question Designer)
+      </p>
+      <p className="mb-3 text-[11px] leading-6 text-muted">
+        این کاربران می‌توانند مستقیماً در بانک سؤال بخش‌های تعیین‌شده، سؤال بسازند/ویرایش کنند و پیشنهادهای در انتظار را تأیید/رد کنند — برخلاف طراح آزمون که فقط
+        ترکیب سؤالِ یک ارزیابی را تعیین می‌کند. مشخص کنید هر کاربر اجازه‌ی طرح سؤال در کدام بخش(ها) را دارد.
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select value={pickUserId} onChange={(e) => setPickUserId(e.target.value)} className="input max-w-xs">
+          <option value="">انتخاب کاربر…</option>
+          {availableProfiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.fullName} ({p.email})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!pickUserId}
+          onClick={() => {
+            onAdd(pickUserId)
+            setPickUserId('')
+          }}
+          className="flex items-center gap-1.5 rounded-lg bg-purple-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-purple-400 disabled:opacity-40"
+        >
+          <UserPlus size={13} /> افزودن طراح سؤال
+        </button>
+      </div>
+
+      {holders.length === 0 ? (
+        <p className="text-[11px] text-muted">هنوز طراح سؤال اختصاصی تعریف نشده.</p>
+      ) : (
+        <div className="space-y-2">
+          {holders.map((h) => {
+            const profile = profiles.find((p) => p.id === h.userId)
+            return (
+              <div key={h.userId} className="rounded-lg border border-white/10 p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
+                  <span className="font-bold">{profile?.fullName ?? h.userId}</span>
+                  <button onClick={() => onRemove(h.userId)} className="text-muted hover:text-red-300">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {QUESTION_DESIGNER_SECTIONS.map((s) => (
+                    <label key={s.key} className="flex items-center gap-1.5 text-[10.5px] text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={h.sections.includes(s.key)}
+                        onChange={(e) =>
+                          onSetScopes(h.userId, e.target.checked ? [...h.sections, s.key] : h.sections.filter((x) => x !== s.key))
+                        }
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+                {h.sections.length === 0 && <p className="mt-1 text-[10px] text-amber-300">هنوز هیچ بخشی برای این کاربر فعال نشده — فعلاً به هیچ بانکی دسترسی ندارد.</p>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Module-wide settings: who has full admin-equivalent access (comp_module_admins), who may design
  * assessments / view reports (the ASSESSMENT_DESIGNER / REPORT_VIEWER rasta roles), and which
  * question types each job role's bank may use. Only reachable at all when the viewer is already a
@@ -141,6 +237,12 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
   const fetchReportViewers = useCompetencyStore((s) => s.fetchReportViewers)
   const addReportViewer = useCompetencyStore((s) => s.addReportViewer)
   const removeReportViewer = useCompetencyStore((s) => s.removeReportViewer)
+
+  const questionDesigners = useCompetencyStore((s) => s.questionDesigners)
+  const fetchQuestionDesigners = useCompetencyStore((s) => s.fetchQuestionDesigners)
+  const addQuestionDesigner = useCompetencyStore((s) => s.addQuestionDesigner)
+  const removeQuestionDesigner = useCompetencyStore((s) => s.removeQuestionDesigner)
+  const setQuestionDesignerScopes = useCompetencyStore((s) => s.setQuestionDesignerScopes)
 
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const fetchJobRoleConfigs = useCompetencyStore((s) => s.fetchJobRoleConfigs)
@@ -170,6 +272,7 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
     fetchModuleAdmins()
     fetchAssessmentDesigners()
     fetchReportViewers()
+    fetchQuestionDesigners()
     fetchJobRoleConfigs()
     fetchCompetencies()
     fetchJobCompetencyRequirements()
@@ -215,6 +318,14 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
         holders={reportViewers}
         onAdd={addReportViewer}
         onRemove={removeReportViewer}
+      />
+
+      <QuestionDesignerSection
+        profiles={profiles}
+        holders={questionDesigners}
+        onAdd={addQuestionDesigner}
+        onRemove={removeQuestionDesigner}
+        onSetScopes={setQuestionDesignerScopes}
       />
 
       <div className="glass-panel rounded-2xl p-4">

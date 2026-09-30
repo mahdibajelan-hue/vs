@@ -744,6 +744,14 @@ export interface CompRoleAssignment {
   createdAt: string
 }
 
+/** Which bank(s) a QUESTION_DESIGNER may author/edit directly (comp_question_designer_scopes) —
+ * TECHNICAL = comp_question_bank, MCQ = comp_mcq_questions, PERSONALITY = personality_questions. */
+export type QuestionDesignerSection = 'TECHNICAL' | 'MCQ' | 'PERSONALITY'
+
+export interface CompQuestionDesignerAssignment extends CompRoleAssignment {
+  sections: QuestionDesignerSection[]
+}
+
 export interface CompPanelist {
   id: string
   assessmentId: string

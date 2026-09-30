@@ -51,6 +51,8 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const fetchModuleAdmins = useCompetencyStore((s) => s.fetchModuleAdmins)
   const assessmentDesigners = useCompetencyStore((s) => s.assessmentDesigners)
   const fetchAssessmentDesigners = useCompetencyStore((s) => s.fetchAssessmentDesigners)
+  const questionDesigners = useCompetencyStore((s) => s.questionDesigners)
+  const fetchQuestionDesigners = useCompetencyStore((s) => s.fetchQuestionDesigners)
   // Fetched once here, app-wide, so every page under this tree (dashboard, wizard stages, question
   // bank, reports, settings) can read the job-role catalog straight from the store instead of each
   // needing its own fetch — replaces the old always-available JOB_ROLE_LABEL_FA/JOB_ROLES constants.
@@ -70,6 +72,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
     fetchModuleAdmins()
     // The dashboard's designer-only actions/next-steps read this list too, not just the wizard.
     fetchAssessmentDesigners()
+    fetchQuestionDesigners()
     fetchPersonalityModuleAdmins()
     fetchJobRoleConfigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,7 +86,8 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // their own candidate's already-selected questions fine via RLS (comp_question_bank_select_scoped),
   // but browsing/proposing across the whole bank is reserved for module admins and assessment
   // designers, so the sidebar link is only wired up for them.
-  const isQuestionBankViewer = isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id)
+  const isQuestionBankViewer =
+    isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id) || questionDesigners.some((d) => d.userId === myProfile?.id)
 
   // Settings is only ever reachable via an admin-gated nav button, but the module-admin flag can
   // still change under a viewer already sitting on this view (e.g. someone else revokes their
@@ -144,12 +148,20 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   if (view.name === 'questionBank') {
+    // QuestionBankPage's isModuleAdmin/isPersonalityModuleAdmin props are really "may I fully manage
+    // this one bank" flags (create/edit/approve — there's no hard-delete left in this UI, only
+    // deactivate, which the same RLS update policy already covers), not a literal admin check — so a
+    // QUESTION_DESIGNER scoped to that section gets the exact same full-management view a module
+    // admin does, matching what comp_question_bank/comp_mcq_questions/personality_questions' RLS
+    // (comp_is_question_designer) already allows them to do at the database layer.
+    const myQuestionDesignerSections = new Set(questionDesigners.find((d) => d.userId === myProfile?.id)?.sections ?? [])
     return (
       <QuestionBankPage
         onExitToHub={onExitToHub}
         nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }}
-        isModuleAdmin={isModuleAdmin}
-        isPersonalityModuleAdmin={isPersonalityModuleAdmin}
+        isModuleAdmin={isModuleAdmin || myQuestionDesignerSections.has('TECHNICAL')}
+        isPersonalityModuleAdmin={isPersonalityModuleAdmin || myQuestionDesignerSections.has('PERSONALITY')}
+        isMcqBankManager={isModuleAdmin || myQuestionDesignerSections.has('MCQ')}
         onNavPersonalitySettings={isPersonalityModuleAdmin ? () => setView({ name: 'personalitySettings' }) : undefined}
         initialTab={view.tab}
       />

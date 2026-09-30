@@ -14250,3 +14250,193 @@ create policy "comp_panelist_scores_update" on comp_panelist_scores
   for update
   using (comp_is_module_admin() or (panelist_id = auth.uid() and submitted_at is null))
   with check (comp_is_module_admin() or panelist_id = auth.uid());
+
+
+-- ============================================================================
+-- Section 57 — Question Designer role, scoped per exam section
+-- ============================================================================
+-- Product request: a new role distinct from ASSESSMENT_DESIGNER (which only picks the question
+-- MIX for an assessment, with read-only bank access) and from the plain "propose a pending
+-- question" workflow every user already has — someone the module admin trusts to actually AUTHOR
+-- and EDIT bank questions directly, but only within specific exam section(s) the admin picks for
+-- them: TECHNICAL (comp_question_bank), MCQ (comp_mcq_questions), PERSONALITY
+-- (personality_questions — a different module's table, bridged deliberately here since
+-- QuestionBankPage already merges all three banks into one page under this module's Settings).
+
+insert into rasta_roles (name, description, is_system)
+values ('QUESTION_DESIGNER', 'طراحی/ویرایش مستقیم سؤالات بانک، محدود به بخش(های) تعیین‌شده توسط ادمین ماژول', true)
+on conflict (name) do nothing;
+
+create table if not exists comp_question_designer_scopes (
+  user_id uuid not null references profiles(id) on delete cascade,
+  section text not null check (section in ('TECHNICAL','MCQ','PERSONALITY')),
+  granted_by uuid references profiles(id),
+  created_at timestamptz not null default now(),
+  primary key (user_id, section)
+);
+alter table comp_question_designer_scopes enable row level security;
+
+drop policy if exists "comp_question_designer_scopes_select" on comp_question_designer_scopes;
+create policy "comp_question_designer_scopes_select" on comp_question_designer_scopes
+  for select using (comp_is_module_admin() or user_id = auth.uid());
+
+create or replace function comp_is_question_designer(p_section text)
+returns boolean as $$
+  select comp_is_module_admin() or exists (
+    select 1 from comp_question_designer_scopes s where s.user_id = auth.uid() and s.section = p_section
+  );
+$$ language sql security definer stable;
+
+-- Replaces the full scope set for a user in one call (module-admin only) — the Settings checkbox
+-- group for this role always submits the complete desired set, not an incremental add/remove.
+create or replace function comp_set_question_designer_scopes(p_user_id uuid, p_sections text[])
+returns void as $$
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  delete from comp_question_designer_scopes where user_id = p_user_id;
+  insert into comp_question_designer_scopes (user_id, section, granted_by)
+  select p_user_id, s, auth.uid() from unnest(p_sections) as s
+  where s in ('TECHNICAL','MCQ','PERSONALITY');
+end;
+$$ language plpgsql security definer;
+
+grant execute on function comp_is_question_designer(text) to authenticated;
+grant execute on function comp_set_question_designer_scopes(uuid, text[]) to authenticated;
+
+-- comp_grant_role / comp_revoke_role's allow-list grows to include the new role; comp_revoke_role
+-- also now validates its role-name argument (it never did before — a pre-existing gap harmless in
+-- practice since only a comp module admin could call it at all, but tightened here to match
+-- comp_grant_role's allow-list while touching this function anyway) and cleans up the scope rows
+-- when QUESTION_DESIGNER itself is revoked.
+create or replace function comp_grant_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('ASSESSMENT_DESIGNER', 'REPORT_VIEWER', 'QUESTION_DESIGNER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    raise exception 'role not found';
+  end if;
+  insert into rasta_user_roles (user_id, role_id, created_by)
+  values (p_user_id, v_role_id, auth.uid())
+  on conflict (user_id, role_id) do nothing;
+end;
+$$ language plpgsql security definer;
+
+create or replace function comp_revoke_role(p_user_id uuid, p_role_name text)
+returns void as $$
+declare
+  v_role_id uuid;
+begin
+  if not comp_is_module_admin() then
+    raise exception 'forbidden';
+  end if;
+  if p_role_name not in ('ASSESSMENT_DESIGNER', 'REPORT_VIEWER', 'QUESTION_DESIGNER') then
+    raise exception 'invalid role';
+  end if;
+  select id into v_role_id from rasta_roles where name = p_role_name;
+  if v_role_id is null then
+    return;
+  end if;
+  delete from rasta_user_roles where user_id = p_user_id and role_id = v_role_id;
+  if p_role_name = 'QUESTION_DESIGNER' then
+    delete from comp_question_designer_scopes where user_id = p_user_id;
+  end if;
+end;
+$$ language plpgsql security definer;
+
+-- comp_question_bank (technical bank) — add the scoped designer alongside the existing
+-- module-admin / assessment-designer(read-only) / panel-scoped rules, additively.
+drop policy if exists "comp_question_bank_select_scoped" on comp_question_bank;
+create policy "comp_question_bank_select_scoped" on comp_question_bank
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or comp_is_question_designer('TECHNICAL')
+    or exists (
+      select 1 from comp_assessments a
+      where a.status <> 'completed'
+        and a.job_role = comp_question_bank.job_role
+        and (
+          comp_is_lead(a.id)
+          or (
+            comp_can_access_assessment(a.id)
+            and (a.job_role = 'project_manager' or a.selected_question_ids @> to_jsonb(comp_question_bank.id::text))
+          )
+        )
+    )
+  );
+
+drop policy if exists "comp_question_bank_insert" on comp_question_bank;
+create policy "comp_question_bank_insert" on comp_question_bank
+  for insert with check (
+    comp_is_module_admin()
+    or comp_is_question_designer('TECHNICAL')
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+drop policy if exists "comp_question_bank_update_admin" on comp_question_bank;
+create policy "comp_question_bank_update_admin" on comp_question_bank
+  for update
+  using (comp_is_module_admin() or comp_is_question_designer('TECHNICAL'))
+  with check (comp_is_module_admin() or comp_is_question_designer('TECHNICAL'));
+
+-- comp_mcq_questions — ASSESSMENT_DESIGNER already had full write access here (a pre-existing,
+-- separate design decision from the technical bank's more restrictive model); add the scoped
+-- designer alongside it, not in place of it.
+drop policy if exists "comp_mcq_questions_insert" on comp_mcq_questions;
+create policy "comp_mcq_questions_insert" on comp_mcq_questions
+  for insert with check (comp_is_module_admin() or comp_is_assessment_designer() or comp_is_question_designer('MCQ'));
+
+drop policy if exists "comp_mcq_questions_select" on comp_mcq_questions;
+create policy "comp_mcq_questions_select" on comp_mcq_questions
+  for select using (
+    comp_is_module_admin()
+    or comp_is_assessment_designer()
+    or comp_is_question_designer('MCQ')
+    or created_by = auth.uid()
+    or exists (select 1 from comp_mcq_tests t where t.question_ids ? (comp_mcq_questions.id)::text and comp_can_access_assessment(t.assessment_id))
+  );
+
+drop policy if exists "comp_mcq_questions_update" on comp_mcq_questions;
+create policy "comp_mcq_questions_update" on comp_mcq_questions
+  for update
+  using (comp_is_module_admin() or comp_is_assessment_designer() or comp_is_question_designer('MCQ'))
+  with check (comp_is_module_admin() or comp_is_assessment_designer() or comp_is_question_designer('MCQ'));
+
+-- personality_questions — a different module's table (its own personality_is_module_admin() /
+-- personality_is_assessment_designer()), bridged deliberately: QuestionBankPage already merges the
+-- personality bank into this module's own page, so a QUESTION_DESIGNER scoped to PERSONALITY here
+-- gets real edit access there too, not just the module-admin-only path that existed before.
+drop policy if exists "personality_questions_insert" on personality_questions;
+create policy "personality_questions_insert" on personality_questions
+  for insert with check (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or comp_is_question_designer('PERSONALITY')
+    or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
+  );
+
+drop policy if exists "personality_questions_select" on personality_questions;
+create policy "personality_questions_select" on personality_questions
+  for select using (
+    personality_is_module_admin()
+    or personality_is_assessment_designer()
+    or personality_is_report_viewer()
+    or comp_is_question_designer('PERSONALITY')
+    or created_by = auth.uid()
+  );
+
+drop policy if exists "personality_questions_update_admin" on personality_questions;
+create policy "personality_questions_update_admin" on personality_questions
+  for update
+  using (personality_is_module_admin() or comp_is_question_designer('PERSONALITY'))
+  with check (personality_is_module_admin() or comp_is_question_designer('PERSONALITY'));

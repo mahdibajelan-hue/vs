@@ -106,6 +106,10 @@ interface QuestionBankPageProps {
   nav: Partial<Record<CompetencySection, () => void>>
   isModuleAdmin: boolean
   isPersonalityModuleAdmin: boolean
+  /** Separate from isModuleAdmin so a QUESTION_DESIGNER scoped to only one of TECHNICAL/MCQ gets
+   * full management of exactly that bank, not both — defaults to isModuleAdmin's value when the
+   * caller has no finer-grained scope to offer. */
+  isMcqBankManager?: boolean
   onNavPersonalitySettings?: () => void
   initialTab?: QuestionBankTab
 }
@@ -118,7 +122,15 @@ interface QuestionBankPageProps {
  * two banks are genuinely different data models with their own store slices and approval flows —
  * this page shares only the sidebar shell/header and the tab toggle, never a unified schema.
  */
-export function QuestionBankPage({ onExitToHub, nav, isModuleAdmin, isPersonalityModuleAdmin, onNavPersonalitySettings, initialTab }: QuestionBankPageProps) {
+export function QuestionBankPage({
+  onExitToHub,
+  nav,
+  isModuleAdmin,
+  isPersonalityModuleAdmin,
+  isMcqBankManager,
+  onNavPersonalitySettings,
+  initialTab,
+}: QuestionBankPageProps) {
   const [tab, setTab] = useState<QuestionBankTab>(initialTab ?? 'technical')
 
   return (
@@ -155,7 +167,7 @@ export function QuestionBankPage({ onExitToHub, nav, isModuleAdmin, isPersonalit
       ) : tab === 'personality' ? (
         <PersonalityQuestionBank isModuleAdmin={isPersonalityModuleAdmin} onNavSettings={onNavPersonalitySettings} />
       ) : (
-        <McqQuestionBank isModuleAdmin={isModuleAdmin} />
+        <McqQuestionBank isModuleAdmin={isMcqBankManager ?? isModuleAdmin} />
       )}
     </CompetencySidebarShell>
   )
