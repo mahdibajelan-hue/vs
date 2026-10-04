@@ -14469,3 +14469,95 @@ revoke execute on function comp_assessments_sync_personality_job_role() from pub
 drop trigger if exists trg_comp_assessments_sync_personality_job_role on comp_assessments;
 create trigger trg_comp_assessments_sync_personality_job_role after update on comp_assessments
   for each row execute function comp_assessments_sync_personality_job_role();
+
+
+-- ---------------------------------------------------------------- Section 59: extra scores for the public qualification card
+--
+-- The public results link (?results=<token>) only ever had comp_public_results_get, which exposes the
+-- scored interview itself. The qualification card now also shows three supplementary indicators — the
+-- online MCQ test percentage, the job-readiness (role fit) percentage and the two most job-relevant
+-- Big Five traits (conscientiousness, emotional stability) — so this separate token-gated RPC returns
+-- just those aggregates (never individual responses, validity details or the full trait/dimension
+-- set). The role-fit math is a straight SQL port of computeRoleAlignment() in
+-- src/modules/personality/lib/roleAlignment.ts (same rowFitScore branches, weighted over covered rows).
+create or replace function comp_public_extra_scores_get(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_pa personality_assessments%rowtype;
+  v_mcq numeric;
+  v_fit numeric;
+  v_traits jsonb := '[]'::jsonb;
+begin
+  select a.id into v_id from comp_assessments a where a.results_share_token = p_token;
+  if v_id is null then
+    return null;
+  end if;
+
+  select t.score_percent into v_mcq
+  from comp_mcq_tests t
+  where t.assessment_id = v_id and t.status = 'SCORED'
+  order by t.created_at desc
+  limit 1;
+
+  select * into v_pa
+  from personality_assessments pa
+  where pa.assessment_id = v_id and pa.status in ('FINGERPRINT', 'AI_ANALYSIS', 'FINAL_REVIEW', 'LOCKED', 'ARCHIVED')
+  order by pa.created_at desc
+  limit 1;
+
+  if found then
+    with req as (
+      select r.weight, r.min_threshold, r.preferred_min, r.preferred_max,
+        (select s.normalized_score
+           from personality_dimension_scores s
+          where s.personality_assessment_id = v_pa.id
+            and s.score_kind = 'BEHAVIORAL_DIMENSION'
+            and s.dimension_id = r.dimension_id
+          limit 1) as score
+      from personality_job_behavioral_requirements r
+      where r.profile_id = v_pa.job_profile_id
+    ), fit as (
+      select weight,
+        case
+          when score is null then null
+          when min_threshold is null and preferred_min is null and preferred_max is null then score
+          when min_threshold is not null and score < min_threshold then greatest(0, (score / min_threshold) * 60)
+          when preferred_min is not null and score < preferred_min
+            then 60 + least(40, ((score - coalesce(min_threshold, 0)) / greatest(1, preferred_min - coalesce(min_threshold, 0))) * 40)
+          when preferred_max is not null and score > preferred_max then greatest(50, 100 - (score - preferred_max))
+          else 100
+        end as f
+      from req
+    )
+    select case
+             when coalesce(sum(weight) filter (where f is not null), 0) > 0
+               then round(sum(f * weight) filter (where f is not null) / sum(weight) filter (where f is not null))
+           end
+      into v_fit
+      from fit;
+
+    select coalesce(jsonb_agg(jsonb_build_object('key', t.key, 'label_fa', t.label_fa, 'score', round(s.normalized_score)) order by t.display_order), '[]'::jsonb)
+      into v_traits
+      from personality_dimension_scores s
+      join personality_traits t on t.id = s.trait_id
+     where s.personality_assessment_id = v_pa.id
+       and s.score_kind = 'TRAIT'
+       and t.key in ('conscientiousness', 'emotional_stability');
+  end if;
+
+  return jsonb_build_object(
+    'mcq_percent', case when v_mcq is null then null else round(v_mcq) end,
+    'role_fit_percent', v_fit,
+    'traits', v_traits
+  );
+end;
+$$;
+
+revoke execute on function comp_public_extra_scores_get(uuid) from public;
+grant execute on function comp_public_extra_scores_get(uuid) to anon, authenticated;

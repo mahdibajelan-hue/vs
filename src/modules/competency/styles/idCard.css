@@ -3,11 +3,14 @@
    Self-contained (imported only by PublicResultsPage.tsx, an unauthenticated route) rather than
    built on farinTheme.css's .fx tokens, since this page never mounts the module shell those rely on.
    Light/cream physical-ID-card look by explicit product request: thick plastic-card feel (a second
-   card peeking out behind, via .cred-card-wrap::before), heavily rounded corners, always the same
-   regardless of the viewer's own device theme.
-   The card's internal layout is authored dir="ltr" (photo/identity block on the visual left, medal on
-   the visual right, exactly like the reference) with Persian text blocks individually right-aligned —
-   Persian glyph shaping doesn't depend on container direction, only paragraph order does.
+   card peeking out behind, via .cred-card-wrap::before), heavily rounded corners, set on a deep
+   teal backdrop so the cream card reads clearly as an object — always the same regardless of the
+   viewer's own device theme.
+   The card's internal layout is authored dir="ltr" (photo on the visual left, medal on the visual
+   right, exactly like the reference) with Persian text blocks individually right-aligned and given
+   dir="rtl" where they mix words and numbers — Persian glyph shaping doesn't depend on container
+   direction, only paragraph/bidi order does. No text on the card may use the app's `.num` class: it
+   forces JetBrains Mono, whose Persian fallback renders letters disconnected.
    ========================================================================== */
 
 .cred-stage {
@@ -18,7 +21,7 @@
   justify-content: center;
   gap: 1.5rem;
   padding: 2rem 1rem;
-  background: radial-gradient(70% 60% at 50% -10%, #fbf6ea 0%, #f1ece0 55%, #e9e3d4 100%);
+  background: radial-gradient(90% 65% at 50% 0%, #1f5568 0%, #11323f 52%, #0a202b 100%);
 }
 
 .cred-card-wrap {
@@ -34,8 +37,8 @@
   inset: 0;
   border-radius: 32px;
   transform: translate(8px, 10px);
-  background: linear-gradient(160deg, #e2d6a8, #c9b876);
-  box-shadow: 0 18px 34px -18px rgba(120, 96, 30, 0.45);
+  background: linear-gradient(160deg, #d9c88a, #b79d52);
+  box-shadow: 0 22px 40px -16px rgba(0, 0, 0, 0.6);
 }
 
 .cred-card {
@@ -45,14 +48,11 @@
   border-radius: 30px;
   overflow: hidden;
   background: linear-gradient(160deg, #fffdf8 0%, #faf5e8 100%);
-  border: 1px solid #e7dcb8;
+  border: 1px solid #efe4bd;
   box-shadow:
-    0 24px 60px -28px rgba(120, 96, 30, 0.35),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+    0 24px 60px -28px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset;
   padding: 1.4rem 1.5rem 1.3rem;
-  /* Explicit rather than relying on inheriting body's font-family — a shareable certificate should
-     never silently fall back to a generic system font if it's ever embedded/printed outside the app
-     shell. Vazirmatn is the same elegant Persian face the rest of the app uses (index.html/index.css). */
   font-family: 'Vazirmatn', Tahoma, sans-serif;
 }
 
@@ -82,16 +82,16 @@
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.9rem;
 }
 
 .cred-logo {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .cred-logo-text {
@@ -99,16 +99,44 @@
   line-height: 1.15;
 }
 
-.cred-title-badge {
+.cred-title {
+  text-align: right;
+}
+
+/* Photo (visual left) and medal (visual right) share one row, the candidate's name between them. */
+.cred-band {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.cred-photo {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #f1ece0;
+  border: 2px solid #d9c98a;
+  box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
+}
+
+.cred-band-name {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.cred-medal-box {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
-  flex-shrink: 0;
-}
-
-.cred-title {
-  text-align: center;
+  gap: 0.25rem;
+  max-width: 96px;
 }
 
 .cred-medal-wrap {
@@ -116,135 +144,105 @@
 }
 
 .cred-medal {
-  width: 58px;
+  width: 78px;
   height: auto;
   display: block;
   filter: drop-shadow(0 4px 8px rgba(120, 96, 30, 0.35));
 }
 
-/* The overall score, set right inside the medal's gold disc rather than as a separate element. The
- * disc sits in the top ~55% of the medal artwork (the rest is the ribbon tails), so the score is
- * vertically anchored there, not at true center of the whole image. */
+/* The overall score sits inside the medal's gold disc, with "از ۱۰۰" right under it so the number
+ * reads as a mark out of 100. The disc occupies the top ~55% of the artwork (the rest is the ribbon
+ * tails), so the stack is anchored there rather than at the true center of the whole image. */
 .cred-medal-score {
   position: absolute;
-  top: 34%;
+  top: 35%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 17px;
-  font-weight: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   line-height: 1;
   color: #6b3a0a;
+}
+.cred-medal-score b {
+  font-size: 21px;
+  font-weight: 900;
+}
+.cred-medal-score small {
+  margin-top: 1px;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .cred-level-label {
   text-align: center;
-  max-width: 110px;
 }
 
-.cred-main {
+/* QR (visual left, where the photo used to be) beside the card's identifying details. */
+.cred-details {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.cred-identity {
+  margin-top: 1rem;
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  min-width: 0;
-  flex: 1;
 }
 
-.cred-photo {
-  position: relative;
-  width: 84px;
-  height: 84px;
+.cred-qr-box {
   flex-shrink: 0;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #f1ece0;
+  padding: 6px;
+  background: #fff;
+  border-radius: 14px;
   border: 2px solid #d9c98a;
-  box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.4);
+  box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
 }
 
-.cred-identity-text {
-  text-align: right;
+.cred-details-text {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
 .cred-meta-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  direction: ltr;
+  gap: 0.4rem;
   justify-content: flex-end;
+  text-align: right;
 }
 
-/* The structured-interview mini-chart — one small colored ring per evaluated domain, its own real
- * score front and center rather than an icon+label tile, so the card carries an actual chart rather
- * than decorative placeholders. */
-.cred-domain-chart {
+/* A single, non-wrapping row of small rings — one per interview domain, or one per supplementary
+ * indicator. Tiles share the width equally so 4 always fits one line on a phone. */
+.cred-ring-section {
   position: relative;
   z-index: 1;
-  margin-top: 1.1rem;
-  padding-top: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
   border-top: 1px dashed #e2d5a3;
 }
 
-.cred-domain-chart-title {
-  margin-bottom: 0.6rem;
+.cred-ring-section-title {
+  margin-bottom: 0.55rem;
   text-align: center;
 }
 
-.cred-domain-grid {
+.cred-ring-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-start;
-  justify-content: center;
-  gap: 0.85rem;
+  justify-content: space-around;
+  gap: 0.35rem;
 }
 
-.cred-domain-tile {
+.cred-ring-tile {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  width: 70px;
   text-align: center;
-}
-
-.cred-footer {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-}
-
-.cred-qr-block {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.cred-qr-box {
-  padding: 5px;
-  background: #fff;
-  border-radius: 9px;
-  border: 1px solid #ece2bd;
-}
-
-.cred-qr-caption {
-  max-width: 160px;
-}
-
-@media (max-width: 460px) {
-  .cred-main {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
 }

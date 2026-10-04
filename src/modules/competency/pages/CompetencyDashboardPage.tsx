@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardList, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
+import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, Hourglass, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
@@ -12,6 +12,7 @@ import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { computeNextStep, type NextStep } from '../lib/nextStep'
 import { DemoBadge, DemoDataToggle } from '../components/DemoDataToggle'
 import { supabase } from '../../../lib/supabaseClient'
+import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { fetchMcqTestStatuses, type McqTestStatus } from '../lib/mcqData'
@@ -165,6 +166,14 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
 
   const myActionItems = assessments.filter((a) => nextStepById.get(a.id)?.mine)
 
+  // The self-service intake already encodes the workflow: the candidate finishes their profile and
+  // uploads documents ("submitted"), then the evaluation officer checks them and presses the approve
+  // button on the Documents stage ("reviewed", see markReviewed). Only the latter are truly ready to
+  // interview — people with just a name and basic details (not_sent/pending) stay out of both lists
+  // and remain visible in the full talent pool below.
+  const awaitingDocsReview = assessments.filter((a) => a.status !== 'completed' && a.selfServiceStatus === 'submitted')
+  const readyForInterview = assessments.filter((a) => a.status !== 'completed' && a.selfServiceStatus === 'reviewed')
+
   // Best-scoring candidate per role that actually has candidates — admin/designer view only (a plain
   // judge's own handful of candidates makes a leaderboard meaningless noise, per the product owner's
   // earlier request to drop it from that view entirely).
@@ -220,6 +229,31 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
               ))}
             </div>
           </section>
+        )}
+
+        {(readyForInterview.length > 0 || awaitingDocsReview.length > 0) && (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <QueueSection
+              title="آماده مصاحبه"
+              hint="پروفایل و مدارک تکمیل و توسط مسئول ارزیابی تأیید شده"
+              color="#34d399"
+              icon={ClipboardCheck}
+              items={readyForInterview}
+              empty="هنوز کسی تأیید مدارک نشده است."
+              trailing={(a) => (a.reviewedAt ? `تأیید ${formatJalali(a.reviewedAt.slice(0, 10))}` : 'تأییدشده')}
+              onOpen={onOpen}
+            />
+            <QueueSection
+              title="منتظر تأیید مدارک"
+              hint="پروفایل تکمیل و مدارک بارگذاری شده — منتظر بررسی مسئول ارزیابی"
+              color="#fbbf24"
+              icon={Hourglass}
+              items={awaitingDocsReview}
+              empty="موردی در انتظار بررسی نیست."
+              trailing={() => 'در انتظار بررسی'}
+              onOpen={onOpen}
+            />
+          </div>
         )}
 
         {topPerRole.length > 0 && (
@@ -325,6 +359,58 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
         </div>
       )}
     </CompetencySidebarShell>
+  )
+}
+
+/** A short, scrollable list of candidates sharing one intake state ("آماده مصاحبه" / "منتظر تأیید
+ * مدارک"). Capped height so two of these side by side never push the page into a long scroll — a
+ * long queue scrolls inside its own card instead. */
+function QueueSection({
+  title,
+  hint,
+  color,
+  icon: Icon,
+  items,
+  empty,
+  trailing,
+  onOpen,
+}: {
+  title: string
+  hint: string
+  color: string
+  icon: typeof Users
+  items: CompetencyAssessment[]
+  empty: string
+  trailing: (a: CompetencyAssessment) => string
+  onOpen: (id: string) => void
+}) {
+  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
+  return (
+    <section className="fx-card fx-accent-bar p-3" style={tone(color)}>
+      <p className="fx-tone-text flex items-center gap-1.5 text-[11.5px] font-bold">
+        <Icon size={13} /> {title} ({items.length.toLocaleString('fa-IR')})
+      </p>
+      <p className="fx-muted mb-2 text-[10px]">{hint}</p>
+      {items.length === 0 ? (
+        <p className="fx-muted py-2 text-center text-[10.5px]">{empty}</p>
+      ) : (
+        <div className="grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto pl-0.5">
+          {items.map((a) => (
+            <button key={a.id} onClick={() => onOpen(a.id)} className="fx-sub flex items-center gap-2 rounded-lg p-1.5 pr-2.5 text-right transition-colors hover:bg-white/5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
+                  {a.isDemo && <DemoBadge />}
+                </div>
+                <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+              </div>
+              <span className="fx-tone-bg fx-tone-text shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold">{trailing(a)}</span>
+              <ChevronLeft size={13} className="fx-muted shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
