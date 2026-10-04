@@ -1,4 +1,4 @@
-import { FarinMark } from '../../../components/common/Logo'
+import { FarinMark } from '../platform'
 import { faNum, shamsi, shamsiLong } from '../lib/fa'
 import { OVERALL_STATUS_LABEL } from '../lib/reportBuilder'
 import { FINDING_KIND_SHORT, VISIT_TYPE_LABEL, type Mission, type Report, type ReportContent } from '../types'

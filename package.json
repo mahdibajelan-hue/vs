@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/fix-cesium-base-path.mjs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint:boundaries": "node scripts/check-module-boundaries.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.1",

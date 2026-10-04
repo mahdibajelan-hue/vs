@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabaseClient'
+import { supabase } from '../platform'
 import type { AiAnalyzeRequest, AiProvider, AiReportParts, AiReportRequest } from './provider'
 import type { AnalysisResult, ExtractedFinding } from '../lib/ruleAnalyzer'
 import { findingKey } from '../lib/ruleAnalyzer'

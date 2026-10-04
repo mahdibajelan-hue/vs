@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles } from 'lucide-react'
-import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
-import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useMissionStore } from './store/useMissionStore'
 import type { MissionRepo } from './repo/types'
 import { NavContext, type View } from './nav'

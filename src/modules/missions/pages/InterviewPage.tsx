@@ -12,7 +12,7 @@ import { useSpeech } from '../components/useSpeech'
 import { planTopics, type MissionContext } from '../lib/questionSets'
 import type { Finding } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
-import { Modal } from '../../../components/common/Modal'
+import { Modal } from '../platform'
 
 type Pane = 'chat' | 'ledger' | 'topics'
 

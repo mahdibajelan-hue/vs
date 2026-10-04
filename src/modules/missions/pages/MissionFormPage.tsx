@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, Lightbulb, Plus, Save, Send, Trash2 } from 'lucide-react'
-import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { JalaliDateInput } from '../platform'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
 import { TOPIC_KEYS_FOR_OBJECTIVES } from '../lib/questionSets'

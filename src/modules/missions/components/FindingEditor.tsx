@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
-import { Modal } from '../../../components/common/Modal'
+import { JalaliDateInput } from '../platform'
+import { Modal } from '../platform'
 import { FINDING_KIND_LABEL, PRIORITY_LABEL, type Finding, type FindingKind, type Priority } from '../types'
 import { Field } from './ui'
 

@@ -1,4 +1,4 @@
-import { formatJalali, isoToJalali, jalaliToIso, todayJalali, toGregorian, toJalali, jalaliMonthLength, JALALI_MONTHS } from '../../../lib/jalali'
+import { formatJalali, isoToJalali, jalaliToIso, todayJalali, toGregorian, toJalali, jalaliMonthLength, JALALI_MONTHS } from '../platform'
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩'

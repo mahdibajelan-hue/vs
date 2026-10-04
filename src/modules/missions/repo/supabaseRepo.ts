@@ -1,13 +1,11 @@
-import { supabase } from '../../../lib/supabaseClient'
-import { friendlyErrorMessage } from '../../../lib/friendlyError'
-import { useAuthStore } from '../../../store/useAuthStore'
+import { supabase, friendlyErrorMessage, useAuthStore } from '../platform'
+import { readLinkedStatus, transferToSystemOfRecord } from '../integration/recordSystems'
 import { DEFAULT_QUESTION_SET, type QuestionSet } from '../lib/questionSets'
 import { uid, type TurnDraft } from '../lib/interviewEngine'
 import type {
   Evidence,
   Finding,
   Interview,
-  LinkedStatus,
   Mission,
   MissionBundle,
   MissionEvent,
@@ -431,16 +429,12 @@ export function createSupabaseRepo(): MissionRepo {
     },
 
     async transferFinding(findingId, target, params = {}) {
-      const { data, error } = await supabase.rpc('ms_transfer_finding', { p_finding_id: findingId, p_target: target, p_params: params })
-      if (error) fail(error)
-      const r = data as { target: 'issue' | 'risk' | 'action'; id: string }
-      return { target: r.target, id: r.id }
+      try {
+        return await transferToSystemOfRecord(findingId, target, params)
+      } catch (e) {
+        fail(e as { message: string })
+      }
     },
-    async linkedStatus(ids): Promise<LinkedStatus[]> {
-      if (!ids.length) return []
-      const { data, error } = await supabase.rpc('ms_linked_status', { p_mission_ids: ids })
-      if (error) return []
-      return ((data ?? []) as Row[]).map((x) => ({ findingId: x.finding_id, target: x.target, linkedId: x.linked_id, linkedCode: x.linked_code ?? '', linkedStatus: x.linked_status ?? '' }))
-    },
+    linkedStatus: (ids) => readLinkedStatus(ids),
   }
 }
