@@ -25,6 +25,7 @@ import type {
   WorkflowAction,
 } from '../types'
 import { createSupabaseRepo } from '../repo/supabaseRepo'
+import { seedDemo } from '../repo/demoSeed'
 import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft, PortfolioData } from '../repo/types'
 
 interface MissionsState {
@@ -72,7 +73,12 @@ interface MissionsState {
   submitReport: () => Promise<boolean>
   decideFinding: (id: string, approval: 'approved' | 'rejected' | 'proposed', note?: string) => Promise<void>
   transfer: (findingId: string, target: TransferTarget) => Promise<boolean>
+
+  seedDemoData: () => Promise<void>
+  clearDemoData: () => Promise<void>
 }
+
+export const DEMO_MARKER = '[نمونه]'
 
 const FRIENDLY = (e: unknown) => (e instanceof Error ? e.message : 'خطای نامشخص')
 
@@ -388,6 +394,35 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
       set({ bundle: { ...bundle, findings: bundle.findings.map((f) => (f.id === id ? { ...f, approval, managerNote: note ?? f.managerNote } : f)) } })
     } catch (e) {
       set({ error: FRIENDLY(e) })
+    }
+  },
+
+  seedDemoData: async () => {
+    const s = get()
+    if (!s.user) return
+    set({ loading: true })
+    try {
+      const multi = 'forUser' in s.repo
+      const requesters = multi ? s.people.filter((p) => p.id !== s.user!.id).slice(0, 3) : [s.user]
+      await seedDemo({ repo: s.repo as Parameters<typeof seedDemo>[0]['repo'], projects: s.projects, requesters: requesters.length ? requesters : [s.user], manager: s.user, marker: DEMO_MARKER })
+      await get().refreshPortfolio()
+    } catch (e) {
+      set({ error: FRIENDLY(e) })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  clearDemoData: async () => {
+    const s = get()
+    set({ loading: true })
+    try {
+      for (const m of (s.portfolio?.missions ?? []).filter((x) => x.locationDetail === DEMO_MARKER)) await s.repo.deleteMission(m.id)
+      await get().refreshPortfolio()
+    } catch (e) {
+      set({ error: FRIENDLY(e) })
+    } finally {
+      set({ loading: false })
     }
   },
 

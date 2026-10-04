@@ -3,6 +3,7 @@ import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
   ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Package, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
+  MapPinned,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../../store/useModuleStore'
@@ -148,6 +149,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const ALL_NAV_ITEMS: NavItem[] = [
     { id: 'lifecycle-nav', moduleKey: 'lifecycle', title: 'Lifecycle Navigator', icon: GitBranch, accent: 'var(--radar-cyan)' },
     { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
+    { id: 'missions', moduleKey: 'missions', title: 'Mission & Visit Debrief', icon: MapPinned, accent: '#f2a93b' },
     { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
     { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },

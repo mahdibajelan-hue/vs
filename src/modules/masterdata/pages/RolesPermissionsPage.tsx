@@ -21,6 +21,7 @@ const MODULE_ORDER_PREFERENCE = [
   'competency',
   'estimator',
   'lifecycle',
+  'missions',
   'admin',
 ]
 

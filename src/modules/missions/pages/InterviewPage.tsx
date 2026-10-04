@@ -1,0 +1,365 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Check, CircleDot, ListChecks, Mic, MicOff, Paperclip, Plus, Send, SkipForward, Sparkles, Star } from 'lucide-react'
+import { useMissionStore } from '../store/useMissionStore'
+import { useNav } from '../nav'
+import { interviewProgress, topicDef } from '../lib/interviewEngine'
+import { topicTitle } from '../lib/questionSets'
+import { faNum } from '../lib/fa'
+import { KindBadge, Meter, Pill, ScoreGauge, SeverityDot, TOPIC_ICON } from '../components/ui'
+import { EvidencePanel } from '../components/EvidencePanel'
+import { FindingEditor } from '../components/FindingEditor'
+import { useSpeech } from '../components/useSpeech'
+import { planTopics, type MissionContext } from '../lib/questionSets'
+import type { Finding } from '../types'
+import { liveFindings } from '../lib/reportBuilder'
+import { Modal } from '../../../components/common/Modal'
+
+type Pane = 'chat' | 'ledger' | 'topics'
+
+export function InterviewPage({ id }: { id: string }) {
+  const { go } = useNav()
+  const user = useMissionStore((s) => s.user)
+  const bundle = useMissionStore((s) => s.bundle)
+  const sets = useMissionStore((s) => s.sets)
+  const projects = useMissionStore((s) => s.projects)
+  const ai = useMissionStore((s) => s.ai)
+  const thinking = useMissionStore((s) => s.thinking)
+  const openMission = useMissionStore((s) => s.openMission)
+  const transition = useMissionStore((s) => s.transition)
+  const beginInterview = useMissionStore((s) => s.beginInterview)
+  const answer = useMissionStore((s) => s.answer)
+  const skipTopic = useMissionStore((s) => s.skipTopic)
+  const jumpToTopic = useMissionStore((s) => s.jumpToTopic)
+  const reopenInterview = useMissionStore((s) => s.reopenInterview)
+  const editFinding = useMissionStore((s) => s.editFinding)
+  const addManualFinding = useMissionStore((s) => s.addManualFinding)
+  const removeFinding = useMissionStore((s) => s.removeFinding)
+
+  const [draft, setDraft] = useState('')
+  const [mode, setMode] = useState<'text' | 'voice'>('text')
+  const [interim, setInterim] = useState('')
+  const [pane, setPane] = useState<Pane>('chat')
+  const [editing, setEditing] = useState<Finding | 'new' | null>(null)
+  const [skipping, setSkipping] = useState(false)
+  const [skipReason, setSkipReason] = useState('')
+  const [starting, setStarting] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    openMission(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  const speech = useSpeech((finalChunk, partial) => {
+    if (finalChunk) setDraft((d) => (d ? d.replace(/\s+$/, '') + ' ' : '') + finalChunk.trim())
+    setInterim(partial)
+    setMode('voice')
+  })
+
+  const set = sets[0]
+  const turns = bundle?.turns ?? []
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [turns.length, thinking])
+
+  const state = bundle?.interview?.state ?? null
+  const progress = state ? interviewProgress(state) : null
+
+  const ctx: MissionContext | null = useMemo(() => {
+    if (!bundle) return null
+    const project = projects.find((p) => p.id === bundle.mission.masterProjectId)
+    return { mission: bundle.mission, objectives: bundle.objectives, projectType: project?.projectType ?? '', projectName: bundle.mission.projectName, answers: {}, openFindingKinds: [] }
+  }, [bundle, projects])
+  const mandatory = useMemo(() => (ctx && set ? planTopics(set, ctx).mandatory : []), [ctx, set])
+
+  if (!bundle || bundle.mission.id !== id || !set) return null
+  const m = bundle.mission
+  const isReq = m.requesterId === user?.id
+  const pending = state?.pending ?? null
+  const findings = liveFindings(bundle.findings)
+  const current = state?.current ?? null
+  const canWrite = isReq && (m.status === 'debrief' || m.status === 'revision_requested')
+
+  // --------------------------------------------------------------------------- gates before the chat
+  if (!bundle.interview) {
+    const plan = ctx ? planTopics(set, ctx).plan : []
+    return (
+      <div className="mx-auto flex max-w-2xl flex-col gap-4 p-4 sm:p-8">
+        <button className="ms-btn ms-btn-ghost ms-btn-sm self-start" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> بازگشت</button>
+        <div className="ms-card p-6 text-center">
+          <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)' }}><Sparkles size={26} aria-hidden /></span>
+          <h1 className="text-[20px] font-black leading-9">گزارش‌گیری هوشمند بازدید</h1>
+          <p className="ms-ink2 mx-auto mt-2 max-w-md text-[13px] leading-8">
+            به‌جای پر کردن فرم طولانی، با چند سؤال کوتاه گفت‌وگو می‌کنیم. می‌توانید صحبت کنید یا تایپ کنید. اگر پاسخی ناقص باشد، فقط همان بخش را دوباره می‌پرسم.
+          </p>
+          <div className="ms-card-flat mx-auto mt-4 max-w-md p-4 text-right">
+            <p className="text-[12px] font-extrabold">موضوعاتی که برای این مأموریت پرسیده می‌شود ({faNum(plan.length)}):</p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {plan.map((k) => <li key={k}><Pill tone={mandatory.includes(k) ? 'accent' : 'neutral'}>{mandatory.includes(k) && <Star size={10} aria-hidden />}{topicTitle(set, k)}</Pill></li>)}
+            </ul>
+            <p className="ms-muted mt-2 text-[11px] leading-6">★ موضوع‌های مرتبط با اهداف مأموریت شما — پیش از ارسال گزارش باید کامل شوند.</p>
+          </div>
+          <p className="ms-muted mt-3 text-[11.5px]">تحلیل پاسخ‌ها: {ai.label}</p>
+          {isReq && (m.status === 'approved' || m.status === 'debrief') ? (
+            <button
+              className="ms-btn ms-btn-primary mt-5"
+              disabled={starting}
+              onClick={async () => {
+                setStarting(true)
+                if (m.status === 'approved') {
+                  const ok = await transition('start_debrief')
+                  if (!ok) { setStarting(false); return }
+                }
+                await beginInterview()
+                setStarting(false)
+              }}
+            >
+              <Sparkles size={15} aria-hidden /> {starting ? 'در حال آماده‌سازی…' : 'شروع گفت‌وگو'}
+            </button>
+          ) : (
+            <p className="ms-ink2 mt-5 text-[12.5px]">گزارش‌گیری فقط پس از تأیید مأموریت و توسط بازدیدکننده شروع می‌شود.</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const reopened = bundle.interview.status === 'completed' && m.status === 'revision_requested'
+  const inSummary = bundle.interview.status === 'summary' || (state && state.current === null && !pending)
+
+  const send = async (text?: string) => {
+    const body = (text ?? draft).trim()
+    if (!body || !pending || thinking) return
+    if (speech.listening) speech.stop()
+    setDraft('')
+    setInterim('')
+    const used = mode
+    setMode('text')
+    await answer(body, used)
+    taRef.current?.focus()
+  }
+
+  const topicStateIcon = (k: string) => {
+    const s = state!.topics[k]
+    if (s.state === 'complete') return <Check size={13} style={{ color: 'var(--ms-good)' }} aria-hidden />
+    if (s.state === 'skipped') return <SkipForward size={13} className="ms-muted" aria-hidden />
+    return <CircleDot size={13} style={{ color: current === k ? 'var(--ms-accent)' : 'var(--ms-muted)' }} aria-hidden />
+  }
+
+  const extraTopics = set.topics.filter((t) => !state!.plan.includes(t.key))
+
+  // --------------------------------------------------------------------------- panes
+  const topicsPane = (
+    <div className="flex flex-col gap-1">
+      <div className="mb-2 flex items-center gap-3 px-1">
+        <ScoreGauge value={progress?.percent ?? 0} size={64} neutral />
+        <div>
+          <p className="text-[12.5px] font-extrabold">پیشرفت گفت‌وگو</p>
+          <p className="ms-muted text-[11px] leading-5">{faNum(progress?.done ?? 0)} از {faNum(progress?.total ?? 0)} موضوع</p>
+        </div>
+      </div>
+      {state!.plan.map((k) => {
+        const def = topicDef(set, k)
+        const tp = state!.topics[k]
+        const Icon = TOPIC_ICON[def.icon] ?? ListChecks
+        return (
+          <button key={k} className={`ms-topic ${current === k ? 'is-current' : ''} ${tp.state === 'complete' ? 'is-done' : ''}`} onClick={() => canWrite && current !== k && jumpToTopic(k).then(() => setPane('chat'))} disabled={!canWrite} title={tp.closedReason}>
+            <Icon size={15} aria-hidden />
+            <span className="min-w-0 flex-1 truncate">{def.title}</span>
+            {mandatory.includes(k) && tp.state === 'open' && <Star size={11} style={{ color: 'var(--ms-accent)' }} aria-label="اجباری" />}
+            {topicStateIcon(k)}
+          </button>
+        )
+      })}
+      {canWrite && extraTopics.length > 0 && (
+        <details className="mt-2">
+          <summary className="ms-muted cursor-pointer px-2 py-1 text-[11.5px] font-bold">افزودن موضوع دیگر</summary>
+          <div className="mt-1 flex flex-col gap-1">
+            {extraTopics.map((t) => (
+              <button key={t.key} className="ms-topic" onClick={() => jumpToTopic(t.key).then(() => setPane('chat'))}>
+                <Plus size={14} aria-hidden /> {t.title}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+
+  const ledgerPane = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12.5px] font-extrabold">آنچه تاکنون فهمیدم</p>
+        <Pill tone="accent">{faNum(findings.length)} مورد</Pill>
+      </div>
+      {findings.length === 0 && <p className="ms-muted text-[12px] leading-7">با پاسخ‌های شما، مسئله‌ها، ریسک‌ها، اقدام‌ها، تعهدها و تصمیم‌ها این‌جا ظاهر می‌شوند.</p>}
+      <ul className="flex flex-col gap-2">
+        {[...findings].reverse().map((f) => {
+          const needs = f.kind === 'issue' ? 4 : f.kind === 'risk' ? 3 : f.kind === 'action' || f.kind === 'commitment' ? 2 : 0
+          const have = f.kind === 'issue' ? ['cause', 'impact', 'party', 'newDate'].filter((s) => f.details[s] || (s === 'party' && f.ownerText) || (s === 'newDate' && f.dueDate)).length
+            : f.kind === 'risk' ? ['impact', 'probability', 'mitigation'].filter((s) => f.details[s]).length
+            : needs ? [f.ownerText || f.details.owner, f.dueDate || f.details.due].filter(Boolean).length : 0
+          return (
+            <li key={f.id} className={`ms-ledger-item ms-k-${f.kind}`}>
+              <button className="block w-full text-right" onClick={() => canWrite && setEditing(f)} disabled={!canWrite}>
+                <span className="flex items-center gap-2">
+                  <KindBadge kind={f.kind} />
+                  {(f.kind === 'issue' || f.kind === 'risk') && <SeverityDot severity={f.severity} />}
+                  <span className="ms-muted mr-auto text-[10.5px]">{topicTitle(set, f.topicKey)}</span>
+                </span>
+                <span className="mt-1 block text-[12.5px] font-bold leading-6">{f.title}</span>
+                {needs > 0 && (
+                  <span className="mt-1.5 flex items-center gap-2">
+                    <span className="flex-1"><Meter value={(have / needs) * 100} tone={have === needs ? 'good' : 'warn'} /></span>
+                    <span className="ms-muted text-[10.5px]">{faNum(have)}/{faNum(needs)} اطلاعات</span>
+                  </span>
+                )}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {canWrite && <button className="ms-btn ms-btn-sm" onClick={() => setEditing('new')}><Plus size={13} aria-hidden /> افزودن دستی</button>}
+      {current && canWrite && (
+        <div className="mt-2 border-t pt-3" style={{ borderColor: 'var(--ms-line)' }}>
+          <p className="mb-2 flex items-center gap-1.5 text-[12.5px] font-extrabold"><Paperclip size={14} aria-hidden /> شواهد «{topicTitle(set, current)}»</p>
+          <EvidencePanel missionId={id} kinds={['photo', 'file', 'minutes', 'letter', 'technical', 'note', 'voice']} topicKey={current} compact />
+        </div>
+      )}
+    </div>
+  )
+
+  const chatPane = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="ms-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+        <div className="ms-chat mx-auto max-w-3xl">
+          {turns.map((t) => (
+            <div key={t.id} className={`ms-bubble ${t.role === 'user' ? 'ms-bubble-user' : t.role === 'system' ? 'ms-bubble-system' : `ms-bubble-bot ${t.kind === 'followup' ? 'ms-bubble-follow' : ''}`}`}>
+              {t.role === 'assistant' && t.kind === 'followup' && <span className="ms-muted mb-0.5 block text-[10.5px] font-bold">سؤال تکمیلی</span>}
+              {t.text}
+              {t.role === 'user' && t.inputMode === 'voice' && <Mic size={11} className="ms-muted mr-1.5 inline" aria-label="پاسخ صوتی" />}
+            </div>
+          ))}
+          {thinking && (
+            <div className="ms-bubble ms-bubble-bot" aria-live="polite"><span className="ms-typing" aria-label="در حال تحلیل پاسخ"><span /><span /><span /></span></div>
+          )}
+          {reopened && (
+            <div className="ms-card-flat self-center p-4 text-center">
+              <p className="text-[12.5px] leading-7">مدیر گزارش را برای اصلاح برگرداند{m.managerComment ? `: «${m.managerComment}»` : '.'}</p>
+              <button className="ms-btn ms-btn-primary mt-2" onClick={() => reopenInterview()}>بازگشایی گفت‌وگو و اصلاح</button>
+            </div>
+          )}
+          {inSummary && !reopened && (
+            <div className="ms-card self-center p-5 text-center" style={{ borderColor: 'color-mix(in srgb, var(--ms-good) 45%, transparent)' }}>
+              <p className="text-[14px] font-extrabold">گفت‌وگو کامل شد 🎉</p>
+              <p className="ms-ink2 mt-1 text-[12.5px] leading-7">همه موضوع‌ها بررسی شد. حالا خلاصه استخراج‌شده را مرور و تأیید کنید.</p>
+              <button className="ms-btn ms-btn-primary mt-3" onClick={() => go({ kind: 'summary', id })}>مرور خلاصه و ارسال گزارش</button>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {canWrite && pending && !inSummary && (
+        <div className="shrink-0 border-t px-3 pb-3 pt-2.5 sm:px-6" style={{ borderColor: 'var(--ms-line)', background: 'color-mix(in srgb, var(--ms-panel) 92%, transparent)' }}>
+          <div className="mx-auto max-w-3xl">
+            {pending.hint && <p className="ms-muted mb-1.5 text-[11.5px] leading-6">💡 {pending.hint}</p>}
+            {pending.quick && pending.quick.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {pending.quick.map((q) => (
+                  <button key={q} className="ms-chip" style={{ fontSize: 11.5, padding: '4px 11px' }} disabled={thinking} onClick={() => send(q)}>{q}</button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <div className="relative flex-1">
+                <textarea
+                  ref={taRef}
+                  className="ms-textarea"
+                  style={{ minHeight: 52, maxHeight: 160, paddingLeft: 12 }}
+                  rows={2}
+                  placeholder={speech.listening ? 'در حال گوش دادن… صحبت کنید' : 'پاسخ خود را بنویسید یا با میکروفون بگویید…'}
+                  value={draft + (interim ? ' ' + interim : '')}
+                  onChange={(e) => { setDraft(e.target.value); setInterim('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
+                  aria-label="پاسخ شما"
+                  disabled={thinking}
+                />
+              </div>
+              <button className={`ms-btn ms-btn-icon ${speech.listening ? 'ms-mic-live' : ''}`} onClick={() => (speech.listening ? speech.stop() : speech.start())} disabled={!speech.supported || thinking} aria-label={speech.listening ? 'توقف ضبط' : 'پاسخ صوتی'} title={speech.supported ? 'پاسخ صوتی (فارسی)' : 'مرورگر شما تبدیل گفتار را پشتیبانی نمی‌کند؛ از دیکته صفحه‌کلید استفاده کنید'}>
+                {speech.supported ? <Mic size={18} aria-hidden /> : <MicOff size={18} aria-hidden />}
+              </button>
+              <button className="ms-btn ms-btn-primary ms-btn-icon" onClick={() => send()} disabled={!draft.trim() || thinking} aria-label="ارسال پاسخ">
+                <Send size={17} aria-hidden style={{ transform: 'scaleX(-1)' }} />
+              </button>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between text-[11px]">
+              <span className="ms-muted">{speech.error || (speech.supported ? 'برای ارسال: دکمه ارسال یا Ctrl+Enter' : 'میکروفون در این مرورگر در دسترس نیست')}</span>
+              <button className="ms-muted underline-offset-2 hover:underline" onClick={() => setSkipping(true)}>این موضوع را رد کن</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-5" style={{ borderColor: 'var(--ms-line)' }}>
+        <div className="flex min-w-0 items-center gap-2">
+          <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> خروج</button>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[13px] font-extrabold">{m.projectName}</p>
+            <p className="ms-muted truncate text-[10.5px]">{m.code} · ذخیره خودکار</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="hidden w-40 sm:block"><Meter value={progress?.percent ?? 0} /></div>
+          <span className="text-[12px] font-black">{faNum(progress?.percent ?? 0)}٪</span>
+          {(state!.current === null || inSummary) && <button className="ms-btn ms-btn-primary ms-btn-sm" onClick={() => go({ kind: 'summary', id })}>مرور و ارسال</button>}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 gap-1 border-b px-3 py-1.5 lg:hidden" style={{ borderColor: 'var(--ms-line)' }} role="tablist">
+        {([['chat', 'گفت‌وگو'], ['ledger', `یافته‌ها (${faNum(findings.length)})`], ['topics', 'موضوع‌ها']] as [Pane, string][]).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={pane === k} className={`ms-chip flex-1 justify-center ${pane === k ? 'is-on' : ''}`} onClick={() => setPane(k)}>{l}</button>
+        ))}
+      </div>
+
+      <div className="flex min-h-0 flex-1">
+        <aside className="ms-scroll hidden w-72 shrink-0 overflow-y-auto border-l p-3 lg:block" style={{ borderColor: 'var(--ms-line)' }} aria-label="موضوع‌ها">{topicsPane}</aside>
+        <div className={`min-h-0 min-w-0 flex-1 flex-col ${pane === 'chat' ? 'flex' : 'hidden'} lg:flex`}>{chatPane}</div>
+        <aside className={`ms-scroll min-h-0 overflow-y-auto p-3 lg:block lg:w-80 lg:shrink-0 lg:border-r ${pane === 'ledger' ? 'block flex-1' : 'hidden'}`} style={{ borderColor: 'var(--ms-line)' }} aria-label="یافته‌ها">{ledgerPane}</aside>
+        <aside className={`ms-scroll min-h-0 overflow-y-auto p-3 lg:hidden ${pane === 'topics' ? 'block flex-1' : 'hidden'}`}>{topicsPane}</aside>
+      </div>
+
+      {editing && (
+        <FindingEditor
+          finding={editing === 'new' ? null : editing}
+          topics={state!.plan.map((k) => ({ key: k, title: topicTitle(set, k) }))}
+          onClose={() => setEditing(null)}
+          onDelete={editing !== 'new' ? () => { removeFinding(editing.id); setEditing(null) } : undefined}
+          onSave={(patch) => {
+            if (editing === 'new') addManualFinding({ kind: patch.kind!, title: patch.title!, topicKey: patch.topicKey ?? current ?? 'issues_risks', severity: patch.severity ?? 'medium', ownerText: patch.ownerText, dueDate: patch.dueDate ?? null, details: patch.details })
+            else editFinding(editing.id, patch)
+            setEditing(null)
+          }}
+        />
+      )}
+
+      {skipping && current && (
+        <Modal title="رد کردن موضوع" subtitle={topicTitle(set, current)} onClose={() => setSkipping(false)} width="max-w-md">
+          <div className="ms-root flex flex-col gap-3" dir="rtl" style={{ background: 'transparent' }}>
+            <p className="ms-ink2 text-[12.5px] leading-7">{mandatory.includes(current) ? 'این موضوع از اهداف مأموریت است؛ دلیل رد کردن را بنویسید.' : 'اگر این موضوع در بازدید مطرح نبود، می‌توانید رد کنید.'}</p>
+            <input className="ms-input" placeholder="دلیل (مثلاً: در این بازدید بررسی نشد)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} aria-label="دلیل" />
+            <div className="flex justify-end gap-2">
+              <button className="ms-btn" onClick={() => setSkipping(false)}>انصراف</button>
+              <button className="ms-btn ms-btn-primary" disabled={mandatory.includes(current) && !skipReason.trim()} onClick={async () => { await skipTopic(skipReason.trim()); setSkipping(false); setSkipReason('') }}>رد کردن</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}

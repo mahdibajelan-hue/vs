@@ -1,0 +1,364 @@
+/* ==========================================================================
+   Mission & Visit Debrief module ("بازدید") — scoped visual identity.
+   Everything lives under .ms-root so nothing leaks into the rest of the app.
+
+   Direction: a site-visit field notebook meets an ops console. Warm amber is the one brand accent
+   (the colour of survey tape / hard hats); the five finding kinds each own a hue that is used for
+   NOTHING ELSE, so a manager reads Issue / Risk / Action / Commitment / Decision at a glance across
+   every screen. Persian digits and Vazirmatn throughout (never the mono .num class: it breaks
+   Persian shaping). Light and dark are both first-class.
+   ========================================================================== */
+
+.ms-root {
+  --ms-bg: #090e18;
+  --ms-bg-2: #0d1422;
+  --ms-panel: #111a2b;
+  --ms-panel-2: #172338;
+  --ms-line: rgba(148, 163, 184, 0.14);
+  --ms-line-2: rgba(148, 163, 184, 0.24);
+  --ms-ink: #e9eff9;
+  --ms-ink-2: #a3b1c8;
+  --ms-muted: #70809a;
+  --ms-accent: #f2a93b;
+  --ms-accent-ink: #1a1204;
+  --ms-accent-soft: rgba(242, 169, 59, 0.14);
+  --ms-rose: #fb7185;
+  --ms-orange: #fb923c;
+  --ms-sky: #38bdf8;
+  --ms-violet: #a78bfa;
+  --ms-emerald: #34d399;
+  --ms-teal: #2dd4bf;
+  --ms-good: #34d399;
+  --ms-warn: #fbbf24;
+  --ms-bad: #fb7185;
+  --ms-shadow: 0 10px 34px -14px rgba(0, 0, 0, 0.65);
+
+  font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+  color: var(--ms-ink);
+  background:
+    radial-gradient(900px 480px at 88% -8%, rgba(242, 169, 59, 0.1), transparent 60%),
+    radial-gradient(700px 420px at -6% 8%, rgba(56, 189, 248, 0.07), transparent 58%),
+    var(--ms-bg);
+}
+
+:root[data-theme='light'] .ms-root {
+  --ms-bg: #eef1f6;
+  --ms-bg-2: #e6eaf1;
+  --ms-panel: #ffffff;
+  --ms-panel-2: #f4f6fa;
+  --ms-line: rgba(15, 23, 42, 0.1);
+  --ms-line-2: rgba(15, 23, 42, 0.18);
+  --ms-ink: #0f172a;
+  --ms-ink-2: #475569;
+  --ms-muted: #64748b;
+  --ms-accent: #c47a05;
+  --ms-accent-ink: #ffffff;
+  --ms-accent-soft: rgba(196, 122, 5, 0.1);
+  --ms-rose: #e11d48;
+  --ms-orange: #ea580c;
+  --ms-sky: #0284c7;
+  --ms-violet: #7c3aed;
+  --ms-emerald: #059669;
+  --ms-teal: #0d9488;
+  --ms-good: #059669;
+  --ms-warn: #b45309;
+  --ms-bad: #e11d48;
+  --ms-shadow: 0 10px 30px -16px rgba(15, 23, 42, 0.25);
+  background:
+    radial-gradient(900px 480px at 88% -8%, rgba(196, 122, 5, 0.08), transparent 60%),
+    radial-gradient(700px 420px at -6% 8%, rgba(2, 132, 199, 0.06), transparent 58%),
+    var(--ms-bg);
+}
+
+.ms-root *,
+.ms-root *::before,
+.ms-root *::after {
+  box-sizing: border-box;
+}
+.ms-root button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.ms-root :focus-visible {
+  outline: 2px solid var(--ms-accent);
+  outline-offset: 2px;
+}
+
+/* ---- finding kinds: one hue each, reserved ------------------------------------------------------ */
+.ms-k-issue { --c: var(--ms-rose); }
+.ms-k-risk { --c: var(--ms-orange); }
+.ms-k-action { --c: var(--ms-sky); }
+.ms-k-commitment { --c: var(--ms-violet); }
+.ms-k-decision { --c: var(--ms-emerald); }
+.ms-k-progress { --c: var(--ms-teal); }
+.ms-k-observation { --c: var(--ms-ink-2); }
+
+/* ---- surfaces ------------------------------------------------------------------------------------ */
+.ms-card {
+  background: var(--ms-panel);
+  border: 1px solid var(--ms-line);
+  border-radius: 18px;
+  box-shadow: var(--ms-shadow);
+}
+.ms-card-flat {
+  background: var(--ms-panel-2);
+  border: 1px solid var(--ms-line);
+  border-radius: 14px;
+}
+.ms-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ms-ink-2);
+  letter-spacing: 0;
+}
+.ms-eyebrow::before {
+  content: '';
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ms-accent);
+}
+.ms-muted { color: var(--ms-muted); }
+.ms-ink2 { color: var(--ms-ink-2); }
+
+/* ---- controls ------------------------------------------------------------------------------------ */
+.ms-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--ms-line-2);
+  background: var(--ms-panel-2);
+  color: var(--ms-ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, opacity 0.15s;
+  white-space: nowrap;
+}
+.ms-btn:hover:not(:disabled) { border-color: var(--ms-accent); }
+.ms-btn:active:not(:disabled) { transform: translateY(1px); }
+.ms-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ms-btn-primary {
+  background: var(--ms-accent);
+  border-color: var(--ms-accent);
+  color: var(--ms-accent-ink);
+  font-weight: 800;
+}
+.ms-btn-primary:hover:not(:disabled) { filter: brightness(1.07); }
+.ms-btn-danger { color: var(--ms-bad); border-color: color-mix(in srgb, var(--ms-bad) 40%, transparent); }
+.ms-btn-ghost { background: transparent; border-color: transparent; color: var(--ms-ink-2); }
+.ms-btn-ghost:hover:not(:disabled) { background: var(--ms-panel-2); border-color: var(--ms-line); }
+.ms-btn-sm { min-height: 32px; padding: 0 11px; font-size: 12px; border-radius: 10px; }
+.ms-btn-icon { min-height: 40px; min-width: 40px; padding: 0; }
+
+.ms-input,
+.ms-select,
+.ms-textarea {
+  width: 100%;
+  background: var(--ms-panel-2);
+  border: 1px solid var(--ms-line-2);
+  border-radius: 12px;
+  color: var(--ms-ink);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 13px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ms-input::placeholder,
+.ms-textarea::placeholder { color: var(--ms-muted); }
+.ms-input:focus,
+.ms-select:focus,
+.ms-textarea:focus {
+  outline: none;
+  border-color: var(--ms-accent);
+  box-shadow: 0 0 0 3px var(--ms-accent-soft);
+}
+.ms-textarea { resize: vertical; min-height: 84px; line-height: 1.9; }
+.ms-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--ms-ink-2); }
+.ms-hint { margin-top: 5px; font-size: 11.5px; color: var(--ms-muted); line-height: 1.7; }
+
+/* ---- pills & chips ------------------------------------------------------------------------------- */
+.ms-pill {
+  --pc: var(--ms-ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--pc) 80%, var(--ms-ink));
+  background: color-mix(in srgb, var(--pc) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pc) 28%, transparent);
+  white-space: nowrap;
+}
+.ms-pill-good { --pc: var(--ms-good); }
+.ms-pill-warn { --pc: var(--ms-warn); }
+.ms-pill-bad { --pc: var(--ms-bad); }
+.ms-pill-info { --pc: var(--ms-sky); }
+.ms-pill-accent { --pc: var(--ms-accent); }
+.ms-pill-kind { --pc: var(--c); }
+
+.ms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ms-line-2);
+  background: transparent;
+  color: var(--ms-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.ms-chip:hover { border-color: var(--ms-accent); color: var(--ms-ink); }
+.ms-chip[aria-pressed='true'],
+.ms-chip.is-on { background: var(--ms-accent-soft); border-color: var(--ms-accent); color: var(--ms-ink); }
+
+/* ---- workflow stepper --------------------------------------------------------------------------- */
+.ms-steps { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 2px 2px 6px; }
+.ms-step { display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 92px; }
+.ms-step-dot {
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800;
+  border: 2px solid var(--ms-line-2); color: var(--ms-muted); background: var(--ms-panel);
+}
+.ms-step.is-done .ms-step-dot { background: var(--ms-good); border-color: var(--ms-good); color: #04130c; }
+.ms-step.is-now .ms-step-dot { border-color: var(--ms-accent); color: var(--ms-accent); box-shadow: 0 0 0 4px var(--ms-accent-soft); }
+.ms-step-label { font-size: 11px; font-weight: 700; color: var(--ms-muted); line-height: 1.5; }
+.ms-step.is-done .ms-step-label, .ms-step.is-now .ms-step-label { color: var(--ms-ink); }
+.ms-step-bar { flex: 1 1 16px; height: 2px; background: var(--ms-line-2); margin: 0 6px; min-width: 12px; }
+.ms-step.is-done + .ms-step-bar, .ms-step-bar.is-done { background: var(--ms-good); }
+
+/* ---- interview ----------------------------------------------------------------------------------- */
+.ms-chat { display: flex; flex-direction: column; gap: 14px; }
+.ms-bubble {
+  max-width: min(88%, 620px);
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 2;
+  animation: ms-rise 0.28s ease both;
+  word-break: break-word;
+}
+.ms-bubble-bot {
+  align-self: flex-start;
+  background: var(--ms-panel-2);
+  border: 1px solid var(--ms-line);
+  border-top-right-radius: 5px;
+}
+.ms-bubble-user {
+  align-self: flex-end;
+  background: var(--ms-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--ms-accent) 38%, transparent);
+  border-top-left-radius: 5px;
+}
+.ms-bubble-system {
+  align-self: center;
+  max-width: 94%;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ms-ink-2);
+  background: transparent;
+  border: 1px dashed var(--ms-line-2);
+  line-height: 1.9;
+  text-align: center;
+}
+.ms-bubble-follow { border-right: 3px solid var(--ms-accent); }
+@keyframes ms-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ms-pop { 0% { opacity: 0; transform: scale(0.92) translateY(6px); } 60% { transform: scale(1.02); } 100% { opacity: 1; transform: none; } }
+@keyframes ms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes ms-mic { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ms-bad) 55%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+.ms-typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ms-ink-2); margin: 0 2px; animation: ms-pulse 1s infinite; }
+.ms-typing span:nth-child(2) { animation-delay: 0.15s; }
+.ms-typing span:nth-child(3) { animation-delay: 0.3s; }
+.ms-mic-live { animation: ms-mic 1.2s infinite; background: var(--ms-bad) !important; border-color: var(--ms-bad) !important; color: #fff !important; }
+
+.ms-ledger-item {
+  position: relative;
+  padding: 10px 12px 10px 12px;
+  border-radius: 12px;
+  background: var(--ms-panel-2);
+  border: 1px solid var(--ms-line);
+  border-right: 3px solid var(--c, var(--ms-line-2));
+  animation: ms-pop 0.4s ease both;
+}
+
+.ms-topic {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 11px; border-radius: 12px; border: 1px solid transparent;
+  background: transparent; color: var(--ms-ink-2); text-align: right; font-size: 12.5px; font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ms-topic:hover { background: var(--ms-panel-2); }
+.ms-topic.is-current { background: var(--ms-accent-soft); border-color: color-mix(in srgb, var(--ms-accent) 45%, transparent); color: var(--ms-ink); }
+.ms-topic.is-done { color: var(--ms-ink); }
+
+/* ---- bars ---------------------------------------------------------------------------------------- */
+.ms-bar { height: 8px; border-radius: 999px; background: var(--ms-panel-2); border: 1px solid var(--ms-line); overflow: hidden; }
+.ms-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--ms-accent); transition: width 0.4s ease; }
+
+/* ---- tables -------------------------------------------------------------------------------------- */
+.ms-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.ms-table th { text-align: right; font-size: 11px; font-weight: 700; color: var(--ms-muted); padding: 8px 12px; border-bottom: 1px solid var(--ms-line); white-space: nowrap; }
+.ms-table td { padding: 11px 12px; border-bottom: 1px solid var(--ms-line); vertical-align: middle; }
+.ms-table tr:last-child td { border-bottom: none; }
+.ms-table tbody tr.is-click { cursor: pointer; transition: background 0.12s; }
+.ms-table tbody tr.is-click:hover { background: var(--ms-panel-2); }
+
+/* ---- official report (paper) -------------------------------------------------------------------- */
+.ms-paper {
+  background: #fdfcf8;
+  color: #1c1917;
+  border-radius: 6px;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+  padding: 44px 48px;
+  line-height: 2;
+}
+.ms-paper h2 { font-size: 15px; font-weight: 800; margin: 26px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #1c1917; color: #1c1917; }
+.ms-paper p { margin: 0 0 8px; font-size: 13.5px; color: #292524; }
+.ms-paper ul { margin: 0; padding: 0 20px 0 0; }
+.ms-paper li { font-size: 13px; color: #292524; margin-bottom: 4px; }
+.ms-paper .ms-paper-k { font-size: 11px; color: #78716c; }
+@media (max-width: 640px) { .ms-paper { padding: 26px 20px; } }
+@media print {
+  .ms-no-print { display: none !important; }
+  .ms-root { background: #fff !important; height: auto !important; overflow: visible !important; }
+  .ms-paper { box-shadow: none; padding: 0; }
+}
+
+/* ---- score gauge -------------------------------------------------------------------------------- */
+.ms-ring-track { stroke: var(--ms-line-2); }
+
+/* ---- scroll area -------------------------------------------------------------------------------- */
+.ms-scroll { scrollbar-width: thin; }
+
+/* ---- bottom nav (mobile) ------------------------------------------------------------------------ */
+.ms-bottom-nav {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 40;
+  display: flex; gap: 2px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--ms-panel) 94%, transparent); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--ms-line);
+}
+.ms-bottom-nav button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px;
+  border-radius: 12px; border: none; background: transparent; color: var(--ms-muted); font-size: 10.5px; font-weight: 700;
+}
+.ms-bottom-nav button.is-on { color: var(--ms-accent); background: var(--ms-accent-soft); }
+@media (min-width: 768px) { .ms-bottom-nav { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-bubble, .ms-ledger-item, .ms-typing span, .ms-mic-live { animation: none; }
+  .ms-bar > i { transition: none; }
+}

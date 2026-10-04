@@ -7,7 +7,9 @@ import type { CurrentUser, MissionDraft, MissionRepo, PortfolioData } from './ty
  * In-memory MissionRepo: same rules as the SQL (ms_transition, manager-only transfer) so the UI behaves
  * identically, with no backend. Used for demos and for rendering/testing the module offline.
  */
-export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[]; projects: ProjectRef[] }): MissionRepo & { _debug: { missions: Map<string, Mission> } } {
+export type MemoryRepo = MissionRepo & { forUser: (user: CurrentUser) => MemoryRepo }
+
+export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[]; projects: ProjectRef[] }): MemoryRepo {
   const missions = new Map<string, Mission>()
   const objectives = new Map<string, Objective>()
   const findings = new Map<string, Finding>()
@@ -21,9 +23,8 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
   const personName = (id: string | null) => opts.people.find((p) => p.id === id)?.name ?? ''
   const projectName = (id: string) => opts.projects.find((p) => p.id === id)?.name ?? '—'
   const now = () => new Date().toISOString()
-  const me = opts.user
 
-  function logEvent(missionId: string, event: string, comment = '', actorId: string | null = me.id) {
+  function logEvent(missionId: string, event: string, comment = '', actorId: string | null = null) {
     const list = events.get(missionId) ?? []
     const e: MissionEvent = { id: uid(), missionId, actorId, actorName: personName(actorId) || 'سیستم', event, comment, detail: {}, createdAt: now() }
     list.push(e)
@@ -63,8 +64,9 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     }
   }
 
-  const repo: MissionRepo & { _debug: { missions: Map<string, Mission> } } = {
-    _debug: { missions },
+  function build(me: CurrentUser): MemoryRepo {
+  const repo: MemoryRepo = {
+    forUser: (u) => build(u),
     async loadCurrentUser() {
       return me
     },
@@ -115,7 +117,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
         const oid = uid()
         objectives.set(oid, { id: oid, missionId: id, position: i, title: o.title, measure: o.measure, topicKey: o.topicKey, priority: o.priority, status: 'pending', resultNote: '' })
       })
-      logEvent(id, 'created')
+      logEvent(id, 'created', '', me.id)
       return { ...m }
     },
     async updateMission(id, draft, objs) {
@@ -188,11 +190,11 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       missions.set(id, upd)
       const last = list[list.length - 1]
       if (last) {
-        if (action === 'submit_report') last.status = 'submitted', last.submittedAt = t
+        if (action === 'submit_report') { last.status = 'submitted'; last.submittedAt = t }
         if (action === 'return_report') last.status = 'returned'
         if (action === 'approve_report') last.status = 'approved'
       }
-      logEvent(id, action, comment)
+      logEvent(id, action, comment, me.id)
     },
 
     async saveInterview(missionId, patch) {
@@ -276,7 +278,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       return rep
     },
     async addEvent(missionId, event, comment = '') {
-      return logEvent(missionId, event, comment)
+      return logEvent(missionId, event, comment, me.id)
     },
 
     async transferFinding(findingId, target) {
@@ -287,7 +289,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       const id = uid()
       findings.set(findingId, { ...f, approval: 'approved', transferredTo: target, transferredId: id, transferredAt: now() })
       linkedMap.set(findingId, { findingId, target, linkedId: id, linkedCode: target === 'risk' ? `R-${String(10 + linkedMap.size).padStart(3, '0')}` : id.slice(0, 8).toUpperCase(), linkedStatus: target === 'action' ? 'not_started' : 'open' })
-      logEvent(f.missionId, `transfer_${target}`)
+      logEvent(f.missionId, `transfer_${target}`, '', me.id)
       return { target, id }
     },
     async linkedStatus(ids) {
@@ -295,4 +297,6 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     },
   }
   return repo
+  }
+  return build(opts.user)
 }

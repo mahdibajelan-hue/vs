@@ -320,7 +320,11 @@ export function estimateSeverity(norm: string, topicKey: string, kind: FindingKi
   if (/(بحرانی|فوت|مصدوم|توقف کامل|متوقف شده|انفجار|آتش سوزی|آتش)/.test(withoutCriticalPath)) level = 3
   const delay = extractDelayDays(norm)
   if (delay != null) level = Math.max(level, delay >= 180 ? 3 : delay >= 30 ? 2 : delay >= 7 ? 1 : level)
-  if (topicKey === 'hse' && kind === 'issue' && /(حادثه|مصدوم|آسیب|سقوط|ریزش|نشتی|عدم رعایت|بدون)/.test(norm)) level = Math.max(level, 2)
+  if (topicKey === 'hse' && kind === 'issue') {
+    // A safety deviation is never trivial, but a stated "minor" lapse stays medium; real harm or a fall is high.
+    if (/(حادثه|مصدوم|آسیب|سقوط|ریزش|نشتی|شبه حادثه)/.test(norm)) level = Math.max(level, 2)
+    else level = Math.max(level, 1)
+  }
   return (['low', 'medium', 'high', 'critical'] as const)[Math.min(3, level)]
 }
 

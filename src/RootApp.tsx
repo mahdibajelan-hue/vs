@@ -17,6 +17,7 @@ import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
 import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
+import { MissionsApp } from './modules/missions/MissionsApp'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
@@ -133,6 +134,8 @@ export function RootApp() {
     <CompetencyApp onExitToHub={exitToHub} />
   ) : activeModule === 'estimator' ? (
     <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'missions' ? (
+    <MissionsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (
     <LifecycleApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pipelinedigitaltwin' ? (

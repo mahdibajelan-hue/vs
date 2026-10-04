@@ -10,6 +10,7 @@ export type ModuleKeyRef =
   | 'competency'
   | 'estimator'
   | 'lifecycle'
+  | 'missions'
   | 'admin'
 
 export interface RastaModule {
