@@ -221,7 +221,9 @@ export function PublicResultsPage({ token }: { token: string }) {
           </div>
 
           <div className="cred-band">
-            <PublicPhoto path={row.photo_url} />
+            <div className="cred-left-col">
+              <PublicPhoto path={row.photo_url} />
+            </div>
             <div className="cred-band-name">
               <p className="text-[22px] font-black leading-8 text-stone-900">{row.candidate_name}</p>
               {row.candidate_position && <p className="text-[12.5px] font-semibold leading-5 text-stone-600">{row.candidate_position}</p>}
@@ -240,8 +242,10 @@ export function PublicResultsPage({ token }: { token: string }) {
           </div>
 
           <div className="cred-details">
-            <div className="cred-qr-box">
-              <QRCodeSVG value={shareUrl} size={84} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+            <div className="cred-left-col">
+              <div className="cred-qr-box">
+                <QRCodeSVG value={shareUrl} size={96} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+              </div>
             </div>
             <div className="cred-details-text">
               <div className="cred-meta-row">

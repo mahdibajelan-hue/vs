@@ -47,11 +47,16 @@
   z-index: 1;
   border-radius: 30px;
   overflow: hidden;
-  background: linear-gradient(160deg, #fffdf8 0%, #faf5e8 100%);
-  border: 1px solid #efe4bd;
+  background: linear-gradient(160deg, #fffefb 0%, #fdf9ef 55%, #faf4e3 100%);
+  border: 1px solid #f3e9c8;
+  /* Embossed rim: a bright top/left bevel and a darker bottom/right bevel (inset), an inner hairline
+   * just inside the edge, and a soft drop shadow — reads as a raised, thick plastic card. */
   box-shadow:
-    0 24px 60px -28px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.7) inset;
+    inset 3px 3px 0 rgba(255, 255, 255, 0.95),
+    inset -3px -4px 0 rgba(196, 170, 98, 0.4),
+    inset 0 0 0 7px rgba(255, 255, 255, 0.35),
+    0 2px 0 #fff4cf,
+    0 26px 50px -22px rgba(0, 0, 0, 0.65);
   padding: 1.4rem 1.5rem 1.3rem;
   font-family: 'Vazirmatn', Tahoma, sans-serif;
 }
@@ -114,10 +119,10 @@
 
 .cred-photo {
   position: relative;
-  width: 92px;
-  height: 92px;
+  width: 112px;
+  height: 112px;
   flex-shrink: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   overflow: hidden;
   background: #f1ece0;
   border: 2px solid #d9c98a;
@@ -187,6 +192,14 @@
   display: flex;
   align-items: center;
   gap: 0.9rem;
+}
+
+/* Photo and QR each sit in this same-width column, centred, so their centres share one vertical axis. */
+.cred-left-col {
+  width: 120px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
 }
 
 .cred-qr-box {
