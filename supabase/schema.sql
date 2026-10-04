@@ -14588,3 +14588,489 @@ $$;
 
 revoke execute on function comp_public_competency_scores_get(uuid) from public;
 grant execute on function comp_public_competency_scores_get(uuid) to anon, authenticated;
+-- ---------------------------------------------------------------- Section 61: Mission & Visit Debrief module
+--
+-- "مأموریت و بازدید پروژه": request a mission -> approval -> guided AI/rule-based debrief interview ->
+-- evidence -> structured management report with a quality score -> manager review -> Ready for Mission
+-- Claim. Deliberately NOT a second Issue/Risk system: it is a Discovery & Intelligence layer.
+-- Issues and Risks found in an interview are only PROPOSED here (ms_findings.kind = 'issue'/'risk');
+-- when a manager approves one, ms_transfer_finding() writes it into the real im_issues / rm_risks
+-- through the existing rasta_project_mappings (same SECURITY DEFINER pattern as
+-- rasta_convert_action_to_issue), stores the source-of-truth id back on the finding, and
+-- ms_linked_status() reads the live status from the owning system so it is never copied or diverged.
+-- Actions go to rasta_actions (the Reporting module's existing action store).
+
+insert into rasta_modules (key, label_fa) values
+  ('missions', 'مأموریت و بازدید پروژه')
+on conflict (key) do nothing;
+
+insert into rasta_permissions (module_key, action)
+select m.key, a.action
+from rasta_modules m
+cross join (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+where m.key = 'missions'
+on conflict (module_key, action) do nothing;
+
+alter table im_issues drop constraint if exists im_issues_source_check;
+alter table im_issues add constraint im_issues_source_check check (source in ('manual', 'lifecycle_action', 'mission_debrief'));
+
+alter table rasta_actions drop constraint if exists rasta_actions_source_check;
+alter table rasta_actions add constraint rasta_actions_source_check
+  check (source in ('risk', 'issue', 'decision', 'management_report', 'lifecycle', 'milestone', 'gate', 'mission_debrief'));
+
+create sequence if not exists ms_mission_seq start 1001;
+
+-- Managers: system admins plus anyone granted missions/approve through the RBAC framework.
+create or replace function ms_is_manager()
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or rasta_has_permission(auth.uid(), 'missions', 'approve') or rasta_has_permission(auth.uid(), 'missions', 'review');
+$$;
+
+create table if not exists ms_missions (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique default ('MIS-' || lpad(nextval('ms_mission_seq')::text, 5, '0')),
+  requester_id uuid not null references profiles (id) default auth.uid(),
+  requester_position text not null default '',
+  master_project_id uuid not null references master_projects (id),
+  destination text not null default '',
+  location_detail text not null default '',
+  start_date date not null,
+  end_date date not null,
+  visit_type text not null default 'progress_review' check (visit_type in (
+    'progress_review', 'engineering', 'procurement_expediting', 'construction_supervision',
+    'hse_audit', 'quality_audit', 'coordination_meeting', 'client_meeting', 'commissioning', 'other')),
+  visitees jsonb not null default '[]'::jsonb,
+  topics_of_interest text not null default '',
+  expected_output text not null default '',
+  approver_id uuid references profiles (id),
+  status text not null default 'draft' check (status in (
+    'draft', 'pending_approval', 'returned', 'rejected', 'approved', 'debrief', 'report_review',
+    'revision_requested', 'ready_for_claim', 'claimed', 'cancelled')),
+  manager_comment text not null default '',
+  quality_score numeric,
+  submitted_at timestamptz,
+  approved_at timestamptz,
+  debrief_started_at timestamptz,
+  report_submitted_at timestamptz,
+  final_approved_at timestamptz,
+  claimed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (end_date >= start_date)
+);
+create index if not exists idx_ms_missions_project on ms_missions (master_project_id);
+create index if not exists idx_ms_missions_requester on ms_missions (requester_id);
+create index if not exists idx_ms_missions_status on ms_missions (status);
+
+create or replace function ms_can_view(p_mission_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from ms_missions m
+    where m.id = p_mission_id
+      and (m.requester_id = auth.uid() or m.approver_id = auth.uid() or ms_is_manager())
+  );
+$$;
+
+-- Requesters edit their own mission's working data only while it is open for work; managers any time.
+create or replace function ms_can_write(p_mission_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from ms_missions m
+    where m.id = p_mission_id
+      and (ms_is_manager()
+           or (m.requester_id = auth.uid()
+               and m.status in ('draft', 'returned', 'approved', 'debrief', 'revision_requested')))
+  );
+$$;
+
+alter table ms_missions enable row level security;
+drop policy if exists "ms_missions_select" on ms_missions;
+create policy "ms_missions_select" on ms_missions for select
+  using (requester_id = auth.uid() or approver_id = auth.uid() or ms_is_manager());
+drop policy if exists "ms_missions_insert" on ms_missions;
+create policy "ms_missions_insert" on ms_missions for insert
+  with check (auth.uid() is not null and requester_id = auth.uid() and status = 'draft');
+-- Status is changed ONLY through ms_transition(); a direct update may edit the request's content
+-- while it is a draft/returned request (checked by the trigger below).
+drop policy if exists "ms_missions_update" on ms_missions;
+create policy "ms_missions_update" on ms_missions for update
+  using (requester_id = auth.uid() or ms_is_manager());
+drop policy if exists "ms_missions_delete" on ms_missions;
+create policy "ms_missions_delete" on ms_missions for delete
+  using ((requester_id = auth.uid() and status = 'draft') or is_admin_user());
+
+create or replace function ms_guard_mission_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if current_setting('ms.transition', true) = 'on' then
+    new.updated_at := now();
+    return new;
+  end if;
+  if new.status is distinct from old.status
+     or new.approved_at is distinct from old.approved_at
+     or new.final_approved_at is distinct from old.final_approved_at
+     or new.claimed_at is distinct from old.claimed_at then
+    raise exception 'status_change_via_transition_only';
+  end if;
+  if not ms_is_manager() then
+    if new.requester_id is distinct from old.requester_id then raise exception 'forbidden'; end if;
+    if old.status not in ('draft', 'returned') and (
+         new.master_project_id is distinct from old.master_project_id
+         or new.start_date is distinct from old.start_date or new.end_date is distinct from old.end_date
+         or new.visit_type is distinct from old.visit_type) then
+      raise exception 'request_locked';
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+drop trigger if exists trg_ms_guard_mission_update on ms_missions;
+create trigger trg_ms_guard_mission_update before update on ms_missions
+  for each row execute function ms_guard_mission_update();
+
+create table if not exists ms_objectives (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  position smallint not null default 0,
+  title text not null,
+  measure text not null default '',
+  topic_key text not null default '',
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
+  status text not null default 'pending' check (status in ('pending', 'achieved', 'partial', 'not_achieved', 'follow_up')),
+  result_note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_ms_objectives_mission on ms_objectives (mission_id);
+
+create table if not exists ms_interviews (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null unique references ms_missions (id) on delete cascade,
+  status text not null default 'active' check (status in ('active', 'summary', 'completed')),
+  state jsonb not null default '{}'::jsonb,
+  provider text not null default 'rules',
+  summary_confirmed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists ms_turns (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  seq integer not null,
+  topic_key text not null default '',
+  role text not null check (role in ('assistant', 'user', 'system')),
+  kind text not null default 'main' check (kind in ('main', 'followup', 'system', 'answer')),
+  text text not null default '',
+  input_mode text not null default 'text' check (input_mode in ('text', 'voice')),
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (mission_id, seq)
+);
+
+create table if not exists ms_findings (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  kind text not null check (kind in ('issue', 'risk', 'action', 'commitment', 'decision', 'progress', 'observation')),
+  topic_key text not null default '',
+  title text not null,
+  description text not null default '',
+  details jsonb not null default '{}'::jsonb,
+  severity text not null default 'medium' check (severity in ('low', 'medium', 'high', 'critical')),
+  owner_text text not null default '',
+  owner_id uuid references profiles (id),
+  due_date date,
+  objective_id uuid references ms_objectives (id) on delete set null,
+  confidence numeric not null default 0.6,
+  user_confirmed boolean not null default false,
+  approval text not null default 'proposed' check (approval in ('proposed', 'approved', 'rejected')),
+  manager_note text not null default '',
+  transferred_to text check (transferred_to in ('issue', 'risk', 'action')),
+  transferred_id uuid,
+  transferred_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_ms_findings_mission on ms_findings (mission_id);
+create index if not exists idx_ms_findings_open on ms_findings (kind, approval);
+
+create or replace function ms_guard_finding_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if current_setting('ms.transition', true) <> 'on' and not ms_is_manager() then
+    if new.approval is distinct from old.approval or new.transferred_to is distinct from old.transferred_to
+       or new.transferred_id is distinct from old.transferred_id or new.manager_note is distinct from old.manager_note then
+      raise exception 'manager_only';
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+drop trigger if exists trg_ms_guard_finding_update on ms_findings;
+create trigger trg_ms_guard_finding_update before update on ms_findings
+  for each row execute function ms_guard_finding_update();
+
+create table if not exists ms_evidence (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  finding_id uuid references ms_findings (id) on delete set null,
+  objective_id uuid references ms_objectives (id) on delete set null,
+  topic_key text not null default '',
+  kind text not null default 'file' check (kind in ('photo', 'file', 'minutes', 'letter', 'technical', 'note', 'voice')),
+  title text not null default '',
+  note text not null default '',
+  file_path text,
+  mime text not null default '',
+  size_bytes integer not null default 0,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_ms_evidence_mission on ms_evidence (mission_id);
+
+create table if not exists ms_reports (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  version integer not null default 1,
+  status text not null default 'draft' check (status in ('draft', 'submitted', 'approved', 'returned')),
+  content jsonb not null default '{}'::jsonb,
+  quality_score numeric,
+  quality_breakdown jsonb not null default '[]'::jsonb,
+  generated_by text not null default 'rules',
+  created_at timestamptz not null default now(),
+  submitted_at timestamptz,
+  unique (mission_id, version)
+);
+
+create table if not exists ms_events (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  actor_id uuid references profiles (id) default auth.uid(),
+  event text not null,
+  comment text not null default '',
+  detail jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_ms_events_mission on ms_events (mission_id, created_at);
+
+-- Data-driven Question Engine definitions: the engine ships built-in defaults and overlays any active
+-- row here by key, so question sets/logic can be extended without touching application code.
+create table if not exists ms_question_sets (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  title text not null,
+  definition jsonb not null,
+  is_active boolean not null default true,
+  version integer not null default 1,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['ms_objectives', 'ms_interviews', 'ms_question_sets'] loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
+  end loop;
+  foreach t in array array['ms_objectives', 'ms_interviews', 'ms_turns', 'ms_findings', 'ms_evidence', 'ms_reports', 'ms_events'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_select', t);
+    execute format('create policy %I on %I for select using (ms_can_view(mission_id))', t || '_select', t);
+    execute format('drop policy if exists %I on %I', t || '_insert', t);
+    execute format('create policy %I on %I for insert with check (ms_can_write(mission_id))', t || '_insert', t);
+    execute format('drop policy if exists %I on %I', t || '_update', t);
+    execute format('create policy %I on %I for update using (ms_can_write(mission_id))', t || '_update', t);
+    execute format('drop policy if exists %I on %I', t || '_delete', t);
+    execute format('create policy %I on %I for delete using (ms_can_write(mission_id))', t || '_delete', t);
+  end loop;
+end $$;
+
+alter table ms_question_sets enable row level security;
+drop policy if exists "ms_question_sets_select" on ms_question_sets;
+create policy "ms_question_sets_select" on ms_question_sets for select using (auth.uid() is not null);
+drop policy if exists "ms_question_sets_write" on ms_question_sets;
+create policy "ms_question_sets_write" on ms_question_sets for all using (is_admin_user()) with check (is_admin_user());
+
+-- Workflow state machine. The ONLY way ms_missions.status changes; checks who may do what and logs
+-- every step to ms_events (the timeline). Returns the new status.
+create or replace function ms_transition(p_mission_id uuid, p_action text, p_comment text default '')
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  m ms_missions%rowtype;
+  v_new text;
+  v_is_req boolean;
+  v_is_mgr boolean;
+begin
+  select * into m from ms_missions where id = p_mission_id for update;
+  if not found then raise exception 'mission_not_found'; end if;
+  v_is_req := m.requester_id = auth.uid();
+  v_is_mgr := ms_is_manager() or m.approver_id = auth.uid();
+  if not (v_is_req or v_is_mgr) then raise exception 'forbidden'; end if;
+
+  if p_action = 'submit_request' and v_is_req and m.status in ('draft', 'returned') then
+    if not exists (select 1 from ms_objectives where mission_id = m.id) then raise exception 'objectives_required'; end if;
+    v_new := 'pending_approval';
+  elsif p_action = 'approve_request' and v_is_mgr and m.status = 'pending_approval' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'approved';
+  elsif p_action = 'return_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'returned';
+  elsif p_action = 'reject_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'rejected';
+  elsif p_action = 'start_debrief' and v_is_req and m.status = 'approved' then v_new := 'debrief';
+  elsif p_action = 'submit_report' and v_is_req and m.status in ('debrief', 'revision_requested') then
+    if not exists (select 1 from ms_reports where mission_id = m.id) then raise exception 'report_required'; end if;
+    v_new := 'report_review';
+  elsif p_action = 'return_report' and v_is_mgr and m.status = 'report_review' then v_new := 'revision_requested';
+  elsif p_action = 'approve_report' and v_is_mgr and m.status = 'report_review' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'ready_for_claim';
+  elsif p_action = 'mark_claimed' and v_is_req and m.status = 'ready_for_claim' then v_new := 'claimed';
+  elsif p_action = 'cancel' and (v_is_req or v_is_mgr) and m.status in ('draft', 'pending_approval', 'returned', 'approved') then v_new := 'cancelled';
+  else
+    raise exception 'invalid_transition';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_missions set
+    status = v_new,
+    manager_comment = case when p_action in ('approve_request', 'return_request', 'reject_request', 'return_report', 'approve_report') then coalesce(p_comment, '') else manager_comment end,
+    submitted_at = case when p_action = 'submit_request' then now() else submitted_at end,
+    approved_at = case when p_action = 'approve_request' then now() else approved_at end,
+    approver_id = case when p_action = 'approve_request' and approver_id is null then auth.uid() else approver_id end,
+    debrief_started_at = case when p_action = 'start_debrief' then now() else debrief_started_at end,
+    report_submitted_at = case when p_action = 'submit_report' then now() else report_submitted_at end,
+    final_approved_at = case when p_action = 'approve_report' then now() else final_approved_at end,
+    claimed_at = case when p_action = 'mark_claimed' then now() else claimed_at end
+  where id = m.id;
+
+  if p_action = 'submit_report' then
+    update ms_reports set status = 'submitted', submitted_at = now()
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'return_report' then
+    update ms_reports set status = 'returned'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'approve_report' then
+    update ms_reports set status = 'approved'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  end if;
+
+  insert into ms_events (mission_id, actor_id, event, comment, detail)
+  values (m.id, auth.uid(), p_action, coalesce(p_comment, ''), jsonb_build_object('from', m.status, 'to', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return v_new;
+end;
+$$;
+revoke execute on function ms_transition(uuid, text, text) from public;
+grant execute on function ms_transition(uuid, text, text) to authenticated;
+
+-- Approve a finding and hand it to the system of record. issue -> im_issues, risk -> rm_risks (both via
+-- the confirmed rasta_project_mappings), action/commitment/decision follow-up -> rasta_actions.
+-- Manager only. Stores the SoT id on the finding; never duplicates lifecycle in this module.
+create or replace function ms_transfer_finding(p_finding_id uuid, p_target text, p_params jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  f ms_findings%rowtype;
+  m ms_missions%rowtype;
+  v_proj uuid;
+  v_new uuid;
+  v_label text;
+  v_prob smallint;
+  v_imp smallint;
+  v_cat text;
+  v_prio text;
+begin
+  if not ms_is_manager() then raise exception 'manager_only'; end if;
+  select * into f from ms_findings where id = p_finding_id for update;
+  if not found then raise exception 'finding_not_found'; end if;
+  if f.transferred_id is not null then raise exception 'already_transferred'; end if;
+  select * into m from ms_missions where id = f.mission_id;
+  v_prio := case f.severity when 'critical' then 'critical' when 'high' then 'high' when 'low' then 'low' else 'medium' end;
+
+  if p_target = 'issue' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'issues' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_issue_mapping'; end if;
+    insert into im_issues (project_id, title, description, pursuer_id, priority, deadline_days, status, created_by, source)
+    values (v_proj, f.title,
+            f.description || E'\n\n— منبع: بازدید ' || m.code,
+            coalesce(f.owner_id, nullif(p_params->>'pursuer_id', '')::uuid),
+            v_prio, coalesce(nullif(p_params->>'deadline_days', '')::smallint, 7), 'open', auth.uid(), 'mission_debrief')
+    returning id into v_new;
+    v_label := 'Issue';
+  elsif p_target = 'risk' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_risk_mapping'; end if;
+    v_prob := least(5, greatest(1, coalesce(nullif(p_params->>'probability', '')::smallint,
+                case f.severity when 'critical' then 4 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_imp := least(5, greatest(1, coalesce(nullif(p_params->>'impact', '')::smallint,
+                case f.severity when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_cat := case f.topic_key
+      when 'engineering' then 'technical' when 'procurement' then 'procurement' when 'construction' then 'technical'
+      when 'hse' then 'hse' when 'quality' then 'quality' when 'schedule' then 'schedule' when 'cost' then 'cost'
+      else 'other' end;
+    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by)
+    values (v_proj, '', f.title, f.description || E'\n\n— منبع: بازدید ' || m.code, v_cat, 'threat', f.owner_id, v_prob, v_imp, auth.uid())
+    returning id into v_new;
+    v_label := 'Risk';
+  elsif p_target = 'action' then
+    insert into rasta_actions (master_project_id, title, owner_id, due_date, priority, status, source, created_by)
+    values (m.master_project_id, f.title, f.owner_id, f.due_date, v_prio, 'not_started', 'mission_debrief', auth.uid())
+    returning id into v_new;
+    v_label := 'Action';
+  else
+    raise exception 'invalid_target';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_findings set approval = 'approved', transferred_to = p_target, transferred_id = v_new, transferred_at = now(),
+         manager_note = coalesce(nullif(p_params->>'note', ''), manager_note)
+   where id = f.id;
+  insert into ms_events (mission_id, actor_id, event, detail)
+  values (f.mission_id, auth.uid(), 'transfer_' || p_target, jsonb_build_object('finding_id', f.id, 'target_id', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return jsonb_build_object('target', p_target, 'id', v_new, 'label', v_label);
+end;
+$$;
+revoke execute on function ms_transfer_finding(uuid, text, jsonb) from public;
+grant execute on function ms_transfer_finding(uuid, text, jsonb) to authenticated;
+
+-- Live status of every transferred finding, read from the owning system (never copied here).
+create or replace function ms_linked_status(p_mission_ids uuid[])
+returns table (finding_id uuid, target text, linked_id uuid, linked_code text, linked_status text)
+language sql stable security definer set search_path = public as $$
+  select f.id, f.transferred_to, f.transferred_id,
+         case f.transferred_to
+           when 'risk' then (select r.code from rm_risks r where r.id = f.transferred_id)
+           else upper(substr(f.transferred_id::text, 1, 8)) end,
+         case f.transferred_to
+           when 'issue' then (select i.status from im_issues i where i.id = f.transferred_id)
+           when 'risk' then (select r.status from rm_risks r where r.id = f.transferred_id)
+           when 'action' then (select a.status from rasta_actions a where a.id = f.transferred_id)
+         end
+    from ms_findings f
+   where f.mission_id = any (p_mission_ids)
+     and f.transferred_id is not null
+     and exists (select 1 from ms_missions mm where mm.id = f.mission_id
+                  and (mm.requester_id = auth.uid() or mm.approver_id = auth.uid() or ms_is_manager()));
+$$;
+revoke execute on function ms_linked_status(uuid[]) from public;
+grant execute on function ms_linked_status(uuid[]) to authenticated;
+
+-- Evidence files (photos, minutes, letters, technical docs, voice notes). Objects are keyed
+-- `${mission_id}/${uuid}.${ext}`; access follows the mission's own access rules.
+insert into storage.buckets (id, name, public) values ('mission-evidence', 'mission-evidence', false)
+on conflict (id) do nothing;
+
+drop policy if exists "mission_evidence_read" on storage.objects;
+create policy "mission_evidence_read" on storage.objects for select
+  using (bucket_id = 'mission-evidence' and auth.uid() is not null and ms_can_view(((storage.foldername(name))[1])::uuid));
+drop policy if exists "mission_evidence_insert" on storage.objects;
+create policy "mission_evidence_insert" on storage.objects for insert
+  with check (bucket_id = 'mission-evidence' and auth.uid() is not null and ms_can_write(((storage.foldername(name))[1])::uuid));
+drop policy if exists "mission_evidence_delete" on storage.objects;
+create policy "mission_evidence_delete" on storage.objects for delete
+  using (bucket_id = 'mission-evidence' and auth.uid() is not null and ms_can_write(((storage.foldername(name))[1])::uuid));
