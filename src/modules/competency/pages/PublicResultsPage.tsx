@@ -84,6 +84,7 @@ const ZONES = [
   { key: 'yellow', label: 'قابل‌قبول', range: '۶۰ تا ۷۴', min: 60, max: 74, from: '#fde047', to: '#eab308' },
   { key: 'green', label: 'توانمند', range: '۷۵ تا ۱۰۰', min: 75, max: 100, from: '#4ade80', to: '#16a34a' },
 ] as const
+// The bar is drawn left→right red, yellow, green, so green ends up on the right.
 
 /** 0-1 position of a 0-100 score along the three equal-width zones. */
 function zonePosition(score: number): number {
@@ -333,9 +334,9 @@ function RingRow({ tiles }: { tiles: RingTileData[] }) {
   )
 }
 
-/** PMI-style result bar: three equal zones (red / yellow / green) with a marker where the candidate
- * stands. Authored dir="rtl" like the rings, so the lowest zone sits on the right. The knob sits at the
- * exact position; the status pill above it is clamped inside the bar so it never leaves the card. */
+/** PMI-style result bar: one continuous bar of three equal zones (red / yellow / green, green on the
+ * right) with a marker where the candidate stands. The knob sits at the exact position; the status
+ * pill above it is clamped inside the bar so it never leaves the card. */
 function ProficiencyBar({ score, label }: { score: number; label: string }) {
   const t = zonePosition(score)
   const zoneIdx = score < 60 ? 0 : score < 75 ? 1 : 2
@@ -343,16 +344,18 @@ function ProficiencyBar({ score, label }: { score: number; label: string }) {
   return (
     <div className="cred-spectrum">
       <p className="cred-ring-section-title text-[11px] font-bold text-stone-600">جایگاه متقاضی در ارزیابی</p>
-      <div className="cred-spectrum-body" dir="rtl">
-        <div className="cred-spectrum-pill" style={{ right: `${pillT * 100}%`, borderColor: ZONES[zoneIdx].to }}>
-          <span className="text-[10.5px] font-extrabold text-stone-800">وضعیت متقاضی: {label}</span>
+      <div className="cred-spectrum-body" dir="ltr">
+        <div className="cred-spectrum-pill" style={{ left: `${pillT * 100}%`, borderColor: ZONES[zoneIdx].to }}>
+          <span dir="rtl" className="text-[10.5px] font-extrabold text-stone-800">
+            وضعیت متقاضی: {label}
+          </span>
         </div>
-        <div className="cred-spectrum-caret" style={{ right: `${t * 100}%`, borderTopColor: ZONES[zoneIdx].to }} />
+        <div className="cred-spectrum-caret" style={{ left: `${t * 100}%`, borderTopColor: ZONES[zoneIdx].to }} />
         <div className="cred-spectrum-bar">
           {ZONES.map((z) => (
             <div key={z.key} className="cred-spectrum-seg" style={{ background: `linear-gradient(180deg, ${z.from}, ${z.to})` }} />
           ))}
-          <div className="cred-spectrum-knob" style={{ right: `${t * 100}%` }} />
+          <div className="cred-spectrum-knob" style={{ left: `${t * 100}%` }} />
         </div>
         <div className="cred-spectrum-labels">
           {ZONES.map((z) => (
