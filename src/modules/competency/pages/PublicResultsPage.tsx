@@ -39,11 +39,11 @@ interface PublicResultsRow {
   photo_url: string | null
 }
 
-/** Supplementary indicators from comp_public_extra_scores_get (schema.sql Section 59). */
-interface PublicExtraScores {
-  mcq_percent: number | null
-  role_fit_percent: number | null
-  traits: { key: string; label_fa: string; score: number }[]
+/** One behavioral/HSE interview competency from comp_public_competency_scores_get (schema.sql Section 60). */
+interface PublicCompetencyScore {
+  key: string
+  label_fa: string
+  score: number
 }
 
 interface RingTileData {
@@ -55,7 +55,7 @@ interface RingTileData {
 }
 
 // Two varied fixed palettes — one cycled over the interview domains, a different one for the
-// supplementary indicators so the two rows never read as the same series. Each entry pairs a vivid ring
+// competency row so the two rows never read as the same series. Each entry pairs a vivid ring
 // color with a darker same-hue shade for the number inside it: the vivid tone alone was too low-contrast
 // to read at this size (especially amber/sky).
 const DOMAIN_PALETTE: { ring: string; text: string }[] = [
@@ -68,12 +68,32 @@ const DOMAIN_PALETTE: { ring: string; text: string }[] = [
   { ring: '#ef4444', text: '#991b1b' },
   { ring: '#14b8a6', text: '#115e59' },
 ]
-const EXTRA_PALETTE: { ring: string; text: string }[] = [
+const COMPETENCY_PALETTE: { ring: string; text: string }[] = [
+  { ring: '#ef4444', text: '#991b1b' },
+  { ring: '#0ea5e9', text: '#075985' },
+  { ring: '#8b5cf6', text: '#5b21b6' },
   { ring: '#14b8a6', text: '#115e59' },
-  { ring: '#ec4899', text: '#9d174d' },
-  { ring: '#6366f1', text: '#3730a3' },
-  { ring: '#f97316', text: '#9a3412' },
 ]
+
+/** Zones of the proficiency bar, taken from the module's maturity bands (MATURITY_BAND_DEFS):
+ * red = پرریسک+پایه (0-59), yellow = قابل‌قبول (60-74), green = توانمند+راهبردی (75-100). The bar draws
+ * the three zones at equal width (like the PMI result bar) and maps the score piecewise onto them, so
+ * the marker lands in the zone the candidate's band actually belongs to. */
+const ZONES = [
+  { key: 'red', label: 'نیازمند توسعه', range: '۰ تا ۵۹', min: 0, max: 59, from: '#f87171', to: '#dc2626' },
+  { key: 'yellow', label: 'قابل‌قبول', range: '۶۰ تا ۷۴', min: 60, max: 74, from: '#fde047', to: '#eab308' },
+  { key: 'green', label: 'توانمند', range: '۷۵ تا ۱۰۰', min: 75, max: 100, from: '#4ade80', to: '#16a34a' },
+] as const
+
+/** 0-1 position of a 0-100 score along the three equal-width zones. */
+function zonePosition(score: number): number {
+  const p = Math.max(0, Math.min(100, score))
+  const i = p < 60 ? 0 : p < 75 ? 1 : 2
+  const z = ZONES[i]
+  const span = i === 0 ? 60 : i === 1 ? 15 : 25
+  const into = i === 0 ? p : p - z.min
+  return (i + Math.min(1, into / span)) / 3
+}
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 const toFa = (s: string | number) => String(s).replace(/\d/g, (d) => FA_DIGITS[Number(d)])
@@ -97,21 +117,21 @@ function issueAndExpiry(iso: string): { issued: string; expires: string } {
 
 /**
  * Public, unauthenticated "view results online" page reached via a secret-link token
- * (?results=<token>). Deliberately shows only what comp_public_results_get / comp_public_extra_scores_get
+ * (?results=<token>). Deliberately shows only what comp_public_results_get / comp_public_competency_scores_get
  * return — the scored result itself and a few aggregate indicators, never the interviewer panel (who
  * scored, their names, their individual sheets) and never the candidate's contact/personal-profile
- * fields. See supabase/schema.sql sections 19 and 59.
+ * fields. See supabase/schema.sql sections 19 and 60.
  *
  * A permanent, printable-looking "Professional Qualification Card" matching a physical-ID-card
  * reference: photo and qualification medal (carrying the overall score out of 100) on one row, a QR
- * code pointing back at this same page beside the credential number and issue/expiry dates, then one
- * row of mini-rings for the structured interview's own domain breakdown and one for supplementary
- * indicators (job readiness, specialist test, key personality traits). The full report stays available
+ * code pointing back at this same page beside the credential number and issue/expiry dates, a
+ * three-zone proficiency bar marking where the candidate stands, then rows of mini-rings for the
+ * structured interview — its own domain breakdown plus four behavioral/HSE competencies. The full report stays available
  * to staff inside the app.
  */
 export function PublicResultsPage({ token }: { token: string }) {
   const [row, setRow] = useState<PublicResultsRow | null>(null)
-  const [extra, setExtra] = useState<PublicExtraScores | null>(null)
+  const [competencies, setCompetencies] = useState<PublicCompetencyScore[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   // Role- and band-specific interpretation text (Section 57; readable anonymously) — only the band
@@ -133,9 +153,9 @@ export function PublicResultsPage({ token }: { token: string }) {
         }
         setRow(data[0] as PublicResultsRow)
       })
-    // Best-effort: the card is complete without these, so a failure just hides the extra row.
-    supabase.rpc('comp_public_extra_scores_get', { p_token: token }).then(({ data, error }) => {
-      if (!error && data) setExtra(data as PublicExtraScores)
+    // Best-effort: the card is complete without these, so a failure just hides the competency row.
+    supabase.rpc('comp_public_competency_scores_get', { p_token: token }).then(({ data, error }) => {
+      if (!error && Array.isArray(data)) setCompetencies(data as PublicCompetencyScore[])
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
@@ -189,14 +209,12 @@ export function PublicResultsPage({ token }: { token: string }) {
     .filter((d) => d.percentScore != null)
     .map((d, i) => ({ key: d.domain.key, label: d.domain.shortTitle, value: d.percentScore as number, ...DOMAIN_PALETTE[i % DOMAIN_PALETTE.length] }))
 
-  const extraRaw: { key: string; label: string; value: number | null | undefined }[] = [
-    { key: 'role-fit', label: 'آمادگی برای شغل', value: extra?.role_fit_percent },
-    { key: 'mcq', label: 'آزمون تخصصی', value: extra?.mcq_percent },
-    ...(extra?.traits ?? []).map((t) => ({ key: t.key, label: t.label_fa, value: t.score })),
-  ]
-  const extraTiles: RingTileData[] = extraRaw
-    .filter((t): t is { key: string; label: string; value: number } => t.value != null)
-    .map((t, i) => ({ ...t, ...EXTRA_PALETTE[i % EXTRA_PALETTE.length] }))
+  const competencyTiles: RingTileData[] = competencies.map((c, i) => ({
+    key: c.key,
+    label: c.label_fa,
+    value: c.score,
+    ...COMPETENCY_PALETTE[i % COMPETENCY_PALETTE.length],
+  }))
 
   const { issued, expires } = issueAndExpiry(row.interview_date)
   const cardNo = credentialNumber(row.id)
@@ -269,8 +287,15 @@ export function PublicResultsPage({ token }: { token: string }) {
             </div>
           </div>
 
-          {domainTiles.length > 0 && <RingRow title="نتایج مصاحبه ساختاریافته" tiles={domainTiles} />}
-          {extraTiles.length > 0 && <RingRow title="شاخص‌های تکمیلی" tiles={extraTiles} />}
+          {overall != null && <ProficiencyBar score={overall} label={interp.bandLabel} />}
+
+          {(domainTiles.length > 0 || competencyTiles.length > 0) && (
+            <div className="cred-ring-section">
+              <p className="cred-ring-section-title text-[11px] font-bold text-stone-600">نتایج مصاحبه ساختاریافته</p>
+              {domainTiles.length > 0 && <RingRow tiles={domainTiles} />}
+              {competencyTiles.length > 0 && <RingRow tiles={competencyTiles} />}
+            </div>
+          )}
         </div>
       </div>
 
@@ -283,14 +308,13 @@ export function PublicResultsPage({ token }: { token: string }) {
 
 /** One non-wrapping row of mini rings. Ring size steps down as tiles are added so a longer series
  * (the legacy PM rubric has 8 domains) still fits a single line on a phone. */
-function RingRow({ title, tiles }: { title: string; tiles: RingTileData[] }) {
+function RingRow({ tiles }: { tiles: RingTileData[] }) {
   const n = tiles.length
   const size = n <= 4 ? 54 : n <= 6 ? 44 : 36
   const numSize = n <= 4 ? 14 : n <= 6 ? 12 : 10
   const labelSize = n <= 4 ? 9.5 : n <= 6 ? 9 : 8
   return (
-    <div className="cred-ring-section">
-      <p className="cred-ring-section-title text-[11px] font-bold text-stone-500">{title}</p>
+    <div className="cred-ring-block">
       <div className="cred-ring-row" dir="rtl">
         {tiles.map((t) => (
           <div key={t.key} className="cred-ring-tile">
@@ -309,6 +333,40 @@ function RingRow({ title, tiles }: { title: string; tiles: RingTileData[] }) {
   )
 }
 
+/** PMI-style result bar: three equal zones (red / yellow / green) with a marker where the candidate
+ * stands. Authored dir="rtl" like the rings, so the lowest zone sits on the right. The knob sits at the
+ * exact position; the status pill above it is clamped inside the bar so it never leaves the card. */
+function ProficiencyBar({ score, label }: { score: number; label: string }) {
+  const t = zonePosition(score)
+  const zoneIdx = score < 60 ? 0 : score < 75 ? 1 : 2
+  const pillT = Math.max(0.14, Math.min(0.86, t))
+  return (
+    <div className="cred-spectrum">
+      <p className="cred-ring-section-title text-[11px] font-bold text-stone-600">جایگاه متقاضی در ارزیابی</p>
+      <div className="cred-spectrum-body" dir="rtl">
+        <div className="cred-spectrum-pill" style={{ right: `${pillT * 100}%`, borderColor: ZONES[zoneIdx].to }}>
+          <span className="text-[10.5px] font-extrabold text-stone-800">وضعیت متقاضی: {label}</span>
+        </div>
+        <div className="cred-spectrum-caret" style={{ right: `${t * 100}%`, borderTopColor: ZONES[zoneIdx].to }} />
+        <div className="cred-spectrum-bar">
+          {ZONES.map((z) => (
+            <div key={z.key} className="cred-spectrum-seg" style={{ background: `linear-gradient(180deg, ${z.from}, ${z.to})` }} />
+          ))}
+          <div className="cred-spectrum-knob" style={{ right: `${t * 100}%` }} />
+        </div>
+        <div className="cred-spectrum-labels">
+          {ZONES.map((z) => (
+            <div key={z.key} className="cred-spectrum-label">
+              <span className="text-[10.5px] font-bold text-stone-700">{z.label}</span>
+              <span className="text-[9.5px] font-medium text-stone-500">{z.range}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Self-contained SVG ring (no farinTheme.css token dependency — this page must look identical
  * regardless of the viewer's own device theme). */
 function MiniRing({ value, color, size, strokeWidth, children }: { value: number | null; color: string; size: number; strokeWidth: number; children?: React.ReactNode }) {
@@ -319,7 +377,7 @@ function MiniRing({ value, color, size, strokeWidth, children }: { value: number
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${value != null ? toFa(Math.round(value)) : '—'} از ۱۰۰`}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#ece2bd" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#dccb9a" strokeWidth={strokeWidth} />
         {value != null && (
           <circle
             cx={size / 2}

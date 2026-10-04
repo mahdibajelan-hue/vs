@@ -30,33 +30,48 @@
   max-width: 560px;
 }
 
-/* The "thick plastic card" illusion — a second, slightly offset card peeking out from behind. */
-.cred-card-wrap::before {
+/* Glossy PVC sheen: a soft diagonal highlight across the face, over everything (pointer-events off). */
+.cred-card-wrap::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 32px;
-  transform: translate(8px, 10px);
-  background: linear-gradient(160deg, #d9c88a, #b79d52);
-  box-shadow: 0 22px 40px -16px rgba(0, 0, 0, 0.6);
+  z-index: 3;
+  border-radius: 30px;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0) 26%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0.04) 44%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 12%);
 }
 
+/* A real card is a slab: the cream face sits on a visibly thick edge. The solid, stepped box-shadows
+ * below extrude that edge down-right (one 1px step per layer, darkening as it goes), and the inset
+ * highlights bevel the rim itself — bright where light hits (top/left), darker opposite. */
 .cred-card {
   direction: ltr;
   position: relative;
   z-index: 1;
   border-radius: 30px;
   overflow: hidden;
-  background: linear-gradient(160deg, #fffefb 0%, #fdf9ef 55%, #faf4e3 100%);
-  border: 1px solid #f3e9c8;
-  /* Embossed rim: a bright top/left bevel and a darker bottom/right bevel (inset), an inner hairline
-   * just inside the edge, and a soft drop shadow — reads as a raised, thick plastic card. */
+  background:
+    repeating-linear-gradient(135deg, rgba(150, 118, 40, 0.045) 0 1px, transparent 1px 6px),
+    linear-gradient(160deg, #f8efd5 0%, #f2e5c0 52%, #ebdcb0 100%);
+  border: 1px solid #fff6dc;
   box-shadow:
-    inset 3px 3px 0 rgba(255, 255, 255, 0.95),
-    inset -3px -4px 0 rgba(196, 170, 98, 0.4),
-    inset 0 0 0 7px rgba(255, 255, 255, 0.35),
-    0 2px 0 #fff4cf,
-    0 26px 50px -22px rgba(0, 0, 0, 0.65);
+    inset 2px 2px 1px rgba(255, 255, 255, 0.95),
+    inset -2px -3px 2px rgba(168, 138, 62, 0.55),
+    inset 0 0 0 6px rgba(255, 250, 232, 0.5),
+    inset 0 0 0 7px rgba(190, 160, 80, 0.22),
+    1px 1px 0 #d6c486,
+    2px 2px 0 #ccba7d,
+    3px 3px 0 #c2b074,
+    4px 4px 0 #b8a56b,
+    5px 5px 0 #ae9b62,
+    6px 6px 0 #a59158,
+    7px 7px 0 #9b874f,
+    8px 8px 0 #917c46,
+    9px 9px 0 #87723d,
+    10px 10px 0 #7d6834,
+    18px 28px 34px -8px rgba(0, 0, 0, 0.7);
   padding: 1.4rem 1.5rem 1.3rem;
   font-family: 'Vazirmatn', Tahoma, sans-serif;
 }
@@ -67,7 +82,7 @@
   content: '';
   position: absolute;
   border-radius: 9999px;
-  border: 1.5px solid rgba(191, 155, 48, 0.22);
+  border: 1.5px solid rgba(160, 125, 35, 0.28);
   pointer-events: none;
 }
 .cred-card::before {
@@ -124,8 +139,8 @@
   flex-shrink: 0;
   border-radius: 20px;
   overflow: hidden;
-  background: #f1ece0;
-  border: 2px solid #d9c98a;
+  background: #efe5c8;
+  border: 2px solid #cdb872;
   box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
 }
 
@@ -207,7 +222,7 @@
   padding: 6px;
   background: #fff;
   border-radius: 14px;
-  border: 2px solid #d9c98a;
+  border: 2px solid #cdb872;
   box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
 }
 
@@ -234,11 +249,95 @@
   z-index: 1;
   margin-top: 1rem;
   padding-top: 0.9rem;
-  border-top: 1px dashed #e2d5a3;
+  border-top: 1px dashed #cfbb7e;
 }
 
 .cred-ring-section-title {
   margin-bottom: 0.55rem;
+  text-align: center;
+}
+
+.cred-ring-block + .cred-ring-block {
+  margin-top: 0.95rem;
+}
+
+/* PMI-style proficiency bar, centred under the QR/details row. */
+.cred-spectrum {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed #cfbb7e;
+}
+
+.cred-spectrum-body {
+  position: relative;
+  padding-top: 40px;
+}
+
+.cred-spectrum-pill {
+  position: absolute;
+  top: 0;
+  transform: translateX(50%);
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #fffdf5;
+  border: 2px solid;
+  box-shadow: 0 3px 8px -3px rgba(60, 40, 0, 0.45);
+}
+
+.cred-spectrum-caret {
+  position: absolute;
+  top: 25px;
+  transform: translateX(50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid;
+}
+
+.cred-spectrum-bar {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  height: 16px;
+}
+
+.cred-spectrum-seg {
+  flex: 1;
+  border-radius: 9999px;
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 2px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(80, 55, 0, 0.3);
+}
+
+.cred-spectrum-knob {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(50%, -50%);
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #3b2f12;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.cred-spectrum-labels {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.cred-spectrum-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.5;
   text-align: center;
 }
 

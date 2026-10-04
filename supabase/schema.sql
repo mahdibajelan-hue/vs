@@ -14561,3 +14561,30 @@ $$;
 
 revoke execute on function comp_public_extra_scores_get(uuid) from public;
 grant execute on function comp_public_extra_scores_get(uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------- Section 60: interview competency scores for the public card
+--
+-- The qualification card's structured-interview block now also shows four behavioral/HSE competency
+-- scores (0-100, already computed per assessment into comp_competency_scores by the competency
+-- engine). Same pattern as Section 59: token-gated, aggregate-only — one score per competency, never
+-- the underlying evidence rows, ratings or rater identities. Returns a jsonb array in fixed display
+-- order; a competency with no computed score yet is simply omitted.
+create or replace function comp_public_competency_scores_get(p_token uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('key', c.key, 'label_fa', c.label_fa, 'score', round(s.actual_score))
+                            order by array_position(array['hse_awareness', 'communication', 'teamwork_collaboration', 'accountability_reliability'], c.key)), '[]'::jsonb)
+    from comp_assessments a
+    join comp_competency_scores s on s.assessment_id = a.id
+    join comp_competencies c on c.id = s.competency_id
+   where a.results_share_token = p_token
+     and s.actual_score is not null
+     and c.key in ('hse_awareness', 'communication', 'teamwork_collaboration', 'accountability_reliability');
+$$;
+
+revoke execute on function comp_public_competency_scores_get(uuid) from public;
+grant execute on function comp_public_competency_scores_get(uuid) to anon, authenticated;
