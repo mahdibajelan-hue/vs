@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { openRecord } from '../integration/recordSystems'
 import { FileSearch } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
@@ -66,7 +67,8 @@ export function FindingsPage() {
                 missionLabel={m ? `${m.code} · ${m.projectName}` : undefined}
                 onOpenMission={() => m && go({ kind: m.status === 'report_review' ? 'report' : 'mission', id: m.id })}
                 onDecide={canAct ? (a) => decide(f.id, a) : undefined}
-                onTransfer={canAct ? async (t) => { setMoving(f.id); await transfer(f.id, t); setMoving(null) } : undefined}
+                onTransfer={canAct ? async (t, params) => { setMoving(f.id); await transfer(f.id, t, params); setMoving(null) } : undefined}
+                onOpenLinked={(() => { const l = portfolio?.linked.find((x) => x.findingId === f.id); return l && m ? () => openRecord(l.target, l.linkedId, m.masterProjectId) : undefined })()}
                 transferring={moving === f.id}
               />
             )

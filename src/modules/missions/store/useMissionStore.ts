@@ -75,7 +75,7 @@ interface MissionsState {
 
   submitReport: () => Promise<boolean>
   decideFinding: (id: string, approval: 'approved' | 'rejected' | 'proposed', note?: string) => Promise<void>
-  transfer: (findingId: string, target: TransferTarget) => Promise<boolean>
+  transfer: (findingId: string, target: TransferTarget, params?: Record<string, unknown>) => Promise<boolean>
 
   seedDemoData: () => Promise<void>
   clearDemoData: () => Promise<void>
@@ -446,9 +446,9 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
     }
   },
 
-  transfer: async (findingId, target) => {
+  transfer: async (findingId, target, params) => {
     try {
-      await get().repo.transferFinding(findingId, target)
+      await get().repo.transferFinding(findingId, target, params)
       await Promise.all([get().refreshBundle(), get().refreshPortfolio()])
       return true
     } catch (e) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles, Users } from 'lucide-react'
-import { BUILD_ID, ModuleHeaderActions, StorageErrorBanner } from './platform'
+import { BUILD_ID, ModuleHeaderActions, StorageErrorBanner, useDeepLinkStore } from './platform'
 import { useMissionStore } from './store/useMissionStore'
 import type { MissionRepo } from './repo/types'
 import { NavContext, type View } from './nav'
@@ -42,7 +42,15 @@ function sectionOf(v: View): View['kind'] {
 }
 
 export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, embedded }: Props) {
-  const [view, setView] = useState<View>(initialView ?? { kind: 'dashboard' })
+  // Arrived through an «از بازدید MIS-…» chip on an Issue / Risk / Action: open that mission directly.
+  const [view, setView] = useState<View>(() => {
+    const p = useDeepLinkStore.getState().pending
+    if (p?.module === 'missions') return { kind: 'mission', id: p.recordId }
+    return initialView ?? { kind: 'dashboard' }
+  })
+  useEffect(() => {
+    if (useDeepLinkStore.getState().pending?.module === 'missions') useDeepLinkStore.getState().clear()
+  }, [])
   const init = useMissionStore((s) => s.init)
   const setRepo = useMissionStore((s) => s.setRepo)
   const ready = useMissionStore((s) => s.ready)

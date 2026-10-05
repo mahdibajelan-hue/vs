@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FileSpreadsheet, Plus, Search, TrendingDown, TrendingUp, Minus, AlertTriangle, Users } from 'lucide-react'
 import type { RmProjectDetail } from '../store/useRiskStore'
 import { exportRiskProjectToExcel } from '../lib/riskExport'
@@ -17,6 +17,8 @@ import { currentState, isEscalationRequired, latestAssessment, riskLevel, RISK_L
 import { useRiskCurrentRole, useRiskMembersStore } from '../store/useRiskMembersStore'
 import { RiskFormModal } from '../components/RiskFormModal'
 import { RiskDetailModal } from '../components/RiskDetailModal'
+import { useDeepLinkStore } from '../../../store/useDeepLinkStore'
+import { MissionOriginChip } from '../../missions/integration/originChip'
 import { RmMembersModal } from '../components/RmMembersModal'
 import { KpiTile } from '../components/KpiTile'
 
@@ -30,6 +32,16 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
   const [statusFilter, setStatusFilter] = useState<RmRiskStatus | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState<RmRiskCategory | 'all'>('all')
   const [query, setQuery] = useState('')
+
+  // Arrived from a mission finding («مشاهده در مدیریت ریسک»): open that risk straight away.
+  const pendingLink = useDeepLinkStore((s) => s.pending)
+  const clearLink = useDeepLinkStore((s) => s.clear)
+  useEffect(() => {
+    if (pendingLink?.module === 'risk' && project.risks.some((r) => r.id === pendingLink.recordId)) {
+      setSelectedRiskId(pendingLink.recordId)
+      clearLink()
+    }
+  }, [pendingLink, project.risks, clearLink])
 
   const enriched = useMemo(
     () =>
@@ -88,6 +100,7 @@ export function RiskRegisterPage({ project, onChangeProject }: { project: RmProj
             </span>
           )}
           <span className="truncate font-medium">{e.risk.title}</span>
+          <MissionOriginChip recordId={e.risk.id} />
         </span>
       ),
     },

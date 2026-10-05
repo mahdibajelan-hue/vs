@@ -60,3 +60,9 @@ Mission → Visit → Intelligent Interview → Evidence → Project Insight
 ## داده نمونه
 
 ادمین در داشبورد خالی «ساخت داده نمونه» را می‌بیند؛ داده را همان موتور مصاحبه تولید می‌کند و با برچسب `[نمونه]` قابل حذف است.
+
+## Transferred records: origin chip, links, transfer dialog
+
+- **Transfer dialog** (`components/TransferDialog.tsx`): «تأیید و انتقال…» lets the executive choose the target (Issue / Risk / Action), set the deadline (Issue) or probability and impact (Risk), and add a note before `ms_transfer_finding` runs.
+- **Link out** (`integration/recordSystems.ts → openRecord`): a transferred finding shows «مشاهده در …». It sets the project context, files a one-shot request in `store/useDeepLinkStore` and switches module; Issues, Risk and Reporting consume the request and open the record.
+- **Origin chip** (`integration/originChip.tsx → MissionOriginChip`): Issue, Risk and Action screens and the Radar signal panel render «از بازدید MIS-…» on transferred records (resolved by `ms_record_origin`, schema Section 64); clicking it opens the mission.

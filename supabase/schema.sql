@@ -15332,3 +15332,21 @@ $$ language plpgsql security definer stable set search_path = public;
 
 revoke execute on function comp_public_results_get(uuid) from public;
 grant execute on function comp_public_results_get(uuid) to anon, authenticated;
+
+-- =============================================================================
+-- 64. Missions: where did this Issue / Risk / Action come from?
+-- =============================================================================
+-- Issue, Risk and Action screens (and the Project Radar) show a small «از بازدید MIS-…» chip on records
+-- that were transferred from a mission finding. The records themselves stay owned by their own modules;
+-- this function only resolves record id -> mission code (no mission content leaves the module).
+create or replace function ms_record_origin(p_ids uuid[])
+returns table (record_id uuid, target text, mission_id uuid, mission_code text, finding_title text)
+language sql stable security definer set search_path = public as $$
+  select f.transferred_id, f.transferred_to, f.mission_id, m.code, f.title
+    from ms_findings f
+    join ms_missions m on m.id = f.mission_id
+   where auth.uid() is not null
+     and f.transferred_id = any (p_ids);
+$$;
+revoke execute on function ms_record_origin(uuid[]) from public, anon;
+grant execute on function ms_record_origin(uuid[]) to authenticated;

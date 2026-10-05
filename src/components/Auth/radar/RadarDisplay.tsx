@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { MissionOriginChip } from '../../../modules/missions/integration/originChip'
 import { AlertTriangle, CircleAlert, Clock, FileText, Flag, RefreshCw, ShieldCheck, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -222,6 +223,7 @@ export function RadarDisplay({
           </div>
           <p className="text-[13px] font-extrabold">{selected.title}</p>
           <p className="mt-0.5 text-[11px] text-secondary">{selected.subject} · {selected.detail}</p>
+          {(selected.category === 'issue' || selected.category === 'risk') && <MissionOriginChip recordId={selected.id} className="mt-1.5" />}
           <div className="mt-2.5 space-y-1.5 border-t pt-2.5 text-[10.5px] leading-5" style={{ borderColor: 'var(--border-soft)' }}>
             <p><span className="text-muted">علت ریشه‌ای: </span>{selected.rootCause}</p>
             <p><span className="text-muted">تاثیر: </span>{selected.impact}</p>

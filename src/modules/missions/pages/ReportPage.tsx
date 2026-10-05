@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { openRecord } from '../integration/recordSystems'
 import { ArrowRight, Check, FileQuestion, Printer, RotateCcw, Undo2 } from 'lucide-react'
 import { useMissionStore, engineInputFor } from '../store/useMissionStore'
 import { useNav } from '../nav'
@@ -137,7 +138,9 @@ export function ReportPage({ id }: { id: string }) {
                 finding={f}
                 linked={bundle.linked.find((l) => l.findingId === f.id)}
                 onDecide={canReview ? (a) => decideFinding(f.id, a) : undefined}
-                onTransfer={canReview ? async (target) => { setMoving(f.id); await transfer(f.id, target); setMoving(null) } : undefined}
+                onTransfer={canReview ? async (target, params) => { setMoving(f.id); await transfer(f.id, target, params); setMoving(null) } : undefined}
+                onOpenLinked={(() => { const l = bundle.linked.find((x) => x.findingId === f.id); return l ? () => openRecord(l.target, l.linkedId, m.masterProjectId) : undefined })()}
+                missionCode={m.code}
                 transferring={moving === f.id}
               />
             ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Brain, LayoutDashboard, ListChecks, Loader2, Network, ShieldAlert } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
+import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { LevelBreadcrumb } from '../masterdata/components/LevelBreadcrumb'
@@ -54,6 +55,12 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // A mission finding asked to open one of this project's risks: show the register, which opens it.
+  const pendingLink = useDeepLinkStore((s) => s.pending)
+  useEffect(() => {
+    if (pendingLink?.module === 'risk' && projectDetail?.risks.some((r) => r.id === pendingLink.recordId)) setTab('register')
+  }, [pendingLink, projectDetail])
 
   useEffect(() => {
     if (currentProjectId) fetchMembers(currentProjectId)

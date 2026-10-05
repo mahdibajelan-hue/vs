@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { openRecord } from '../integration/recordSystems'
 import { ArrowRight, BadgeCheck, Plane, CalendarDays, Check, ClipboardCopy, FileText, History, MapPin, Pencil, Play, Send, UserRound, X } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
@@ -276,7 +277,7 @@ export function MissionDetailPage({ id }: { id: string }) {
           <SectionHead eyebrow="کشف‌شده در بازدید" title="یافته‌ها" sub="Issue و Risk فقط پیشنهاد هستند؛ پس از تأیید مجری طرح به سامانه اصلی منتقل می‌شوند." />
           {live.length === 0 ? <p className="ms-muted py-6 text-center text-[12.5px]">هنوز یافته‌ای ثبت نشده است.</p> : (
             <div className="flex flex-col gap-3">
-              {live.map((f) => <FindingCard key={f.id} finding={f} linked={linked.find((l) => l.findingId === f.id)} />)}
+              {live.map((f) => { const l = linked.find((x) => x.findingId === f.id); return <FindingCard key={f.id} finding={f} linked={l} onOpenLinked={l ? () => openRecord(l.target, l.linkedId, m.masterProjectId) : undefined} /> })}
             </div>
           )}
         </Card>

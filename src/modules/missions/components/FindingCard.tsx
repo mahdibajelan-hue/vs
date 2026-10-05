@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Check, ExternalLink, Link2, Pencil, Trash2, X } from 'lucide-react'
 import { FINDING_KIND_LABEL, type Finding, type LinkedStatus, type TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
 import { KindBadge, Pill, SeverityDot } from './ui'
+import { TransferDialog } from './TransferDialog'
 
 const LINKED_STATUS_LABEL: Record<string, string> = {
   open: 'باز',
@@ -53,7 +55,9 @@ export function FindingCard({
   onRemove,
   onDecide,
   onTransfer,
+  onOpenLinked,
   missionLabel,
+  missionCode,
   onOpenMission,
   transferring,
 }: {
@@ -63,13 +67,18 @@ export function FindingCard({
   onRemove?: () => void
   /** Manager review: approve or reject the proposal. */
   onDecide?: (approval: 'approved' | 'rejected' | 'proposed') => void
-  onTransfer?: (target: TransferTarget) => void
+  onTransfer?: (target: TransferTarget, params: Record<string, unknown>) => void | Promise<unknown>
+  /** Jump to the transferred record inside the module that owns it. */
+  onOpenLinked?: () => void
   missionLabel?: string
+  /** Shown in the transfer dialog; defaults to the code part of missionLabel. */
+  missionCode?: string
   onOpenMission?: () => void
   transferring?: boolean
 }) {
   const rows = detailRows(f)
   const target = defaultTarget(f)
+  const [dialog, setDialog] = useState(false)
   const missing = [(f.kind === 'action' || f.kind === 'commitment') && !f.ownerText ? 'مسئول' : '', (f.kind === 'action' || f.kind === 'commitment') && !f.dueDate ? 'موعد' : ''].filter(Boolean)
   return (
     <article className={`ms-ledger-item ms-k-${f.kind}`} style={{ animation: 'none' }}>
@@ -105,11 +114,21 @@ export function FindingCard({
           <span className="ms-ink2">در {TARGET_LABEL[linked.target]} ثبت شد</span>
           <Pill tone="good">{linked.linkedCode}</Pill>
           <Pill>{LINKED_STATUS_LABEL[linked.linkedStatus] ?? linked.linkedStatus}</Pill>
+          {onOpenLinked && (
+            <button type="button" className="ms-btn ms-btn-sm mr-auto" onClick={onOpenLinked}>
+              <ExternalLink size={13} aria-hidden /> مشاهده در {TARGET_LABEL[linked.target]}
+            </button>
+          )}
         </p>
       )}
       {f.transferredId && !linked && (
         <p className="ms-ink2 mt-2 flex items-center gap-1.5 text-[11.5px]">
           <ExternalLink size={13} aria-hidden /> به {TARGET_LABEL[f.transferredTo ?? 'issue']} منتقل شده است
+          {onOpenLinked && (
+            <button type="button" className="ms-btn ms-btn-sm mr-auto" onClick={onOpenLinked}>
+              مشاهده
+            </button>
+          )}
         </p>
       )}
 
@@ -126,8 +145,8 @@ export function FindingCard({
             </>
           )}
           {onTransfer && target && !f.transferredId && f.approval !== 'rejected' && (
-            <button className="ms-btn ms-btn-sm ms-btn-primary" disabled={transferring} onClick={() => onTransfer(target)}>
-              <ExternalLink size={13} aria-hidden /> {transferring ? 'در حال انتقال…' : `تأیید و انتقال به ${TARGET_LABEL[target]}`}
+            <button className="ms-btn ms-btn-sm ms-btn-primary" disabled={transferring} onClick={() => setDialog(true)}>
+              <ExternalLink size={13} aria-hidden /> {transferring ? 'در حال انتقال…' : `تأیید و انتقال…`}
             </button>
           )}
           {onEdit && (
@@ -141,6 +160,19 @@ export function FindingCard({
             </button>
           )}
         </div>
+      )}
+      {dialog && target && onTransfer && (
+        <TransferDialog
+          finding={f}
+          missionCode={missionCode ?? missionLabel?.split(' · ')[0]}
+          defaultTarget={target}
+          busy={transferring}
+          onClose={() => setDialog(false)}
+          onConfirm={async (t, params) => {
+            await onTransfer(t, params)
+            setDialog(false)
+          }}
+        />
       )}
     </article>
   )

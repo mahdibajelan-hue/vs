@@ -304,13 +304,13 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       return logEvent(missionId, event, comment, me.id)
     },
 
-    async transferFinding(findingId, target) {
+    async transferFinding(findingId, target, params = {}) {
       if (!me.isManager) throw new Error('این اقدام فقط برای مجری طرح مجاز است.')
       const f = findings.get(findingId)
       if (!f) throw new Error('یافته پیدا نشد')
       if (f.transferredId) throw new Error('این مورد قبلاً منتقل شده است.')
       const id = uid()
-      findings.set(findingId, { ...f, approval: 'approved', transferredTo: target, transferredId: id, transferredAt: now() })
+      findings.set(findingId, { ...f, approval: 'approved', transferredTo: target, transferredId: id, transferredAt: now(), managerNote: String(params.note ?? '') || f.managerNote })
       linkedMap.set(findingId, { findingId, target, linkedId: id, linkedCode: target === 'risk' ? `R-${String(10 + linkedMap.size).padStart(3, '0')}` : id.slice(0, 8).toUpperCase(), linkedStatus: target === 'action' ? 'not_started' : 'open' })
       logEvent(f.missionId, `transfer_${target}`, '', me.id)
       return { target, id }

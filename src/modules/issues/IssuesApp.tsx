@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
+import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { fetchModuleProjectMappings } from '../masterdata/lib/hierarchyRollup'
@@ -66,6 +67,16 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Arrived from a mission finding («مشاهده در مدیریت Issue»): open that issue once the list has loaded.
+  const pendingLink = useDeepLinkStore((s) => s.pending)
+  const clearLink = useDeepLinkStore((s) => s.clear)
+  useEffect(() => {
+    if (!loading && pendingLink?.module === 'issues') {
+      setSelectedIssueId(pendingLink.recordId)
+      clearLink()
+    }
+  }, [loading, pendingLink, clearLink])
 
   const visibleNav = lockedToProject ? NAV.filter((n) => n.id === 'projects' || n.id === 'about') : NAV
 

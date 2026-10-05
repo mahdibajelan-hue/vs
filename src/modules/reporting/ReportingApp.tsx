@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BarChart3, ClipboardList, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
+import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -29,8 +30,12 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const fetchProfiles = useReportingStore((s) => s.fetchProfiles)
   const fetchProjectData = useReportingStore((s) => s.fetchProjectData)
 
-  const [projectId, setProjectId] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
+  // Arrived from a mission finding («مشاهده در مدیریت اقدامات»): open that project's decision center.
+  const [projectId, setProjectId] = useState<string | null>(() => {
+    const p = useDeepLinkStore.getState().pending
+    return p?.module === 'reporting' ? p.masterProjectId ?? null : null
+  })
+  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'reporting' ? 'decisions' : 'dashboard'))
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()

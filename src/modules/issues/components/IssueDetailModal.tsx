@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MissionOriginChip } from '../../missions/integration/originChip'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { formatJalali } from '../../../lib/jalali'
@@ -69,6 +70,7 @@ export function IssueDetailModal({ issueId, onClose }: { issueId: string; onClos
           <div>
             <div className="im-modal-title">{issue.title}</div>
             <div style={{ fontSize: 11.5, color: 'var(--im-muted)', marginTop: 4 }}>{project?.name ?? '—'}</div>
+            <MissionOriginChip recordId={issue.id} className="mt-1.5" />
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {canEditIssue && !editing && (
