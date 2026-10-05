@@ -104,6 +104,10 @@ export function useSpeech(onText: (finalChunk: string, interim: string) => void,
           else setError('صدایی تشخیص داده نشد؛ دوباره تلاش کنید.')
         } catch (e) {
           const why = (e instanceof Error ? e.message : String(e)).slice(0, 240)
+          if (/429|quota|RESOURCE_EXHAUSTED/i.test(why)) {
+            setError('سهمیه سرویس هوش مصنوعی (Gemini) تمام شده است. تا بازنشانی سهمیه یا فعال‌سازی صورتحساب، از دکمه میکروفون روی صفحه‌کلید گوشی (دیکته) در همین کادر پاسخ استفاده کنید.')
+            return
+          }
           setError(
             stage === 'decode'
               ? `پردازش صدای ضبط‌شده در این مرورگر ممکن نبود (${why}). پاسخ را تایپ کنید.`

@@ -49,6 +49,8 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
     } catch (err) {
       last = err
       const msg = err instanceof Error ? err.message : String(err)
+      // A spent quota ("exceeded your current quota") will not recover within seconds: fail fast instead of retrying.
+      if (/exceeded your current quota/i.test(msg)) throw err
       if (!/\b(503|429)\b|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(msg) || i === attempts) throw err
       await new Promise((r) => setTimeout(r, 800 * 2 ** (i - 1)))
     }
@@ -94,7 +96,7 @@ const TRANSCRIBE_PROMPT = (lang: string) =>
 // Audio-capable models tried in order (first that answers wins). A model that rejects audio input or does
 // not exist answers 400/404 and we move on to the next; load errors (429/503) are retried inside withRetry.
 const AUDIO_MODELS = (): string[] =>
-  [...new Set([Deno.env.get('MISSION_AI_AUDIO_MODEL'), Deno.env.get('MISSION_AI_MODEL'), Deno.env.get('GEMINI_MODEL'), 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].filter((m): m is string => !!m))]
+  [...new Set([Deno.env.get('MISSION_AI_AUDIO_MODEL'), Deno.env.get('MISSION_AI_MODEL'), Deno.env.get('GEMINI_MODEL'), 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'].filter((m): m is string => !!m))]
 
 const geminiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
   const key = Deno.env.get('GEMINI_API_KEY')!
@@ -110,7 +112,7 @@ const geminiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
             generationConfig: { temperature: 0 },
           }),
         })
-        if (!res.ok) throw new Error(`${model} ${res.status}: ${(await res.text()).slice(0, 220)}`)
+        if (!res.ok) throw new Error(`${model} ${res.status}: ${(await res.text()).replace(/\s+/g, ' ').slice(0, 160)}`)
         const data = await res.json()
         const text = (data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '').trim()
         if (!text && data?.promptFeedback?.blockReason) throw new Error(`${model} blocked: ${data.promptFeedback.blockReason}`)
@@ -234,7 +236,7 @@ Deno.serve(async (req) => {
       } catch (err) {
         console.error('mission-ai transcribe', err)
         // Unlike the analysis tasks, a failed transcription has no rule-based fallback, so say why (no secrets in these messages).
-        return json({ available: true, provider: provider.id, error: 'transcribe_failed', detail: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
+        return json({ available: true, provider: provider.id, error: 'transcribe_failed', detail: (err instanceof Error ? err.message : String(err)).slice(0, 1200) })
       }
     }
     if (body.task === 'compose_report') {
