@@ -24,6 +24,7 @@ export function InterviewPage({ id }: { id: string }) {
   const projects = useMissionStore((s) => s.projects)
   const ai = useMissionStore((s) => s.ai)
   const thinking = useMissionStore((s) => s.thinking)
+  const error = useMissionStore((s) => s.error)
   const openMission = useMissionStore((s) => s.openMission)
   const transition = useMissionStore((s) => s.transition)
   const beginInterview = useMissionStore((s) => s.beginInterview)
@@ -84,43 +85,97 @@ export function InterviewPage({ id }: { id: string }) {
   // --------------------------------------------------------------------------- gates before the chat
   if (!bundle.interview) {
     const plan = ctx ? planTopics(set, ctx).plan : []
+    const canStart = isReq && (m.status === 'approved' || m.status === 'debrief')
+    // Say precisely WHY the report cannot be started, instead of a generic sentence.
+    const blocked = canStart
+      ? null
+      : !isReq
+        ? `گزارش این مأموریت را فقط بازدیدکننده (${m.requesterName}) می‌تواند ثبت کند.`
+        : m.status === 'draft' || m.status === 'returned'
+          ? 'درخواست مأموریت هنوز برای تأیید ارسال نشده است. ابتدا درخواست را ارسال کنید.'
+          : m.status === 'pending_approval'
+            ? 'درخواست مأموریت هنوز تأیید نشده است. گزارش پس از تأیید مدیر قابل ثبت است.'
+            : m.status === 'report_review' || m.status === 'ready_for_claim' || m.status === 'claimed'
+              ? 'گزارش این مأموریت قبلاً ثبت و ارسال شده است.'
+              : 'برای این مأموریت امکان ثبت گزارش وجود ندارد.'
+    const start = async () => {
+      setStarting(true)
+      if (m.status === 'approved') {
+        const ok = await transition('start_debrief')
+        if (!ok) { setStarting(false); return }
+      }
+      await beginInterview()
+      setStarting(false)
+    }
+    // This page lives in the immersive (non-scrolling) shell, so it must scroll itself — on a phone the
+    // start button used to sit below the fold with no way to reach it.
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 p-4 sm:p-8">
-        <button className="ms-btn ms-btn-ghost ms-btn-sm self-start" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> بازگشت</button>
-        <div className="ms-card p-6 text-center">
-          <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)' }}><Sparkles size={26} aria-hidden /></span>
-          <h1 className="text-[20px] font-black leading-9">گزارش‌گیری هوشمند بازدید</h1>
-          <p className="ms-ink2 mx-auto mt-2 max-w-md text-[13px] leading-8">
-            به‌جای پر کردن فرم طولانی، با چند سؤال کوتاه گفت‌وگو می‌کنیم. می‌توانید صحبت کنید یا تایپ کنید. اگر پاسخی ناقص باشد، فقط همان بخش را دوباره می‌پرسم.
-          </p>
-          <div className="ms-card-flat mx-auto mt-4 max-w-md p-4 text-right">
-            <p className="text-[12px] font-extrabold">موضوعاتی که برای این مأموریت پرسیده می‌شود ({faNum(plan.length)}):</p>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto flex max-w-2xl flex-col gap-4 p-4 pb-28 sm:p-8">
+          <button className="ms-btn ms-btn-ghost ms-btn-sm self-start" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> بازگشت</button>
+          {error && <p role="alert" className="rounded-xl px-4 py-3 text-[12.5px] leading-7" style={{ background: 'color-mix(in srgb, var(--ms-bad) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--ms-bad) 40%, transparent)' }}>{error}</p>}
+          <div className="ms-card p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)' }}><Sparkles size={24} aria-hidden /></span>
+              <div className="min-w-0">
+                <h1 className="text-[19px] font-black leading-8">ثبت گزارش بازدید</h1>
+                <p className="ms-muted truncate text-[12px]">{m.projectName} · {m.code}</p>
+              </div>
+            </div>
+
+            {blocked ? (
+              <div className="mt-4 rounded-xl px-4 py-3 text-[13px] leading-8" style={{ background: 'color-mix(in srgb, var(--ms-warn) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--ms-warn) 38%, transparent)' }}>
+                {blocked}
+                <button className="ms-btn ms-btn-sm mt-2 block" onClick={() => go({ kind: m.status === 'draft' || m.status === 'returned' ? 'form' : 'mission', id })}>
+                  {m.status === 'draft' || m.status === 'returned' ? 'رفتن به درخواست' : 'رفتن به صفحه مأموریت'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="ms-ink2 mt-4 text-[13px] leading-8">
+                  گزارش را با گفت‌وگو ثبت می‌کنید، نه با پر کردن فرم. من چند سؤال کوتاه می‌پرسم؛ شما صحبت یا تایپ می‌کنید. هر جا پاسخ ناقص بود فقط همان بخش را دوباره می‌پرسم.
+                </p>
+                <button className="ms-btn ms-btn-primary mt-4 w-full max-md:hidden" style={{ minHeight: 48, fontSize: 15 }} disabled={starting} onClick={start}>
+                  <Sparkles size={17} aria-hidden /> {starting ? 'در حال آماده‌سازی…' : m.status === 'debrief' ? 'شروع گفت‌وگو' : 'شروع ثبت گزارش'}
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="ms-card p-5">
+            <p className="ms-eyebrow mb-3">راهنما</p>
+            <ol className="flex flex-col gap-3">
+              {[
+                ['۱', 'شروع را بزنید', 'گفت‌وگو باز می‌شود و اولین سؤال نمایش داده می‌شود.'],
+                ['۲', 'پاسخ بدهید', 'پایین صفحه کادر پاسخ است. با دکمه میکروفون صحبت کنید یا تایپ کنید، سپس «ارسال» را بزنید. برای پاسخ‌های کوتاه دکمه‌های آماده هم هست.'],
+                ['۳', 'سؤال تکمیلی را جواب دهید', 'اگر مشکل یا ریسکی گفتید، علت، اثر، مسئول و موعد آن را می‌پرسم. «نمی‌دانم» هم پاسخ قبول است.'],
+                ['۴', 'عکس و مستند بگذارید', 'در بخش «یافته‌ها» (در موبایل: تب بالای صفحه) برای هر موضوع عکس، صورتجلسه یا نامه پیوست کنید.'],
+                ['۵', 'مرور و ارسال', 'پس از پایان همه موضوع‌ها، خلاصه را بررسی و برای مدیر ارسال کنید. می‌توانید هر زمان خارج شوید؛ پاسخ‌ها ذخیره می‌شوند.'],
+              ].map(([n, t, d]) => (
+                <li key={n} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-black" style={{ background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)' }}>{n}</span>
+                  <span className="min-w-0"><b className="block text-[13px] leading-7">{t}</b><span className="ms-ink2 block text-[12px] leading-7">{d}</span></span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="ms-card p-5">
+            <p className="text-[12.5px] font-extrabold">موضوعات این گفت‌وگو ({faNum(plan.length)})</p>
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {plan.map((k) => <li key={k}><Pill tone={mandatory.includes(k) ? 'accent' : 'neutral'}>{mandatory.includes(k) && <Star size={10} aria-hidden />}{topicTitle(set, k)}</Pill></li>)}
             </ul>
-            <p className="ms-muted mt-2 text-[11px] leading-6">★ موضوع‌های مرتبط با اهداف مأموریت شما — پیش از ارسال گزارش باید کامل شوند.</p>
+            <p className="ms-muted mt-2 text-[11px] leading-6">★ مرتبط با اهداف مأموریت شما؛ پیش از ارسال گزارش باید کامل شوند. زمان تقریبی: ۸ تا ۱۵ دقیقه. تحلیل پاسخ‌ها: {ai.label}</p>
           </div>
-          <p className="ms-muted mt-3 text-[11.5px]">تحلیل پاسخ‌ها: {ai.label}</p>
-          {isReq && (m.status === 'approved' || m.status === 'debrief') ? (
-            <button
-              className="ms-btn ms-btn-primary mt-5"
-              disabled={starting}
-              onClick={async () => {
-                setStarting(true)
-                if (m.status === 'approved') {
-                  const ok = await transition('start_debrief')
-                  if (!ok) { setStarting(false); return }
-                }
-                await beginInterview()
-                setStarting(false)
-              }}
-            >
-              <Sparkles size={15} aria-hidden /> {starting ? 'در حال آماده‌سازی…' : 'شروع گفت‌وگو'}
-            </button>
-          ) : (
-            <p className="ms-ink2 mt-5 text-[12.5px]">گزارش‌گیری فقط پس از تأیید مأموریت و توسط بازدیدکننده شروع می‌شود.</p>
-          )}
         </div>
+
+        {canStart && (
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t px-4 py-3 md:hidden" style={{ borderColor: 'var(--ms-line)', background: 'color-mix(in srgb, var(--ms-panel) 95%, transparent)', backdropFilter: 'blur(12px)', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+            <button className="ms-btn ms-btn-primary w-full" style={{ minHeight: 48, fontSize: 15 }} disabled={starting} onClick={start}>
+              <Sparkles size={17} aria-hidden /> {starting ? 'در حال آماده‌سازی…' : m.status === 'debrief' ? 'شروع گفت‌وگو' : 'شروع ثبت گزارش'}
+            </button>
+          </div>
+        )}
       </div>
     )
   }
@@ -295,7 +350,7 @@ export function InterviewPage({ id }: { id: string }) {
               </button>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-[11px]">
-              <span className="ms-muted">{speech.error || (speech.supported ? 'برای ارسال: دکمه ارسال یا Ctrl+Enter' : 'میکروفون در این مرورگر در دسترس نیست')}</span>
+              <span className={error ? '' : 'ms-muted'} style={error ? { color: 'var(--ms-bad)', fontWeight: 700 } : undefined}>{error || speech.error || (speech.supported ? 'برای ارسال: دکمه ارسال یا Ctrl+Enter' : 'میکروفون در این مرورگر در دسترس نیست')}</span>
               <button className="ms-muted underline-offset-2 hover:underline" onClick={() => setSkipping(true)}>این موضوع را رد کن</button>
             </div>
           </div>

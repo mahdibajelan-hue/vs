@@ -52,7 +52,7 @@ export function nextStepFor(m: Mission, user: CurrentUser | null): NextStep | nu
     case 'approved': {
       if (!isReq) return null
       const late = m.endDate < todayIso() ? daysBetween(m.endDate, todayIso()) : 0
-      return { label: 'شروع گزارش‌گیری', view: { kind: 'interview', id: m.id }, tone: 'accent', hint: late > 0 ? `${late} روز از پایان مأموریت گذشته است.` : 'پس از بازدید، گفت‌وگوی گزارش را شروع کنید.', owner: 'requester' }
+      return { label: 'ثبت گزارش بازدید', view: { kind: 'interview', id: m.id }, tone: 'accent', hint: late > 0 ? `${late} روز از پایان مأموریت گذشته است.` : 'پس از بازدید، گفت‌وگوی گزارش را شروع کنید.', owner: 'requester' }
     }
     case 'debrief':
       return isReq ? { label: 'ادامه گزارش‌گیری', view: { kind: 'interview', id: m.id }, tone: 'accent', hint: 'گفت‌وگوی گزارش نیمه‌تمام است.', owner: 'requester' } : null
