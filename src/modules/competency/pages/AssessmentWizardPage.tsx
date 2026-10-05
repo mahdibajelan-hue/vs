@@ -7,6 +7,7 @@ import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, quest
 import { jobRoleLabel } from '../lib/competencyData'
 import type { QuestionType } from '../types'
 import { ProfileForm } from '../components/ProfileForm'
+import { WorkStatusEditor } from '../components/WorkStatusEditor'
 import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
 import { CandidatePhoto } from '../components/CandidatePhoto'
 import { QuestionScoreCard, type PanelVote } from '../components/QuestionScoreCard'
@@ -390,7 +391,13 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
               <InfoRow label="سابقه اجرای خط لوله" value={assessment.yearsExperiencePipeline != null ? `${assessment.yearsExperiencePipeline} سال` : '—'} />
               <InfoRow label="کارفرمای فعلی" value={assessment.currentEmployer || '—'} />
               <InfoRow label="تاریخ مصاحبه" value={formatJalali(assessment.interviewDate)} />
+              <InfoRow
+                label="وضعیت اشتغال"
+                value={assessment.workStatus === 'on_project' ? `شاغل در پروژه ${assessment.workProjectName}` : assessment.workStatus === 'open_to_work' ? 'آماده به کار (Open to work)' : 'نامشخص'}
+              />
             </div>
+            {/* Same lead-only update right as the profile itself (comp_assessments update = comp_is_lead). */}
+            {isLead && <WorkStatusEditor assessment={assessment} />}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <EducationCards value={assessment.education} />
               <EmploymentCards value={assessment.employmentHistory} />

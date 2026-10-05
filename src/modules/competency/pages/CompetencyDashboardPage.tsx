@@ -703,11 +703,13 @@ function ActionCandidateRow({
     <div className="fx-sub group flex items-center gap-2 rounded-lg border-r-[3px] p-1.5 pr-2.5 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-right">
         <div className="relative shrink-0">
-          <OpenToWorkRing active={a.workStatus === 'open_to_work'} size={32}>
-            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
-              {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
-            </div>
-          </OpenToWorkRing>
+          <div className="h-8 w-8">
+            <OpenToWorkRing active={a.workStatus === 'open_to_work'} size={32}>
+              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
+                {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
+              </div>
+            </OpenToWorkRing>
+          </div>
           {a.isApproved && (
             <span className="absolute -bottom-1 -left-1 scale-75">
               <ApprovalMedal size="sm" level={approvalLevel(a.isApproved, overall)} />
