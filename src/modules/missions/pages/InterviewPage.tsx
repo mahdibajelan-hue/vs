@@ -10,6 +10,7 @@ import { EvidencePanel } from '../components/EvidencePanel'
 import { FindingEditor } from '../components/FindingEditor'
 import { useSpeech } from '../components/useSpeech'
 import { planTopics, type MissionContext } from '../lib/questionSets'
+import { BUILD_ID } from '../platform'
 import type { Finding } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
 import { Modal } from '../platform'
@@ -372,7 +373,7 @@ export function InterviewPage({ id }: { id: string }) {
           <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> خروج</button>
           <div className="min-w-0 leading-tight">
             <p className="truncate text-[13px] font-extrabold">{m.projectName}</p>
-            <p className="ms-muted truncate text-[10.5px]">{m.code} · ذخیره خودکار</p>
+            <p className="ms-muted truncate text-[10.5px]">{m.code} · ذخیره خودکار · <span dir="ltr">{BUILD_ID}</span></p>
           </div>
         </div>
         <div className="flex items-center gap-2">

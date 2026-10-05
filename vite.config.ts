@@ -3,6 +3,10 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import * as cesiumPluginModule from 'vite-plugin-cesium'
+import { execSync } from 'node:child_process'
+
+// Short commit id shown in the Missions header so it is obvious which deployed build a browser is running.
+const buildId = (process.env.GITHUB_SHA ?? (() => { try { return execSync('git rev-parse HEAD').toString() } catch { return 'dev' } })()).slice(0, 7)
 
 // vite-plugin-cesium's CJS/ESM interop confuses TS's nodenext module resolution (it resolves the
 // default export as the whole namespace object) — the plugin itself works fine at runtime, so this
@@ -11,6 +15,7 @@ const cesium = (cesiumPluginModule as unknown as { default: (options?: Record<st
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(buildId) },
   // GitHub Pages serves this repo under /vs/ (a project site, not a username.github.io root site).
   base: process.env.GH_PAGES ? '/vs/' : '/',
   // vite-plugin-cesium copies Cesium's static Assets/Widgets/Workers into the build and points

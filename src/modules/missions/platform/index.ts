@@ -15,3 +15,6 @@ export { FarinMark } from '../../../components/common/Logo'
 export { ModuleHeaderActions } from '../../../components/common/ModuleHeaderActions'
 export { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 export { formatJalali, isoToJalali, jalaliToIso, todayJalali, toGregorian, toJalali, jalaliMonthLength, JALALI_MONTHS } from '../../../lib/jalali'
+
+/** Short commit id of the running build (injected by the host's bundler), or 'dev'. */
+export const BUILD_ID: string = typeof __BUILD_ID__ !== 'undefined' && __BUILD_ID__ ? __BUILD_ID__ : 'dev'

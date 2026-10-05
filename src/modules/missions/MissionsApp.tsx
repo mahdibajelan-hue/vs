@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles } from 'lucide-react'
-import { ModuleHeaderActions, StorageErrorBanner } from './platform'
+import { BUILD_ID, ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useMissionStore } from './store/useMissionStore'
 import type { MissionRepo } from './repo/types'
 import { NavContext, type View } from './nav'
@@ -72,7 +72,7 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-[14.5px] font-black">مأموریت و بازدید پروژه</span>
-              <span className="ms-muted hidden text-[10.5px] sm:block" dir="ltr">Mission · Visit · Debrief · Insight</span>
+              <span className="ms-muted hidden text-[10.5px] sm:block" dir="ltr">Mission · Visit · Debrief · Insight · {BUILD_ID}</span>
             </span>
           </button>
 
