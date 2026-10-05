@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, Hourglass, Plus, Repeat, Sprout, Trash2, TrendingUp, User, Users } from 'lucide-react'
+import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, Hourglass, Plus, Repeat, Search, Sprout, Trash2, TrendingUp, User, Users, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
@@ -25,6 +25,28 @@ interface CompetencyDashboardPageProps {
   nav: Partial<Record<CompetencySection, () => void>>
 }
 
+type StatusFilter = 'all' | 'mine' | 'inProgress' | 'completed' | 'approved'
+const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
+  { id: 'all', label: 'همه وضعیت‌ها' },
+  { id: 'mine', label: 'منتظر اقدام من' },
+  { id: 'inProgress', label: 'در جریان' },
+  { id: 'completed', label: 'تکمیل‌شده' },
+  { id: 'approved', label: 'پذیرفته‌شده' },
+]
+
+/** Lowercase, unify Arabic/Persian letter variants and Persian/Arabic digits so «علی» / «علي» and «۰۹۱۲» / «0912» match. */
+function normalizeSearch(v: string): string {
+  return v
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/[\u200c\u200f\u200e]/g, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** Landing page of the module — cross-role statistics (how many candidates, how many accepted, who
  * leads each specialty) plus the full candidate grid to open one. Replaces the old plain list page:
  * item 9 of the redesign asked for exactly this comparison view instead of a bare list. */
@@ -45,6 +67,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchDevelopmentPlans = useCompetencyStore((s) => s.fetchDevelopmentPlans)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   // N-12: the next step per candidate — from the loaded rows plus two light lists: every panel
   // assignment (assessment/user/lead only) and the personality tests' statuses.
   const myProfile = useAuthStore((s) => s.profile)
@@ -157,7 +181,20 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     }
     return map
   }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myId, isModuleAdmin, isDesigner])
-  const filteredAssessments = roleFilter === 'all' ? assessments : assessments.filter((a) => a.jobRole === roleFilter)
+  const filteredAssessments = useMemo(() => {
+    const q = normalizeSearch(query)
+    return assessments.filter((a) => {
+      if (roleFilter !== 'all' && a.jobRole !== roleFilter) return false
+      if (statusFilter === 'approved' && !a.isApproved) return false
+      if (statusFilter === 'completed' && a.status !== 'completed') return false
+      if (statusFilter === 'inProgress' && a.status === 'completed') return false
+      if (statusFilter === 'mine' && !nextStepById.get(a.id)?.mine) return false
+      if (!q) return true
+      const hay = normalizeSearch([a.candidateName, a.candidatePosition, a.currentEmployer, a.candidateNationalId, a.candidatePhone, a.candidateEmail].join(' '))
+      return q.split(' ').every((t) => hay.includes(t))
+    })
+  }, [assessments, roleFilter, statusFilter, query, nextStepById])
+  const filtersActive = roleFilter !== 'all' || statusFilter !== 'all' || query.trim() !== ''
 
   const totalInterviews = assessments.length
   const acceptedCount = assessments.filter((a) => a.isApproved).length
@@ -291,6 +328,37 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
             <DemoDataToggle />
           </div>
 
+          <div className="mb-2.5 flex flex-col gap-2">
+            <div className="relative">
+              <Search size={14} className="fx-muted pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="جستجوی متقاضی: نام، سمت، کارفرما، کد ملی، تلفن…"
+                aria-label="جستجوی متقاضی"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-9 text-xs outline-none focus:border-purple-400/60"
+              />
+              {query && (
+                <button onClick={() => setQuery('')} aria-label="پاک کردن جستجو" className="fx-muted absolute left-2 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-white/10">
+                  <X size={13} aria-hidden />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="فیلتر وضعیت">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  aria-pressed={statusFilter === f.id}
+                  onClick={() => setStatusFilter(f.id)}
+                  className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${statusFilter === f.id ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {usedRoles.length > 1 && (
             <div className="mb-2.5 flex flex-wrap gap-1.5">
               <button
@@ -311,7 +379,29 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
             </div>
           )}
 
-          {filteredAssessments.length === 0 ? (
+          {filtersActive && assessments.length > 0 && (
+            <p className="fx-muted mb-2 flex items-center gap-2 text-[10.5px]">
+              {filteredAssessments.length.toLocaleString('fa-IR')} از {assessments.length.toLocaleString('fa-IR')} متقاضی
+              <button
+                onClick={() => {
+                  setQuery('')
+                  setStatusFilter('all')
+                  setRoleFilter('all')
+                }}
+                className="text-purple-300 underline-offset-2 hover:underline"
+              >
+                پاک کردن فیلترها
+              </button>
+            </p>
+          )}
+
+          {assessments.length > 0 && filteredAssessments.length === 0 ? (
+            <div className="fx-card flex flex-col items-center gap-2 p-8 text-center">
+              <Search size={24} className="fx-muted" />
+              <p className="text-sm text-secondary">متقاضی با این مشخصات پیدا نشد.</p>
+              <p className="fx-muted text-[10.5px]">املای نام را بررسی کنید یا فیلترها را پاک کنید.</p>
+            </div>
+          ) : filteredAssessments.length === 0 ? (
             <div className="fx-card flex flex-col items-center gap-2 p-10 text-center">
               <ClipboardList size={28} className="fx-muted" />
               <p className="text-sm text-secondary">هنوز مصاحبه‌ای ثبت نشده است.</p>
