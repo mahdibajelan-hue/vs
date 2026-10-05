@@ -244,6 +244,7 @@ export function PublicResultsPage({ token }: { token: string }) {
             <div className="cred-title">
               <p className="text-[13.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
               <p className="text-[10px] font-medium text-stone-500">Professional Qualification Card</p>
+              {row.candidate_position && <p className="mt-1 text-[12px] font-bold leading-5 text-stone-700">{row.candidate_position}</p>}
             </div>
           </div>
 
@@ -255,11 +256,9 @@ export function PublicResultsPage({ token }: { token: string }) {
             </div>
             <div className="cred-band-name">
               <p className="text-[22px] font-black leading-8 text-stone-900">{row.candidate_name}</p>
-              {row.candidate_position && <p className="text-[12.5px] font-semibold leading-5 text-stone-600">{row.candidate_position}</p>}
               {row.work_status === 'on_project' && row.work_project_name && (
                 <p className="mt-1 text-[12px] font-extrabold leading-5 text-sky-800">شاغل در پروژه {row.work_project_name}</p>
               )}
-              {approval === 'approved' && <p className="mt-1 text-[11px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</p>}
               {approval === 'conditional' && <p className="mt-1 text-[11px] font-bold text-orange-700">دارای صلاحیت با تأیید مشروط</p>}
             </div>
             <div className="cred-medal-box">
