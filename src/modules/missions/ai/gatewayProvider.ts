@@ -111,3 +111,11 @@ export async function pingGateway(): Promise<{ available: boolean; provider: str
     return { available: false, provider: null }
   }
 }
+
+/** Speech-to-text through the gateway (Gemini audio understanding, or an OpenAI-compatible /audio/transcriptions). */
+export async function transcribeViaGateway(wavBase64: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('mission-ai', { body: { task: 'transcribe', payload: { audio: wavBase64, mime: 'audio/wav', lang: 'fa' } } })
+  const r = data as { available?: boolean; text?: string } | null
+  if (error || !r?.available || typeof r.text !== 'string') throw new Error('transcribe_unavailable')
+  return r.text.trim()
+}

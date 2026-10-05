@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, CircleDot, ListChecks, Mic, MicOff, Paperclip, Plus, Send, SkipForward, Sparkles, Star } from 'lucide-react'
+import { ArrowRight, Check, CircleDot, ListChecks, Loader2, Mic, MicOff, Paperclip, Plus, Send, SkipForward, Sparkles, Star } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
 import { interviewProgress, topicDef } from '../lib/interviewEngine'
@@ -56,7 +56,7 @@ export function InterviewPage({ id }: { id: string }) {
     if (finalChunk) setDraft((d) => (d ? d.replace(/\s+$/, '') + ' ' : '') + finalChunk.trim())
     setInterim(partial)
     setMode('voice')
-  })
+  }, ai.enhanced)
 
   const set = sets[0]
   const turns = bundle?.turns ?? []
@@ -342,15 +342,21 @@ export function InterviewPage({ id }: { id: string }) {
                   disabled={thinking}
                 />
               </div>
-              <button className={`ms-btn ms-btn-icon ${speech.listening ? 'ms-mic-live' : ''}`} onClick={() => (speech.listening ? speech.stop() : speech.start())} disabled={!speech.supported || thinking} aria-label={speech.listening ? 'توقف ضبط' : 'پاسخ صوتی'} title={speech.supported ? 'پاسخ صوتی (فارسی)' : 'مرورگر شما تبدیل گفتار را پشتیبانی نمی‌کند؛ از دیکته صفحه‌کلید استفاده کنید'}>
-                {speech.supported ? <Mic size={18} aria-hidden /> : <MicOff size={18} aria-hidden />}
+              <button
+                className={`ms-btn ms-btn-icon ${speech.listening ? 'ms-mic-live' : ''}`}
+                onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                disabled={!speech.supported || thinking || speech.state === 'transcribing'}
+                aria-label={speech.listening ? 'توقف ضبط' : 'پاسخ صوتی'}
+                title={speech.supported ? 'پاسخ صوتی (فارسی)' : speech.unsupportedReason}
+              >
+                {speech.state === 'transcribing' ? <Loader2 size={18} className="animate-spin" aria-hidden /> : speech.supported ? <Mic size={18} aria-hidden /> : <MicOff size={18} aria-hidden />}
               </button>
               <button className="ms-btn ms-btn-primary ms-btn-icon" onClick={() => send()} disabled={!draft.trim() || thinking} aria-label="ارسال پاسخ">
                 <Send size={17} aria-hidden style={{ transform: 'scaleX(-1)' }} />
               </button>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-[11px]">
-              <span className={error ? '' : 'ms-muted'} style={error ? { color: 'var(--ms-bad)', fontWeight: 700 } : undefined}>{error || speech.error || (speech.supported ? 'برای ارسال: دکمه ارسال یا Ctrl+Enter' : 'میکروفون در این مرورگر در دسترس نیست')}</span>
+              <span className={error ? '' : 'ms-muted'} style={error ? { color: 'var(--ms-bad)', fontWeight: 700 } : undefined}>{error || speech.error || (speech.state === 'transcribing' ? 'در حال تبدیل صدا به متن…' : speech.listening ? 'در حال ضبط… پس از پایان صحبت دوباره روی میکروفون بزنید' : speech.supported ? 'برای ارسال: دکمه ارسال یا Ctrl+Enter' : speech.unsupportedReason)}</span>
               <button className="ms-muted underline-offset-2 hover:underline" onClick={() => setSkipping(true)}>این موضوع را رد کن</button>
             </div>
           </div>

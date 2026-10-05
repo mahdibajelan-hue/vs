@@ -1,8 +1,8 @@
 // Mission & Visit Debrief — AI gateway (schema.sql Section 61).
 //
-// ONE narrow, provider-independent endpoint for the three things the module may ask a language model to
-// do: analyse an interview answer, phrase the next follow-up question, and polish the management report's
-// wording. The browser never talks to a model vendor — it talks to this function, and THIS function talks
+// ONE narrow, provider-independent endpoint for the four things the module may ask a language model to
+// do: analyse an interview answer, phrase the next follow-up question, polish the management report's
+// wording, and transcribe a spoken answer (voice input on browsers without a built-in recogniser). The browser never talks to a model vendor — it talks to this function, and THIS function talks
 // to whichever provider the deployment is configured for:
 //
 //   MISSION_AI_PROVIDER = gemini   (default)  → Google Gemini REST, key GEMINI_API_KEY, model MISSION_AI_MODEL | GEMINI_MODEL
@@ -37,6 +37,8 @@ interface Provider {
   configured(): boolean
   /** Returns the model's JSON object for the given system+user prompt. */
   generateJson(system: string, user: string, schemaHint: string): Promise<Json>
+  /** Speech → text. `audio` is base64 of a 16 kHz mono PCM WAV recorded in the browser. */
+  transcribe(audio: string, mime: string, lang: string): Promise<string>
 }
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
@@ -81,6 +83,47 @@ const gemini: Provider = {
       return parseJsonLoose(text)
     })
   },
+  transcribe: (a, m, l) => geminiTranscribe(a, m, l),
+}
+
+const TRANSCRIBE_PROMPT = (lang: string) =>
+  `Transcribe this audio recording exactly as spoken. The language is ${lang === 'fa' ? 'Persian (Farsi)' : lang}. ` +
+  'Write it in Persian script with natural punctuation, keep numbers as digits where they were clearly said as numbers, ' +
+  'do not translate, summarise, or add anything. If there is no intelligible speech, return an empty string. Return ONLY the transcript text.'
+
+const geminiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
+  const key = Deno.env.get('GEMINI_API_KEY')!
+  const model = Deno.env.get('MISSION_AI_AUDIO_MODEL') || Deno.env.get('MISSION_AI_MODEL') || Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash'
+  return withRetry(async () => {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: TRANSCRIBE_PROMPT(lang) }, { inline_data: { mime_type: mime, data: audio } }] }],
+        generationConfig: { temperature: 0 },
+      }),
+    })
+    if (!res.ok) throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 300)}`)
+    const data = await res.json()
+    return (data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '').trim()
+  })
+}
+
+const openaiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
+  const base = (Deno.env.get('MISSION_AI_BASE_URL') || 'https://api.openai.com/v1').replace(/\/$/, '')
+  const key = Deno.env.get('MISSION_AI_API_KEY') ?? ''
+  const model = Deno.env.get('MISSION_AI_TRANSCRIBE_MODEL') || 'whisper-1'
+  const bytes = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0))
+  const form = new FormData()
+  form.append('file', new Blob([bytes], { type: mime }), 'voice.wav')
+  form.append('model', model)
+  form.append('language', lang)
+  form.append('response_format', 'json')
+  return withRetry(async () => {
+    const res = await fetch(`${base}/audio/transcriptions`, { method: 'POST', headers: key ? { Authorization: `Bearer ${key}` } : {}, body: form })
+    if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 300)}`)
+    return String((await res.json())?.text ?? '').trim()
+  })
 }
 
 const openaiCompatible: Provider = {
@@ -109,6 +152,7 @@ const openaiCompatible: Provider = {
       return parseJsonLoose(data?.choices?.[0]?.message?.content ?? '{}')
     })
   },
+  transcribe: (a, m, l) => openaiTranscribe(a, m, l),
 }
 
 const PROVIDERS: Record<string, Provider> = { gemini, openai: openaiCompatible }
@@ -165,6 +209,13 @@ Deno.serve(async (req) => {
     if (body.task === 'analyze_answer') {
       const out = await provider.generateJson(SYSTEM_ANALYZE, JSON.stringify(body.payload), SCHEMA_ANALYZE)
       return json({ available: true, provider: provider.id, result: out })
+    }
+    if (body.task === 'transcribe') {
+      const p = body.payload as { audio?: string; mime?: string; lang?: string } | undefined
+      // ~2 minutes of 16 kHz mono PCM is ~3.8 MB (~5.1 MB base64); refuse anything larger.
+      if (!p?.audio || p.audio.length > 6_500_000) return json({ error: 'bad_audio' }, 400)
+      const text = await provider.transcribe(p.audio, p.mime || 'audio/wav', p.lang || 'fa')
+      return json({ available: true, provider: provider.id, text })
     }
     if (body.task === 'compose_report') {
       const out = await provider.generateJson(SYSTEM_REPORT, JSON.stringify(body.payload), SCHEMA_REPORT)
