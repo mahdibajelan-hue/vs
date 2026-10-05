@@ -275,9 +275,30 @@ export function tierColor(percent: number | null): string {
   if (percent == null) return '#6b7280'
   if (percent >= 80) return '#34d399'
   if (percent >= 60) return '#a78bfa'
+  if (percent >= CONDITIONAL_MIN) return CONDITIONAL_COLOR
   if (percent >= 40) return '#fbbf24'
   return '#f87171'
 }
+
+/** Overall scores of 50–59 sit in the «تأیید مشروط» band: shown orange, and an approval granted to
+ * someone in this band reads as a conditional approval rather than a full one. */
+export const CONDITIONAL_MIN = 50
+export const CONDITIONAL_MAX = 59
+export const CONDITIONAL_COLOR = '#fb923c'
+
+export type ApprovalLevel = 'none' | 'approved' | 'conditional'
+
+export function isConditionalScore(overall: number | null | undefined): boolean {
+  return overall != null && overall >= CONDITIONAL_MIN && overall < CONDITIONAL_MAX + 1
+}
+
+/** The lead's explicit go/no-go (isApproved) refined by the score band — never granted by the score alone. */
+export function approvalLevel(isApproved: boolean, overall: number | null | undefined): ApprovalLevel {
+  if (!isApproved) return 'none'
+  return isConditionalScore(overall) ? 'conditional' : 'approved'
+}
+
+export const APPROVAL_LABEL: Record<ApprovalLevel, string> = { none: 'تأیید نشده', approved: 'تأیید شده', conditional: 'تأیید مشروط' }
 
 /** @deprecated kept for the short on-card label; prefer maturityBand for the full guidance text. */
 export function overallRatingLabel(percent: number | null): string {

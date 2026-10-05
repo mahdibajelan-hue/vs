@@ -311,7 +311,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const headerRight = (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-secondary">
       {/* The candidate's photo on every wizard stage, for every judge — not only on the lead-only results page. */}
-      <CandidatePhoto path={assessment.photoUrl} size={26} />
+      <CandidatePhoto path={assessment.photoUrl} size={26} openToWork={assessment.workStatus === 'open_to_work'} />
       <AssessmentChainNav assessment={assessment} onOpen={(id) => openAssessment(id, 'profile')} />
       <User size={13} className="text-purple-300" />
       <span className="font-bold text-primary">{myName ?? '—'}</span>
@@ -368,7 +368,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           <div className="glass-panel space-y-3 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <CandidatePhoto path={assessment.photoUrl} size={64} />
+                <CandidatePhoto path={assessment.photoUrl} size={64} openToWork={assessment.workStatus === 'open_to_work'} />
                 <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
               </div>
               {/* Only the lead can save the profile (comp_assessments update = comp_is_lead). */}

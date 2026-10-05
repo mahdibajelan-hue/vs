@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, Hourglass, Plus, Repeat, Search, Sprout, Trash2, TrendingUp, User, Users, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { computeDomainScores, computeOverallPercent, maturityBand } from '../lib/competencyModel'
+import { approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { ApprovalMedal } from '../components/ApprovalMedal'
+import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { RingChart } from '../components/DonutChart'
 import { tone } from '../lib/tone'
@@ -25,14 +26,30 @@ interface CompetencyDashboardPageProps {
   nav: Partial<Record<CompetencySection, () => void>>
 }
 
-type StatusFilter = 'all' | 'mine' | 'inProgress' | 'completed' | 'approved'
+type StatusFilter = 'all' | 'mine' | 'inProgress' | 'completed' | 'approved' | 'conditional'
+type WorkFilter = 'all' | 'open_to_work' | 'on_project'
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'همه وضعیت‌ها' },
   { id: 'mine', label: 'منتظر اقدام من' },
   { id: 'inProgress', label: 'در جریان' },
   { id: 'completed', label: 'تکمیل‌شده' },
-  { id: 'approved', label: 'پذیرفته‌شده' },
+  { id: 'approved', label: 'تأییدشده' },
+  { id: 'conditional', label: 'تأیید مشروط' },
 ]
+const WORK_FILTERS: { id: WorkFilter; label: string }[] = [
+  { id: 'all', label: 'همه' },
+  { id: 'open_to_work', label: 'Open to work' },
+  { id: 'on_project', label: 'شاغل در پروژه' },
+]
+
+/** Row/accent color for an overall score: orange for the conditional 50–59 band, else the usual tiers. */
+function rowTier(overall: number | null): string {
+  if (overall == null) return '#6b7280'
+  if (overall >= 75) return '#34d399'
+  if (overall >= 60) return '#fbbf24'
+  if (isConditionalScore(overall)) return CONDITIONAL_COLOR
+  return '#f87171'
+}
 
 /** Lowercase, unify Arabic/Persian letter variants and Persian/Arabic digits so «علی» / «علي» and «۰۹۱۲» / «0912» match. */
 function normalizeSearch(v: string): string {
@@ -69,6 +86,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [workFilter, setWorkFilter] = useState<WorkFilter>('all')
+  const [projectFilter, setProjectFilter] = useState('all')
   // N-12: the next step per candidate — from the loaded rows plus two light lists: every panel
   // assignment (assessment/user/lead only) and the personality tests' statuses.
   const myProfile = useAuthStore((s) => s.profile)
@@ -181,20 +200,29 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     }
     return map
   }, [assessments, panelistScores, panelRows, personalityAssessments, personalityLoaded, mcqStatuses, mcqLoaded, myId, isModuleAdmin, isDesigner])
+  const overallById = useMemo(() => new Map(scored.map((x) => [x.assessment.id, x.overall])), [scored])
+  const projectNames = useMemo(
+    () => [...new Set(assessments.filter((a) => a.workStatus === 'on_project' && a.workProjectName).map((a) => a.workProjectName))].sort((x, y) => x.localeCompare(y, 'fa')),
+    [assessments],
+  )
   const filteredAssessments = useMemo(() => {
     const q = normalizeSearch(query)
     return assessments.filter((a) => {
       if (roleFilter !== 'all' && a.jobRole !== roleFilter) return false
-      if (statusFilter === 'approved' && !a.isApproved) return false
+      if (workFilter !== 'all' && a.workStatus !== workFilter) return false
+      if (workFilter === 'on_project' && projectFilter !== 'all' && a.workProjectName !== projectFilter) return false
+      const level = approvalLevel(a.isApproved, overallById.get(a.id))
+      if (statusFilter === 'approved' && level !== 'approved') return false
+      if (statusFilter === 'conditional' && level !== 'conditional') return false
       if (statusFilter === 'completed' && a.status !== 'completed') return false
       if (statusFilter === 'inProgress' && a.status === 'completed') return false
       if (statusFilter === 'mine' && !nextStepById.get(a.id)?.mine) return false
       if (!q) return true
-      const hay = normalizeSearch([a.candidateName, a.candidatePosition, a.currentEmployer, a.candidateNationalId, a.candidatePhone, a.candidateEmail].join(' '))
+      const hay = normalizeSearch([a.candidateName, a.candidatePosition, a.currentEmployer, a.workProjectName, a.candidateNationalId, a.candidatePhone, a.candidateEmail].join(' '))
       return q.split(' ').every((t) => hay.includes(t))
     })
-  }, [assessments, roleFilter, statusFilter, query, nextStepById])
-  const filtersActive = roleFilter !== 'all' || statusFilter !== 'all' || query.trim() !== ''
+  }, [assessments, roleFilter, statusFilter, workFilter, projectFilter, query, nextStepById, overallById])
+  const filtersActive = roleFilter !== 'all' || statusFilter !== 'all' || workFilter !== 'all' || query.trim() !== ''
 
   const totalInterviews = assessments.length
   const acceptedCount = assessments.filter((a) => a.isApproved).length
@@ -335,7 +363,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="جستجوی متقاضی: نام، سمت، کارفرما، کد ملی، تلفن…"
+                placeholder="جستجوی متقاضی: نام، سمت، پروژه، کارفرما، کد ملی، تلفن…"
                 aria-label="جستجوی متقاضی"
                 className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-9 text-xs outline-none focus:border-purple-400/60"
               />
@@ -356,6 +384,37 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                   {f.label}
                 </button>
               ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="فیلتر وضعیت اشتغال">
+              <span className="fx-muted text-[10.5px]">اشتغال:</span>
+              {WORK_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  aria-pressed={workFilter === f.id}
+                  onClick={() => {
+                    setWorkFilter(f.id)
+                    if (f.id !== 'on_project') setProjectFilter('all')
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors ${workFilter === f.id ? (f.id === 'open_to_work' ? 'bg-emerald-500/25 text-emerald-300' : 'bg-sky-500/25 text-sky-300') : 'bg-white/5 text-secondary hover:bg-white/10'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+              {workFilter === 'on_project' && projectNames.length > 0 && (
+                <select
+                  value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)}
+                  aria-label="فیلتر بر اساس نام پروژه"
+                  className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10.5px] outline-none focus:border-sky-400/60"
+                >
+                  <option value="all">همه پروژه‌ها</option>
+                  {projectNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -387,6 +446,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
                   setQuery('')
                   setStatusFilter('all')
                   setRoleFilter('all')
+                  setWorkFilter('all')
+                  setProjectFilter('all')
                 }}
                 className="text-purple-300 underline-offset-2 hover:underline"
               >
@@ -554,7 +615,7 @@ function TalentPoolRow({
 }) {
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
   const band = maturityBand(overall)
-  const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
+  const tier = rowTier(overall)
 
   return (
     <div className="fx-sub group flex items-center gap-2.5 rounded-lg border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
@@ -562,7 +623,8 @@ function TalentPoolRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
-            {a.isApproved && <ApprovalMedal size="sm" />}
+            {a.isApproved && <ApprovalMedal size="sm" level={approvalLevel(a.isApproved, overall)} />}
+            <WorkStatusChip status={a.workStatus} projectName={a.workProjectName} />
             {a.isDemo && <DemoBadge />}
           </div>
           <p className="fx-muted truncate text-[10.5px]">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
@@ -635,18 +697,20 @@ function ActionCandidateRow({
     }
   }, [a.photoUrl])
 
-  const tier = overall == null ? '#6b7280' : overall >= 75 ? '#34d399' : overall >= 60 ? '#fbbf24' : '#f87171'
+  const tier = rowTier(overall)
 
   return (
     <div className="fx-sub group flex items-center gap-2 rounded-lg border-r-[3px] p-1.5 pr-2.5 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-right">
         <div className="relative shrink-0">
-          <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
-            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
-          </div>
+          <OpenToWorkRing active={a.workStatus === 'open_to_work'} size={32}>
+            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
+              {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
+            </div>
+          </OpenToWorkRing>
           {a.isApproved && (
             <span className="absolute -bottom-1 -left-1 scale-75">
-              <ApprovalMedal size="sm" />
+              <ApprovalMedal size="sm" level={approvalLevel(a.isApproved, overall)} />
             </span>
           )}
           {rank != null && (
@@ -663,6 +727,7 @@ function ActionCandidateRow({
             <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
             {hasPlan && <Sprout size={9} className="shrink-0 text-emerald-300" aria-label="برنامه توسعه فردی فعال" />}
             {reassessmentRelated && <Repeat size={9} className="shrink-0 text-sky-300" aria-label="ارزیابی مجدد" />}
+            <WorkStatusChip status={a.workStatus} projectName={a.workProjectName} />
             {a.isDemo && <DemoBadge />}
           </div>
           <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>

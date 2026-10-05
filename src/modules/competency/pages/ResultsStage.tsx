@@ -55,7 +55,9 @@ import { ApprovalMedal } from '../components/ApprovalMedal'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { generatePersonalityProfile } from '../lib/personalityAnalysis'
-import { computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
+import { APPROVAL_LABEL, approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, tierColor } from '../lib/competencyModel'
+import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
+import { WorkStatusEditor } from '../components/WorkStatusEditor'
 import { computeCategoryScores, questionsForAssessment, resolveOfficialAnswers, usesLegacyPmRubric } from '../lib/roleCompetencyModel'
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
 import { buildGapRows, evidenceMethodMix, isAiAnalysisStale, isCriticalGap, isDevelopmentGap } from '../lib/competencyGap'
@@ -296,6 +298,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     [assessment, questionBank, allPanelists, allPanelistScores, profiles, roleLabel, guidanceRows, gapLabels],
   )
   const { domainScores, overall, completion, status, strengths, weaknesses, isPM } = model
+  const approval = approvalLevel(assessment.isApproved, overall)
 
   const interviewRows = useMemo(
     () =>
@@ -546,11 +549,17 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.45fr_0.85fr_1.1fr]">
           <div className="fx-card fx-tone-wash relative flex flex-col items-center gap-4 overflow-hidden p-5 sm:flex-row" style={tone(status.state === 'final' ? tierColor(overall) : '#a855f7')}>
             <div className="relative shrink-0">
-              <div className="fx-tone-border flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-2" style={{ background: 'var(--fx-surface-2)' }}>
-                {photoUrl ? <img src={photoUrl} alt={`عکس ${assessment.candidateName}`} className="h-full w-full object-cover" /> : <User size={32} className="fx-muted" />}
-              </div>
+              <OpenToWorkRing active={assessment.workStatus === 'open_to_work'} size={96} shape="square" radius={16}>
+                <div className="fx-tone-border flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-2" style={{ background: 'var(--fx-surface-2)' }}>
+                  {photoUrl ? <img src={photoUrl} alt={`عکس ${assessment.candidateName}`} className="h-full w-full object-cover" /> : <User size={32} className="fx-muted" />}
+                </div>
+              </OpenToWorkRing>
               {assessment.isApproved && (
-                <span className="absolute -bottom-1.5 -left-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg ring-2 ring-[var(--fx-ring-hole)]">
+                <span
+                  className={`absolute -left-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-white shadow-lg ring-2 ring-[var(--fx-ring-hole)] ${assessment.workStatus === 'open_to_work' ? '-top-1.5' : '-bottom-1.5'} ${approval === 'conditional' ? '' : 'bg-emerald-500'}`}
+                  style={approval === 'conditional' ? { background: CONDITIONAL_COLOR } : undefined}
+                  title={APPROVAL_LABEL[approval]}
+                >
                   <ShieldCheck size={14} />
                 </span>
               )}
@@ -558,7 +567,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             <div className="min-w-0 flex-1 text-center sm:text-right">
               <p className="flex items-center justify-center gap-1.5 text-xl font-black sm:justify-start">
                 {assessment.candidateName}
-                {assessment.isApproved && <ApprovalMedal />}
+                {assessment.isApproved && <ApprovalMedal level={approval} />}
                 {status.state === 'final' && overall != null && overall >= 85 && <Star size={17} className="fill-amber-400 text-amber-400" />}
               </p>
               <p className="fx-text-2 text-[12px]">متقاضی سمت: {assessment.candidatePosition || roleLabel}</p>
@@ -579,6 +588,12 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                     ثبت نهایی‌شده
                   </span>
                 )}
+                {approval === 'conditional' && (
+                  <span className="fx-tone-bg fx-tone-text rounded-full px-2.5 py-1 text-[10.5px] font-bold" style={tone(CONDITIONAL_COLOR)}>
+                    تأیید مشروط
+                  </span>
+                )}
+                <WorkStatusChip status={assessment.workStatus} projectName={assessment.workProjectName} className="!px-2.5 !py-1 !text-[10.5px]" />
               </div>
             </div>
           </div>
@@ -838,7 +853,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {[
             { label: 'وضعیت ارزیابی', value: assessment.status === 'completed' ? 'ثبت نهایی و قفل‌شده' : 'در جریان', color: assessment.status === 'completed' ? '#10b981' : '#f59e0b' },
-            { label: 'تأیید صلاحیت', value: assessment.isApproved ? 'تأیید شده' : 'تأیید نشده', color: assessment.isApproved ? '#10b981' : '#94a3b8' },
+            { label: 'تأیید صلاحیت', value: APPROVAL_LABEL[approval], color: approval === 'conditional' ? CONDITIONAL_COLOR : approval === 'approved' ? '#10b981' : '#94a3b8' },
             { label: 'نتیجه', value: status.label, color: status.color },
           ].map((x) => (
             <div key={x.label} className="fx-card fx-accent-bar p-3.5" style={tone(x.color)}>
@@ -877,12 +892,22 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             onClick={handleApprove}
             disabled={settingApproval}
             className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
-              assessment.isApproved ? 'fx-sub' : 'bg-emerald-600 text-white hover:bg-emerald-500'
+              assessment.isApproved ? 'fx-sub' : isConditionalScore(overall) ? 'text-white hover:brightness-110' : 'bg-emerald-600 text-white hover:bg-emerald-500'
             }`}
+            style={!assessment.isApproved && isConditionalScore(overall) ? { background: CONDITIONAL_COLOR } : undefined}
           >
-            <ShieldCheck size={14} /> {assessment.isApproved ? 'لغو تایید صلاحیت' : 'تایید و ارسال به مرحله بعد'}
+            <ShieldCheck size={14} />{' '}
+            {assessment.isApproved
+              ? approval === 'conditional'
+                ? 'لغو تأیید مشروط'
+                : 'لغو تایید صلاحیت'
+              : isConditionalScore(overall)
+                ? 'تأیید مشروط و ارسال به مرحله بعد'
+                : 'تایید و ارسال به مرحله بعد'}
           </button>
         </div>
+
+        <WorkStatusEditor assessment={assessment} />
 
         {isModuleAdmin && assessment.status === 'completed' && (
           <div className="fx-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:justify-between" style={tone('#f59e0b')}>

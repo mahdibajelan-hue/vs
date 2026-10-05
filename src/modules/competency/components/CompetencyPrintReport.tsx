@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { formatJalali as formatJalaliDate } from '../../../lib/jalali'
 import { EVIDENCE_METHOD_META, formatLevel, GAP_CONFIDENCE_META, GAP_STATUS_META, sortGapRows, type EvidenceMethodKey, type GapRow } from '../lib/competencyGap'
 import { ACTION_STATUS_META, ACTION_TYPE_LABEL_FA, PLAN_STATUS_META, PRIORITY_META, planProgress } from '../lib/developmentPlan'
+import { APPROVAL_LABEL, approvalLevel, isConditionalScore } from '../lib/competencyModel'
 import { fa, type InterviewSummaryRow, type ResultsModel } from '../lib/resultsModel'
 import { REPORT_WIDTH_PX } from '../lib/reportExport'
 import { scoreBandFa, type FingerprintSnapshot } from '../../personality/lib/fingerprintModel'
@@ -41,6 +42,7 @@ function toneForPercent(p: number | null): string {
   if (p == null) return MUTED
   if (p >= 80) return PRINT_TONE.good
   if (p >= 60) return ACCENT
+  if (isConditionalScore(p)) return '#c2410c'
   if (p >= 40) return PRINT_TONE.warn
   return PRINT_TONE.bad
 }
@@ -779,7 +781,8 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         <KV
           rows={[
             ['وضعیت ارزیابی', a.status === 'completed' ? 'ثبت نهایی و قفل‌شده' : 'در جریان (قابل ویرایش)'],
-            ['تأیید صلاحیت', a.isApproved ? '✓ تأیید شده' : 'تأیید نشده'],
+            ['تأیید صلاحیت', a.isApproved ? `✓ ${APPROVAL_LABEL[approvalLevel(true, m.overall)]}` : APPROVAL_LABEL.none],
+            ['وضعیت اشتغال', a.workStatus === 'on_project' ? `شاغل در پروژه ${a.workProjectName}` : a.workStatus === 'open_to_work' ? 'آماده به کار (Open to work)' : '—'],
             ['نتیجه', status.label],
             ['بازبینی مشخصات', a.reviewedAt ? `${approval.reviewedByName ?? '—'} — ${formatJalali(a.reviewedAt)}` : '—'],
             ['آخرین بازگشایی', a.reopenedAt ? formatJalali(a.reopenedAt) : '—'],

@@ -5,7 +5,8 @@ import { supabase } from '../../../lib/supabaseClient'
 import { FarinMark } from '../../../components/common/Logo'
 import { formatJalali, isoToJalali } from '../../../lib/jalali'
 import { getCompDocSignedUrl } from '../lib/compStorage'
-import { computeCompletion, computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
+import { approvalLevel, computeCompletion, computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
+import { OpenToWorkRing } from '../components/OpenToWorkRing'
 import { computeResultStatus, interpretMaturity } from '../lib/maturityGuidance'
 import { useRoleGuidanceStore } from '../store/useRoleGuidanceStore'
 import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
@@ -37,6 +38,8 @@ interface PublicResultsRow {
   development_areas: string
   resolved_questions: ResolvedQuestion[]
   photo_url: string | null
+  work_status?: string | null
+  work_project_name?: string | null
 }
 
 /** One behavioral/HSE interview competency from comp_public_competency_scores_get (schema.sql Section 60). */
@@ -76,24 +79,28 @@ const COMPETENCY_PALETTE: { ring: string; text: string }[] = [
 ]
 
 /** Zones of the proficiency bar, taken from the module's maturity bands (MATURITY_BAND_DEFS):
- * red = پرریسک+پایه (0-59), yellow = قابل‌قبول (60-74), green = توانمند+راهبردی (75-100). The bar draws
- * the three zones at equal width (like the PMI result bar) and maps the score piecewise onto them, so
- * the marker lands in the zone the candidate's band actually belongs to. */
+ * red = پرریسک+پایه (0-49), orange = مشروط (50-59, the conditional-approval band), yellow = قابل‌قبول
+ * (60-74), green = توانمند+راهبردی (75-100). The bar draws the zones at equal width (like the PMI
+ * result bar) and maps the score piecewise onto them, so the marker lands in the zone the
+ * candidate's band actually belongs to. */
 const ZONES = [
-  { key: 'red', label: 'نیازمند توسعه', range: '۰ تا ۵۹', min: 0, max: 59, from: '#f87171', to: '#dc2626' },
-  { key: 'yellow', label: 'قابل‌قبول', range: '۶۰ تا ۷۴', min: 60, max: 74, from: '#fde047', to: '#eab308' },
-  { key: 'green', label: 'توانمند', range: '۷۵ تا ۱۰۰', min: 75, max: 100, from: '#4ade80', to: '#16a34a' },
+  { key: 'red', label: 'نیازمند توسعه', range: '۰ تا ۴۹', min: 0, span: 50, from: '#f87171', to: '#dc2626' },
+  { key: 'orange', label: 'مشروط', range: '۵۰ تا ۵۹', min: 50, span: 10, from: '#fdba74', to: '#ea580c' },
+  { key: 'yellow', label: 'قابل‌قبول', range: '۶۰ تا ۷۴', min: 60, span: 15, from: '#fde047', to: '#eab308' },
+  { key: 'green', label: 'توانمند', range: '۷۵ تا ۱۰۰', min: 75, span: 25, from: '#4ade80', to: '#16a34a' },
 ] as const
-// The bar is drawn left→right red, yellow, green, so green ends up on the right.
+// The bar is drawn left→right red, orange, yellow, green, so green ends up on the right.
 
-/** 0-1 position of a 0-100 score along the three equal-width zones. */
+function zoneIndex(score: number): number {
+  return score < 50 ? 0 : score < 60 ? 1 : score < 75 ? 2 : 3
+}
+
+/** 0-1 position of a 0-100 score along the equal-width zones. */
 function zonePosition(score: number): number {
   const p = Math.max(0, Math.min(100, score))
-  const i = p < 60 ? 0 : p < 75 ? 1 : 2
+  const i = zoneIndex(p)
   const z = ZONES[i]
-  const span = i === 0 ? 60 : i === 1 ? 15 : 25
-  const into = i === 0 ? p : p - z.min
-  return (i + Math.min(1, into / span)) / 3
+  return (i + Math.min(1, (p - z.min) / z.span)) / ZONES.length
 }
 
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
@@ -203,6 +210,7 @@ export function PublicResultsPage({ token }: { token: string }) {
     sufficient: resultStatus.state === 'final',
   })
   const tier = tierColor(overall)
+  const approval = approvalLevel(row.is_approved, overall)
 
   // The structured interview's own domain-level breakdown — real evidence specific to this candidate
   // (their actual per-domain interview scores), never a generic placeholder set.
@@ -241,12 +249,18 @@ export function PublicResultsPage({ token }: { token: string }) {
 
           <div className="cred-band">
             <div className="cred-left-col">
-              <PublicPhoto path={row.photo_url} />
+              <OpenToWorkRing active={row.work_status === 'open_to_work'} size={112} shape="square" radius={20}>
+                <PublicPhoto path={row.photo_url} />
+              </OpenToWorkRing>
             </div>
             <div className="cred-band-name">
               <p className="text-[22px] font-black leading-8 text-stone-900">{row.candidate_name}</p>
               {row.candidate_position && <p className="text-[12.5px] font-semibold leading-5 text-stone-600">{row.candidate_position}</p>}
-              {row.is_approved && <p className="mt-1 text-[11px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</p>}
+              {row.work_status === 'on_project' && row.work_project_name && (
+                <p className="mt-1 text-[12px] font-extrabold leading-5 text-sky-800">شاغل در پروژه {row.work_project_name}</p>
+              )}
+              {approval === 'approved' && <p className="mt-1 text-[11px] font-bold text-emerald-700">دارای صلاحیت تأییدشده</p>}
+              {approval === 'conditional' && <p className="mt-1 text-[11px] font-bold text-orange-700">دارای صلاحیت با تأیید مشروط</p>}
             </div>
             <div className="cred-medal-box">
               <div className="cred-medal-wrap" role="img" aria-label={`امتیاز کلی ${overall != null ? toFa(overall) : '—'} از ۱۰۰`}>
@@ -339,7 +353,7 @@ function RingRow({ tiles }: { tiles: RingTileData[] }) {
  * pill above it is clamped inside the bar so it never leaves the card. */
 function ProficiencyBar({ score, label }: { score: number; label: string }) {
   const t = zonePosition(score)
-  const zoneIdx = score < 60 ? 0 : score < 75 ? 1 : 2
+  const zoneIdx = zoneIndex(score)
   const pillT = Math.max(0.14, Math.min(0.86, t))
   return (
     <div className="cred-spectrum">

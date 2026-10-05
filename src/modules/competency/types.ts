@@ -53,6 +53,10 @@ export interface CompetencyAnswer {
 export type CompetencyAnswers = Record<string, CompetencyAnswer>
 
 export type AssessmentStatus = 'draft' | 'completed'
+
+/** Where the candidate stands after the assessment: unspecified, available for work (green "Open to
+ * work" ring), or placed on a named project («شاغل در پروژه …» on the credential card). */
+export type WorkStatus = 'none' | 'open_to_work' | 'on_project'
 export type SelfServiceStatus = 'not_sent' | 'pending' | 'submitted' | 'reviewed'
 
 /**
@@ -688,6 +692,9 @@ export interface CompetencyAssessment {
   reopenRequestReason: string | null
   /** Explicit go/no-go verdict from the interview lead / final assessor — distinct from status='completed', which only means the scoring flow was finished. Shown as a badge on the candidate's card. */
   isApproved: boolean
+  workStatus: WorkStatus
+  /** Only meaningful when workStatus === 'on_project'. */
+  workProjectName: string
   /** Demo/test candidate (schema.sql Section 54, N-15) — left out of stats, peer rank/averages and
    * reports unless the viewer turns on «نمایش داده‌های آزمایشی». */
   isDemo: boolean

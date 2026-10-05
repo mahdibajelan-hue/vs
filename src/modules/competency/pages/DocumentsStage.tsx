@@ -189,7 +189,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           <Camera size={14} className="text-purple-300" /> عکس پرسنلی
         </p>
         <div className="flex items-center gap-3">
-          <CandidatePhoto path={assessment.photoUrl} size={56} />
+          <CandidatePhoto path={assessment.photoUrl} size={56} openToWork={assessment.workStatus === 'open_to_work'} />
           {canSetPhoto ? (
           <button
             type="button"

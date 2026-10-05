@@ -49,6 +49,7 @@ import type {
   QuestionDifficulty,
   QuestionMixCell,
   QuestionType,
+  WorkStatus,
 } from '../types'
 import {
   compAiAnalysisFromRow,
@@ -467,6 +468,7 @@ interface CompetencyState {
   setQualificationScores: (id: string, scores: QualificationScoresInput) => Promise<void>
   setStatus: (id: string, status: AssessmentStatus) => Promise<void>
   setApproved: (id: string, approved: boolean) => Promise<void>
+  setWorkStatus: (id: string, status: WorkStatus, projectName: string) => Promise<boolean>
   setStrengthsAndDevelopment: (id: string, strengths: string, developmentAreas: string) => Promise<void>
   deleteAssessment: (id: string) => Promise<void>
   uploadPhoto: (id: string, file: File) => Promise<void>
@@ -830,6 +832,8 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       reopenRequestedBy: null,
       reopenRequestReason: null,
       isApproved: false,
+      workStatus: 'none',
+      workProjectName: '',
       isDemo: false,
       strengths: '',
       developmentAreas: '',
@@ -970,6 +974,14 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     const { error } = await supabase.from('comp_assessments').update({ is_approved: approved }).eq('id', id)
     if (reportError('ثبت تایید صلاحیت', error)) return
     set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, isApproved: approved } : a)) })
+  },
+
+  setWorkStatus: async (id, workStatus, projectName) => {
+    const workProjectName = workStatus === 'on_project' ? projectName.trim() : ''
+    const { error } = await supabase.from('comp_assessments').update({ work_status: workStatus, work_project_name: workProjectName }).eq('id', id)
+    if (reportError('ثبت وضعیت اشتغال متقاضی', error)) return false
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, workStatus, workProjectName } : a)) })
+    return true
   },
 
   setStrengthsAndDevelopment: async (id, strengths, developmentAreas) => {

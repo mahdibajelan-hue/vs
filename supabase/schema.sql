@@ -15261,3 +15261,74 @@ end;
 $$;
 revoke execute on function ms_transition(uuid, text, text, jsonb) from public;
 grant execute on function ms_transition(uuid, text, text, jsonb) to authenticated;
+
+-- =============================================================================
+-- 63. Competency: work status (open to work / on a project) shown on the credential card
+-- =============================================================================
+-- A candidate is either unspecified ('none'), available ('open_to_work' — the green "Open to work"
+-- ring on their photo) or placed on a project ('on_project' + work_project_name — "شاغل در پروژه …"
+-- on the card). Staff set it from the results page; it is not part of the completed-assessment lock
+-- (comp_assessments_enforce_lock) because placement happens after the assessment is finalized.
+
+alter table comp_assessments add column if not exists work_status text not null default 'none';
+alter table comp_assessments add column if not exists work_project_name text not null default '';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'comp_assessments_work_status_chk') then
+    alter table comp_assessments add constraint comp_assessments_work_status_chk
+      check (work_status in ('none', 'open_to_work', 'on_project'));
+  end if;
+end $$;
+
+-- The public credential card reads it through the token RPC (return type changes, so recreate).
+drop function if exists comp_public_results_get(uuid);
+create or replace function comp_public_results_get(p_token uuid)
+returns table (
+  id uuid, candidate_name text, candidate_position text, job_role text, interview_date date, status text,
+  answers jsonb, capstone_score int, capstone_note text, education_score numeric, experience_score numeric,
+  pm_training_score numeric, pm_certification_score numeric, is_approved boolean, strengths text,
+  development_areas text, resolved_questions jsonb, photo_url text, work_status text, work_project_name text
+) as $$
+declare
+  v_assessment comp_assessments%rowtype;
+  v_resolved_questions jsonb;
+begin
+  select * into v_assessment from comp_assessments a where a.results_share_token = p_token;
+  if not found then
+    return;
+  end if;
+
+  if jsonb_typeof(v_assessment.selected_question_ids) <> 'array' or jsonb_array_length(v_assessment.selected_question_ids) = 0 then
+    v_resolved_questions := '[]'::jsonb;
+  else
+    select coalesce(jsonb_agg(jsonb_build_object('id', q.id, 'category', q.category, 'score', official.score)), '[]'::jsonb)
+    into v_resolved_questions
+    from comp_question_bank q
+    cross join lateral (
+      select coalesce(
+        (
+          select round(avg((ps.answers -> q.id::text ->> 'score')::numeric))
+          from comp_panelist_scores ps
+          where ps.assessment_id = v_assessment.id
+            and ps.submitted_at is not null
+            and jsonb_typeof(ps.answers -> q.id::text -> 'score') = 'number'
+        ),
+        case when jsonb_typeof(v_assessment.answers -> q.id::text -> 'score') = 'number'
+          then (v_assessment.answers -> q.id::text ->> 'score')::numeric end
+      ) as score
+    ) official
+    where q.id::text in (select jsonb_array_elements_text(v_assessment.selected_question_ids));
+  end if;
+
+  return query select
+    v_assessment.id, v_assessment.candidate_name, v_assessment.candidate_position, v_assessment.job_role,
+    v_assessment.interview_date, v_assessment.status, v_assessment.answers,
+    v_assessment.capstone_score, v_assessment.capstone_note,
+    v_assessment.education_score, v_assessment.experience_score, v_assessment.pm_training_score, v_assessment.pm_certification_score,
+    v_assessment.is_approved, v_assessment.strengths, v_assessment.development_areas, v_resolved_questions,
+    v_assessment.photo_url, v_assessment.work_status, v_assessment.work_project_name;
+end;
+$$ language plpgsql security definer stable set search_path = public;
+
+revoke execute on function comp_public_results_get(uuid) from public;
+grant execute on function comp_public_results_get(uuid) to anon, authenticated;
