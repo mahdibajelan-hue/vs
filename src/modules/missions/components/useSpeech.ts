@@ -95,13 +95,20 @@ export function useSpeech(onText: (finalChunk: string, interim: string) => void,
           return
         }
         setState('transcribing')
+        let stage = 'decode'
         try {
           const { base64 } = await blobToWavBase64(blob)
+          stage = 'transcribe'
           const text = await transcribeViaGateway(base64)
           if (text) cb.current(text, '')
           else setError('صدایی تشخیص داده نشد؛ دوباره تلاش کنید.')
-        } catch {
-          setError('تبدیل صدا به متن انجام نشد. دوباره تلاش کنید یا پاسخ را تایپ کنید.')
+        } catch (e) {
+          const why = (e instanceof Error ? e.message : String(e)).slice(0, 240)
+          setError(
+            stage === 'decode'
+              ? `پردازش صدای ضبط‌شده در این مرورگر ممکن نبود (${why}). پاسخ را تایپ کنید.`
+              : `تبدیل صدا به متن انجام نشد (${why}). دوباره تلاش کنید یا پاسخ را تایپ کنید.`,
+          )
         } finally {
           setState('idle')
         }

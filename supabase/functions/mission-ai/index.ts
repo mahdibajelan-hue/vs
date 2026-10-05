@@ -91,22 +91,36 @@ const TRANSCRIBE_PROMPT = (lang: string) =>
   'Write it in Persian script with natural punctuation, keep numbers as digits where they were clearly said as numbers, ' +
   'do not translate, summarise, or add anything. If there is no intelligible speech, return an empty string. Return ONLY the transcript text.'
 
+// Audio-capable models tried in order (first that answers wins). A model that rejects audio input or does
+// not exist answers 400/404 and we move on to the next; load errors (429/503) are retried inside withRetry.
+const AUDIO_MODELS = (): string[] =>
+  [...new Set([Deno.env.get('MISSION_AI_AUDIO_MODEL'), Deno.env.get('MISSION_AI_MODEL'), Deno.env.get('GEMINI_MODEL'), 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].filter((m): m is string => !!m))]
+
 const geminiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
   const key = Deno.env.get('GEMINI_API_KEY')!
-  const model = Deno.env.get('MISSION_AI_AUDIO_MODEL') || Deno.env.get('MISSION_AI_MODEL') || Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash'
-  return withRetry(async () => {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: TRANSCRIBE_PROMPT(lang) }, { inline_data: { mime_type: mime, data: audio } }] }],
-        generationConfig: { temperature: 0 },
-      }),
-    })
-    if (!res.ok) throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 300)}`)
-    const data = await res.json()
-    return (data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '').trim()
-  })
+  const errors: string[] = []
+  for (const model of AUDIO_MODELS()) {
+    try {
+      return await withRetry(async () => {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: TRANSCRIBE_PROMPT(lang) }, { inline_data: { mime_type: mime, data: audio } }] }],
+            generationConfig: { temperature: 0 },
+          }),
+        })
+        if (!res.ok) throw new Error(`${model} ${res.status}: ${(await res.text()).slice(0, 220)}`)
+        const data = await res.json()
+        const text = (data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '').trim()
+        if (!text && data?.promptFeedback?.blockReason) throw new Error(`${model} blocked: ${data.promptFeedback.blockReason}`)
+        return text
+      })
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err))
+    }
+  }
+  throw new Error(errors.join(' | '))
 }
 
 const openaiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
@@ -214,8 +228,14 @@ Deno.serve(async (req) => {
       const p = body.payload as { audio?: string; mime?: string; lang?: string } | undefined
       // ~2 minutes of 16 kHz mono PCM is ~3.8 MB (~5.1 MB base64); refuse anything larger.
       if (!p?.audio || p.audio.length > 6_500_000) return json({ error: 'bad_audio' }, 400)
-      const text = await provider.transcribe(p.audio, p.mime || 'audio/wav', p.lang || 'fa')
-      return json({ available: true, provider: provider.id, text })
+      try {
+        const text = await provider.transcribe(p.audio, p.mime || 'audio/wav', p.lang || 'fa')
+        return json({ available: true, provider: provider.id, text })
+      } catch (err) {
+        console.error('mission-ai transcribe', err)
+        // Unlike the analysis tasks, a failed transcription has no rule-based fallback, so say why (no secrets in these messages).
+        return json({ available: true, provider: provider.id, error: 'transcribe_failed', detail: (err instanceof Error ? err.message : String(err)).slice(0, 500) })
+      }
     }
     if (body.task === 'compose_report') {
       const out = await provider.generateJson(SYSTEM_REPORT, JSON.stringify(body.payload), SCHEMA_REPORT)

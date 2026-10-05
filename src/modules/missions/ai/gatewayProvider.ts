@@ -115,7 +115,19 @@ export async function pingGateway(): Promise<{ available: boolean; provider: str
 /** Speech-to-text through the gateway (Gemini audio understanding, or an OpenAI-compatible /audio/transcriptions). */
 export async function transcribeViaGateway(wavBase64: string): Promise<string> {
   const { data, error } = await supabase.functions.invoke('mission-ai', { body: { task: 'transcribe', payload: { audio: wavBase64, mime: 'audio/wav', lang: 'fa' } } })
-  const r = data as { available?: boolean; text?: string } | null
-  if (error || !r?.available || typeof r.text !== 'string') throw new Error('transcribe_unavailable')
+  if (error) {
+    let detail = error.message
+    try {
+      const ctx = (error as unknown as { context?: Response }).context
+      if (ctx && typeof ctx.text === 'function') detail = `${ctx.status} ${(await ctx.text()).slice(0, 200)}`
+    } catch {
+      /* keep message */
+    }
+    throw new Error(`gateway: ${detail}`)
+  }
+  const r = data as { available?: boolean; text?: string; error?: string; detail?: string } | null
+  if (!r?.available) throw new Error('gateway: هیچ سرویس هوش مصنوعی روی سرور فعال نیست (کلید یا ارائه‌دهنده تنظیم نشده).')
+  if (r.error) throw new Error(`model: ${r.detail ?? r.error}`)
+  if (typeof r.text !== 'string') throw new Error('gateway: پاسخ نامعتبر')
   return r.text.trim()
 }
