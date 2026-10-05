@@ -1,14 +1,23 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import type { WorkStatus } from '../types'
 
 /** LinkedIn-style "Open to work" green. */
 export const OPEN_TO_WORK_GREEN = '#3f9b2f'
 
+const BAND_TEXT = '#OPENTOWORK'
+
+/** Point on a circle of radius r around (50,50) in a 100×100 viewBox; angle in degrees, clockwise from 3 o'clock (SVG y points down). */
+const pt = (deg: number, r: number) => {
+  const a = (deg * Math.PI) / 180
+  return `${(50 + r * Math.cos(a)).toFixed(2)} ${(50 + r * Math.sin(a)).toFixed(2)}`
+}
+
 /**
- * Wraps a candidate photo in a LinkedIn-style «Open to work» ring when `active`. A circular photo gets
- * an SVG ring with the words curved along its lower arc; a rounded-square photo (the credential card)
- * gets the same ring plus a straight banner across the bottom edge. Below ~52px there is no room for
- * legible text, so only the ring is drawn (the accessible label still names the state).
+ * Wraps a candidate photo in LinkedIn's «#OpenToWork» frame when `active`: a green crescent laid over
+ * the lower part of the photo (from about 9 o'clock round the bottom to 4 o'clock) with the hashtag
+ * running along it. A rounded-square photo (the credential card) gets the same band as a shallow arch
+ * across the bottom edge. Below ~52px there is no room for legible text, so only the band is drawn
+ * (the accessible label still names the state).
  */
 export function OpenToWorkRing({
   active,
@@ -26,58 +35,51 @@ export function OpenToWorkRing({
   className?: string
   children: ReactNode
 }) {
+  const uid = useId().replace(/:/g, '')
   if (!active) return <>{children}</>
   const label = 'آماده به کار (Open to work)'
-
-  if (shape === 'square') {
-    return (
-      <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }} title={label} role="img" aria-label={label}>
-        {children}
-        <span className="pointer-events-none absolute inset-0" style={{ borderRadius: radius, boxShadow: `0 0 0 4px ${OPEN_TO_WORK_GREEN}`, zIndex: 2 }} />
-        <span
-          className="pointer-events-none absolute flex items-center justify-center text-white"
-          style={{
-            zIndex: 3,
-            left: -4,
-            right: -4,
-            bottom: -4,
-            height: 24,
-            background: OPEN_TO_WORK_GREEN,
-            borderRadius: `0 0 ${radius + 4}px ${radius + 4}px`,
-            fontSize: 10.5,
-            fontWeight: 800,
-            letterSpacing: '0.09em',
-            direction: 'ltr',
-            fontFamily: 'system-ui, sans-serif',
-          }}
-        >
-          OPEN TO WORK
-        </span>
-      </div>
-    )
-  }
-
   const showText = size >= 52
-  const ring = Math.max(3, Math.round(size * 0.055))
+  const square = shape === 'square'
+  const clipId = `otw-clip-${uid}`
+  const gradId = `otw-grad-${uid}`
+  const arcId = `otw-arc-${uid}`
+
+  const bandPath = square
+    ? 'M 0 80 Q 50 60 100 80 L 100 100 L 0 100 Z'
+    : `M ${pt(200, 50)} A 50 50 0 0 0 ${pt(28, 50)} L ${pt(28, 32)} A 32 32 0 0 1 ${pt(200, 32)} Z`
+  const textPath = square ? 'M 6 94 Q 50 78 94 94' : `M ${pt(203, 44)} A 44 44 0 0 0 ${pt(27, 44)}`
+
   return (
     <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }} title={label} role="img" aria-label={label}>
-      <div className="absolute flex items-center justify-center overflow-hidden rounded-full" style={{ inset: ring }}>
-        {children}
+      <div className="absolute inset-0 overflow-hidden" style={{ borderRadius: square ? radius : 9999 }}>
+        <div className="flex h-full w-full items-center justify-center">{children}</div>
       </div>
       <svg viewBox="0 0 100 100" width={size} height={size} className="pointer-events-none absolute inset-0" aria-hidden>
         <defs>
-          <path id={`otw-arc-${size}`} d="M 15 67 A 40 40 0 0 0 85 67" />
+          <clipPath id={clipId}>{square ? <rect width="100" height="100" rx={(radius / size) * 100} /> : <circle cx="50" cy="50" r="50" />}</clipPath>
+          <linearGradient id={gradId} x1="0" y1="0.3" x2="1" y2="1">
+            <stop offset="0" stopColor="#2f7a22" />
+            <stop offset="1" stopColor="#4f9d2e" />
+          </linearGradient>
+          <path id={arcId} d={textPath} />
         </defs>
-        <circle cx="50" cy="50" r={50 - (ring / size) * 50} fill="none" stroke={OPEN_TO_WORK_GREEN} strokeWidth={(ring / size) * 100} />
+        <g clipPath={`url(#${clipId})`}>
+          <path d={bandPath} fill={`url(#${gradId})`} stroke={`url(#${gradId})`} strokeWidth="4" strokeLinejoin="round" />
+        </g>
         {showText && (
-          <>
-            <path d="M 12.5 66 A 41 41 0 0 0 87.5 66" fill="none" stroke={OPEN_TO_WORK_GREEN} strokeWidth="17" />
-            <text fill="#fff" fontSize="9.2" fontWeight="800" letterSpacing="0.9" textAnchor="middle" style={{ fontFamily: 'system-ui, sans-serif' }}>
-              <textPath href={`#otw-arc-${size}`} startOffset="50%">
-                OPEN TO WORK
-              </textPath>
-            </text>
-          </>
+          <text
+            fill="#fff"
+            fontSize={square ? 8.6 : 10.5}
+            fontWeight="800"
+            letterSpacing={square ? '0.5' : '0.8'}
+            textAnchor="middle"
+            direction="ltr"
+            style={{ fontFamily: 'system-ui, sans-serif', direction: 'ltr', unicodeBidi: 'isolate' }}
+          >
+            <textPath href={`#${arcId}`} startOffset="50%">
+              {BAND_TEXT}
+            </textPath>
+          </text>
         )}
       </svg>
     </div>

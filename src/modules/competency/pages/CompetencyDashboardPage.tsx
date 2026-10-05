@@ -624,10 +624,12 @@ function TalentPoolRow({
           <div className="flex items-center gap-1.5">
             <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
             {a.isApproved && <ApprovalMedal size="sm" level={approvalLevel(a.isApproved, overall)} />}
-            <WorkStatusChip status={a.workStatus} projectName={a.workProjectName} />
             {a.isDemo && <DemoBadge />}
           </div>
-          <p className="fx-muted truncate text-[10.5px]">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="fx-muted truncate text-[10.5px]">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
+            <WorkStatusChip status={a.workStatus} projectName={a.workProjectName} />
+          </div>
         </div>
         <span
           className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold sm:inline-block ${
@@ -729,7 +731,6 @@ function ActionCandidateRow({
             <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
             {hasPlan && <Sprout size={9} className="shrink-0 text-emerald-300" aria-label="برنامه توسعه فردی فعال" />}
             {reassessmentRelated && <Repeat size={9} className="shrink-0 text-sky-300" aria-label="ارزیابی مجدد" />}
-            <WorkStatusChip status={a.workStatus} projectName={a.workProjectName} />
             {a.isDemo && <DemoBadge />}
           </div>
           <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>

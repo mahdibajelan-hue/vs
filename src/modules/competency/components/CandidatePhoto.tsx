@@ -39,7 +39,7 @@ export function CandidatePhoto({ path, size = 56, className = '', openToWork = f
     box
   )
   return openToWork ? (
-    <OpenToWorkRing active size={size + 2 * Math.max(3, Math.round(size * 0.06))} shape="circle">
+    <OpenToWorkRing active size={size} shape="circle">
       {photo}
     </OpenToWorkRing>
   ) : (
