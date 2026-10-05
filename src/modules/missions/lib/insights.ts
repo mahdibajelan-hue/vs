@@ -23,12 +23,14 @@ export interface Insight {
   weight: number
 }
 
-export const ACTIVE_STATUSES: MissionStatus[] = ['approved', 'debrief', 'pending_approval', 'report_review', 'revision_requested', 'returned']
+export const ACTIVE_STATUSES: MissionStatus[] = ['ticketing', 'approved', 'debrief', 'pending_approval', 'report_review', 'ready_for_claim', 'revision_requested', 'returned']
 const OPEN_FINDING = (f: Finding) => f.approval !== 'rejected'
 
 export interface Kpis {
   active: number
   awaitingRequestApproval: number
+  awaitingTicket: number
+  awaitingClaim: number
   awaitingReportReview: number
   completedReports: number
   incompleteReports: number
@@ -54,6 +56,8 @@ export function computeKpis(p: PortfolioData, today = todayIso()): Kpis {
   return {
     active: m.filter((x) => ACTIVE_STATUSES.includes(x.status)).length,
     awaitingRequestApproval: m.filter((x) => x.status === 'pending_approval').length,
+    awaitingTicket: m.filter((x) => x.status === 'ticketing').length,
+    awaitingClaim: m.filter((x) => x.status === 'ready_for_claim').length,
     awaitingReportReview: m.filter((x) => x.status === 'report_review').length,
     completedReports: m.filter((x) => x.status === 'ready_for_claim' || x.status === 'claimed').length,
     incompleteReports: m.filter((x) => x.status === 'debrief' || x.status === 'revision_requested').length,
@@ -194,11 +198,29 @@ export function computeInsights(p: PortfolioData, today = todayIso()): Insight[]
       action: 'از بازدیدکننده بخواهید گزارش‌گیری را شروع کند؛ هرچه دیرتر، جزئیات بیشتری فراموش می‌شود.',
     })
   }
+  const ticketLate = m.filter((x) => x.status === 'ticketing' && x.approvedAt && daysBetween(x.approvedAt.slice(0, 10), today) >= 2 && daysBetween(today, x.startDate) <= 7)
+  if (ticketLate.length) {
+    out.push({
+      id: 'ticket-late', tone: 'bad', weight: 92, missionIds: ticketLate.map((x) => x.id),
+      title: `${faNum(ticketLate.length)} مأموریت نزدیک اعزام است و بلیط هنوز صادر نشده`,
+      detail: ticketLate.slice(0, 3).map((x) => `${x.code} (${x.requesterName}، شروع ${faNum(daysBetween(today, x.startDate))} روز دیگر)`).join(' · '),
+      action: 'امور اداری برای صدور بلیط اقدام کند؛ هر روز تأخیر هزینه بلیط را بالا می‌برد.',
+    })
+  }
+  const claimLate = m.filter((x) => x.status === 'ready_for_claim' && x.finalApprovedAt && daysBetween(x.finalApprovedAt.slice(0, 10), today) >= 3)
+  if (claimLate.length) {
+    out.push({
+      id: 'claim-late', tone: 'warn', weight: 55, missionIds: claimLate.map((x) => x.id),
+      title: `${faNum(claimLate.length)} کلیم مأموریت بیش از ۳ روز منتظر تأیید امور اداری است`,
+      detail: claimLate.slice(0, 3).map((x) => `${x.code} — ${x.requesterName}`).join(' · '),
+      action: 'امور اداری کلیم را بررسی و تأیید کند تا حق مأموریت به‌موقع پرداخت شود.',
+    })
+  }
   const stuck = m.filter((x) => x.status === 'report_review' && x.reportSubmittedAt && daysBetween(x.reportSubmittedAt.slice(0, 10), today) >= 2)
   if (stuck.length) {
     out.push({
       id: 'stuck-review', tone: 'warn', weight: 80, missionIds: stuck.map((x) => x.id),
-      title: `${faNum(stuck.length)} گزارش بیش از ۲ روز منتظر تأیید شماست`,
+      title: `${faNum(stuck.length)} گزارش بیش از ۲ روز منتظر تأیید مجری طرح است`,
       detail: stuck.slice(0, 3).map((x) => `${x.code} — ${x.projectName}`).join(' · '),
       action: 'گزارش را مرور و Issue/Risk پیشنهادی را تأیید یا رد کنید.',
     })

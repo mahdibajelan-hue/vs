@@ -28,8 +28,8 @@ function fail(error: { message: string } | null | undefined, fallback = 'عمل�
     report_required: 'ابتدا گزارش را تولید کنید.',
     invalid_transition: 'این اقدام در وضعیت فعلی مأموریت مجاز نیست.',
     forbidden: 'دسترسی لازم برای این اقدام را ندارید.',
-    manager_only: 'این اقدام فقط برای مدیر مجاز است.',
-    cannot_approve_own: 'تأیید مأموریت یا گزارش خود مجاز نیست.',
+    manager_only: 'این اقدام فقط برای مجری طرح مجاز است.',
+    cannot_approve_own: 'تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.',
     no_issue_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت Issue متصل نشده است.',
     no_risk_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت ریسک متصل نشده است.',
     already_transferred: 'این مورد قبلاً منتقل شده است.',
@@ -56,6 +56,12 @@ function toMission(r: Row, people: Map<string, PersonRef>, projects: Map<string,
     visitees: Array.isArray(r.visitees) ? r.visitees : [],
     topicsOfInterest: r.topics_of_interest ?? '',
     expectedOutput: r.expected_output ?? '',
+    needsTicket: r.needs_ticket !== false,
+    originCity: r.origin_city ?? '',
+    ticketNote: r.ticket_note ?? '',
+    ticket: r.ticket ?? {},
+    ticketIssuedAt: r.ticket_issued_at ?? null,
+    adminComment: r.admin_comment ?? '',
     approverId: r.approver_id,
     approverName: r.approver_id ? people.get(r.approver_id)?.name ?? '' : '',
     status: r.status,
@@ -201,6 +207,9 @@ export function createSupabaseRepo(): MissionRepo {
     if (d.visitees !== undefined) out.visitees = d.visitees
     if (d.topicsOfInterest !== undefined) out.topics_of_interest = d.topicsOfInterest
     if (d.expectedOutput !== undefined) out.expected_output = d.expectedOutput
+    if (d.needsTicket !== undefined) out.needs_ticket = d.needsTicket
+    if (d.originCity !== undefined) out.origin_city = d.originCity
+    if (d.ticketNote !== undefined) out.ticket_note = d.ticketNote
     if (d.approverId !== undefined) out.approver_id = d.approverId
     return out
   }
@@ -223,8 +232,8 @@ export function createSupabaseRepo(): MissionRepo {
   return {
     async loadCurrentUser(): Promise<CurrentUser> {
       const p = useAuthStore.getState().profile
-      const { data } = await supabase.rpc('ms_is_manager')
-      return { id: p?.id ?? '', name: p?.fullName ?? '', position: p?.positionTitle ?? '', isAdmin: !!p?.isAdmin, isManager: data === true || !!p?.isAdmin }
+      const [mgr, aa] = await Promise.all([supabase.rpc('ms_is_manager'), supabase.rpc('ms_is_admin_affairs')])
+      return { id: p?.id ?? '', name: p?.fullName ?? '', position: p?.positionTitle ?? '', isAdmin: !!p?.isAdmin, isManager: mgr.data === true || !!p?.isAdmin, isAdminAffairs: aa.data === true || !!p?.isAdmin }
     },
     async listProjects() {
       return [...(await projects()).values()]
@@ -315,8 +324,17 @@ export function createSupabaseRepo(): MissionRepo {
       const { error } = await supabase.from('ms_missions').delete().eq('id', id)
       if (error) fail(error)
     },
-    async transition(id, action, comment = '') {
-      const { error } = await supabase.rpc('ms_transition', { p_mission_id: id, p_action: action, p_comment: comment })
+    async transition(id, action, comment = '', data = {}) {
+      const { error } = await supabase.rpc('ms_transition', { p_mission_id: id, p_action: action, p_comment: comment, p_data: data })
+      if (error) fail(error)
+    },
+    async listRoles() {
+      const { data } = await supabase.from('ms_roles').select('user_id, role')
+      return ((data ?? []) as Row[]).map((r) => ({ userId: r.user_id, role: r.role }))
+    },
+    async setRole(userId, role, on) {
+      const q = on ? supabase.from('ms_roles').upsert({ user_id: userId, role }) : supabase.from('ms_roles').delete().eq('user_id', userId).eq('role', role)
+      const { error } = await q
       if (error) fail(error)
     },
 

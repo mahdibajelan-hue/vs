@@ -27,6 +27,9 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
   const [draft, setDraft] = useState<MissionDraft>({
     masterProjectId: '',
     requesterPosition: user?.position ?? '',
+    needsTicket: true,
+    originCity: '',
+    ticketNote: '',
     destination: '',
     locationDetail: '',
     startDate: addDaysIso(todayIso(), 3),
@@ -47,7 +50,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     openMission(missionId).then((b) => {
       if (!b) return
       const m = b.mission
-      setDraft({ masterProjectId: m.masterProjectId, requesterPosition: m.requesterPosition, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
+      setDraft({ masterProjectId: m.masterProjectId, requesterPosition: m.requesterPosition, needsTicket: m.needsTicket, originCity: m.originCity, ticketNote: m.ticketNote, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
       setObjectives(b.objectives.length ? b.objectives.map((o) => ({ id: o.id, title: o.title, measure: o.measure, topicKey: o.topicKey, priority: o.priority })) : [EMPTY_OBJECTIVE()])
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +77,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     if (!draft.masterProjectId) e.push('پروژه را انتخاب کنید.')
     if (forSubmit) {
       if (!draft.destination.trim()) e.push('مقصد و محل بازدید را بنویسید.')
+      if (draft.needsTicket && !draft.originCity.trim()) e.push('برای درخواست بلیط، شهر مبدأ را بنویسید.')
       if (!draft.startDate || !draft.endDate || draft.endDate < draft.startDate) e.push('تاریخ شروع و پایان معتبر نیست.')
       if (!filled.length) e.push('حداقل یک هدف برای مأموریت لازم است.')
       if (filled.some((o) => !o.measure.trim())) e.push('برای هر هدف معیار تحقق بنویسید تا بتوان نتیجه را سنجید.')
@@ -114,7 +118,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
         <p className="ms-ink2 text-[12.5px] leading-7">پیش از اعزام، هدف را قابل‌اندازه‌گیری بنویسید؛ همین اهداف بعداً مسیر گفت‌وگوی گزارش را می‌سازند.</p>
         {bundle?.mission.status === 'returned' && bundle.mission.managerComment && (
           <p className="mt-2 rounded-xl px-4 py-3 text-[12.5px] leading-7" style={{ background: 'color-mix(in srgb, var(--ms-warn) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--ms-warn) 35%, transparent)' }}>
-            <b>نظر مدیر:</b> {bundle.mission.managerComment}
+            <b>نظر مجری طرح:</b> {bundle.mission.managerComment}
           </p>
         )}
       </div>
@@ -159,6 +163,23 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
               <JalaliDateInput value={draft.endDate} onChange={(v) => set('endDate', v)} />
             </Field>
           </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionHead eyebrow="سفر" title="بلیط هواپیما" sub="پس از تأیید مجری طرح، درخواست بلیط برای امور اداری ارسال می‌شود." />
+          <label className="flex cursor-pointer items-center gap-3 text-[13px] font-bold">
+            <input type="checkbox" checked={draft.needsTicket} onChange={(e) => set('needsTicket', e.target.checked)} />
+            برای این مأموریت به بلیط هواپیما نیاز دارم
+          </label>
+          {draft.needsTicket ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="شهر مبدأ"><input className="ms-input" value={draft.originCity} onChange={(e) => set('originCity', e.target.value)} placeholder="مثلاً تهران" /></Field>
+              <Field label="توضیح برای امور اداری (ساعت پرواز مطلوب، همراه، سقف قیمت…)"><input className="ms-input" value={draft.ticketNote} onChange={(e) => set('ticketNote', e.target.value)} placeholder="اختیاری" /></Field>
+              <p className="ms-muted text-[11.5px] leading-6 sm:col-span-2">تاریخ رفت و برگشت همان تاریخ شروع و پایان مأموریت است؛ اگر تغییر می‌کند در توضیح بنویسید.</p>
+            </div>
+          ) : (
+            <p className="ms-muted mt-2 text-[12px] leading-7">بدون بلیط: پس از تأیید مجری طرح، مأموریت مستقیم آماده اعزام می‌شود.</p>
+          )}
         </Card>
 
         <Card className="p-5">
@@ -244,9 +265,9 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
             <Field label="خروجی مورد انتظار از مأموریت">
               <textarea className="ms-textarea" value={draft.expectedOutput} onChange={(e) => set('expectedOutput', e.target.value)} placeholder="مثلاً: برنامه تحویل مکتوب و صورتجلسه با سازنده" />
             </Field>
-            <Field label="تأییدکننده درخواست" hint="اگر خالی بماند، مدیر مسئول آن را تعیین می‌کند.">
+            <Field label="مجری طرح (تأییدکننده درخواست و گزارش)" hint="اگر خالی بماند، مجری طرح پس از ارسال، درخواست را برمی‌دارد.">
               <select className="ms-select" value={draft.approverId ?? ''} onChange={(e) => set('approverId', e.target.value || null)}>
-                <option value="">انتخاب تأییدکننده…</option>
+                <option value="">انتخاب مجری طرح…</option>
                 {approvers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.position ? ` — ${p.position}` : ''}</option>)}
               </select>
             </Field>

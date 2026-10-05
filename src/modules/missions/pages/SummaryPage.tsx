@@ -75,7 +75,7 @@ export function SummaryPage({ id }: { id: string }) {
           <button className="ms-btn ms-btn-ghost ms-btn-sm mb-2" onClick={() => go({ kind: 'mission', id })}><ArrowRight size={14} aria-hidden /> بازگشت</button>
           <p className="ms-eyebrow mb-1">پیش از ارسال به مدیر</p>
           <h1 className="text-[22px] font-black leading-9">مرور و تأیید خلاصه گزارش</h1>
-          <p className="ms-ink2 text-[12.5px] leading-7">این همان چیزی است که از گفته‌های شما استخراج شد. هر مورد را اصلاح کنید؛ سپس برای مدیر ارسال کنید.</p>
+          <p className="ms-ink2 text-[12.5px] leading-7">این همان چیزی است که از گفته‌های شما استخراج شد. هر مورد را اصلاح کنید؛ سپس برای مجری طرح ارسال کنید.</p>
         </div>
 
         <Card className="p-5">
@@ -173,10 +173,10 @@ export function SummaryPage({ id }: { id: string }) {
             </label>
           )}
           <button className="ms-btn ms-btn-primary mt-4 w-full" disabled={sending || blockers.length > 0 || (warnings.length > 0 && !ack) || m.status === 'report_review'} onClick={send}>
-            <Send size={15} aria-hidden /> {sending ? 'در حال ارسال…' : 'تأیید و ارسال برای مدیر'}
+            <Send size={15} aria-hidden /> {sending ? 'در حال ارسال…' : 'تأیید و ارسال برای مجری طرح'}
           </button>
           <button className="ms-btn ms-btn-ghost mt-2 w-full" onClick={() => fixTopic()}>بازگشت به گفت‌وگو</button>
-          <p className="ms-muted mt-3 text-[11px] leading-6">{blockers.length ? `${faNum(blockers.length)} مورد اجباری باقی مانده است.` : 'پس از ارسال، تا تصمیم مدیر نمی‌توانید گزارش را تغییر دهید.'}</p>
+          <p className="ms-muted mt-3 text-[11px] leading-6">{blockers.length ? `${faNum(blockers.length)} مورد اجباری باقی مانده است.` : 'پس از ارسال، تا تصمیم مجری طرح نمی‌توانید گزارش را تغییر دهید.'}</p>
         </Card>
         <Pill tone="info">پیش‌نمایش گزارش رسمی پس از ارسال در دسترس مدیر است</Pill>
       </aside>

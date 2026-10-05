@@ -15074,3 +15074,190 @@ create policy "mission_evidence_insert" on storage.objects for insert
 drop policy if exists "mission_evidence_delete" on storage.objects;
 create policy "mission_evidence_delete" on storage.objects for delete
   using (bucket_id = 'mission-evidence' and auth.uid() is not null and ms_can_write(((storage.foldername(name))[1])::uuid));
+
+-- ---------------------------------------------------------------- Section 62: Mission workflow roles (employee / Administrative Affairs / project executive)
+--
+-- Three roles drive the mission workflow:
+--   employee            — anyone; requests the mission, later files the debrief report
+--   executive (مجری طرح) — approves the request and the report. ms_roles 'executive', or a system admin,
+--                          or the RBAC permissions missions:approve / missions:review (ms_is_manager)
+--   admin_affairs (امور اداری) — books the flight ticket after the first approval and approves the mission
+--                          claim after the report is approved. ms_roles 'admin_affairs' or a system admin.
+--
+--   draft ─submit→ pending_approval ─executive approves→ ticketing ─Admin Affairs issues ticket→ approved
+--   approved ─employee starts→ debrief ─submit→ report_review ─executive approves→ ready_for_claim
+--   ready_for_claim ─Admin Affairs approves claim→ claimed
+-- A request with needs_ticket = false skips 'ticketing' (executive approval goes straight to 'approved').
+-- Ticket details live in ms_missions.ticket (jsonb), written only through ms_transition('issue_ticket').
+
+create table if not exists ms_roles (
+  user_id uuid not null references profiles (id) on delete cascade,
+  role text not null check (role in ('executive', 'admin_affairs')),
+  granted_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (user_id, role)
+);
+alter table ms_roles enable row level security;
+drop policy if exists "ms_roles_select" on ms_roles;
+create policy "ms_roles_select" on ms_roles for select using (auth.uid() is not null);
+drop policy if exists "ms_roles_write" on ms_roles;
+create policy "ms_roles_write" on ms_roles for all using (is_admin_user()) with check (is_admin_user());
+
+create or replace function ms_is_executive()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from ms_roles where user_id = auth.uid() and role = 'executive');
+$$;
+create or replace function ms_is_admin_affairs()
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or exists (select 1 from ms_roles where user_id = auth.uid() and role = 'admin_affairs');
+$$;
+create or replace function ms_is_manager()
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or ms_is_executive() or rasta_has_permission(auth.uid(), 'missions', 'approve') or rasta_has_permission(auth.uid(), 'missions', 'review');
+$$;
+
+alter table ms_missions add column if not exists needs_ticket boolean not null default true;
+alter table ms_missions add column if not exists origin_city text not null default '';
+alter table ms_missions add column if not exists ticket_note text not null default '';
+alter table ms_missions add column if not exists ticket jsonb not null default '{}'::jsonb;
+alter table ms_missions add column if not exists ticket_issued_at timestamptz;
+alter table ms_missions add column if not exists ticket_issued_by uuid references profiles (id);
+alter table ms_missions add column if not exists admin_comment text not null default '';
+alter table ms_missions add column if not exists claim_approved_by uuid references profiles (id);
+alter table ms_missions drop constraint if exists ms_missions_status_check;
+alter table ms_missions add constraint ms_missions_status_check check (status in (
+  'draft', 'pending_approval', 'returned', 'rejected', 'ticketing', 'approved', 'debrief', 'report_review',
+  'revision_requested', 'ready_for_claim', 'claimed', 'cancelled'));
+
+create or replace function ms_can_view(p_mission_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from ms_missions m
+    where m.id = p_mission_id
+      and (m.requester_id = auth.uid() or m.approver_id = auth.uid() or ms_is_manager() or ms_is_admin_affairs())
+  );
+$$;
+alter policy "ms_missions_select" on ms_missions using (requester_id = auth.uid() or approver_id = auth.uid() or ms_is_manager() or ms_is_admin_affairs());
+
+create or replace function ms_guard_mission_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(current_setting('ms.transition', true), '') = 'on' then
+    new.updated_at := now();
+    return new;
+  end if;
+  if new.status is distinct from old.status
+     or new.approved_at is distinct from old.approved_at
+     or new.final_approved_at is distinct from old.final_approved_at
+     or new.claimed_at is distinct from old.claimed_at
+     or new.ticket is distinct from old.ticket
+     or new.ticket_issued_at is distinct from old.ticket_issued_at
+     or new.ticket_issued_by is distinct from old.ticket_issued_by
+     or new.admin_comment is distinct from old.admin_comment
+     or new.claim_approved_by is distinct from old.claim_approved_by then
+    raise exception 'status_change_via_transition_only';
+  end if;
+  if not ms_is_manager() then
+    if new.requester_id is distinct from old.requester_id then raise exception 'forbidden'; end if;
+    if old.status not in ('draft', 'returned') and (
+         new.master_project_id is distinct from old.master_project_id
+         or new.start_date is distinct from old.start_date or new.end_date is distinct from old.end_date
+         or new.visit_type is distinct from old.visit_type
+         or new.needs_ticket is distinct from old.needs_ticket or new.origin_city is distinct from old.origin_city
+         or new.ticket_note is distinct from old.ticket_note) then
+      raise exception 'request_locked';
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+-- Replaces the Section 61 three-argument ms_transition (kept renamed below only because DROP FUNCTION is
+-- not available in every deployment path; harmless and unused).
+do $$
+begin
+  if exists (select 1 from pg_proc where oid = to_regprocedure('ms_transition(uuid,text,text)')) then
+    alter function ms_transition(uuid, text, text) rename to ms_transition_v1_unused;
+  end if;
+end $$;
+
+create or replace function ms_transition(p_mission_id uuid, p_action text, p_comment text default '', p_data jsonb default '{}'::jsonb)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  m ms_missions%rowtype;
+  v_new text;
+  v_is_req boolean;
+  v_is_mgr boolean;
+  v_is_aa boolean;
+begin
+  select * into m from ms_missions where id = p_mission_id for update;
+  if not found then raise exception 'mission_not_found'; end if;
+  v_is_req := m.requester_id = auth.uid();
+  v_is_mgr := ms_is_manager() or m.approver_id = auth.uid();
+  v_is_aa := ms_is_admin_affairs();
+  if not (v_is_req or v_is_mgr or v_is_aa) then raise exception 'forbidden'; end if;
+
+  if p_action = 'submit_request' and v_is_req and m.status in ('draft', 'returned') then
+    if not exists (select 1 from ms_objectives where mission_id = m.id) then raise exception 'objectives_required'; end if;
+    v_new := 'pending_approval';
+  elsif p_action = 'approve_request' and v_is_mgr and m.status = 'pending_approval' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := case when m.needs_ticket then 'ticketing' else 'approved' end;
+  elsif p_action = 'return_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'returned';
+  elsif p_action = 'reject_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'rejected';
+  elsif p_action = 'issue_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'approved';
+  elsif p_action = 'return_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'returned';
+  elsif p_action = 'start_debrief' and v_is_req and m.status = 'approved' then v_new := 'debrief';
+  elsif p_action = 'submit_report' and v_is_req and m.status in ('debrief', 'revision_requested') then
+    if not exists (select 1 from ms_reports where mission_id = m.id) then raise exception 'report_required'; end if;
+    v_new := 'report_review';
+  elsif p_action = 'return_report' and v_is_mgr and m.status = 'report_review' then v_new := 'revision_requested';
+  elsif p_action = 'approve_report' and v_is_mgr and m.status = 'report_review' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'ready_for_claim';
+  elsif p_action = 'approve_claim' and v_is_aa and m.status = 'ready_for_claim' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'claimed';
+  elsif p_action = 'cancel' and (v_is_req or v_is_mgr) and m.status in ('draft', 'pending_approval', 'returned', 'ticketing', 'approved') then v_new := 'cancelled';
+  else
+    raise exception 'invalid_transition';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_missions set
+    status = v_new,
+    manager_comment = case when p_action in ('approve_request', 'return_request', 'reject_request', 'return_report', 'approve_report') then coalesce(p_comment, '') else manager_comment end,
+    admin_comment = case when p_action in ('issue_ticket', 'return_ticket', 'approve_claim') then coalesce(p_comment, '') else admin_comment end,
+    ticket = case when p_action = 'issue_ticket' then coalesce(p_data, '{}'::jsonb) else ticket end,
+    ticket_issued_at = case when p_action = 'issue_ticket' then now() else ticket_issued_at end,
+    ticket_issued_by = case when p_action = 'issue_ticket' then auth.uid() else ticket_issued_by end,
+    submitted_at = case when p_action = 'submit_request' then now() else submitted_at end,
+    approved_at = case when p_action = 'approve_request' then now() else approved_at end,
+    approver_id = case when p_action = 'approve_request' and approver_id is null then auth.uid() else approver_id end,
+    debrief_started_at = case when p_action = 'start_debrief' then now() else debrief_started_at end,
+    report_submitted_at = case when p_action = 'submit_report' then now() else report_submitted_at end,
+    final_approved_at = case when p_action = 'approve_report' then now() else final_approved_at end,
+    claimed_at = case when p_action = 'approve_claim' then now() else claimed_at end,
+    claim_approved_by = case when p_action = 'approve_claim' then auth.uid() else claim_approved_by end
+  where id = m.id;
+
+  if p_action = 'submit_report' then
+    update ms_reports set status = 'submitted', submitted_at = now()
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'return_report' then
+    update ms_reports set status = 'returned'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'approve_report' then
+    update ms_reports set status = 'approved'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  end if;
+
+  insert into ms_events (mission_id, actor_id, event, comment, detail)
+  values (m.id, auth.uid(), p_action, coalesce(p_comment, ''), jsonb_build_object('from', m.status, 'to', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return v_new;
+end;
+$$;
+revoke execute on function ms_transition(uuid, text, text, jsonb) from public;
+grant execute on function ms_transition(uuid, text, text, jsonb) to authenticated;

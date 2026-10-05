@@ -21,11 +21,11 @@ export function DashboardPage() {
   const loading = useMissionStore((s) => s.loading)
   const portfolio = useMissionStore((s) => s.portfolio)
   const [scope, setScope] = useState<'all' | 'mine'>('all')
-  const isManager = !!user?.isManager
+  const seesAll = !!user?.isManager || !!user?.isAdminAffairs
 
   const data: PortfolioData | null = useMemo(() => {
     if (!portfolio) return null
-    if (scope === 'all' && isManager) return portfolio
+    if (scope === 'all' && seesAll) return portfolio
     const ids = new Set(portfolio.missions.filter((m) => m.requesterId === user?.id).map((m) => m.id))
     return {
       ...portfolio,
@@ -34,7 +34,7 @@ export function DashboardPage() {
       findings: portfolio.findings.filter((f) => ids.has(f.missionId)),
       interviews: portfolio.interviews.filter((i) => ids.has(i.missionId)),
     }
-  }, [portfolio, scope, isManager, user?.id])
+  }, [portfolio, scope, seesAll, user?.id])
 
   const kpis = useMemo(() => (data ? computeKpis(data) : null), [data])
   const insights = useMemo(() => (data ? computeInsights(data) : []), [data])
@@ -46,7 +46,7 @@ export function DashboardPage() {
   if (!data || !kpis) return null
 
   const mine = data.missions.map((m) => ({ m, next: nextStepFor(m, user) })).filter((x) => x.next)
-  const funnel = STEPS.map((label, i) => ({ label, count: data.missions.filter((m) => stepIndex(m.status) === i).length }))
+  const funnel = [...STEPS, 'پایان‌یافته'].map((label, i) => ({ label, count: data.missions.filter((m) => stepIndex(m.status) === i).length }))
   const total = data.missions.length
 
   if (!total) {
@@ -82,11 +82,11 @@ export function DashboardPage() {
       {/* ------------------------------------------------------------------ title + scope */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="ms-eyebrow mb-1">{isManager ? 'نگاه مدیریتی' : 'میز کار من'}</p>
+          <p className="ms-eyebrow mb-1">{seesAll ? 'نگاه مدیریتی' : 'میز کار من'}</p>
           <h1 className="text-[22px] font-black leading-9">نبض بازدیدهای پروژه</h1>
           <p className="ms-ink2 text-[12.5px] leading-7">آنچه از بازدیدها بیرون می‌آید، نه فقط آنچه ثبت شده است.</p>
         </div>
-        {isManager && (
+        {seesAll && (
           <div className="flex gap-1 rounded-xl p-1" style={{ background: 'var(--ms-panel-2)', border: '1px solid var(--ms-line)' }} role="group" aria-label="دامنه نمایش">
             <button className={`ms-chip ${scope === 'all' ? 'is-on' : ''}`} aria-pressed={scope === 'all'} onClick={() => setScope('all')}>
               <Users size={13} aria-hidden /> همه
@@ -110,7 +110,7 @@ export function DashboardPage() {
         </Card>
 
         <Card className="p-4 lg:col-span-2">
-          <SectionHead eyebrow="نوبت شماست" title={isManager ? 'در انتظار تصمیم یا اقدام شما' : 'قدم بعدی من'} />
+          <SectionHead eyebrow="نوبت شماست" title={seesAll ? 'در انتظار تصمیم یا اقدام شما' : 'قدم بعدی من'} />
           {mine.length === 0 ? (
             <EmptyState icon={CircleCheck} title="کار معوقی ندارید" text="هر مأموریتی که اقدام شما را بخواهد اینجا می‌آید." />
           ) : (
@@ -136,10 +136,12 @@ export function DashboardPage() {
       </div>
 
       {/* ------------------------------------------------------------------ KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
         <Kpi label="مأموریت جاری" value={faNum(kpis.active)} onClick={() => go({ kind: 'list', filter: 'active' })} />
-        <Kpi label="منتظر تأیید درخواست" value={faNum(kpis.awaitingRequestApproval)} tone={kpis.awaitingRequestApproval ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'pending_approval' })} />
+        <Kpi label="منتظر تأیید مجری طرح" value={faNum(kpis.awaitingRequestApproval)} tone={kpis.awaitingRequestApproval ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'pending_approval' })} />
+        <Kpi label="منتظر صدور بلیط" value={faNum(kpis.awaitingTicket)} tone={kpis.awaitingTicket ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'ticketing' })} />
         <Kpi label="گزارش منتظر تأیید" value={faNum(kpis.awaitingReportReview)} tone={kpis.awaitingReportReview ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'report_review' })} />
+        <Kpi label="کلیم منتظر تأیید" value={faNum(kpis.awaitingClaim)} tone={kpis.awaitingClaim ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'claim' })} />
         <Kpi label="گزارش تکمیل‌شده" value={faNum(kpis.completedReports)} tone="good" onClick={() => go({ kind: 'list', filter: 'done' })} />
         <Kpi label="گزارش ناقص" value={faNum(kpis.incompleteReports)} tone={kpis.incompleteReports ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'incomplete' })} />
         <Kpi label="Issue شناسایی‌شده" value={faNum(kpis.issues)} tone={kpis.issues ? 'bad' : undefined} sub={`${faNum(kpis.transferred)} منتقل‌شده`} onClick={() => go({ kind: 'findings' })} />

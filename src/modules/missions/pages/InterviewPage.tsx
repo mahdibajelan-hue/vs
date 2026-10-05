@@ -95,7 +95,9 @@ export function InterviewPage({ id }: { id: string }) {
         : m.status === 'draft' || m.status === 'returned'
           ? 'درخواست مأموریت هنوز برای تأیید ارسال نشده است. ابتدا درخواست را ارسال کنید.'
           : m.status === 'pending_approval'
-            ? 'درخواست مأموریت هنوز تأیید نشده است. گزارش پس از تأیید مدیر قابل ثبت است.'
+            ? 'درخواست مأموریت هنوز توسط مجری طرح تأیید نشده است. گزارش پس از تأیید و پس از انجام مأموریت قابل ثبت است.'
+            : m.status === 'ticketing'
+              ? 'درخواست شما تأیید شد و منتظر صدور بلیط توسط امور اداری است. پس از صدور بلیط و انجام مأموریت، گزارش را ثبت کنید.'
             : m.status === 'report_review' || m.status === 'ready_for_claim' || m.status === 'claimed'
               ? 'گزارش این مأموریت قبلاً ثبت و ارسال شده است.'
               : 'برای این مأموریت امکان ثبت گزارش وجود ندارد.'
@@ -151,7 +153,7 @@ export function InterviewPage({ id }: { id: string }) {
                 ['۲', 'پاسخ بدهید', 'پایین صفحه کادر پاسخ است. با دکمه میکروفون صحبت کنید یا تایپ کنید، سپس «ارسال» را بزنید. برای پاسخ‌های کوتاه دکمه‌های آماده هم هست.'],
                 ['۳', 'سؤال تکمیلی را جواب دهید', 'اگر مشکل یا ریسکی گفتید، علت، اثر، مسئول و موعد آن را می‌پرسم. «نمی‌دانم» هم پاسخ قبول است.'],
                 ['۴', 'عکس و مستند بگذارید', 'در بخش «یافته‌ها» (در موبایل: تب بالای صفحه) برای هر موضوع عکس، صورتجلسه یا نامه پیوست کنید.'],
-                ['۵', 'مرور و ارسال', 'پس از پایان همه موضوع‌ها، خلاصه را بررسی و برای مدیر ارسال کنید. می‌توانید هر زمان خارج شوید؛ پاسخ‌ها ذخیره می‌شوند.'],
+                ['۵', 'مرور و ارسال', 'پس از پایان همه موضوع‌ها، خلاصه را بررسی و برای مجری طرح ارسال کنید. می‌توانید هر زمان خارج شوید؛ پاسخ‌ها ذخیره می‌شوند.'],
               ].map(([n, t, d]) => (
                 <li key={n} className="flex gap-3">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-black" style={{ background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)' }}>{n}</span>
@@ -302,7 +304,7 @@ export function InterviewPage({ id }: { id: string }) {
           )}
           {reopened && (
             <div className="ms-card-flat self-center p-4 text-center">
-              <p className="text-[12.5px] leading-7">مدیر گزارش را برای اصلاح برگرداند{m.managerComment ? `: «${m.managerComment}»` : '.'}</p>
+              <p className="text-[12.5px] leading-7">مجری طرح گزارش را برای اصلاح برگرداند{m.managerComment ? `: «${m.managerComment}»` : '.'}</p>
               <button className="ms-btn ms-btn-primary mt-2" onClick={() => reopenInterview()}>بازگشایی گفت‌وگو و اصلاح</button>
             </div>
           )}

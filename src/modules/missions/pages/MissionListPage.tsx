@@ -2,18 +2,20 @@ import { useMemo, useState } from 'react'
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
-import { nextStepFor, STEPS, stepIndex } from '../lib/workflow'
+import { nextStepFor, STEPS, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, shamsi, missionDays } from '../lib/fa'
 import { Avatar, Card, EmptyState, Pill, StatusPill } from '../components/ui'
 import { MISSION_STATUS_LABEL, VISIT_TYPE_LABEL, type Mission, type MissionStatus } from '../types'
 
 const FILTERS: { key: string; label: string; test: (m: Mission) => boolean }[] = [
   { key: 'all', label: 'همه', test: () => true },
-  { key: 'active', label: 'جاری', test: (m) => ['approved', 'debrief', 'pending_approval', 'report_review', 'revision_requested', 'returned'].includes(m.status) },
-  { key: 'pending_approval', label: 'منتظر تأیید درخواست', test: (m) => m.status === 'pending_approval' },
-  { key: 'report_review', label: 'گزارش منتظر تأیید', test: (m) => m.status === 'report_review' },
+  { key: 'active', label: 'جاری', test: (m) => ['ticketing', 'approved', 'debrief', 'pending_approval', 'report_review', 'ready_for_claim', 'revision_requested', 'returned'].includes(m.status) },
+  { key: 'pending_approval', label: 'منتظر تأیید مجری طرح', test: (m) => m.status === 'pending_approval' },
+  { key: 'ticketing', label: 'منتظر بلیط (امور اداری)', test: (m) => m.status === 'ticketing' },
+  { key: 'report_review', label: 'گزارش منتظر مجری طرح', test: (m) => m.status === 'report_review' },
   { key: 'incomplete', label: 'گزارش ناقص', test: (m) => m.status === 'debrief' || m.status === 'revision_requested' },
-  { key: 'done', label: 'تکمیل‌شده', test: (m) => m.status === 'ready_for_claim' || m.status === 'claimed' },
+  { key: 'claim', label: 'کلیم منتظر امور اداری', test: (m) => m.status === 'ready_for_claim' },
+  { key: 'done', label: 'تکمیل‌شده', test: (m) => m.status === 'claimed' },
   { key: 'draft', label: 'پیش‌نویس', test: (m) => m.status === 'draft' || m.status === 'returned' },
 ]
 
@@ -75,6 +77,7 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                           <b className="text-[13.5px]">{m.projectName}</b>
                           <span className="ms-muted text-[11.5px]">{m.code}</span>
                           <StatusPill status={m.status as MissionStatus} />
+                          {waitingOn(m) && <span className="ms-muted text-[11px]">منتظر: {waitingOn(m)}</span>}
                         </span>
                         <span className="ms-ink2 mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[12px] leading-6">
                           <span>{m.requesterName}</span>

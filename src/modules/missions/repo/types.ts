@@ -27,6 +27,9 @@ import type { QuestionSet } from '../lib/questionSets'
 export interface MissionDraft {
   masterProjectId: string
   requesterPosition: string
+  needsTicket: boolean
+  originCity: string
+  ticketNote: string
   destination: string
   locationDetail: string
   startDate: string
@@ -42,7 +45,16 @@ export type ObjectiveDraft = Pick<Objective, 'title' | 'measure' | 'topicKey' | 
 
 export interface CurrentUser extends PersonRef {
   isAdmin: boolean
+  /** مجری طرح — approves requests and reports. */
   isManager: boolean
+  /** امور اداری — books flight tickets and approves mission claims. */
+  isAdminAffairs: boolean
+}
+
+export type MissionRole = 'executive' | 'admin_affairs'
+export interface RoleAssignment {
+  userId: string
+  role: MissionRole
 }
 
 export interface PortfolioData {
@@ -73,7 +85,10 @@ export interface MissionRepo {
   createMission(draft: MissionDraft, objectives: ObjectiveDraft[]): Promise<Mission>
   updateMission(id: string, draft: Partial<MissionDraft>, objectives?: ObjectiveDraft[]): Promise<void>
   deleteMission(id: string): Promise<void>
-  transition(id: string, action: WorkflowAction, comment?: string): Promise<void>
+  transition(id: string, action: WorkflowAction, comment?: string, data?: Record<string, unknown>): Promise<void>
+
+  listRoles(): Promise<RoleAssignment[]>
+  setRole(userId: string, role: MissionRole, on: boolean): Promise<void>
 
   saveInterview(missionId: string, patch: { status?: InterviewStatus; state?: InterviewState; provider?: string; summaryConfirmedAt?: string | null }): Promise<Interview>
   appendTurns(missionId: string, startSeq: number, turns: TurnDraft[]): Promise<Turn[]>

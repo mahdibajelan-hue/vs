@@ -98,7 +98,7 @@ export function ReportPage({ id }: { id: string }) {
 
           {canReview && (
             <Card className="p-5" style={{ borderColor: 'color-mix(in srgb, var(--ms-accent) 50%, transparent)' }}>
-              <SectionHead eyebrow="تصمیم مدیر" title="تأیید یا بازگشت گزارش" />
+              <SectionHead eyebrow="تصمیم مجری طرح" title="تأیید یا بازگشت گزارش" />
               {seriousUnreviewed.length > 0 && (
                 <p className="mb-3 rounded-xl px-3 py-2 text-[12px] leading-6" style={{ background: 'color-mix(in srgb, var(--ms-warn) 14%, transparent)' }}>
                   {faNum(seriousUnreviewed.length)} مسئله/ریسک مهم هنوز به سامانه اصلی منتقل یا ردّ نشده است.
@@ -112,12 +112,12 @@ export function ReportPage({ id }: { id: string }) {
                 <button className="ms-btn" disabled={busy || !comment.trim()} onClick={() => decide('return_report')}><Undo2 size={14} aria-hidden /> برگشت برای اصلاح</button>
                 <button className="ms-btn" disabled={busy || !comment.trim()} onClick={() => decide('return_report', 'اطلاعات تکمیلی لازم است: ')}><FileQuestion size={14} aria-hidden /> درخواست اطلاعات تکمیلی</button>
               </div>
-              <p className="ms-muted mt-2 text-[11px] leading-6">با تأیید نهایی، مأموریت به وضعیت «آماده ثبت حق مأموریت» می‌رود.</p>
+              <p className="ms-muted mt-2 text-[11px] leading-6">با تأیید نهایی، کلیم مأموریت برای تأیید امور اداری ارسال می‌شود.</p>
             </Card>
           )}
 
-          {!canReview && m.status === 'report_review' && <Pill tone="warn">گزارش منتظر تصمیم مدیر است</Pill>}
-          {m.status === 'ready_for_claim' && <Pill tone="good">گزارش تأیید نهایی شد</Pill>}
+          {!canReview && m.status === 'report_review' && <Pill tone="warn">گزارش منتظر تصمیم مجری طرح است</Pill>}
+          {m.status === 'ready_for_claim' && <Pill tone="good">گزارش تأیید شد؛ کلیم نزد امور اداری</Pill>}
         </aside>
       </div>
 

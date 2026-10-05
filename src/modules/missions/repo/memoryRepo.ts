@@ -19,6 +19,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
   const reports = new Map<string, Report[]>()
   const events = new Map<string, MissionEvent[]>()
   const linkedMap = new Map<string, LinkedStatus>()
+  const roleSet = new Set<string>()
   let seq = 1001
   const personName = (id: string | null) => opts.people.find((p) => p.id === id)?.name ?? ''
   const projectName = (id: string) => opts.projects.find((p) => p.id === id)?.name ?? '—'
@@ -49,6 +50,12 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       visitees: d.visitees,
       topicsOfInterest: d.topicsOfInterest,
       expectedOutput: d.expectedOutput,
+      needsTicket: d.needsTicket,
+      originCity: d.originCity,
+      ticketNote: d.ticketNote,
+      ticket: {},
+      ticketIssuedAt: null,
+      adminComment: '',
       approverId: d.approverId,
       approverName: personName(d.approverId),
       status: 'draft',
@@ -80,7 +87,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       return [DEFAULT_QUESTION_SET]
     },
     async loadPortfolio(): Promise<PortfolioData> {
-      const visible = [...missions.values()].filter((m) => me.isManager || m.requesterId === me.id || m.approverId === me.id)
+      const visible = [...missions.values()].filter((m) => me.isManager || m.requesterId === me.id || m.approverId === me.id || me.isAdminAffairs)
       const ids = new Set(visible.map((m) => m.id))
       const latest = [...reports.entries()].filter(([id]) => ids.has(id)).map(([, list]) => list[list.length - 1])
       return {
@@ -147,11 +154,12 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       reports.delete(id)
       events.delete(id)
     },
-    async transition(id, action: WorkflowAction, comment = '') {
+    async transition(id, action: WorkflowAction, comment = '', data: Record<string, unknown> = {}) {
       const m = missions.get(id)
       if (!m) throw new Error('مأموریت یافت نشد')
       const isReq = m.requesterId === me.id
       const isMgr = me.isManager || m.approverId === me.id
+      const isAA = me.isAdminAffairs
       const hasObjectives = [...objectives.values()].some((o) => o.missionId === id)
       const list = reports.get(id) ?? []
       let next: Mission['status'] | null = null
@@ -159,20 +167,25 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
         if (!hasObjectives) throw new Error('حداقل یک هدف برای مأموریت لازم است.')
         next = 'pending_approval'
       } else if (action === 'approve_request' && isMgr && m.status === 'pending_approval') {
-        if (isReq && !me.isAdmin) throw new Error('تأیید مأموریت یا گزارش خود مجاز نیست.')
-        next = 'approved'
+        if (isReq && !me.isAdmin) throw new Error('تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.')
+        next = m.needsTicket ? 'ticketing' : 'approved'
       } else if (action === 'return_request' && isMgr && m.status === 'pending_approval') next = 'returned'
       else if (action === 'reject_request' && isMgr && m.status === 'pending_approval') next = 'rejected'
+      else if (action === 'issue_ticket' && isAA && m.status === 'ticketing') next = 'approved'
+      else if (action === 'return_ticket' && isAA && m.status === 'ticketing') next = 'returned'
       else if (action === 'start_debrief' && isReq && m.status === 'approved') next = 'debrief'
       else if (action === 'submit_report' && isReq && (m.status === 'debrief' || m.status === 'revision_requested')) {
         if (!list.length) throw new Error('ابتدا گزارش را تولید کنید.')
         next = 'report_review'
       } else if (action === 'return_report' && isMgr && m.status === 'report_review') next = 'revision_requested'
       else if (action === 'approve_report' && isMgr && m.status === 'report_review') {
-        if (isReq && !me.isAdmin) throw new Error('تأیید مأموریت یا گزارش خود مجاز نیست.')
+        if (isReq && !me.isAdmin) throw new Error('تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.')
         next = 'ready_for_claim'
-      } else if (action === 'mark_claimed' && isReq && m.status === 'ready_for_claim') next = 'claimed'
-      else if (action === 'cancel' && (isReq || isMgr) && ['draft', 'pending_approval', 'returned', 'approved'].includes(m.status)) next = 'cancelled'
+      } else if (action === 'approve_claim' && isAA && m.status === 'ready_for_claim') {
+        if (isReq && !me.isAdmin) throw new Error('تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.')
+        next = 'claimed'
+      }
+      else if (action === 'cancel' && (isReq || isMgr) && ['draft', 'pending_approval', 'returned', 'ticketing', 'approved'].includes(m.status)) next = 'cancelled'
       if (!next) throw new Error('این اقدام در وضعیت فعلی مأموریت مجاز نیست.')
 
       const t = now()
@@ -186,7 +199,9 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       if (action === 'start_debrief') upd.debriefStartedAt = t
       if (action === 'submit_report') upd.reportSubmittedAt = t
       if (action === 'approve_report') upd.finalApprovedAt = t
-      if (action === 'mark_claimed') upd.claimedAt = t
+      if (action === 'issue_ticket') { upd.ticket = data as Mission['ticket']; upd.ticketIssuedAt = t }
+      if (['issue_ticket', 'return_ticket', 'approve_claim'].includes(action)) upd.adminComment = comment
+      if (action === 'approve_claim') upd.claimedAt = t
       missions.set(id, upd)
       const last = list[list.length - 1]
       if (last) {
@@ -195,6 +210,14 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
         if (action === 'approve_report') last.status = 'approved'
       }
       logEvent(id, action, comment, me.id)
+    },
+
+    async listRoles() {
+      return [...roleSet].map((k) => { const [userId, role] = k.split('|'); return { userId, role: role as 'executive' | 'admin_affairs' } })
+    },
+    async setRole(userId, role, on) {
+      if (on) roleSet.add(`${userId}|${role}`)
+      else roleSet.delete(`${userId}|${role}`)
     },
 
     async saveInterview(missionId, patch) {
@@ -225,7 +248,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     async updateFinding(id, patch) {
       const f = findings.get(id)
       if (!f) return
-      if ((patch.approval !== undefined || patch.managerNote !== undefined) && !me.isManager) throw new Error('این اقدام فقط برای مدیر مجاز است.')
+      if ((patch.approval !== undefined || patch.managerNote !== undefined) && !me.isManager) throw new Error('این اقدام فقط برای مجری طرح مجاز است.')
       findings.set(id, { ...f, ...patch } as Finding)
     },
     async deleteFinding(id) {
@@ -282,7 +305,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     },
 
     async transferFinding(findingId, target) {
-      if (!me.isManager) throw new Error('این اقدام فقط برای مدیر مجاز است.')
+      if (!me.isManager) throw new Error('این اقدام فقط برای مجری طرح مجاز است.')
       const f = findings.get(findingId)
       if (!f) throw new Error('یافته پیدا نشد')
       if (f.transferredId) throw new Error('این مورد قبلاً منتقل شده است.')

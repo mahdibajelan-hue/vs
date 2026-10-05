@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles } from 'lucide-react'
+import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles, Users } from 'lucide-react'
 import { BUILD_ID, ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useMissionStore } from './store/useMissionStore'
 import type { MissionRepo } from './repo/types'
@@ -14,6 +14,7 @@ import { SummaryPage } from './pages/SummaryPage'
 import { ReportPage } from './pages/ReportPage'
 import { FindingsPage } from './pages/FindingsPage'
 import { QuestionSetsPage } from './pages/QuestionSetsPage'
+import { RolesPage } from './pages/RolesPage'
 import './missions.css'
 
 interface Props {
@@ -26,11 +27,12 @@ interface Props {
   embedded?: boolean
 }
 
-const NAV: { key: View['kind']; label: string; icon: typeof LayoutDashboard; view: View }[] = [
+const NAV: { key: View['kind']; label: string; icon: typeof LayoutDashboard; view: View; adminOnly?: boolean }[] = [
   { key: 'dashboard', label: 'داشبورد', icon: LayoutDashboard, view: { kind: 'dashboard' } },
   { key: 'list', label: 'مأموریت‌ها', icon: ClipboardList, view: { kind: 'list' } },
   { key: 'findings', label: 'یافته‌ها', icon: FileSearch, view: { kind: 'findings' } },
   { key: 'sets', label: 'سؤال‌ها', icon: ListTree, view: { kind: 'sets' } },
+  { key: 'roles', label: 'نقش‌ها', icon: Users, view: { kind: 'roles' }, adminOnly: true },
 ]
 
 /** The section a deeper page belongs to, so the nav stays lit while inside a mission. */
@@ -48,6 +50,8 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
   const error = useMissionStore((s) => s.error)
   const clearError = useMissionStore((s) => s.clearError)
   const ai = useMissionStore((s) => s.ai)
+  const user = useMissionStore((s) => s.user)
+  const nav = NAV.filter((n) => !n.adminOnly || user?.isAdmin)
 
   useEffect(() => {
     if (repo) setRepo(repo)
@@ -77,7 +81,7 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
           </button>
 
           <nav className="order-3 hidden items-center gap-1 rounded-xl p-1 md:order-none md:flex" style={{ background: 'var(--ms-panel-2)', border: '1px solid var(--ms-line)' }} aria-label="بخش‌ها">
-            {NAV.map((n) => (
+            {nav.map((n) => (
               <button key={n.key} onClick={() => go(n.view)} className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12.5px] font-bold transition-colors ${section === n.key ? '' : 'ms-ink2 hover:text-[var(--ms-ink)]'}`} style={section === n.key ? { background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)' } : undefined} aria-current={section === n.key ? 'page' : undefined}>
                 <n.icon size={14} aria-hidden /> {n.label}
               </button>
@@ -120,6 +124,8 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
             <ReportPage id={view.id} />
           ) : view.kind === 'findings' ? (
             <FindingsPage />
+          ) : view.kind === 'roles' ? (
+            <RolesPage />
           ) : (
             <QuestionSetsPage />
           )}
@@ -127,7 +133,7 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
 
         {!immersive && (
           <nav className="ms-bottom-nav ms-no-print" aria-label="بخش‌ها">
-            {NAV.map((n) => (
+            {nav.map((n) => (
               <button key={n.key} className={section === n.key ? 'is-on' : ''} onClick={() => go(n.view)}>
                 <n.icon size={19} aria-hidden />
                 {n.label}

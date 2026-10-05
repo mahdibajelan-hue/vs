@@ -14,6 +14,7 @@ export type MissionStatus =
   | 'pending_approval'
   | 'returned'
   | 'rejected'
+  | 'ticketing'
   | 'approved'
   | 'debrief'
   | 'report_review'
@@ -24,15 +25,16 @@ export type MissionStatus =
 
 export const MISSION_STATUS_LABEL: Record<MissionStatus, string> = {
   draft: 'پیش‌نویس',
-  pending_approval: 'در انتظار تأیید درخواست',
+  pending_approval: 'در انتظار تأیید مجری طرح',
   returned: 'برگشت‌خورده برای اصلاح',
   rejected: 'ردشده',
+  ticketing: 'در انتظار صدور بلیط (امور اداری)',
   approved: 'تأییدشده — آماده اعزام',
   debrief: 'در حال گزارش‌گیری',
-  report_review: 'گزارش در انتظار تأیید مدیر',
+  report_review: 'گزارش در انتظار تأیید مجری طرح',
   revision_requested: 'گزارش نیازمند اصلاح',
-  ready_for_claim: 'آماده ثبت حق مأموریت',
-  claimed: 'حق مأموریت ثبت شد',
+  ready_for_claim: 'در انتظار تأیید کلیم (امور اداری)',
+  claimed: 'کلیم مأموریت تأیید شد',
   cancelled: 'لغوشده',
 }
 
@@ -43,11 +45,12 @@ export const MISSION_STATUS_TONE: Record<MissionStatus, Tone> = {
   pending_approval: 'warn',
   returned: 'warn',
   rejected: 'bad',
+  ticketing: 'warn',
   approved: 'info',
   debrief: 'accent',
   report_review: 'warn',
   revision_requested: 'warn',
-  ready_for_claim: 'good',
+  ready_for_claim: 'warn',
   claimed: 'good',
   cancelled: 'neutral',
 }
@@ -86,6 +89,18 @@ export interface Visitee {
 export type Priority = 'low' | 'medium' | 'high' | 'critical'
 export const PRIORITY_LABEL: Record<Priority, string> = { low: 'کم', medium: 'متوسط', high: 'زیاد', critical: 'بحرانی' }
 
+/** Flight ticket details recorded by Administrative Affairs when the ticket is issued. */
+export interface TicketInfo {
+  airline?: string
+  flightNo?: string
+  route?: string
+  departAt?: string
+  returnAt?: string
+  pnr?: string
+  cost?: string
+  note?: string
+}
+
 export interface Mission {
   id: string
   code: string
@@ -102,6 +117,13 @@ export interface Mission {
   visitees: Visitee[]
   topicsOfInterest: string
   expectedOutput: string
+  /** Flight ticket needed? (false → the request skips Administrative Affairs ticketing) */
+  needsTicket: boolean
+  originCity: string
+  ticketNote: string
+  ticket: TicketInfo
+  ticketIssuedAt: string | null
+  adminComment: string
   approverId: string | null
   approverName: string
   status: MissionStatus
@@ -399,20 +421,24 @@ export type WorkflowAction =
   | 'submit_report'
   | 'return_report'
   | 'approve_report'
-  | 'mark_claimed'
+  | 'issue_ticket'
+  | 'return_ticket'
+  | 'approve_claim'
   | 'cancel'
 
 export const EVENT_LABEL: Record<string, string> = {
   created: 'ثبت درخواست',
   submit_request: 'ارسال برای تأیید',
-  approve_request: 'تأیید درخواست مأموریت',
+  approve_request: 'تأیید درخواست توسط مجری طرح',
   return_request: 'برگشت درخواست برای اصلاح',
   reject_request: 'رد درخواست',
   start_debrief: 'شروع گزارش‌گیری',
-  submit_report: 'ارسال گزارش برای مدیر',
+  submit_report: 'ارسال گزارش برای مجری طرح',
   return_report: 'برگشت گزارش برای اصلاح',
-  approve_report: 'تأیید نهایی گزارش',
-  mark_claimed: 'ثبت حق مأموریت',
+  approve_report: 'تأیید نهایی گزارش توسط مجری طرح',
+  issue_ticket: 'صدور بلیط هواپیما',
+  return_ticket: 'برگشت درخواست توسط امور اداری',
+  approve_claim: 'تأیید کلیم مأموریت',
   cancel: 'لغو مأموریت',
   transfer_issue: 'انتقال به مدیریت Issue',
   transfer_risk: 'انتقال به مدیریت ریسک',

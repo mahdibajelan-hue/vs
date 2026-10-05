@@ -76,7 +76,7 @@ export function FindingCard({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <KindBadge kind={f.kind} />
         {(f.kind === 'issue' || f.kind === 'risk') && <SeverityDot severity={f.severity} withLabel />}
-        {f.approval === 'approved' && !f.transferredId && <Pill tone="good">تأیید مدیر</Pill>}
+        {f.approval === 'approved' && !f.transferredId && <Pill tone="good">تأیید مجری طرح</Pill>}
         {f.approval === 'rejected' && <Pill tone="bad">ردشده</Pill>}
         {f.userConfirmed && <span className="ms-muted text-[10.5px]">تأیید بازدیدکننده</span>}
         {missionLabel && (
@@ -97,7 +97,7 @@ export function FindingCard({
         </dl>
       )}
       {missing.length > 0 && <p className="mt-1 text-[11px] font-bold" style={{ color: 'var(--ms-warn)' }}>⚠ {missing.join(' و ')} مشخص نشده است</p>}
-      {f.managerNote && <p className="ms-ink2 mt-1 text-[11.5px] leading-6">یادداشت مدیر: {f.managerNote}</p>}
+      {f.managerNote && <p className="ms-ink2 mt-1 text-[11.5px] leading-6">یادداشت مجری طرح: {f.managerNote}</p>}
 
       {linked && (
         <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px]">

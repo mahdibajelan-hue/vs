@@ -10,6 +10,7 @@ export type View =
   | { kind: 'report'; id: string }
   | { kind: 'findings' }
   | { kind: 'sets' }
+  | { kind: 'roles' }
 
 export interface Nav {
   view: View

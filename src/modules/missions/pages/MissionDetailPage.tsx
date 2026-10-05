@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, BadgeCheck, CalendarDays, Check, ClipboardCopy, FileText, History, MapPin, Pencil, Play, Send, UserRound, X } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Plane, CalendarDays, Check, ClipboardCopy, FileText, History, MapPin, Pencil, Play, Send, UserRound, X } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
-import { nextStepFor, STEPS, stepIndex } from '../lib/workflow'
+import { nextStepFor, STEPS, STEP_OWNER, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, missionDays, shamsi, shamsiLong, timeAgoFa } from '../lib/fa'
 import { Card, Field, Pill, ScoreGauge, SectionHead, StatusPill } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
 import { EvidencePanel } from '../components/EvidencePanel'
-import { EVENT_LABEL, OBJECTIVE_STATUS_LABEL, OBJECTIVE_STATUS_TONE, VISIT_TYPE_LABEL, PRIORITY_LABEL } from '../types'
+import { EVENT_LABEL, type TicketInfo, OBJECTIVE_STATUS_LABEL, OBJECTIVE_STATUS_TONE, VISIT_TYPE_LABEL, PRIORITY_LABEL } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
 
 type Tab = 'overview' | 'findings' | 'evidence' | 'history'
@@ -23,6 +23,7 @@ export function MissionDetailPage({ id }: { id: string }) {
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [ticket, setTicket] = useState<TicketInfo>({})
 
   useEffect(() => {
     openMission(id)
@@ -33,14 +34,15 @@ export function MissionDetailPage({ id }: { id: string }) {
   const { mission: m, objectives, findings, linked, events, report } = bundle
   const isReq = m.requesterId === user?.id
   const isMgr = !!user?.isManager || m.approverId === user?.id
+  const isAA = !!user?.isAdminAffairs
   const idx = stepIndex(m.status)
   const next = nextStepFor(m, user)
   const live = liveFindings(findings)
   const days = missionDays(m.startDate, m.endDate)
 
-  async function act(action: Parameters<typeof transition>[0], c = comment) {
+  async function act(action: Parameters<typeof transition>[0], c = comment, data?: Record<string, unknown>) {
     setBusy(true)
-    const ok = await transition(action, c)
+    const ok = await transition(action, c, undefined, data)
     setBusy(false)
     if (ok) setComment('')
     return ok
@@ -54,7 +56,7 @@ export function MissionDetailPage({ id }: { id: string }) {
     `تاریخ شروع: ${shamsi(m.startDate)}`,
     `تاریخ پایان: ${shamsi(m.endDate)}`,
     `مدت مأموریت: ${faNum(days)} روز`,
-    `تأیید نهایی گزارش: ${m.finalApprovedAt ? shamsi(m.finalApprovedAt) : '—'}${m.approverName ? ` توسط ${m.approverName}` : ''}`,
+    `تأیید گزارش توسط مجری طرح: ${m.finalApprovedAt ? shamsi(m.finalApprovedAt) : '—'}${m.approverName ? ` (${m.approverName})` : ''}`,
   ].join('\n')
 
   return (
@@ -79,7 +81,8 @@ export function MissionDetailPage({ id }: { id: string }) {
             <div className="mt-2 flex flex-wrap gap-2">
               <StatusPill status={m.status} />
               <Pill>{VISIT_TYPE_LABEL[m.visitType]}</Pill>
-              {m.approverName && <Pill>تأییدکننده: {m.approverName}</Pill>}
+              {m.approverName && <Pill>مجری طرح: {m.approverName}</Pill>}
+              {waitingOn(m) && <Pill tone="warn">منتظر: {waitingOn(m)}</Pill>}
             </div>
           </div>
           {m.qualityScore != null && <ScoreGauge value={m.qualityScore} size={92} label="کیفیت گزارش" />}
@@ -91,7 +94,7 @@ export function MissionDetailPage({ id }: { id: string }) {
               <div key={s} className="contents" role="listitem">
                 <div className={`ms-step ${i < idx ? 'is-done' : i === idx ? 'is-now' : ''}`}>
                   <span className="ms-step-dot">{i < idx ? <Check size={13} aria-hidden /> : faNum(i + 1)}</span>
-                  <span className="ms-step-label">{s}</span>
+                  <span className="ms-step-label">{s}<span className="ms-muted block text-[10px] font-medium">{STEP_OWNER[i]}</span></span>
                 </div>
                 {i < STEPS.length - 1 && <span className={`ms-step-bar ${i < idx ? 'is-done' : ''}`} />}
               </div>
@@ -101,28 +104,28 @@ export function MissionDetailPage({ id }: { id: string }) {
 
         {/* ------------------------------------------------------------ actions */}
         <div className="mt-5 flex flex-col gap-3 border-t pt-4" style={{ borderColor: 'var(--ms-line)' }}>
-          {m.managerComment && ['returned', 'revision_requested', 'rejected'].includes(m.status) && (
+          {(m.managerComment || m.adminComment) && ['returned', 'revision_requested', 'rejected'].includes(m.status) && (
             <p className="rounded-xl px-4 py-3 text-[12.5px] leading-7" style={{ background: 'color-mix(in srgb, var(--ms-warn) 13%, transparent)', border: '1px solid color-mix(in srgb, var(--ms-warn) 35%, transparent)' }}>
-              <b>نظر مدیر:</b> {m.managerComment}
+              <b>{m.managerComment ? 'نظر مجری طرح' : 'نظر امور اداری'}:</b> {m.managerComment || m.adminComment}
             </p>
           )}
 
           {m.status === 'pending_approval' && isMgr && (
             <div className="flex flex-col gap-3">
-              <Field label="نظر شما (برای برگشت یا رد الزامی است)">
+              <Field label="نظر شما به‌عنوان مجری طرح (برای برگشت یا رد الزامی است)">
                 <textarea className="ms-textarea" style={{ minHeight: 64 }} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="مثلاً: معیار تحقق هدف دوم را مشخص‌تر بنویسید" />
               </Field>
               <div className="flex flex-wrap gap-2">
-                <button className="ms-btn ms-btn-primary" disabled={busy} onClick={() => act('approve_request')}><Check size={15} aria-hidden /> تأیید مأموریت</button>
+                <button className="ms-btn ms-btn-primary" disabled={busy} onClick={() => act('approve_request')}><Check size={15} aria-hidden /> {m.needsTicket ? 'تأیید و ارسال به امور اداری (بلیط)' : 'تأیید مأموریت'}</button>
                 <button className="ms-btn" disabled={busy || !comment.trim()} onClick={() => act('return_request')}><Pencil size={14} aria-hidden /> برگشت برای اصلاح</button>
                 <button className="ms-btn ms-btn-danger" disabled={busy || !comment.trim()} onClick={() => act('reject_request')}><X size={14} aria-hidden /> رد درخواست</button>
               </div>
             </div>
           )}
 
-          {m.status === 'pending_approval' && !isMgr && <p className="ms-ink2 text-[12.5px]">درخواست شما ارسال شده و منتظر تأیید مدیر است.</p>}
+          {m.status === 'pending_approval' && !isMgr && <p className="ms-ink2 text-[12.5px]">درخواست شما ارسال شده و منتظر تأیید مجری طرح است.</p>}
 
-          {next && m.status !== 'pending_approval' && m.status !== 'report_review' && (
+          {next && !['pending_approval', 'report_review', 'ticketing', 'ready_for_claim'].includes(m.status) && (
             <div className="flex flex-wrap items-center gap-3">
               <button className="ms-btn ms-btn-primary" onClick={() => go(next.view)}>
                 {m.status === 'approved' || m.status === 'debrief' ? <Play size={15} aria-hidden /> : m.status === 'draft' || m.status === 'returned' ? <Pencil size={14} aria-hidden /> : <Send size={14} aria-hidden />}
@@ -135,7 +138,7 @@ export function MissionDetailPage({ id }: { id: string }) {
           {m.status === 'report_review' && (
             <div className="flex flex-wrap items-center gap-3">
               <button className="ms-btn ms-btn-primary" onClick={() => go({ kind: 'report', id })}><FileText size={15} aria-hidden /> {isMgr ? 'بررسی گزارش و تصمیم' : 'مشاهده گزارش ارسال‌شده'}</button>
-              <p className="ms-ink2 text-[12.5px]">گزارش برای مدیر ارسال شده است.</p>
+              <p className="ms-ink2 text-[12.5px]">گزارش برای مجری طرح ارسال شده است.</p>
             </div>
           )}
 
@@ -143,7 +146,7 @@ export function MissionDetailPage({ id }: { id: string }) {
             <div><button className="ms-btn ms-btn-sm" onClick={() => go({ kind: 'report', id })}><FileText size={14} aria-hidden /> مشاهده گزارش</button></div>
           )}
 
-          {(isReq || isMgr) && ['draft', 'pending_approval', 'returned', 'approved'].includes(m.status) && (
+          {(isReq || isMgr) && ['draft', 'pending_approval', 'returned', 'ticketing', 'approved'].includes(m.status) && (
             <div className="flex flex-wrap gap-2">
               <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={() => act('cancel', '')} disabled={busy}>لغو مأموریت</button>
               {m.status === 'draft' && isReq && <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={async () => { await deleteMission(id); go({ kind: 'list' }) }}>حذف پیش‌نویس</button>}
@@ -152,10 +155,56 @@ export function MissionDetailPage({ id }: { id: string }) {
         </div>
       </Card>
 
-      {/* ---------------------------------------------------------------- mission claim */}
+      {/* ---------------------------------------------------------------- Administrative Affairs: ticketing */}
+      {m.status === 'ticketing' && (
+        <Card className="p-5" style={{ borderColor: 'color-mix(in srgb, var(--ms-accent) 50%, transparent)' }}>
+          <SectionHead eyebrow="امور اداری" title="درخواست بلیط هواپیما" action={<Pill tone="warn">منتظر صدور بلیط</Pill>} />
+          <dl className="grid gap-x-8 gap-y-1 text-[12.5px] sm:grid-cols-2">
+            {[['مسافر', `${m.requesterName}${m.requesterPosition ? ` (${m.requesterPosition})` : ''}`], ['مبدأ → مقصد', `${m.originCity || '—'} → ${m.destination || '—'}`], ['رفت', shamsiLong(m.startDate)], ['برگشت', shamsiLong(m.endDate)], ['پروژه', m.projectName], ['توضیح کارمند', m.ticketNote || '—']].map(([k, v]) => (
+              <div key={k} className="flex gap-2 border-b py-1.5" style={{ borderColor: 'var(--ms-line)' }}><dt className="ms-muted w-28 shrink-0">{k}</dt><dd className="font-bold">{v}</dd></div>
+            ))}
+          </dl>
+          {isAA ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <p className="text-[12.5px] font-extrabold">پس از رزرو، مشخصات بلیط را ثبت کنید:</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="ایرلاین"><input className="ms-input" value={ticket.airline ?? ''} onChange={(e) => setTicket({ ...ticket, airline: e.target.value })} placeholder="مثلاً ماهان" /></Field>
+                <Field label="شماره پرواز"><input className="ms-input" dir="ltr" value={ticket.flightNo ?? ''} onChange={(e) => setTicket({ ...ticket, flightNo: e.target.value })} placeholder="W5-1234" /></Field>
+                <Field label="ساعت و تاریخ رفت"><input className="ms-input" value={ticket.departAt ?? ''} onChange={(e) => setTicket({ ...ticket, departAt: e.target.value })} placeholder="مثلاً ۱۴۰۵/۰۷/۱۵ ساعت ۰۷:۳۰" /></Field>
+                <Field label="ساعت و تاریخ برگشت"><input className="ms-input" value={ticket.returnAt ?? ''} onChange={(e) => setTicket({ ...ticket, returnAt: e.target.value })} placeholder="مثلاً ۱۴۰۵/۰۷/۱۶ ساعت ۱۸:۰۰" /></Field>
+                <Field label="کد رزرو / شماره بلیط (PNR)"><input className="ms-input" dir="ltr" value={ticket.pnr ?? ''} onChange={(e) => setTicket({ ...ticket, pnr: e.target.value })} /></Field>
+                <Field label="مبلغ بلیط (ریال)"><input className="ms-input" value={ticket.cost ?? ''} onChange={(e) => setTicket({ ...ticket, cost: e.target.value })} /></Field>
+              </div>
+              <Field label="توضیح برای کارمند (اختیاری؛ برای برگشت درخواست الزامی)"><textarea className="ms-textarea" style={{ minHeight: 56 }} value={comment} onChange={(e) => setComment(e.target.value)} /></Field>
+              <div className="flex flex-wrap gap-2">
+                <button className="ms-btn ms-btn-primary" disabled={busy || !(ticket.airline || ticket.flightNo || ticket.pnr)} onClick={() => act('issue_ticket', comment, ticket as Record<string, unknown>)}>
+                  <Plane size={15} aria-hidden /> بلیط صادر شد — تأیید و اطلاع به کارمند
+                </button>
+                <button className="ms-btn" disabled={busy || !comment.trim()} onClick={() => act('return_ticket')}><Pencil size={14} aria-hidden /> برگشت به کارمند برای اصلاح</button>
+              </div>
+            </div>
+          ) : (
+            <p className="ms-ink2 mt-3 text-[12.5px] leading-7">درخواست بلیط برای امور اداری ارسال شده است. پس از صدور، مشخصات بلیط همین‌جا نمایش داده می‌شود.</p>
+          )}
+        </Card>
+      )}
+
+      {/* ---------------------------------------------------------------- issued ticket */}
+      {m.ticketIssuedAt && m.needsTicket && m.status !== 'ticketing' && (
+        <Card className="p-5">
+          <SectionHead eyebrow="بلیط هواپیما" title="مشخصات بلیط صادرشده" action={<Pill tone="good"><Plane size={12} aria-hidden /> صادر شد {shamsi(m.ticketIssuedAt)}</Pill>} />
+          <dl className="grid gap-x-8 gap-y-1 text-[12.5px] sm:grid-cols-2">
+            {([['ایرلاین', m.ticket.airline], ['شماره پرواز', m.ticket.flightNo], ['رفت', m.ticket.departAt], ['برگشت', m.ticket.returnAt], ['کد رزرو (PNR)', m.ticket.pnr], ['مبلغ', m.ticket.cost]] as [string, string | undefined][]).filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} className="flex gap-2 border-b py-1.5" style={{ borderColor: 'var(--ms-line)' }}><dt className="ms-muted w-28 shrink-0">{k}</dt><dd className="font-bold" dir="auto">{v}</dd></div>
+            ))}
+          </dl>
+        </Card>
+      )}
+
+      {/* ---------------------------------------------------------------- Administrative Affairs: mission claim */}
       {(m.status === 'ready_for_claim' || m.status === 'claimed') && (
-        <Card className="p-5" style={{ borderColor: 'color-mix(in srgb, var(--ms-good) 45%, transparent)' }}>
-          <SectionHead eyebrow="آماده ثبت حق مأموریت" title="اطلاعات لازم برای ثبت حق مأموریت" action={<Pill tone="good"><BadgeCheck size={12} aria-hidden /> گزارش تأیید شد</Pill>} />
+        <Card className="p-5" style={{ borderColor: `color-mix(in srgb, var(${m.status === 'claimed' ? '--ms-good' : '--ms-accent'}) 45%, transparent)` }}>
+          <SectionHead eyebrow="امور اداری" title={m.status === 'claimed' ? 'کلیم مأموریت تأیید شد' : 'تأیید کلیم مأموریت'} action={<Pill tone={m.status === 'claimed' ? 'good' : 'warn'}><BadgeCheck size={12} aria-hidden /> {m.status === 'claimed' ? `تأیید ${shamsi(m.claimedAt)}` : 'گزارش توسط مجری طرح تأیید شد'}</Pill>} />
           <dl className="grid gap-x-8 gap-y-2 text-[12.5px] sm:grid-cols-2">
             {claimText.split('\n').map((line) => {
               const [k, ...rest] = line.split(': ')
@@ -167,16 +216,20 @@ export function MissionDetailPage({ id }: { id: string }) {
               )
             })}
           </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button className="ms-btn" onClick={() => { navigator.clipboard?.writeText(claimText); setCopied(true); setTimeout(() => setCopied(false), 1800) }}>
-              <ClipboardCopy size={14} aria-hidden /> {copied ? 'کپی شد' : 'کپی اطلاعات'}
-            </button>
-            {m.status === 'ready_for_claim' && isReq && (
-              <button className="ms-btn ms-btn-primary" disabled={busy} onClick={() => act('mark_claimed', '')}>
-                <Check size={15} aria-hidden /> حق مأموریت را ثبت کردم
+          {m.status === 'ready_for_claim' && isAA && (
+            <div className="mt-4 flex flex-col gap-3">
+              <Field label="یادداشت امور اداری (اختیاری)"><input className="ms-input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="مثلاً: مطابق دستورالعمل حق مأموریت محاسبه شد" /></Field>
+              <button className="ms-btn ms-btn-primary self-start" disabled={busy} onClick={() => act('approve_claim')}>
+                <Check size={15} aria-hidden /> تأیید کلیم مأموریت
               </button>
-            )}
-            {m.status === 'claimed' && <Pill tone="good">ثبت حق مأموریت در {shamsi(m.claimedAt)}</Pill>}
+            </div>
+          )}
+          {m.status === 'ready_for_claim' && !isAA && <p className="ms-ink2 mt-3 text-[12.5px] leading-7">گزارش تأیید شد و کلیم برای امور اداری ارسال شده است؛ پس از تأیید ایشان مأموریت بسته می‌شود.</p>}
+          {m.status === 'claimed' && m.adminComment && <p className="ms-ink2 mt-3 text-[12px] leading-7">یادداشت امور اداری: {m.adminComment}</p>}
+          <div className="mt-3">
+            <button className="ms-btn ms-btn-sm" onClick={() => { navigator.clipboard?.writeText(claimText); setCopied(true); setTimeout(() => setCopied(false), 1800) }}>
+              <ClipboardCopy size={14} aria-hidden /> {copied ? 'کپی شد' : 'کپی اطلاعات کلیم'}
+            </button>
           </div>
         </Card>
       )}
@@ -220,7 +273,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
       {tab === 'findings' && (
         <Card className="p-5">
-          <SectionHead eyebrow="کشف‌شده در بازدید" title="یافته‌ها" sub="Issue و Risk فقط پیشنهاد هستند؛ پس از تأیید مدیر به سامانه اصلی منتقل می‌شوند." />
+          <SectionHead eyebrow="کشف‌شده در بازدید" title="یافته‌ها" sub="Issue و Risk فقط پیشنهاد هستند؛ پس از تأیید مجری طرح به سامانه اصلی منتقل می‌شوند." />
           {live.length === 0 ? <p className="ms-muted py-6 text-center text-[12.5px]">هنوز یافته‌ای ثبت نشده است.</p> : (
             <div className="flex flex-col gap-3">
               {live.map((f) => <FindingCard key={f.id} finding={f} linked={linked.find((l) => l.findingId === f.id)} />)}

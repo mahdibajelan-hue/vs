@@ -2,7 +2,7 @@ import { DEFAULT_QUESTION_SET } from '../lib/questionSets'
 import { startInterview, submitAnswer, type EngineInput } from '../lib/interviewEngine'
 import { buildReport } from '../lib/reportBuilder'
 import { scoreReport } from '../lib/qualityScore'
-import { addDaysIso, todayIso } from '../lib/fa'
+import { addDaysIso, shamsi as shamsiOf, todayIso } from '../lib/fa'
 import type { Finding, InterviewState, Mission, Objective, PendingQuestion, PersonRef, ProjectRef, VisitType } from '../types'
 import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft } from './types'
 
@@ -12,7 +12,7 @@ import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft } from './t
  * itself would have produced, not hand-typed fixtures.
  */
 
-type End = 'draft' | 'pending' | 'approved' | 'debrief' | 'review' | 'returned' | 'ready' | 'claimed'
+type End = 'draft' | 'pending' | 'ticketing' | 'approved' | 'debrief' | 'review' | 'returned' | 'ready' | 'claimed'
 
 interface Scenario {
   visitType: VisitType
@@ -32,6 +32,9 @@ interface Scenario {
   evidence?: number
   managerNote?: string
   transfer?: boolean
+  /** false → no flight ticket needed (skips Administrative Affairs ticketing) */
+  ticket?: boolean
+  originCity?: string
 }
 
 const SLOT_ANSWERS: Record<string, string[]> = {
@@ -137,6 +140,16 @@ const SCENARIOS: Scenario[] = [
     answers: {}, objectiveAnswers: [],
   },
   {
+    visitType: 'engineering',
+    destination: 'دفتر مهندسی طراحی — شیراز',
+    visitees: [{ name: 'مهندس کیانی', org: 'پیمانکار EPC', role: 'مدیر مهندسی' }],
+    topicsOfInterest: 'نقشه‌های ایستگاه، P&ID',
+    expectedOutput: 'فهرست مدارک معلق',
+    startOffset: 4, days: 2, end: 'ticketing', originCity: 'تهران',
+    objectives: [{ title: 'دریافت فهرست مدارک مهندسی معلق نزد پیمانکار', measure: 'فهرست مکتوب با تاریخ تحویل', topicKey: 'engineering', priority: 'high' }],
+    answers: {}, objectiveAnswers: [],
+  },
+  {
     visitType: 'quality_audit',
     destination: 'کارخانه پوشش لوله — بندرعباس',
     visitees: [{ name: 'مهندس شریفی', org: 'پیمانکار پوشش', role: 'مدیر کنترل کیفیت' }],
@@ -221,6 +234,8 @@ export interface SeedContext {
   /** People who play the visiting managers (cycled). Live DB: just the current user. */
   requesters: (PersonRef & { isAdmin?: boolean })[]
   manager: CurrentUser
+  /** امور اداری — books tickets and approves claims. */
+  adminAffairs: CurrentUser
   /** Mark live rows so they can be found and removed later. */
   marker?: string
 }
@@ -277,12 +292,16 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
     const requester = ctx.requesters[idx % ctx.requesters.length]
     const project = projects[idx % projects.length]
     idx++
-    const asRequester: MissionRepo = ctx.repo.forUser ? ctx.repo.forUser({ id: requester.id, name: requester.name, position: requester.position, isAdmin: !!requester.isAdmin, isManager: false }) : repo
+    const asRequester: MissionRepo = ctx.repo.forUser ? ctx.repo.forUser({ id: requester.id, name: requester.name, position: requester.position, isAdmin: !!requester.isAdmin, isManager: false, isAdminAffairs: false }) : repo
     const asManager: MissionRepo = ctx.repo.forUser ? ctx.repo.forUser(ctx.manager) : repo
+    const asAdminAffairs: MissionRepo = ctx.repo.forUser ? ctx.repo.forUser(ctx.adminAffairs) : repo
     const start = addDaysIso(today, sc.startOffset)
     const draft: MissionDraft = {
       masterProjectId: project.id,
       requesterPosition: requester.position || 'مدیر پروژه',
+      needsTicket: sc.ticket !== false,
+      originCity: sc.ticket === false ? '' : sc.originCity ?? 'تهران',
+      ticketNote: sc.ticket === false ? '' : 'ترجیحاً پرواز صبح',
       destination: sc.destination,
       locationDetail: ctx.marker ?? '',
       startDate: start,
@@ -299,6 +318,17 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
     await asRequester.transition(mission.id, 'submit_request')
     if (sc.end === 'pending') continue
     await asManager.transition(mission.id, 'approve_request', 'اهداف روشن است؛ موفق باشید.')
+    if (sc.end === 'ticketing') continue
+    if (sc.ticket !== false) {
+      await asAdminAffairs.transition(mission.id, 'issue_ticket', 'بلیط صادر و ارسال شد.', {
+        airline: ['ماهان', 'ایران‌ایر', 'آسمان'][idx % 3],
+        flightNo: `W5-${1100 + idx * 7}`,
+        departAt: `${shamsiOf(start)} ساعت ۰۷:۳۰`,
+        returnAt: `${shamsiOf(addDaysIso(start, sc.days - 1))} ساعت ۱۸:۰۰`,
+        pnr: `K${String(7000 + idx * 13)}Z`,
+        cost: `${12 + idx} ۰۰۰ ۰۰۰`,
+      })
+    }
     if (sc.end === 'approved') continue
     await asRequester.transition(mission.id, 'start_debrief')
     const bundle = await asRequester.loadBundle(mission.id)
@@ -329,7 +359,7 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
       }
     }
     await asManager.transition(mission.id, 'approve_report', 'گزارش کامل و قابل اتکا بود. ممنون.')
-    if (sc.end === 'claimed') await asRequester.transition(mission.id, 'mark_claimed')
+    if (sc.end === 'claimed') await asAdminAffairs.transition(mission.id, 'approve_claim', 'کلیم مطابق دستورالعمل تأیید شد.')
   }
   return created
 }

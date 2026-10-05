@@ -26,7 +26,7 @@ import type {
 } from '../types'
 import { createSupabaseRepo } from '../repo/supabaseRepo'
 import { seedDemo } from '../repo/demoSeed'
-import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft, PortfolioData } from '../repo/types'
+import type { CurrentUser, MissionDraft, MissionRepo, MissionRole, ObjectiveDraft, PortfolioData, RoleAssignment } from '../repo/types'
 
 interface MissionsState {
   repo: MissionRepo
@@ -41,6 +41,9 @@ interface MissionsState {
   aiProvider: AiProvider | null
   portfolio: PortfolioData | null
   bundle: MissionBundle | null
+  roles: RoleAssignment[]
+  loadRoles: () => Promise<void>
+  toggleRole: (userId: string, role: MissionRole, on: boolean) => Promise<void>
   /** True while the engine is analysing an answer (the chat shows a typing indicator). */
   thinking: boolean
 
@@ -53,7 +56,7 @@ interface MissionsState {
   clearError: () => void
 
   saveRequest: (draft: MissionDraft, objectives: ObjectiveDraft[], id?: string) => Promise<string>
-  transition: (action: WorkflowAction, comment?: string, id?: string) => Promise<boolean>
+  transition: (action: WorkflowAction, comment?: string, id?: string, data?: Record<string, unknown>) => Promise<boolean>
   deleteMission: (id: string) => Promise<void>
 
   beginInterview: () => Promise<void>
@@ -108,10 +111,27 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
   aiProvider: null,
   portfolio: null,
   bundle: null,
+  roles: [],
   thinking: false,
 
   setRepo: (repo) => set({ repo, ready: false, portfolio: null, bundle: null }),
   clearError: () => set({ error: null }),
+
+  loadRoles: async () => {
+    try {
+      set({ roles: await get().repo.listRoles() })
+    } catch (e) {
+      set({ error: FRIENDLY(e) })
+    }
+  },
+  toggleRole: async (userId, role, on) => {
+    try {
+      await get().repo.setRole(userId, role, on)
+      await get().loadRoles()
+    } catch (e) {
+      set({ error: FRIENDLY(e) })
+    }
+  },
 
   init: async () => {
     const { repo } = get()
@@ -175,11 +195,11 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
     }
   },
 
-  transition: async (action, comment, id) => {
+  transition: async (action, comment, id, data) => {
     const target = id ?? get().bundle?.mission.id
     if (!target) return false
     try {
-      await get().repo.transition(target, action, comment)
+      await get().repo.transition(target, action, comment, data)
       await Promise.all([get().refreshPortfolio(), get().bundle?.mission.id === target ? get().refreshBundle() : Promise.resolve()])
       return true
     } catch (e) {
@@ -404,7 +424,7 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
     try {
       const multi = 'forUser' in s.repo
       const requesters = multi ? s.people.filter((p) => p.id !== s.user!.id).slice(0, 3) : [s.user]
-      await seedDemo({ repo: s.repo as Parameters<typeof seedDemo>[0]['repo'], projects: s.projects, requesters: requesters.length ? requesters : [s.user], manager: s.user, marker: DEMO_MARKER })
+      await seedDemo({ repo: s.repo as Parameters<typeof seedDemo>[0]['repo'], projects: s.projects, requesters: requesters.length ? requesters : [s.user], manager: s.user, adminAffairs: s.user, marker: DEMO_MARKER })
       await get().refreshPortfolio()
     } catch (e) {
       set({ error: FRIENDLY(e) })
