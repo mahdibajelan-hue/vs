@@ -10,7 +10,7 @@ export function ProjectRadarCard({ onSelect, locked }: { onSelect: () => void; l
       englishTag="Project Intelligence & Control"
       description="مرکز فرماندهی هر پروژه — سیگنال‌ها، چرخه عمر، گیت‌ها، ریسک، مسائل، قرارداد و مالی."
       icon={RadarIcon}
-      accent="var(--radar-green)"
+      accent="#10b981"
       hero
       cta="ENTER PROJECT RADAR →"
       visual={<RadarMiniVisual size={56} />}

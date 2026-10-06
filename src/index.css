@@ -1877,17 +1877,21 @@ select option {
   .lp-tile:hover { transform: none; }
 }
 
-/* Signed-in launchpad: the showcase box is a lighter, blue-violet "paper" so it stands apart from the
-   black page and the cyan lamp — the module tiles keep their own colours on top of it. */
+/* Signed-in launchpad: the showcase box is a soft, light surface so it stands apart from the black page and
+   the cyan lamp; every module tile is a pastel wash of its own hue (green, indigo, coral, purple, pink,
+   slate, cyan) with dark text. The CSS variables below re-theme everything inside the box. */
 .launchpad-frame.is-authed {
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
   background:
-    radial-gradient(90% 60% at 85% 0%, rgba(99, 102, 241, 0.34), transparent 70%),
-    radial-gradient(80% 70% at 5% 100%, rgba(236, 72, 153, 0.16), transparent 70%),
-    linear-gradient(165deg, #1a2a52 0%, #16224a 48%, #241c52 100%);
+    radial-gradient(70% 60% at 90% 0%, rgba(167, 139, 250, 0.22), transparent 70%),
+    radial-gradient(70% 70% at 0% 100%, rgba(125, 211, 252, 0.28), transparent 70%),
+    linear-gradient(165deg, #f1f4fb 0%, #f6f2fb 55%, #fdf3f6 100%);
   box-shadow:
-    0 -18px 60px -30px rgba(34, 211, 238, 0.4),
-    0 30px 70px -30px rgba(99, 102, 241, 0.55),
-    inset 0 1px 0 rgba(165, 180, 252, 0.25);
+    0 -18px 60px -30px rgba(34, 211, 238, 0.45),
+    0 30px 70px -30px rgba(148, 163, 184, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .launchpad-frame.is-authed::after {
   content: '';
@@ -1896,12 +1900,38 @@ select option {
   z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.2px);
+  background-image: radial-gradient(rgba(15, 23, 42, 0.07) 1px, transparent 1.2px);
   background-size: 18px 18px;
-  mask-image: radial-gradient(ellipse at 50% 30%, black, transparent 75%);
+  mask-image: radial-gradient(ellipse at 50% 20%, black, transparent 75%);
 }
+.launchpad-frame.is-authed::before {
+  background: linear-gradient(165deg, rgba(34, 211, 238, 0.7), rgba(255, 255, 255, 0.6) 30%, rgba(255, 255, 255, 0.5) 70%, rgba(167, 139, 250, 0.7));
+}
+.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #1e293b, #475569); }
+.launchpad-frame.is-authed .lp-brand-fa { color: #b8901c; }
+.launchpad-frame.is-authed .lp-brand-tag { color: #475569; }
+.launchpad-frame.is-authed .launchpad-frame-corner { border-color: rgba(100, 116, 139, 0.55); }
+
 .launchpad-frame.is-authed .lp-tile {
+  border-color: color-mix(in srgb, var(--a) 38%, #ffffff);
   background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--a) 30%, transparent), transparent 62%),
-    linear-gradient(160deg, color-mix(in srgb, var(--a) 14%, #0c1226), #0a1020);
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--a) 26%, #ffffff), transparent 62%),
+    linear-gradient(160deg, color-mix(in srgb, var(--a) 12%, #ffffff), color-mix(in srgb, var(--a) 5%, #ffffff));
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--a) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
+.launchpad-frame.is-authed .lp-tile:hover {
+  border-color: color-mix(in srgb, var(--a) 75%, #ffffff);
+  box-shadow: 0 16px 34px -14px color-mix(in srgb, var(--a) 75%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.launchpad-frame.is-authed .lp-tile.is-hero {
+  background:
+    repeating-radial-gradient(circle at 12% 88%, transparent 0 26px, color-mix(in srgb, var(--a) 20%, transparent) 26px 27px),
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--a) 34%, #ffffff), transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--a) 16%, #ffffff), color-mix(in srgb, var(--a) 6%, #ffffff));
+}
+.launchpad-frame.is-authed .lp-tile-chip { color: color-mix(in srgb, var(--a) 80%, #000); background: color-mix(in srgb, var(--a) 22%, #ffffff); border-color: color-mix(in srgb, var(--a) 45%, #ffffff); box-shadow: none; }
+.launchpad-frame.is-authed .lp-tile-no { color: color-mix(in srgb, var(--a) 75%, #000); }
+.launchpad-frame.is-authed .lp-tile-en { color: color-mix(in srgb, var(--a) 70%, #334155); }
+.launchpad-frame.is-authed .lp-tile-cta, .launchpad-frame.is-authed .lp-tile-arrow { color: color-mix(in srgb, var(--a) 80%, #000); }
+.launchpad-frame.is-authed .lp-tile .lp-tile-mark { opacity: 0.16; }
+.launchpad-frame.is-authed .lp-tile::after { box-shadow: none; }

@@ -9,7 +9,7 @@ export function UserManagementCard({ onSelect, locked }: { onSelect: () => void;
       englishTag="Users, Roles & Access Control"
       description="کاربران، نقش‌ها، سازمان و کنترل دسترسی یکپارچه به همه ماژول‌ها."
       icon={Users}
-      accent="#94a3b8"
+      accent="#64748b"
       locked={locked}
       onSelect={onSelect}
     />

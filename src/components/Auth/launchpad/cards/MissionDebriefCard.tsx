@@ -10,7 +10,7 @@ export function MissionDebriefCard({ onSelect, locked }: { onSelect: () => void;
       englishTag={MISSIONS_MODULE.labelEn}
       description={MISSIONS_MODULE.descriptionFa}
       icon={MapPinned}
-      accent="#38bdf8"
+      accent="#06b6d4"
       locked={locked}
       onSelect={onSelect}
     />

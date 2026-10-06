@@ -17,8 +17,8 @@ function BrandName({ className = '', compact }: { className?: string; compact?: 
     // Signed in: the wordmark shrinks to one line so the modules sit above the fold.
     return (
       <div className={`flex items-baseline justify-center gap-3 ${className}`}>
-        <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">FARIN</span>
-        <span className="text-3xl font-extrabold leading-tight text-[#c9a227] md:text-4xl">{FARIN_NAME_FA}</span>
+        <span dir="ltr" className="lp-brand-farin bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">FARIN</span>
+        <span className="lp-brand-fa text-3xl font-extrabold leading-tight text-[#c9a227] md:text-4xl">{FARIN_NAME_FA}</span>
       </div>
     )
   }
@@ -38,7 +38,7 @@ function BrandTitle({ centered, nameOnDesktopOnly, children }: { centered?: bool
   return (
     <div className={`hub-fade-in flex flex-col gap-2 ${centered ? 'items-center text-center' : 'items-center text-center md:items-end md:text-left'}`}>
       <BrandName compact={centered} className={`${centered ? 'items-center' : 'items-center md:items-end'} ${nameOnDesktopOnly ? 'hidden md:flex' : ''}`} />
-      <p className={`${centered ? 'text-xs md:text-sm' : 'mt-1 text-sm md:text-base'} font-medium text-zinc-300`}>{FARIN_TAGLINE_FA}</p>
+      <p className={`lp-brand-tag ${centered ? 'text-xs md:text-sm' : 'mt-1 text-sm md:text-base'} font-medium text-zinc-300`}>{FARIN_TAGLINE_FA}</p>
       {children}
     </div>
   )
