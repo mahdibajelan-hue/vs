@@ -15504,8 +15504,14 @@ returns boolean language sql stable security definer set search_path = public as
       and (not ms_is_interested(m.id) or m.final_approved_at is not null)
   );
 $$;
+-- NOTE: the policy must test the row's own columns, not call ms_can_view(id): INSERT ... RETURNING checks the
+-- select policy too, and a function that re-reads ms_missions cannot see the row being inserted.
 drop policy if exists "ms_missions_select" on ms_missions;
-create policy "ms_missions_select" on ms_missions for select using (ms_can_view(id));
+create policy "ms_missions_select" on ms_missions for select
+  using (
+    (requester_id = auth.uid() or approver_id = auth.uid() or ms_is_manager() or ms_is_admin_affairs())
+    and (requester_id = auth.uid() or final_approved_at is not null or not ms_is_interested(id))
+  );
 
 drop policy if exists "ms_findings_select" on ms_findings;
 create policy "ms_findings_select" on ms_findings for select
