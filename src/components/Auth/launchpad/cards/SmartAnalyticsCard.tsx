@@ -9,7 +9,7 @@ export function SmartAnalyticsCard({ onSelect, locked }: { onSelect: () => void;
       englishTag="Smart Reporting & Decision Intelligence"
       description="تجمیع زنده داده از همه ماژول‌ها، گزارش مدیریتی و هشدار زودهنگام برای تصمیم‌گیری."
       icon={BarChart3}
-      accent="#f97316"
+      accent="#ea580c"
       locked={locked}
       onSelect={onSelect}
     />

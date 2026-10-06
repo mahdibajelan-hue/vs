@@ -1877,61 +1877,67 @@ select option {
   .lp-tile:hover { transform: none; }
 }
 
-/* Signed-in launchpad: the showcase box is a soft, light surface so it stands apart from the black page and
-   the cyan lamp; every module tile is a pastel wash of its own hue (green, indigo, coral, purple, pink,
-   slate, cyan) with dark text. The CSS variables below re-theme everything inside the box. */
+/* Signed-in launchpad (ui-ux-pro-max "bento box grid": neutral frame, white elevated cards, one saturated
+   colour per module). The frame is a plain light-grey sheet; every module is a WHITE card with dark text
+   (≥7:1), a colour bar along its top edge, a solid-gradient icon badge and a coloured number — so the seven
+   modules read as seven distinct, clearly raised objects. Radar, the flagship, is the one solid-colour card. */
 .launchpad-frame.is-authed {
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  background:
-    radial-gradient(70% 60% at 90% 0%, rgba(167, 139, 250, 0.22), transparent 70%),
-    radial-gradient(70% 70% at 0% 100%, rgba(125, 211, 252, 0.28), transparent 70%),
-    linear-gradient(165deg, #f1f4fb 0%, #f6f2fb 55%, #fdf3f6 100%);
-  box-shadow:
-    0 -18px 60px -30px rgba(34, 211, 238, 0.45),
-    0 30px 70px -30px rgba(148, 163, 184, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #f8f9fc 0%, #eceff6 100%);
+  box-shadow: 0 -18px 60px -30px rgba(34, 211, 238, 0.4), 0 34px 80px -34px rgba(0, 0, 0, 0.9), inset 0 1px 0 #fff;
 }
-.launchpad-frame.is-authed::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background-image: radial-gradient(rgba(15, 23, 42, 0.07) 1px, transparent 1.2px);
-  background-size: 18px 18px;
-  mask-image: radial-gradient(ellipse at 50% 20%, black, transparent 75%);
-}
-.launchpad-frame.is-authed::before {
-  background: linear-gradient(165deg, rgba(34, 211, 238, 0.7), rgba(255, 255, 255, 0.6) 30%, rgba(255, 255, 255, 0.5) 70%, rgba(167, 139, 250, 0.7));
-}
-.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #1e293b, #475569); }
-.launchpad-frame.is-authed .lp-brand-fa { color: #b8901c; }
-.launchpad-frame.is-authed .lp-brand-tag { color: #475569; }
-.launchpad-frame.is-authed .launchpad-frame-corner { border-color: rgba(100, 116, 139, 0.55); }
+.launchpad-frame.is-authed::after { content: none; }
+.launchpad-frame.is-authed::before { background: linear-gradient(165deg, rgba(34, 211, 238, 0.65), rgba(255, 255, 255, 0.4) 35%, rgba(255, 255, 255, 0.4) 65%, rgba(148, 163, 184, 0.6)); }
+.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #0f172a, #334155); }
+.launchpad-frame.is-authed .lp-brand-fa { color: #a17a12; }
+.launchpad-frame.is-authed .lp-brand-tag { color: #334155; }
+.launchpad-frame.is-authed .launchpad-frame-corner { border-color: rgba(100, 116, 139, 0.5); }
 
 .launchpad-frame.is-authed .lp-tile {
-  border-color: color-mix(in srgb, var(--a) 38%, #ffffff);
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--a) 26%, #ffffff), transparent 62%),
-    linear-gradient(160deg, color-mix(in srgb, var(--a) 12%, #ffffff), color-mix(in srgb, var(--a) 5%, #ffffff));
-  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--a) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid #dfe4ee;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 14px 26px -16px rgba(15, 23, 42, 0.35);
+}
+.launchpad-frame.is-authed .lp-tile::before { background: radial-gradient(220px circle at var(--spot-x) var(--spot-y), color-mix(in srgb, var(--a) 10%, transparent), transparent 72%); }
+.launchpad-frame.is-authed .lp-tile::after {
+  top: 0; right: 0; left: 0; width: auto; height: 5px; border-radius: 0;
+  background: linear-gradient(90deg, var(--a), color-mix(in srgb, var(--a) 55%, #ffffff));
+  box-shadow: none;
 }
 .launchpad-frame.is-authed .lp-tile:hover {
-  border-color: color-mix(in srgb, var(--a) 75%, #ffffff);
-  box-shadow: 0 16px 34px -14px color-mix(in srgb, var(--a) 75%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: color-mix(in srgb, var(--a) 45%, #ffffff);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 20px 36px -16px color-mix(in srgb, var(--a) 55%, transparent);
 }
+.launchpad-frame.is-authed .lp-tile-chip {
+  color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--a) 78%, #ffffff), var(--a));
+  border: 0;
+  box-shadow: 0 8px 16px -8px var(--a);
+}
+.launchpad-frame.is-authed .lp-tile-no { color: var(--a); opacity: 1; }
+.launchpad-frame.is-authed .lp-tile-title { color: #0f172a; }
+.launchpad-frame.is-authed .lp-tile-en { color: var(--a); opacity: 1; }
+.launchpad-frame.is-authed .lp-tile-desc { color: #475569; }
+.launchpad-frame.is-authed .lp-tile-cta, .launchpad-frame.is-authed .lp-tile-arrow { color: var(--a); }
+.launchpad-frame.is-authed .lp-tile .lp-tile-mark { opacity: 0.07; }
+.launchpad-frame.is-authed .lp-tile:hover .lp-tile-mark { opacity: 0.13; }
+
+/* Radar — the flagship: solid emerald, white type */
 .launchpad-frame.is-authed .lp-tile.is-hero {
+  border: 0;
   background:
-    repeating-radial-gradient(circle at 12% 88%, transparent 0 26px, color-mix(in srgb, var(--a) 20%, transparent) 26px 27px),
-    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--a) 34%, #ffffff), transparent 60%),
-    linear-gradient(160deg, color-mix(in srgb, var(--a) 16%, #ffffff), color-mix(in srgb, var(--a) 6%, #ffffff));
+    repeating-radial-gradient(circle at 14% 90%, transparent 0 26px, rgba(255, 255, 255, 0.13) 26px 27px),
+    linear-gradient(150deg, #065f46 0%, #047857 45%, #059669 100%);
+  box-shadow: 0 2px 4px rgba(6, 95, 70, 0.3), 0 24px 40px -18px rgba(5, 150, 105, 0.7);
 }
-.launchpad-frame.is-authed .lp-tile-chip { color: color-mix(in srgb, var(--a) 80%, #000); background: color-mix(in srgb, var(--a) 22%, #ffffff); border-color: color-mix(in srgb, var(--a) 45%, #ffffff); box-shadow: none; }
-.launchpad-frame.is-authed .lp-tile-no { color: color-mix(in srgb, var(--a) 75%, #000); }
-.launchpad-frame.is-authed .lp-tile-en { color: color-mix(in srgb, var(--a) 70%, #334155); }
-.launchpad-frame.is-authed .lp-tile-cta, .launchpad-frame.is-authed .lp-tile-arrow { color: color-mix(in srgb, var(--a) 80%, #000); }
-.launchpad-frame.is-authed .lp-tile .lp-tile-mark { opacity: 0.16; }
-.launchpad-frame.is-authed .lp-tile::after { box-shadow: none; }
+.launchpad-frame.is-authed .lp-tile.is-hero::after { background: linear-gradient(90deg, #6ee7b7, #a7f3d0); }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-no { color: #a7f3d0; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-title { color: #fff; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-en { color: #a7f3d0; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-desc { color: #ecfdf5; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-arrow { color: #fff; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-cta { color: #064e3b; background: #fff; border: 0; }
+.launchpad-frame.is-authed .lp-tile.is-hero .lp-tile-mark { color: #fff; opacity: 0.1; }
+.launchpad-frame.is-authed .lp-tile.is-hero:hover { box-shadow: 0 2px 4px rgba(6, 95, 70, 0.3), 0 30px 46px -18px rgba(5, 150, 105, 0.85); }
