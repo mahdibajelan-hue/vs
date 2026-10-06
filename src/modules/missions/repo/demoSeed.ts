@@ -2,6 +2,8 @@ import { DEFAULT_QUESTION_SET } from '../lib/questionSets'
 import { startInterview, submitAnswer, type EngineInput } from '../lib/interviewEngine'
 import { buildReport } from '../lib/reportBuilder'
 import { scoreReport } from '../lib/qualityScore'
+import { SLOT_LABEL } from '../lib/batch'
+import { extractMetrics } from '../lib/ruleAnalyzer'
 import { addDaysIso, shamsi as shamsiOf, todayIso } from '../lib/fa'
 import type { Finding, InterviewState, Mission, Objective, PendingQuestion, PersonRef, ProjectRef, VisitType } from '../types'
 import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft } from './types'
@@ -27,6 +29,12 @@ interface Scenario {
   /** answers keyed by main-question id (or `<topic>` fallback) */
   answers: Record<string, string>
   objectiveAnswers: string[]
+  /** Structured decisions / actions (title, who, by when) — filled into the batch template's repeating blocks. */
+  decisions?: Entry[]
+  actions?: Entry[]
+  suggestion?: string
+  /** A deliberately vague report: gap rounds are answered with «نمی‌دانم». */
+  weak?: boolean
   /** stop the scripted interview after this many topics (for the "in progress" scenario) */
   stopAfterTopics?: number
   evidence?: number
@@ -36,6 +44,8 @@ interface Scenario {
   ticket?: boolean
   originCity?: string
 }
+
+interface Entry { title: string; owner: string; due: string }
 
 const SLOT_ANSWERS: Record<string, string[]> = {
   cause: ['چون سازنده مشکل تأمین ارز و مواد اولیه دارد', 'به دلیل هماهنگ نبودن مجوزهای دسترسی با مالکین اراضی', 'به علت تأخیر در تأیید نقشه‌ها توسط مشاور'],
@@ -72,13 +82,15 @@ const SCENARIOS: Scenario[] = [
       'hse-1': 'در کارخانه موردی از نظر ایمنی مشاهده نشد.',
       'ir-1': 'مورد دیگری نبود.',
       'ir-2': 'ممکن است اگر تحریم‌ها ادامه پیدا کند سازنده نتواند قطعات را تأمین کند و پروژه با ریسک توقف روبه‌رو شود.',
-      'dec-1': 'توافق شد که سازنده هر هفته گزارش پیشرفت تولید بدهد.',
-      'dec-2': 'سازنده تا پایان ماه برنامه مکتوب تحویل می‌دهد.',
-      'act-1': 'آقای کریمی تا دو هفته دیگر نامه تسریع رسمی به سازنده بدهد.',
-      'act-2': 'پیشنهاد می‌کنم یک سازنده جایگزین هم برای شیرها پیش‌ارزیابی شود.',
       'evd-1': 'ثبت شد',
     },
     objectiveAnswers: ['کاملاً محقق شد، برنامه مکتوب گرفتیم', 'تا حدی؛ فقط بخشی از خط تولید را دیدیم'],
+    decisions: [
+      { title: 'سازنده هر هفته گزارش پیشرفت تولید بدهد', owner: 'آقای رضایی', due: 'تا پایان ماه' },
+      { title: 'سازنده برنامه مکتوب تحویل شیرها را ارائه کند', owner: 'آقای رضایی', due: 'تا پایان ماه' },
+    ],
+    actions: [{ title: 'ارسال نامه تسریع رسمی به سازنده', owner: 'آقای کریمی', due: 'دو هفته دیگر' }],
+    suggestion: 'یک سازنده جایگزین هم برای شیرها پیش‌ارزیابی شود.',
   },
   {
     visitType: 'construction_supervision',
@@ -102,13 +114,15 @@ const SCENARIOS: Scenario[] = [
       'qual-1': 'سه NCR جوش خط ورودی باز است و بازرسی رادیوگرافی هنوز انجام نشده است.',
       'ir-1': 'مورد دیگری نبود.',
       'ir-2': 'ممکن است در صورت ادامه کمبود جرثقیل، فعالیت‌های مسیر بحرانی نصب با تأخیر بیشتری روبه‌رو شود.',
-      'dec-1': 'توافق شد که تا فردا استفاده از داربست طبقه دوم متوقف شود.',
-      'dec-2': 'پیمانکار تا پایان هفته گواهی بازرسی داربست را ارائه می‌کند.',
-      'act-1': 'مهندس احمدی تا پایان هفته داربست‌ها را بازرسی و برچسب‌گذاری کند.',
-      'act-2': 'پیشنهاد می‌کنم بازرس ایمنی دائمی در کارگاه مستقر شود.',
       'evd-1': 'ثبت شد',
     },
     objectiveAnswers: ['محقق شد؛ فهرست موارد با عکس ثبت شد', 'تا حدی؛ سه NCR باز شناسایی شد ولی وضعیت رفع نامشخص است', 'محقق شد'],
+    decisions: [
+      { title: 'استفاده از داربست طبقه دوم تا بازرسی ایمنی متوقف شود', owner: 'مهندس احمدی', due: 'فردا' },
+      { title: 'پیمانکار گواهی بازرسی داربست را ارائه کند', owner: 'مهندس احمدی', due: 'تا پایان هفته' },
+    ],
+    actions: [{ title: 'بازرسی و برچسب‌گذاری همه داربست‌ها', owner: 'مهندس احمدی', due: 'تا پایان هفته' }],
+    suggestion: 'بازرس ایمنی دائمی در کارگاه مستقر شود.',
   },
   {
     visitType: 'client_meeting',
@@ -179,13 +193,11 @@ const SCENARIOS: Scenario[] = [
       'hse-1': 'مشکلی نبود.',
       'ir-1': 'نه.',
       'ir-2': 'نه.',
-      'dec-1': 'نه.',
-      'dec-2': 'نه.',
-      'act-1': 'پیگیری شود.',
-      'act-2': 'ندارم.',
       'evd-1': 'ندارم',
     },
     objectiveAnswers: ['تا حدی'],
+    weak: true,
+    actions: [{ title: 'پیگیری شود', owner: '', due: '' }],
     managerNote: 'گزارش بسیار کلی است: درصد پیشرفت، موانع مشخص و مسئول هر اقدام را بنویسید و حداقل یک عکس از کارگاه پیوست کنید.',
   },
   {
@@ -208,13 +220,14 @@ const SCENARIOS: Scenario[] = [
       'qual-1': 'موردی مشاهده نشد.',
       'ir-1': 'مورد دیگری نبود.',
       'ir-2': 'ریسک جدیدی ندیدم.',
-      'dec-1': 'توافق شد که چک‌لیست ممیزی هر دو هفته تکرار شود.',
-      'dec-2': 'مدیر HSE تا پایان ماه برنامه ممیزی دوره‌ای را ارائه می‌کند.',
-      'act-1': 'مهندس باقری تا دو هفته دیگر برنامه آموزش مجوز کار را تهیه کند.',
-      'act-2': 'پیشنهاد دیگری ندارم.',
       'evd-1': 'ثبت شد',
     },
     objectiveAnswers: ['کاملاً محقق شد، چک‌لیست تکمیل شد'],
+    decisions: [
+      { title: 'چک‌لیست ممیزی هر دو هفته تکرار شود', owner: 'مهندس باقری', due: 'دو هفته دیگر' },
+      { title: 'برنامه ممیزی دوره‌ای ارائه شود', owner: 'مهندس باقری', due: 'تا پایان ماه' },
+    ],
+    actions: [{ title: 'تهیه برنامه آموزش مجوز کار', owner: 'مهندس باقری', due: 'دو هفته دیگر' }],
   },
   {
     visitType: 'coordination_meeting',
@@ -244,6 +257,66 @@ function projectTypeOf(projects: ProjectRef[], id: string): string {
   return projects.find((p) => p.id === id)?.projectType ?? ''
 }
 
+/** Single-question sessions (kept so old saved interviews still replay). */
+function legacyAnswer(p: PendingQuestion, sc: Scenario, objectives: Objective[], used: Record<string, number>): string {
+  if (p.kind === 'followup' && p.slot) {
+    const list = SLOT_ANSWERS[p.slot] ?? ['نامشخص']
+    used[p.slot] = (used[p.slot] ?? 0) + 1
+    return list[(used[p.slot] - 1) % list.length]
+  }
+  if (p.kind === 'followup') return 'مورد دیگری ندارم'
+  if (p.findingKey?.startsWith('obj:')) return sc.objectiveAnswers[objectives.findIndex((o) => `obj:${o.id}` === p.findingKey)] ?? 'تا حدی'
+  return sc.answers[p.id] ?? 'موردی مشاهده نشد.'
+}
+
+/** Fills the pre-built answer template the way a diligent user would, from the scenario's scripted facts. */
+function composeBatchAnswer(p: PendingQuestion, state: InterviewState, sc: Scenario, objectives: Objective[], used: Record<string, number>): string {
+  const layout = p.layout!
+  if (layout.gap) {
+    const g = layout.gap
+    const out: string[] = []
+    for (const f of g.fields) out.push(`${f}: ${sc.weak ? 'نمی‌دانم' : 'ندارم'}`)
+    for (const id of g.objectives) out.push('▪ هدف', `نتیجه: ${sc.objectiveAnswers[objectives.findIndex((o) => o.id === id)] ?? 'تا حدی'}`, 'توضیح: ')
+    for (const f of g.findings) {
+      out.push(`▪ «${f.title}»`)
+      for (const slot of f.slots) {
+        const list = SLOT_ANSWERS[slot] ?? ['نامشخص']
+        used[slot] = (used[slot] ?? 0) + 1
+        out.push(`${SLOT_LABEL[slot as keyof typeof SLOT_LABEL]}: ${sc.weak ? 'نمی‌دانم' : list[(used[slot] - 1) % list.length]}`)
+      }
+    }
+    return out.join('\n')
+  }
+  const key = p.topicKey
+  const ids = state.topics[key]?.mainAsked ?? []
+  const said = ids.map((id) => sc.answers[id]).filter(Boolean)
+  const lines: string[] = []
+  layout.fields.forEach((f, i) => {
+    let v = said[i] ?? (f.optional ? 'ندارم' : 'موردی مشاهده نشد')
+    if (f.metric) {
+      const m = extractMetrics(said.join(' '))
+      v = m[f.metric] != null ? String(m[f.metric]) : ''
+    } else if (key === 'actions') v = sc.suggestion ?? 'پیشنهاد دیگری ندارم'
+    lines.push(`${f.label}: ${v}`)
+  })
+  if (layout.entries) {
+    const list = (key === 'decisions' ? sc.decisions : sc.actions) ?? []
+    for (let i = 0; i < layout.entries.count; i++) {
+      const e = list[i]
+      lines.push('', `${layout.entries.item} ${i + 1}: ${e?.title ?? ''}`, `${layout.entries.ownerLabel}: ${e?.owner ?? ''}`, `${layout.entries.dueLabel}: ${e?.due ?? ''}`)
+      if (layout.entries.noteLabel) lines.push(`${layout.entries.noteLabel}: `)
+    }
+  }
+  if (layout.objectives) {
+    layout.objectives.forEach((o, i) => {
+      const a = sc.objectiveAnswers[i] ?? 'تا حدی'
+      const [result, ...rest] = a.split(/[؛،]/)
+      lines.push(`هدف ${i + 1} — «${o.title}»`, `نتیجه: ${result.trim()}`, `توضیح: ${rest.join('، ').trim()}`)
+    })
+  }
+  return lines.join('\n')
+}
+
 async function runInterview(repo: MissionRepo, mission: Mission, objectives: Objective[], ctx: SeedContext, sc: Scenario) {
   const input: EngineInput = { set: DEFAULT_QUESTION_SET, mission, objectives, projectType: projectTypeOf(ctx.projects, mission.masterProjectId), projectName: mission.projectName, today: todayIso(), ai: null }
   let step = startInterview(input)
@@ -257,16 +330,7 @@ async function runInterview(repo: MissionRepo, mission: Mission, objectives: Obj
   let guard = 0
   while (state.pending && guard++ < 80) {
     const p: PendingQuestion = state.pending
-    let text: string
-    if (p.kind === 'followup' && p.slot) {
-      const list = SLOT_ANSWERS[p.slot] ?? ['نامشخص']
-      used[p.slot] = (used[p.slot] ?? 0) + 1
-      text = list[(used[p.slot] - 1) % list.length]
-    } else if (p.kind === 'followup') text = 'مورد دیگری ندارم'
-    else if (p.findingKey?.startsWith('obj:')) {
-      const idx = objectives.findIndex((o) => `obj:${o.id}` === p.findingKey)
-      text = sc.objectiveAnswers[idx] ?? 'تا حدی'
-    } else text = sc.answers[p.id] ?? 'موردی مشاهده نشد.'
+    const text = p.layout ? composeBatchAnswer(p, state, sc, objectives, used) : legacyAnswer(p, sc, objectives, used)
     step = await submitAnswer(input, state, findings, text, 'text')
     const before = completedTopics
     completedTopics = Object.values(step.state.topics).filter((t) => t.state !== 'open').length

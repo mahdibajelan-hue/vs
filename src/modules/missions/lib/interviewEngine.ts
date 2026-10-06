@@ -22,6 +22,22 @@ import {
 import { analyzeAnswer, classifyObjectiveAnswer, estimateSeverity, similarity, type AnalysisResult, type ExtractedFinding } from './ruleAnalyzer'
 import { normalizeFa } from './fa'
 import type { AiProvider } from '../ai/provider'
+import {
+  analysisTextOf,
+  batchQuestionText,
+  entriesToFindings,
+  gapQuestionText,
+  isBlank,
+  isUnknownValue,
+  layoutFor,
+  metricsOf,
+  notesOf,
+  parseAnswer,
+  parseGapAnswer,
+  renderGapTemplate,
+  renderTemplate,
+  type GapSpec,
+} from './batch'
 
 /**
  * Interview Engine — a generic interpreter of QuestionSet definitions.
@@ -174,7 +190,7 @@ export function startInterview(input: EngineInput): StepResult {
       topicKey: '',
       role: 'system',
       kind: 'system',
-      text: `سلام. من دستیار گزارش بازدید هستم. می‌خواهم با چند سؤال کوتاه، یافته‌های بازدید «${input.projectName}» را از شما بگیرم و گزارش مدیریتی را آماده کنم. هر جا راحت‌ترید صحبت کنید (میکروفون) یا تایپ کنید. فقط همان‌قدر می‌پرسم که لازم باشد.`,
+      text: `سلام. من دستیار گزارش بازدید هستم. سؤال‌های هر موضوع را یکجا و همراه با یک قالب پاسخ می‌پرسم؛ شما قالب را پر می‌کنید (تایپ یا میکروفون) و اگر اطلاعاتی ناقص ماند، فقط همان را یک بار دیگر می‌پرسم. «${input.projectName}»`,
       inputMode: 'text',
     },
   ]
@@ -192,7 +208,8 @@ function openTopic(input: EngineInput, state: InterviewState, findings: Finding[
   const def = topicDef(input.set, key)
   const ctx = contextFor(input, state, findings)
   const isMandatory = def.mandatoryWhen ? evalCond(def.mandatoryWhen, ctx) : false
-  const q = nextMainQuestion(input, def, state.topics[key], ctx)
+  const questions = expandedQuestions(def, input).filter((x) => !x.when || evalCond(x.when, ctx))
+  const q = questions[0]
   const nextState: InterviewState = { ...state, current: key }
   if (!q) {
     // Nothing applicable to ask in this topic: it closes immediately.
@@ -200,7 +217,20 @@ function openTopic(input: EngineInput, state: InterviewState, findings: Finding[
     return advance(input, nextState, findings, turns)
   }
   turns.push({ topicKey: key, role: 'system', kind: 'system', text: topicIntro(def, isMandatory), inputMode: 'text', meta: { topicKey: key, intro: true } })
-  return ask(input, nextState, q, key, 'main', turns, ctx)
+  return askBatch(input, nextState, def, questions, isMandatory, turns, ctx)
+}
+
+/** Asks every applicable question of a topic at once, with the answer template pre-filled. */
+function askBatch(input: EngineInput, state: InterviewState, def: TopicDef, questions: (QuestionDef & { objectiveId?: string })[], mandatory: boolean, turns: TurnDraft[], ctx: MissionContext): InterviewState {
+  const layout = layoutFor(def, questions, input.objectives)
+  const template = renderTemplate(layout)
+  const text = batchQuestionText(def, mandatory, questions.map((x) => fillTemplate(x.text, ctx)), layout)
+  const quick = def.quick ?? questions.find((x) => x.quick)?.quick
+  const pending: PendingQuestion = { id: `batch:${def.key}`, topicKey: def.key, kind: 'main', text, template, layout, quick }
+  turns.push({ topicKey: def.key, role: 'assistant', kind: 'main', text, inputMode: 'text', meta: { quick, batch: true, template } })
+  const tp = state.topics[def.key]
+  const topics = { ...state.topics, [def.key]: { ...tp, mainAsked: questions.map((x) => x.id) } }
+  return { ...state, topics, pending, asked: state.asked + questions.length }
 }
 
 function nextMainQuestion(input: EngineInput, def: TopicDef, tp: TopicProgress, ctx: MissionContext) {
@@ -395,6 +425,142 @@ async function analyze(input: EngineInput, findings: Finding[], pending: Pending
   }
 }
 
+
+// ------------------------------------------------------------------------------------- batch & gap rounds
+
+const MAX_GAP_ROUNDS = 2
+const MAX_GAP_FINDINGS = 6
+
+const EMPTY_ANALYSIS: AnalysisResult = { findings: [], slotFills: [], metrics: {}, sentiment: 'neutral', nothingToReport: false, unknown: false, vague: false, summary: '', source: 'rules' }
+
+/** Every required fact still missing about this topic's findings (all of them at once), most severe first. */
+function slotGaps(input: EngineInput, findings: Finding[], topicKey: string): GapSpec['findings'] {
+  return findings
+    .filter((f) => f.topicKey === topicKey && f.approval !== 'rejected')
+    .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+    .map((f) => ({ key: findingKeyOf(f), title: shortTitle(f.title), slots: requiredSlots(input, f).filter((sl) => !slotFilled(f, sl)) }))
+    .filter((g) => g.slots.length > 0)
+    .slice(0, MAX_GAP_FINDINGS)
+}
+
+function closeTopic(input: EngineInput, state: InterviewState, findings: Finding[], key: string, turns: TurnDraft[], nothing: boolean): InterviewState {
+  const def = topicDef(input.set, key)
+  const found = findings.filter((f) => f.topicKey === key)
+  const reason = nothing && !found.length ? 'مورد خاصی برای گزارش نبود' : found.length ? `${found.length} یافته ثبت و تکمیل شد` : 'اطلاعات کافی دریافت شد'
+  state.topics[key] = { ...state.topics[key], state: 'complete', coverage: 1, closedReason: reason }
+  turns.push({ topicKey: key, role: 'system', kind: 'system', text: `✓ موضوع «${def.title}» تکمیل شد — ${reason}.`, inputMode: 'text', meta: { closed: key } })
+  return advance(input, { ...state, pending: null }, findings, turns)
+}
+
+/** Asks the consolidated «still missing» round, or returns null when nothing is missing / the rounds are used up. */
+function askGap(input: EngineInput, state: InterviewState, findings: Finding[], key: string, turns: TurnDraft[], gap: GapSpec): InterviewState | null {
+  const def = topicDef(input.set, key)
+  const tp = state.topics[key]
+  const round = (tp.gapRounds ?? 0) + 1
+  if (round > MAX_GAP_ROUNDS || def.maxFollowUps <= 0) return null
+  if (!gap.fields.length && !gap.objectives.length && !gap.findings.length) return null
+  const objectives = input.objectives.map((o) => ({ id: o.id, title: o.title }))
+  const template = renderGapTemplate(gap, objectives)
+  const text = gapQuestionText(def, round, gap)
+  turns.push({ topicKey: key, role: 'assistant', kind: 'followup', text, inputMode: 'text', meta: { gap: true, template } })
+  state.topics[key] = { ...tp, gapRounds: round, followUps: tp.followUps + 1, coverage: recomputeCoverage(input, state, findings, key) }
+  return { ...state, pending: { id: `gap:${key}:${round}`, topicKey: key, kind: 'gap', text, template, layout: { fields: [], gap }, quick: ['نمی‌دانم'] }, asked: state.asked + 1 }
+}
+
+async function submitBatch(input: EngineInput, stateIn: InterviewState, findingsIn: Finding[], answerText: string, inputMode: 'text' | 'voice'): Promise<StepResult> {
+  const pending = stateIn.pending!
+  const layout = pending.layout!
+  const key = pending.topicKey
+  const def = topicDef(input.set, key)
+  const turns: TurnDraft[] = [{ topicKey: key, role: 'user', kind: 'answer', text: answerText.trim(), inputMode }]
+  const now = new Date().toISOString()
+  const state: InterviewState = { ...stateIn, topics: { ...stateIn.topics } }
+  let findings = [...findingsIn]
+  const objectiveUpdates: StepResult['objectiveUpdates'] = []
+
+  const parsed = parseAnswer(answerText, layout)
+  const text = analysisTextOf(parsed, layout.fields)
+  const { analysis, aiUsed } = text.trim() ? await analyze(input, findings, { ...pending, kind: 'main' }, text, null) : { analysis: EMPTY_ANALYSIS, aiUsed: false }
+  const nothing = !parsed.structured ? analysis.nothingToReport : !Object.values(parsed.fields).some((v) => !isBlank(v) && !isUnknownValue(v)) && !parsed.entries.length && !parsed.objectives.some((o) => !isBlank(o.result))
+
+  const tp = { ...state.topics[key] }
+  tp.notes = [...tp.notes, notesOf(parsed, answerText)]
+  tp.metrics = { ...tp.metrics, ...analysis.metrics, ...metricsOf(parsed, layout.fields) }
+  state.topics[key] = tp
+  findings = applySlotFills(analysis.slotFills, findings)
+  if (!def.noFindings) findings = applyExtracted(input, analysis.findings, findings, input.mission.id, now)
+  if (layout.entries && parsed.entries.length) findings = applyExtracted(input, entriesToFindings(parsed.entries, def, layout.entries, input.today), findings, input.mission.id, now)
+
+  const missingObjectives: string[] = []
+  for (const o of parsed.objectives) {
+    if (isBlank(o.result) && isBlank(o.note)) { missingObjectives.push(o.id); continue }
+    objectiveUpdates.push({ id: o.id, status: classifyObjectiveAnswer(`${o.result} ${o.note}`), note: (o.note || o.result).trim() })
+  }
+
+  const fieldGaps = parsed.structured && !nothing ? layout.fields.filter((f) => !f.optional && isBlank(parsed.fields[f.label])).map((f) => f.label) : []
+  const gap: GapSpec = { fields: fieldGaps, objectives: missingObjectives, findings: nothing ? [] : slotGaps(input, findings, key) }
+  const asked = askGap(input, state, findings, key, turns, gap)
+  if (asked) return { state: asked, findings, turns, objectiveUpdates, done: false, analysis, aiUsed }
+  const closed = closeTopic(input, state, findings, key, turns, nothing)
+  return { state: closed, findings, turns, objectiveUpdates, done: closed.current === null, analysis, aiUsed }
+}
+
+function submitGap(input: EngineInput, stateIn: InterviewState, findingsIn: Finding[], answerText: string, inputMode: 'text' | 'voice'): StepResult {
+  const pending = stateIn.pending!
+  const gap = pending.layout!.gap!
+  const key = pending.topicKey
+  const def = topicDef(input.set, key)
+  const turns: TurnDraft[] = [{ topicKey: key, role: 'user', kind: 'answer', text: answerText.trim(), inputMode }]
+  const state: InterviewState = { ...stateIn, topics: { ...stateIn.topics } }
+  let findings = [...findingsIn]
+  const objectiveUpdates: StepResult['objectiveUpdates'] = []
+  const now = new Date().toISOString()
+  const parsed = parseGapAnswer(answerText, gap)
+  const tp = { ...state.topics[key] }
+  const notes: string[] = []
+
+  // Plain fields that were blank: keep the text as notes, and mine it like a normal answer.
+  const fieldText = Object.entries(parsed.fields).filter(([, v]) => !isBlank(v)).map(([k, v]) => `${k.replace(/[(（].*$/u, '').trim()}: ${v}.`)
+  if (fieldText.length) {
+    notes.push(...fieldText)
+    const a = analyzeAnswer({ topicKey: key, answer: fieldText.join('\n'), today: input.today, defaultKind: def.defaultKind, lexicon: def.lexicon, known: findings.filter((f) => f.topicKey === key).map((f) => ({ key: findingKeyOf(f), title: f.title, kind: f.kind })) })
+    tp.metrics = { ...tp.metrics, ...a.metrics }
+    findings = applySlotFills(a.slotFills, findings)
+    if (!def.noFindings) findings = applyExtracted(input, a.findings, findings, input.mission.id, now)
+  }
+
+  const stillObjectives: string[] = []
+  for (const o of parsed.objectives) {
+    if (isBlank(o.result) && isBlank(o.note)) { stillObjectives.push(o.id); continue }
+    objectiveUpdates.push({ id: o.id, status: classifyObjectiveAnswer(`${o.result} ${o.note}`), note: (o.note || o.result).trim() })
+  }
+
+  // Finding facts: normalise each value exactly like a direct answer (dates, "نمی‌دانم" → نامشخص …).
+  const fills: AnalysisResult['slotFills'] = []
+  for (const pf of parsed.findings) {
+    const title = findings.find((f) => findingKeyOf(f) === pf.key)?.title ?? ''
+    for (const [slot, value] of Object.entries(pf.slots)) {
+      if (isBlank(value)) continue
+      const a = analyzeAnswer({ topicKey: key, answer: value, today: input.today, defaultKind: def.defaultKind, lexicon: def.lexicon, target: { findingKey: pf.key, slot: slot as Slot, findingTitle: title } })
+      fills.push(...a.slotFills)
+      notes.push(`${title}: ${value}`)
+    }
+  }
+  findings = applySlotFills(fills, findings)
+  tp.notes = [...tp.notes, ...(notes.length ? [notes.join('\n')] : [answerText.trim()])]
+  state.topics[key] = tp
+
+  const gaps: GapSpec = {
+    fields: gap.fields.filter((f) => isBlank(parsed.fields[f])),
+    objectives: stillObjectives,
+    findings: slotGaps(input, findings, key),
+  }
+  const next = askGap(input, state, findings, key, turns, gaps)
+  if (next) return { state: next, findings, turns, objectiveUpdates, done: false, analysis: null, aiUsed: false }
+  const closed = closeTopic(input, state, findings, key, turns, false)
+  return { state: closed, findings, turns, objectiveUpdates, done: closed.current === null, analysis: null, aiUsed: false }
+}
+
 export async function submitAnswer(
   input: EngineInput,
   stateIn: InterviewState,
@@ -404,6 +570,10 @@ export async function submitAnswer(
 ): Promise<StepResult> {
   const pending = stateIn.pending
   if (!pending) throw new Error('no pending question')
+  // Batch questions and the consolidated gap round carry their layout; sessions saved before that existed
+  // continue through the single-question path below.
+  if (pending.layout?.gap) return submitGap(input, stateIn, findingsIn, answerText, inputMode)
+  if (pending.layout) return submitBatch(input, stateIn, findingsIn, answerText, inputMode)
   const turns: TurnDraft[] = [{ topicKey: pending.topicKey, role: 'user', kind: 'answer', text: answerText.trim(), inputMode }]
   const now = new Date().toISOString()
   const def = topicDef(input.set, pending.topicKey)

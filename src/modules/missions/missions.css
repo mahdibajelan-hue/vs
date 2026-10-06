@@ -242,6 +242,7 @@
 /* ---- interview ----------------------------------------------------------------------------------- */
 .ms-chat { display: flex; flex-direction: column; gap: 14px; }
 .ms-bubble {
+  white-space: pre-wrap;
   max-width: min(88%, 620px);
   padding: 12px 16px;
   border-radius: 18px;

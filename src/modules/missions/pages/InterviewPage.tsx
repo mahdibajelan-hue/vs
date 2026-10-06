@@ -53,8 +53,18 @@ export function InterviewPage({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Dictation lands where the cursor is (so it fills the template line being edited), else at the end.
   const speech = useSpeech((finalChunk, partial) => {
-    if (finalChunk) setDraft((d) => (d ? d.replace(/\s+$/, '') + ' ' : '') + finalChunk.trim())
+    if (finalChunk) {
+      const chunk = finalChunk.trim()
+      const el = taRef.current
+      setDraft((d) => {
+        const at = el && el.selectionStart != null && el.selectionStart <= d.length ? el.selectionStart : d.length
+        const before = d.slice(0, at)
+        const sep = before && !/[\s:：]$/.test(before) ? ' ' : before.endsWith(':') || before.endsWith('：') ? ' ' : ''
+        return before + sep + chunk + d.slice(at)
+      })
+    }
     setInterim(partial)
     setMode('voice')
   }, ai.enhanced)
@@ -66,6 +76,16 @@ export function InterviewPage({ id }: { id: string }) {
   }, [turns.length, thinking])
 
   const state = bundle?.interview?.state ?? null
+  // Each topic arrives with a pre-filled answer template: put it in the answer box (fresh for every question).
+  const pendingId = state?.pending?.id
+  const pendingTemplate = state?.pending?.template
+  useEffect(() => {
+    if (pendingTemplate) {
+      setDraft(pendingTemplate)
+      taRef.current?.scrollTo?.({ top: 0 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingId])
   const progress = state ? interviewProgress(state) : null
 
   const ctx: MissionContext | null = useMemo(() => {
@@ -136,7 +156,7 @@ export function InterviewPage({ id }: { id: string }) {
             ) : (
               <>
                 <p className="ms-ink2 mt-4 text-[13px] leading-8">
-                  گزارش را با گفت‌وگو ثبت می‌کنید، نه با پر کردن فرم. من چند سؤال کوتاه می‌پرسم؛ شما صحبت یا تایپ می‌کنید. هر جا پاسخ ناقص بود فقط همان بخش را دوباره می‌پرسم.
+                  گزارش را با گفت‌وگو ثبت می‌کنید. سؤال‌های هر موضوع را یکجا و همراه با یک قالب پاسخ می‌پرسم؛ شما قالب را پر می‌کنید (تایپ یا میکروفون). اگر اطلاعاتی ناقص ماند، فقط همان را یک بار دیگر می‌پرسم.
                 </p>
                 <button className="ms-btn ms-btn-primary mt-4 w-full max-md:hidden" style={{ minHeight: 48, fontSize: 15 }} disabled={starting} onClick={start}>
                   <Sparkles size={17} aria-hidden /> {starting ? 'در حال آماده‌سازی…' : m.status === 'debrief' ? 'شروع گفت‌وگو' : 'شروع ثبت گزارش'}
@@ -150,8 +170,8 @@ export function InterviewPage({ id }: { id: string }) {
             <ol className="flex flex-col gap-3">
               {[
                 ['۱', 'شروع را بزنید', 'گفت‌وگو باز می‌شود و اولین سؤال نمایش داده می‌شود.'],
-                ['۲', 'پاسخ بدهید', 'پایین صفحه کادر پاسخ است. با دکمه میکروفون صحبت کنید یا تایپ کنید، سپس «ارسال» را بزنید. برای پاسخ‌های کوتاه دکمه‌های آماده هم هست.'],
-                ['۳', 'سؤال تکمیلی را جواب دهید', 'اگر مشکل یا ریسکی گفتید، علت، اثر، مسئول و موعد آن را می‌پرسم. «نمی‌دانم» هم پاسخ قبول است.'],
+                ['۲', 'قالب هر موضوع را پر کنید', 'همه سؤال‌های یک موضوع با هم می‌آید و قالب پاسخ در کادر پایین آماده است. جلوی هر خط بنویسید یا با میکروفون بگویید، سپس «ارسال» را بزنید. موردی نداشتید بنویسید «ندارم».'],
+                ['۳', 'موارد ناقص را یکجا تکمیل کنید', 'اگر مسئله یا مصوبه‌ای علت، اثر، مسئول یا موعد نداشت، همه کسری‌ها را در یک قالب جدید می‌پرسم. «نمی‌دانم» هم پاسخ قبول است.'],
                 ['۴', 'عکس و مستند بگذارید', 'در بخش «یافته‌ها» (در موبایل: تب بالای صفحه) برای هر موضوع عکس، صورتجلسه یا نامه پیوست کنید.'],
                 ['۵', 'مرور و ارسال', 'پس از پایان همه موضوع‌ها، خلاصه را بررسی و برای مجری طرح ارسال کنید. می‌توانید هر زمان خارج شوید؛ پاسخ‌ها ذخیره می‌شوند.'],
               ].map(([n, t, d]) => (
@@ -189,6 +209,8 @@ export function InterviewPage({ id }: { id: string }) {
   const send = async (text?: string) => {
     const body = (text ?? draft).trim()
     if (!body || !pending || thinking) return
+    // The untouched template is not an answer.
+    if (text === undefined && pending.template && body === pending.template.trim()) return
     if (speech.listening) speech.stop()
     setDraft('')
     setInterim('')
@@ -323,6 +345,7 @@ export function InterviewPage({ id }: { id: string }) {
         <div className="shrink-0 border-t px-3 pb-3 pt-2.5 sm:px-6" style={{ borderColor: 'var(--ms-line)', background: 'color-mix(in srgb, var(--ms-panel) 92%, transparent)' }}>
           <div className="mx-auto max-w-3xl">
             {pending.hint && <p className="ms-muted mb-1.5 text-[11.5px] leading-6">💡 {pending.hint}</p>}
+            {pending.template && <p className="ms-muted mb-1.5 text-[11.5px] leading-6">✍️ قالب پاسخ را کامل کنید: جلوی هر خط بنویسید یا با میکروفون بگویید (متن در جای نشانگر وارد می‌شود).</p>}
             {pending.quick && pending.quick.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {pending.quick.map((q) => (
@@ -335,9 +358,10 @@ export function InterviewPage({ id }: { id: string }) {
                 <textarea
                   ref={taRef}
                   className="ms-textarea"
-                  style={{ minHeight: 52, maxHeight: 160, paddingLeft: 12 }}
-                  rows={2}
+                  style={pending.template ? { minHeight: 150, maxHeight: 320, paddingLeft: 12, lineHeight: 2 } : { minHeight: 52, maxHeight: 160, paddingLeft: 12 }}
+                  rows={pending.template ? 8 : 2}
                   placeholder={speech.listening ? 'در حال گوش دادن… صحبت کنید' : 'پاسخ خود را بنویسید یا با میکروفون بگویید…'}
+                  dir="rtl"
                   value={draft + (interim ? ' ' + interim : '')}
                   onChange={(e) => { setDraft(e.target.value); setInterim('') }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }}
@@ -354,7 +378,7 @@ export function InterviewPage({ id }: { id: string }) {
               >
                 {speech.state === 'transcribing' ? <Loader2 size={18} className="animate-spin" aria-hidden /> : speech.supported ? <Mic size={18} aria-hidden /> : <MicOff size={18} aria-hidden />}
               </button>
-              <button className="ms-btn ms-btn-primary ms-btn-icon" onClick={() => send()} disabled={!draft.trim() || thinking} aria-label="ارسال پاسخ">
+              <button className="ms-btn ms-btn-primary ms-btn-icon" onClick={() => send()} disabled={!draft.trim() || thinking || (!!pending.template && draft.trim() === pending.template.trim())} aria-label="ارسال پاسخ">
                 <Send size={17} aria-hidden style={{ transform: 'scaleX(-1)' }} />
               </button>
             </div>

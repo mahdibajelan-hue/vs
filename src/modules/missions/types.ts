@@ -316,13 +316,57 @@ export interface TopicProgress {
   notes: string[]
   /** Extracted numbers, e.g. planned / actual progress. */
   metrics: Record<string, number>
+  /** How many «what is still missing» rounds were asked after the topic's batch answer (max 2). */
+  gapRounds?: number
+}
+
+/** One labelled line of a batch answer template. */
+export interface TemplateField {
+  label: string
+  /** Shown in the question text under the label. */
+  hint?: string
+  optional?: boolean
+  /** Kept in the topic notes (and quoted in the report) but never mined for findings — e.g. a free suggestion. */
+  noteOnly?: boolean
+  /** When set, the (numeric) value is stored as this topic metric (e.g. planned / actual progress). */
+  metric?: string
+}
+
+/** A repeating group of lines in a template (decisions, actions, one block per objective). */
+export interface TemplateEntries {
+  /** «مصوبه», «اقدام» … → «مصوبه ۱», «مصوبه ۲» */
+  item: string
+  count: number
+  kind: FindingKind
+  /** Field labels after the title line: who is responsible and by when. */
+  ownerLabel: string
+  dueLabel: string
+  /** Extra free-text field per entry (optional), e.g. the decision's context. */
+  noteLabel?: string
+}
+
+export interface PendingLayout {
+  fields: TemplateField[]
+  entries?: TemplateEntries
+  /** One block per mission objective (id + title) — the objective-review topic. */
+  objectives?: { id: string; title: string; measure: string }[]
+  /** Gap round: what is being re-asked. */
+  gap?: {
+    fields: string[]
+    findings: { key: string; title: string; slots: string[] }[]
+    objectives: string[]
+  }
 }
 
 export interface PendingQuestion {
   id: string
   topicKey: string
-  kind: 'main' | 'followup'
+  /** main = the topic's one batch question, gap = the consolidated «still missing» round, followup = legacy single question. */
+  kind: 'main' | 'followup' | 'gap'
   text: string
+  /** Pre-filled answer template shown in the answer box (batch and gap questions). */
+  template?: string
+  layout?: PendingLayout
   /** For follow-ups: which finding and which slot this question is trying to fill. */
   findingKey?: string
   slot?: string

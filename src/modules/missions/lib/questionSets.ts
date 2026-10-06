@@ -1,4 +1,4 @@
-import type { FindingKind, Mission, Objective, VisitType } from '../types'
+import type { FindingKind, Mission, Objective, TemplateEntries, TemplateField, VisitType } from '../types'
 import { normalizeFa } from './fa'
 
 /**
@@ -35,6 +35,8 @@ export interface QuestionDef {
   id: string
   /** Placeholders: {project} {destination} {visitees} {objective} {measure} */
   text: string
+  /** Short label used in the generated answer template when the topic defines none. */
+  label?: string
   when?: Cond
   /** Shown under the question as a gentle prompt of what a good answer contains. */
   hint?: string
@@ -55,6 +57,13 @@ export interface TopicDef {
   /** A topic is mandatory (cannot be skipped without a reason) when this holds. */
   mandatoryWhen?: Cond
   mainQuestions: QuestionDef[]
+  /** Labelled lines of the answer template shown with the topic's batch question. Without it, one line per
+   * applicable main question is generated. */
+  template?: TemplateField[]
+  /** Repeating blocks (decisions, actions…) captured as structured findings with owner and due date. */
+  entries?: TemplateEntries
+  /** Quick replies for the whole batch (e.g. «موردی برای گزارش نبود»). */
+  quick?: string[]
   /** Words that make this topic's sentences count as "about" this topic during analysis. */
   lexicon: string[]
   /** When true the topic only collects notes: no issue/risk/action findings are mined from its answers
@@ -154,7 +163,7 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     risk: { required: ['impact', 'probability', 'mitigation'] },
     action: { required: ['owner', 'due'] },
     commitment: { required: ['owner', 'due'] },
-    decision: { required: [] },
+    decision: { required: ['owner', 'due'] },
     progress: { required: [] },
     observation: { required: [] },
   },
@@ -173,6 +182,12 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
   topics: [
     {
       key: 'overview',
+      quick: ['مطابق برنامه و رضایت‌بخش', 'با تأخیر ولی قابل جبران', 'وضعیت نگران‌کننده است'],
+      template: [
+        { label: 'ارزیابی کلی از وضعیت پروژه' },
+        { label: 'مهم‌ترین نکته مثبت', optional: true },
+        { label: 'مهم‌ترین نگرانی', optional: true },
+      ],
       noFindings: true,
       title: 'جمع‌بندی کلی بازدید',
       icon: 'Compass',
@@ -193,6 +208,12 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'progress',
+      template: [
+        { label: 'پیشرفت واقعی (درصد)', metric: 'actual' },
+        { label: 'پیشرفت برنامه‌ای در همین زمان (درصد)', metric: 'planned' },
+        { label: 'فعالیت‌ها یا بخش‌های عقب‌تر از برنامه (به همراه میزان انحراف)' },
+        { label: 'فعالیت‌ها یا بخش‌های جلوتر از برنامه', optional: true },
+      ],
       title: 'پیشرفت پروژه',
       icon: 'TrendingUp',
       description: 'پیشرفت واقعی در برابر برنامه و فعالیت‌های حیاتی',
@@ -219,6 +240,10 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'engineering',
+      template: [
+        { label: 'نقشه یا مدرک منتظر تأیید، اصلاح یا تکمیل' },
+        { label: 'تغییر طراحی یا ابهام فنی مؤثر بر خرید یا اجرا' },
+      ],
       title: 'وضعیت مهندسی',
       icon: 'Ruler',
       description: 'نقشه‌ها، مدارک مهندسی، تأییدیه‌ها و تغییرات طراحی',
@@ -250,6 +275,11 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'procurement',
+      template: [
+        { label: 'اقلام عقب‌تر از برنامه یا دارای ریسک تأخیر' },
+        { label: 'سازنده یا تأمین‌کننده و وضعیت سفارش' },
+        { label: 'تعهد یا زمان تحویل اعلام‌شده توسط سازنده', optional: true },
+      ],
       title: 'خرید و تأمین',
       icon: 'Package',
       description: 'اقلام کلیدی، تأمین‌کنندگان، ارسال و ورود به کارگاه',
@@ -280,6 +310,10 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'construction',
+      template: [
+        { label: 'وضعیت اجرا در کارگاه و منابع (نیرو، ماشین‌آلات، مصالح)' },
+        { label: 'مانع اجرایی (دسترسی، مجوز، هوا، پیمانکار جزء)' },
+      ],
       title: 'ساخت، تولید و اجرا',
       icon: 'HardHat',
       description: 'وضعیت کارگاه و تولید، منابع، پیمانکاران و موانع اجرا',
@@ -310,6 +344,10 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'hse',
+      template: [
+        { label: 'حادثه یا شبه‌حادثه' },
+        { label: 'مورد عدم‌رعایت ایمنی یا محیط‌زیست' },
+      ],
       title: 'ایمنی، بهداشت و محیط‌زیست (HSE)',
       icon: 'ShieldCheck',
       description: 'حوادث، شبه‌حادثه‌ها، رعایت الزامات و ریسک‌های ایمنی',
@@ -330,6 +368,10 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'quality',
+      template: [
+        { label: 'عدم‌انطباق (NCR) یا رد بازرسی' },
+        { label: 'وضعیت رفع نقص‌ها' , optional: true },
+      ],
       title: 'کیفیت',
       icon: 'BadgeCheck',
       description: 'بازرسی‌ها، عدم‌انطباق‌ها (NCR) و تطابق با مشخصات',
@@ -355,6 +397,10 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'issues_risks',
+      template: [
+        { label: 'مانع یا مشکل مهم که در گزارش‌های رسمی نیست' },
+        { label: 'ریسک یا نگرانی تازه برای ادامه پروژه (زمان، هزینه، کیفیت، قرارداد)' },
+      ],
       title: 'مشکلات، موانع و ریسک‌های جدید',
       icon: 'AlertTriangle',
       description: 'هر مانع یا نگرانی که در گزارش‌های رسمی دیده نمی‌شود',
@@ -378,6 +424,8 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'decisions',
+      quick: ['تصمیم یا توافق مشخصی نبود'],
+      entries: { item: 'مصوبه', count: 3, kind: 'decision', ownerLabel: 'مسئول اقدام', dueLabel: 'مهلت اجرا (تاریخ)', noteLabel: 'توضیح (اختیاری)' },
       title: 'تصمیمات، توافق‌ها و تعهدات',
       icon: 'Handshake',
       description: 'آنچه با طرف‌های ملاقات توافق شد و تعهد هر طرف',
@@ -423,6 +471,8 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'actions',
+      entries: { item: 'اقدام', count: 3, kind: 'action', ownerLabel: 'مسئول اقدام', dueLabel: 'موعد انجام (تاریخ)' },
+      template: [{ label: 'پیشنهاد شما به مدیر پروژه یا مدیریت ارشد', optional: true, noteOnly: true }],
       title: 'اقدامات موردنیاز و پیشنهادها',
       icon: 'ListChecks',
       description: 'کارهای بعدی با مسئول و موعد، و پیشنهاد به مدیریت پروژه',
@@ -446,6 +496,7 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'evidence',
+      template: [{ label: 'عکس یا مستند بارگذاری‌شده (بنویسید «ثبت شد» یا «ندارم»)' }],
       noFindings: true,
       title: 'مستندات و شواهد',
       icon: 'Paperclip',
