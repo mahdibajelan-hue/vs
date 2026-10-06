@@ -38,14 +38,14 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   const locked = !isAuthed
 
   return (
-    <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto max-w-4xl px-6 py-8 sm:px-10'}>
+    <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto w-full max-w-4xl py-2'}>
       {!embedded && (
-        <p className="hub-fade-in mb-5 text-center text-xs text-secondary" style={{ animationDelay: '80ms' }}>
+        <p className="hub-fade-in mb-3 text-center text-[11px] text-secondary" style={{ animationDelay: '80ms' }}>
           {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
         </p>
       )}
 
-      <div className="launchpad-module-grid">
+      <div className={locked || embedded ? 'launchpad-module-grid' : 'launchpad-bento'}>
         <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>
           <ProjectRadarCard onSelect={() => onSelect('radar')} locked={locked} />
         </div>

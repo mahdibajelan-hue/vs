@@ -9,7 +9,7 @@ export function TechnicalCompetencyCard({ onSelect, locked }: { onSelect: () => 
       englishTag="Technical Competency & Qualification"
       description="مصاحبه ساختاریافته، امتیازدهی و صلاحیت‌سنجی مدیران و عوامل فنی پروژه."
       icon={Award}
-      accent="#a855f7"
+      accent="#c084fc"
       locked={locked}
       onSelect={onSelect}
     />

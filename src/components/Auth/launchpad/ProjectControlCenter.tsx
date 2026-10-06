@@ -12,7 +12,16 @@ import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
 
 /** FARIN wordmark + Persian name + tagline — the hero title that sits under the lamp. `children`
  * (the signed-out About note) follows the tagline directly. */
-function BrandName({ className = '' }: { className?: string }) {
+function BrandName({ className = '', compact }: { className?: string; compact?: boolean }) {
+  if (compact) {
+    // Signed in: the wordmark shrinks to one line so the modules sit above the fold.
+    return (
+      <div className={`flex items-baseline justify-center gap-3 ${className}`}>
+        <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">FARIN</span>
+        <span className="text-3xl font-extrabold leading-tight text-[#c9a227] md:text-4xl">{FARIN_NAME_FA}</span>
+      </div>
+    )
+  }
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-7xl">
@@ -28,8 +37,8 @@ function BrandName({ className = '' }: { className?: string }) {
 function BrandTitle({ centered, nameOnDesktopOnly, children }: { centered?: boolean; nameOnDesktopOnly?: boolean; children?: ReactNode }) {
   return (
     <div className={`hub-fade-in flex flex-col gap-2 ${centered ? 'items-center text-center' : 'items-center text-center md:items-end md:text-left'}`}>
-      <BrandName className={`${centered ? 'items-center' : 'items-center md:items-end'} ${nameOnDesktopOnly ? 'hidden md:flex' : ''}`} />
-      <p className="mt-1 text-sm font-medium text-zinc-300 md:text-base">{FARIN_TAGLINE_FA}</p>
+      <BrandName compact={centered} className={`${centered ? 'items-center' : 'items-center md:items-end'} ${nameOnDesktopOnly ? 'hidden md:flex' : ''}`} />
+      <p className={`${centered ? 'text-xs md:text-sm' : 'mt-1 text-sm md:text-base'} font-medium text-zinc-300`}>{FARIN_TAGLINE_FA}</p>
       {children}
     </div>
   )
@@ -65,17 +74,17 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
   return (
     <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip bg-black">
       <Header />
-      <LampContainer className="flex-1 pb-28 [--lamp-bg:#000]" lightClassName="opacity-25 md:opacity-50">
+      <LampContainer className={`flex-1 [--lamp-bg:#000] ${isAuthed ? 'pb-16 [&>div:last-child]:-mt-[14.5rem]' : 'pb-28'}`} lightClassName="opacity-25 md:opacity-50">
         {/* The black showcase box the lamp shines onto: hairline cyan→gold border, drafting-sheet
             corner ticks, and the lamp's light reflected on the "floor" beneath it. */}
         <div className="relative mx-auto w-full max-w-5xl">
-          <div className="launchpad-frame relative rounded-[1.75rem] px-5 py-8 sm:rounded-[2.25rem] sm:px-10 sm:py-10">
+          <div className={`launchpad-frame relative rounded-[1.75rem] sm:rounded-[2.25rem] ${isAuthed ? 'px-3 py-5 sm:px-8 sm:py-7' : 'px-5 py-8 sm:px-10 sm:py-10'}`}>
             <span className="launchpad-frame-corner is-tr" aria-hidden="true" />
             <span className="launchpad-frame-corner is-tl" aria-hidden="true" />
             <span className="launchpad-frame-corner is-br" aria-hidden="true" />
             <span className="launchpad-frame-corner is-bl" aria-hidden="true" />
             {isAuthed ? (
-              <div className="flex w-full flex-col items-center gap-2">
+              <div className="flex w-full flex-col items-center gap-1.5">
                 <BrandTitle centered />
                 <ModuleLaunchpad onSelect={handleSelect} />
               </div>

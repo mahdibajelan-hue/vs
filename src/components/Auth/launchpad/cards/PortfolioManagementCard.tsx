@@ -9,7 +9,7 @@ export function PortfolioManagementCard({ onSelect, locked }: { onSelect: () => 
       englishTag="Portfolio & Program Control"
       description="دید تجمیعی سلامت، ریسک و مالی کل سبد پروژه‌ها — Portfolio ← Program ← Project."
       icon={Briefcase}
-      accent="#6366f1"
+      accent="#818cf8"
       locked={locked}
       onSelect={onSelect}
     />

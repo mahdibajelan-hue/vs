@@ -1685,3 +1685,194 @@ select option {
 @media (max-width: 767px) {
   .launchpad-frame-reflection { opacity: 0.5; }
 }
+
+/* ===== Launchpad bento (signed-in) =====
+   Seven module tiles on a 4-column bento: Radar 2×2, Competency and Missions 2×1, the rest 1×1.
+   On a phone: two compact columns, Radar full-width, descriptions hidden except on Radar. */
+.launchpad-bento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.launchpad-bento > * { min-width: 0; }
+.launchpad-bento .area-radar { grid-column: 1 / -1; }
+@media (min-width: 640px) {
+  .launchpad-bento {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: minmax(104px, auto);
+    gap: 0.7rem;
+    grid-template-areas: 'radar radar a b' 'radar radar c c' 'd e f f';
+  }
+  .launchpad-bento .area-radar { grid-area: radar; }
+  .launchpad-bento .area-a { grid-area: a; }
+  .launchpad-bento .area-b { grid-area: b; }
+  .launchpad-bento .area-c { grid-area: c; }
+  .launchpad-bento .area-d { grid-area: d; }
+  .launchpad-bento .area-e { grid-area: e; }
+  .launchpad-bento .area-f { grid-area: f; }
+}
+
+.lp-tile {
+  --a: #38bdf8;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  height: 100%;
+  min-height: 92px;
+  padding: 0.8rem 0.85rem;
+  text-align: right;
+  border-radius: 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--a) 34%, transparent);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--a) 26%, transparent), transparent 62%),
+    linear-gradient(160deg, color-mix(in srgb, var(--a) 10%, var(--bg-panel-solid)), var(--bg-panel-solid));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--a) 22%, transparent);
+  --spot-x: 50%;
+  --spot-y: 50%;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), border-color 240ms ease, box-shadow 240ms ease;
+}
+/* accent rail on the leading (right, RTL) edge */
+.lp-tile::after {
+  content: '';
+  position: absolute;
+  top: 0.9rem;
+  right: 0;
+  width: 3px;
+  height: 34%;
+  border-radius: 3px 0 0 3px;
+  background: var(--a);
+  box-shadow: 0 0 14px var(--a);
+}
+.lp-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(200px circle at var(--spot-x) var(--spot-y), color-mix(in srgb, var(--a) 24%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+.lp-tile:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--a) 72%, transparent);
+  box-shadow: 0 14px 34px -14px color-mix(in srgb, var(--a) 70%, transparent), inset 0 1px 0 color-mix(in srgb, var(--a) 30%, transparent);
+}
+.lp-tile:hover::before { opacity: 1; }
+.lp-tile:focus-visible { outline: 2px solid var(--a); outline-offset: 3px; }
+.lp-tile > * { position: relative; z-index: 1; }
+.lp-tile .lp-tile-mark {
+  position: absolute;
+  z-index: 0;
+  left: -14px;
+  bottom: -18px;
+  color: var(--a);
+  opacity: 0.13;
+  transform: rotate(-14deg);
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1), opacity 260ms ease;
+  pointer-events: none;
+}
+.lp-tile:hover .lp-tile-mark { transform: rotate(-6deg) scale(1.08); opacity: 0.22; }
+
+.lp-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.lp-tile-chip {
+  display: inline-flex;
+  height: 2.1rem;
+  width: 2.1rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  color: var(--a);
+  background: color-mix(in srgb, var(--a) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--a) 45%, transparent);
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--a) 60%, transparent);
+  transition: transform 260ms ease;
+}
+.lp-tile:hover .lp-tile-chip { transform: scale(1.1) rotate(-4deg); }
+.lp-tile-no {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: color-mix(in srgb, var(--a) 80%, white);
+  opacity: 0.85;
+}
+.lp-tile-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.lp-tile-title { font-size: 0.86rem; font-weight: 800; line-height: 1.5; color: var(--text-primary, #f1f5f9); }
+.lp-tile-en { font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: color-mix(in srgb, var(--a) 70%, var(--text-muted, #94a3b8)); opacity: 0.9; display: none; }
+.lp-tile-desc {
+  display: none;
+  margin-top: 0.15rem;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.lp-tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.lp-tile-cta { white-space: nowrap; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: var(--a); }
+.lp-tile-arrow { flex: none; color: var(--a); transition: transform 240ms ease; }
+.lp-tile:hover .lp-tile-arrow { transform: translateX(-4px); }
+
+/* phone: compact two-column tiles — icon, number, title only; Radar keeps its description */
+@media (max-width: 639px) {
+  .lp-tile { min-height: 0; padding: 0.7rem 0.75rem; gap: 0.45rem; }
+  .lp-tile-foot { display: none; }
+  .lp-tile.is-hero { flex-direction: row; align-items: center; gap: 0.75rem; }
+  .lp-tile.is-hero .lp-tile-head { flex-direction: column; align-items: flex-start; }
+  .lp-tile.is-hero .lp-tile-body { flex: 1; }
+  .lp-tile.is-hero .lp-tile-desc { font-size: 10.5px; }
+  .lp-tile.is-hero .lp-tile-foot { display: flex; }
+  .lp-tile.is-hero .lp-tile-cta { display: none; }
+  .lp-tile:not(.is-hero) .lp-tile-desc { display: none; }
+  .lp-tile .lp-tile-mark { width: 64px; height: 64px; }
+}
+@media (min-width: 640px) {
+  .lp-tile-desc { display: -webkit-box; }
+  .lp-tile-en { display: block; }
+  /* 1×1 tiles stay lean: no English tag, one description line */
+  .launchpad-bento .area-a .lp-tile-en, .launchpad-bento .area-b .lp-tile-en,
+  .launchpad-bento .area-d .lp-tile-en, .launchpad-bento .area-e .lp-tile-en { display: none; }
+  .launchpad-bento .area-a .lp-tile-desc, .launchpad-bento .area-b .lp-tile-desc,
+  .launchpad-bento .area-d .lp-tile-desc, .launchpad-bento .area-e .lp-tile-desc { -webkit-line-clamp: 2; font-size: 10.5px; }
+  .launchpad-bento .area-a .lp-tile-foot, .launchpad-bento .area-b .lp-tile-foot,
+  .launchpad-bento .area-d .lp-tile-foot, .launchpad-bento .area-e .lp-tile-foot { display: none; }
+  /* wide tiles: icon · text · arrow in one row */
+  .launchpad-bento .area-c .lp-tile, .launchpad-bento .area-f .lp-tile { flex-direction: row; align-items: center; gap: 0.85rem; }
+  .launchpad-bento .area-c .lp-tile-head, .launchpad-bento .area-f .lp-tile-head { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+  .launchpad-bento .area-c .lp-tile-body, .launchpad-bento .area-f .lp-tile-body { flex: 1; }
+}
+
+/* Radar: the big tile — scope rings, larger type, a pill CTA */
+.lp-tile.is-hero {
+  min-height: 150px;
+  background:
+    repeating-radial-gradient(circle at 12% 88%, transparent 0 26px, color-mix(in srgb, var(--a) 14%, transparent) 26px 27px),
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--a) 34%, transparent), transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--a) 14%, var(--bg-panel-solid)), var(--bg-panel-solid));
+  box-shadow: 0 0 40px -14px color-mix(in srgb, var(--a) 55%, transparent), inset 0 1px 0 color-mix(in srgb, var(--a) 30%, transparent);
+}
+@media (min-width: 640px) {
+  .lp-tile.is-hero { padding: 1.1rem 1.15rem; }
+  .lp-tile.is-hero .lp-tile-title { font-size: 1.35rem; }
+  .lp-tile.is-hero .lp-tile-desc { font-size: 12px; -webkit-line-clamp: 4; margin-top: 0.4rem; }
+  .lp-tile.is-hero .lp-tile-en { display: block; font-size: 9.5px; }
+  .lp-tile.is-hero .lp-tile-cta {
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--a) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--a) 50%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-tile, .lp-tile-chip, .lp-tile-mark, .lp-tile-arrow { transition: none; }
+  .lp-tile:hover { transform: none; }
+}

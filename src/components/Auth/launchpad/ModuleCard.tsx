@@ -1,5 +1,5 @@
-import type { MouseEvent, ReactNode } from 'react'
-import { ArrowRight, Lock } from 'lucide-react'
+import type { CSSProperties, MouseEvent, ReactNode } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ModuleCardProps {
@@ -9,46 +9,39 @@ export interface ModuleCardProps {
   description: string
   icon: LucideIcon
   accent: string
-  /** The flagship entry — Project Radar. Same footprint as every other card (all six sit in one
-   * equal-size grid), but filled with a vivid accent wash + glow instead of the neutral dark
-   * background, so it reads as the centerpiece by color, not by size. */
+  /** The flagship entry — Project Radar. It owns the big tile of the bento grid and carries the live mini-radar. */
   hero?: boolean
   /** English micro-CTA shown only on the hero card (e.g. "ENTER PROJECT RADAR"). */
   cta?: string
-  /** Replaces the default icon tile — used by the Radar card for its animated mini-visual. */
+  /** Replaces the default icon chip — used by the Radar card for its animated mini-visual. */
   visual?: ReactNode
   /** Not signed in yet: preview the module but block entry (dimmed, no hover, no click). */
   locked?: boolean
   onSelect: () => void
 }
 
-/** Cursor-follow spotlight — a soft accent-tinted glow that tracks the pointer under
- * `.hub-grid-card::before` (see index.css). Plain imperative style writes on the DOM node so
- * mousemove never triggers a React re-render. */
+/** Cursor-follow spotlight — plain imperative style writes so mousemove never re-renders React. */
 function trackSpotlight(e: MouseEvent<HTMLElement>) {
   const rect = e.currentTarget.getBoundingClientRect()
   e.currentTarget.style.setProperty('--spot-x', `${e.clientX - rect.left}px`)
   e.currentTarget.style.setProperty('--spot-y', `${e.clientY - rect.top}px`)
 }
 
-/** Shared visual/interaction shell for every Launchpad module entry point. Each module gets its
- * own named component (ProjectRadarCard, PortfolioManagementCard, ...) so new modules can be
- * added later without touching this primitive — but the elevate/glow/spotlight/arrow behavior and
- * the locked-preview treatment stay identical across all of them. */
-export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent: moduleAccent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
-  // Every module keeps its own hue, but pulled toward slate so the grid reads calm — the raw brand
-  // colors (neon green, hard-hat yellow) were far too loud side by side on the dark launchpad.
-  const accent = `color-mix(in srgb, ${moduleAccent} 66%, #8b9bb4)`
-  // Before sign-in: only the bare icon shows (no title/description/border/background box) — the
-  // full card treatment appears once the user is authenticated.
+/**
+ * One tile of the launchpad's bento grid (see `.launchpad-bento` in index.css). Every module owns a
+ * colour: the tile is washed with it, carries a rail on its leading edge, an oversized tilted icon
+ * as a watermark, and a glow on hover — so the grid reads as seven distinct instruments instead of
+ * seven identical dark boxes. Sizes come from the grid area the tile sits in (Radar: 2×2, Competency
+ * and Missions: 2×1, the rest: 1×1); on a phone everything collapses to a compact two-column grid
+ * where only the Radar tile keeps its description.
+ */
+export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+  // Before sign-in: only the bare icon shows — the full tile appears once the user is authenticated.
   if (locked) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3" title={title}>
         {visual ?? (
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: `color-mix(in srgb, ${accent} 14%, transparent)` }}
-          >
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${accent} 14%, transparent)` }}>
             <Icon size={26} style={{ color: accent }} />
           </div>
         )}
@@ -59,77 +52,30 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
   return (
     <button
       type="button"
-      disabled={locked}
-      onClick={locked ? undefined : onSelect}
-      onMouseMove={locked ? undefined : trackSpotlight}
-      className={`hub-grid-card group flex h-full w-full flex-col rounded-2xl border p-3.5 text-right ${
-        locked ? 'pointer-events-none opacity-55 grayscale-[0.4]' : ''
-      }`}
-      style={{
-        background: hero
-          ? `linear-gradient(160deg, color-mix(in srgb, ${accent} 22%, var(--bg-panel-solid)), color-mix(in srgb, ${accent} 7%, var(--bg-panel-solid)))`
-          : undefined,
-        borderColor: hero ? `color-mix(in srgb, ${accent} 60%, transparent)` : 'var(--border-soft)',
-        boxShadow: hero ? `0 0 44px color-mix(in srgb, ${accent} 22%, transparent)` : undefined,
-        // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
-        '--card-accent': accent,
-      }}
+      onClick={onSelect}
+      onMouseMove={trackSpotlight}
+      className={`lp-tile group ${hero ? 'is-hero' : ''}`}
+      style={{ '--a': accent } as CSSProperties}
     >
-      {!hero && <div className="hub-grid-card-glow" style={{ background: accent }} />}
-
-      <div className="relative z-10 flex items-start justify-between gap-2">
-        <span
-          className="font-mono text-[10px] font-bold tracking-[0.18em]"
-          dir="ltr"
-          style={{ color: accent }}
-        >
-          {number}
-        </span>
+      <Icon className="lp-tile-mark" size={hero ? 150 : 92} strokeWidth={1.25} aria-hidden />
+      <span className="lp-tile-head">
         {visual ?? (
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-transform duration-300 group-hover:scale-110"
-            style={
-              hero
-                ? { background: `color-mix(in srgb, ${accent} 30%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 55%, transparent)` }
-                : { background: `color-mix(in srgb, ${accent} 14%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 35%, transparent)` }
-            }
-          >
-            <Icon size={16} style={{ color: accent }} />
-          </div>
-        )}
-      </div>
-
-      <p className="relative z-10 mt-3 text-sm font-extrabold" style={undefined}>
-        {title}
-      </p>
-      <p className="eyebrow-en relative z-10 mt-0.5 text-[9px]" dir="ltr" style={undefined}>
-        {englishTag}
-      </p>
-      <p
-        className="relative z-10 mt-2 line-clamp-2 flex-1 text-[11px] leading-5"
-        style={{ color: 'var(--text-secondary)' }}
-      >
-        {description}
-      </p>
-
-      <div className="relative z-10 mt-3 flex items-center justify-between gap-2">
-        {cta && !locked ? (
-          <span className="text-[10px] font-bold tracking-wide" dir="ltr" style={{ color: accent }}>
-            {cta}
+          <span className="lp-tile-chip">
+            <Icon size={18} />
           </span>
-        ) : (
-          <span />
         )}
-        {locked ? (
-          <Lock size={13} className="shrink-0 text-muted" />
-        ) : (
-          <ArrowRight
-            size={14}
-            className="shrink-0 transition-transform duration-300 group-hover:translate-x-1"
-            style={{ color: accent }}
-          />
-        )}
-      </div>
+        <span className="lp-tile-no" dir="ltr">{number}</span>
+      </span>
+      <span className="lp-tile-body">
+        <span className="lp-tile-title">{title}</span>
+        <span className="lp-tile-en" dir="ltr">{englishTag}</span>
+        <span className="lp-tile-desc">{description}</span>
+      </span>
+      <span className="lp-tile-foot">
+        {cta ? <span className="lp-tile-cta" dir="ltr">{cta}</span> : <span />}
+        <ArrowLeft size={16} className="lp-tile-arrow" />
+      </span>
     </button>
   )
 }
+
