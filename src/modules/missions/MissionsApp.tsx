@@ -77,9 +77,9 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
   return (
     <NavContext.Provider value={{ view, go }}>
       <div className="ms-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl">
-        <header className="ms-no-print flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-5" style={{ borderColor: 'var(--ms-line)', background: 'color-mix(in srgb, var(--ms-panel) 86%, transparent)', backdropFilter: 'blur(14px)' }}>
+        <header className="ms-no-print flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-5" style={{ borderColor: 'var(--ms-line-2)', background: 'var(--ms-panel)', boxShadow: '0 10px 24px -18px rgba(15,23,42,.5)' }}>
           <button className="flex min-w-0 items-center gap-2.5 text-right" onClick={() => go({ kind: 'dashboard' })} aria-label="داشبورد مأموریت‌ها">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)' }}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'linear-gradient(145deg, var(--ms-accent), var(--ms-accent-2))', color: 'var(--ms-accent-ink)', boxShadow: '0 10px 18px -10px var(--ms-accent)' }}>
               <MapPinned size={20} aria-hidden />
             </span>
             <span className="min-w-0 leading-tight">
@@ -88,9 +88,9 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
             </span>
           </button>
 
-          <nav className="order-3 hidden items-center gap-1 rounded-xl p-1 md:order-none md:flex" style={{ background: 'var(--ms-panel-2)', border: '1px solid var(--ms-line)' }} aria-label="بخش‌ها">
+          <nav className="order-3 hidden items-center gap-1 rounded-xl p-1 md:order-none md:flex" style={{ background: 'var(--ms-panel-2)', border: '1px solid var(--ms-line-2)' }} aria-label="بخش‌ها">
             {nav.map((n) => (
-              <button key={n.key} onClick={() => go(n.view)} className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12.5px] font-bold transition-colors ${section === n.key ? '' : 'ms-ink2 hover:text-[var(--ms-ink)]'}`} style={section === n.key ? { background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)' } : undefined} aria-current={section === n.key ? 'page' : undefined}>
+              <button key={n.key} onClick={() => go(n.view)} className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[12.5px] font-bold transition-colors ${section === n.key ? '' : 'ms-ink2 hover:text-[var(--ms-ink)]'}`} style={section === n.key ? { background: 'linear-gradient(135deg, var(--ms-accent), var(--ms-accent-2))', color: 'var(--ms-accent-ink)', boxShadow: '0 8px 14px -8px var(--ms-accent)' } : undefined} aria-current={section === n.key ? 'page' : undefined}>
                 <n.icon size={14} aria-hidden /> {n.label}
               </button>
             ))}

@@ -84,3 +84,6 @@ Mission → Visit → Intelligent Interview → Evidence → Project Insight
 
 ## Request form additions (schema Section 67)
 Origin city **and** destination city, a list of companions, and an approver list limited to people holding the «مجری طرح» role (`ms_roles`); the guard trigger rejects any other approver (`approver_must_be_executive`). The demo seed now ships five complete signed reports from different fields (legal, finance, quality, engineering, HR/administration), including a returned report and one with a confidential answer.
+
+## Visual skin
+The module uses one light "bento" skin (tokens at the top of `missions.css`), independent of the app-wide dark/light switch: neutral sheet, white raised cards with a colour bar on top (`--bar`), solid-gradient KPI badges (`.ms-kpi`, `--h`), indigo primary actions, dark bold text. The same language as the Farin launchpad tiles.

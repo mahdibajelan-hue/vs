@@ -134,16 +134,20 @@ export function ErrorBanner({ message, onClose }: { message: string; onClose: ()
   )
 }
 
-export function Kpi({ label, value, sub, tone, onClick }: { label: string; value: ReactNode; sub?: string; tone?: 'bad' | 'warn' | 'good'; onClick?: () => void }) {
-  const color = tone === 'bad' ? 'var(--ms-bad)' : tone === 'warn' ? 'var(--ms-warn)' : tone === 'good' ? 'var(--ms-good)' : 'var(--ms-ink)'
+/** A dashboard number: white raised card, colour bar on top, solid-gradient icon badge in the card's own hue. */
+export function Kpi({ label, value, sub, tone, onClick, icon: Icon, hue }: { label: string; value: ReactNode; sub?: string; tone?: 'bad' | 'warn' | 'good'; onClick?: () => void; icon?: LucideIcon; hue?: string }) {
+  const h = hue ?? (tone === 'bad' ? 'var(--ms-bad)' : tone === 'warn' ? 'var(--ms-orange)' : tone === 'good' ? 'var(--ms-good)' : 'var(--ms-accent)')
   const Tag = onClick ? 'button' : 'div'
   return (
-    <Tag onClick={onClick} className={`ms-card-flat p-3.5 text-right ${onClick ? 'transition-colors hover:border-[var(--ms-accent)]' : ''}`}>
-      <p className="ms-muted text-[11.5px] font-bold leading-5">{label}</p>
-      <p className="mt-1 text-[26px] font-black leading-9" style={{ color }}>
+    <Tag onClick={onClick} className="ms-kpi" style={{ '--h': h } as CSSProperties}>
+      <span className="flex items-start justify-between gap-2">
+        <span className="text-[12px] font-extrabold leading-5" style={{ color: 'var(--ms-ink-2)' }}>{label}</span>
+        {Icon && <span className="ms-kpi-badge"><Icon size={17} aria-hidden /></span>}
+      </span>
+      <span className="mt-1 text-[28px] font-black leading-9" style={{ color: 'var(--ms-ink)' }}>
         {value}
-      </p>
-      {sub && <p className="ms-muted text-[11px] leading-5">{sub}</p>}
+      </span>
+      {sub && <span className="text-[11px] font-semibold leading-5" style={{ color: 'var(--ms-muted)' }}>{sub}</span>}
     </Tag>
   )
 }
