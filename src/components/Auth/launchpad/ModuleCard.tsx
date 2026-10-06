@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ModuleCardProps {
-  number: string
+  number?: string
   title: string
   englishTag: string
   description: string
@@ -35,7 +35,7 @@ function trackSpotlight(e: MouseEvent<HTMLElement>) {
  * and Missions: 2×1, the rest: 1×1); on a phone everything collapses to a compact two-column grid
  * where only the Radar tile keeps its description.
  */
-export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+export function ModuleCard({ title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
   // Before sign-in: only the bare icon shows — the full tile appears once the user is authenticated.
   if (locked) {
     return (
@@ -64,7 +64,6 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
             <Icon size={18} />
           </span>
         )}
-        <span className="lp-tile-no" dir="ltr">{number}</span>
       </span>
       <span className="lp-tile-body">
         <span className="lp-tile-title">{title}</span>

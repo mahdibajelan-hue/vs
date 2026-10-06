@@ -40,7 +40,7 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   return (
     <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto w-full max-w-4xl py-2'}>
       {!embedded && (
-        <p className="hub-fade-in mb-3 text-center text-[11px] text-secondary" style={{ animationDelay: '80ms' }}>
+        <p className="lp-hint hub-fade-in mb-3 text-center text-xs font-medium text-secondary" style={{ animationDelay: '80ms' }}>
           {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
         </p>
       )}

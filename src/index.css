@@ -1618,35 +1618,17 @@ select option {
    light across its top edge, four L-shaped corner ticks like the registration marks on a drawing
    sheet, and (.launchpad-frame-reflection) the lamp's light reflected on the floor beneath it. */
 .launchpad-frame {
+  /* The hairline gradient border is painted with a border-box background layer, NOT with a masked
+     ::before overlay: on browsers without `mask-composite: exclude` the overlay filled the whole box
+     and washed out everything inside it. */
+  border: 1px solid transparent;
   background:
-    radial-gradient(ellipse 60% 120px at 50% 0%, rgba(34, 211, 238, 0.07), transparent 70%),
-    #000;
+    radial-gradient(ellipse 60% 120px at 50% 0%, rgba(34, 211, 238, 0.07), transparent 70%) padding-box,
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(165deg, rgba(34, 211, 238, 0.6), rgba(255, 255, 255, 0.1) 30%, rgba(255, 255, 255, 0.06) 68%, rgba(129, 140, 248, 0.55)) border-box;
   box-shadow:
     0 -18px 60px -30px rgba(34, 211, 238, 0.35),
     inset 0 1px 0 rgba(34, 211, 238, 0.12);
-}
-.launchpad-frame::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 60;
-  padding: 1px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    165deg,
-    rgba(34, 211, 238, 0.6),
-    rgba(255, 255, 255, 0.07) 28%,
-    rgba(255, 255, 255, 0.04) 68%,
-    rgba(129, 140, 248, 0.55)
-  );
-  mask:
-    linear-gradient(#000 0 0) content-box exclude,
-    linear-gradient(#000 0 0);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
 }
 .launchpad-frame-corner {
   position: absolute;
@@ -1885,24 +1867,25 @@ select option {
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  background: linear-gradient(180deg, #f8f9fc 0%, #eceff6 100%);
-  box-shadow: 0 -18px 60px -30px rgba(34, 211, 238, 0.4), 0 34px 80px -34px rgba(0, 0, 0, 0.9), inset 0 1px 0 #fff;
+  background:
+    linear-gradient(180deg, #eef1f8 0%, #dfe4ef 100%) padding-box,
+    linear-gradient(165deg, rgba(34, 211, 238, 0.8), rgba(255, 255, 255, 0.5) 35%, rgba(255, 255, 255, 0.5) 65%, rgba(148, 163, 184, 0.8)) border-box;
+  box-shadow: 0 -18px 60px -30px rgba(34, 211, 238, 0.4), 0 34px 80px -34px rgba(0, 0, 0, 0.9);
 }
-.launchpad-frame.is-authed::after { content: none; }
-.launchpad-frame.is-authed::before { background: linear-gradient(165deg, rgba(34, 211, 238, 0.65), rgba(255, 255, 255, 0.4) 35%, rgba(255, 255, 255, 0.4) 65%, rgba(148, 163, 184, 0.6)); }
-.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #0f172a, #334155); }
-.launchpad-frame.is-authed .lp-brand-fa { color: #a17a12; }
-.launchpad-frame.is-authed .lp-brand-tag { color: #334155; }
+.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #020617, #1e293b); font-weight: 800; }
+.launchpad-frame.is-authed .lp-brand-fa { color: #8a6508; font-weight: 900; }
+.launchpad-frame.is-authed .lp-brand-tag { color: #0f172a; font-weight: 700; font-size: 0.95rem; }
+.launchpad-frame.is-authed .lp-hint { color: #1e293b; font-weight: 600; }
 .launchpad-frame.is-authed .launchpad-frame-corner { border-color: rgba(100, 116, 139, 0.5); }
 
 .launchpad-frame.is-authed .lp-tile {
-  border: 1px solid #dfe4ee;
+  border: 1px solid color-mix(in srgb, var(--a) 28%, #c9d1e0);
   background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 14px 26px -16px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 16px 28px -14px rgba(15, 23, 42, 0.5);
 }
 .launchpad-frame.is-authed .lp-tile::before { background: radial-gradient(220px circle at var(--spot-x) var(--spot-y), color-mix(in srgb, var(--a) 10%, transparent), transparent 72%); }
 .launchpad-frame.is-authed .lp-tile::after {
-  top: 0; right: 0; left: 0; width: auto; height: 5px; border-radius: 0;
+  top: 0; right: 0; left: 0; width: auto; height: 6px; border-radius: 0;
   background: linear-gradient(90deg, var(--a), color-mix(in srgb, var(--a) 55%, #ffffff));
   box-shadow: none;
 }
@@ -1917,9 +1900,9 @@ select option {
   box-shadow: 0 8px 16px -8px var(--a);
 }
 .launchpad-frame.is-authed .lp-tile-no { color: var(--a); opacity: 1; }
-.launchpad-frame.is-authed .lp-tile-title { color: #0f172a; }
+.launchpad-frame.is-authed .lp-tile-title { color: #020617; font-weight: 900; }
 .launchpad-frame.is-authed .lp-tile-en { color: var(--a); opacity: 1; }
-.launchpad-frame.is-authed .lp-tile-desc { color: #475569; }
+.launchpad-frame.is-authed .lp-tile-desc { color: #334155; }
 .launchpad-frame.is-authed .lp-tile-cta, .launchpad-frame.is-authed .lp-tile-arrow { color: var(--a); }
 .launchpad-frame.is-authed .lp-tile .lp-tile-mark { opacity: 0.07; }
 .launchpad-frame.is-authed .lp-tile:hover .lp-tile-mark { opacity: 0.13; }
