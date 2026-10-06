@@ -244,8 +244,8 @@ export function createSupabaseRepo(): MissionRepo {
   return {
     async loadCurrentUser(): Promise<CurrentUser> {
       const p = useAuthStore.getState().profile
-      const [mgr, aa] = await Promise.all([supabase.rpc('ms_is_manager'), supabase.rpc('ms_is_admin_affairs')])
-      return { id: p?.id ?? '', name: p?.fullName ?? '', position: p?.positionTitle ?? '', isAdmin: !!p?.isAdmin, isManager: mgr.data === true || !!p?.isAdmin, isAdminAffairs: aa.data === true || !!p?.isAdmin }
+      const [mgr, aa, ex] = await Promise.all([supabase.rpc('ms_is_manager'), supabase.rpc('ms_is_admin_affairs'), supabase.rpc('ms_is_executive')])
+      return { id: p?.id ?? '', name: p?.fullName ?? '', position: p?.positionTitle ?? '', isAdmin: !!p?.isAdmin, isManager: mgr.data === true || !!p?.isAdmin, isAdminAffairs: aa.data === true || !!p?.isAdmin, isExecutive: ex.data === true }
     },
     async listProjects() {
       return [...(await projects()).values()]

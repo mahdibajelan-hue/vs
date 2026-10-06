@@ -5,6 +5,7 @@ import { useNav } from '../nav'
 import { nextStepFor, STEPS, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, shamsi, missionDays } from '../lib/fa'
 import { Avatar, Card, EmptyState, Pill, StatusPill } from '../components/ui'
+import { DeleteMissionButton } from '../components/DeleteMissionButton'
 import { MISSION_STATUS_LABEL, VISIT_TYPE_LABEL, type Mission, type MissionStatus } from '../types'
 
 const FILTERS: { key: string; label: string; test: (m: Mission) => boolean }[] = [
@@ -96,6 +97,7 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                     </button>
                     <div className="flex shrink-0 items-center gap-3 md:w-64 md:justify-end">
                       {m.qualityScore != null && <Pill tone={m.qualityScore >= 75 ? 'good' : m.qualityScore >= 60 ? 'warn' : 'bad'} title="امتیاز کیفیت گزارش">کیفیت {faNum(Math.round(m.qualityScore))}</Pill>}
+                      <DeleteMissionButton mission={m} compact />
                       {next ? (
                         <button className={`ms-btn ms-btn-sm ${next.tone === 'good' || next.tone === 'accent' ? 'ms-btn-primary' : ''}`} onClick={() => go(next.view)}>
                           {next.label} <ArrowLeft size={13} aria-hidden />
@@ -111,7 +113,7 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
           })}
         </ul>
       )}
-      <p className="ms-muted text-[11px]">{MISSION_STATUS_LABEL.draft} و {MISSION_STATUS_LABEL.returned} فقط برای خود درخواست‌دهنده قابل ویرایش است.</p>
+      <p className="ms-muted text-[11px]">{MISSION_STATUS_LABEL.draft} و {MISSION_STATUS_LABEL.returned} فقط برای خود درخواست‌دهنده قابل ویرایش است. حذف مأموریت (مثلاً درخواست تکراری) فقط برای مجری طرح فعال است.</p>
     </div>
   )
 }

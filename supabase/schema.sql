@@ -15790,3 +15790,6 @@ begin
   return new;
 end;
 $$;
+
+-- Deleting a mission (e.g. a duplicate request) is limited to the «مجری طرح» (executive) role.
+alter policy "ms_missions_delete" on ms_missions using (ms_is_executive());

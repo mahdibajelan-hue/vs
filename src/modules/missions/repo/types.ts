@@ -51,6 +51,8 @@ export interface CurrentUser extends PersonRef {
   isAdmin: boolean
   /** مجری طرح — approves requests and reports. */
   isManager: boolean
+  /** Holds the «مجری طرح» role — the only role that may delete missions (e.g. duplicate requests). Absent in offline demos, where managers count. */
+  isExecutive?: boolean
   /** امور اداری — books flight tickets and approves mission claims. */
   isAdminAffairs: boolean
 }

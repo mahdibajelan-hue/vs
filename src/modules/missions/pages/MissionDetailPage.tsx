@@ -9,6 +9,7 @@ import { Card, Field, Pill, ScoreGauge, SectionHead, StatusPill } from '../compo
 import { FindingCard } from '../components/FindingCard'
 import { EvidencePanel } from '../components/EvidencePanel'
 import { IntegrityPanel } from '../components/IntegrityPanel'
+import { DeleteMissionButton } from '../components/DeleteMissionButton'
 import { EVENT_LABEL, type TicketInfo, OBJECTIVE_STATUS_LABEL, OBJECTIVE_STATUS_TONE, VISIT_TYPE_LABEL, PRIORITY_LABEL } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
 
@@ -20,7 +21,6 @@ export function MissionDetailPage({ id }: { id: string }) {
   const bundle = useMissionStore((s) => s.bundle)
   const openMission = useMissionStore((s) => s.openMission)
   const transition = useMissionStore((s) => s.transition)
-  const deleteMission = useMissionStore((s) => s.deleteMission)
   const [tab, setTab] = useState<Tab>('overview')
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
@@ -90,6 +90,8 @@ export function MissionDetailPage({ id }: { id: string }) {
           {m.qualityScore != null && <ScoreGauge value={m.qualityScore} size={92} label="کیفیت گزارش" />}
         </div>
 
+        <div className="mt-3 flex justify-end"><DeleteMissionButton mission={m} onDeleted={() => go({ kind: 'list' })} /></div>
+
         {idx >= 0 && (
           <div className="ms-steps mt-5" role="list" aria-label="مراحل مأموریت">
             {STEPS.map((s, i) => (
@@ -151,7 +153,6 @@ export function MissionDetailPage({ id }: { id: string }) {
           {(isReq || isMgr) && ['draft', 'pending_approval', 'returned', 'ticketing', 'approved'].includes(m.status) && (
             <div className="flex flex-wrap gap-2">
               <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={() => act('cancel', '')} disabled={busy}>لغو مأموریت</button>
-              {m.status === 'draft' && isReq && <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={async () => { await deleteMission(id); go({ kind: 'list' }) }}>حذف پیش‌نویس</button>}
             </div>
           )}
         </div>
