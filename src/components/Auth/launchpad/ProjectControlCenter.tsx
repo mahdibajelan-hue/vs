@@ -78,7 +78,7 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
         {/* The black showcase box the lamp shines onto: hairline cyan→gold border, drafting-sheet
             corner ticks, and the lamp's light reflected on the "floor" beneath it. */}
         <div className="relative mx-auto w-full max-w-5xl">
-          <div className={`launchpad-frame relative rounded-[1.75rem] sm:rounded-[2.25rem] ${isAuthed ? 'px-3 py-5 sm:px-8 sm:py-7' : 'px-5 py-8 sm:px-10 sm:py-10'}`}>
+          <div className={`launchpad-frame relative rounded-[1.75rem] sm:rounded-[2.25rem] ${isAuthed ? 'is-authed' : ''} ${isAuthed ? 'px-3 py-5 sm:px-8 sm:py-7' : 'px-5 py-8 sm:px-10 sm:py-10'}`}>
             <span className="launchpad-frame-corner is-tr" aria-hidden="true" />
             <span className="launchpad-frame-corner is-tl" aria-hidden="true" />
             <span className="launchpad-frame-corner is-br" aria-hidden="true" />
