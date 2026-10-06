@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { FarinMark } from '../platform'
 import { faNum, shamsi, shamsiLong } from '../lib/fa'
 import { OVERALL_STATUS_LABEL } from '../lib/reportBuilder'
+import { DISCIPLINE_LABEL } from '../lib/discipline'
 import { buildVisuals, KIND_COLOR, SEVERITY_COLOR, SEVERITY_FA, type IssueRow, type OwnedRow } from '../lib/reportVisuals'
 import { Bars, Donut, ProgressCompare, QualityRing, RiskMatrix, SeverityStack } from './ReportCharts'
 import { OBJECTIVE_STATUS_LABEL, VISIT_TYPE_LABEL, type Finding, type Mission, type Objective, type Report, type ReportContent } from '../types'
@@ -61,6 +62,7 @@ export function ReportPaper({
       </header>
 
       <dl className="ms-paper-meta">
+        <div><dt>حوزه کاری</dt><dd>{DISCIPLINE_LABEL[mission.discipline] ?? '—'}</dd></div>
         <div><dt>بازدیدکننده</dt><dd>{mission.requesterName}{mission.requesterPosition ? ` — ${mission.requesterPosition}` : ''}</dd></div>
         <div><dt>مقصد</dt><dd>{mission.destination || '—'}</dd></div>
         <div><dt>تاریخ بازدید</dt><dd>{shamsiLong(mission.startDate)} تا {shamsiLong(mission.endDate)}</dd></div>

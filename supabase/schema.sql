@@ -15469,3 +15469,271 @@ end;
 $$;
 revoke execute on function ms_transition(uuid, text, text, jsonb) from public;
 grant execute on function ms_transition(uuid, text, text, jsonb) to authenticated;
+
+-- =============================================================================
+-- 66. Missions: discipline-aware interviews + integrity safeguards (confidential findings, conflict of
+--     interest, tamper-evident audit)
+-- =============================================================================
+-- discipline : the visitor's field (hse, legal, quality, …) — drives which topics and questions the interview uses.
+-- confidential: a finding only the requester and non-interested managers can read.
+-- ms_is_interested: the visited project's own manager/director (never the requester, never an admin). On a mission
+--     to their project they cannot approve/return/transfer, cannot read confidential findings, and see the
+--     mission only once its report is finally approved — so nobody can lean on a report before it is final.
+-- ms_finding_audit: every insert/delete (and downgrade/un-confidential/approval update) of a finding, with the
+--     actor and the mission status; changes made after the report was first submitted are flagged suspicious.
+
+alter table ms_missions add column if not exists discipline text not null default 'general';
+alter table ms_findings add column if not exists confidential boolean not null default false;
+
+create or replace function ms_is_interested(p_mission_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select not is_admin_user() and exists (
+    select 1 from ms_missions m join master_projects p on p.id = m.master_project_id
+     where m.id = p_mission_id
+       and m.requester_id <> auth.uid()
+       and auth.uid() in (p.project_manager_id, p.project_director_id)
+  );
+$$;
+
+create or replace function ms_can_view(p_mission_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from ms_missions m
+    where m.id = p_mission_id
+      and (m.requester_id = auth.uid() or m.approver_id = auth.uid() or ms_is_manager() or ms_is_admin_affairs())
+      and (not ms_is_interested(m.id) or m.final_approved_at is not null)
+  );
+$$;
+drop policy if exists "ms_missions_select" on ms_missions;
+create policy "ms_missions_select" on ms_missions for select using (ms_can_view(id));
+
+drop policy if exists "ms_findings_select" on ms_findings;
+create policy "ms_findings_select" on ms_findings for select
+  using (ms_can_view(mission_id) and (not confidential or not ms_is_interested(mission_id)));
+
+create table if not exists ms_finding_audit (
+  id bigserial primary key,
+  mission_id uuid not null references ms_missions (id) on delete cascade,
+  finding_id uuid,
+  op text not null check (op in ('insert', 'update', 'delete')),
+  actor_id uuid references profiles (id) default auth.uid(),
+  at timestamptz not null default now(),
+  mission_status text not null default '',
+  before jsonb,
+  after jsonb,
+  suspicious boolean not null default false,
+  reason text not null default ''
+);
+create index if not exists idx_ms_finding_audit_mission on ms_finding_audit (mission_id, at desc);
+alter table ms_finding_audit enable row level security;
+drop policy if exists "ms_finding_audit_select" on ms_finding_audit;
+create policy "ms_finding_audit_select" on ms_finding_audit for select using (ms_is_manager() and not ms_is_interested(mission_id));
+
+create or replace function ms_finding_snapshot(f ms_findings)
+returns jsonb language sql immutable as $$
+  select jsonb_build_object('kind', f.kind, 'title', f.title, 'severity', f.severity, 'approval', f.approval,
+                            'owner', f.owner_text, 'due', f.due_date, 'confidential', f.confidential, 'topic', f.topic_key);
+$$;
+
+create or replace function ms_finding_audit_fn()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_mid uuid;
+  v_status text;
+  v_submitted timestamptz;
+  v_rank_old int;
+  v_rank_new int;
+  v_susp boolean := false;
+  v_reason text := '';
+  v_before jsonb;
+  v_after jsonb;
+begin
+  v_mid := coalesce(new.mission_id, old.mission_id);
+  select status, report_submitted_at into v_status, v_submitted from ms_missions where id = v_mid;
+  if not found then return coalesce(new, old); end if; -- mission itself is being deleted (cascade)
+  if tg_op = 'DELETE' then
+    v_before := ms_finding_snapshot(old);
+    if v_submitted is not null then v_susp := true; v_reason := 'حذف پس از ارسال گزارش'; end if;
+    insert into ms_finding_audit (mission_id, finding_id, op, mission_status, before, suspicious, reason) values (v_mid, old.id, 'delete', coalesce(v_status, ''), v_before, v_susp, v_reason);
+    return old;
+  elsif tg_op = 'INSERT' then
+    insert into ms_finding_audit (mission_id, finding_id, op, mission_status, after) values (v_mid, new.id, 'insert', coalesce(v_status, ''), ms_finding_snapshot(new));
+    return new;
+  end if;
+  -- update: only the changes that can hide or soften something
+  v_rank_old := array_position(array['low', 'medium', 'high', 'critical'], old.severity);
+  v_rank_new := array_position(array['low', 'medium', 'high', 'critical'], new.severity);
+  if v_rank_new < v_rank_old then v_reason := 'کاهش شدت'; end if;
+  if old.kind in ('issue', 'risk') and new.kind not in ('issue', 'risk') then v_reason := 'تغییر نوع به مورد کم‌اهمیت‌تر'; end if;
+  if old.confidential and not new.confidential then v_reason := 'برداشتن برچسب محرمانه'; end if;
+  if old.approval is distinct from new.approval and new.approval = 'rejected' then v_reason := 'ردشدن مورد'; end if;
+  if v_reason = '' then return new; end if;
+  v_susp := v_submitted is not null and v_reason <> 'ردشدن مورد';
+  insert into ms_finding_audit (mission_id, finding_id, op, mission_status, before, after, suspicious, reason)
+  values (v_mid, new.id, 'update', coalesce(v_status, ''), ms_finding_snapshot(old), ms_finding_snapshot(new), v_susp, v_reason);
+  return new;
+end;
+$$;
+drop trigger if exists trg_ms_finding_audit on ms_findings;
+create trigger trg_ms_finding_audit after insert or update or delete on ms_findings for each row execute function ms_finding_audit_fn();
+
+create or replace function ms_transition(p_mission_id uuid, p_action text, p_comment text default '', p_data jsonb default '{}'::jsonb)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  m ms_missions%rowtype;
+  v_new text;
+  v_is_req boolean;
+  v_is_mgr boolean;
+  v_is_aa boolean;
+  v_interested boolean;
+begin
+  select * into m from ms_missions where id = p_mission_id for update;
+  if not found then raise exception 'mission_not_found'; end if;
+  v_is_req := m.requester_id = auth.uid();
+  -- The visited project's own manager/director has no say over reports about that project (see ms_is_interested).
+  v_interested := ms_is_interested(p_mission_id);
+  v_is_mgr := (ms_is_manager() or m.approver_id = auth.uid()) and not v_interested;
+  v_is_aa := ms_is_admin_affairs();
+  if v_interested and not v_is_req then raise exception 'conflict_of_interest'; end if;
+  if not (v_is_req or v_is_mgr or v_is_aa) then raise exception 'forbidden'; end if;
+
+  if p_action = 'submit_request' and v_is_req and m.status in ('draft', 'returned') then
+    if not exists (select 1 from ms_objectives where mission_id = m.id) then raise exception 'objectives_required'; end if;
+    v_new := 'pending_approval';
+  elsif p_action = 'approve_request' and v_is_mgr and m.status = 'pending_approval' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := case when m.needs_ticket then 'ticketing' else 'approved' end;
+  elsif p_action = 'return_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'returned';
+  elsif p_action = 'reject_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'rejected';
+  elsif p_action = 'issue_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'approved';
+  elsif p_action = 'return_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'returned';
+  elsif p_action = 'start_debrief' and v_is_req and m.status = 'approved' then v_new := 'debrief';
+  elsif p_action = 'submit_report' and v_is_req and m.status in ('debrief', 'revision_requested') then
+    if not exists (select 1 from ms_reports where mission_id = m.id) then raise exception 'report_required'; end if;
+    if not exists (select 1 from user_signatures where user_id = auth.uid()) then raise exception 'signature_required'; end if;
+    v_new := 'report_review';
+  elsif p_action = 'return_report' and v_is_mgr and m.status = 'report_review' then v_new := 'revision_requested';
+  elsif p_action = 'approve_report' and v_is_mgr and m.status = 'report_review' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'ready_for_claim';
+  elsif p_action = 'approve_claim' and v_is_aa and m.status = 'ready_for_claim' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'claimed';
+  elsif p_action = 'cancel' and (v_is_req or v_is_mgr) and m.status in ('draft', 'pending_approval', 'returned', 'ticketing', 'approved') then v_new := 'cancelled';
+  else
+    raise exception 'invalid_transition';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_missions set
+    status = v_new,
+    manager_comment = case when p_action in ('approve_request', 'return_request', 'reject_request', 'return_report', 'approve_report') then coalesce(p_comment, '') else manager_comment end,
+    admin_comment = case when p_action in ('issue_ticket', 'return_ticket', 'approve_claim') then coalesce(p_comment, '') else admin_comment end,
+    ticket = case when p_action = 'issue_ticket' then coalesce(p_data, '{}'::jsonb) else ticket end,
+    ticket_issued_at = case when p_action = 'issue_ticket' then now() else ticket_issued_at end,
+    ticket_issued_by = case when p_action = 'issue_ticket' then auth.uid() else ticket_issued_by end,
+    submitted_at = case when p_action = 'submit_request' then now() else submitted_at end,
+    approved_at = case when p_action = 'approve_request' then now() else approved_at end,
+    approver_id = case when p_action = 'approve_request' and approver_id is null then auth.uid() else approver_id end,
+    debrief_started_at = case when p_action = 'start_debrief' then now() else debrief_started_at end,
+    report_submitted_at = case when p_action = 'submit_report' then now() else report_submitted_at end,
+    final_approved_at = case when p_action = 'approve_report' then now() else final_approved_at end,
+    claimed_at = case when p_action = 'approve_claim' then now() else claimed_at end,
+    claim_approved_by = case when p_action = 'approve_claim' then auth.uid() else claim_approved_by end
+  where id = m.id;
+
+  if p_action = 'submit_report' then
+    -- The signature is copied from the preparer's profile at this moment; later profile edits never change a submitted report.
+    update ms_reports set status = 'submitted', submitted_at = now(),
+           signature = jsonb_build_object(
+             'image', (select image from user_signatures where user_id = auth.uid()),
+             'name', coalesce((select full_name from profiles where id = auth.uid()), ''),
+             'position', m.requester_position,
+             'signedAt', now())
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'return_report' then
+    update ms_reports set status = 'returned'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'approve_report' then
+    update ms_reports set status = 'approved'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  end if;
+
+  insert into ms_events (mission_id, actor_id, event, comment, detail)
+  values (m.id, auth.uid(), p_action, coalesce(p_comment, ''), jsonb_build_object('from', m.status, 'to', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return v_new;
+end;
+$$;
+revoke execute on function ms_transition(uuid, text, text, jsonb) from public;
+grant execute on function ms_transition(uuid, text, text, jsonb) to authenticated;
+
+create or replace function ms_transfer_finding(p_finding_id uuid, p_target text, p_params jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  f ms_findings%rowtype;
+  m ms_missions%rowtype;
+  v_proj uuid;
+  v_new uuid;
+  v_label text;
+  v_prob smallint;
+  v_imp smallint;
+  v_cat text;
+  v_prio text;
+begin
+  if not ms_is_manager() then raise exception 'manager_only'; end if;
+  select * into f from ms_findings where id = p_finding_id for update;
+  if not found then raise exception 'finding_not_found'; end if;
+  if ms_is_interested(f.mission_id) then raise exception 'conflict_of_interest'; end if;
+  if f.transferred_id is not null then raise exception 'already_transferred'; end if;
+  select * into m from ms_missions where id = f.mission_id;
+  v_prio := case f.severity when 'critical' then 'critical' when 'high' then 'high' when 'low' then 'low' else 'medium' end;
+
+  if p_target = 'issue' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'issues' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_issue_mapping'; end if;
+    insert into im_issues (project_id, title, description, pursuer_id, priority, deadline_days, status, created_by, source)
+    values (v_proj, f.title,
+            f.description || E'\n\n— منبع: بازدید ' || m.code,
+            coalesce(f.owner_id, nullif(p_params->>'pursuer_id', '')::uuid),
+            v_prio, coalesce(nullif(p_params->>'deadline_days', '')::smallint, 7), 'open', auth.uid(), 'mission_debrief')
+    returning id into v_new;
+    v_label := 'Issue';
+  elsif p_target = 'risk' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_risk_mapping'; end if;
+    v_prob := least(5, greatest(1, coalesce(nullif(p_params->>'probability', '')::smallint,
+                case f.severity when 'critical' then 4 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_imp := least(5, greatest(1, coalesce(nullif(p_params->>'impact', '')::smallint,
+                case f.severity when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_cat := case f.topic_key
+      when 'engineering' then 'technical' when 'procurement' then 'procurement' when 'construction' then 'technical'
+      when 'hse' then 'hse' when 'quality' then 'quality' when 'schedule' then 'schedule' when 'cost' then 'cost'
+      else 'other' end;
+    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by)
+    values (v_proj, '', f.title, f.description || E'\n\n— منبع: بازدید ' || m.code, v_cat, 'threat', f.owner_id, v_prob, v_imp, auth.uid())
+    returning id into v_new;
+    v_label := 'Risk';
+  elsif p_target = 'action' then
+    insert into rasta_actions (master_project_id, title, owner_id, due_date, priority, status, source, created_by)
+    values (m.master_project_id, f.title, f.owner_id, f.due_date, v_prio, 'not_started', 'mission_debrief', auth.uid())
+    returning id into v_new;
+    v_label := 'Action';
+  else
+    raise exception 'invalid_target';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_findings set approval = 'approved', transferred_to = p_target, transferred_id = v_new, transferred_at = now(),
+         manager_note = coalesce(nullif(p_params->>'note', ''), manager_note)
+   where id = f.id;
+  insert into ms_events (mission_id, actor_id, event, detail)
+  values (f.mission_id, auth.uid(), 'transfer_' || p_target, jsonb_build_object('finding_id', f.id, 'target_id', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return jsonb_build_object('target', p_target, 'id', v_new, 'label', v_label);
+end;
+$$;
+revoke execute on function ms_transfer_finding(uuid, text, jsonb) from public;
+grant execute on function ms_transfer_finding(uuid, text, jsonb) to authenticated;

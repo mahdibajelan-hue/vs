@@ -37,6 +37,11 @@ export function liveFindings(findings: Finding[]): Finding[] {
   return findings.filter((f) => f.approval !== 'rejected')
 }
 
+/** What the report text, charts and quality score may use — confidential findings never go into the report body. */
+export function reportFindings(findings: Finding[]): Finding[] {
+  return liveFindings(findings).filter((f) => !f.confidential)
+}
+
 export function progressOf(state: InterviewState | null): { planned: number | null; actual: number | null } {
   const m = state?.topics.progress?.metrics ?? {}
   return { planned: m.planned ?? null, actual: m.actual ?? null }
@@ -69,17 +74,17 @@ function bullet(f: Finding): string {
 }
 
 function listOf(findings: Finding[], kind: FindingKind): Finding[] {
-  return liveFindings(findings).filter((f) => f.kind === kind).sort(bySeverity)
+  return reportFindings(findings).filter((f) => f.kind === kind).sort(bySeverity)
 }
 
 export function countsOf(findings: Finding[]): Record<FindingKind, number> {
   const counts = { issue: 0, risk: 0, action: 0, commitment: 0, decision: 0, progress: 0, observation: 0 } as Record<FindingKind, number>
-  for (const f of liveFindings(findings)) counts[f.kind]++
+  for (const f of reportFindings(findings)) counts[f.kind]++
   return counts
 }
 
 export function overallStatusOf(findings: Finding[], objectives: Objective[], progress: { planned: number | null; actual: number | null }): ReportContent['overallStatus'] {
-  const live = liveFindings(findings).filter((f) => f.kind === 'issue' || f.kind === 'risk')
+  const live = reportFindings(findings).filter((f) => f.kind === 'issue' || f.kind === 'risk')
   const gap = progress.planned != null && progress.actual != null ? progress.planned - progress.actual : 0
   if (live.some((f) => f.severity === 'critical') || gap >= 15) return 'critical'
   if (live.some((f) => f.severity === 'high') || gap >= 5 || objectives.some((o) => o.status === 'not_achieved')) return 'attention'
@@ -179,7 +184,7 @@ export function buildReport(input: ReportInput): ReportContent {
   for (const [key, label] of disciplines) {
     if (!state?.plan.includes(key)) continue
     const notes = meaningfulNotes(state, key)
-    const related = liveFindings(findings).filter((f) => (f.details._area ?? f.topicKey) === key && (f.kind === 'issue' || f.kind === 'risk'))
+    const related = reportFindings(findings).filter((f) => (f.details._area ?? f.topicKey) === key && (f.kind === 'issue' || f.kind === 'risk'))
     const tp = state.topics[key]
     if (tp?.state === 'skipped') discBullets.push(`${label}: در این بازدید بررسی نشد (${tp.closedReason || 'رد شد'}).`)
     else if (notes.length) discBullets.push(`${label}: ${notes.join('؛ ')}`)

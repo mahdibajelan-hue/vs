@@ -1,6 +1,6 @@
 import { DEFAULT_QUESTION_SET } from '../lib/questionSets'
 import { uid, type TurnDraft } from '../lib/interviewEngine'
-import type { Evidence, Finding, Interview, LinkedStatus, Mission, MissionBundle, MissionEvent, Objective, PersonRef, ProjectRef, Report, Turn, WorkflowAction } from '../types'
+import type { Evidence, Finding, FindingAudit, Interview, LinkedStatus, Mission, MissionBundle, MissionEvent, Objective, PersonRef, ProjectRef, Report, Turn, WorkflowAction } from '../types'
 import type { CurrentUser, MissionDraft, MissionRepo, PortfolioData } from './types'
 
 /**
@@ -41,6 +41,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       requesterName: personName(requesterId),
       requesterPosition: d.requesterPosition,
       masterProjectId: d.masterProjectId,
+      discipline: d.discipline,
       projectName: projectName(d.masterProjectId),
       destination: d.destination,
       locationDetail: d.locationDetail,
@@ -72,6 +73,30 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
   }
 
   const signatures = new Map<string, string>()
+  const audit = new Map<string, FindingAudit[]>()
+  const SEV = ['low', 'medium', 'high', 'critical']
+
+  /** Mirrors the database trigger ms_finding_audit_fn: creations, deletions and softening changes are recorded; changes after the first report submission are suspicious. */
+  function logAudit(op: 'insert' | 'update' | 'delete', before: Finding | null, after: Finding | null, actorId: string) {
+    const f = (after ?? before)!
+    const m = missions.get(f.missionId)
+    const submitted = !!m?.reportSubmittedAt
+    const snap = (x: Finding | null) => (x ? { kind: x.kind, title: x.title, severity: x.severity, approval: x.approval, owner: x.ownerText, due: x.dueDate, confidential: x.confidential, topic: x.topicKey } : null)
+    let reason = ''
+    let suspicious = false
+    if (op === 'delete') {
+      if (submitted) { suspicious = true; reason = 'حذف پس از ارسال گزارش' }
+    } else if (op === 'update' && before && after) {
+      if (SEV.indexOf(after.severity) < SEV.indexOf(before.severity)) reason = 'کاهش شدت'
+      if ((before.kind === 'issue' || before.kind === 'risk') && after.kind !== 'issue' && after.kind !== 'risk') reason = 'تغییر نوع به مورد کم‌اهمیت‌تر'
+      if (before.confidential && !after.confidential) reason = 'برداشتن برچسب محرمانه'
+      if (!reason) return
+      suspicious = submitted
+    }
+    const list = audit.get(f.missionId) ?? []
+    list.push({ id: list.length + 1, missionId: f.missionId, findingId: f.id, op, actorName: personName(actorId) || 'سیستم', at: now(), missionStatus: m?.status ?? '', before: snap(before), after: snap(after), suspicious, reason })
+    audit.set(f.missionId, list)
+  }
 
   function build(me: CurrentUser): MemoryRepo {
   const repo: MemoryRepo = {
@@ -109,6 +134,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
         mission: { ...mission },
         objectives: [...objectives.values()].filter((o) => o.missionId === id).sort((a, b) => a.position - b.position),
         findings: [...findings.values()].filter((f) => f.missionId === id),
+        audit: me.isManager ? [...(audit.get(id) ?? [])].reverse() : [],
         evidence: [...evidence.values()].filter((e) => e.missionId === id),
         turns: turns.get(id) ?? [],
         interview: interviews.get(id) ?? null,
@@ -249,6 +275,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     async upsertFindings(missionId, list) {
       for (const f of list) {
         const prev = findings.get(f.id)
+        if (!prev) logAudit('insert', null, f, me.id)
         findings.set(f.id, { ...(prev ?? f), ...f, missionId, approval: prev?.approval ?? f.approval, managerNote: prev?.managerNote ?? f.managerNote, transferredTo: prev?.transferredTo ?? f.transferredTo, transferredId: prev?.transferredId ?? f.transferredId, transferredAt: prev?.transferredAt ?? f.transferredAt })
       }
     },
@@ -256,9 +283,13 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       const f = findings.get(id)
       if (!f) return
       if ((patch.approval !== undefined || patch.managerNote !== undefined) && !me.isManager) throw new Error('این اقدام فقط برای مجری طرح مجاز است.')
-      findings.set(id, { ...f, ...patch } as Finding)
+      const next = { ...f, ...patch } as Finding
+      logAudit('update', f, next, me.id)
+      findings.set(id, next)
     },
     async deleteFinding(id) {
+      const f = findings.get(id)
+      if (f) logAudit('delete', f, null, me.id)
       findings.delete(id)
     },
     async updateObjective(id, patch) {

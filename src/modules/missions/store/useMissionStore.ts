@@ -338,6 +338,7 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
       transferredTo: null,
       transferredId: null,
       transferredAt: null,
+      confidential: false,
       createdAt: new Date().toISOString(),
       ...f,
     }

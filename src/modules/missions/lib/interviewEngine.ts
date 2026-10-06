@@ -5,6 +5,7 @@ import type {
   Mission,
   Objective,
   ObjectiveStatus,
+  PendingLayout,
   PendingQuestion,
   Priority,
   TopicProgress,
@@ -19,8 +20,9 @@ import {
   type Slot,
   type TopicDef,
 } from './questionSets'
-import { analyzeAnswer, classifyObjectiveAnswer, estimateSeverity, similarity, type AnalysisResult, type ExtractedFinding } from './ruleAnalyzer'
+import { analyzeAnswer, classifyObjectiveAnswer, estimateSeverity, findingKey, similarity, type AnalysisResult, type ExtractedFinding } from './ruleAnalyzer'
 import { normalizeFa } from './fa'
+import { DISCIPLINE_LABEL } from './discipline'
 import type { AiProvider } from '../ai/provider'
 import {
   analysisTextOf,
@@ -117,7 +119,9 @@ function contextFor(input: EngineInput, state: InterviewState, findings: Finding
 /** Main questions of a topic with objective-repeating questions expanded. */
 export function expandedQuestions(def: TopicDef, input: EngineInput): (QuestionDef & { objectiveId?: string })[] {
   const out: (QuestionDef & { objectiveId?: string })[] = []
-  for (const q of def.mainQuestions) {
+  for (const base of def.mainQuestions) {
+    // The same question is worded for the visitor's own field (a lawyer is asked about contracts, not about schedule slips).
+    const q = base.byDiscipline?.[input.mission.discipline] ? { ...base, text: base.byDiscipline[input.mission.discipline]! } : base
     if (q.repeatForObjective) {
       for (const o of input.objectives) {
         out.push({ ...q, id: `${q.id}:${o.id}`, objectiveId: o.id, text: q.text.replace('{objective}', o.title).replace('{measure}', o.measure ? ` (معیار: ${o.measure})` : '') })
@@ -192,7 +196,7 @@ export function startInterview(input: EngineInput): StepResult {
       topicKey: '',
       role: 'system',
       kind: 'system',
-      text: `سلام. من دستیار گزارش بازدید هستم. سؤال‌های هر موضوع را یکجا و همراه با یک قالب پاسخ می‌پرسم؛ شما قالب را پر می‌کنید (تایپ یا میکروفون) و اگر اطلاعاتی ناقص ماند، فقط همان را یک بار دیگر می‌پرسم. «${input.projectName}»`,
+      text: `سلام. من دستیار گزارش بازدید هستم. سؤال‌های هر موضوع را یکجا و همراه با یک قالب پاسخ می‌پرسم؛ شما قالب را پر می‌کنید (تایپ یا میکروفون) و اگر اطلاعاتی ناقص ماند، فقط همان را یک بار دیگر می‌پرسم. پرسش‌ها با حوزهٔ کاری شما (${DISCIPLINE_LABEL[input.mission.discipline] ?? 'عمومی'}) هماهنگ است؛ فقط از دید تخصصی خودتان بگویید، لازم نیست درباره بخش‌های دیگر نظر بدهید. بخش «استقلال و شفافیت گزارش» محرمانه است. «${input.projectName}»`,
       inputMode: 'text',
     },
   ]
@@ -224,7 +228,7 @@ function openTopic(input: EngineInput, state: InterviewState, findings: Finding[
 
 /** Asks every applicable question of a topic at once, with the answer template pre-filled. */
 function askBatch(input: EngineInput, state: InterviewState, def: TopicDef, questions: (QuestionDef & { objectiveId?: string })[], mandatory: boolean, turns: TurnDraft[], ctx: MissionContext): InterviewState {
-  const layout = layoutFor(def, questions, input.objectives)
+  const layout = layoutFor(def, questions, input.objectives, input.mission.discipline)
   const template = renderTemplate(layout)
   const text = batchQuestionText(def, mandatory, questions.map((x) => fillTemplate(x.text, ctx)), layout)
   const quick = def.quick ?? questions.find((x) => x.quick)?.quick
@@ -300,7 +304,7 @@ function recomputeCoverage(input: EngineInput, state: InterviewState, findings: 
 
 // ------------------------------------------------------------------------------------- applying analysis
 
-const DISCIPLINES = ['engineering', 'procurement', 'construction', 'hse', 'quality']
+const DISCIPLINES = ['engineering', 'procurement', 'construction', 'hse', 'quality', 'legal', 'finance', 'hr_admin']
 
 /** The engineering discipline a finding is really about, from the topics' own vocabularies — used to group
  * the report by discipline even when it was mentioned under a general topic (progress, risks...). */
@@ -355,6 +359,7 @@ function applyExtracted(input: EngineInput, found: ExtractedFinding[], findings:
       transferredTo: null,
       transferredId: null,
       transferredAt: null,
+      confidential: !!input.set.topics.find((t) => t.key === e.topicKey)?.confidential,
       createdAt: now,
     })
   }
@@ -469,14 +474,47 @@ function askGap(input: EngineInput, state: InterviewState, findings: Finding[], 
   return { ...state, pending: { id: `gap:${key}:${round}`, topicKey: key, kind: 'gap', text, template, layout: { fields: [], gap }, quick: ['نمی‌دانم'] }, asked: state.asked + 1 }
 }
 
+/**
+ * A confidential topic (pressure or limits on reporting). What the visitor writes here must reach only the project
+ * manager's superiors, so it is kept out of everything the visited project's own manager could ever read: the answer
+ * is never stored as a conversation turn or note, never sent to an external AI, and never enters the report text.
+ * It becomes confidential findings — which the database hides from that manager.
+ */
+function submitConfidential(input: EngineInput, state: InterviewState, findingsIn: Finding[], answerText: string, inputMode: 'text' | 'voice', layout: PendingLayout): StepResult {
+  const key = state.pending!.topicKey
+  const def = topicDef(input.set, key)
+  const now = new Date().toISOString()
+  const parsed = parseAnswer(answerText, layout)
+  const given: { label: string; value: string }[] = []
+  if (parsed.structured) {
+    for (const f of layout.fields) {
+      const v = (parsed.fields[f.label] ?? '').trim()
+      if (!isBlank(v) && !isNothingValue(v) && !isUnknownValue(v)) given.push({ label: f.label, value: v })
+    }
+  } else if (!isBlank(answerText) && !isNothingValue(answerText)) given.push({ label: 'گزارش محرمانه', value: answerText.trim() })
+  const extracted: ExtractedFinding[] = given.map((g) => {
+    const title = g.value.replace(/\s+/g, ' ').slice(0, 120)
+    return { key: findingKey('observation', key, title), kind: 'observation', topicKey: key, title, description: `${g.label}: ${g.value}`, details: {}, severity: 'high', ownerText: '', dueDate: null, confidence: 1 }
+  })
+  const findings = applyExtracted(input, extracted, findingsIn, input.mission.id, now)
+  const turns: TurnDraft[] = [{ topicKey: key, role: 'user', kind: 'answer', text: '🔒 پاسخ محرمانه ثبت شد (در گفتگو و گزارش نمایش داده نمی‌شود)', inputMode, meta: { confidential: true } }]
+  state.topics[key] = { ...state.topics[key], notes: [], metrics: {} }
+  const reason = given.length ? 'ثبت شد و فقط برای مجری طرح و مدیریت ارشد نمایان است' : 'موردی گزارش نشد'
+  state.topics[key] = { ...state.topics[key], state: 'complete', coverage: 1, closedReason: reason }
+  turns.push({ topicKey: key, role: 'system', kind: 'system', text: `✓ موضوع «${def.title}» تکمیل شد — ${reason}.`, inputMode: 'text', meta: { closed: key } })
+  const closed = advance(input, { ...state, pending: null }, findings, turns)
+  return { state: closed, findings, turns, objectiveUpdates: [], done: closed.current === null, analysis: null, aiUsed: false }
+}
+
 async function submitBatch(input: EngineInput, stateIn: InterviewState, findingsIn: Finding[], answerText: string, inputMode: 'text' | 'voice'): Promise<StepResult> {
   const pending = stateIn.pending!
   const layout = pending.layout!
   const key = pending.topicKey
   const def = topicDef(input.set, key)
+  const state: InterviewState = { ...stateIn, topics: { ...stateIn.topics } }
+  if (def.confidential) return submitConfidential(input, state, [...findingsIn], answerText, inputMode, layout)
   const turns: TurnDraft[] = [{ topicKey: key, role: 'user', kind: 'answer', text: answerText.trim(), inputMode }]
   const now = new Date().toISOString()
-  const state: InterviewState = { ...stateIn, topics: { ...stateIn.topics } }
   let findings = [...findingsIn]
   const objectiveUpdates: StepResult['objectiveUpdates'] = []
 

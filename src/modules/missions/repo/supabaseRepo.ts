@@ -29,6 +29,7 @@ function fail(error: { message: string } | null | undefined, fallback = 'عمل�
     invalid_transition: 'این اقدام در وضعیت فعلی مأموریت مجاز نیست.',
     forbidden: 'دسترسی لازم برای این اقدام را ندارید.',
     manager_only: 'این اقدام فقط برای مجری طرح مجاز است.',
+    conflict_of_interest: 'شما مدیر یا مدیرعامل همین پروژه هستید؛ برای جلوگیری از تعارض منافع، تصمیم‌گیری درباره گزارش بازدید این پروژه برعهده شما نیست.',
     signature_required: 'برای ارسال گزارش ابتدا امضای نمونه خود را ثبت کنید.',
     cannot_approve_own: 'تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.',
     no_issue_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت Issue متصل نشده است.',
@@ -48,6 +49,7 @@ function toMission(r: Row, people: Map<string, PersonRef>, projects: Map<string,
     requesterName: people.get(r.requester_id)?.name ?? '—',
     requesterPosition: r.requester_position ?? '',
     masterProjectId: r.master_project_id,
+    discipline: r.discipline ?? 'general',
     projectName: projects.get(r.master_project_id)?.name ?? '—',
     destination: r.destination ?? '',
     locationDetail: r.location_detail ?? '',
@@ -110,6 +112,7 @@ const toFinding = (r: Row): Finding => ({
   transferredTo: r.transferred_to,
   transferredId: r.transferred_id,
   transferredAt: r.transferred_at,
+  confidential: !!r.confidential,
   createdAt: r.created_at,
 })
 
@@ -173,6 +176,7 @@ function findingRow(f: Finding): Row {
     objective_id: f.objectiveId,
     confidence: f.confidence,
     user_confirmed: f.userConfirmed,
+    confidential: f.confidential,
   }
 }
 
@@ -200,6 +204,7 @@ export function createSupabaseRepo(): MissionRepo {
   const missionPatch = (d: Partial<MissionDraft>): Row => {
     const out: Row = {}
     if (d.masterProjectId !== undefined) out.master_project_id = d.masterProjectId
+    if (d.discipline !== undefined) out.discipline = d.discipline
     if (d.requesterPosition !== undefined) out.requester_position = d.requesterPosition
     if (d.destination !== undefined) out.destination = d.destination
     if (d.locationDetail !== undefined) out.location_detail = d.locationDetail
@@ -279,7 +284,7 @@ export function createSupabaseRepo(): MissionRepo {
 
     async loadBundle(id): Promise<MissionBundle> {
       const [pp, pr] = await Promise.all([people(), projects()])
-      const [m, o, f, e, t, iv, rp, ev] = await Promise.all([
+      const [m, o, f, e, t, iv, rp, ev, au] = await Promise.all([
         supabase.from('ms_missions').select('*').eq('id', id).single(),
         supabase.from('ms_objectives').select('*').eq('mission_id', id).order('position'),
         supabase.from('ms_findings').select('*').eq('mission_id', id).order('created_at'),
@@ -288,6 +293,7 @@ export function createSupabaseRepo(): MissionRepo {
         supabase.from('ms_interviews').select('*').eq('mission_id', id).maybeSingle(),
         supabase.from('ms_reports').select('*').eq('mission_id', id).order('version', { ascending: false }).limit(1),
         supabase.from('ms_events').select('*').eq('mission_id', id).order('created_at'),
+        supabase.from('ms_finding_audit').select('*').eq('mission_id', id).order('at', { ascending: false }).limit(200),
       ])
       if (m.error) fail(m.error)
       const events: MissionEvent[] = ((ev.data ?? []) as Row[]).map((x) => ({ id: x.id, missionId: x.mission_id, actorId: x.actor_id, actorName: x.actor_id ? pp.get(x.actor_id)?.name ?? '—' : 'سیستم', event: x.event, comment: x.comment ?? '', detail: x.detail ?? {}, createdAt: x.created_at }))
@@ -300,6 +306,7 @@ export function createSupabaseRepo(): MissionRepo {
         interview: iv.data ? toInterview(iv.data as Row) : null,
         report: rp.data && (rp.data as Row[]).length ? toReport((rp.data as Row[])[0]) : null,
         events,
+        audit: ((au.data ?? []) as Row[]).map((x) => ({ id: x.id, missionId: x.mission_id, findingId: x.finding_id, op: x.op, actorName: x.actor_id ? pp.get(x.actor_id)?.name ?? '—' : 'سیستم', at: x.at, missionStatus: x.mission_status ?? '', before: x.before ?? null, after: x.after ?? null, suspicious: !!x.suspicious, reason: x.reason ?? '' })),
         linked: await this.linkedStatus([id]),
       }
     },
@@ -375,6 +382,7 @@ export function createSupabaseRepo(): MissionRepo {
       if (patch.kind !== undefined) row.kind = patch.kind
       if (patch.approval !== undefined) row.approval = patch.approval
       if (patch.managerNote !== undefined) row.manager_note = patch.managerNote
+      if (patch.confidential !== undefined) row.confidential = patch.confidential
       const { error } = await supabase.from('ms_findings').update(row).eq('id', id)
       if (error) fail(error)
     },

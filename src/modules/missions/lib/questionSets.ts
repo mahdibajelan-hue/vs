@@ -1,4 +1,4 @@
-import type { FindingKind, Mission, Objective, TemplateEntries, TemplateField, VisitType } from '../types'
+import type { FindingKind, Mission, MissionDiscipline, Objective, TemplateEntries, TemplateField, VisitType } from '../types'
 import { normalizeFa } from './fa'
 
 /**
@@ -21,6 +21,8 @@ export interface Cond {
   not?: Cond
   projectTypeIn?: string[]
   visitTypeIn?: VisitType[]
+  /** true when the visitor's discipline (HSE, legal, quality…) is one of these */
+  disciplineIn?: MissionDiscipline[]
   /** true when at least one mission objective is mapped to one of these topic keys */
   objectiveTopicIn?: string[]
   /** true when the mission's own free text (objectives, topics of interest, expected output) mentions any of these words */
@@ -37,6 +39,8 @@ export interface QuestionDef {
   text: string
   /** Short label used in the generated answer template when the topic defines none. */
   label?: string
+  /** Alternative wording for visitors of a given discipline (so a legal or HSE visitor is asked in their own terms). */
+  byDiscipline?: Partial<Record<MissionDiscipline, string>>
   when?: Cond
   /** Shown under the question as a gentle prompt of what a good answer contains. */
   hint?: string
@@ -53,6 +57,12 @@ export interface TopicDef {
   order: number
   /** Core topics are always asked; others only when `relevantWhen` holds. */
   core?: boolean
+  /** Never planned automatically for visitors of these disciplines (they can still add it by hand) — e.g. site progress for a legal visitor. */
+  excludeFor?: MissionDiscipline[]
+  /** The professional field this topic belongs to: a visitor from another specialist field is asked about it only when one of their objectives names it. */
+  field?: MissionDiscipline
+  /** Sensitive topic: its findings are confidential, it is left out of the report text and never sent to an external AI. */
+  confidential?: boolean
   relevantWhen?: Cond
   /** A topic is mandatory (cannot be skipped without a reason) when this holds. */
   mandatoryWhen?: Cond
@@ -123,6 +133,7 @@ export function evalCond(c: Cond | undefined, ctx: MissionContext): boolean {
   if (c.not && evalCond(c.not, ctx)) return false
   if (c.projectTypeIn && !c.projectTypeIn.includes(ctx.projectType)) return false
   if (c.visitTypeIn && !c.visitTypeIn.includes(ctx.mission.visitType)) return false
+  if (c.disciplineIn && !c.disciplineIn.includes(ctx.mission.discipline)) return false
   if (c.objectiveTopicIn && !ctx.objectives.some((o) => c.objectiveTopicIn!.includes(o.topicKey))) return false
   if (c.missionTextHas) {
     const t = missionText(ctx)
@@ -153,6 +164,7 @@ export function fillTemplate(text: string, ctx: MissionContext, extra: Record<st
 // ---------------------------------------------------------------------------------------- default set
 
 const VT = (...v: VisitType[]): Cond => ({ visitTypeIn: v })
+const DS = (...d: MissionDiscipline[]): Cond => ({ disciplineIn: d })
 
 export const DEFAULT_QUESTION_SET: QuestionSet = {
   key: 'epc-site-visit',
@@ -208,6 +220,7 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'progress',
+      excludeFor: ['hse', 'legal', 'finance', 'hr_admin'],
       template: [
         { label: 'پیشرفت واقعی (درصد)', metric: 'actual' },
         { label: 'پیشرفت برنامه‌ای در همین زمان (درصد)', metric: 'planned' },
@@ -240,6 +253,8 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'engineering',
+      field: 'engineering',
+      excludeFor: ['legal', 'finance', 'hr_admin'],
       template: [
         { label: 'نقشه یا مدرک منتظر تأیید، اصلاح یا تکمیل' },
         { label: 'تغییر طراحی یا ابهام فنی مؤثر بر خرید یا اجرا' },
@@ -251,6 +266,7 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
       relevantWhen: {
         any: [
           VT('engineering'),
+          DS('engineering'),
           { objectiveTopicIn: ['engineering'] },
           { missionTextHas: ['مهندسی', 'نقشه', 'طراحی', 'دیتاشیت', 'Datasheet', 'P&ID', 'مدارک فنی', 'تایید مدارک'] },
           { all: [VT('progress_review', 'coordination_meeting'), { projectTypeIn: ['EPC', 'EPCF'] }] },
@@ -275,6 +291,8 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'procurement',
+      field: 'procurement',
+      excludeFor: ['legal', 'hr_admin'],
       template: [
         { label: 'اقلام عقب‌تر از برنامه یا دارای ریسک تأخیر' },
         { label: 'سازنده یا تأمین‌کننده و وضعیت سفارش' },
@@ -287,6 +305,7 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
       relevantWhen: {
         any: [
           VT('procurement_expediting', 'progress_review'),
+          DS('procurement'),
           { objectiveTopicIn: ['procurement'] },
           { missionTextHas: ['خرید', 'تامین', 'شیر', 'لوله', 'تجهیزات', 'سفارش', 'حمل', 'گمرک', 'تامین کننده', 'سازنده', 'Expediting', 'PO'] },
         ],
@@ -310,6 +329,8 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'construction',
+      field: 'general',
+      excludeFor: ['legal', 'finance', 'hr_admin', 'procurement', 'engineering'],
       template: [
         { label: 'وضعیت اجرا در کارگاه و منابع (نیرو، ماشین‌آلات، مصالح)' },
         { label: 'مانع اجرایی (دسترسی، مجوز، هوا، پیمانکار جزء)' },
@@ -344,16 +365,20 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
     },
     {
       key: 'hse',
+      field: 'hse',
       template: [
         { label: 'حادثه یا شبه‌حادثه' },
         { label: 'مورد عدم‌رعایت ایمنی یا محیط‌زیست' },
+        { label: 'مجوزهای کار، ممیزی‌ها و اقدام‌های اصلاحی باز', forDiscipline: ['hse'] },
+        { label: 'آمادگی اضطراری و آموزش‌های ایمنی', forDiscipline: ['hse'] },
+        { label: 'روند آمار حوادث و علل ریشه‌ای', forDiscipline: ['hse'] },
       ],
       title: 'ایمنی، بهداشت و محیط‌زیست (HSE)',
       icon: 'ShieldCheck',
       description: 'حوادث، شبه‌حادثه‌ها، رعایت الزامات و ریسک‌های ایمنی',
       order: 60,
       core: true,
-      mandatoryWhen: { any: [VT('hse_audit', 'construction_supervision', 'commissioning'), { objectiveTopicIn: ['hse'] }] },
+      mandatoryWhen: { any: [VT('hse_audit', 'construction_supervision', 'commissioning'), DS('hse'), { objectiveTopicIn: ['hse'] }] },
       lexicon: ['ایمنی', 'hse', 'حادثه', 'شبه حادثه', 'ppe', 'مجوز کار', 'محیط زیست', 'آسیب', 'تجهیز ایمنی', 'ریزش', 'سقوط', 'نشتی', 'آتش', 'پرتو'],
       defaultKind: 'issue',
       maxFollowUps: 4,
@@ -364,13 +389,32 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
           hint: 'اگر موردی نبود هم همین را بنویسید («موردی مشاهده نشد»).',
           quick: ['موردی مشاهده نشد', 'عدم‌رعایت جزئی بود', 'مورد جدی مشاهده شد'],
         },
+        {
+          id: 'hse-2',
+          text: 'وضعیت مجوزهای کار، ممیزی‌های ایمنی و اقدام‌های اصلاحی باز چگونه است؟ مورد معوق یا تکرارشونده‌ای هست؟',
+          when: DS('hse'),
+        },
+        {
+          id: 'hse-3',
+          text: 'آمادگی اضطراری (مانور، تجهیزات اطفا و کمک‌های اولیه، مسیرهای تخلیه) و آموزش‌های ایمنی کافی بود؟',
+          when: DS('hse'),
+        },
+        {
+          id: 'hse-4',
+          text: 'آمار حوادث و شبه‌حادثه‌ها نسبت به دوره قبل چه روندی دارد و علل ریشه‌ای آن‌ها بررسی شده است؟',
+          when: DS('hse'),
+        },
       ],
     },
     {
       key: 'quality',
+      field: 'quality',
+      excludeFor: ['legal', 'finance', 'hr_admin'],
       template: [
         { label: 'عدم‌انطباق (NCR) یا رد بازرسی' },
-        { label: 'وضعیت رفع نقص‌ها' , optional: true },
+        { label: 'وضعیت رفع نقص‌ها', optional: true },
+        { label: 'اجرای بازرسی‌ها مطابق ITP و مدارک کیفی ناقص', forDiscipline: ['quality'] },
+        { label: 'کیفیت مصالح و تجهیزات ورودی', forDiscipline: ['quality'] },
       ],
       title: 'کیفیت',
       icon: 'BadgeCheck',
@@ -379,11 +423,12 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
       relevantWhen: {
         any: [
           VT('quality_audit', 'construction_supervision', 'commissioning', 'progress_review'),
+          DS('quality'),
           { objectiveTopicIn: ['quality'] },
           { missionTextHas: ['کیفیت', 'NCR', 'بازرسی', 'جوش', 'تست', 'ITP', 'عدم انطباق'] },
         ],
       },
-      mandatoryWhen: { any: [VT('quality_audit'), { objectiveTopicIn: ['quality'] }] },
+      mandatoryWhen: { any: [VT('quality_audit'), DS('quality'), { objectiveTopicIn: ['quality'] }] },
       lexicon: ['کیفیت', 'ncr', 'عدم انطباق', 'بازرسی', 'itp', 'تست', 'جوش', 'رادیوگرافی', 'نقص', 'رد شد', 'تایید کیفی', 'مشخصات فنی'],
       defaultKind: 'issue',
       maxFollowUps: 4,
@@ -392,6 +437,16 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
           id: 'qual-1',
           text: 'وضعیت کیفیت چطور است؟ عدم‌انطباق (NCR)، رد بازرسی یا نقص تکرارشونده‌ای دیدید؟',
           hint: 'تعداد/نوع NCR، فعالیت مرتبط، وضعیت رفع نقص.',
+        },
+        {
+          id: 'qual-2',
+          text: 'آیا بازرسی‌ها مطابق ITP و نقاط توقف/شاهد (Hold/Witness) انجام می‌شود؟ مدرک یا گواهی کیفی ناقصی هست؟',
+          when: DS('quality'),
+        },
+        {
+          id: 'qual-3',
+          text: 'کیفیت مصالح و تجهیزات ورودی (گواهی مواد، بازرسی کارخانه، آزمون‌ها) چگونه است؟',
+          when: DS('quality'),
         },
       ],
     },
@@ -413,6 +468,15 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
         {
           id: 'ir-1',
           text: 'مانع یا مشکل مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+          byDiscipline: {
+            hse: 'در حوزه ایمنی و محیط‌زیست، مشکل یا کمبود مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            legal: 'در حوزه قرارداد و حقوقی، مشکل، ابهام یا اختلاف مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            quality: 'در حوزه کیفیت، مشکل یا ضعف مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            finance: 'در حوزه مالی و هزینه، مشکل یا انحراف مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            engineering: 'در حوزه مهندسی و طراحی، مشکل یا ابهام مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            procurement: 'در حوزه خرید و تأمین، مشکل یا ریسک مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+            hr_admin: 'در حوزه نیروی انسانی و پشتیبانی، مشکل یا کمبود مهم دیگری دیدید که در گزارش‌های رسمی پروژه منعکس نشده است؟',
+          },
           quick: ['مورد دیگری نبود'],
         },
         {
@@ -420,6 +484,81 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
           text: 'از این بازدید، چه ریسک یا نگرانی تازه‌ای برای ادامه پروژه (زمان، هزینه، کیفیت، قرارداد) به ذهنتان رسید؟',
           quick: ['ریسک جدیدی ندیدم'],
         },
+      ],
+    },
+    {
+      key: 'legal',
+      field: 'legal',
+      title: 'حقوقی و قراردادی',
+      icon: 'Handshake',
+      description: 'قرارداد و الحاقیه‌ها، ادعاها و اختلاف‌ها، ضمانت‌نامه‌ها و تطبیق با قوانین',
+      order: 85,
+      relevantWhen: { any: [DS('legal', 'finance', 'procurement'), VT('client_meeting'), { missionTextHas: ['قرارداد', 'الحاقیه', 'ادعا', 'Claim', 'تمدید', 'ضمانت', 'خسارت', 'حقوقی'] }] },
+      mandatoryWhen: DS('legal'),
+      lexicon: ['قرارداد', 'الحاقیه', 'ادعا', 'claim', 'اختلاف', 'دعوا', 'ضمانت', 'بیمه', 'خسارت', 'تمدید', 'تغییر دامنه', 'variation', 'مکاتبه', 'مجوز', 'قانون', 'مقررات', 'مالیات', 'جریمه', 'فسخ'],
+      defaultKind: 'issue',
+      maxFollowUps: 4,
+      template: [
+        { label: 'وضعیت قرارداد، الحاقیه‌ها و تغییر دامنه کار (Variation)' },
+        { label: 'ادعا، اختلاف یا دعوا (Claim / Dispute) مطرح یا در دست آماده‌سازی' },
+        { label: 'وضعیت ضمانت‌نامه‌ها، بیمه‌نامه‌ها و مجوزهای قانونی (تاریخ انقضا یا نقص)' },
+        { label: 'رخداد یا تأخیر مبنای تمدید مدت یا خسارت و مکاتبات رسمی انجام‌شده' },
+        { label: 'عدم‌انطباق با قوانین، مقررات یا تعهدات قراردادی', optional: true },
+      ],
+      mainQuestions: [
+        { id: 'leg-1', text: 'وضعیت قرارداد و الحاقیه‌ها چگونه است؟ آیا تغییر دامنه کار (Variation)، الحاقیه یا موضوعی منتظر امضا یا تأیید است؟' },
+        { id: 'leg-2', text: 'آیا ادعا، اختلاف یا دعوایی (Claim / Dispute) از سوی پیمانکار، سازنده یا کارفرما مطرح یا در حال آماده‌سازی است؟' },
+        { id: 'leg-3', text: 'وضعیت ضمانت‌نامه‌ها، بیمه‌نامه‌ها و مجوزهای قانونی چیست؟ موعد انقضا یا نقصی وجود دارد؟' },
+        { id: 'leg-4', text: 'آیا رخداد یا تأخیری هست که مبنای تمدید مدت یا خسارت باشد؟ مکاتبات رسمی لازم انجام شده است؟' },
+        { id: 'leg-5', text: 'آیا مورد عدم‌انطباق با قوانین، مقررات یا تعهدات قراردادی (مثلاً بیمه کارگران، مالیات، الزامات بومی‌سازی) دیدید؟', quick: ['موردی ندیدم'] },
+      ],
+    },
+    {
+      key: 'finance',
+      field: 'finance',
+      title: 'مالی و کنترل هزینه',
+      icon: 'Banknote',
+      description: 'صورت‌وضعیت‌ها، پرداخت‌ها، جریان نقدی و انحراف هزینه',
+      order: 86,
+      relevantWhen: { any: [DS('finance', 'legal', 'procurement'), VT('client_meeting'), { missionTextHas: ['صورت وضعیت', 'پرداخت', 'هزینه', 'بودجه', 'جریان نقدی', 'مطالبات'] }] },
+      mandatoryWhen: DS('finance'),
+      lexicon: ['صورت وضعیت', 'پرداخت', 'معوق', 'هزینه', 'بودجه', 'جریان نقدی', 'اعتبار', 'نقدینگی', 'مطالبات', 'افزایش قیمت', 'نوسان', 'کسورات', 'پیش پرداخت', 'eac', 'سربار'],
+      defaultKind: 'issue',
+      maxFollowUps: 4,
+      template: [
+        { label: 'وضعیت صورت‌وضعیت‌ها و پرداخت‌ها (مبلغ و مدت معوقات)' },
+        { label: 'جریان نقدی، تأمین مالی یا اعتبار اسنادی' },
+        { label: 'برآورد هزینه تا پایان (EAC) و افزایش هزینه یا نوسان قیمت' },
+        { label: 'تغییرات و کارهای اضافه دارای اثر مالی', optional: true },
+      ],
+      mainQuestions: [
+        { id: 'fin-1', text: 'وضعیت صورت‌وضعیت‌ها و پرداخت‌ها چگونه است؟ پرداخت معوق، کسورات یا اختلاف مبلغی هست؟' },
+        { id: 'fin-2', text: 'جریان نقدی، تأمین مالی یا اعتبار اسنادی پروژه مشکلی دارد؟' },
+        { id: 'fin-3', text: 'برآورد هزینه تا پایان پروژه (EAC) نسبت به بودجه چه وضعی دارد؟ افزایش قیمت یا نوسان ارز اثری داشته است؟' },
+        { id: 'fin-4', text: 'تغییر یا کار اضافه‌ای با اثر مالی در جریان است که هنوز تأیید یا ثبت نشده باشد؟', quick: ['موردی نیست'] },
+      ],
+    },
+    {
+      key: 'hr_admin',
+      field: 'hr_admin',
+      title: 'نیروی انسانی و پشتیبانی',
+      icon: 'Users',
+      description: 'نیروی کلیدی، اسکان و ایاب‌ذهاب، پیمانکاران جزء و امور اداری',
+      order: 87,
+      relevantWhen: { any: [DS('hr_admin'), { missionTextHas: ['نیروی انسانی', 'اسکان', 'پرسنل', 'ایاب', 'اداری', 'پشتیبانی'] }] },
+      mandatoryWhen: DS('hr_admin'),
+      lexicon: ['نیرو', 'پرسنل', 'اسکان', 'ایاب', 'غذا', 'رضایت', 'غیبت', 'ترک کار', 'حقوق', 'دستمزد', 'پیمانکار جزء', 'بیمه', 'مرخصی', 'پشتیبانی', 'امور اداری'],
+      defaultKind: 'issue',
+      maxFollowUps: 4,
+      template: [
+        { label: 'وضعیت نیروی کلیدی و تعداد نیرو (کمبود، ترک کار، غیبت)' },
+        { label: 'اسکان، تغذیه، ایاب‌ذهاب و رفاه کارکنان' },
+        { label: 'پرداخت حقوق و دستمزد و وضعیت پیمانکاران جزء', optional: true },
+      ],
+      mainQuestions: [
+        { id: 'hr-1', text: 'وضعیت نیروی انسانی کلیدی و تعداد نیرو چگونه است؟ کمبود، ترک کار یا غیبت مهمی هست؟' },
+        { id: 'hr-2', text: 'اسکان، تغذیه، ایاب‌ذهاب و رفاه کارکنان مشکلی دارد؟' },
+        { id: 'hr-3', text: 'پرداخت‌ها و وضعیت پیمانکاران جزء از نظر نیروی انسانی (حقوق، بیمه، مجوز) چگونه است؟', quick: ['موردی نیست'] },
       ],
     },
     {
@@ -495,6 +634,30 @@ export const DEFAULT_QUESTION_SET: QuestionSet = {
       ],
     },
     {
+      key: 'integrity',
+      title: 'استقلال و شفافیت گزارش (محرمانه)',
+      icon: 'ShieldCheck',
+      description: 'فشار یا محدودیت در گزارش‌دهی — فقط برای مجری طرح و مدیریت ارشد',
+      order: 115,
+      core: true,
+      confidential: true,
+      noFindings: true,
+      lexicon: ['فشار', 'محدودیت', 'نگفتن', 'پنهان', 'حذف', 'تلطیف', 'تهدید', 'نگرانی'],
+      defaultKind: 'observation',
+      maxFollowUps: 0,
+      quick: ['موردی نبود'],
+      template: [
+        { label: 'توصیه یا فشار برای گزارش‌نکردن، تلطیف یا حذف موضوعی', optional: true },
+        { label: 'محدودیت دسترسی به محل، مدارک یا افراد لازم', optional: true },
+        { label: 'موضوعی که می‌خواستید گزارش کنید ولی از پیامدش نگرانید', optional: true },
+      ],
+      mainQuestions: [
+        { id: 'int-1', text: 'آیا در این بازدید به شما توصیه یا فشاری برای گزارش‌نکردن، تلطیف یا حذف موضوعی شد؟ (چه کسی و درباره چه چیزی)' },
+        { id: 'int-2', text: 'آیا دسترسی شما به محل، مدارک یا افراد لازم محدود شد؟' },
+        { id: 'int-3', text: 'آیا موضوعی هست که می‌خواستید گزارش کنید ولی از پیامد آن نگرانید؟ پاسخ‌های این بخش محرمانه است: فقط برای مجری طرح و مدیریت ارشد نمایش داده می‌شود و هرگز در متن گزارش، نزد مدیر همین پروژه، یا نزد هوش مصنوعی خارجی نمی‌رود.', quick: ['موردی نبود'] },
+      ],
+    },
+    {
       key: 'evidence',
       template: [{ label: 'عکس یا مستند بارگذاری‌شده (بنویسید «ثبت شد» یا «ندارم»)' }],
       noFindings: true,
@@ -523,6 +686,9 @@ export function planTopics(set: QuestionSet, ctx: MissionContext): { plan: strin
   const plan: string[] = []
   const mandatory: string[] = []
   for (const t of topics) {
+    if (t.excludeFor?.includes(ctx.mission.discipline)) continue
+    const d = ctx.mission.discipline
+    if (t.field && d !== 'general' && d !== 'planning' && t.field !== d && !evalCond({ objectiveTopicIn: [t.key] }, ctx)) continue
     const relevant = t.core || evalCond(t.relevantWhen, ctx)
     if (!relevant) continue
     plan.push(t.key)
@@ -539,6 +705,8 @@ export const TOPIC_KEYS_FOR_OBJECTIVES: { key: string; label: string }[] = [
   { key: 'construction', label: 'ساخت و اجرا' },
   { key: 'hse', label: 'HSE' },
   { key: 'quality', label: 'کیفیت' },
+  { key: 'legal', label: 'حقوقی و قراردادی' },
+  { key: 'finance', label: 'مالی و هزینه' },
   { key: 'decisions', label: 'تصمیم و توافق' },
 ]
 

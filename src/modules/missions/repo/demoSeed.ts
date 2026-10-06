@@ -5,7 +5,7 @@ import { scoreReport } from '../lib/qualityScore'
 import { SLOT_LABEL } from '../lib/batch'
 import { extractMetrics } from '../lib/ruleAnalyzer'
 import { addDaysIso, shamsi as shamsiOf, todayIso } from '../lib/fa'
-import type { Finding, InterviewState, Mission, Objective, PendingQuestion, PersonRef, ProjectRef, VisitType } from '../types'
+import type { Finding, InterviewState, MissionDiscipline, Mission, Objective, PendingQuestion, PersonRef, ProjectRef, VisitType } from '../types'
 import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft } from './types'
 
 /**
@@ -17,6 +17,7 @@ import type { CurrentUser, MissionDraft, MissionRepo, ObjectiveDraft } from './t
 type End = 'draft' | 'pending' | 'ticketing' | 'approved' | 'debrief' | 'review' | 'returned' | 'ready' | 'claimed'
 
 interface Scenario {
+  discipline?: MissionDiscipline
   visitType: VisitType
   destination: string
   visitees: { name: string; org: string; role: string }[]
@@ -164,6 +165,7 @@ const SCENARIOS: Scenario[] = [
     answers: {}, objectiveAnswers: [],
   },
   {
+    discipline: 'quality',
     visitType: 'quality_audit',
     destination: 'کارخانه پوشش لوله — بندرعباس',
     visitees: [{ name: 'مهندس شریفی', org: 'پیمانکار پوشش', role: 'مدیر کنترل کیفیت' }],
@@ -201,6 +203,7 @@ const SCENARIOS: Scenario[] = [
     managerNote: 'گزارش بسیار کلی است: درصد پیشرفت، موانع مشخص و مسئول هر اقدام را بنویسید و حداقل یک عکس از کارگاه پیوست کنید.',
   },
   {
+    discipline: 'hse',
     visitType: 'hse_audit',
     destination: 'کمپ و کارگاه ایستگاه کمپرسور — عسلویه',
     visitees: [{ name: 'مهندس باقری', org: 'مدیریت HSE پروژه', role: 'مدیر HSE' }],
@@ -221,6 +224,7 @@ const SCENARIOS: Scenario[] = [
       'ir-1': 'مورد دیگری نبود.',
       'ir-2': 'ریسک جدیدی ندیدم.',
       'evd-1': 'ثبت شد',
+      'int-1': 'در جلسه پایانی از من خواسته شد مورد مجوزهای کار بدون امضای ناظر را در گزارش نیاورم.',
     },
     objectiveAnswers: ['کاملاً محقق شد، چک‌لیست تکمیل شد'],
     decisions: [
@@ -389,6 +393,7 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
     const start = addDaysIso(today, sc.startOffset)
     const draft: MissionDraft = {
       masterProjectId: project.id,
+      discipline: sc.discipline ?? 'general',
       requesterPosition: requester.position || 'مدیر پروژه',
       needsTicket: sc.ticket !== false,
       originCity: sc.ticket === false ? '' : sc.originCity ?? 'تهران',

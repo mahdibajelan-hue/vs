@@ -22,10 +22,12 @@ import type {
   WorkflowAction,
 } from '../types'
 import type { TurnDraft } from '../lib/interviewEngine'
+import type { MissionDiscipline } from '../types'
 import type { QuestionSet } from '../lib/questionSets'
 
 export interface MissionDraft {
   masterProjectId: string
+  discipline: MissionDiscipline
   requesterPosition: string
   needsTicket: boolean
   originCity: string
@@ -93,7 +95,7 @@ export interface MissionRepo {
   saveInterview(missionId: string, patch: { status?: InterviewStatus; state?: InterviewState; provider?: string; summaryConfirmedAt?: string | null }): Promise<Interview>
   appendTurns(missionId: string, startSeq: number, turns: TurnDraft[]): Promise<Turn[]>
   upsertFindings(missionId: string, findings: Finding[]): Promise<void>
-  updateFinding(id: string, patch: Partial<Pick<Finding, 'title' | 'description' | 'severity' | 'ownerText' | 'ownerId' | 'dueDate' | 'userConfirmed' | 'details' | 'kind'>> & { approval?: Finding['approval']; managerNote?: string }): Promise<void>
+  updateFinding(id: string, patch: Partial<Pick<Finding, 'title' | 'description' | 'severity' | 'ownerText' | 'ownerId' | 'dueDate' | 'userConfirmed' | 'details' | 'kind' | 'confidential'>> & { approval?: Finding['approval']; managerNote?: string }): Promise<void>
   deleteFinding(id: string): Promise<void>
   updateObjective(id: string, patch: Partial<Pick<Objective, 'status' | 'resultNote'>>): Promise<void>
 

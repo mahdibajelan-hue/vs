@@ -1,4 +1,4 @@
-import type { FindingKind, Objective, PendingLayout, TemplateEntries, TemplateField } from '../types'
+import type { FindingKind, MissionDiscipline, Objective, PendingLayout, TemplateEntries, TemplateField } from '../types'
 import { faNum, latinDigits, normalizeFa } from './fa'
 import { detectNothing, extractDate, findingKey, type ExtractedFinding } from './ruleAnalyzer'
 import type { QuestionDef, Slot, TopicDef } from './questionSets'
@@ -47,14 +47,14 @@ function plainLabel(q: QuestionDef, i: number): string {
   return cut || `پاسخ ${faNum(i + 1)}`
 }
 
-export function layoutFor(def: TopicDef, questions: QuestionDef[], objectives: Objective[]): PendingLayout {
+export function layoutFor(def: TopicDef, questions: QuestionDef[], objectives: Objective[], discipline: MissionDiscipline = 'general'): PendingLayout {
   const layout: PendingLayout = { fields: [] }
   if (def.mainQuestions.some((q) => q.repeatForObjective) && objectives.length) {
     layout.objectives = objectives.map((o) => ({ id: o.id, title: o.title, measure: o.measure }))
     return layout
   }
   if (def.entries) layout.entries = def.entries
-  layout.fields = def.template ?? (def.entries ? [] : questions.map((q, i) => ({ label: plainLabel(q, i), optional: false })))
+  layout.fields = def.template?.filter((f) => !f.forDiscipline || f.forDiscipline.includes(discipline)) ?? (def.entries ? [] : questions.map((q, i) => ({ label: plainLabel(q, i), optional: false })))
   return layout
 }
 

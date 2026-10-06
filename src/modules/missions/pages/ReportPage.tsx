@@ -9,6 +9,7 @@ import { faNum } from '../lib/fa'
 import { Card, Field, Meter, Pill, ScoreGauge, SectionHead } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
 import { ReportPaper } from '../components/ReportPaper'
+import { IntegrityPanel } from '../components/IntegrityPanel'
 import type { FindingKind } from '../types'
 
 const REVIEW_KINDS: FindingKind[] = ['issue', 'risk', 'action', 'commitment', 'decision']
@@ -96,6 +97,8 @@ export function ReportPage({ id }: { id: string }) {
               ))}
             </ul>
           </Card>
+
+          {isMgr && (bundle.audit.length > 0 || bundle.findings.some((f) => f.confidential)) && <IntegrityPanel audit={bundle.audit} findings={bundle.findings} compact />}
 
           {canReview && (
             <Card className="p-5" style={{ borderColor: 'color-mix(in srgb, var(--ms-accent) 50%, transparent)' }}>

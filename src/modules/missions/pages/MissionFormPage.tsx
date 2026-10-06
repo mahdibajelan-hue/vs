@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { DISCIPLINE_HINT, DISCIPLINE_LABEL, guessDiscipline } from '../lib/discipline'
 import { ArrowRight, Check, Lightbulb, Plus, Save, Send, Trash2 } from 'lucide-react'
 import { JalaliDateInput } from '../platform'
 import { useMissionStore } from '../store/useMissionStore'
@@ -8,7 +9,7 @@ import { checkObjective, MEASURE_SUGGESTIONS } from '../lib/objectives'
 import { faNum, missionDays, todayIso, addDaysIso } from '../lib/fa'
 import { Card, Field, Pill, SectionHead } from '../components/ui'
 import { EvidencePanel } from '../components/EvidencePanel'
-import { PRIORITY_LABEL, VISIT_TYPE_LABEL, type Priority, type Visitee, type VisitType } from '../types'
+import { PRIORITY_LABEL, VISIT_TYPE_LABEL, type MissionDiscipline, type Priority, type Visitee, type VisitType } from '../types'
 import type { MissionDraft, ObjectiveDraft } from '../repo/types'
 
 const EMPTY_OBJECTIVE = (): ObjectiveDraft => ({ title: '', measure: '', topicKey: '', priority: 'medium' })
@@ -26,6 +27,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
   const [id, setId] = useState(missionId)
   const [draft, setDraft] = useState<MissionDraft>({
     masterProjectId: '',
+    discipline: guessDiscipline(user?.position),
     requesterPosition: user?.position ?? '',
     needsTicket: true,
     originCity: '',
@@ -50,7 +52,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     openMission(missionId).then((b) => {
       if (!b) return
       const m = b.mission
-      setDraft({ masterProjectId: m.masterProjectId, requesterPosition: m.requesterPosition, needsTicket: m.needsTicket, originCity: m.originCity, ticketNote: m.ticketNote, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
+      setDraft({ masterProjectId: m.masterProjectId, discipline: m.discipline, requesterPosition: m.requesterPosition, needsTicket: m.needsTicket, originCity: m.originCity, ticketNote: m.ticketNote, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
       setObjectives(b.objectives.length ? b.objectives.map((o) => ({ id: o.id, title: o.title, measure: o.measure, topicKey: o.topicKey, priority: o.priority })) : [EMPTY_OBJECTIVE()])
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,6 +142,13 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
                 <option value="">انتخاب پروژه…</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="حوزه کاری شما در این بازدید" hint={DISCIPLINE_HINT[draft.discipline]}>
+              <select className="ms-select" value={draft.discipline} onChange={(e) => set('discipline', e.target.value as MissionDiscipline)}>
+                {Object.entries(DISCIPLINE_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
                 ))}
               </select>
             </Field>

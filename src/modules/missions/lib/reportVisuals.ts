@@ -1,6 +1,6 @@
 import type { Finding, FindingKind, Objective, Priority } from '../types'
 import { normalizeFa } from './fa'
-import { liveFindings } from './reportBuilder'
+import { reportFindings } from './reportBuilder'
 
 /**
  * Numbers behind the report's charts and tables. Computed from the live findings and objectives (not from the
@@ -21,7 +21,7 @@ export const KIND_COLOR: Record<FindingKind, string> = {
 export const SEVERITY_COLOR: Record<Priority, string> = { critical: '#b91c1c', high: '#ea580c', medium: '#d97706', low: '#65a30d' }
 export const SEVERITY_FA: Record<Priority, string> = { critical: 'بحرانی', high: 'زیاد', medium: 'متوسط', low: 'کم' }
 
-const DISCIPLINES: [string, string][] = [['engineering', 'مهندسی'], ['procurement', 'خرید و تأمین'], ['construction', 'ساخت و اجرا'], ['quality', 'کیفیت'], ['hse', 'HSE']]
+const DISCIPLINES: [string, string][] = [['engineering', 'مهندسی'], ['procurement', 'خرید و تأمین'], ['construction', 'ساخت و اجرا'], ['quality', 'کیفیت'], ['hse', 'HSE'], ['legal', 'حقوقی'], ['finance', 'مالی'], ['hr_admin', 'منابع انسانی و اداری']]
 
 export interface OwnedRow {
   id: string
@@ -101,7 +101,7 @@ function probabilityOf(f: Finding): number {
 const impactOf = (f: Finding): number => (f.severity === 'critical' ? 5 : f.severity === 'high' ? 4 : f.severity === 'medium' ? 3 : 2)
 
 export function buildVisuals(findingsAll: Finding[], objectives: Objective[]): ReportVisuals {
-  const findings = liveFindings(findingsAll)
+  const findings = reportFindings(findingsAll)
   const count = (k: FindingKind) => findings.filter((f) => f.kind === k).length
   const kinds: ReportVisuals['kinds'] = [
     { kind: 'issue', label: 'مسئله', count: count('issue'), color: KIND_COLOR.issue },

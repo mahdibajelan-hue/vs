@@ -8,10 +8,11 @@ import { faNum, missionDays, shamsi, shamsiLong, timeAgoFa } from '../lib/fa'
 import { Card, Field, Pill, ScoreGauge, SectionHead, StatusPill } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
 import { EvidencePanel } from '../components/EvidencePanel'
+import { IntegrityPanel } from '../components/IntegrityPanel'
 import { EVENT_LABEL, type TicketInfo, OBJECTIVE_STATUS_LABEL, OBJECTIVE_STATUS_TONE, VISIT_TYPE_LABEL, PRIORITY_LABEL } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
 
-type Tab = 'overview' | 'findings' | 'evidence' | 'history'
+type Tab = 'overview' | 'findings' | 'evidence' | 'history' | 'integrity'
 
 export function MissionDetailPage({ id }: { id: string }) {
   const { go } = useNav()
@@ -237,7 +238,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
       {/* ---------------------------------------------------------------- tabs */}
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="بخش‌های مأموریت">
-        {([['overview', 'نمای کلی'], ['findings', `یافته‌ها (${faNum(live.length)})`], ['evidence', `شواهد (${faNum(bundle.evidence.length)})`], ['history', 'تاریخچه']] as [Tab, string][]).map(([k, label]) => (
+        {([['overview', 'نمای کلی'], ['findings', `یافته‌ها (${faNum(live.length)})`], ['evidence', `شواهد (${faNum(bundle.evidence.length)})`], ['history', 'تاریخچه'], ...(isMgr && (bundle.audit.length > 0 || findings.some((f) => f.confidential)) ? [['integrity', 'شفافیت'] as [Tab, string]] : [])] as [Tab, string][]).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`ms-chip ${tab === k ? 'is-on' : ''}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -282,6 +283,8 @@ export function MissionDetailPage({ id }: { id: string }) {
           )}
         </Card>
       )}
+
+      {tab === 'integrity' && <IntegrityPanel audit={bundle.audit} findings={findings} />}
 
       {tab === 'evidence' && (
         <Card className="p-5">

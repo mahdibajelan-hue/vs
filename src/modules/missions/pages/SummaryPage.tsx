@@ -214,7 +214,7 @@ export function SummaryPage({ id }: { id: string }) {
           onClose={() => setEditing(null)}
           onDelete={editing !== 'new' ? () => { removeFinding(editing.id); setEditing(null) } : undefined}
           onSave={(patch) => {
-            if (editing === 'new') addManualFinding({ kind: patch.kind!, title: patch.title!, topicKey: patch.topicKey ?? 'issues_risks', severity: patch.severity ?? 'medium', ownerText: patch.ownerText, dueDate: patch.dueDate ?? null, details: patch.details })
+            if (editing === 'new') addManualFinding({ kind: patch.kind!, title: patch.title!, topicKey: patch.topicKey ?? 'issues_risks', severity: patch.severity ?? 'medium', ownerText: patch.ownerText, dueDate: patch.dueDate ?? null, details: patch.details, confidential: patch.confidential })
             else editFinding(editing.id, patch)
             setEditing(null)
           }}

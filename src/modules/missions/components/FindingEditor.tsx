@@ -4,7 +4,7 @@ import { Modal } from '../platform'
 import { FINDING_KIND_LABEL, PRIORITY_LABEL, type Finding, type FindingKind, type Priority } from '../types'
 import { Field } from './ui'
 
-type Patch = Partial<Pick<Finding, 'title' | 'description' | 'severity' | 'ownerText' | 'dueDate' | 'details' | 'kind' | 'userConfirmed'>>
+type Patch = Partial<Pick<Finding, 'title' | 'description' | 'severity' | 'ownerText' | 'dueDate' | 'details' | 'kind' | 'userConfirmed' | 'confidential'>>
 
 const KINDS: FindingKind[] = ['issue', 'risk', 'action', 'commitment', 'decision', 'observation']
 
@@ -15,6 +15,7 @@ export function FindingEditor({ finding, topics, onSave, onClose, onDelete }: { 
   const [severity, setSeverity] = useState<Priority>(finding?.severity ?? 'medium')
   const [owner, setOwner] = useState(finding?.ownerText ?? '')
   const [due, setDue] = useState(finding?.dueDate ?? '')
+  const [confidential, setConfidential] = useState(finding?.confidential ?? false)
   const [topicKey, setTopicKey] = useState(finding?.topicKey ?? topics[0]?.key ?? '')
   const [details, setDetails] = useState<Record<string, string>>(Object.fromEntries(Object.entries(finding?.details ?? {}).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, v ?? ''])))
   const setD = (k: string, v: string) => setDetails((d) => ({ ...d, [k]: v }))
@@ -65,10 +66,17 @@ export function FindingEditor({ finding, topics, onSave, onClose, onDelete }: { 
         {(kind === 'issue' || kind === 'risk') && (
           <Field label="مسئول پیگیری"><input className="ms-input" value={owner} onChange={(e) => setOwner(e.target.value)} /></Field>
         )}
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg p-2.5 text-[12px] leading-6" style={{ background: 'var(--ms-warn-bg, rgba(217,119,6,.08))' }}>
+          <input type="checkbox" className="mt-1.5" checked={confidential} onChange={(e) => setConfidential(e.target.checked)} />
+          <span>
+            <b>محرمانه</b> — فقط برای مجری طرح و مدیریت ارشد نمایان باشد (مدیر همین پروژه آن را نمی‌بیند و در متن گزارش نمی‌آید).
+            {finding?.confidential && !confidential && <span className="block font-bold" style={{ color: 'var(--ms-bad)' }}>برداشتن برچسب محرمانه در سابقه ثبت می‌شود.</span>}
+          </span>
+        </label>
         <div className="flex items-center justify-end gap-2 pt-1">
           {onDelete && <button className="ms-btn ms-btn-danger ml-auto" onClick={onDelete}>حذف</button>}
           <button className="ms-btn" onClick={onClose}>انصراف</button>
-          <button className="ms-btn ms-btn-primary" disabled={title.trim().length < 3} onClick={() => onSave({ kind, title: title.trim(), severity, ownerText: owner.trim(), dueDate: due || null, details, userConfirmed: true, topicKey })}>
+          <button className="ms-btn ms-btn-primary" disabled={title.trim().length < 3} onClick={() => onSave({ kind, title: title.trim(), severity, ownerText: owner.trim(), dueDate: due || null, details, userConfirmed: true, confidential, topicKey })}>
             ذخیره
           </button>
         </div>

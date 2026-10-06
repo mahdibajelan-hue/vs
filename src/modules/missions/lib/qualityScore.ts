@@ -1,5 +1,5 @@
 import type { Evidence, Finding, InterviewState, Mission, Objective, QualityCriterion, ReportContent } from '../types'
-import { liveFindings, progressOf } from './reportBuilder'
+import { reportFindings, progressOf } from './reportBuilder'
 import { wordCount } from './fa'
 
 /**
@@ -32,7 +32,7 @@ function slotCompleteness(f: Finding): number {
 
 export function scoreReport(input: QualityInput): { score: number; criteria: QualityCriterion[] } {
   const { objectives, evidence, state, content } = input
-  const findings = liveFindings(input.findings)
+  const findings = reportFindings(input.findings)
   const issues = findings.filter((f) => f.kind === 'issue')
   const risks = findings.filter((f) => f.kind === 'risk')
   const acts = findings.filter((f) => f.kind === 'action' || f.kind === 'commitment')
@@ -107,7 +107,7 @@ export function reportGaps(input: QualityInput, mandatoryTopics: string[]): Repo
     else if (tp?.state === 'skipped') gaps.push({ severity: 'warning', text: 'موضوع اجباری رد شده است.', topicKey: k })
   }
   for (const o of input.objectives.filter((x) => x.status === 'pending')) gaps.push({ severity: 'blocker', text: `وضعیت تحقق هدف «${o.title}» مشخص نیست.`, topicKey: 'objectives' })
-  for (const f of liveFindings(input.findings)) {
+  for (const f of reportFindings(input.findings)) {
     if ((f.kind === 'action' || f.kind === 'commitment') && (!f.ownerText || !f.dueDate)) {
       gaps.push({ severity: 'warning', text: `«${f.title}» ${!f.ownerText ? 'مسئول' : 'موعد'} ندارد.`, topicKey: f.topicKey })
     }

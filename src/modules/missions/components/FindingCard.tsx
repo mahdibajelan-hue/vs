@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ExternalLink, Link2, Pencil, Trash2, X } from 'lucide-react'
+import { Check, ExternalLink, Link2, Lock, Pencil, Trash2, X } from 'lucide-react'
 import { FINDING_KIND_LABEL, type Finding, type LinkedStatus, type TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
 import { KindBadge, Pill, SeverityDot } from './ui'
@@ -87,6 +87,7 @@ export function FindingCard({
         {(f.kind === 'issue' || f.kind === 'risk') && <SeverityDot severity={f.severity} withLabel />}
         {f.approval === 'approved' && !f.transferredId && <Pill tone="good">تأیید مجری طرح</Pill>}
         {f.approval === 'rejected' && <Pill tone="bad">ردشده</Pill>}
+        {f.confidential && <Pill tone="warn"><Lock size={11} aria-hidden className="inline" /> محرمانه</Pill>}
         {f.userConfirmed && <span className="ms-muted text-[10.5px]">تأیید بازدیدکننده</span>}
         {missionLabel && (
           <button className="ms-muted mr-auto text-[11px] underline-offset-2 hover:underline" onClick={onOpenMission}>

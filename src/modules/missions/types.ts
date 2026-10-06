@@ -67,6 +67,8 @@ export type VisitType =
   | 'commissioning'
   | 'other'
 
+export type MissionDiscipline = 'general' | 'hse' | 'legal' | 'quality' | 'engineering' | 'procurement' | 'finance' | 'planning' | 'hr_admin'
+
 export const VISIT_TYPE_LABEL: Record<VisitType, string> = {
   progress_review: 'بازدید پیشرفت پروژه',
   engineering: 'بازدید مهندسی و طراحی',
@@ -104,6 +106,8 @@ export interface TicketInfo {
 export interface Mission {
   id: string
   code: string
+  /** The visitor's field (HSE, legal, quality…) — decides which topics and questions the interview uses. */
+  discipline: MissionDiscipline
   requesterId: string
   requesterName: string
   requesterPosition: string
@@ -225,6 +229,8 @@ export interface Finding {
   transferredTo: TransferTarget | null
   transferredId: string | null
   transferredAt: string | null
+  /** Readable only by the requester and managers who are not the visited project's own manager/director. */
+  confidential: boolean
   createdAt: string
 }
 
@@ -328,6 +334,8 @@ export interface TemplateField {
   optional?: boolean
   /** Kept in the topic notes (and quoted in the report) but never mined for findings — e.g. a free suggestion. */
   noteOnly?: boolean
+  /** Line is shown only to visitors of these disciplines (default: everyone). */
+  forDiscipline?: MissionDiscipline[]
   /** When set, the (numeric) value is stored as this topic metric (e.g. planned / actual progress). */
   metric?: string
 }
@@ -453,6 +461,21 @@ export interface ProjectRef {
   projectType: string
 }
 
+/** One tamper-evident entry about a finding being created, deleted or softened (managers only). */
+export interface FindingAudit {
+  id: number
+  missionId: string
+  findingId: string | null
+  op: 'insert' | 'update' | 'delete'
+  actorName: string
+  at: string
+  missionStatus: string
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  suspicious: boolean
+  reason: string
+}
+
 /** Everything the UI needs to know about a mission at once. */
 export interface MissionBundle {
   mission: Mission
@@ -464,6 +487,8 @@ export interface MissionBundle {
   report: Report | null
   events: MissionEvent[]
   linked: LinkedStatus[]
+  /** Empty for everyone who may not read it (RLS). */
+  audit: FindingAudit[]
 }
 
 export type WorkflowAction =
