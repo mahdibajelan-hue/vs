@@ -57,7 +57,7 @@ export interface CurrentUser extends PersonRef {
   isAdminAffairs: boolean
 }
 
-export type MissionRole = 'executive' | 'admin_affairs'
+export type MissionRole = 'executive' | 'admin_affairs' | 'employee'
 export interface RoleAssignment {
   userId: string
   role: MissionRole

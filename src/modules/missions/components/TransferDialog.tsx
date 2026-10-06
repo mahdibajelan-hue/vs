@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Modal } from '../platform'
+import { MsModal } from './MsModal'
 import type { Finding, TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
 
@@ -50,7 +50,7 @@ export function TransferDialog({
   const actionMissing = target === 'action' ? [!f.ownerText ? 'مسئول' : '', !f.dueDate ? 'موعد' : ''].filter(Boolean) : []
 
   return (
-    <Modal title="تأیید و انتقال یافته" subtitle={f.title} onClose={onClose} width="max-w-lg">
+    <MsModal title="تأیید و انتقال یافته" subtitle={f.title} onClose={onClose} width="max-w-lg">
       <div className="ms-root flex flex-col gap-4 text-[12.5px]" dir="rtl" style={{ background: 'transparent' }}>
         <fieldset>
           <legend className="ms-muted mb-1.5 text-[11.5px]">انتقال به</legend>
@@ -119,6 +119,6 @@ export function TransferDialog({
           </button>
         </div>
       </div>
-    </Modal>
+    </MsModal>
   )
 }

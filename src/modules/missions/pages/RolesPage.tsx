@@ -5,6 +5,7 @@ import { Avatar, Card, SectionHead } from '../components/ui'
 import type { MissionRole } from '../repo/types'
 
 const ROLE_INFO: { role: MissionRole; label: string; icon: typeof Plane; text: string }[] = [
+  { role: 'employee', label: 'کارمند', icon: UserRound, text: 'درخواست مأموریت می‌دهد و پس از بازگشت، گزارش بازدید را با گفت‌وگو ثبت می‌کند. هر کاربر بدون نقش دیگر هم کارمند حساب می‌شود؛ ثبت صریح این نقش فقط برای مشخص‌کردن فهرست کارمندان (مثلاً پیشنهاد همراهان) است.' },
   { role: 'executive', label: 'مجری طرح', icon: ClipboardCheck, text: 'درخواست مأموریت را تأیید اولیه می‌کند و پس از بازگشت، گزارش بازدید را تأیید یا برای اصلاح برمی‌گرداند. Issue/Risk پیشنهادی را هم او به سامانه‌های اصلی منتقل می‌کند.' },
   { role: 'admin_affairs', label: 'امور اداری', icon: Plane, text: 'پس از تأیید مجری طرح، بلیط هواپیما را رزرو و مشخصات آن را ثبت می‌کند. پس از تأیید گزارش توسط مجری طرح، کلیم مأموریت را تأیید می‌کند.' },
 ]
@@ -29,11 +30,10 @@ export function RolesPage() {
       <div>
         <p className="ms-eyebrow mb-1">نقش‌ها</p>
         <h1 className="text-[22px] font-black leading-9">نقش‌های گردش کار مأموریت</h1>
-        <p className="ms-ink2 text-[12.5px] leading-7">سه نقش وجود دارد. هر کاربری که نقش دیگری نداشته باشد «کارمند» است و می‌تواند مأموریت درخواست دهد و گزارش بازدید ثبت کند.</p>
+        <p className="ms-ink2 text-[12.5px] leading-7">سه نقش وجود دارد: کارمند، مجری طرح و امور اداری. یک نفر می‌تواند چند نقش داشته باشد.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="ms-card-flat p-3.5"><p className="flex items-center gap-2 text-[12.5px] font-extrabold"><UserRound size={15} aria-hidden /> کارمند</p><p className="ms-ink2 mt-1 text-[12px] leading-7">درخواست مأموریت می‌دهد؛ پس از بازگشت، گزارش بازدید را با گفت‌وگو ثبت می‌کند.</p></div>
         {ROLE_INFO.map((r) => (
           <div key={r.role} className="ms-card-flat p-3.5"><p className="flex items-center gap-2 text-[12.5px] font-extrabold" style={{ color: 'var(--ms-accent)' }}><r.icon size={15} aria-hidden /> {r.label}</p><p className="ms-ink2 mt-1 text-[12px] leading-7">{r.text}</p></div>
         ))}

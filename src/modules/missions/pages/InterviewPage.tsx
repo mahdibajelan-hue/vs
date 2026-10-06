@@ -13,7 +13,7 @@ import { planTopics, type MissionContext } from '../lib/questionSets'
 import { BUILD_ID } from '../platform'
 import type { Finding } from '../types'
 import { liveFindings } from '../lib/reportBuilder'
-import { Modal } from '../platform'
+import { MsModal } from '../components/MsModal'
 
 type Pane = 'chat' | 'ledger' | 'topics'
 
@@ -437,7 +437,7 @@ export function InterviewPage({ id }: { id: string }) {
       )}
 
       {skipping && current && (
-        <Modal title="رد کردن موضوع" subtitle={topicTitle(set, current)} onClose={() => setSkipping(false)} width="max-w-md">
+        <MsModal title="رد کردن موضوع" subtitle={topicTitle(set, current)} onClose={() => setSkipping(false)} width="max-w-md">
           <div className="ms-root flex flex-col gap-3" dir="rtl" style={{ background: 'transparent' }}>
             <p className="ms-ink2 text-[12.5px] leading-7">{mandatory.includes(current) ? 'این موضوع از اهداف مأموریت است؛ دلیل رد کردن را بنویسید.' : 'اگر این موضوع در بازدید مطرح نبود، می‌توانید رد کنید.'}</p>
             <input className="ms-input" placeholder="دلیل (مثلاً: در این بازدید بررسی نشد)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} aria-label="دلیل" />
@@ -446,7 +446,7 @@ export function InterviewPage({ id }: { id: string }) {
               <button className="ms-btn ms-btn-primary" disabled={mandatory.includes(current) && !skipReason.trim()} onClick={async () => { await skipTopic(skipReason.trim()); setSkipping(false); setSkipReason('') }}>رد کردن</button>
             </div>
           </div>
-        </Modal>
+        </MsModal>
       )}
     </div>
   )

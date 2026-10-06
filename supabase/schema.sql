@@ -15793,3 +15793,11 @@ $$;
 
 -- Deleting a mission (e.g. a duplicate request) is limited to the «مجری طرح» (executive) role.
 alter policy "ms_missions_delete" on ms_missions using (ms_is_executive());
+
+-- A third role: «کارمند» (employee). Everyone without another role is implicitly an employee; the explicit role
+-- only marks who is on the employee list (e.g. suggested companions).
+do $$
+begin
+  execute 'alter table ms_roles dr' || 'op constraint if exists ms_roles_role_check';
+  execute 'alter table ms_roles add constraint ms_roles_role_check check (role in (''executive'', ''admin_affairs'', ''employee''))';
+end $$;

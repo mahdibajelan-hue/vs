@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { Modal } from '../platform'
+import { MsModal } from './MsModal'
 import { useMissionStore } from '../store/useMissionStore'
 import type { Mission } from '../types'
 
@@ -22,7 +22,7 @@ export function DeleteMissionButton({ mission, onDeleted, compact }: { mission: 
         <Trash2 size={14} aria-hidden /> {compact ? null : 'حذف مأموریت'}
       </button>
       {open && (
-        <Modal title="حذف مأموریت" subtitle={`${mission.code} · ${mission.projectName}`} onClose={() => !busy && setOpen(false)} width="max-w-md">
+        <MsModal title="حذف مأموریت" subtitle={`${mission.code} · ${mission.projectName}`} onClose={() => !busy && setOpen(false)} width="max-w-md">
           <div className="ms-root flex flex-col gap-3" dir="rtl" style={{ background: 'transparent' }}>
             <p className="text-[12.5px] leading-7">
               مأموریت <b>{mission.code}</b> ({mission.requesterName}) همراه با اهداف، یافته‌ها، گزارش، مستندات و تاریخچه‌اش برای همیشه حذف می‌شود و قابل بازگشت نیست. اگر فقط درخواست تکراری است، همین کار را بکنید.
@@ -44,7 +44,7 @@ export function DeleteMissionButton({ mission, onDeleted, compact }: { mission: 
               </button>
             </div>
           </div>
-        </Modal>
+        </MsModal>
       )}
     </>
   )

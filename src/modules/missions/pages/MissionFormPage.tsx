@@ -76,7 +76,13 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
   const loadRoles = useMissionStore((s) => s.loadRoles)
   useEffect(() => { loadRoles() }, [loadRoles])
   // Only people holding the «مجری طرح» role can approve — the same list the roles page maintains.
-  const approvers = people.filter((p) => p.id !== user?.id && roles.some((r) => r.userId === p.id && r.role === 'executive'))
+  const executives = people.filter((p) => roles.some((r) => r.userId === p.id && r.role === 'executive'))
+  // Approving your own request is refused by the database unless you are a system admin, so only an admin may pick themselves.
+  const approvers = executives.filter((p) => p.id !== user?.id || user?.isAdmin)
+  useEffect(() => {
+    if (!draft.approverId && approvers.length === 1) setDraft((d) => (d.approverId ? d : { ...d, approverId: approvers[0].id }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvers.length])
   const days = draft.startDate && draft.endDate ? missionDays(draft.startDate, draft.endDate) : 0
   const project = projects.find((p) => p.id === draft.masterProjectId)
 
@@ -217,7 +223,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
               ))}
             </ul>
           )}
-          <datalist id="ms-people-names">{people.map((p) => <option key={p.id} value={p.name} />)}</datalist>
+          <datalist id="ms-people-names">{(roles.some((r) => r.role === 'employee') ? people.filter((p) => roles.some((r) => r.userId === p.id && r.role === 'employee')) : people).map((p) => <option key={p.id} value={p.name} />)}</datalist>
         </Card>
 
         <Card className="p-5">
@@ -305,7 +311,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
             </Field>
             <Field label="مجری طرح (تأییدکننده درخواست و گزارش)" hint="فقط افرادی که در «نقش‌ها» به‌عنوان مجری طرح تعریف شده‌اند. اگر خالی بماند، یکی از مجریان پس از ارسال، درخواست را برمی‌دارد.">
               <select className="ms-select" value={draft.approverId ?? ''} onChange={(e) => set('approverId', e.target.value || null)}>
-                <option value="">{approvers.length ? 'انتخاب مجری طرح…' : 'هنوز مجری طرحی در «نقش‌ها» تعریف نشده'}</option>
+                <option value="">{approvers.length ? 'انتخاب مجری طرح…' : executives.length ? 'مجری دیگری جز خودتان تعریف نشده است' : 'هنوز مجری طرحی در «نقش‌ها» تعریف نشده'}</option>
                 {approvers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.position ? ` — ${p.position}` : ''}</option>)}
               </select>
             </Field>

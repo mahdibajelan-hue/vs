@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { JalaliDateInput } from '../platform'
-import { Modal } from '../platform'
+import { MsModal } from './MsModal'
 import { FINDING_KIND_LABEL, PRIORITY_LABEL, type Finding, type FindingKind, type Priority } from '../types'
 import { Field } from './ui'
 
@@ -26,7 +26,7 @@ export function FindingEditor({ finding, topics, onSave, onClose, onDelete }: { 
     : []
 
   return (
-    <Modal title={finding ? 'ویرایش مورد استخراج‌شده' : 'افزودن مورد'} subtitle="آنچه سیستم از گفته‌های شما فهمید را تصحیح کنید" onClose={onClose}  width="max-w-xl">
+    <MsModal title={finding ? 'ویرایش مورد استخراج‌شده' : 'افزودن مورد'} subtitle="آنچه سیستم از گفته‌های شما فهمید را تصحیح کنید" onClose={onClose}  width="max-w-xl">
       <div className="ms-root flex flex-col gap-3.5" dir="rtl" style={{ background: 'transparent' }}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="نوع">
@@ -81,6 +81,6 @@ export function FindingEditor({ finding, topics, onSave, onClose, onDelete }: { 
           </button>
         </div>
       </div>
-    </Modal>
+    </MsModal>
   )
 }
