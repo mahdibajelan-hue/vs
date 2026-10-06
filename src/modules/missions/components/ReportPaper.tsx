@@ -35,6 +35,8 @@ export function ReportPaper({
 }) {
   const c = content
   const v = buildVisuals(findings, objectives)
+  // A lawyer's or HSE officer's visit is not about physical progress — don't show an empty progress gauge for them.
+  const hasProgress = c.progress.actual != null || c.progress.planned != null || !['hse', 'legal', 'finance', 'hr_admin'].includes(mission.discipline)
   const sig = report?.signature ?? null
   const narrative = (key: string) => c.sections.find((s) => s.key === key)
   let n = 0
@@ -63,6 +65,8 @@ export function ReportPaper({
 
       <dl className="ms-paper-meta">
         <div><dt>حوزه کاری</dt><dd>{DISCIPLINE_LABEL[mission.discipline] ?? '—'}</dd></div>
+        {mission.companions.length > 0 && <div><dt>همراهان</dt><dd>{mission.companions.join('، ')}</dd></div>}
+        <div><dt>مسیر سفر</dt><dd>{mission.originCity && mission.destinationCity ? `${mission.originCity} ← ${mission.destinationCity}` : mission.destination || '—'}</dd></div>
         <div><dt>بازدیدکننده</dt><dd>{mission.requesterName}{mission.requesterPosition ? ` — ${mission.requesterPosition}` : ''}</dd></div>
         <div><dt>مقصد</dt><dd>{mission.destination || '—'}</dd></div>
         <div><dt>تاریخ بازدید</dt><dd>{shamsiLong(mission.startDate)} تا {shamsiLong(mission.endDate)}</dd></div>
@@ -76,7 +80,7 @@ export function ReportPaper({
 
       {/* ------------------------------------------------------------------ KPI strip */}
       <div className="ms-paper-kpis">
-        <Kpi label="پیشرفت واقعی" value={c.progress.actual != null ? `${faNum(c.progress.actual)}٪` : '—'} sub={c.progress.planned != null ? `برنامه ${faNum(c.progress.planned)}٪` : undefined} />
+        {hasProgress && <Kpi label="پیشرفت واقعی" value={c.progress.actual != null ? `${faNum(c.progress.actual)}٪` : '—'} sub={c.progress.planned != null ? `برنامه ${faNum(c.progress.planned)}٪` : undefined} />}
         <Kpi label="مسئله / ریسک" value={`${faNum(v.kinds[0].count)} / ${faNum(v.kinds[1].count)}`} sub={v.severity.critical + v.severity.high ? `${faNum(v.severity.critical + v.severity.high)} مورد مهم` : 'بدون مورد مهم'} />
         <Kpi label="مصوبه / اقدام" value={`${faNum(v.decisions.length)} / ${faNum(v.actions.length)}`} sub={`${faNum([...v.decisions, ...v.actions].filter((r) => !r.owner || (!r.dueIso && !r.dueText)).length)} بدون مسئول یا موعد`} />
         <Kpi label="تحقق اهداف" value={v.objectives.total ? `${faNum(v.objectives.percent)}٪` : '—'} sub={v.objectives.total ? `${faNum(v.objectives.achieved)} از ${faNum(v.objectives.total)} کامل` : undefined} />
@@ -90,7 +94,7 @@ export function ReportPaper({
       <section>
         <h2 className="ms-paper-h ms-paper-h-plain">نمای تصویری بازدید</h2>
         <div className="ms-paper-charts">
-          <Chart title="پیشرفت واقعی در برابر برنامه"><ProgressCompare planned={c.progress.planned} actual={c.progress.actual} /></Chart>
+          {hasProgress && <Chart title="پیشرفت واقعی در برابر برنامه"><ProgressCompare planned={c.progress.planned} actual={c.progress.actual} /></Chart>}
           <Chart title="تحقق اهداف مأموریت">
             {v.objectives.total ? (
               <Donut

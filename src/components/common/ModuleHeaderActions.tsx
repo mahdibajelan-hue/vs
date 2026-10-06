@@ -1,5 +1,6 @@
 import { Home, Radar } from 'lucide-react'
 import { SignOutButton } from '../Auth/SignOutButton'
+import { UserChip } from './UserChip'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -19,6 +20,7 @@ interface ModuleHeaderActionsProps {
 export function ModuleHeaderActions({ onExitToHub, onBackToRadar, className = '' }: ModuleHeaderActionsProps) {
   return (
     <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
+      <UserChip />
       {onBackToRadar && (
         <button
           onClick={onBackToRadar}

@@ -162,7 +162,7 @@ export function MissionDetailPage({ id }: { id: string }) {
         <Card className="p-5" style={{ borderColor: 'color-mix(in srgb, var(--ms-accent) 50%, transparent)' }}>
           <SectionHead eyebrow="امور اداری" title="درخواست بلیط هواپیما" action={<Pill tone="warn">منتظر صدور بلیط</Pill>} />
           <dl className="grid gap-x-8 gap-y-1 text-[12.5px] sm:grid-cols-2">
-            {[['مسافر', `${m.requesterName}${m.requesterPosition ? ` (${m.requesterPosition})` : ''}`], ['مبدأ → مقصد', `${m.originCity || '—'} → ${m.destination || '—'}`], ['رفت', shamsiLong(m.startDate)], ['برگشت', shamsiLong(m.endDate)], ['پروژه', m.projectName], ['توضیح کارمند', m.ticketNote || '—']].map(([k, v]) => (
+            {[['مسافر', `${m.requesterName}${m.requesterPosition ? ` (${m.requesterPosition})` : ''}`], ['همراهان', m.companions.length ? m.companions.join('، ') : 'بدون همراه'], ['مبدأ → مقصد', `${m.originCity || '—'} → ${m.destinationCity || m.destination || '—'}`], ['رفت', shamsiLong(m.startDate)], ['برگشت', shamsiLong(m.endDate)], ['پروژه', m.projectName], ['توضیح کارمند', m.ticketNote || '—']].map(([k, v]) => (
               <div key={k} className="flex gap-2 border-b py-1.5" style={{ borderColor: 'var(--ms-line)' }}><dt className="ms-muted w-28 shrink-0">{k}</dt><dd className="font-bold">{v}</dd></div>
             ))}
           </dl>
@@ -265,6 +265,8 @@ export function MissionDetailPage({ id }: { id: string }) {
           <Card className="flex flex-col gap-4 p-5 lg:col-span-2">
             <SectionHead eyebrow="جزئیات" title="مشخصات درخواست" />
             <Fact k="نوع بازدید" v={VISIT_TYPE_LABEL[m.visitType]} />
+            <Fact k="مسیر سفر" v={`${m.originCity || '—'} ← ${m.destinationCity || '—'}`} />
+            <Fact k="همراهان" v={m.companions.length ? m.companions.join('، ') : 'بدون همراه'} />
             <Fact k="محل دقیق" v={m.locationDetail || '—'} />
             <Fact k="ملاقات‌شوندگان" v={m.visitees.length ? m.visitees.map((v) => [v.name, v.org, v.role].filter(Boolean).join(' / ')).join('\n') : '—'} />
             <Fact k="موضوعات مورد بررسی" v={m.topicsOfInterest || '—'} />

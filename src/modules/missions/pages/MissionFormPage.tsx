@@ -31,6 +31,8 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     requesterPosition: user?.position ?? '',
     needsTicket: true,
     originCity: '',
+    destinationCity: '',
+    companions: [],
     ticketNote: '',
     destination: '',
     locationDetail: '',
@@ -52,7 +54,7 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     openMission(missionId).then((b) => {
       if (!b) return
       const m = b.mission
-      setDraft({ masterProjectId: m.masterProjectId, discipline: m.discipline, requesterPosition: m.requesterPosition, needsTicket: m.needsTicket, originCity: m.originCity, ticketNote: m.ticketNote, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
+      setDraft({ masterProjectId: m.masterProjectId, discipline: m.discipline, requesterPosition: m.requesterPosition, needsTicket: m.needsTicket, originCity: m.originCity, destinationCity: m.destinationCity, companions: m.companions, ticketNote: m.ticketNote, destination: m.destination, locationDetail: m.locationDetail, startDate: m.startDate, endDate: m.endDate, visitType: m.visitType, visitees: m.visitees, topicsOfInterest: m.topicsOfInterest, expectedOutput: m.expectedOutput, approverId: m.approverId })
       setObjectives(b.objectives.length ? b.objectives.map((o) => ({ id: o.id, title: o.title, measure: o.measure, topicKey: o.topicKey, priority: o.priority })) : [EMPTY_OBJECTIVE()])
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +72,11 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
 
   const filled = objectives.filter((o) => o.title.trim())
   const checks = useMemo(() => objectives.map(checkObjective), [objectives])
-  const approvers = people.filter((p) => p.id !== user?.id)
+  const roles = useMissionStore((s) => s.roles)
+  const loadRoles = useMissionStore((s) => s.loadRoles)
+  useEffect(() => { loadRoles() }, [loadRoles])
+  // Only people holding the «مجری طرح» role can approve — the same list the roles page maintains.
+  const approvers = people.filter((p) => p.id !== user?.id && roles.some((r) => r.userId === p.id && r.role === 'executive'))
   const days = draft.startDate && draft.endDate ? missionDays(draft.startDate, draft.endDate) : 0
   const project = projects.find((p) => p.id === draft.masterProjectId)
 
@@ -79,7 +85,8 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
     if (!draft.masterProjectId) e.push('پروژه را انتخاب کنید.')
     if (forSubmit) {
       if (!draft.destination.trim()) e.push('مقصد و محل بازدید را بنویسید.')
-      if (draft.needsTicket && !draft.originCity.trim()) e.push('برای درخواست بلیط، شهر مبدأ را بنویسید.')
+      if (!draft.originCity.trim()) e.push('شهر مبدأ را بنویسید.')
+      if (!draft.destinationCity.trim()) e.push('شهر مقصد را بنویسید.')
       if (!draft.startDate || !draft.endDate || draft.endDate < draft.startDate) e.push('تاریخ شروع و پایان معتبر نیست.')
       if (!filled.length) e.push('حداقل یک هدف برای مأموریت لازم است.')
       if (filled.some((o) => !o.measure.trim())) e.push('برای هر هدف معیار تحقق بنویسید تا بتوان نتیجه را سنجید.')
@@ -159,8 +166,14 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
                 ))}
               </select>
             </Field>
-            <Field label="مقصد">
-              <input className="ms-input" value={draft.destination} onChange={(e) => set('destination', e.target.value)} placeholder="مثلاً کارخانه سازنده — کرج" />
+            <Field label="شهر مبدأ">
+              <input className="ms-input" value={draft.originCity} onChange={(e) => set('originCity', e.target.value)} placeholder="مثلاً تهران" />
+            </Field>
+            <Field label="شهر مقصد">
+              <input className="ms-input" value={draft.destinationCity} onChange={(e) => set('destinationCity', e.target.value)} placeholder="مثلاً بندرعباس" />
+            </Field>
+            <Field label="مقصد (محل بازدید)">
+              <input className="ms-input" value={draft.destination} onChange={(e) => set('destination', e.target.value)} placeholder="مثلاً کارخانه سازنده" />
             </Field>
             <Field label="محل دقیق / آدرس">
               <input className="ms-input" value={draft.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="اختیاری" />
@@ -182,13 +195,29 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
           </label>
           {draft.needsTicket ? (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="شهر مبدأ"><input className="ms-input" value={draft.originCity} onChange={(e) => set('originCity', e.target.value)} placeholder="مثلاً تهران" /></Field>
-              <Field label="توضیح برای امور اداری (ساعت پرواز مطلوب، همراه، سقف قیمت…)"><input className="ms-input" value={draft.ticketNote} onChange={(e) => set('ticketNote', e.target.value)} placeholder="اختیاری" /></Field>
+              <Field label="توضیح برای امور اداری (ساعت پرواز مطلوب، سقف قیمت…)"><input className="ms-input" value={draft.ticketNote} onChange={(e) => set('ticketNote', e.target.value)} placeholder="اختیاری" /></Field>
               <p className="ms-muted text-[11.5px] leading-6 sm:col-span-2">تاریخ رفت و برگشت همان تاریخ شروع و پایان مأموریت است؛ اگر تغییر می‌کند در توضیح بنویسید.</p>
             </div>
           ) : (
             <p className="ms-muted mt-2 text-[12px] leading-7">بدون بلیط: پس از تأیید مجری طرح، مأموریت مستقیم آماده اعزام می‌شود.</p>
           )}
+        </Card>
+
+        <Card className="p-5">
+          <SectionHead eyebrow="همراهان" title="همراهان در مأموریت" action={<button className="ms-btn ms-btn-sm" onClick={() => set('companions', [...draft.companions, ''])}><Plus size={13} aria-hidden /> افزودن</button>} />
+          {draft.companions.length === 0 ? (
+            <p className="ms-muted text-[12.5px]">تنها سفر می‌کنید؟ اگر همکاری همراه شماست، نام او را اضافه کنید (برای رزرو بلیط و هماهنگی استفاده می‌شود).</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {draft.companions.map((c, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <input className="ms-input" value={c} onChange={(e) => set('companions', draft.companions.map((x, j) => (j === i ? e.target.value : x)))} placeholder="نام و نام خانوادگی همراه" list="ms-people-names" />
+                  <button className="ms-btn ms-btn-ghost ms-btn-sm" aria-label="حذف همراه" onClick={() => set('companions', draft.companions.filter((_, j) => j !== i))}><Trash2 size={14} aria-hidden /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <datalist id="ms-people-names">{people.map((p) => <option key={p.id} value={p.name} />)}</datalist>
         </Card>
 
         <Card className="p-5">
@@ -274,9 +303,9 @@ export function MissionFormPage({ missionId }: { missionId?: string }) {
             <Field label="خروجی مورد انتظار از مأموریت">
               <textarea className="ms-textarea" value={draft.expectedOutput} onChange={(e) => set('expectedOutput', e.target.value)} placeholder="مثلاً: برنامه تحویل مکتوب و صورتجلسه با سازنده" />
             </Field>
-            <Field label="مجری طرح (تأییدکننده درخواست و گزارش)" hint="اگر خالی بماند، مجری طرح پس از ارسال، درخواست را برمی‌دارد.">
+            <Field label="مجری طرح (تأییدکننده درخواست و گزارش)" hint="فقط افرادی که در «نقش‌ها» به‌عنوان مجری طرح تعریف شده‌اند. اگر خالی بماند، یکی از مجریان پس از ارسال، درخواست را برمی‌دارد.">
               <select className="ms-select" value={draft.approverId ?? ''} onChange={(e) => set('approverId', e.target.value || null)}>
-                <option value="">انتخاب مجری طرح…</option>
+                <option value="">{approvers.length ? 'انتخاب مجری طرح…' : 'هنوز مجری طرحی در «نقش‌ها» تعریف نشده'}</option>
                 {approvers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.position ? ` — ${p.position}` : ''}</option>)}
               </select>
             </Field>

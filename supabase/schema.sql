@@ -15743,3 +15743,50 @@ end;
 $$;
 revoke execute on function ms_transfer_finding(uuid, text, jsonb) from public;
 grant execute on function ms_transfer_finding(uuid, text, jsonb) to authenticated;
+
+-- =============================================================================
+-- 67. Missions: destination city, companions, executive-only approver
+-- =============================================================================
+alter table ms_missions add column if not exists destination_city text not null default '';
+alter table ms_missions add column if not exists companions jsonb not null default '[]'::jsonb;
+
+create or replace function ms_guard_mission_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(current_setting('ms.transition', true), '') = 'on' then
+    new.updated_at := now();
+    return new;
+  end if;
+  if new.status is distinct from old.status
+     or new.approved_at is distinct from old.approved_at
+     or new.final_approved_at is distinct from old.final_approved_at
+     or new.claimed_at is distinct from old.claimed_at
+     or new.ticket is distinct from old.ticket
+     or new.ticket_issued_at is distinct from old.ticket_issued_at
+     or new.ticket_issued_by is distinct from old.ticket_issued_by
+     or new.admin_comment is distinct from old.admin_comment
+     or new.claim_approved_by is distinct from old.claim_approved_by then
+    raise exception 'status_change_via_transition_only';
+  end if;
+  -- The approver of a request must be someone holding the «مجری طرح» (executive) role.
+  if new.approver_id is not null and new.approver_id is distinct from old.approver_id
+     and not exists (select 1 from ms_roles where user_id = new.approver_id and role = 'executive') then
+    raise exception 'approver_must_be_executive';
+  end if;
+  if not ms_is_manager() then
+    if new.requester_id is distinct from old.requester_id then raise exception 'forbidden'; end if;
+    if old.status not in ('draft', 'returned') and (
+         new.master_project_id is distinct from old.master_project_id
+         or new.start_date is distinct from old.start_date or new.end_date is distinct from old.end_date
+         or new.visit_type is distinct from old.visit_type
+         or new.needs_ticket is distinct from old.needs_ticket or new.origin_city is distinct from old.origin_city
+         or new.destination_city is distinct from old.destination_city
+         or new.companions is distinct from old.companions
+         or new.ticket_note is distinct from old.ticket_note) then
+      raise exception 'request_locked';
+    end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;

@@ -49,7 +49,7 @@ export function scoreReport(input: QualityInput): { score: number; criteria: Qua
   const objectivesScore = objectives.length ? (reviewed / objectives.length) * 100 : 60
 
   // 3. progress report quality
-  const progressScore = progress.actual != null && progress.planned != null ? 100 : progress.actual != null ? 65 : (state?.topics.progress?.notes.length ?? 0) > 0 ? 35 : 0
+  const progressScore = state && !state.plan.includes('progress') ? 100 : progress.actual != null && progress.planned != null ? 100 : progress.actual != null ? 65 : (state?.topics.progress?.notes.length ?? 0) > 0 ? 35 : 0
 
   // 4/5. issue & risk identification quality
   const thorough = plan.length > 0 && closed >= Math.ceil(plan.length * 0.8)

@@ -177,7 +177,7 @@ export function buildReport(input: ReportInput): ReportContent {
   })
 
   const overviewNotes = meaningfulNotes(state, 'overview')
-  sections.push({ key: 'progress', title: 'وضعیت پیشرفت پروژه', body: progressBody(progress, meaningfulNotes(state, 'progress')), bullets: undefined })
+  if (!state || state.plan.includes('progress')) sections.push({ key: 'progress', title: 'وضعیت پیشرفت پروژه', body: progressBody(progress, meaningfulNotes(state, 'progress')), bullets: undefined })
 
   const disciplines: [string, string][] = [['engineering', 'مهندسی'], ['procurement', 'خرید و تأمین'], ['construction', 'ساخت و اجرا'], ['quality', 'کیفیت'], ['hse', 'HSE']]
   const discBullets: string[] = []

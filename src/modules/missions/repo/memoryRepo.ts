@@ -53,6 +53,8 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       expectedOutput: d.expectedOutput,
       needsTicket: d.needsTicket,
       originCity: d.originCity,
+      destinationCity: d.destinationCity,
+      companions: d.companions,
       ticketNote: d.ticketNote,
       ticket: {},
       ticketIssuedAt: null,

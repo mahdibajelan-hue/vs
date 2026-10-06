@@ -124,6 +124,10 @@ export interface Mission {
   /** Flight ticket needed? (false → the request skips Administrative Affairs ticketing) */
   needsTicket: boolean
   originCity: string
+  /** City of the visit — the destination of the flight. */
+  destinationCity: string
+  /** Colleagues travelling with the requester (names). */
+  companions: string[]
   ticketNote: string
   ticket: TicketInfo
   ticketIssuedAt: string | null

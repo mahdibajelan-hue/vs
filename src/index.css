@@ -553,7 +553,7 @@ select option {
   inset: 0;
   background:
     radial-gradient(circle at 20% 15%, rgba(56, 189, 248, 0.16), transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(201, 162, 39, 0.12), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(129, 140, 248, 0.10), transparent 45%),
     radial-gradient(circle at 60% 40%, rgba(167, 139, 250, 0.1), transparent 50%);
   z-index: -1;
 }
@@ -1638,7 +1638,7 @@ select option {
     rgba(34, 211, 238, 0.6),
     rgba(255, 255, 255, 0.07) 28%,
     rgba(255, 255, 255, 0.04) 68%,
-    rgba(201, 162, 39, 0.6)
+    rgba(129, 140, 248, 0.55)
   );
   mask:
     linear-gradient(#000 0 0) content-box exclude,
@@ -1654,7 +1654,7 @@ select option {
   width: 18px;
   height: 18px;
   pointer-events: none;
-  border-color: rgba(201, 162, 39, 0.55);
+  border-color: rgba(129, 140, 248, 0.5);
   border-style: solid;
   border-width: 0;
 }

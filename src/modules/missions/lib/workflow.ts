@@ -83,7 +83,7 @@ export function nextStepFor(m: Mission, user: CurrentUser | null): NextStep | nu
     case 'pending_approval':
       return isMgr ? { label: 'بررسی درخواست', view: { kind: 'mission', id: m.id }, tone: 'warn', hint: 'منتظر تأیید شما (مجری طرح) است.', owner: 'manager' } : null
     case 'ticketing':
-      return isAA ? { label: 'درخواست و ثبت بلیط', view: { kind: 'mission', id: m.id }, tone: 'warn', hint: `بلیط ${m.requesterName} از ${m.originCity || 'مبدأ'} به ${m.destination || 'مقصد'}`, owner: 'adminAffairs' } : null
+      return isAA ? { label: 'درخواست و ثبت بلیط', view: { kind: 'mission', id: m.id }, tone: 'warn', hint: `بلیط ${m.requesterName} از ${m.originCity || 'مبدأ'} به ${m.destinationCity || m.destination || 'مقصد'}${m.companions.length ? ` (+${m.companions.length} همراه)` : ''}`, owner: 'adminAffairs' } : null
     case 'approved': {
       if (!isReq) return null
       const late = m.endDate < todayIso() ? daysBetween(m.endDate, todayIso()) : 0

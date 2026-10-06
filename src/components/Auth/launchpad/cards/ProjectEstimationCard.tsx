@@ -9,7 +9,7 @@ export function ProjectEstimationCard({ onSelect, locked }: { onSelect: () => vo
       englishTag="Project Estimation & Cost Intelligence"
       description="ماشین‌حساب برآورد مالی EPC خط لوله، متره، بنچمارک هزینه و پیش‌بینی."
       icon={Calculator}
-      accent="#F2B705"
+      accent="#f472b6"
       locked={locked}
       onSelect={onSelect}
     />

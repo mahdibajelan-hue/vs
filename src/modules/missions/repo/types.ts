@@ -31,6 +31,8 @@ export interface MissionDraft {
   requesterPosition: string
   needsTicket: boolean
   originCity: string
+  destinationCity: string
+  companions: string[]
   ticketNote: string
   destination: string
   locationDetail: string

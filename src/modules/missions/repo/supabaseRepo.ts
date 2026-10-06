@@ -30,6 +30,7 @@ function fail(error: { message: string } | null | undefined, fallback = 'عمل�
     forbidden: 'دسترسی لازم برای این اقدام را ندارید.',
     manager_only: 'این اقدام فقط برای مجری طرح مجاز است.',
     conflict_of_interest: 'شما مدیر یا مدیرعامل همین پروژه هستید؛ برای جلوگیری از تعارض منافع، تصمیم‌گیری درباره گزارش بازدید این پروژه برعهده شما نیست.',
+    approver_must_be_executive: 'تأییدکننده باید از افراد دارای نقش «مجری طرح» باشد.',
     signature_required: 'برای ارسال گزارش ابتدا امضای نمونه خود را ثبت کنید.',
     cannot_approve_own: 'تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.',
     no_issue_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت Issue متصل نشده است.',
@@ -61,6 +62,8 @@ function toMission(r: Row, people: Map<string, PersonRef>, projects: Map<string,
     expectedOutput: r.expected_output ?? '',
     needsTicket: r.needs_ticket !== false,
     originCity: r.origin_city ?? '',
+    destinationCity: r.destination_city ?? '',
+    companions: Array.isArray(r.companions) ? r.companions : [],
     ticketNote: r.ticket_note ?? '',
     ticket: r.ticket ?? {},
     ticketIssuedAt: r.ticket_issued_at ?? null,
@@ -216,6 +219,8 @@ export function createSupabaseRepo(): MissionRepo {
     if (d.expectedOutput !== undefined) out.expected_output = d.expectedOutput
     if (d.needsTicket !== undefined) out.needs_ticket = d.needsTicket
     if (d.originCity !== undefined) out.origin_city = d.originCity
+    if (d.destinationCity !== undefined) out.destination_city = d.destinationCity
+    if (d.companions !== undefined) out.companions = d.companions.map((x) => x.trim()).filter(Boolean)
     if (d.ticketNote !== undefined) out.ticket_note = d.ticketNote
     if (d.approverId !== undefined) out.approver_id = d.approverId
     return out

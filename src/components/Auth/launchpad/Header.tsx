@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Bell, Search, Settings, UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
+import { ProfileModal } from '../ProfileModal'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 
 function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
@@ -23,6 +24,7 @@ export function Header() {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const currentUser = useAuthStore((s) => s.currentUser())
   const [profileOpen, setProfileOpen] = useState(false)
+  const [profileModal, setProfileModal] = useState(false)
 
   return (
     <header
@@ -71,6 +73,7 @@ export function Header() {
                   <UserCircle2 size={17} />
                 </div>
               )}
+              <span className="hidden max-w-[9rem] truncate text-xs font-bold sm:block">{currentUser?.fullName || 'کاربر'}</span>
             </button>
 
             {profileOpen && (
@@ -84,6 +87,13 @@ export function Header() {
                   <p className="truncate text-[11px] text-muted" dir="ltr">
                     {currentUser?.email}
                   </p>
+                  <button
+                    onClick={() => { setProfileOpen(false); setProfileModal(true) }}
+                    className="mt-3 flex w-full items-center justify-center rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-white/5"
+                    style={{ borderColor: 'var(--border-soft)' }}
+                  >
+                    پروفایل و امضای من
+                  </button>
                   <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--border-soft)' }}>
                     <SignOutButton className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-400/25 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors" />
                   </div>
@@ -93,6 +103,7 @@ export function Header() {
           </div>
         </div>
       )}
+      {profileModal && <ProfileModal onClose={() => setProfileModal(false)} />}
     </header>
   )
 }
