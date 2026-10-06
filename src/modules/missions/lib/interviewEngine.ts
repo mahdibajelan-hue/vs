@@ -28,7 +28,9 @@ import {
   entriesToFindings,
   gapQuestionText,
   isBlank,
+  isNothingValue,
   isUnknownValue,
+  isYesOnly,
   layoutFor,
   metricsOf,
   notesOf,
@@ -497,7 +499,7 @@ async function submitBatch(input: EngineInput, stateIn: InterviewState, findings
     objectiveUpdates.push({ id: o.id, status: classifyObjectiveAnswer(`${o.result} ${o.note}`), note: (o.note || o.result).trim() })
   }
 
-  const fieldGaps = parsed.structured && !nothing ? layout.fields.filter((f) => !f.optional && isBlank(parsed.fields[f.label])).map((f) => f.label) : []
+  const fieldGaps = parsed.structured && !nothing ? layout.fields.filter((f) => !f.noteOnly && (isYesOnly(parsed.fields[f.label]) || (!f.optional && isBlank(parsed.fields[f.label])))).map((f) => f.label) : []
   const gap: GapSpec = { fields: fieldGaps, objectives: missingObjectives, findings: nothing ? [] : slotGaps(input, findings, key) }
   const asked = askGap(input, state, findings, key, turns, gap)
   if (asked) return { state: asked, findings, turns, objectiveUpdates, done: false, analysis, aiUsed }
@@ -520,10 +522,11 @@ function submitGap(input: EngineInput, stateIn: InterviewState, findingsIn: Find
   const notes: string[] = []
 
   // Plain fields that were blank: keep the text as notes, and mine it like a normal answer.
-  const fieldText = Object.entries(parsed.fields).filter(([, v]) => !isBlank(v)).map(([k, v]) => `${k.replace(/[(（].*$/u, '').trim()}: ${v}.`)
-  if (fieldText.length) {
-    notes.push(...fieldText)
-    const a = analyzeAnswer({ topicKey: key, answer: fieldText.join('\n'), today: input.today, defaultKind: def.defaultKind, lexicon: def.lexicon, known: findings.filter((f) => f.topicKey === key).map((f) => ({ key: findingKeyOf(f), title: f.title, kind: f.kind })) })
+  const fieldText = Object.entries(parsed.fields).filter(([, v]) => !isBlank(v)).map(([k, v]) => `${k.replace(/[(（].*$/u, '').trim()}: ${v}`)
+  const mineText = analysisTextOf({ fields: parsed.fields, entries: [], objectives: [], structured: true, free: '' })
+  if (fieldText.length) notes.push(...fieldText.filter((l) => !isNothingValue(l.split(': ').slice(1).join(': '))))
+  if (mineText.trim()) {
+    const a = analyzeAnswer({ topicKey: key, answer: mineText, today: input.today, defaultKind: def.defaultKind, lexicon: def.lexicon, known: findings.filter((f) => f.topicKey === key).map((f) => ({ key: findingKeyOf(f), title: f.title, kind: f.kind })) })
     tp.metrics = { ...tp.metrics, ...a.metrics }
     findings = applySlotFills(a.slotFills, findings)
     if (!def.noFindings) findings = applyExtracted(input, a.findings, findings, input.mission.id, now)
@@ -551,7 +554,7 @@ function submitGap(input: EngineInput, stateIn: InterviewState, findingsIn: Find
   state.topics[key] = tp
 
   const gaps: GapSpec = {
-    fields: gap.fields.filter((f) => isBlank(parsed.fields[f])),
+    fields: gap.fields.filter((f) => isBlank(parsed.fields[f]) || isYesOnly(parsed.fields[f])),
     objectives: stillObjectives,
     findings: slotGaps(input, findings, key),
   }

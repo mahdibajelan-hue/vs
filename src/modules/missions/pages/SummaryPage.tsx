@@ -7,6 +7,7 @@ import { reportGaps, scoreReport } from '../lib/qualityScore'
 import { planTopics, topicTitle } from '../lib/questionSets'
 import { faNum } from '../lib/fa'
 import { Card, Meter, Pill, ScoreGauge, SectionHead } from '../components/ui'
+import { SignaturePad } from '../platform'
 import { FindingCard } from '../components/FindingCard'
 import { FindingEditor } from '../components/FindingEditor'
 import { EvidencePanel } from '../components/EvidencePanel'
@@ -27,12 +28,17 @@ export function SummaryPage({ id }: { id: string }) {
   const reopenInterview = useMissionStore((s) => s.reopenInterview)
   const jumpToTopic = useMissionStore((s) => s.jumpToTopic)
   const submitReport = useMissionStore((s) => s.submitReport)
+  const signature = useMissionStore((s) => s.signature)
+  const loadSignature = useMissionStore((s) => s.loadSignature)
+  const saveSignature = useMissionStore((s) => s.saveSignature)
+  const [savingSig, setSavingSig] = useState(false)
   const [editing, setEditing] = useState<Finding | 'new' | null>(null)
   const [sending, setSending] = useState(false)
   const [ack, setAck] = useState(false)
 
   useEffect(() => {
     openMission(id)
+    loadSignature()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -166,17 +172,37 @@ export function SummaryPage({ id }: { id: string }) {
               ))}
             </ul>
           )}
+          <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--ms-line)' }}>
+            <p className="text-[12.5px] font-extrabold">امضای شما</p>
+            <p className="ms-muted mb-2 text-[11px] leading-6">با ارسال، این امضا پای گزارش درج می‌شود. امضای نمونه در «پروفایل» هم نگه‌داری می‌شود.</p>
+            {signature === undefined ? (
+              <p className="ms-muted text-[11.5px]">در حال بارگذاری امضا…</p>
+            ) : (
+              <div className="ms-root" style={{ background: 'transparent' }}>
+                <SignaturePad
+                  value={signature}
+                  saving={savingSig}
+                  saveLabel="ذخیره امضا"
+                  onSave={async (png) => {
+                    setSavingSig(true)
+                    await saveSignature(png)
+                    setSavingSig(false)
+                  }}
+                />
+              </div>
+            )}
+          </div>
           {blockers.length === 0 && warnings.length > 0 && (
             <label className="mt-3 flex cursor-pointer items-start gap-2 text-[12px] leading-6">
               <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1.5" />
               با وجود {faNum(warnings.length)} هشدار، می‌خواهم گزارش را ارسال کنم.
             </label>
           )}
-          <button className="ms-btn ms-btn-primary mt-4 w-full" disabled={sending || blockers.length > 0 || (warnings.length > 0 && !ack) || m.status === 'report_review'} onClick={send}>
+          <button className="ms-btn ms-btn-primary mt-4 w-full" disabled={sending || !signature || blockers.length > 0 || (warnings.length > 0 && !ack) || m.status === 'report_review'} onClick={send}>
             <Send size={15} aria-hidden /> {sending ? 'در حال ارسال…' : 'تأیید و ارسال برای مجری طرح'}
           </button>
           <button className="ms-btn ms-btn-ghost mt-2 w-full" onClick={() => fixTopic()}>بازگشت به گفت‌وگو</button>
-          <p className="ms-muted mt-3 text-[11px] leading-6">{blockers.length ? `${faNum(blockers.length)} مورد اجباری باقی مانده است.` : 'پس از ارسال، تا تصمیم مجری طرح نمی‌توانید گزارش را تغییر دهید.'}</p>
+          <p className="ms-muted mt-3 text-[11px] leading-6">{blockers.length ? `${faNum(blockers.length)} مورد اجباری باقی مانده است.` : !signature ? 'برای ارسال، ابتدا امضای خود را ثبت کنید.' : 'پس از ارسال، تا تصمیم مجری طرح نمی‌توانید گزارش را تغییر دهید.'}</p>
         </Card>
         <Pill tone="info">پیش‌نمایش گزارش رسمی پس از ارسال در دسترس مدیر است</Pill>
       </aside>

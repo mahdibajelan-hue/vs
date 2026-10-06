@@ -15350,3 +15350,122 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function ms_record_origin(uuid[]) from public, anon;
 grant execute on function ms_record_origin(uuid[]) to authenticated;
+
+-- =============================================================================
+-- 65. Signatures: a sample signature on the user's profile, frozen onto a mission report when it is submitted
+-- =============================================================================
+-- user_signatures holds ONE PNG data URL per user, readable and writable by its owner only. Reports never
+-- reference it later: ms_transition('submit_report') copies it into ms_reports.signature together with the
+-- preparer's name, position and the signing time, and refuses to submit when the user has none.
+
+create table if not exists user_signatures (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  image text not null check (image like 'data:image/png;base64,%' and length(image) < 400000),
+  updated_at timestamptz not null default now()
+);
+alter table user_signatures enable row level security;
+drop policy if exists "user_signatures_owner" on user_signatures;
+create policy "user_signatures_owner" on user_signatures for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+alter table ms_reports add column if not exists signature jsonb;
+
+-- Only ms_transition may write the signature; a client can never forge or carry one onto a draft.
+create or replace function ms_reports_guard_signature() returns trigger language plpgsql set search_path = public as $$
+begin
+  if coalesce(current_setting('ms.transition', true), '') <> 'on' then
+    if tg_op = 'INSERT' then new.signature := null;
+    elsif new.status = 'draft' then new.signature := null;
+    else new.signature := old.signature;
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_ms_reports_signature on ms_reports;
+create trigger trg_ms_reports_signature before insert or update on ms_reports for each row execute function ms_reports_guard_signature();
+
+create or replace function ms_transition(p_mission_id uuid, p_action text, p_comment text default '', p_data jsonb default '{}'::jsonb)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  m ms_missions%rowtype;
+  v_new text;
+  v_is_req boolean;
+  v_is_mgr boolean;
+  v_is_aa boolean;
+begin
+  select * into m from ms_missions where id = p_mission_id for update;
+  if not found then raise exception 'mission_not_found'; end if;
+  v_is_req := m.requester_id = auth.uid();
+  v_is_mgr := ms_is_manager() or m.approver_id = auth.uid();
+  v_is_aa := ms_is_admin_affairs();
+  if not (v_is_req or v_is_mgr or v_is_aa) then raise exception 'forbidden'; end if;
+
+  if p_action = 'submit_request' and v_is_req and m.status in ('draft', 'returned') then
+    if not exists (select 1 from ms_objectives where mission_id = m.id) then raise exception 'objectives_required'; end if;
+    v_new := 'pending_approval';
+  elsif p_action = 'approve_request' and v_is_mgr and m.status = 'pending_approval' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := case when m.needs_ticket then 'ticketing' else 'approved' end;
+  elsif p_action = 'return_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'returned';
+  elsif p_action = 'reject_request' and v_is_mgr and m.status = 'pending_approval' then v_new := 'rejected';
+  elsif p_action = 'issue_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'approved';
+  elsif p_action = 'return_ticket' and v_is_aa and m.status = 'ticketing' then v_new := 'returned';
+  elsif p_action = 'start_debrief' and v_is_req and m.status = 'approved' then v_new := 'debrief';
+  elsif p_action = 'submit_report' and v_is_req and m.status in ('debrief', 'revision_requested') then
+    if not exists (select 1 from ms_reports where mission_id = m.id) then raise exception 'report_required'; end if;
+    if not exists (select 1 from user_signatures where user_id = auth.uid()) then raise exception 'signature_required'; end if;
+    v_new := 'report_review';
+  elsif p_action = 'return_report' and v_is_mgr and m.status = 'report_review' then v_new := 'revision_requested';
+  elsif p_action = 'approve_report' and v_is_mgr and m.status = 'report_review' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'ready_for_claim';
+  elsif p_action = 'approve_claim' and v_is_aa and m.status = 'ready_for_claim' then
+    if m.requester_id = auth.uid() and not is_admin_user() then raise exception 'cannot_approve_own'; end if;
+    v_new := 'claimed';
+  elsif p_action = 'cancel' and (v_is_req or v_is_mgr) and m.status in ('draft', 'pending_approval', 'returned', 'ticketing', 'approved') then v_new := 'cancelled';
+  else
+    raise exception 'invalid_transition';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_missions set
+    status = v_new,
+    manager_comment = case when p_action in ('approve_request', 'return_request', 'reject_request', 'return_report', 'approve_report') then coalesce(p_comment, '') else manager_comment end,
+    admin_comment = case when p_action in ('issue_ticket', 'return_ticket', 'approve_claim') then coalesce(p_comment, '') else admin_comment end,
+    ticket = case when p_action = 'issue_ticket' then coalesce(p_data, '{}'::jsonb) else ticket end,
+    ticket_issued_at = case when p_action = 'issue_ticket' then now() else ticket_issued_at end,
+    ticket_issued_by = case when p_action = 'issue_ticket' then auth.uid() else ticket_issued_by end,
+    submitted_at = case when p_action = 'submit_request' then now() else submitted_at end,
+    approved_at = case when p_action = 'approve_request' then now() else approved_at end,
+    approver_id = case when p_action = 'approve_request' and approver_id is null then auth.uid() else approver_id end,
+    debrief_started_at = case when p_action = 'start_debrief' then now() else debrief_started_at end,
+    report_submitted_at = case when p_action = 'submit_report' then now() else report_submitted_at end,
+    final_approved_at = case when p_action = 'approve_report' then now() else final_approved_at end,
+    claimed_at = case when p_action = 'approve_claim' then now() else claimed_at end,
+    claim_approved_by = case when p_action = 'approve_claim' then auth.uid() else claim_approved_by end
+  where id = m.id;
+
+  if p_action = 'submit_report' then
+    -- The signature is copied from the preparer's profile at this moment; later profile edits never change a submitted report.
+    update ms_reports set status = 'submitted', submitted_at = now(),
+           signature = jsonb_build_object(
+             'image', (select image from user_signatures where user_id = auth.uid()),
+             'name', coalesce((select full_name from profiles where id = auth.uid()), ''),
+             'position', m.requester_position,
+             'signedAt', now())
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'return_report' then
+    update ms_reports set status = 'returned'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  elsif p_action = 'approve_report' then
+    update ms_reports set status = 'approved'
+     where mission_id = m.id and version = (select max(version) from ms_reports where mission_id = m.id);
+  end if;
+
+  insert into ms_events (mission_id, actor_id, event, comment, detail)
+  values (m.id, auth.uid(), p_action, coalesce(p_comment, ''), jsonb_build_object('from', m.status, 'to', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return v_new;
+end;
+$$;
+revoke execute on function ms_transition(uuid, text, text, jsonb) from public;
+grant execute on function ms_transition(uuid, text, text, jsonb) to authenticated;

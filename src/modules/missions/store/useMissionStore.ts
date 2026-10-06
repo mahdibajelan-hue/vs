@@ -42,6 +42,10 @@ interface MissionsState {
   portfolio: PortfolioData | null
   bundle: MissionBundle | null
   roles: RoleAssignment[]
+  /** The user's own sample signature: undefined = not loaded yet, null = none saved. */
+  signature: string | null | undefined
+  loadSignature: () => Promise<void>
+  saveSignature: (png: string) => Promise<boolean>
   loadRoles: () => Promise<void>
   toggleRole: (userId: string, role: MissionRole, on: boolean) => Promise<void>
   /** True while the engine is analysing an answer (the chat shows a typing indicator). */
@@ -103,6 +107,7 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
   ready: false,
   loading: false,
   error: null,
+  signature: undefined,
   user: null,
   people: [],
   projects: [],
@@ -375,6 +380,25 @@ export const useMissionStore = create<MissionsState>()((set, get) => ({
   },
 
   // ------------------------------------------------------------------------------------ report
+
+  loadSignature: async () => {
+    try {
+      set({ signature: await get().repo.loadMySignature() })
+    } catch {
+      set({ signature: null })
+    }
+  },
+
+  saveSignature: async (png) => {
+    try {
+      await get().repo.saveMySignature(png)
+      set({ signature: png })
+      return true
+    } catch (e) {
+      set({ error: FRIENDLY(e) })
+      return false
+    }
+  },
 
   submitReport: async () => {
     const s = get()

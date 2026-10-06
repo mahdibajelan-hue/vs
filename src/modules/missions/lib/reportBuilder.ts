@@ -92,14 +92,28 @@ export const OVERALL_STATUS_LABEL: Record<ReportContent['overallStatus'], string
   critical: 'بحرانی',
 }
 
-function notesOf(state: InterviewState | null, key: string): string[] {
-  return state?.topics[key]?.notes.filter((n) => n.trim().length > 3) ?? []
+/** One entry per answered line of the topic's notes ("label: value" for template answers, the sentence itself for free text). */
+function noteLines(state: InterviewState | null, key: string): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = []
+  for (const n of state?.topics[key]?.notes ?? []) {
+    for (const raw of n.split('\n')) {
+      const line = raw.trim()
+      if (line.length < 3 || /^\d+\)/.test(line)) continue // numbered lines are the decisions/actions blocks → they have their own tables
+      const m = line.match(/^([^:：]{1,80})[:：]\s*(.+)$/u)
+      out.push({ label: m ? m[1].trim() : '', value: (m ? m[2] : line).trim() })
+    }
+  }
+  return out
 }
 
 const NOTHING = /^(موردی|مشکلی|مانعی|ریسکی|ندارم|نداریم|ندارد|نبود|مورد دیگری|پیشنهادی ندارم|تصمیم یا توافق|مستندی ندارم|ثبت شد)/
 
+const NUMERIC_ONLY = /^[\d٠-٩۰-۹.,٫\s٪%]+$/
+
 function meaningfulNotes(state: InterviewState | null, key: string): string[] {
-  return notesOf(state, key).filter((n) => !NOTHING.test(n.trim()))
+  return noteLines(state, key)
+    .filter((l) => !NOTHING.test(l.value) && !NUMERIC_ONLY.test(l.value)) // metric lines are shown as numbers, «ندارم» carries nothing
+    .map((l) => (l.label ? `${l.label}: ${l.value}` : l.value))
 }
 
 export function buildReport(input: ReportInput): ReportContent {
@@ -168,14 +182,14 @@ export function buildReport(input: ReportInput): ReportContent {
     const related = liveFindings(findings).filter((f) => (f.details._area ?? f.topicKey) === key && (f.kind === 'issue' || f.kind === 'risk'))
     const tp = state.topics[key]
     if (tp?.state === 'skipped') discBullets.push(`${label}: در این بازدید بررسی نشد (${tp.closedReason || 'رد شد'}).`)
-    else if (notes.length) discBullets.push(`${label}: ${notes.join(' ')}`)
+    else if (notes.length) discBullets.push(`${label}: ${notes.join('؛ ')}`)
     else if (!related.length) discBullets.push(`${label}: مورد خاصی گزارش نشد.`)
     if (related.length && !notes.length) discBullets.push(`${label}: ${faNum(related.length)} موضوع ثبت شد (جزئیات در بخش مسائل و ریسک‌ها).`)
   }
   sections.push({
     key: 'findings',
     title: 'یافته‌های بازدید و وضعیت مهندسی، خرید، ساخت و اجرا',
-    body: overviewNotes.join(' '),
+    body: overviewNotes.join('؛ '),
     bullets: discBullets.length ? discBullets : undefined,
   })
 
@@ -221,7 +235,7 @@ function progressBody(p: { planned: number | null; actual: number | null }, note
       : p.actual != null
         ? `پیشرفت واقعی ${faNum(p.actual)} درصد (عدد برنامه‌ای اعلام نشد).`
         : 'عدد پیشرفت اعلام نشد.'
-  return [head, ...notes].join(' ')
+  return [head, ...notes].join(' ؛ ').replace(/^(.*?\.) ؛ /, '$1 ')
 }
 
 function buildRecommendations(
@@ -236,7 +250,7 @@ function buildRecommendations(
   for (const f of g.risks.filter((x) => x.severity === 'critical' || x.severity === 'high')) out.push(`ریسک «${f.title}» در سامانه مدیریت ریسک ثبت و برنامه کنترل آن تدوین شود.`)
   for (const f of g.commitments.filter((x) => x.dueDate)) out.push(`تعهد ${f.ownerText || 'طرف مقابل'}: «${f.title}» — موعد ${shamsiLong(f.dueDate)} پیگیری شود.`)
   for (const o of input.objectives.filter((x) => x.status === 'not_achieved' || x.status === 'follow_up' || x.status === 'partial')) out.push(`هدف «${o.title}» کامل نشده است؛ برنامه پیگیری یا بازدید تکمیلی تعیین شود.`)
-  const mine = meaningfulNotes(input.state, 'actions').filter((n) => /پیشنهاد|باید|بهتر|لازم/.test(n))
+  const mine = noteLines(input.state, 'actions').filter((l) => /^پیشنهاد/.test(l.label) && !NOTHING.test(l.value)).map((l) => l.value)
   for (const n of mine.slice(0, 2)) out.push(n)
   return [...new Set(out)].slice(0, 10)
 }

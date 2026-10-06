@@ -29,6 +29,7 @@ function fail(error: { message: string } | null | undefined, fallback = 'عمل�
     invalid_transition: 'این اقدام در وضعیت فعلی مأموریت مجاز نیست.',
     forbidden: 'دسترسی لازم برای این اقدام را ندارید.',
     manager_only: 'این اقدام فقط برای مجری طرح مجاز است.',
+    signature_required: 'برای ارسال گزارش ابتدا امضای نمونه خود را ثبت کنید.',
     cannot_approve_own: 'تأیید مأموریت، گزارش یا کلیم خود مجاز نیست.',
     no_issue_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت Issue متصل نشده است.',
     no_risk_mapping: 'برای این پروژه هنوز پروژه‌ای در مدیریت ریسک متصل نشده است.',
@@ -153,6 +154,7 @@ const toReport = (r: Row): Report => ({
   generatedBy: r.generated_by,
   createdAt: r.created_at,
   submittedAt: r.submitted_at,
+  signature: r.signature ?? null,
 })
 
 function findingRow(f: Finding): Row {
@@ -438,6 +440,16 @@ export function createSupabaseRepo(): MissionRepo {
       }
       await supabase.from('ms_missions').update({ quality_score: d.qualityScore }).eq('id', missionId)
       return toReport(saved)
+    },
+    async loadMySignature() {
+      const { data } = await supabase.from('user_signatures').select('image').maybeSingle()
+      return (data as Row | null)?.image ?? null
+    },
+    async saveMySignature(image) {
+      const { data: u } = await supabase.auth.getUser()
+      if (!u.user) throw new Error('ابتدا وارد حساب کاربری شوید.')
+      const { error } = await supabase.from('user_signatures').upsert({ user_id: u.user.id, image, updated_at: new Date().toISOString() })
+      if (error) fail(error)
     },
     async addEvent(missionId, event, comment = '') {
       const { data, error } = await supabase.from('ms_events').insert({ mission_id: missionId, event, comment }).select('*').single()

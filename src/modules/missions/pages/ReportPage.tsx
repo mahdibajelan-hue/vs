@@ -75,7 +75,7 @@ export function ReportPage({ id }: { id: string }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <div className="lg:col-span-3"><ReportPaper mission={m} content={content} report={bundle.report} projectName={m.projectName} /></div>
+        <div className="lg:col-span-3"><ReportPaper mission={m} content={content} report={bundle.report} projectName={m.projectName} findings={bundle.findings} objectives={bundle.objectives} /></div>
 
         <aside className="ms-no-print flex flex-col gap-4 lg:col-span-2">
           <Card className="p-5">

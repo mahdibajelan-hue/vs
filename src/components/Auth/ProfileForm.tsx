@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Camera, Check, Loader2, User } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { supabase } from '../../lib/supabaseClient'
 import { PasswordField } from './AuthGate'
+import { SignaturePad } from '../common/SignaturePad'
+import { loadMySignature, saveMySignature } from '../../lib/userSignature'
 
 export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSaved?: () => void }) {
   const profile = useAuthStore((s) => s.profile)
@@ -24,7 +26,31 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
   const [passInfo, setPassInfo] = useState('')
   const [savingPass, setSavingPass] = useState(false)
 
+  // Sample signature — printed under the user's mission reports. Saved on its own (not part of «ذخیره تغییرات»).
+  const [signature, setSignature] = useState<string | null>(null)
+  const [signatureLoaded, setSignatureLoaded] = useState(false)
+  const [savingSignature, setSavingSignature] = useState(false)
+  const [signatureError, setSignatureError] = useState('')
+  useEffect(() => {
+    loadMySignature().then((s) => {
+      setSignature(s)
+      setSignatureLoaded(true)
+    })
+  }, [])
+
   if (!profile) return null
+
+  const handleSignature = async (png: string) => {
+    setSavingSignature(true)
+    setSignatureError('')
+    try {
+      await saveMySignature(png)
+      setSignature(png)
+    } catch (e) {
+      setSignatureError(e instanceof Error ? e.message : 'ثبت امضا انجام نشد')
+    }
+    setSavingSignature(false)
+  }
 
   const handleAvatarPick = async (file: File) => {
     setUploading(true)
@@ -140,6 +166,14 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
         <span className="mb-1 block text-xs text-secondary">شماره تماس</span>
         <input value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="09xxxxxxxxx" dir="ltr" />
       </label>
+      <div className="space-y-2 rounded-xl border border-white/10 p-3">
+        <p className="text-xs font-bold text-secondary">امضای نمونه</p>
+        <p className="text-[11px] leading-5 text-muted">
+          امضای شما پای گزارش‌های مأموریتی که ارسال می‌کنید درج می‌شود. بدون امضای ثبت‌شده، ارسال گزارش مأموریت ممکن نیست. فقط خودتان می‌توانید آن را ببینید یا تغییر دهید.
+        </p>
+        {signatureLoaded ? <SignaturePad value={signature} onSave={handleSignature} saving={savingSignature} /> : <Loader2 size={14} className="animate-spin text-muted" />}
+        {signatureError && <p className="text-xs text-red-400">{signatureError}</p>}
+      </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
         onClick={submit}

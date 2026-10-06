@@ -104,6 +104,10 @@ export interface MissionRepo {
   saveReport(missionId: string, data: { content: ReportContent; qualityScore: number; breakdown: QualityCriterion[]; generatedBy: string }): Promise<Report>
   addEvent(missionId: string, event: string, comment?: string): Promise<MissionEvent | null>
 
+  /** The signed-in user's sample signature (PNG data URL) — frozen onto a report when it is submitted. */
+  loadMySignature(): Promise<string | null>
+  saveMySignature(image: string): Promise<void>
+
   transferFinding(findingId: string, target: TransferTarget, params?: Record<string, unknown>): Promise<{ target: TransferTarget; id: string }>
   linkedStatus(missionIds: string[]): Promise<LinkedStatus[]>
 }

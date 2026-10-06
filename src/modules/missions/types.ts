@@ -406,6 +406,15 @@ export interface QualityCriterion {
   topicKey?: string
 }
 
+/** The preparer's signature, frozen onto the report when it is submitted (later profile changes never alter it). */
+export interface ReportSignature {
+  /** PNG data URL */
+  image: string
+  name: string
+  position: string
+  signedAt: string
+}
+
 export interface Report {
   id: string
   missionId: string
@@ -417,6 +426,7 @@ export interface Report {
   generatedBy: string
   createdAt: string
   submittedAt: string | null
+  signature?: ReportSignature | null
 }
 
 export interface MissionEvent {

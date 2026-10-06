@@ -193,7 +193,7 @@ export function analysisTextOf(p: ParsedAnswer, fields: TemplateField[] = []): s
   const metric = new Set(fields.filter((f) => f.metric || f.noteOnly).map((f) => f.label))
   const lines: string[] = []
   for (const [k, v] of Object.entries(p.fields)) {
-    if (isBlank(v) || metric.has(k) || isUnknownValue(v) || detectNothing(normalizeFa(v))) continue
+    if (isBlank(v) || metric.has(k) || isNothingValue(v) || isYesOnly(v)) continue
     const words = normalizeFa(v).split(' ').length
     lines.push(words >= 4 ? `${v.replace(/[.\s]+$/u, '')}.` : `${k.replace(/[(（].*$/u, '').trim()}: ${v}.`)
   }
@@ -224,9 +224,25 @@ export function metricsOf(p: ParsedAnswer, fields: TemplateField[]): Record<stri
 }
 
 const UNKNOWN_WORDS = /^(نامشخص|نمی ?دانم|مشخص نیست|اعلام نشده|ندارد|ندارم|ندارند|نیست)$/
+const NO_ONLY = /^(نه|نخیر|خیر|هیچ|هیچی|هیچ چیز|چیزی نیست|مورد خاصی نیست|مورد دیگری نیست|مورد دیگری نبود)$/
+const YES_ONLY = /^(بله|بلی|آره|اره|دارد|هست|وجود دارد|بله دارد|بله هست)$/
+
+/** Normalised value without trailing punctuation (JS \b does not work with Persian letters, so we trim instead). */
+const tidy = (v: string) => normalizeFa(v).replace(/[.،!؟?؛\s]+$/u, '')
 
 export function isUnknownValue(v: string): boolean {
-  return UNKNOWN_WORDS.test(normalizeFa(v).replace(/[.،\s]+$/u, ''))
+  return UNKNOWN_WORDS.test(tidy(v))
+}
+
+/** True when the value says «nothing to report / don't know» (so it must never be mined for findings). */
+export function isNothingValue(v: string): boolean {
+  const t = tidy(v)
+  return UNKNOWN_WORDS.test(t) || NO_ONLY.test(t) || detectNothing(t)
+}
+
+/** «بله» with no detail says something exists but not what — the field is asked again. */
+export function isYesOnly(v: string | undefined): boolean {
+  return !!v && YES_ONLY.test(tidy(v))
 }
 
 /** Parsed repeating blocks → findings with owner and due date already set (the deterministic path for decisions and actions). */

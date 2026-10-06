@@ -251,6 +251,27 @@ export interface SeedContext {
   adminAffairs: CurrentUser
   /** Mark live rows so they can be found and removed later. */
   marker?: string
+  /** Offline demo only: draws a sample signature for a requester that has none. The live seed never invents one. */
+  demoSignature?: (name: string) => string
+}
+
+/** A deterministic hand-drawn-looking scribble (SVG data URL) for demos. */
+export function demoSignature(name: string): string {
+  let h = 7
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const r = (k: number) => ((h >>> k) & 15) / 15
+  let px = 12
+  let py = 52
+  let d = `M${px},${py}`
+  for (let i = 0; i < 8; i++) {
+    const x = 12 + (i + 1) * 36 + r(i) * 6
+    const y = 44 + (i % 2 ? 16 : -14) * (0.6 + r(i + 5)) + r(i + 9) * 8
+    d += ` Q${((px + x) / 2).toFixed(1)},${(Math.min(py, y) - 12 - r(i + 3) * 14).toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`
+    px = x
+    py = y
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90"><path d="${d}" fill="none" stroke="#1f2a44" stroke-width="2.6" stroke-linecap="round"/><path d="M40,70 C120,80 200,60 292,72" fill="none" stroke="#1f2a44" stroke-width="1.6" stroke-linecap="round"/></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function projectTypeOf(projects: ProjectRef[], id: string): string {
@@ -315,6 +336,12 @@ function composeBatchAnswer(p: PendingQuestion, state: InterviewState, sc: Scena
     })
   }
   return lines.join('\n')
+}
+
+async function ensureSignature(repo: MissionRepo, name: string, ctx: SeedContext): Promise<void> {
+  if (await repo.loadMySignature()) return
+  if (!ctx.demoSignature) throw new Error('برای ساخت داده نمونه ابتدا امضای نمونه خود را در «پروفایل» ثبت کنید؛ گزارش‌های نمونه با آن امضا می‌شوند.')
+  await repo.saveMySignature(ctx.demoSignature(name))
 }
 
 async function runInterview(repo: MissionRepo, mission: Mission, objectives: Objective[], ctx: SeedContext, sc: Scenario) {
@@ -406,6 +433,7 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
     const q = scoreReport({ mission: full.mission, objectives: full.objectives, findings, evidence: full.evidence, state, content })
     await asRequester.saveInterview(mission.id, { status: 'completed', summaryConfirmedAt: new Date().toISOString() })
     await asRequester.saveReport(mission.id, { content, qualityScore: q.score, breakdown: q.criteria, generatedBy: 'rules' })
+    await ensureSignature(asRequester, requester.name, ctx)
     await asRequester.transition(mission.id, 'submit_report')
     if (sc.end === 'review') continue
     if (sc.end === 'returned') {

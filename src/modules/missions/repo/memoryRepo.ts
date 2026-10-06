@@ -71,6 +71,8 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
     }
   }
 
+  const signatures = new Map<string, string>()
+
   function build(me: CurrentUser): MemoryRepo {
   const repo: MemoryRepo = {
     forUser: (u) => build(u),
@@ -176,6 +178,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       else if (action === 'start_debrief' && isReq && m.status === 'approved') next = 'debrief'
       else if (action === 'submit_report' && isReq && (m.status === 'debrief' || m.status === 'revision_requested')) {
         if (!list.length) throw new Error('ابتدا گزارش را تولید کنید.')
+        if (!signatures.get(me.id)) throw new Error('برای ارسال گزارش ابتدا امضای نمونه خود را ثبت کنید.')
         next = 'report_review'
       } else if (action === 'return_report' && isMgr && m.status === 'report_review') next = 'revision_requested'
       else if (action === 'approve_report' && isMgr && m.status === 'report_review') {
@@ -205,7 +208,11 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       missions.set(id, upd)
       const last = list[list.length - 1]
       if (last) {
-        if (action === 'submit_report') { last.status = 'submitted'; last.submittedAt = t }
+        if (action === 'submit_report') {
+          last.status = 'submitted'
+          last.submittedAt = t
+          last.signature = { image: signatures.get(me.id) ?? '', name: personName(me.id) || me.name, position: m.requesterPosition, signedAt: t }
+        }
         if (action === 'return_report') last.status = 'returned'
         if (action === 'approve_report') last.status = 'approved'
       }
@@ -299,6 +306,12 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
       const m = missions.get(missionId)
       if (m) missions.set(missionId, { ...m, qualityScore: d.qualityScore })
       return rep
+    },
+    async loadMySignature() {
+      return signatures.get(me.id) ?? null
+    },
+    async saveMySignature(image) {
+      signatures.set(me.id, image)
     },
     async addEvent(missionId, event, comment = '') {
       return logEvent(missionId, event, comment, me.id)
