@@ -35,7 +35,10 @@ function trackSpotlight(e: MouseEvent<HTMLElement>) {
  * own named component (ProjectRadarCard, PortfolioManagementCard, ...) so new modules can be
  * added later without touching this primitive — but the elevate/glow/spotlight/arrow behavior and
  * the locked-preview treatment stay identical across all of them. */
-export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+export function ModuleCard({ number, title, englishTag, description, icon: Icon, accent: moduleAccent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+  // Every module keeps its own hue, but pulled toward slate so the grid reads calm — the raw brand
+  // colors (neon green, hard-hat yellow) were far too loud side by side on the dark launchpad.
+  const accent = `color-mix(in srgb, ${moduleAccent} 66%, #8b9bb4)`
   // Before sign-in: only the bare icon shows (no title/description/border/background box) — the
   // full card treatment appears once the user is authenticated.
   if (locked) {
@@ -64,10 +67,10 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
       }`}
       style={{
         background: hero
-          ? `linear-gradient(160deg, color-mix(in srgb, ${accent} 40%, var(--bg-panel-solid)), color-mix(in srgb, ${accent} 12%, var(--bg-panel-solid)))`
+          ? `linear-gradient(160deg, color-mix(in srgb, ${accent} 22%, var(--bg-panel-solid)), color-mix(in srgb, ${accent} 7%, var(--bg-panel-solid)))`
           : undefined,
-        borderColor: hero ? accent : 'var(--border-soft)',
-        boxShadow: hero ? `0 0 56px color-mix(in srgb, ${accent} 55%, transparent)` : undefined,
+        borderColor: hero ? `color-mix(in srgb, ${accent} 60%, transparent)` : 'var(--border-soft)',
+        boxShadow: hero ? `0 0 44px color-mix(in srgb, ${accent} 22%, transparent)` : undefined,
         // @ts-expect-error -- custom property consumed by .hub-grid-card:focus-visible
         '--card-accent': accent,
       }}
@@ -78,7 +81,7 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
         <span
           className="font-mono text-[10px] font-bold tracking-[0.18em]"
           dir="ltr"
-          style={{ color: hero ? '#031008' : accent, opacity: hero ? 0.75 : 1 }}
+          style={{ color: accent }}
         >
           {number}
         </span>
@@ -87,31 +90,31 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-transform duration-300 group-hover:scale-110"
             style={
               hero
-                ? { background: accent, borderColor: accent }
+                ? { background: `color-mix(in srgb, ${accent} 30%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 55%, transparent)` }
                 : { background: `color-mix(in srgb, ${accent} 14%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 35%, transparent)` }
             }
           >
-            <Icon size={16} style={{ color: hero ? '#031008' : accent }} />
+            <Icon size={16} style={{ color: accent }} />
           </div>
         )}
       </div>
 
-      <p className="relative z-10 mt-3 text-sm font-extrabold" style={{ color: hero ? '#031008' : undefined }}>
+      <p className="relative z-10 mt-3 text-sm font-extrabold" style={undefined}>
         {title}
       </p>
-      <p className="eyebrow-en relative z-10 mt-0.5 text-[9px]" dir="ltr" style={{ color: hero ? 'color-mix(in srgb, #031008 70%, transparent)' : undefined }}>
+      <p className="eyebrow-en relative z-10 mt-0.5 text-[9px]" dir="ltr" style={undefined}>
         {englishTag}
       </p>
       <p
         className="relative z-10 mt-2 line-clamp-2 flex-1 text-[11px] leading-5"
-        style={{ color: hero ? 'color-mix(in srgb, #031008 85%, transparent)' : 'var(--text-secondary)' }}
+        style={{ color: 'var(--text-secondary)' }}
       >
         {description}
       </p>
 
       <div className="relative z-10 mt-3 flex items-center justify-between gap-2">
         {cta && !locked ? (
-          <span className="text-[10px] font-bold tracking-wide" dir="ltr" style={{ color: hero ? '#031008' : accent }}>
+          <span className="text-[10px] font-bold tracking-wide" dir="ltr" style={{ color: accent }}>
             {cta}
           </span>
         ) : (
@@ -123,7 +126,7 @@ export function ModuleCard({ number, title, englishTag, description, icon: Icon,
           <ArrowRight
             size={14}
             className="shrink-0 transition-transform duration-300 group-hover:translate-x-1"
-            style={{ color: hero ? '#031008' : accent }}
+            style={{ color: accent }}
           />
         )}
       </div>
