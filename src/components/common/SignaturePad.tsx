@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Eraser, ImageUp, Loader2, PenLine, Save } from 'lucide-react'
+import { clearSlabs } from '../../lib/imageTools'
 
 const W = 640
 const H = 220
@@ -110,14 +111,19 @@ export function SignaturePad({
       const c = canvasRef.current
       const ctx = c?.getContext('2d')
       if (!c || !ctx) return
-      ctx.clearRect(0, 0, W, H)
+      // Flatten on white first: a transparent PNG has rgb(0,0,0) under its transparent pixels, which the
+      // darkness test below would otherwise read as solid black ink (black blocks around the signature).
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, W, H)
       const k = Math.min(W / img.width, H / img.height, 1)
       const w = img.width * k
       const h = img.height * k
       ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h)
       // Scanned/photographed signatures have a white paper background: make it transparent.
       const px = ctx.getImageData(0, 0, W, H)
+      clearSlabs(px.data, W, H) // letterbox bars baked into the picture are not ink
       for (let i = 0; i < px.data.length; i += 4) {
+        if (px.data[i + 3] === 0) continue
         const lum = (px.data[i] + px.data[i + 1] + px.data[i + 2]) / 3
         if (lum > 215) px.data[i + 3] = 0
         else px.data[i + 3] = Math.min(255, (215 - lum) * 4)

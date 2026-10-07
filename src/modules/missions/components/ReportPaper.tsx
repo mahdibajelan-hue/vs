@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { FarinMark } from '../platform'
+import { useEffect, useState, type ReactNode } from 'react'
+import { FarinMark, cleanSignatureImage } from '../platform'
 import { faNum, shamsi, shamsiLong } from '../lib/fa'
 import { OVERALL_STATUS_LABEL } from '../lib/reportBuilder'
 import { DISCIPLINE_LABEL } from '../lib/discipline'
@@ -204,7 +204,7 @@ export function ReportPaper({
         <div className="ms-paper-signbox">
           <p className="ms-paper-k">تهیه‌کننده</p>
           <div className="ms-paper-signimg">
-            {sig ? <img src={sig.image} alt={`امضای ${sig.name}`} /> : <span className="ms-paper-k">محل امضا — پس از ارسال گزارش درج می‌شود</span>}
+            {sig ? <SignatureImage src={sig.image} name={sig.name} /> : <span className="ms-paper-k">محل امضا — پس از ارسال گزارش درج می‌شود</span>}
           </div>
           <p style={{ margin: 0 }}><b>{sig?.name ?? mission.requesterName}</b></p>
           <p className="ms-paper-k" style={{ margin: 0 }}>{sig?.position ?? mission.requesterPosition}{sig ? ` · ${shamsi(sig.signedAt)}` : mission.reportSubmittedAt ? ` · ${shamsi(mission.reportSubmittedAt)}` : ''}</p>
@@ -304,4 +304,20 @@ function IssueTable({ rows, base, risk }: { rows: IssueRow[]; base: number; risk
       </tbody>
     </table>
   )
+}
+
+/** The frozen signature, with any black slabs left by older uploads (transparent margins flattened to black) removed on the fly. */
+function SignatureImage({ src, name }: { src: string; name: string }) {
+  const [clean, setClean] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    setClean(null)
+    cleanSignatureImage(src)
+      .then((c) => live && c && setClean(c))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [src])
+  return <img src={clean ?? src} alt={`امضای ${name}`} />
 }

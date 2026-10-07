@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { PasswordField } from './AuthGate'
 import { SignaturePad } from '../common/SignaturePad'
 import { loadMySignature, saveMySignature } from '../../lib/userSignature'
-import { prepareAvatar } from '../../lib/imageTools'
+import { cleanSignatureImage, prepareAvatar } from '../../lib/imageTools'
 
 export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSaved?: () => void }) {
   const profile = useAuthStore((s) => s.profile)
@@ -33,9 +33,22 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
   const [savingSignature, setSavingSignature] = useState(false)
   const [signatureError, setSignatureError] = useState('')
   useEffect(() => {
-    loadMySignature().then((s) => {
+    loadMySignature().then(async (s) => {
       setSignature(s)
       setSignatureLoaded(true)
+      // A signature saved by an older version may carry black blocks around it (transparent margins flattened to black):
+      // repair it once and save the clean copy so new reports are signed with it.
+      if (s) {
+        try {
+          const cleaned = await cleanSignatureImage(s)
+          if (cleaned) {
+            await saveMySignature(cleaned)
+            setSignature(cleaned)
+          }
+        } catch {
+          /* leave the stored image as is */
+        }
+      }
     })
   }, [])
 

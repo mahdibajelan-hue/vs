@@ -134,3 +134,66 @@ export async function prepareAvatar(file: Blob): Promise<Blob> {
   bmp.close()
   return toBlob(out, 0.86)
 }
+
+/**
+ * Removes solid dark "slabs" from a signature drawing: full-height bands (letterbox bars, transparent margins that
+ * were flattened to black) are not ink, while real strokes are only a few pixels wide. Returns true when anything was cleared.
+ * Works in place on RGBA pixel data; a slab is >= 6 contiguous columns whose opaque dark share is >= 85 % of the height.
+ */
+export function clearSlabs(data: Uint8ClampedArray, width: number, height: number): boolean {
+  const dark = (p: number) => data[p + 3] > 128 && data[p] + data[p + 1] + data[p + 2] < 200
+  const isSlab: boolean[] = []
+  for (let x = 0; x < width; x++) {
+    let n = 0
+    for (let y = 0; y < height; y++) if (dark((y * width + x) * 4)) n++
+    isSlab.push(n / height >= 0.85)
+  }
+  let cleared = false
+  let x = 0
+  while (x < width) {
+    if (!isSlab[x]) {
+      x++
+      continue
+    }
+    let end = x
+    while (end < width && isSlab[end]) end++
+    if (end - x >= 6) {
+      // include a few anti-aliased columns on both sides
+      const from = Math.max(0, x - 2)
+      const to = Math.min(width, end + 2)
+      for (let cx = from; cx < to; cx++) for (let y = 0; y < height; y++) data[(y * width + cx) * 4 + 3] = 0
+      cleared = true
+    }
+    x = end
+  }
+  return cleared
+}
+
+/** Repairs a stored signature PNG (data URL) that has dark slabs baked in. Returns the cleaned PNG, or null when nothing needed cleaning. */
+export async function cleanSignatureImage(src: string): Promise<string | null> {
+  const blob = await (await fetch(src)).blob()
+  const bmp = await createImageBitmap(blob)
+  const c = document.createElement('canvas')
+  c.width = bmp.width
+  c.height = bmp.height
+  const ctx = c.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(bmp, 0, 0)
+  bmp.close()
+  const px = ctx.getImageData(0, 0, c.width, c.height)
+  if (!clearSlabs(px.data, c.width, c.height)) return null
+  ctx.putImageData(px, 0, 0)
+  // crop to the remaining ink
+  let minX = c.width, minY = c.height, maxX = -1, maxY = -1
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (px.data[(y * c.width + x) * 4 + 3] > 24) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
+  if (maxX < 0) return null
+  const pad = 8
+  const sx = Math.max(0, minX - pad)
+  const sy = Math.max(0, minY - pad)
+  const sw = Math.min(c.width - sx, maxX - minX + pad * 2)
+  const sh = Math.min(c.height - sy, maxY - minY + pad * 2)
+  const out = document.createElement('canvas')
+  out.width = sw
+  out.height = sh
+  out.getContext('2d')!.drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh)
+  return out.toDataURL('image/png')
+}
