@@ -131,6 +131,7 @@ const toEvidence = (r: Row): Evidence => ({
   filePath: r.file_path,
   mime: r.mime ?? '',
   sizeBytes: r.size_bytes ?? 0,
+  capturedAt: r.captured_at ?? null,
   createdAt: r.created_at,
 })
 
@@ -418,7 +419,7 @@ export function createSupabaseRepo(): MissionRepo {
       }
       const { data, error } = await supabase
         .from('ms_evidence')
-        .insert({ mission_id: missionId, finding_id: draft.findingId, objective_id: draft.objectiveId, topic_key: draft.topicKey, kind: draft.kind, title: draft.title, note: draft.note, file_path: filePath, mime, size_bytes: size })
+        .insert({ mission_id: missionId, finding_id: draft.findingId, objective_id: draft.objectiveId, topic_key: draft.topicKey, kind: draft.kind, title: draft.title, note: draft.note, file_path: filePath, mime, size_bytes: size, captured_at: draft.capturedAt ?? null })
         .select('*')
         .single()
       if (error) fail(error)

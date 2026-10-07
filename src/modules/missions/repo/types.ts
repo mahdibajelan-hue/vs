@@ -103,7 +103,7 @@ export interface MissionRepo {
   deleteFinding(id: string): Promise<void>
   updateObjective(id: string, patch: Partial<Pick<Objective, 'status' | 'resultNote'>>): Promise<void>
 
-  addEvidence(missionId: string, draft: { kind: EvidenceKind; title: string; note: string; topicKey: string; findingId: string | null; objectiveId: string | null }, file: File | Blob | null): Promise<Evidence>
+  addEvidence(missionId: string, draft: { kind: EvidenceKind; title: string; note: string; topicKey: string; findingId: string | null; objectiveId: string | null; capturedAt?: string | null }, file: File | Blob | null): Promise<Evidence>
   deleteEvidence(id: string): Promise<void>
   evidenceUrl(path: string): Promise<string | null>
 

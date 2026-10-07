@@ -51,7 +51,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
             title="پروفایل من"
           >
             {currentUser.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+              <img src={currentUser.avatarUrl} alt="" className="h-4 w-4 rounded-full bg-white object-cover" />
             ) : (
               <UserCircle2 size={14} />
             )}

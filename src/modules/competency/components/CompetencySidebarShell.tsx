@@ -152,7 +152,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
                 title="پروفایل من — مشخصات و رمز عبور"
               >
                 {myProfile.avatarUrl ? (
-                  <img src={myProfile.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+                  <img src={myProfile.avatarUrl} alt="" className="h-4 w-4 rounded-full bg-white object-cover" />
                 ) : (
                   <UserCircle2 size={14} />
                 )}

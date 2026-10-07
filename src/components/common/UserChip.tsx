@@ -21,7 +21,7 @@ export function UserChip({ className = '' }: { className?: string }) {
         className={`flex min-w-0 items-center gap-2 rounded-full border border-white/10 py-1 pr-1 pl-2.5 transition-colors hover:bg-white/5 ${className}`}
       >
         {user.avatarUrl ? (
-          <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+          <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full bg-white object-cover" />
         ) : (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white">
             <UserCircle2 size={16} />

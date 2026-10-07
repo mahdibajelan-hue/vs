@@ -11,6 +11,7 @@ import { SignaturePad } from '../platform'
 import { FindingCard } from '../components/FindingCard'
 import { FindingEditor } from '../components/FindingEditor'
 import { EvidencePanel } from '../components/EvidencePanel'
+import { AttendanceCard } from '../components/AttendanceCard'
 import { FINDING_KIND_LABEL, OBJECTIVE_STATUS_LABEL, type Finding, type FindingKind, type ObjectiveStatus } from '../types'
 
 const GROUPS: FindingKind[] = ['issue', 'risk', 'action', 'commitment', 'decision']
@@ -124,6 +125,7 @@ export function SummaryPage({ id }: { id: string }) {
 
         <Card className="p-5">
           <SectionHead eyebrow="شواهد" title={`${faNum(bundle.evidence.length)} مدرک پیوست شده`} />
+          <div className="mb-3"><AttendanceCard missionId={id} /></div>
           <EvidencePanel missionId={id} kinds={['photo', 'file', 'minutes', 'letter', 'technical', 'note']} topicKey="" compact />
         </Card>
       </div>

@@ -10,6 +10,7 @@ import type {
   Priority,
 } from '../types'
 import { OBJECTIVE_STATUS_LABEL, PRIORITY_LABEL, VISIT_TYPE_LABEL } from '../types'
+import { attendanceOf } from './attendance'
 import { faNum, missionDays, shamsiLong } from './fa'
 import { topicTitle, type QuestionSet } from './questionSets'
 
@@ -32,6 +33,14 @@ export interface ReportInput {
 
 const SEV_ORDER: Priority[] = ['critical', 'high', 'medium', 'low']
 const bySeverity = (a: Finding, b: Finding) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity)
+
+function attendanceLine(evidence: Evidence[], mission: Pick<Mission, 'startDate' | 'endDate'>): string {
+  const a = attendanceOf(evidence, mission)
+  if (a.status === 'verified') return `حضور بازدیدکننده با ${faNum(a.verified)} عکس ثبت‌شده در بازهٔ مأموریت تأیید شده است.`
+  if (a.status === 'unverified') return 'عکس بارگذاری شده است ولی تاریخ ثبت آن قابل تأیید نیست.'
+  if (a.status === 'outside') return 'عکس‌های بارگذاری‌شده خارج از بازهٔ مأموریت گرفته شده‌اند.'
+  return 'عکسی برای تأیید حضور در جلسه یا بازدید بارگذاری نشده است.'
+}
 
 export function liveFindings(findings: Finding[]): Finding[] {
   return findings.filter((f) => f.approval !== 'rejected')
@@ -216,7 +225,7 @@ export function buildReport(input: ReportInput): ReportContent {
   sections.push({
     key: 'evidence',
     title: 'مستندات و تصاویر',
-    body: evidence.length ? `${faNum(evidence.length)} مستند به این گزارش پیوست شده است.` : 'مستندی پیوست نشده است.',
+    body: [evidence.length ? `${faNum(evidence.length)} مستند به این گزارش پیوست شده است.` : 'مستندی پیوست نشده است.', attendanceLine(evidence, input.mission)].filter(Boolean).join(' '),
     bullets: evidence.map((e) => `${e.title || 'بدون عنوان'}${e.topicKey ? ` (${topicTitle(input.set, e.topicKey)})` : ''}`),
   })
 

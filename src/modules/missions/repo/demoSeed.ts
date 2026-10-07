@@ -669,7 +669,7 @@ export async function seedDemo(ctx: SeedContext): Promise<number> {
     const bundle = await asRequester.loadBundle(mission.id)
     const { state, findings } = await runInterview(asRequester, bundle.mission, bundle.objectives, ctx, sc)
     for (let i = 0; i < (sc.evidence ?? 0); i++) {
-      await asRequester.addEvidence(mission.id, { kind: (['photo', 'minutes', 'letter', 'technical'] as const)[i % 4], title: ['عکس از محل بازدید', 'صورتجلسه با سازنده', 'نامه تسریع', 'مدرک فنی'][i % 4], note: '', topicKey: ['construction', 'decisions', 'procurement', 'quality'][i % 4], findingId: null, objectiveId: null }, null)
+      await asRequester.addEvidence(mission.id, { kind: (['photo', 'minutes', 'letter', 'technical'] as const)[i % 4], title: ['عکس از محل بازدید', 'صورتجلسه با سازنده', 'نامه تسریع', 'مدرک فنی'][i % 4], note: '', topicKey: ['construction', 'decisions', 'procurement', 'quality'][i % 4], findingId: null, objectiveId: null, capturedAt: `${start}T11:30:00` }, null)
     }
     if (sc.end === 'debrief') continue
     const full = await asRequester.loadBundle(mission.id)

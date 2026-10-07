@@ -270,6 +270,8 @@ export interface Evidence {
   filePath: string | null
   mime: string
   sizeBytes: number
+  /** When a photo was taken (EXIF), if the file said. */
+  capturedAt: string | null
   createdAt: string
 }
 

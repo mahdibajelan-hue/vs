@@ -312,6 +312,7 @@ export function createMemoryRepo(opts: { user: CurrentUser; people: PersonRef[];
         filePath: file ? `mem/${uid()}` : null,
         mime: file?.type ?? '',
         sizeBytes: file?.size ?? 0,
+        capturedAt: draft.capturedAt ?? null,
         createdAt: now(),
       }
       evidence.set(e.id, e)

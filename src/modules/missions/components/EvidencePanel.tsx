@@ -3,9 +3,11 @@ import { Camera, FileAudio, FileText, Mic, Paperclip, Square, StickyNote, Trash2
 import { useMissionStore } from '../store/useMissionStore'
 import { EVIDENCE_KIND_LABEL, type Evidence, type EvidenceKind } from '../types'
 import { faNum, timeAgoFa } from '../lib/fa'
+import { preparePhoto } from '../lib/photo'
+import { MAX_PHOTOS_PER_MISSION } from '../lib/attendance'
 
 const KIND_ICON: Record<EvidenceKind, typeof Paperclip> = { photo: Camera, file: Paperclip, minutes: FileText, letter: FileText, technical: FileText, note: StickyNote, voice: FileAudio }
-const MAX_BYTES = 8 * 1024 * 1024
+const MAX_BYTES = 8 * 1024 * 1024 // documents; photos are compressed to ~350 KB first
 
 /**
  * Evidence attached to a specific topic (or to the request as a whole): photos, minutes, letters,
@@ -38,14 +40,35 @@ export function EvidencePanel({ missionId, kinds, topicKey, findingId = null, co
     const k = kindOverride ?? kind
     const t = title.trim() || fallbackTitle || (file instanceof File ? file.name : EVIDENCE_KIND_LABEL[k])
     if (k === 'note' && !note.trim()) return
-    if (file && file.size > MAX_BYTES) {
+    const isImage = file instanceof File && (k === 'photo' || file.type.startsWith('image/'))
+    if (!isImage && file && file.size > MAX_BYTES) {
       setErr('حجم فایل بیش از ۸ مگابایت است.')
+      return
+    }
+    if (isImage && (bundle?.evidence.filter((e) => e.kind === 'photo').length ?? 0) >= MAX_PHOTOS_PER_MISSION && k === 'photo') {
+      setErr(`برای هر مأموریت حداکثر ${faNum(MAX_PHOTOS_PER_MISSION)} عکس نگه داشته می‌شود؛ یکی از قبلی‌ها را حذف کنید.`)
       return
     }
     setErr('')
     setBusy(true)
     try {
-      await addEvidence({ kind: k, title: t, note, topicKey, findingId, objectiveId: null }, file)
+      let upload: File | Blob | null = file
+      let capturedAt: string | null = null
+      if (isImage && file instanceof File) {
+        // Phone photos are 3-8 MB: resize and re-encode (~150-350 KB) so the storage never fills up; the capture time is read first.
+        try {
+          const prepared = await preparePhoto(file)
+          upload = new File([prepared.blob], `${t.replace(/[^\w\u0600-\u06FF-]+/g, '_').slice(0, 40) || 'photo'}.jpg`, { type: 'image/jpeg' })
+          capturedAt = prepared.capturedAt
+        } catch {
+          if (file.size > MAX_BYTES) {
+            setErr('این تصویر خوانده نشد و حجمش زیاد است؛ فرمت JPG یا PNG بفرستید.')
+            setBusy(false)
+            return
+          }
+        }
+      }
+      await addEvidence({ kind: k, title: t, note, topicKey, findingId, objectiveId: null, capturedAt }, upload)
       setTitle('')
       setNote('')
       if (fileRef.current) fileRef.current.value = ''

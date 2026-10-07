@@ -67,7 +67,7 @@ export function Header() {
               className="flex items-center gap-2 rounded-lg py-1 pr-1 pl-2 hover:bg-white/5 transition-colors"
             >
               {currentUser?.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                <img src={currentUser.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full bg-white object-cover" />
               ) : (
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white">
                   <UserCircle2 size={17} />

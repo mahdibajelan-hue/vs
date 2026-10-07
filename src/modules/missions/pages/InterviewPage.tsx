@@ -7,6 +7,7 @@ import { topicTitle } from '../lib/questionSets'
 import { faNum } from '../lib/fa'
 import { KindBadge, Meter, Pill, ScoreGauge, SeverityDot, TOPIC_ICON } from '../components/ui'
 import { EvidencePanel } from '../components/EvidencePanel'
+import { AttendanceCard } from '../components/AttendanceCard'
 import { FindingEditor } from '../components/FindingEditor'
 import { useSpeech } from '../components/useSpeech'
 import { planTopics, type MissionContext } from '../lib/questionSets'
@@ -304,6 +305,7 @@ export function InterviewPage({ id }: { id: string }) {
       {current && canWrite && (
         <div className="mt-2 border-t pt-3" style={{ borderColor: 'var(--ms-line)' }}>
           <p className="mb-2 flex items-center gap-1.5 text-[12.5px] font-extrabold"><Paperclip size={14} aria-hidden /> شواهد «{topicTitle(set, current)}»</p>
+          {current === 'evidence' && <div className="mb-3"><AttendanceCard missionId={id} /></div>}
           <EvidencePanel missionId={id} kinds={['photo', 'file', 'minutes', 'letter', 'technical', 'note', 'voice']} topicKey={current} compact />
         </div>
       )}

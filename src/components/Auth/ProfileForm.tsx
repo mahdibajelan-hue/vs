@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { PasswordField } from './AuthGate'
 import { SignaturePad } from '../common/SignaturePad'
 import { loadMySignature, saveMySignature } from '../../lib/userSignature'
+import { prepareAvatar } from '../../lib/imageTools'
 
 export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSaved?: () => void }) {
   const profile = useAuthStore((s) => s.profile)
@@ -55,9 +56,16 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
   const handleAvatarPick = async (file: File) => {
     setUploading(true)
     setError('')
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${profile.id}/avatar.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    let body: Blob = file
+    try {
+      // Square crop without black/transparent borders, 320 px, flattened on white (~30 KB).
+      body = await prepareAvatar(file)
+    } catch {
+      /* undecodable (e.g. HEIC in an old browser): upload the original */
+    }
+    const processed = body !== file
+    const path = `${profile.id}/avatar.${processed ? 'jpg' : file.name.split('.').pop() ?? 'jpg'}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, body, { upsert: true, contentType: processed ? 'image/jpeg' : file.type })
     setUploading(false)
     if (upErr) {
       setError('خطا در آپلود عکس — ' + upErr.message)
@@ -125,7 +133,7 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
           className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/5"
         >
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            <img src={avatarUrl} alt="" className="h-full w-full bg-white object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center">
               <User size={28} className="text-muted" />

@@ -90,7 +90,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
       {currentUser && (
         <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-xl bg-white/[0.04] p-2.5 border" style={{ borderColor: 'var(--border-soft)' }}>
           {currentUser.avatarUrl ? (
-            <img src={currentUser.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <img src={currentUser.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full bg-white object-cover" />
           ) : (
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white">
               <UserCircle2 size={20} />

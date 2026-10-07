@@ -15801,3 +15801,10 @@ begin
   execute 'alter table ms_roles dr' || 'op constraint if exists ms_roles_role_check';
   execute 'alter table ms_roles add constraint ms_roles_role_check check (role in (''executive'', ''admin_affairs'', ''employee''))';
 end $$;
+
+-- =============================================================================
+-- 68. Missions: photo capture time (attendance proof)
+-- =============================================================================
+-- captured_at: when the photo was taken (EXIF DateTimeOriginal, read in the browser before the image is
+-- compressed). A photo taken inside the mission's dates counts as proof of attendance in the report score.
+alter table ms_evidence add column if not exists captured_at timestamptz;

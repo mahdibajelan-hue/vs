@@ -74,7 +74,7 @@ interface MissionsState {
   removeFinding: (id: string) => Promise<void>
   addManualFinding: (f: Pick<Finding, 'kind' | 'title' | 'topicKey' | 'severity'> & Partial<Finding>) => Promise<void>
   setObjective: (id: string, patch: { status?: MissionBundle['objectives'][number]['status']; resultNote?: string }) => Promise<void>
-  addEvidence: (draft: { kind: EvidenceKind; title: string; note: string; topicKey: string; findingId: string | null; objectiveId: string | null }, file: File | Blob | null) => Promise<void>
+  addEvidence: (draft: { kind: EvidenceKind; title: string; note: string; topicKey: string; findingId: string | null; objectiveId: string | null; capturedAt?: string | null }, file: File | Blob | null) => Promise<void>
   removeEvidence: (id: string) => Promise<void>
 
   submitReport: () => Promise<boolean>
