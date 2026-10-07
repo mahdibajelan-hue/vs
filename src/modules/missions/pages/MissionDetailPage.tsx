@@ -3,10 +3,11 @@ import { openRecord } from '../integration/recordSystems'
 import { ArrowRight, BadgeCheck, Plane, CalendarDays, Check, ClipboardCopy, FileText, History, MapPin, Pencil, Play, Send, UserRound, X } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
-import { nextStepFor, STEPS, STEP_OWNER, stepIndex, waitingOn } from '../lib/workflow'
+import { nextStepFor, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, missionDays, shamsi, shamsiLong, timeAgoFa } from '../lib/fa'
 import { Card, Field, Pill, ScoreGauge, SectionHead, StatusPill } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
+import { MissionTimeline } from '../components/MissionTimeline'
 import { EvidencePanel } from '../components/EvidencePanel'
 import { IntegrityPanel } from '../components/IntegrityPanel'
 import { DeleteMissionButton } from '../components/DeleteMissionButton'
@@ -92,19 +93,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
         <div className="mt-3 flex justify-end"><DeleteMissionButton mission={m} onDeleted={() => go({ kind: 'list' })} /></div>
 
-        {idx >= 0 && (
-          <div className="ms-steps mt-5" role="list" aria-label="مراحل مأموریت">
-            {STEPS.map((s, i) => (
-              <div key={s} className="contents" role="listitem">
-                <div className={`ms-step ${i < idx ? 'is-done' : i === idx ? 'is-now' : ''}`}>
-                  <span className="ms-step-dot">{i < idx ? <Check size={13} aria-hidden /> : faNum(i + 1)}</span>
-                  <span className="ms-step-label">{s}<span className="ms-muted block text-[10px] font-medium">{STEP_OWNER[i]}</span></span>
-                </div>
-                {i < STEPS.length - 1 && <span className={`ms-step-bar ${i < idx ? 'is-done' : ''}`} />}
-              </div>
-            ))}
-          </div>
-        )}
+        {idx >= 0 && <div className="mt-5"><MissionTimeline status={m.status} /></div>}
 
         {/* ------------------------------------------------------------ actions */}
         <div className="mt-5 flex flex-col gap-3 border-t pt-4" style={{ borderColor: 'var(--ms-line)' }}>

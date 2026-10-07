@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
-import { nextStepFor, STEPS, stepIndex, waitingOn } from '../lib/workflow'
+import { nextStepFor, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, shamsi, missionDays } from '../lib/fa'
 import { Avatar, Card, EmptyState, Pill, StatusPill } from '../components/ui'
 import { DeleteMissionButton } from '../components/DeleteMissionButton'
+import { MissionTimeline } from '../components/MissionTimeline'
 import { MISSION_STATUS_LABEL, VISIT_TYPE_LABEL, type Mission, type MissionStatus } from '../types'
 
 const FILTERS: { key: string; label: string; test: (m: Mission) => boolean }[] = [
@@ -85,13 +86,7 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                           <span className="inline-flex items-center gap-1"><CalendarDays size={12} aria-hidden />{shamsi(m.startDate)} · {faNum(missionDays(m.startDate, m.endDate))} روز</span>
                           <span>{VISIT_TYPE_LABEL[m.visitType]}</span>
                         </span>
-                        {idx >= 0 && (
-                          <span className="mt-2 flex items-center gap-1.5" aria-label={`مرحله ${STEPS[Math.min(idx, STEPS.length - 1)]}`}>
-                            {STEPS.map((s, i) => (
-                              <span key={s} title={s} className="h-1.5 flex-1 rounded-full" style={{ background: i < idx ? 'var(--ms-good)' : i === idx ? 'var(--ms-accent)' : 'var(--ms-line-2)' }} />
-                            ))}
-                          </span>
-                        )}
+                        {idx >= 0 && <span className="mt-2.5 block"><MissionTimeline status={m.status as MissionStatus} compact /></span>}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center gap-2 md:w-72 md:gap-3">

@@ -83,7 +83,6 @@
 .ms-root.ms-dark { background: var(--ms-bg); }
 .ms-dark .ms-btn-primary { color: #0a0f1e; }
 .ms-dark .ms-chip.is-on, .ms-dark .ms-bottom-nav button.is-on { color: #0a0f1e; }
-.ms-dark .ms-step.is-done .ms-step-dot, .ms-dark .ms-step.is-now .ms-step-dot { color: #0a0f1e; }
 
 /* dialogs live in a portal on the app's own (dark) glass panel — give them the module's card skin */
 .ms-modal-panel {
@@ -290,21 +289,72 @@ button.ms-kpi { cursor: pointer; }
 .ms-chip[aria-pressed='true'],
 .ms-chip.is-on { background: var(--ms-accent); border-color: transparent; color: #fff; box-shadow: 0 8px 16px -8px var(--ms-accent); }
 
-/* ---- workflow stepper --------------------------------------------------------------------------- */
-.ms-steps { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 2px 2px 6px; }
-.ms-step { display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 92px; }
-.ms-step-dot {
-  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
-  border: 2px solid var(--ms-line-2); color: var(--ms-muted); background: var(--ms-panel);
+/* ---- mission timeline (six workflow steps) ------------------------------------------------------- */
+.ms-tl { --n: 38px; display: flex; align-items: flex-start; margin: 0; padding: 4px 0 6px; list-style: none; overflow-x: auto; }
+.ms-tl.is-compact { --n: 24px; padding: 0; overflow: visible; }
+.ms-tl-step { position: relative; flex: 1 1 0; min-width: 66px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ms-tl.is-compact .ms-tl-step { min-width: 0; }
+.ms-tl-node {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: center;
+  width: var(--n); height: var(--n); border-radius: 50%;
+  background: var(--ms-panel); border: 2px solid var(--ms-line-2); color: var(--ms-muted);
+  animation: ms-tl-pop 240ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms);
 }
-.ms-step.is-done .ms-step-dot { background: var(--ms-good); border-color: var(--ms-good); color: #fff; }
-.ms-step.is-now .ms-step-dot { background: var(--ms-accent); border-color: var(--ms-accent); color: #fff; box-shadow: 0 0 0 4px var(--ms-accent-soft); }
-.ms-step-label { font-size: 11px; font-weight: 600; color: var(--ms-muted); line-height: 1.5; }
-.ms-step.is-done .ms-step-label, .ms-step.is-now .ms-step-label { color: var(--ms-ink); }
-.ms-step-bar { flex: 1 1 16px; height: 2px; background: var(--ms-line-2); margin: 0 6px; min-width: 12px; }
-.ms-step.is-done + .ms-step-bar, .ms-step-bar.is-done { background: var(--ms-good); }
+.ms-tl-step.is-done .ms-tl-node { background: var(--ms-good); border-color: var(--ms-good); color: #fff; }
+.ms-tl-step.is-now .ms-tl-node { background: var(--ms-accent); border-color: var(--ms-accent); color: var(--ms-accent-ink); }
+.ms-tl-step.is-now.is-warn .ms-tl-node { background: var(--ms-orange); border-color: var(--ms-orange); color: #fff; }
+.ms-dark .ms-tl-step.is-done .ms-tl-node { color: #0a0f1e; }
+/* current step: a slow ring, state indication only */
+.ms-tl-step.is-now .ms-tl-node::after {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--ms-accent); opacity: 0; pointer-events: none;
+  animation: ms-tl-ring 2s var(--ms-ease-out) infinite; animation-delay: calc(var(--i) * 60ms + 600ms);
+}
+.ms-tl-step.is-now.is-warn .ms-tl-node::after { border-color: var(--ms-orange); }
+.ms-tl-tick {
+  position: absolute; inset-block-end: -3px; inset-inline-start: -3px; width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #fff; color: var(--ms-good); border: 1.5px solid var(--ms-good);
+}
+.ms-tl-label {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; font-size: 11.5px; font-weight: 600; line-height: 1.5; color: var(--ms-muted);
+  animation: ms-tl-fade 240ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms + 80ms);
+}
+.ms-tl-label small { font-size: 10px; font-weight: 500; color: var(--ms-muted); }
+.ms-tl-step.is-done .ms-tl-label, .ms-tl-step.is-now .ms-tl-label { color: var(--ms-ink); }
+/* connector to the next step: grey track, green fill drawn with transform */
+.ms-tl-link {
+  position: absolute; z-index: 0; top: calc(var(--n) / 2 - 1.5px); height: 3px; border-radius: 3px; background: var(--ms-line-2); overflow: hidden;
+  right: calc(50% + var(--n) / 2 + 4px); left: calc(-50% + var(--n) / 2 + 4px);
+}
+.ms-tl-link i { display: block; height: 100%; background: var(--ms-good); transform: scaleX(0); transform-origin: right; }
+.ms-tl-step.is-done .ms-tl-link i { animation: ms-tl-fill 360ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms + 160ms); }
+.ms-tl.is-compact .ms-tl-node, .ms-tl.is-compact .ms-tl-label, .ms-tl.is-compact .ms-tl-link i, .ms-tl.is-compact .ms-tl-step.is-now .ms-tl-node::after { animation: none; }
+.ms-tl.is-compact .ms-tl-step.is-done .ms-tl-link i { transform: none; }
+.ms-tl.is-compact .ms-tl-step.is-now .ms-tl-node { box-shadow: 0 0 0 3px var(--ms-accent-soft); }
+.ms-tl.is-compact .ms-tl-step.is-now.is-warn .ms-tl-node { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ms-orange) 22%, transparent); }
+@media (max-width: 520px) {
+  .ms-tl:not(.is-compact) { --n: 32px; overflow: visible; }
+  .ms-tl:not(.is-compact) .ms-tl-step { min-width: 0; gap: 6px; }
+  .ms-tl:not(.is-compact) .ms-tl-label { font-size: 10px; }
+  .ms-tl:not(.is-compact) .ms-tl-label small { font-size: 9px; }
+}
+@keyframes ms-tl-pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes ms-tl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ms-tl-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ms-tl-ring { 0% { opacity: 0.55; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.55); } }
+
+/* a link to another record: unmistakably clickable (tint + underline + arrow that leans toward the target) */
+.ms-link {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px; border: 0; border-radius: 99px;
+  background: var(--ms-accent-soft); color: var(--ms-accent); font-size: 11.5px; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ms-accent) 45%, transparent); text-underline-offset: 3px;
+  transition: background-color 0.15s, transform 160ms var(--ms-ease-out);
+}
+.ms-link:active { transform: scale(0.97); }
+.ms-link-arrow { flex-shrink: 0; transition: transform 160ms var(--ms-ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .ms-link:hover { background: color-mix(in srgb, var(--ms-accent) 20%, transparent); text-decoration-color: var(--ms-accent); }
+  .ms-link:hover .ms-link-arrow { transform: translateX(-3px); }
+}
 
 /* ---- interview ----------------------------------------------------------------------------------- */
 .ms-chat { display: flex; flex-direction: column; gap: 14px; }
@@ -557,3 +607,10 @@ button.ms-card-flat { transition: transform 160ms var(--ms-ease-out), border-col
 .ms-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ms-ink); font-size: 12.5px; font-weight: 600; text-align: right; }
 .ms-menu button.is-danger { color: var(--ms-bad); }
 @media (hover: hover) and (pointer: fine) { .ms-menu button:hover { background: var(--ms-panel-2); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-tl-node { animation-name: ms-tl-fade; }
+  .ms-tl-link i { animation: none !important; transform: none; }
+  .ms-tl-step.is-now .ms-tl-node::after { animation: none; opacity: 0.35; transform: scale(1.25); }
+  .ms-link-arrow, .ms-link:active { transform: none !important; }
+}

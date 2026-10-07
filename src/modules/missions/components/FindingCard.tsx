@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, ExternalLink, Link2, Lock, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, ExternalLink, Link2, Lock, Pencil, Trash2, X } from 'lucide-react'
 import { FINDING_KIND_LABEL, type Finding, type LinkedStatus, type TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
 import { KindBadge, Pill, SeverityDot } from './ui'
@@ -92,8 +92,10 @@ export function FindingCard({
       </div>
       <h3 className="mt-1.5 text-[13px] font-extrabold leading-7">{f.title}</h3>
       {missionLabel && (
-        <button className="ms-muted text-[11px] underline-offset-2 hover:underline" onClick={onOpenMission}>
-          {missionLabel}
+        <button type="button" className="ms-link mt-1" onClick={onOpenMission} title="مشاهده جزئیات این بازدید" aria-label={`مشاهده جزئیات بازدید ${missionLabel}`}>
+          <ClipboardList size={13} aria-hidden />
+          <span className="truncate">{missionLabel}</span>
+          <ArrowLeft size={13} className="ms-link-arrow" aria-hidden />
         </button>
       )}
       {rows.length > 0 && (
