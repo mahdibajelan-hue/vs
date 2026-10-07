@@ -11,6 +11,7 @@ export type ModuleKeyRef =
   | 'estimator'
   | 'lifecycle'
   | 'missions'
+  | 'landacq'
   | 'admin'
 
 export interface RastaModule {

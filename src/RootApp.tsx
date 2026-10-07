@@ -18,10 +18,15 @@ import { CompetencyApp } from './modules/competency/CompetencyApp'
 import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { MissionsApp } from './modules/missions/MissionsApp'
+import { LandAcqApp } from './modules/landacq/LandAcqApp'
+import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
 import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
+
+// One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
+const landRepo = createLandRepo()
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -136,6 +141,8 @@ export function RootApp() {
     <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'missions' ? (
     <MissionsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'landacq' ? (
+    <LandAcqApp repo={landRepo} onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (
     <LifecycleApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pipelinedigitaltwin' ? (

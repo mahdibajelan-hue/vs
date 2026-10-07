@@ -5,6 +5,7 @@ import { Home, Layers, Loader2, LocateFixed } from 'lucide-react'
 import type { Joint, JointFinalStatus, Pipe, Route } from '../types'
 import { cumulativeDistances, pointAtChainage, sliceRoutePoints } from '../lib/chainage'
 import { computeProgressSpans } from '../lib/routeSegments'
+import type { LandLayerSpan } from '../../landacq/integration/layer'
 import { FINAL_STATUS_COLOR } from '../lib/progressEngine'
 
 // No Cesium ion account for this MVP (per spec: mock/offline terrain, no token dependency) — so
@@ -41,6 +42,8 @@ interface PipelineViewerProps {
   statusFilter: JointFinalStatus | 'all'
   onSelectJoint: (id: string | null) => void
   onViewerReady?: (viewer: Cesium.Viewer) => void
+  /** Land Acquisition Layer: when set, the pipe is painted by land status instead of construction progress. */
+  landSpans?: LandLayerSpan[] | null
 }
 
 /**
@@ -58,7 +61,7 @@ function imageryProviderPromise(style: ImageryStyle): Promise<Cesium.ImageryProv
     : Promise.resolve(new Cesium.OpenStreetMapImageryProvider({ url: OSM_URL }))
 }
 
-export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady }: PipelineViewerProps) {
+export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, landSpans }: PipelineViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const pointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
@@ -157,7 +160,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     const cumulative = cumulativeDistances(route.points)
     const radiusMeters = (pipe.diameterInch * INCH_TO_METER) / 2
     const shape = pipeCrossSection(radiusMeters)
-    const spans = computeProgressSpans(joints, route.lengthMeters)
+    const spans = landSpans ? landSpans.map((l) => ({ startMeters: l.startMeters, endMeters: Math.min(l.endMeters, route.lengthMeters), color: l.color })) : computeProgressSpans(joints, route.lengthMeters)
 
     for (const span of spans) {
       const slice = sliceRoutePoints(route.points, cumulative, span.startMeters, span.endMeters)
@@ -179,7 +182,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       viewer.flyTo(viewer.entities, { duration: 1.2 })
       hasFlownRef.current = true
     }
-  }, [route, joints, pipe])
+  }, [route, joints, pipe, landSpans])
 
   // Joint markers — rebuilt whenever joint statuses change (e.g. an edit, or the Timeline scrub date moving).
   useEffect(() => {

@@ -3,10 +3,11 @@ import {
   Activity, AlertTriangle, ArrowRight, Banknote, Bell, CheckCircle2,
   ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Package, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
-  MapPinned,
+  MapPinned, Sprout,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MISSIONS_MODULE } from '../../../modules/missions/integration/manifest'
+import { LANDACQ_MODULE } from '../../../modules/landacq/integration/manifest'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
@@ -151,6 +152,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     { id: 'lifecycle-nav', moduleKey: 'lifecycle', title: 'Lifecycle Navigator', icon: GitBranch, accent: 'var(--radar-cyan)' },
     { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
     { id: 'missions', moduleKey: 'missions', title: MISSIONS_MODULE.labelEn, icon: MapPinned, accent: MISSIONS_MODULE.accent },
+    { id: 'landacq', moduleKey: 'landacq', title: 'Land Acquisition', icon: Sprout, accent: LANDACQ_MODULE.accent },
     { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
     { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },

@@ -22,6 +22,7 @@ const MODULE_ORDER_PREFERENCE = [
   'estimator',
   'lifecycle',
   'missions',
+  'landacq',
   'admin',
 ]
 

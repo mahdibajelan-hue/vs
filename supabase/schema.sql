@@ -16040,3 +16040,310 @@ revoke execute on function uc_admin_update_user(uuid, jsonb) from public, anon;
 revoke execute on function uc_audit_access() from public, anon, authenticated;
 revoke execute on function uc_audit_profiles() from public, anon, authenticated;
 revoke execute on function uc_guard_profiles() from public, anon, authenticated;
+
+-- =============================================================================
+-- 70. Land Acquisition Control Tower (تحصیل اراضی)
+-- =============================================================================
+-- A forward-looking control system, NOT a document store: every document is metadata only (type, number,
+-- date, issuer, status, short note, optional reference/link). The route is split into parcels by chainage (km);
+-- each parcel carries a screening profile, a 10-step workflow, owners, and is tied to the project's linear
+-- construction schedule (la_activities) so that land that is not released before an activity reaches it shows up
+-- as a schedule constraint. Criticality scoring, early-action planning and delay forecasting are computed in the
+-- client from this data (lib/*), so they are never stale.
+
+insert into rasta_modules (key, label_fa) values ('landacq', 'تحصیل اراضی') on conflict (key) do nothing;
+insert into rasta_permissions (module_key, action)
+select 'landacq', a.action
+from (values ('view'), ('create'), ('edit'), ('delete'), ('submit'), ('review'), ('approve'), ('reject'), ('export'), ('configure')) as a(action)
+on conflict (module_key, action) do nothing;
+
+-- The pre-existing "full access" role keeps meaning full access.
+insert into rasta_role_permissions (role_id, permission_id)
+select r.id, p.id from rasta_roles r cross join rasta_permissions p
+where r.name = 'دسترسی کامل' and p.module_key = 'landacq'
+on conflict do nothing;
+
+alter table im_issues drop constraint if exists im_issues_source_check;
+alter table im_issues add constraint im_issues_source_check check (source in ('manual', 'lifecycle_action', 'mission_debrief', 'land_acquisition'));
+
+create table if not exists la_routes (
+  master_project_id uuid primary key references master_projects (id) on delete cascade,
+  name text not null default '',
+  total_km numeric(9, 3) not null check (total_km > 0),
+  start_km numeric(9, 3) not null default 0,
+  -- [[lon, lat], …] along the route; optional (the module also works as a pure chainage model)
+  geometry jsonb not null default '[]'::jsonb,
+  geometry_source text not null default 'none' check (geometry_source in ('none', 'kml', 'manual', 'demo')),
+  settings jsonb not null default '{}'::jsonb,
+  is_demo boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists la_parcels (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  code text not null default '',
+  title text not null default '',
+  km_start numeric(9, 3) not null,
+  km_end numeric(9, 3) not null,
+  land_type text not null default 'unknown' check (land_type in ('agricultural', 'garden', 'rangeland', 'forest', 'desert', 'urban', 'industrial', 'riverbed', 'road_rail', 'other', 'unknown')),
+  ownership_class text not null default 'unknown' check (ownership_class in ('private', 'natural_resources', 'exempt', 'governmental', 'unknown')),
+  land_use text not null default '',
+  owner_count_est integer not null default 0 check (owner_count_est >= 0),
+  owner_known boolean not null default false,
+  custodian text not null default '',
+  dispute_probability smallint not null default 0 check (dispute_probability between 0 and 100),
+  complexity smallint not null default 1 check (complexity between 1 and 5),
+  est_duration_days integer check (est_duration_days is null or est_duration_days >= 0),
+  -- sensitive_area, has_facilities, past_dispute, high_value, critical_for_execution
+  flags jsonb not null default '{}'::jsonb,
+  acquisition_route text not null default 'normal' check (acquisition_route in ('normal', 'accelerated', 'dispute')),
+  area_m2 numeric,
+  est_cost numeric,
+  notes text not null default '',
+  risk_id uuid,
+  issue_id uuid,
+  schedule_warning_id uuid,
+  is_demo boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (km_end > km_start)
+);
+create index if not exists idx_la_parcels_project on la_parcels (master_project_id, km_start);
+
+create table if not exists la_stages (
+  parcel_id uuid not null references la_parcels (id) on delete cascade,
+  stage_key text not null check (stage_key in ('identification', 'ownership_status', 'owner_identification', 'preliminary_assessment', 'expert_referral', 'valuation', 'financial_settlement', 'payment', 'release', 'ready_for_construction')),
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'done', 'blocked', 'skipped')),
+  responsible text not null default '',
+  planned_date date,
+  actual_date date,
+  note text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (parcel_id, stage_key)
+);
+
+create table if not exists la_owners (
+  id uuid primary key default gen_random_uuid(),
+  parcel_id uuid not null references la_parcels (id) on delete cascade,
+  name text not null default '',
+  contact text not null default '',
+  share_pct numeric(6, 3) check (share_pct is null or share_pct between 0 and 100),
+  agreement text not null default 'not_contacted' check (agreement in ('unknown', 'not_contacted', 'negotiating', 'agreed', 'refused', 'legal')),
+  est_amount numeric,
+  final_amount numeric,
+  payment text not null default 'unpaid' check (payment in ('unpaid', 'partial', 'paid')),
+  release_status text not null default 'pending' check (release_status in ('pending', 'released')),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_la_owners_parcel on la_owners (parcel_id);
+
+-- Document METADATA only. No files are uploaded or stored by this module.
+create table if not exists la_docs (
+  id uuid primary key default gen_random_uuid(),
+  parcel_id uuid not null references la_parcels (id) on delete cascade,
+  doc_type text not null default '',
+  doc_number text not null default '',
+  doc_date date,
+  issuer text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'submitted', 'approved', 'rejected')),
+  note text not null default '',
+  ref text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_la_docs_parcel on la_docs (parcel_id);
+
+-- The project's linear construction schedule: an activity moves along a km range between two dates.
+create table if not exists la_activities (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  key text not null default 'other',
+  name text not null,
+  km_start numeric(9, 3) not null,
+  km_end numeric(9, 3) not null,
+  start_date date not null,
+  end_date date not null,
+  sequence smallint not null default 0,
+  is_demo boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (km_end > km_start),
+  check (end_date >= start_date)
+);
+create index if not exists idx_la_activities_project on la_activities (master_project_id, sequence);
+
+create table if not exists la_events (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  parcel_id uuid references la_parcels (id) on delete cascade,
+  actor_id uuid,
+  kind text not null,
+  detail jsonb not null default '{}'::jsonb
+);
+create index if not exists idx_la_events_parcel on la_events (parcel_id, at desc);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['la_routes', 'la_parcels', 'la_owners'] loop
+    execute format('drop trigger if exists trg_set_updated_at on %I', t);
+    execute format('create trigger trg_set_updated_at before update on %I for each row execute function set_updated_at()', t);
+  end loop;
+end $$;
+
+-- ---- access --------------------------------------------------------------------------------------------------
+create or replace function la_can_view(p_master_project_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and rasta_user_can_access_master_project(p_master_project_id);
+$$;
+create or replace function la_can_edit(p_master_project_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select la_can_view(p_master_project_id)
+     and (is_admin_user() or rasta_has_permission(auth.uid(), 'landacq', 'edit') or rasta_has_permission(auth.uid(), 'landacq', 'create'));
+$$;
+create or replace function la_parcel_project(p_parcel_id uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select master_project_id from la_parcels where id = p_parcel_id;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['la_routes', 'la_parcels', 'la_activities'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_select', t);
+    execute format('create policy %I on %I for select using (la_can_view(master_project_id))', t || '_select', t);
+    execute format('drop policy if exists %I on %I', t || '_write', t);
+    execute format('create policy %I on %I for all using (la_can_edit(master_project_id)) with check (la_can_edit(master_project_id))', t || '_write', t);
+  end loop;
+  foreach t in array array['la_stages', 'la_owners', 'la_docs'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists %I on %I', t || '_select', t);
+    execute format('create policy %I on %I for select using (la_can_view(la_parcel_project(parcel_id)))', t || '_select', t);
+    execute format('drop policy if exists %I on %I', t || '_write', t);
+    execute format('create policy %I on %I for all using (la_can_edit(la_parcel_project(parcel_id))) with check (la_can_edit(la_parcel_project(parcel_id)))', t || '_write', t);
+  end loop;
+end $$;
+alter table la_events enable row level security;
+drop policy if exists la_events_select on la_events;
+create policy la_events_select on la_events for select using (la_can_view(master_project_id));
+
+-- ---- workflow bootstrap + audit -----------------------------------------------------------------------------
+create or replace function la_parcel_after_insert()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into la_stages (parcel_id, stage_key)
+  select new.id, s from unnest(array['identification', 'ownership_status', 'owner_identification', 'preliminary_assessment', 'expert_referral', 'valuation', 'financial_settlement', 'payment', 'release', 'ready_for_construction']) as s
+  on conflict do nothing;
+  insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+  values (new.master_project_id, new.id, auth.uid(), 'parcel_created', jsonb_build_object('code', new.code, 'km_start', new.km_start, 'km_end', new.km_end));
+  return null;
+end $$;
+drop trigger if exists trg_la_parcel_after_insert on la_parcels;
+create trigger trg_la_parcel_after_insert after insert on la_parcels for each row execute function la_parcel_after_insert();
+
+create or replace function la_parcel_after_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.acquisition_route is distinct from old.acquisition_route then
+    insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+    values (new.master_project_id, new.id, auth.uid(), 'route_changed', jsonb_build_object('from', old.acquisition_route, 'to', new.acquisition_route));
+  end if;
+  if new.ownership_class is distinct from old.ownership_class then
+    insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+    values (new.master_project_id, new.id, auth.uid(), 'ownership_changed', jsonb_build_object('from', old.ownership_class, 'to', new.ownership_class));
+  end if;
+  return null;
+end $$;
+drop trigger if exists trg_la_parcel_after_update on la_parcels;
+create trigger trg_la_parcel_after_update after update on la_parcels for each row execute function la_parcel_after_update();
+
+create or replace function la_stage_after_write()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_proj uuid;
+begin
+  if tg_op = 'UPDATE' and new.status = old.status and new.actual_date is not distinct from old.actual_date and new.planned_date is not distinct from old.planned_date then
+    return null;
+  end if;
+  select master_project_id into v_proj from la_parcels where id = new.parcel_id;
+  insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+  values (v_proj, new.parcel_id, auth.uid(), 'stage', jsonb_build_object('stage_key', new.stage_key, 'status', new.status, 'actual_date', new.actual_date));
+  return null;
+end $$;
+drop trigger if exists trg_la_stage_after_write on la_stages;
+create trigger trg_la_stage_after_write after update on la_stages for each row execute function la_stage_after_write();
+
+-- ---- hand-over to Risk / Issue / Schedule (single source of truth: only the id is kept here) -----------------------
+create or replace function la_transfer(p_parcel_id uuid, p_target text, p_params jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  p la_parcels%rowtype;
+  v_proj uuid; v_new uuid;
+  v_label text; v_desc text; v_sev text; v_prob smallint; v_imp smallint;
+begin
+  select * into p from la_parcels where id = p_parcel_id for update;
+  if not found then raise exception 'parcel_not_found'; end if;
+  if not la_can_edit(p.master_project_id) then raise exception 'not_allowed'; end if;
+  v_label := 'تحصیل اراضی KM ' || p.km_start || ' تا ' || p.km_end || case when p.title <> '' then ' — ' || p.title else '' end;
+  v_desc := coalesce(nullif(p_params ->> 'description', ''), 'قطعه ' || coalesce(nullif(p.code, ''), '') || ' (KM ' || p.km_start || ' تا ' || p.km_end || ') با ماهیت مالکیت «' || p.ownership_class || '».') || E'\n\n— منبع: ماژول تحصیل اراضی';
+  v_sev := case coalesce(p_params ->> 'severity', 'high') when 'critical' then 'critical' when 'low' then 'low' when 'medium' then 'medium' else 'high' end;
+
+  if p_target = 'issue' then
+    if p.issue_id is not null then raise exception 'already_transferred'; end if;
+    select source_project_id into v_proj from rasta_project_mappings where master_project_id = p.master_project_id and source_module = 'issues' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_issue_mapping'; end if;
+    insert into im_issues (project_id, title, description, pursuer_id, priority, deadline_days, status, created_by, source)
+    values (v_proj, v_label, v_desc, nullif(p_params ->> 'pursuer_id', '')::uuid, v_sev, coalesce(nullif(p_params ->> 'deadline_days', '')::smallint, 14), 'open', auth.uid(), 'land_acquisition')
+    returning id into v_new;
+    update la_parcels set issue_id = v_new where id = p.id;
+  elsif p_target = 'risk' then
+    if p.risk_id is not null then raise exception 'already_transferred'; end if;
+    select source_project_id into v_proj from rasta_project_mappings where master_project_id = p.master_project_id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_risk_mapping'; end if;
+    v_prob := least(5, greatest(1, coalesce(nullif(p_params ->> 'probability', '')::smallint, case v_sev when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_imp := least(5, greatest(1, coalesce(nullif(p_params ->> 'impact', '')::smallint, case v_sev when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by)
+    values (v_proj, '', v_label, v_desc, 'external', 'threat', nullif(p_params ->> 'owner_id', '')::uuid, v_prob, v_imp, auth.uid())
+    returning id into v_new;
+    update la_parcels set risk_id = v_new where id = p.id;
+  elsif p_target = 'schedule' then
+    if p.schedule_warning_id is not null then raise exception 'already_transferred'; end if;
+    insert into plc_early_warnings (project_id, trigger_key, severity, title, detail, required_action, status)
+    values (p.master_project_id, 'land_acquisition', v_sev, v_label, v_desc, coalesce(nullif(p_params ->> 'required_action', ''), 'تعیین تکلیف تحصیل قطعه پیش از رسیدن فعالیت اجرایی'), 'open')
+    returning id into v_new;
+    update la_parcels set schedule_warning_id = v_new where id = p.id;
+  else
+    raise exception 'invalid_target';
+  end if;
+
+  insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+  values (p.master_project_id, p.id, auth.uid(), 'transfer', jsonb_build_object('target', p_target, 'id', v_new));
+  return jsonb_build_object('target', p_target, 'id', v_new);
+end $$;
+revoke execute on function la_transfer(uuid, text, jsonb) from public, anon;
+grant execute on function la_transfer(uuid, text, jsonb) to authenticated;
+
+-- Live status of the records a parcel was handed to (never copied here).
+create or replace function la_linked_status(p_master_project_id uuid)
+returns table (parcel_id uuid, target text, linked_id uuid, linked_code text, linked_status text)
+language sql stable security definer set search_path = public as $$
+  select p.id, 'risk', p.risk_id, (select r.code from rm_risks r where r.id = p.risk_id), (select r.status from rm_risks r where r.id = p.risk_id)
+    from la_parcels p where p.master_project_id = p_master_project_id and p.risk_id is not null and la_can_view(p_master_project_id)
+  union all
+  select p.id, 'issue', p.issue_id, upper(substr(p.issue_id::text, 1, 8)), (select i.status from im_issues i where i.id = p.issue_id)
+    from la_parcels p where p.master_project_id = p_master_project_id and p.issue_id is not null and la_can_view(p_master_project_id)
+  union all
+  select p.id, 'schedule', p.schedule_warning_id, upper(substr(p.schedule_warning_id::text, 1, 8)), (select w.status from plc_early_warnings w where w.id = p.schedule_warning_id)
+    from la_parcels p where p.master_project_id = p_master_project_id and p.schedule_warning_id is not null and la_can_view(p_master_project_id);
+$$;
+revoke execute on function la_linked_status(uuid) from public, anon;
+grant execute on function la_linked_status(uuid) to authenticated;
+
+revoke execute on function la_parcel_after_insert() from public, anon, authenticated;
+revoke execute on function la_parcel_after_update() from public, anon, authenticated;
+revoke execute on function la_stage_after_write() from public, anon, authenticated;

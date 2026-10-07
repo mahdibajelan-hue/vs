@@ -14,6 +14,8 @@ import { JointPanel } from '../components/JointPanel'
 import { VisualizationFilters } from '../components/VisualizationFilters'
 import { ConstructionStatusLegend } from '../components/ConstructionStatusLegend'
 import { RouteInfoBar } from '../components/RouteInfoBar'
+import { LandLayerToggle } from '../components/LandLayerToggle'
+import type { LandLayerSpan } from '../../landacq/integration/layer'
 
 export function DashboardPage() {
   const route = usePdtStore((s) => s.route)
@@ -28,6 +30,7 @@ export function DashboardPage() {
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const [kpiOpen, setKpiOpen] = useState(true)
   const [dockOpen, setDockOpen] = useState(true)
+  const [landSpans, setLandSpans] = useState<LandLayerSpan[] | null>(null)
 
   // Timeline scrubbing recomputes each joint's five stage fields (and derived finalStatus) as of
   // the scrubbed moment by replaying its own history log — nothing here is a separate snapshot, so
@@ -68,6 +71,7 @@ export function DashboardPage() {
           selectedJointId={selectedJointId}
           statusFilter={statusFilter}
           onSelectJoint={selectJoint}
+          landSpans={landSpans}
           onViewerReady={(v) => {
             viewerRef.current = v
           }}
@@ -76,6 +80,9 @@ export function DashboardPage() {
 
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <VisualizationFilters joints={displayedJoints} value={statusFilter} onChange={setStatusFilter} />
+      </div>
+      <div className="absolute left-3 top-14 z-10 max-w-[min(20rem,calc(100%-1.5rem))]">
+        <LandLayerToggle onSpans={setLandSpans} />
       </div>
 
       <ConstructionStatusLegend />

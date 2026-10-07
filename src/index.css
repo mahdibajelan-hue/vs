@@ -1601,7 +1601,7 @@ select option {
 }
 @media (min-width: 1024px) {
   .launchpad-module-grid {
-    grid-template-areas: 'a radar b' 'c d e' '. f .';
+    grid-template-areas: 'a radar b' 'c d e' 'f g .';
   }
   .launchpad-module-grid .area-a { grid-area: a; }
   .launchpad-module-grid .area-radar { grid-area: radar; }
@@ -1610,6 +1610,7 @@ select option {
   .launchpad-module-grid .area-d { grid-area: d; }
   .launchpad-module-grid .area-e { grid-area: e; }
   .launchpad-module-grid .area-f { grid-area: f; }
+  .launchpad-module-grid .area-g { grid-area: g; }
 }
 
 /* ===== Farin launchpad showcase box =====
@@ -1669,7 +1670,7 @@ select option {
 }
 
 /* ===== Launchpad bento (signed-in) =====
-   Seven module tiles on a 4-column bento: Radar 2×2, Competency and Missions 2×1, the rest 1×1.
+   Eight module tiles on a 4-column bento: Radar 2×2, Competency 2×1, the rest 1×1.
    On a phone: two compact columns, Radar full-width, descriptions hidden except on Radar. */
 .launchpad-bento {
   display: grid;
@@ -1683,7 +1684,7 @@ select option {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-auto-rows: minmax(104px, auto);
     gap: 0.7rem;
-    grid-template-areas: 'radar radar a b' 'radar radar c c' 'd e f f';
+    grid-template-areas: 'radar radar a b' 'radar radar c c' 'd e f g';
   }
   .launchpad-bento .area-radar { grid-area: radar; }
   .launchpad-bento .area-a { grid-area: a; }
@@ -1692,6 +1693,7 @@ select option {
   .launchpad-bento .area-d { grid-area: d; }
   .launchpad-bento .area-e { grid-area: e; }
   .launchpad-bento .area-f { grid-area: f; }
+  .launchpad-bento .area-g { grid-area: g; }
 }
 
 .lp-tile {
@@ -1822,15 +1824,18 @@ select option {
   .lp-tile-en { display: block; }
   /* 1×1 tiles stay lean: no English tag, one description line */
   .launchpad-bento .area-a .lp-tile-en, .launchpad-bento .area-b .lp-tile-en,
-  .launchpad-bento .area-d .lp-tile-en, .launchpad-bento .area-e .lp-tile-en { display: none; }
+  .launchpad-bento .area-d .lp-tile-en, .launchpad-bento .area-e .lp-tile-en,
+  .launchpad-bento .area-f .lp-tile-en, .launchpad-bento .area-g .lp-tile-en { display: none; }
   .launchpad-bento .area-a .lp-tile-desc, .launchpad-bento .area-b .lp-tile-desc,
-  .launchpad-bento .area-d .lp-tile-desc, .launchpad-bento .area-e .lp-tile-desc { -webkit-line-clamp: 2; font-size: 10.5px; }
+  .launchpad-bento .area-d .lp-tile-desc, .launchpad-bento .area-e .lp-tile-desc,
+  .launchpad-bento .area-f .lp-tile-desc, .launchpad-bento .area-g .lp-tile-desc { -webkit-line-clamp: 2; font-size: 10.5px; }
   .launchpad-bento .area-a .lp-tile-foot, .launchpad-bento .area-b .lp-tile-foot,
-  .launchpad-bento .area-d .lp-tile-foot, .launchpad-bento .area-e .lp-tile-foot { display: none; }
+  .launchpad-bento .area-d .lp-tile-foot, .launchpad-bento .area-e .lp-tile-foot,
+  .launchpad-bento .area-f .lp-tile-foot, .launchpad-bento .area-g .lp-tile-foot { display: none; }
   /* wide tiles: icon · text · arrow in one row */
-  .launchpad-bento .area-c .lp-tile, .launchpad-bento .area-f .lp-tile { flex-direction: row; align-items: center; gap: 0.85rem; }
-  .launchpad-bento .area-c .lp-tile-head, .launchpad-bento .area-f .lp-tile-head { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
-  .launchpad-bento .area-c .lp-tile-body, .launchpad-bento .area-f .lp-tile-body { flex: 1; }
+  .launchpad-bento .area-c .lp-tile { flex-direction: row; align-items: center; gap: 0.85rem; }
+  .launchpad-bento .area-c .lp-tile-head { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+  .launchpad-bento .area-c .lp-tile-body { flex: 1; }
 }
 
 /* Radar: the big tile — scope rings, larger type, a pill CTA */

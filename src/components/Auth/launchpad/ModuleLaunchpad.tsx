@@ -9,6 +9,7 @@ import { TechnicalCompetencyCard } from './cards/TechnicalCompetencyCard'
 import { ProjectEstimationCard } from './cards/ProjectEstimationCard'
 import { UserManagementCard } from './cards/UserManagementCard'
 import { MissionDebriefCard } from './cards/MissionDebriefCard'
+import { LandAcquisitionCard } from './cards/LandAcquisitionCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => ReactElement
 
@@ -27,6 +28,7 @@ const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] =
   { key: 'estimator', Card: ProjectEstimationCard, area: 'area-d' },
   { key: 'admin', Card: UserManagementCard, area: 'area-e' },
   { key: 'missions', Card: MissionDebriefCard, area: 'area-f' },
+  { key: 'landacq', Card: LandAcquisitionCard, area: 'area-g' },
 ]
 
 /** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
