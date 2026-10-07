@@ -15107,9 +15107,11 @@ create or replace function ms_is_executive()
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from ms_roles where user_id = auth.uid() and role = 'executive');
 $$;
+-- امور اداری only by the explicit role: an app admin / executive no longer inherits ticketing and claim duties
+-- (they used to, which put every ticket request in the executive's own "your turn" queue).
 create or replace function ms_is_admin_affairs()
 returns boolean language sql stable security definer set search_path = public as $$
-  select is_admin_user() or exists (select 1 from ms_roles where user_id = auth.uid() and role = 'admin_affairs');
+  select exists (select 1 from ms_roles where user_id = auth.uid() and role = 'admin_affairs');
 $$;
 create or replace function ms_is_manager()
 returns boolean language sql stable security definer set search_path = public as $$
