@@ -15810,3 +15810,233 @@ end $$;
 -- captured_at: when the photo was taken (EXIF DateTimeOriginal, read in the browser before the image is
 -- compressed). A photo taken inside the mission's dates counts as proof of attendance in the report score.
 alter table ms_evidence add column if not exists captured_at timestamptz;
+
+-- =============================================================================
+-- 69. User Center (مرکز مدیریت کاربران): account status, organisation/user type, per-user permission
+--     overrides, admin-only user directory info (last sign-in), and an audit trail of every change to a
+--     user's profile or access.
+-- =============================================================================
+alter table profiles add column if not exists organization text not null default '';
+alter table profiles add column if not exists user_type text not null default 'other';
+alter table profiles add column if not exists account_status text not null default 'active';
+alter table profiles add column if not exists status_reason text not null default '';
+alter table profiles add column if not exists status_changed_at timestamptz;
+alter table profiles add column if not exists status_changed_by uuid references profiles (id) on delete set null;
+
+do $$ begin
+  alter table profiles add constraint profiles_user_type_check
+    check (user_type in ('project_manager', 'owner', 'consultant', 'contractor', 'supervisor', 'other'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table profiles add constraint profiles_account_status_check check (account_status in ('active', 'disabled', 'blocked'));
+exception when duplicate_object then null; end $$;
+
+-- A disabled / blocked admin is no longer an admin for every RLS policy that asks is_admin_user().
+create or replace function is_admin_user()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select is_admin and account_status = 'active' from profiles where id = auth.uid()), false);
+$$;
+
+create or replace function rasta_my_accessible_modules()
+returns table (module_key text) language sql stable security definer set search_path = public as $$
+  select m.key
+  from rasta_modules m
+  where m.is_active
+    and coalesce((select account_status = 'active' from profiles where id = auth.uid()), true)
+    and (
+      is_admin_user()
+      or not exists (
+        select 1 from rasta_user_module_access a
+        where a.user_id = auth.uid() and a.module_key = m.key and a.has_access = false
+      )
+    );
+$$;
+
+-- Direct (per-user) permission grants / denials on top of what the user's roles give.
+create table if not exists rasta_user_permission_overrides (
+  user_id uuid not null references profiles (id) on delete cascade,
+  permission_id uuid not null references rasta_permissions (id) on delete cascade,
+  effect text not null check (effect in ('allow', 'deny')),
+  note text not null default '',
+  created_by uuid references profiles (id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  primary key (user_id, permission_id)
+);
+alter table rasta_user_permission_overrides enable row level security;
+do $$ begin
+  create policy rasta_user_permission_overrides_select on rasta_user_permission_overrides for select using (is_admin_user() or user_id = auth.uid());
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy rasta_user_permission_overrides_write_admin on rasta_user_permission_overrides for all using (is_admin_user()) with check (is_admin_user());
+exception when duplicate_object then null; end $$;
+
+-- deny override > allow override > what the roles grant
+create or replace function rasta_has_permission(p_user_id uuid, p_module_key text, p_action text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select case
+    when exists (
+      select 1 from rasta_user_permission_overrides o join rasta_permissions p on p.id = o.permission_id
+      where o.user_id = p_user_id and p.module_key = p_module_key and p.action = p_action and o.effect = 'deny'
+    ) then false
+    when exists (
+      select 1 from rasta_user_permission_overrides o join rasta_permissions p on p.id = o.permission_id
+      where o.user_id = p_user_id and p.module_key = p_module_key and p.action = p_action and o.effect = 'allow'
+    ) then true
+    else exists (
+      select 1
+      from rasta_user_roles ur
+      join rasta_role_permissions rp on rp.role_id = ur.role_id
+      join rasta_permissions p on p.id = rp.permission_id
+      where ur.user_id = p_user_id and p.module_key = p_module_key and p.action = p_action
+    )
+  end;
+$$;
+
+-- Audit trail: who changed what about whom.
+create table if not exists uc_audit (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  actor_id uuid,
+  target_id uuid,
+  category text not null,
+  action text not null,
+  detail jsonb not null default '{}'::jsonb
+);
+create index if not exists uc_audit_target_idx on uc_audit (target_id, at desc);
+alter table uc_audit enable row level security;
+do $$ begin
+  create policy uc_audit_select_admin on uc_audit for select using (is_admin_user());
+exception when duplicate_object then null; end $$;
+
+create or replace function uc_audit_access()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_row jsonb;
+begin
+  v_row := to_jsonb(case when tg_op = 'DELETE' then old else new end);
+  insert into uc_audit (actor_id, target_id, category, action, detail)
+  values (
+    auth.uid(), nullif(v_row ->> 'user_id', '')::uuid, tg_argv[0], lower(tg_op),
+    jsonb_build_object(
+      'row', v_row - 'created_at' - 'updated_at' - 'created_by' - 'updated_by',
+      'old', case when tg_op = 'UPDATE' then to_jsonb(old) - 'created_at' - 'updated_at' - 'created_by' - 'updated_by' else null end
+    )
+  );
+  return null;
+end $$;
+
+do $$
+declare t record;
+begin
+  for t in select * from (values
+    ('rasta_user_roles', 'role'),
+    ('rasta_user_module_access', 'module'),
+    ('rasta_user_project_scope', 'scope'),
+    ('rasta_user_permission_overrides', 'permission'),
+    ('project_members', 'project_pp'),
+    ('rm_project_members', 'project_rm'),
+    ('im_project_members', 'project_im'),
+    ('rasta_project_role_assignments', 'project_role')
+  ) as v(tbl, cat)
+  loop
+    execute format('drop trigger if exists trg_uc_audit on %I', t.tbl);
+    execute format('create trigger trg_uc_audit after insert or update or delete on %I for each row execute function uc_audit_access(%L)', t.tbl, t.cat);
+  end loop;
+end $$;
+
+create or replace function uc_audit_profiles()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_old jsonb; v_new jsonb; v_changed jsonb := '{}'::jsonb; k text; v_cat text;
+  v_tracked text[] := array['full_name', 'position_title', 'phone', 'organization', 'user_type', 'account_status', 'status_reason', 'is_admin', 'email'];
+begin
+  if tg_op = 'INSERT' then
+    insert into uc_audit (actor_id, target_id, category, action, detail)
+    values (auth.uid(), new.id, 'account', 'create', jsonb_build_object('email', new.email, 'full_name', new.full_name));
+    return null;
+  end if;
+  v_old := to_jsonb(old); v_new := to_jsonb(new);
+  foreach k in array v_tracked loop
+    if v_old -> k is distinct from v_new -> k then
+      v_changed := v_changed || jsonb_build_object(k, jsonb_build_object('from', v_old -> k, 'to', v_new -> k));
+    end if;
+  end loop;
+  if v_changed = '{}'::jsonb then return null; end if;
+  v_cat := case when v_changed ? 'account_status' then 'status' when v_changed ? 'is_admin' then 'admin' else 'profile' end;
+  insert into uc_audit (actor_id, target_id, category, action, detail)
+  values (auth.uid(), new.id, v_cat, 'update', jsonb_build_object('changes', v_changed));
+  return null;
+end $$;
+drop trigger if exists trg_uc_audit_profiles on profiles;
+create trigger trg_uc_audit_profiles after insert or update on profiles for each row execute function uc_audit_profiles();
+
+-- Guard rails on profiles: ordinary users can edit their own details but not their status / type; an admin
+-- cannot change their own status; the platform always keeps at least one active admin.
+create or replace function uc_guard_profiles()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_actor_admin boolean; v_other_admins int;
+begin
+  if auth.uid() is null then return new; end if;
+  v_actor_admin := coalesce((select is_admin and account_status = 'active' from profiles where id = auth.uid()), false);
+  if not v_actor_admin then
+    new.user_type := old.user_type;
+    new.account_status := old.account_status;
+    new.status_reason := old.status_reason;
+    new.status_changed_at := old.status_changed_at;
+    new.status_changed_by := old.status_changed_by;
+  else
+    if new.id = auth.uid() and new.account_status is distinct from old.account_status then
+      raise exception 'نمی‌توانید وضعیت حساب خودتان را تغییر دهید' using errcode = '42501';
+    end if;
+    if new.account_status is distinct from old.account_status then
+      new.status_changed_at := now();
+      new.status_changed_by := auth.uid();
+    end if;
+  end if;
+  if old.is_admin and old.account_status = 'active' and (not new.is_admin or new.account_status <> 'active') then
+    select count(*) into v_other_admins from profiles where is_admin and account_status = 'active' and id <> old.id;
+    if v_other_admins = 0 then
+      raise exception 'حداقل یک مدیر سیستم فعال باید باقی بماند' using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_uc_guard_profiles on profiles;
+create trigger trg_uc_guard_profiles before update on profiles for each row execute function uc_guard_profiles();
+
+-- Admin edits another user's profile fields (profiles_update_own only lets users edit themselves).
+create or replace function uc_admin_update_user(p_user uuid, p_patch jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin_user() then
+    raise exception 'دسترسی مجاز نیست' using errcode = '42501';
+  end if;
+  update profiles set
+    full_name = coalesce(p_patch ->> 'full_name', full_name),
+    position_title = coalesce(p_patch ->> 'position_title', position_title),
+    phone = coalesce(p_patch ->> 'phone', phone),
+    organization = coalesce(p_patch ->> 'organization', organization),
+    user_type = coalesce(p_patch ->> 'user_type', user_type),
+    account_status = coalesce(p_patch ->> 'account_status', account_status),
+    status_reason = case when p_patch ? 'account_status' then coalesce(p_patch ->> 'status_reason', '') else status_reason end,
+    is_admin = coalesce((p_patch ->> 'is_admin')::boolean, is_admin)
+  where id = p_user;
+  if not found then
+    raise exception 'کاربر پیدا نشد' using errcode = 'P0002';
+  end if;
+end $$;
+
+-- Sign-in info lives in auth.users — exposed to admins only.
+create or replace function uc_auth_info()
+returns table (user_id uuid, last_sign_in_at timestamptz, auth_created_at timestamptz, banned_until timestamptz, email_confirmed_at timestamptz)
+language sql stable security definer set search_path = public, auth as $$
+  select u.id, u.last_sign_in_at, u.created_at, u.banned_until, u.email_confirmed_at
+  from auth.users u
+  where is_admin_user();
+$$;
+revoke execute on function uc_auth_info() from public, anon;
+revoke execute on function uc_admin_update_user(uuid, jsonb) from public, anon;
+
+-- Trigger functions are never meant to be called as RPCs.
+revoke execute on function uc_audit_access() from public, anon, authenticated;
+revoke execute on function uc_audit_profiles() from public, anon, authenticated;
+revoke execute on function uc_guard_profiles() from public, anon, authenticated;

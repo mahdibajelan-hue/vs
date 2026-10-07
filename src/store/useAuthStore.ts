@@ -13,6 +13,7 @@ export interface Profile {
   phone: string
   isAdmin: boolean
   profileCompleted: boolean
+  accountStatus: 'active' | 'disabled' | 'blocked'
 }
 
 interface ProfileRow {
@@ -24,6 +25,7 @@ interface ProfileRow {
   phone: string
   is_admin: boolean
   profile_completed: boolean
+  account_status?: 'active' | 'disabled' | 'blocked' | null
 }
 
 interface AuthState {
@@ -34,6 +36,8 @@ interface AuthState {
   /** True while the profiles row for a signed-in session is being fetched. */
   profileLoading: boolean
   isAuthed: boolean
+  /** Why the last session was ended by the app itself (e.g. the account was disabled) — shown on the login card. */
+  authNotice: string | null
 
   currentUser: () => Profile | null
 
@@ -53,13 +57,26 @@ function profileFromRow(row: ProfileRow): Profile {
     phone: row.phone,
     isAdmin: row.is_admin,
     profileCompleted: row.profile_completed,
+    accountStatus: row.account_status ?? 'active',
   }
 }
+
+const INACTIVE_NOTICE = {
+  disabled: 'حساب شما غیرفعال شده است. برای فعال‌سازی با مدیر سیستم تماس بگیرید.',
+  blocked: 'حساب شما مسدود شده است. برای اطلاع از دلیل با مدیر سیستم تماس بگیرید.',
+} as const
 
 async function loadProfile(userId: string) {
   try {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    useAuthStore.setState({ profile: data ? profileFromRow(data as ProfileRow) : null, profileLoading: false })
+    const row = data as ProfileRow | null
+    // A disabled / blocked account (changed by an admin, possibly mid-session) must not stay signed in.
+    if (row && row.account_status && row.account_status !== 'active') {
+      useAuthStore.setState({ authNotice: INACTIVE_NOTICE[row.account_status], profile: null, profileLoading: false })
+      await supabase.auth.signOut()
+      return
+    }
+    useAuthStore.setState({ profile: row ? profileFromRow(row) : null, profileLoading: false })
   } catch {
     // Never leave profileLoading stuck true — that would hang RootApp's loading spinner forever.
     useAuthStore.setState({ profileLoading: false })
@@ -72,12 +89,21 @@ export const useAuthStore = create<AuthState>()((_set, get) => ({
   authLoading: true,
   profileLoading: false,
   isAuthed: false,
+  authNotice: null,
 
   currentUser: () => get().profile,
 
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    useAuthStore.setState({ authNotice: null })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { ok: false, error: translateAuthError(error.message) }
+    // Tell a disabled / blocked user why right here, instead of flashing "success" and signing them out again.
+    const { data: row } = await supabase.from('profiles').select('account_status').eq('id', data.user.id).maybeSingle()
+    const status = (row as { account_status?: 'active' | 'disabled' | 'blocked' } | null)?.account_status
+    if (status && status !== 'active') {
+      await supabase.auth.signOut()
+      return { ok: false, error: INACTIVE_NOTICE[status] }
+    }
     return { ok: true }
   },
 
@@ -98,6 +124,7 @@ export const useAuthStore = create<AuthState>()((_set, get) => ({
 }))
 
 function translateAuthError(message: string): string {
+  if (/banned|user is banned/i.test(message)) return INACTIVE_NOTICE.blocked
   if (message.includes('Invalid login credentials')) return 'ایمیل یا رمز عبور اشتباه است'
   if (message.includes('User already registered')) return 'این ایمیل قبلاً ثبت‌نام کرده است'
   if (message.includes('Password should be at least')) return 'رمز عبور باید حداقل ۶ کاراکتر باشد'

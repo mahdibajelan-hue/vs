@@ -12,6 +12,7 @@ type Status = 'idle' | 'submitting' | 'success' | 'error'
  * resolves. */
 export function LoginCard() {
   const signIn = useAuthStore((s) => s.signIn)
+  const authNotice = useAuthStore((s) => s.authNotice)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -67,6 +68,11 @@ export function LoginCard() {
             <BadgeCheck size={14} style={{ color: 'var(--radar-green)' }} />
             <p className="text-sm font-bold">ورود به سامانه</p>
           </div>
+          {authNotice && !error && (
+            <p role="alert" className="mb-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs leading-6 text-amber-200">
+              {authNotice}
+            </p>
+          )}
           <div className="space-y-3">
             <label className="block">
               <span className="mb-1 flex items-baseline gap-1.5 text-xs text-secondary">

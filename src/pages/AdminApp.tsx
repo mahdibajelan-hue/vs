@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Database, Users } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
-import { UnifiedAdminPage } from './UnifiedAdminPage'
+import { UserCenterApp } from '../modules/usercenter/UserCenterApp'
 import { MasterDataApp } from '../modules/masterdata/MasterDataApp'
 import { ModuleHeaderActions } from '../components/common/ModuleHeaderActions'
 
@@ -9,7 +9,7 @@ type Tab = 'users' | 'masterdata'
 
 /**
  * Shell for the admin-gated 'admin' hub module — two tabs sharing one header/back-button:
- * "کاربران" (the existing cross-module user/membership view) and "داده‌های پایه" (the new
+ * "کاربران" (the User 360° Management Center) and "داده‌های پایه" (the new
  * centralized Organization/Portfolio/Program/Project master data, see
  * supabase/schema.sql section 12). Both are admin-only, mirroring RASTA's own Master Data
  * nav sketch which nests Users alongside Organizations/Portfolios/Programs/Projects.
@@ -37,7 +37,7 @@ export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => vo
         <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
-      <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UnifiedAdminPage /> : <MasterDataApp />}</div>
+      <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UserCenterApp /> : <MasterDataApp />}</div>
     </div>
   )
 }

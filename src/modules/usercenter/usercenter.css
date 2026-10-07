@@ -1,0 +1,239 @@
+/* ==========================================================================
+   User 360° Management Center — scoped under .uc-root.
+   Direction: quiet executive console. It inherits the platform's dark/light tokens (so the theme switch just
+   works) and adds one accent, three status hues and a "source" colour language that is used for NOTHING else:
+     sky   = inherited from a role        violet = granted directly to this user
+     rose  = restricted / denied          amber  = needs attention
+   Hairline borders, tabular figures, no gradients, motion only where it explains state.
+   ========================================================================== */
+.uc-root {
+  --uc-surface: var(--bg-panel-solid);
+  --uc-surface-2: color-mix(in srgb, var(--text-primary) 4%, var(--bg-panel-solid));
+  --uc-surface-3: color-mix(in srgb, var(--text-primary) 8%, var(--bg-panel-solid));
+  --uc-line: var(--border-soft);
+  --uc-line-2: color-mix(in srgb, var(--text-primary) 20%, transparent);
+  --uc-ink: var(--text-primary);
+  --uc-ink-2: var(--text-secondary);
+  --uc-muted: var(--text-muted);
+  --uc-accent: #38bdf8;
+  --uc-accent-soft: rgba(56, 189, 248, 0.14);
+  --uc-ok: #34d399;
+  --uc-warn: #fbbf24;
+  --uc-bad: #fb7185;
+  --uc-inherit: #38bdf8;
+  --uc-direct: #a78bfa;
+  --uc-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+  color: var(--uc-ink);
+}
+:root[data-theme='light'] .uc-root {
+  --uc-accent: #0369a1;
+  --uc-accent-soft: rgba(3, 105, 161, 0.1);
+  --uc-ok: #047857;
+  --uc-warn: #b45309;
+  --uc-bad: #be123c;
+  --uc-inherit: #0369a1;
+  --uc-direct: #6d28d9;
+}
+.uc-root *, .uc-root *::before, .uc-root *::after { box-sizing: border-box; }
+.uc-root :focus-visible { outline: 2px solid var(--uc-accent); outline-offset: 2px; border-radius: 6px; }
+.uc-root h1, .uc-root h2, .uc-root h3 { text-wrap: balance; }
+.uc-root p { text-wrap: pretty; }
+.uc-num { font-variant-numeric: tabular-nums; }
+
+/* ---- surfaces ------------------------------------------------------------------------------------ */
+.uc-card { background: var(--uc-surface); border: 1px solid var(--uc-line); border-radius: 16px; }
+.uc-card-flat { background: var(--uc-surface-2); border: 1px solid var(--uc-line); border-radius: 12px; }
+.uc-section-title { font-size: 13px; font-weight: 700; color: var(--uc-ink); }
+.uc-eyebrow { font-size: 11px; font-weight: 500; color: var(--uc-muted); }
+.uc-hair { height: 1px; background: var(--uc-line); border: 0; margin: 0; }
+
+/* ---- buttons ------------------------------------------------------------------------------------- */
+.uc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 14px;
+  border-radius: 10px; border: 1px solid var(--uc-line-2); background: var(--uc-surface); color: var(--uc-ink);
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 160ms var(--uc-ease), opacity 0.15s;
+}
+.uc-btn:active:not(:disabled) { transform: scale(0.97); }
+.uc-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.uc-btn-primary { background: var(--uc-accent); border-color: transparent; color: #04121c; font-weight: 700; }
+:root[data-theme='light'] .uc-btn-primary { color: #fff; }
+.uc-btn-ghost { background: transparent; border-color: transparent; color: var(--uc-ink-2); }
+.uc-btn-danger { color: var(--uc-bad); border-color: color-mix(in srgb, var(--uc-bad) 40%, transparent); background: color-mix(in srgb, var(--uc-bad) 8%, transparent); }
+.uc-btn-warn { color: var(--uc-warn); border-color: color-mix(in srgb, var(--uc-warn) 40%, transparent); background: color-mix(in srgb, var(--uc-warn) 8%, transparent); }
+.uc-btn-sm { min-height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
+.uc-btn-icon { min-width: 32px; min-height: 32px; padding: 0; border-radius: 9px; }
+@media (hover: hover) and (pointer: fine) {
+  .uc-btn:hover:not(:disabled) { background: var(--uc-surface-3); }
+  .uc-btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-accent) 88%, #fff); }
+  .uc-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-bad) 16%, transparent); }
+  .uc-btn-warn:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-warn) 16%, transparent); }
+}
+
+/* ---- fields -------------------------------------------------------------------------------------- */
+.uc-input, .uc-select {
+  width: 100%; min-height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--uc-line-2);
+  background: var(--uc-surface-2); color: var(--uc-ink); font-size: 13px; font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.uc-input::placeholder { color: var(--uc-muted); }
+.uc-input:focus, .uc-select:focus { outline: none; border-color: var(--uc-accent); box-shadow: 0 0 0 3px var(--uc-accent-soft); }
+.uc-input[readonly] { color: var(--uc-ink-2); }
+.uc-textarea { min-height: 76px; padding: 10px 12px; resize: vertical; line-height: 1.8; }
+.uc-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--uc-ink-2); }
+.uc-hint { margin-top: 5px; font-size: 11px; color: var(--uc-muted); line-height: 1.7; }
+.uc-field-err { margin-top: 5px; font-size: 11.5px; color: var(--uc-bad); }
+
+/* ---- badges / chips ------------------------------------------------------------------------------ */
+.uc-badge {
+  --c: var(--uc-ink-2);
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; line-height: 1.8;
+  color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 26%, transparent);
+  white-space: nowrap;
+}
+.uc-badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.uc-badge.is-ok { --c: var(--uc-ok); } .uc-badge.is-warn { --c: var(--uc-warn); } .uc-badge.is-bad { --c: var(--uc-bad); }
+.uc-badge.is-info { --c: var(--uc-inherit); } .uc-badge.is-direct { --c: var(--uc-direct); } .uc-badge.is-accent { --c: var(--uc-accent); }
+.uc-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 10px; border-radius: 8px;
+  border: 1px solid var(--uc-line-2); background: var(--uc-surface-2); font-size: 12px; font-weight: 500; color: var(--uc-ink);
+}
+.uc-chip button { display: inline-flex; border: 0; background: transparent; color: var(--uc-muted); border-radius: 6px; padding: 3px; cursor: pointer; transition: color 0.15s, background-color 0.15s; }
+@media (hover: hover) and (pointer: fine) { .uc-chip button:hover { color: var(--uc-bad); background: color-mix(in srgb, var(--uc-bad) 12%, transparent); } }
+
+/* ---- segmented control / tabs -------------------------------------------------------------------- */
+.uc-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: var(--uc-surface-2); border: 1px solid var(--uc-line); }
+.uc-seg button {
+  min-height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--uc-ink-2); font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, transform 160ms var(--uc-ease);
+}
+.uc-seg button:active { transform: scale(0.97); }
+.uc-seg button[aria-pressed='true'], .uc-seg button[aria-selected='true'] { background: var(--uc-surface); color: var(--uc-ink); box-shadow: 0 0 0 1px var(--uc-line-2); }
+.uc-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--uc-line); scrollbar-width: none; }
+.uc-tabs::-webkit-scrollbar { display: none; }
+.uc-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 11px 14px; border: 0; background: transparent; color: var(--uc-ink-2);
+  font-size: 13px; font-weight: 600; font-family: inherit; white-space: nowrap; cursor: pointer; transition: color 0.15s;
+}
+.uc-tab::after { content: ''; position: absolute; inset-inline: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--uc-accent); transform: scaleX(0); transition: transform 220ms var(--uc-ease); }
+.uc-tab[aria-selected='true'] { color: var(--uc-ink); }
+.uc-tab[aria-selected='true']::after { transform: scaleX(1); }
+.uc-tab-count { font-size: 11px; padding: 0 7px; border-radius: 99px; background: var(--uc-surface-3); color: var(--uc-ink-2); line-height: 1.7; }
+@media (hover: hover) and (pointer: fine) { .uc-tab:hover { color: var(--uc-ink); } }
+
+/* ---- switch -------------------------------------------------------------------------------------- */
+.uc-switch { position: relative; width: 38px; height: 22px; border-radius: 99px; border: 0; background: var(--uc-line-2); cursor: pointer; flex-shrink: 0; transition: background-color 0.2s; }
+.uc-switch::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 200ms var(--uc-ease); }
+.uc-switch[aria-checked='true'] { background: var(--uc-ok); }
+.uc-switch[aria-checked='true']::after { transform: translateX(-16px); }
+.uc-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---- KPI strip ----------------------------------------------------------------------------------- */
+.uc-kpi {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; text-align: right; border-radius: 14px; background: var(--uc-surface); border: 1px solid var(--uc-line);
+  font-family: inherit; color: inherit; transition: border-color 0.15s, transform 160ms var(--uc-ease);
+}
+button.uc-kpi { cursor: pointer; }
+button.uc-kpi:active { transform: scale(0.98); }
+button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background: var(--uc-accent-soft); }
+.uc-kpi-label { font-size: 11.5px; font-weight: 500; color: var(--uc-ink-2); }
+.uc-kpi-value { font-size: 26px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.uc-kpi-sub { font-size: 11px; color: var(--uc-muted); }
+@media (hover: hover) and (pointer: fine) { button.uc-kpi:hover { border-color: var(--uc-line-2); } }
+
+/* ---- directory table ----------------------------------------------------------------------------- */
+.uc-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.uc-table th { position: sticky; top: 0; z-index: 2; padding: 10px 14px; text-align: right; font-size: 11.5px; font-weight: 600; color: var(--uc-muted); background: var(--uc-surface); border-bottom: 1px solid var(--uc-line); white-space: nowrap; }
+.uc-table th button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+.uc-table td { padding: 12px 14px; border-bottom: 1px solid var(--uc-line); vertical-align: middle; }
+.uc-table tbody tr { cursor: pointer; transition: background-color 0.15s; }
+.uc-table tbody tr:last-child td { border-bottom: 0; }
+.uc-row-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+@media (hover: hover) and (pointer: fine) {
+  .uc-table tbody tr:hover { background: var(--uc-surface-2); }
+  .uc-table tbody tr:hover .uc-row-actions, .uc-table tbody tr:focus-within .uc-row-actions { opacity: 1; }
+}
+@media (hover: none) { .uc-row-actions { opacity: 1; } }
+
+/* ---- avatar -------------------------------------------------------------------------------------- */
+.uc-avatar { --h: 200; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; overflow: hidden; font-weight: 700; color: hsl(var(--h) 70% 82%); background: hsl(var(--h) 38% 24%); }
+:root[data-theme='light'] .uc-avatar { color: hsl(var(--h) 55% 28%); background: hsl(var(--h) 70% 90%); }
+.uc-avatar img { width: 100%; height: 100%; object-fit: cover; background: #fff; }
+
+/* ---- matrices ------------------------------------------------------------------------------------ */
+.uc-matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.uc-matrix th { padding: 10px 8px; font-size: 11.5px; font-weight: 600; color: var(--uc-muted); text-align: center; border-bottom: 1px solid var(--uc-line); white-space: nowrap; background: var(--uc-surface); position: sticky; top: 0; z-index: 2; }
+.uc-matrix th:first-child, .uc-matrix td:first-child { text-align: right; padding-inline-start: 16px; position: sticky; inset-inline-start: 0; background: var(--uc-surface); z-index: 1; }
+.uc-matrix th:first-child { z-index: 3; }
+.uc-matrix td { padding: 8px; text-align: center; border-bottom: 1px solid var(--uc-line); }
+.uc-matrix tbody tr:last-child td { border-bottom: 0; }
+.uc-matrix tr.is-blocked td { opacity: 0.5; }
+.uc-matrix tr.is-blocked td:first-child { opacity: 1; }
+.uc-cell {
+  --c: var(--uc-muted); position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 30px; border-radius: 9px;
+  border: 1px solid transparent; background: transparent; color: var(--c); cursor: pointer; font-family: inherit;
+  transition: background-color 0.15s, border-color 0.15s, transform 160ms var(--uc-ease);
+}
+.uc-cell:active { transform: scale(0.94); }
+.uc-cell.is-role { --c: var(--uc-inherit); background: color-mix(in srgb, var(--c) 13%, transparent); border-color: color-mix(in srgb, var(--c) 28%, transparent); }
+.uc-cell.is-direct { --c: var(--uc-direct); background: color-mix(in srgb, var(--c) 15%, transparent); border-color: color-mix(in srgb, var(--c) 40%, transparent); }
+.uc-cell.is-denied { --c: var(--uc-bad); background: color-mix(in srgb, var(--c) 12%, transparent); border-color: color-mix(in srgb, var(--c) 36%, transparent); }
+.uc-cell.is-none::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--uc-line-2); }
+@media (hover: hover) and (pointer: fine) { .uc-cell:hover { border-color: var(--uc-line-2); background: var(--uc-surface-3); } }
+.uc-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--uc-ink-2); }
+.uc-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.uc-legend .uc-cell { width: 22px; height: 20px; border-radius: 6px; cursor: default; }
+
+/* ---- popover menu -------------------------------------------------------------------------------- */
+.uc-pop {
+  position: absolute; z-index: 40; min-width: 220px; max-width: 280px; padding: 6px; border-radius: 12px; background: var(--uc-surface); border: 1px solid var(--uc-line-2);
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.55); text-align: right; animation: uc-pop 160ms var(--uc-ease) both; transform-origin: top;
+}
+.uc-pop-item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--uc-ink); font-family: inherit; font-size: 12.5px; font-weight: 500; text-align: right; cursor: pointer; }
+.uc-pop-item small { display: block; font-size: 10.5px; color: var(--uc-muted); font-weight: 400; }
+.uc-pop-item.is-danger { color: var(--uc-bad); }
+@media (hover: hover) and (pointer: fine) { .uc-pop-item:hover { background: var(--uc-surface-3); } }
+@keyframes uc-pop { from { opacity: 0; transform: scale(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ---- drawer -------------------------------------------------------------------------------------- */
+.uc-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 12, 0.55); backdrop-filter: blur(3px); animation: uc-fade 200ms ease both; }
+.uc-drawer { position: fixed; inset-block: 0; left: 0; z-index: 61; display: flex; flex-direction: column; width: min(520px, 100vw); background: var(--uc-surface); border-right: 1px solid var(--uc-line-2); box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6); animation: uc-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes uc-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes uc-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
+
+/* ---- access ring (signature element) ------------------------------------------------------------- */
+.uc-ring-seg { transition: stroke 0.2s, opacity 0.2s; }
+
+/* ---- timeline ------------------------------------------------------------------------------------ */
+.uc-tl { position: relative; margin: 0; padding: 0; list-style: none; }
+.uc-tl > li { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+.uc-tl > li::before { content: ''; position: absolute; top: 34px; bottom: 0; inset-inline-start: 15px; width: 1px; background: var(--uc-line); }
+.uc-tl > li:last-child::before { display: none; }
+.uc-tl-dot { --c: var(--uc-muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 31px; height: 31px; border-radius: 50%; color: var(--c); background: color-mix(in srgb, var(--c) 13%, var(--uc-surface)); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
+
+/* ---- misc ---------------------------------------------------------------------------------------- */
+.uc-skeleton { border-radius: 10px; background: linear-gradient(90deg, var(--uc-surface-2), var(--uc-surface-3), var(--uc-surface-2)); background-size: 200% 100%; animation: uc-shimmer 1.4s linear infinite; }
+@keyframes uc-shimmer { to { background-position: -200% 0; } }
+.uc-rise { animation: uc-rise 260ms var(--uc-ease) both; }
+@keyframes uc-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.uc-toast { position: fixed; z-index: 80; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: min(92vw, 520px); padding: 11px 16px; border-radius: 12px; background: var(--uc-surface); border: 1px solid var(--uc-line-2); box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6); font-size: 12.5px; animation: uc-rise 220ms var(--uc-ease) both; }
+.uc-toast.is-bad { border-color: color-mix(in srgb, var(--uc-bad) 50%, transparent); }
+.uc-toast.is-ok { border-color: color-mix(in srgb, var(--uc-ok) 50%, transparent); }
+.uc-toast.is-warn { border-color: color-mix(in srgb, var(--uc-warn) 50%, transparent); }
+
+@media (max-width: 720px) {
+  .uc-drawer { width: 100vw; border-right: 0; }
+  .uc-kpi-value { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uc-rise, .uc-pop, .uc-drawer, .uc-toast, .uc-skeleton { animation-duration: 0.01ms; animation-iteration-count: 1; }
+  .uc-tab::after, .uc-switch::after { transition: none; }
+}
+
+/* project matrix: the + only shows on hover/focus (always on touch) so a full row reads as a list of roles */
+.uc-matrix tr.is-dim td:not(:first-child):not(:nth-child(2)) { opacity: 0.85; }
+@media (hover: hover) and (pointer: fine) {
+  .uc-matrix .uc-add-cell { opacity: 0.32; transition: opacity 0.15s; }
+  .uc-matrix tr:hover .uc-add-cell, .uc-matrix .uc-add-cell:focus-visible { opacity: 1; }
+}
