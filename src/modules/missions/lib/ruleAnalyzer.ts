@@ -139,7 +139,7 @@ export function makeTitle(sentence: string): string {
   const comma = s.split(/[،,]/)[0]
   if (comma.length >= 14 && contentTokens(comma).length >= 3 && !/^(ممکن|در صورت|اگر|شاید|احتمال|چنانچه)/.test(normalizeFa(comma))) s = comma
   s = s.replace(/[\s،,.:؛]+$/u, '')
-  if (s.length > 84) s = s.slice(0, 84).replace(/\s+\S*$/, '') + '…'
+  if (s.length > 110) s = s.slice(0, 110).replace(/\s+\S*$/, '') + '…'
   return s
 }
 

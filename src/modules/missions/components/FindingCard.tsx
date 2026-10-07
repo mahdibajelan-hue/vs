@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ExternalLink, Link2, Lock, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, ExternalLink, Link2, Lock, Pencil, Trash2, X } from 'lucide-react'
 import { FINDING_KIND_LABEL, type Finding, type LinkedStatus, type TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
 import { KindBadge, Pill, SeverityDot } from './ui'
@@ -81,7 +81,7 @@ export function FindingCard({
   const [dialog, setDialog] = useState(false)
   const missing = [(f.kind === 'action' || f.kind === 'commitment') && !f.ownerText ? 'مسئول' : '', (f.kind === 'action' || f.kind === 'commitment') && !f.dueDate ? 'موعد' : ''].filter(Boolean)
   return (
-    <article className={`ms-ledger-item ms-k-${f.kind}`} style={{ animation: 'none' }}>
+    <article className={`ms-ledger-item is-plain ms-k-${f.kind}`} style={{ animation: 'none' }}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <KindBadge kind={f.kind} />
         {(f.kind === 'issue' || f.kind === 'risk') && <SeverityDot severity={f.severity} withLabel />}
@@ -89,13 +89,13 @@ export function FindingCard({
         {f.approval === 'rejected' && <Pill tone="bad">ردشده</Pill>}
         {f.confidential && <Pill tone="warn"><Lock size={11} aria-hidden className="inline" /> محرمانه</Pill>}
         {f.userConfirmed && <span className="ms-muted text-[10.5px]">تأیید بازدیدکننده</span>}
-        {missionLabel && (
-          <button className="ms-muted mr-auto text-[11px] underline-offset-2 hover:underline" onClick={onOpenMission}>
-            {missionLabel}
-          </button>
-        )}
       </div>
       <h3 className="mt-1.5 text-[13px] font-extrabold leading-7">{f.title}</h3>
+      {missionLabel && (
+        <button className="ms-muted text-[11px] underline-offset-2 hover:underline" onClick={onOpenMission}>
+          {missionLabel}
+        </button>
+      )}
       {rows.length > 0 && (
         <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-[11.5px] leading-6 sm:grid-cols-2">
           {rows.map(([k, v]) => (
@@ -106,7 +106,7 @@ export function FindingCard({
           ))}
         </dl>
       )}
-      {missing.length > 0 && <p className="mt-1 text-[11px] font-bold" style={{ color: 'var(--ms-warn)' }}>⚠ {missing.join(' و ')} مشخص نشده است</p>}
+      {missing.length > 0 && <p className="mt-1 flex items-center gap-1 text-[11px] font-bold" style={{ color: 'var(--ms-warn)' }}><AlertTriangle size={12} aria-hidden /> {missing.join(' و ')} مشخص نشده است</p>}
       {f.managerNote && <p className="ms-ink2 mt-1 text-[11.5px] leading-6">یادداشت مجری طرح: {f.managerNote}</p>}
 
       {linked && (

@@ -100,9 +100,13 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
-            <span className="ms-pill hidden lg:inline-flex" title="موتور تحلیل پاسخ‌ها">
-              <Sparkles size={12} aria-hidden /> {ai.enhanced ? ai.label : 'موتور قواعد'}
-            </span>
+            {ai.enhanced && (
+              <span className="hidden lg:inline-flex">
+                <span className="ms-pill" title="موتور تحلیل پاسخ‌ها">
+                  <Sparkles size={12} aria-hidden /> {ai.label}
+                </span>
+              </span>
+            )}
             <button className="ms-btn ms-btn-sm ms-btn-icon" onClick={toggleTheme} aria-label={dark ? 'تم روشن' : 'تم تاریک'} title={dark ? 'تم روشن' : 'تم تاریک'} aria-pressed={dark}>
               {dark ? <Sun size={15} aria-hidden /> : <Moon size={15} aria-hidden />}
             </button>

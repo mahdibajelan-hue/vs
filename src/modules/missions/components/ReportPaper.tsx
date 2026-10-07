@@ -75,7 +75,7 @@ export function ReportPaper({
 
       <section className="ms-paper-summary">
         <h2 style={{ margin: 0, border: 'none', padding: 0, fontSize: 14 }}>خلاصه مدیریتی</h2>
-        <p style={{ marginTop: 6, marginBottom: 0 }}>{c.executiveSummary}</p>
+        <SummaryBody text={c.executiveSummary} />
       </section>
 
       {/* ------------------------------------------------------------------ KPI strip */}
@@ -199,8 +199,14 @@ export function ReportPaper({
         </section>
       )}
 
-      {/* ------------------------------------------------------------------ signatures */}
-      <section className="ms-paper-sign">
+      {/* ------------------------------------------------------------------ document control + signatures */}
+      <dl className="ms-paper-doc">
+        <div><dt>شماره سند</dt><dd>{mission.code}</dd></div>
+        <div><dt>نسخه</dt><dd>{faNum(report?.version ?? 1)}</dd></div>
+        <div><dt>تاریخ ارسال</dt><dd>{mission.reportSubmittedAt ? shamsi(mission.reportSubmittedAt) : '—'}</dd></div>
+        <div><dt>تأیید نهایی</dt><dd>{mission.finalApprovedAt ? shamsi(mission.finalApprovedAt) : 'در انتظار'}</dd></div>
+      </dl>
+      <section className="ms-paper-sign" style={{ marginTop: 14 }}>
         <div className="ms-paper-signbox">
           <p className="ms-paper-k">تهیه‌کننده</p>
           <div className="ms-paper-signimg">
@@ -222,6 +228,18 @@ export function ReportPaper({
         نسخه {faNum(report?.version ?? 1)} · امتیاز کیفیت گزارش: {mission.qualityScore != null ? faNum(Math.round(mission.qualityScore)) : '—'} از ۱۰۰ · تهیه‌شده با دستیار گزارش‌گیری ({c.generatedBy === 'rules' ? 'موتور قواعد' : 'هوش مصنوعی'}) و تأییدشده توسط بازدیدکننده · {mission.code}
       </footer>
     </article>
+  )
+}
+
+/** The executive summary is stored as one run of sentences; set the first as the lead and the rest as short points. */
+function SummaryBody({ text }: { text: string }) {
+  const parts = text.replace(/([.؟!])\s+/g, '$1\n').split('\n').map((x) => x.trim()).filter(Boolean)
+  if (parts.length < 3) return <p style={{ marginTop: 6, marginBottom: 0 }}>{text}</p>
+  return (
+    <>
+      <p className="ms-paper-lead" style={{ marginTop: 6, marginBottom: 0 }}>{parts[0]}</p>
+      <ul>{parts.slice(1).map((x, i) => <li key={i}>{x}</li>)}</ul>
+    </>
   )
 }
 

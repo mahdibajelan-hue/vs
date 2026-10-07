@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, CircleDot, ListChecks, Loader2, Mic, MicOff, Paperclip, Plus, Send, SkipForward, Sparkles, Star } from 'lucide-react'
+import { ArrowRight, Check, CircleCheck, CircleDot, Lightbulb, ListChecks, Loader2, Lock, Mic, MicOff, Paperclip, PenLine, Pin, Plus, Search, Send, SkipForward, Sparkles, Star, type LucideIcon } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
 import { interviewProgress, topicDef } from '../lib/interviewEngine'
@@ -17,6 +17,20 @@ import { liveFindings } from '../lib/reportBuilder'
 import { MsModal } from '../components/MsModal'
 
 type Pane = 'chat' | 'ledger' | 'topics'
+
+/** Older turns were stored with a leading pictograph (📌 🔎 🔒); show a line icon instead so the chat reads as one family. */
+const LEAD_ICON: Record<string, LucideIcon> = { '📌': Pin, '🔎': Search, '🔒': Lock, '✓': Check }
+function BubbleText({ text }: { text: string }) {
+  const m = /^(📌|🔎|🔒|✓)\s*/u.exec(text)
+  if (!m) return <>{text}</>
+  const Icon = LEAD_ICON[m[1]]
+  return (
+    <>
+      <Icon size={13} className="ms-bubble-lead" aria-hidden />
+      {text.slice(m[0].length)}
+    </>
+  )
+}
 
 export function InterviewPage({ id }: { id: string }) {
   const { go } = useNav()
@@ -189,7 +203,7 @@ export function InterviewPage({ id }: { id: string }) {
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {plan.map((k) => <li key={k}><Pill tone={mandatory.includes(k) ? 'accent' : 'neutral'}>{mandatory.includes(k) && <Star size={10} aria-hidden />}{topicTitle(set, k)}</Pill></li>)}
             </ul>
-            <p className="ms-muted mt-2 text-[11px] leading-6">★ مرتبط با اهداف مأموریت شما؛ پیش از ارسال گزارش باید کامل شوند. زمان تقریبی: ۸ تا ۱۵ دقیقه. تحلیل پاسخ‌ها: {ai.label}</p>
+            <p className="ms-muted mt-2 text-[11px] leading-6"><Star size={10} className="inline" aria-hidden /> مرتبط با اهداف مأموریت شما؛ پیش از ارسال گزارش باید کامل شوند. زمان تقریبی: ۸ تا ۱۵ دقیقه. تحلیل پاسخ‌ها: {ai.label}</p>
           </div>
         </div>
 
@@ -282,20 +296,17 @@ export function InterviewPage({ id }: { id: string }) {
             : f.kind === 'risk' ? ['impact', 'probability', 'mitigation'].filter((s) => f.details[s]).length
             : needs ? [f.ownerText || f.details.owner, f.dueDate || f.details.due].filter(Boolean).length : 0
           return (
-            <li key={f.id} className={`ms-ledger-item ms-k-${f.kind}`}>
+            <li key={f.id} className={`ms-ledger-item is-plain ms-k-${f.kind}`}>
               <button className="block w-full text-right" onClick={() => canWrite && setEditing(f)} disabled={!canWrite}>
                 <span className="flex items-center gap-2">
                   <KindBadge kind={f.kind} />
                   {(f.kind === 'issue' || f.kind === 'risk') && <SeverityDot severity={f.severity} />}
-                  <span className="ms-muted mr-auto text-[10.5px]">{topicTitle(set, f.topicKey)}</span>
                 </span>
-                <span className="mt-1 block text-[12.5px] font-bold leading-6">{f.title}</span>
-                {needs > 0 && (
-                  <span className="mt-1.5 flex items-center gap-2">
-                    <span className="flex-1"><Meter value={(have / needs) * 100} tone={have === needs ? 'good' : 'warn'} /></span>
-                    <span className="ms-muted text-[10.5px]">{faNum(have)}/{faNum(needs)} اطلاعات</span>
-                  </span>
-                )}
+                <span className="mt-1.5 block text-[12.5px] font-semibold leading-6">{f.title}</span>
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="ms-muted text-[10.5px]">{topicTitle(set, f.topicKey)}</span>
+                  {needs > 0 && have < needs && <span className="mr-auto text-[10.5px] font-bold" style={{ color: 'var(--ms-warn)' }}>{faNum(have)}/{faNum(needs)} اطلاعات</span>}
+                </span>
               </button>
             </li>
           )
@@ -319,7 +330,7 @@ export function InterviewPage({ id }: { id: string }) {
           {turns.map((t) => (
             <div key={t.id} className={`ms-bubble ${t.role === 'user' ? 'ms-bubble-user' : t.role === 'system' ? 'ms-bubble-system' : `ms-bubble-bot ${t.kind === 'followup' ? 'ms-bubble-follow' : ''}`}`}>
               {t.role === 'assistant' && t.kind === 'followup' && <span className="ms-muted mb-0.5 block text-[10.5px] font-bold">سؤال تکمیلی</span>}
-              {t.text}
+              <BubbleText text={t.text} />
               {t.role === 'user' && t.inputMode === 'voice' && <Mic size={11} className="ms-muted mr-1.5 inline" aria-label="پاسخ صوتی" />}
             </div>
           ))}
@@ -334,7 +345,7 @@ export function InterviewPage({ id }: { id: string }) {
           )}
           {inSummary && !reopened && (
             <div className="ms-card self-center p-5 text-center" style={{ borderColor: 'color-mix(in srgb, var(--ms-good) 45%, transparent)' }}>
-              <p className="text-[14px] font-extrabold">گفت‌وگو کامل شد 🎉</p>
+              <p className="flex items-center justify-center gap-1.5 text-[14px] font-extrabold"><CircleCheck size={16} style={{ color: 'var(--ms-good)' }} aria-hidden /> گفت‌وگو کامل است</p>
               <p className="ms-ink2 mt-1 text-[12.5px] leading-7">همه موضوع‌ها بررسی شد. حالا خلاصه استخراج‌شده را مرور و تأیید کنید.</p>
               <button className="ms-btn ms-btn-primary mt-3" onClick={() => go({ kind: 'summary', id })}>مرور خلاصه و ارسال گزارش</button>
             </div>
@@ -346,8 +357,8 @@ export function InterviewPage({ id }: { id: string }) {
       {canWrite && pending && !inSummary && (
         <div className="shrink-0 border-t px-3 pb-3 pt-2.5 sm:px-6" style={{ borderColor: 'var(--ms-line)', background: 'color-mix(in srgb, var(--ms-panel) 92%, transparent)' }}>
           <div className="mx-auto max-w-3xl">
-            {pending.hint && <p className="ms-muted mb-1.5 text-[11.5px] leading-6">💡 {pending.hint}</p>}
-            {pending.template && <p className="ms-muted mb-1.5 text-[11.5px] leading-6">✍️ قالب پاسخ را کامل کنید: جلوی هر خط بنویسید یا با میکروفون بگویید (متن در جای نشانگر وارد می‌شود).</p>}
+            {pending.hint && <p className="ms-muted mb-1.5 flex items-start gap-1.5 text-[11.5px] leading-6"><Lightbulb size={13} className="mt-1 shrink-0" aria-hidden /> {pending.hint}</p>}
+            {pending.template && <p className="ms-muted mb-1.5 flex items-start gap-1.5 text-[11.5px] leading-6"><PenLine size={13} className="mt-1 shrink-0" aria-hidden /> قالب پاسخ را کامل کنید: جلوی هر خط بنویسید یا با میکروفون بگویید (متن در جای نشانگر وارد می‌شود).</p>}
             {pending.quick && pending.quick.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {pending.quick.map((q) => (

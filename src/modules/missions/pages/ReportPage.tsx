@@ -6,7 +6,7 @@ import { useNav } from '../nav'
 import { buildReport, liveFindings } from '../lib/reportBuilder'
 import { scoreReport } from '../lib/qualityScore'
 import { faNum } from '../lib/fa'
-import { Card, Field, Meter, Pill, ScoreGauge, SectionHead } from '../components/ui'
+import { Card, Field, Meter, Pill, SectionHead } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
 import { ReportPaper } from '../components/ReportPaper'
 import { IntegrityPanel } from '../components/IntegrityPanel'
@@ -80,19 +80,24 @@ export function ReportPage({ id }: { id: string }) {
 
         <aside className="ms-no-print flex flex-col gap-4 lg:col-span-2">
           <Card className="p-5">
-            <div className="flex items-center gap-4">
-              <ScoreGauge value={m.qualityScore ?? (criteria.length ? Math.round(criteria.reduce((s, c) => s + (c.score * c.weight) / 100, 0)) : null)} size={84} label="کیفیت" />
-              <div className="min-w-0 flex-1">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-[13px] font-extrabold">کیفیت گزارش</p>
                 <p className="ms-muted text-[11.5px] leading-6">کامل بودن، پوشش اهداف، مسئول و موعد، شواهد</p>
               </div>
+              <p className="shrink-0 text-[26px] font-black leading-none" style={{ color: 'var(--ms-ink)' }}>
+                {faNum(m.qualityScore ?? (criteria.length ? Math.round(criteria.reduce((s, c) => s + (c.score * c.weight) / 100, 0)) : 0))}
+                <span className="ms-muted text-[12px] font-medium"> / ۱۰۰</span>
+              </p>
             </div>
-            <ul className="mt-3 flex flex-col gap-2">
+            <ul className="mt-4 flex flex-col gap-3">
               {criteria.map((c) => (
-                <li key={c.key} className="flex items-center gap-2 text-[11.5px]">
-                  <span className="w-32 shrink-0 truncate font-bold">{c.label}</span>
-                  <span className="flex-1"><Meter value={c.score} tone={c.score >= 80 ? 'good' : c.score >= 60 ? 'warn' : 'bad'} /></span>
-                  <span className="w-6 text-left font-black">{faNum(c.score)}</span>
+                <li key={c.key} className="text-[11.5px]">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold leading-5">{c.label}</span>
+                    <span className="shrink-0 font-black">{faNum(c.score)}</span>
+                  </span>
+                  <span className="mt-1 block"><Meter value={c.score} tone={c.score >= 80 ? 'good' : c.score >= 60 ? 'warn' : 'bad'} /></span>
                 </li>
               ))}
             </ul>

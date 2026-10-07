@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { MsModal } from './MsModal'
 import type { Finding, TransferTarget } from '../types'
 import { shamsi } from '../lib/fa'
@@ -99,7 +99,7 @@ export function TransferDialog({
         {target === 'action' && (
           <p className="ms-ink2 text-[11.5px] leading-6">
             مسئول: {f.ownerText || '—'} · موعد: {f.dueDate ? shamsi(f.dueDate) : '—'}
-            {actionMissing.length > 0 && <span className="block font-bold" style={{ color: 'var(--ms-warn)' }}>⚠ {actionMissing.join(' و ')} مشخص نشده است؛ بعداً در مدیریت اقدامات کامل کنید.</span>}
+            {actionMissing.length > 0 && <span className="flex items-center gap-1 font-bold" style={{ color: 'var(--ms-warn)' }}><AlertTriangle size={12} aria-hidden /> {actionMissing.join(' و ')} مشخص نشده است؛ بعداً در مدیریت اقدامات کامل کنید.</span>}
           </p>
         )}
 

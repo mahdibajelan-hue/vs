@@ -63,14 +63,14 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
           <EmptyState icon={ClipboardList} title="مأموریتی با این فیلتر پیدا نشد" text="فیلتر را عوض کنید یا درخواست مأموریت جدید ثبت کنید." action={<button className="ms-btn ms-btn-primary mt-2" onClick={() => go({ kind: 'form' })}>درخواست مأموریت</button>} />
         </Card>
       ) : (
-        <ul className="ms-card overflow-hidden">
+        <ul className="ms-card">
           {shown.map((m) => {
             const next = nextStepFor(m, user)
             const idx = stepIndex(m.status)
             return (
               <li key={m.id} className="ms-row">
-                  <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center">
-                    <button className="flex min-w-0 flex-1 items-start gap-3 text-right" onClick={() => go({ kind: 'mission', id: m.id })}>
+                  <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:gap-6">
+                    <button className="flex min-w-0 flex-1 items-start gap-3 text-right md:max-w-[46rem]" onClick={() => go({ kind: 'mission', id: m.id })}>
                       <Avatar name={m.requesterName} size={38} />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -94,9 +94,7 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                         )}
                       </span>
                     </button>
-                    <div className="flex shrink-0 items-center gap-3 md:w-64 md:justify-end">
-                      {m.qualityScore != null && <Pill tone={m.qualityScore >= 75 ? 'good' : m.qualityScore >= 60 ? 'warn' : 'bad'} title="امتیاز کیفیت گزارش">کیفیت {faNum(Math.round(m.qualityScore))}</Pill>}
-                      <DeleteMissionButton mission={m} compact />
+                    <div className="flex shrink-0 items-center gap-2 md:w-72 md:gap-3">
                       {next ? (
                         <button className={`ms-btn ms-btn-sm ${next.tone === 'good' || next.tone === 'accent' ? 'ms-btn-primary' : ''}`} onClick={() => go(next.view)}>
                           {next.label} <ArrowLeft size={13} aria-hidden />
@@ -104,7 +102,9 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                       ) : (
                         <button className="ms-btn ms-btn-ghost ms-btn-sm" onClick={() => go({ kind: 'mission', id: m.id })}>جزئیات</button>
                       )}
-                    </div>
+                      {m.qualityScore != null && <Pill tone={m.qualityScore >= 75 ? 'good' : m.qualityScore >= 60 ? 'warn' : 'bad'} title="امتیاز کیفیت گزارش">کیفیت {faNum(Math.round(m.qualityScore))}</Pill>}
+                      <DeleteMissionButton mission={m} compact />
+                      </div>
                   </div>
               </li>
             )

@@ -423,6 +423,14 @@ button.ms-kpi { cursor: pointer; }
 .ms-paper-meta dd { font-size: 12.5px; font-weight: 700; margin: 0; color: #1c1917; line-height: 1.8; }
 .ms-paper-summary { margin-top: 14px; padding: 14px 18px; background: #f1f3fc; border-radius: 8px; border-right: 5px solid #4f46e5; }
 .ms-paper-summary p { font-size: 13.5px; line-height: 2.1; }
+.ms-paper-summary .ms-paper-lead { font-size: 14.5px; font-weight: 600; }
+.ms-paper-summary ul { margin: 8px 0 0; padding: 0 18px 0 0; }
+.ms-paper-summary li { font-size: 13px; line-height: 2; margin: 0; }
+.ms-paper-doc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 26px; border: 1px solid #d6d3d1; border-radius: 10px; overflow: hidden; break-inside: avoid; }
+.ms-paper-doc > div { padding: 8px 14px; border-inline-start: 1px solid #e7e5e4; }
+.ms-paper-doc > div:first-child { border-inline-start: 0; }
+.ms-paper-doc dt { font-size: 10.5px; color: #78716c; }
+.ms-paper-doc dd { margin: 0; font-size: 12.5px; font-weight: 700; color: #1c1917; }
 .ms-paper-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .ms-paper-kpi { border: 1px solid #e7e5e4; border-radius: 10px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 2px; }
 .ms-paper-kpi p { margin: 0; }
@@ -456,6 +464,7 @@ button.ms-kpi { cursor: pointer; }
 @media (max-width: 640px) {
   .ms-paper-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ms-paper-charts, .ms-paper-meta, .ms-paper-sign { grid-template-columns: 1fr; }
+  .ms-paper-doc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ms-paper-cover { flex-direction: column; }
   .ms-paper-table { display: block; overflow-x: auto; }
 }
@@ -533,5 +542,18 @@ button.ms-card-flat { transition: transform 160ms var(--ms-ease-out), border-col
 
 /* list rows: one container card, hairline dividers, no per-row chrome */
 .ms-row { border-color: var(--ms-line); transition: background-color 0.15s; }
+.ms-row:first-child { border-radius: 18px 18px 0 0; }
+.ms-row:last-child { border-radius: 0 0 18px 18px; }
+.ms-row:only-child { border-radius: 18px; }
 .ms-row + .ms-row { border-top: 1px solid var(--ms-line); }
 @media (hover: hover) and (pointer: fine) { .ms-row:hover { background: var(--ms-panel-2); } }
+
+/* findings + ledger: one hue signal (the kind pill) — no coloured edge, no shadow */
+.ms-ledger-item.is-plain { border: 1px solid var(--ms-line); box-shadow: none; background: var(--ms-panel); }
+.ms-bubble-lead { display: inline-block; vertical-align: -2px; margin-inline-end: 6px; opacity: 0.75; }
+
+/* row overflow menu */
+.ms-menu { position: absolute; z-index: 20; top: calc(100% + 4px); inset-inline-end: 0; min-width: 150px; padding: 4px; background: var(--ms-panel); border: 1px solid var(--ms-line-2); border-radius: 12px; box-shadow: var(--ms-shadow); animation: ms-pop 0.16s var(--ms-ease-out) both; transform-origin: top; }
+.ms-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ms-ink); font-size: 12.5px; font-weight: 600; text-align: right; }
+.ms-menu button.is-danger { color: var(--ms-bad); }
+@media (hover: hover) and (pointer: fine) { .ms-menu button:hover { background: var(--ms-panel-2); } }

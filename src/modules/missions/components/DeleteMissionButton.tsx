@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { MoreVertical, Trash2 } from 'lucide-react'
 import { MsModal } from './MsModal'
 import { useMissionStore } from '../store/useMissionStore'
 import type { Mission } from '../types'
@@ -14,13 +14,42 @@ export function DeleteMissionButton({ mission, onDeleted, compact }: { mission: 
   const deleteMission = useMissionStore((s) => s.deleteMission)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [menu, setMenu] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
   const allowed = useCanDeleteMissions()
+  useEffect(() => {
+    if (!menu) return
+    const off = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) setMenu(false)
+    }
+    document.addEventListener('pointerdown', off)
+    document.addEventListener('keydown', off)
+    return () => {
+      document.removeEventListener('pointerdown', off)
+      document.removeEventListener('keydown', off)
+    }
+  }, [menu])
   if (!allowed) return null
   return (
     <>
-      <button className={`ms-btn ms-btn-ghost ms-btn-sm ${compact ? '' : 'ms-btn-danger'}`} title="حذف مأموریت" aria-label={`حذف مأموریت ${mission.code}`} onClick={() => setOpen(true)}>
-        <Trash2 size={14} aria-hidden /> {compact ? null : 'حذف مأموریت'}
-      </button>
+      {compact ? (
+        <div ref={box} className="relative">
+          <button className="ms-btn ms-btn-ghost ms-btn-sm ms-btn-icon" aria-haspopup="menu" aria-expanded={menu} aria-label={`گزینه‌های مأموریت ${mission.code}`} onClick={() => setMenu((v) => !v)}>
+            <MoreVertical size={15} aria-hidden />
+          </button>
+          {menu && (
+            <div className="ms-menu" role="menu">
+              <button role="menuitem" className="is-danger" onClick={() => { setMenu(false); setOpen(true) }}>
+                <Trash2 size={14} aria-hidden /> حذف مأموریت
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button className="ms-btn ms-btn-ghost ms-btn-sm ms-btn-danger" aria-label={`حذف مأموریت ${mission.code}`} onClick={() => setOpen(true)}>
+          <Trash2 size={14} aria-hidden /> حذف مأموریت
+        </button>
+      )}
       {open && (
         <MsModal title="حذف مأموریت" subtitle={`${mission.code} · ${mission.projectName}`} onClose={() => !busy && setOpen(false)} width="max-w-md">
           <div className="ms-root flex flex-col gap-3" dir="rtl" style={{ background: 'transparent' }}>
