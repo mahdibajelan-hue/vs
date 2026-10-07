@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search } from 'lucide-react'
 import { useMissionStore } from '../store/useMissionStore'
 import { useNav } from '../nav'
@@ -6,16 +6,7 @@ import { nextStepFor, STEPS, stepIndex, waitingOn } from '../lib/workflow'
 import { faNum, shamsi, missionDays } from '../lib/fa'
 import { Avatar, Card, EmptyState, Pill, StatusPill } from '../components/ui'
 import { DeleteMissionButton } from '../components/DeleteMissionButton'
-import { MISSION_STATUS_LABEL, MISSION_STATUS_TONE, VISIT_TYPE_LABEL, type Mission, type MissionStatus } from '../types'
-
-const STATUS_BAR: Record<string, string> = {
-  good: 'linear-gradient(90deg, var(--ms-emerald), #34d399)',
-  warn: 'linear-gradient(90deg, var(--ms-orange), #fbbf24)',
-  bad: 'linear-gradient(90deg, var(--ms-rose), #fb7185)',
-  info: 'linear-gradient(90deg, var(--ms-sky), #38bdf8)',
-  accent: 'linear-gradient(90deg, var(--ms-accent), var(--ms-accent-2))',
-  neutral: 'linear-gradient(90deg, #64748b, #94a3b8)',
-}
+import { MISSION_STATUS_LABEL, VISIT_TYPE_LABEL, type Mission, type MissionStatus } from '../types'
 
 const FILTERS: { key: string; label: string; test: (m: Mission) => boolean }[] = [
   { key: 'all', label: 'همه', test: () => true },
@@ -72,13 +63,12 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
           <EmptyState icon={ClipboardList} title="مأموریتی با این فیلتر پیدا نشد" text="فیلتر را عوض کنید یا درخواست مأموریت جدید ثبت کنید." action={<button className="ms-btn ms-btn-primary mt-2" onClick={() => go({ kind: 'form' })}>درخواست مأموریت</button>} />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="ms-card overflow-hidden">
           {shown.map((m) => {
             const next = nextStepFor(m, user)
             const idx = stepIndex(m.status)
             return (
-              <li key={m.id}>
-                <Card className="p-0 transition-colors hover:border-[var(--ms-line-2)]" style={{ '--bar': STATUS_BAR[MISSION_STATUS_TONE[m.status as MissionStatus]] } as CSSProperties}>
+              <li key={m.id} className="ms-row">
                   <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center">
                     <button className="flex min-w-0 flex-1 items-start gap-3 text-right" onClick={() => go({ kind: 'mission', id: m.id })}>
                       <Avatar name={m.requesterName} size={38} />
@@ -116,7 +106,6 @@ export function MissionListPage({ initialFilter }: { initialFilter?: string }) {
                       )}
                     </div>
                   </div>
-                </Card>
               </li>
             )
           })}

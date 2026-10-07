@@ -160,7 +160,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
       {/* ---------------------------------------------------------------- Administrative Affairs: ticketing */}
       {m.status === 'ticketing' && (
-        <Card className="p-5" style={{ '--bar': 'linear-gradient(90deg, var(--ms-orange), #f59e0b)' } as React.CSSProperties}>
+        <Card className="p-5">
           <SectionHead eyebrow="امور اداری" title="درخواست بلیط هواپیما" action={<Pill tone="warn">منتظر صدور بلیط</Pill>} />
           <dl className="grid gap-x-8 gap-y-1 text-[12.5px] sm:grid-cols-2">
             {[['مسافر', `${m.requesterName}${m.requesterPosition ? ` (${m.requesterPosition})` : ''}`], ['همراهان', m.companions.length ? m.companions.join('، ') : 'بدون همراه'], ['مبدأ → مقصد', `${m.originCity || '—'} → ${m.destinationCity || m.destination || '—'}`], ['رفت', shamsiLong(m.startDate)], ['برگشت', shamsiLong(m.endDate)], ['پروژه', m.projectName], ['توضیح کارمند', m.ticketNote || '—']].map(([k, v]) => (
@@ -194,7 +194,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
       {/* ---------------------------------------------------------------- issued ticket */}
       {m.ticketIssuedAt && m.needsTicket && m.status !== 'ticketing' && (
-        <Card className="p-5" style={{ '--bar': 'linear-gradient(90deg, var(--ms-sky), #38bdf8)' } as React.CSSProperties}>
+        <Card className="p-5">
           <SectionHead eyebrow="بلیط هواپیما" title="مشخصات بلیط صادرشده" action={<Pill tone="good"><Plane size={12} aria-hidden /> صادر شد {shamsi(m.ticketIssuedAt)}</Pill>} />
           <dl className="grid gap-x-8 gap-y-1 text-[12.5px] sm:grid-cols-2">
             {([['ایرلاین', m.ticket.airline], ['شماره پرواز', m.ticket.flightNo], ['رفت', m.ticket.departAt], ['برگشت', m.ticket.returnAt], ['کد رزرو (PNR)', m.ticket.pnr], ['مبلغ', m.ticket.cost]] as [string, string | undefined][]).filter(([, v]) => v).map(([k, v]) => (
@@ -206,7 +206,7 @@ export function MissionDetailPage({ id }: { id: string }) {
 
       {/* ---------------------------------------------------------------- Administrative Affairs: mission claim */}
       {(m.status === 'ready_for_claim' || m.status === 'claimed') && (
-        <Card className="p-5" style={{ '--bar': m.status === 'claimed' ? 'linear-gradient(90deg, var(--ms-emerald), #34d399)' : 'linear-gradient(90deg, var(--ms-teal), #2dd4bf)' } as React.CSSProperties}>
+        <Card className="p-5">
           <SectionHead eyebrow="امور اداری" title={m.status === 'claimed' ? 'کلیم مأموریت تأیید شد' : 'تأیید کلیم مأموریت'} action={<Pill tone={m.status === 'claimed' ? 'good' : 'warn'}><BadgeCheck size={12} aria-hidden /> {m.status === 'claimed' ? `تأیید ${shamsi(m.claimedAt)}` : 'گزارش توسط مجری طرح تأیید شد'}</Pill>} />
           <dl className="grid gap-x-8 gap-y-2 text-[12.5px] sm:grid-cols-2">
             {claimText.split('\n').map((line) => {

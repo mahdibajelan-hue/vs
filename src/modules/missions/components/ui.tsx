@@ -134,20 +134,23 @@ export function ErrorBanner({ message, onClose }: { message: string; onClose: ()
   )
 }
 
-/** A dashboard number: white raised card, colour bar on top, solid-gradient icon badge in the card's own hue. */
-export function Kpi({ label, value, sub, tone, onClick, icon: Icon, hue }: { label: string; value: ReactNode; sub?: string; tone?: 'bad' | 'warn' | 'good'; onClick?: () => void; icon?: LucideIcon; hue?: string }) {
-  const h = hue ?? (tone === 'bad' ? 'var(--ms-bad)' : tone === 'warn' ? 'var(--ms-orange)' : tone === 'good' ? 'var(--ms-good)' : 'var(--ms-accent)')
+/** A dashboard number. `plain` is the neutral default; `alert` takes its hue only while there is something to see
+ *  (value > 0); `hero` is the one big number of the page, in the accent colour. */
+export function Kpi({ label, value, sub, onClick, icon: Icon, hue, variant = 'plain', attn }: { label: string; value: ReactNode; sub?: string; onClick?: () => void; icon?: LucideIcon; hue?: string; variant?: 'plain' | 'alert' | 'hero'; attn?: boolean }) {
   const Tag = onClick ? 'button' : 'div'
   return (
-    <Tag onClick={onClick} className="ms-kpi" style={{ '--h': h } as CSSProperties}>
+    <Tag onClick={onClick} className={`ms-kpi ${variant === 'alert' ? 'is-alert' : variant === 'hero' ? 'is-hero' : ''}`} style={{ '--h': hue ?? 'var(--ms-accent)' } as CSSProperties}>
       <span className="flex items-start justify-between gap-2">
-        <span className="text-[12px] font-extrabold leading-5" style={{ color: 'var(--ms-ink-2)' }}>{label}</span>
-        {Icon && <span className="ms-kpi-badge"><Icon size={17} aria-hidden /></span>}
+        <span className="flex items-start gap-1.5">
+          <span className="ms-kpi-label text-[12px] font-bold leading-5">{label}</span>
+          {attn && <span className="ms-kpi-dot" aria-label="نیازمند اقدام" />}
+        </span>
+        {Icon && <span className="ms-kpi-badge"><Icon size={16} aria-hidden /></span>}
       </span>
-      <span className="mt-1 text-[28px] font-black leading-9" style={{ color: 'var(--ms-ink)' }}>
+      <span className="ms-kpi-value mt-1 text-[28px] font-black leading-9">
         {value}
       </span>
-      {sub && <span className="text-[11px] font-semibold leading-5" style={{ color: 'var(--ms-muted)' }}>{sub}</span>}
+      {sub && <span className="ms-kpi-sub text-[11px] font-medium leading-5">{sub}</span>}
     </Tag>
   )
 }

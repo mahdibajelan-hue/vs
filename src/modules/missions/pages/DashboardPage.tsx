@@ -99,17 +99,22 @@ export function DashboardPage() {
       </div>
 
       {/* ------------------------------------------------------------------ KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        <Kpi icon={Activity} hue="var(--ms-accent)" label="مأموریت جاری" value={faNum(kpis.active)} onClick={() => go({ kind: 'list', filter: 'active' })} />
-        <Kpi icon={UserCheck} hue="var(--ms-orange)" label="منتظر تأیید مجری طرح" value={faNum(kpis.awaitingRequestApproval)} tone={kpis.awaitingRequestApproval ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'pending_approval' })} />
-        <Kpi icon={Ticket} hue="var(--ms-sky)" label="منتظر صدور بلیط" value={faNum(kpis.awaitingTicket)} tone={kpis.awaitingTicket ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'ticketing' })} />
-        <Kpi icon={FileCheck2} hue="var(--ms-violet)" label="گزارش منتظر تأیید" value={faNum(kpis.awaitingReportReview)} tone={kpis.awaitingReportReview ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'report_review' })} />
-        <Kpi icon={Wallet} hue="var(--ms-teal)" label="کلیم منتظر تأیید" value={faNum(kpis.awaitingClaim)} tone={kpis.awaitingClaim ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'claim' })} />
-        <Kpi icon={CircleCheck} hue="var(--ms-emerald)" label="گزارش تکمیل‌شده" value={faNum(kpis.completedReports)} tone="good" onClick={() => go({ kind: 'list', filter: 'done' })} />
-        <Kpi icon={FileWarning} hue="#d97706" label="گزارش ناقص" value={faNum(kpis.incompleteReports)} tone={kpis.incompleteReports ? 'warn' : undefined} onClick={() => go({ kind: 'list', filter: 'incomplete' })} />
-        <Kpi icon={OctagonAlert} hue="var(--ms-rose)" label="Issue شناسایی‌شده" value={faNum(kpis.issues)} tone={kpis.issues ? 'bad' : undefined} sub={`${faNum(kpis.transferred)} منتقل‌شده`} onClick={() => go({ kind: 'findings' })} />
-        <Kpi icon={TriangleAlert} hue="#c026d3" label="Risk شناسایی‌شده" value={faNum(kpis.risks)} onClick={() => go({ kind: 'findings' })} />
-        <Kpi icon={Clock} hue="#be123c" label="اقدام و تعهد از موعد گذشته" value={faNum(kpis.overdue)} tone={kpis.overdue ? 'bad' : 'good'} sub={`از ${faNum(kpis.actions + kpis.commitments)} مورد`} onClick={() => go({ kind: 'findings' })} />
+      {/* one hero number, four things that earn colour only when non-zero, then the quiet queue */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <div className="col-span-2 grid">
+          <Kpi variant="hero" icon={Activity} label="مأموریت جاری" value={faNum(kpis.active)} sub={`${faNum(kpis.awaitingRequestApproval + kpis.awaitingTicket + kpis.awaitingReportReview + kpis.awaitingClaim)} مورد منتظر اقدام`} onClick={() => go({ kind: 'list', filter: 'active' })} />
+        </div>
+        <Kpi variant={kpis.issues ? 'alert' : 'plain'} icon={OctagonAlert} hue="var(--ms-rose)" label="Issue شناسایی‌شده" value={faNum(kpis.issues)} sub={`${faNum(kpis.transferred)} منتقل‌شده`} onClick={() => go({ kind: 'findings' })} />
+        <Kpi variant={kpis.risks ? 'alert' : 'plain'} icon={TriangleAlert} hue="var(--ms-orange)" label="Risk شناسایی‌شده" value={faNum(kpis.risks)} onClick={() => go({ kind: 'findings' })} />
+        <Kpi variant={kpis.overdue ? 'alert' : 'plain'} icon={Clock} hue="var(--ms-rose)" label="اقدام و تعهد از موعد گذشته" value={faNum(kpis.overdue)} sub={`از ${faNum(kpis.actions + kpis.commitments)} مورد`} onClick={() => go({ kind: 'findings' })} />
+        <Kpi variant={kpis.incompleteReports ? 'alert' : 'plain'} icon={FileWarning} hue="var(--ms-orange)" label="گزارش ناقص" value={faNum(kpis.incompleteReports)} onClick={() => go({ kind: 'list', filter: 'incomplete' })} />
+        <Kpi icon={UserCheck} attn={!!kpis.awaitingRequestApproval} label="منتظر تأیید مجری طرح" value={faNum(kpis.awaitingRequestApproval)} onClick={() => go({ kind: 'list', filter: 'pending_approval' })} />
+        <Kpi icon={Ticket} attn={!!kpis.awaitingTicket} label="منتظر صدور بلیط" value={faNum(kpis.awaitingTicket)} onClick={() => go({ kind: 'list', filter: 'ticketing' })} />
+        <Kpi icon={FileCheck2} attn={!!kpis.awaitingReportReview} label="گزارش منتظر تأیید" value={faNum(kpis.awaitingReportReview)} onClick={() => go({ kind: 'list', filter: 'report_review' })} />
+        <Kpi icon={Wallet} attn={!!kpis.awaitingClaim} label="کلیم منتظر تأیید" value={faNum(kpis.awaitingClaim)} onClick={() => go({ kind: 'list', filter: 'claim' })} />
+        <div className="col-span-2 grid">
+          <Kpi icon={CircleCheck} label="گزارش تکمیل‌شده" value={faNum(kpis.completedReports)} onClick={() => go({ kind: 'list', filter: 'done' })} />
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ insights + queue */}
