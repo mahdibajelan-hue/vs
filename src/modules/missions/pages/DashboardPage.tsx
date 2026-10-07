@@ -185,8 +185,8 @@ export function DashboardPage() {
                   labelStyle={{ color: 'var(--ms-ink)', fontWeight: 800 }}
                   formatter={(v, n) => [faNum(Number(v)), n === 'visits' ? 'بازدید' : 'مسئله/ریسک']}
                 />
-                <Bar dataKey="visits" fill="var(--ms-accent)" radius={[6, 6, 0, 0]} barSize={26} />
-                <Line dataKey="findings" type="monotone" stroke="var(--ms-rose)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--ms-rose)' }} />
+                <Bar dataKey="visits" fill="var(--ms-accent)" radius={[6, 6, 0, 0]} barSize={26} isAnimationActive={false} />
+                <Line dataKey="findings" type="monotone" stroke="var(--ms-rose)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--ms-rose)' }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
