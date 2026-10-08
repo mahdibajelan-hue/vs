@@ -13,6 +13,7 @@ import {
   WARNING_SEVERITY_LABEL_FA, type StageKey,
 } from '../types'
 import { ProjectJourneyTimeline } from '../components/ProjectJourneyTimeline'
+import { StageOrbit } from '../components/StageOrbit'
 import { DriftTrendChart, HealthRadar, StageReadinessBars } from '../components/TowerCharts'
 import { GateLadder, HealthGauge, ReadinessWaffle } from '../components/TowerInstruments'
 import { TowerTile } from '../components/TowerTile'
@@ -107,6 +108,20 @@ export function ControlTowerPage({
             {bundle.lifecycle.stageEnteredAt && <> · از {fa(bundle.lifecycle.stageEnteredAt)}</>}
           </span>
         </div>
+      </div>
+
+      {/* The circular stage-gate ring — the module's signature view, and the first thing a
+          manager who already knows the project wants to see: where it sits on its own path, not
+          a calendar axis. Kept above the bento grid rather than inside it so it reads as the
+          project's "cockpit", with the verdict/health/readiness tiles below as supporting detail. */}
+      <div className="mb-3">
+        <StageOrbit
+          stages={bundle.stages}
+          gates={bundle.gates}
+          gateStatuses={analysis.gateStatuses}
+          currentStageKey={currentStageKey}
+          onSelectStage={onOpenStage}
+        />
       </div>
 
       <div className="plc-bento">
