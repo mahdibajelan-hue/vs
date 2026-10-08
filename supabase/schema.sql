@@ -5685,15 +5685,18 @@ create policy "comp_ai_analysis_insert_authenticated" on comp_ai_analysis
 
 drop policy if exists "comp_question_bank_write_admin" on comp_question_bank;
 
+drop policy if exists "comp_question_bank_insert" on comp_question_bank;
 create policy "comp_question_bank_insert" on comp_question_bank
   for insert with check (
     comp_is_module_admin()
     or (approval_status = 'PENDING_REVIEW' and active = false and created_by = auth.uid())
   );
 
+drop policy if exists "comp_question_bank_update_admin" on comp_question_bank;
 create policy "comp_question_bank_update_admin" on comp_question_bank
   for update using (comp_is_module_admin()) with check (comp_is_module_admin());
 
+drop policy if exists "comp_question_bank_delete_admin" on comp_question_bank;
 create policy "comp_question_bank_delete_admin" on comp_question_bank
   for delete using (comp_is_module_admin());
 
