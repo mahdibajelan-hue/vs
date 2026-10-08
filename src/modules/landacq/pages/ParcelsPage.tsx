@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Plus, Scissors, Search, Wand2 } from 'lucide-react'
+import { ParcelBuilder } from '../components/ParcelBuilder'
 import { Modal } from '../platform'
 import { useLandStore, useLandAnalysis } from '../store/useLandStore'
 import type { OwnershipClass } from '../types'
@@ -16,7 +17,6 @@ import type { ParcelDraft } from '../repo/types'
 /** Land Screening: cut the route into km parcels, profile each one, see the preliminary picture of the whole route. */
 export function ParcelsPage() {
   const data = useLandStore((s) => s.data)
-  const generate = useLandStore((s) => s.generateParcels)
   const addParcel = useLandStore((s) => s.addParcel)
   const splitParcel = useLandStore((s) => s.splitParcel)
   const select = useLandStore((s) => s.selectParcel)
@@ -25,7 +25,7 @@ export function ParcelsPage() {
   const [q, setQ] = useState('')
   const [own, setOwn] = useState<OwnershipClass | 'all'>('all')
   const [lvl, setLvl] = useState<'all' | 'critical' | 'high' | 'open'>('all')
-  const [segKm, setSegKm] = useState(1)
+  const [builder, setBuilder] = useState(false)
   const [adding, setAdding] = useState(false)
   const [splitting, setSplitting] = useState<string | null>(null)
 
@@ -60,13 +60,9 @@ export function ParcelsPage() {
           icon={<Wand2 size={22} />}
           title="مسیر را به قطعه‌های کیلومتری بشکنید"
           text={`مسیر ${faNum(route.totalKm)} کیلومتری به قطعه‌های هم‌اندازه تقسیم می‌شود؛ بعد برای هر قطعه نوع زمین، مالکیت و پیچیدگی را ثبت می‌کنید. قطعه‌های حساس را می‌توانید بعداً جدا کنید.`}
-          action={
-            <div className="mt-2 flex items-end gap-2">
-              <Field label="طول هر قطعه (km)"><input className="la-input la-num" style={{ width: 120 }} type="number" min={0.1} step={0.5} value={segKm} onChange={(e) => setSegKm(Math.max(0.1, Number(e.target.value) || 1))} /></Field>
-              <button className="la-btn la-btn-primary" onClick={() => generate(segKm, false)}>ساخت قطعه‌ها ({faNum(Math.ceil(route.totalKm / segKm))})</button>
-            </div>
-          }
+          action={<button className="la-btn la-btn-primary mt-2" onClick={() => setBuilder(true)}>ساخت قطعه‌ها (خودکار یا دستی)</button>}
         />
+        {builder && <ParcelBuilder replace={false} onClose={() => setBuilder(false)} />}
       </div>
     )
   }
@@ -90,6 +86,7 @@ export function ParcelsPage() {
         title={`قطعه‌ها (${faNum(shown.length)} از ${faNum(rows.length)})`}
         action={
           <div className="flex flex-wrap gap-2">
+            <button className="la-btn la-btn-sm" onClick={() => setBuilder(true)}><Wand2 size={14} /> ساخت دوبارهٔ قطعه‌ها</button>
             <button className="la-btn la-btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> قطعهٔ جدید</button>
           </div>
         }
@@ -134,6 +131,7 @@ export function ParcelsPage() {
         )}
       </Card>
 
+      {builder && <ParcelBuilder replace onClose={() => setBuilder(false)} />}
       {adding && <AddParcelDialog onClose={() => setAdding(false)} onSave={async (d) => { await addParcel(d); setAdding(false) }} startKm={route.startKm} endKm={route.startKm + route.totalKm} />}
       {splitting && (() => {
         const p = rows.find((r) => r.parcel.id === splitting)?.parcel

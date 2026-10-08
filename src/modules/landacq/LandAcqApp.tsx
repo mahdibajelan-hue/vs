@@ -28,20 +28,26 @@ interface Props {
   onBackToRadar: () => void
 }
 
-/** `phase` is the step of the four-step method the tab belongs to (see the «روش کار» help). */
-const TABS: { key: TabKey; label: string; icon: typeof Rows3; phase?: 1 | 2 | 3 | 4 }[] = [
-  { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard, phase: 1 },
-  { key: 'map', label: 'نقشه', icon: MapIcon, phase: 1 },
-  { key: 'parcels', label: 'قطعه‌ها', icon: Rows3, phase: 1 },
-  { key: 'stations', label: 'ایستگاه‌ها', icon: Factory, phase: 1 },
-  { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline, phase: 1 },
-  { key: 'plan', label: 'برنامه آزادسازی', icon: ClipboardList, phase: 2 },
-  { key: 'schedule', label: 'تطبیق با برنامه', icon: GitCompareArrows, phase: 3 },
-  { key: 'fronts', label: 'جبهه‌های کاری', icon: RouteIcon, phase: 4 },
-  { key: 'reports', label: 'گزارش‌ها', icon: FileBarChart },
-  { key: 'actions', label: 'اقدام‌ها', icon: BellRing },
-  { key: 'finance', label: 'مالی و بودجه', icon: Coins },
-  { key: 'settings', label: 'تنظیمات', icon: Settings },
+/** `phase` is the step of the four-step method the tab belongs to (see the «روش کار» help); `color` tints the tab. */
+const PHASES = [
+  { n: 1, label: 'شناخت مسیر', color: '#38bdf8', first: 'tower' },
+  { n: 2, label: 'برنامه آزادسازی', color: '#a78bfa', first: 'plan' },
+  { n: 3, label: 'تطبیق با برنامه پیمانکار', color: '#fbbf24', first: 'schedule' },
+  { n: 4, label: 'بهینه‌سازی جبهه‌ها', color: '#34d399', first: 'fronts' },
+] as const
+const TABS: { key: TabKey; label: string; icon: typeof Rows3; phase?: 1 | 2 | 3 | 4; color: string }[] = [
+  { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard, phase: 1, color: '#38bdf8' },
+  { key: 'map', label: 'نقشه', icon: MapIcon, phase: 1, color: '#38bdf8' },
+  { key: 'parcels', label: 'قطعه‌ها', icon: Rows3, phase: 1, color: '#38bdf8' },
+  { key: 'stations', label: 'ایستگاه‌ها', icon: Factory, phase: 1, color: '#38bdf8' },
+  { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline, phase: 1, color: '#38bdf8' },
+  { key: 'plan', label: 'برنامه آزادسازی', icon: ClipboardList, phase: 2, color: '#a78bfa' },
+  { key: 'schedule', label: 'تطبیق با برنامه', icon: GitCompareArrows, phase: 3, color: '#fbbf24' },
+  { key: 'fronts', label: 'جبهه‌های کاری', icon: RouteIcon, phase: 4, color: '#34d399' },
+  { key: 'reports', label: 'گزارش‌ها', icon: FileBarChart, color: '#fb7185' },
+  { key: 'actions', label: 'اقدام‌ها', icon: BellRing, color: '#f97316' },
+  { key: 'finance', label: 'مالی و بودجه', icon: Coins, color: '#2dd4bf' },
+  { key: 'settings', label: 'تنظیمات', icon: Settings, color: '#94a3b8' },
 ]
 
 /** مدیریت تملک و آزادسازی اراضی مسیر — Land Acquisition & Right of Way Management. */
@@ -64,17 +70,21 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
   useEffect(() => {
     void init(repo)
   }, [init, repo])
+  // keep the selected tab in view when the row of tabs is wider than the screen
+  useEffect(() => {
+    document.querySelector('.la-head .la-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [tab])
 
   const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : k === 'finance' ? (data?.parcels.filter((p) => p.priceException?.status === 'requested').length ?? 0) + (data?.route && !data.route.settings.budgetAmount ? 1 : 0) : 0)
 
   return (
     <div className="la-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
-      <header className="shrink-0 border-b px-3 pt-2.5 sm:px-5" style={{ borderColor: 'var(--la-line)', background: 'var(--la-surface)' }}>
+      <header className="la-head shrink-0 px-3 pt-2.5 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pb-1">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }}><Sprout size={20} aria-hidden /></span>
+            <span className="la-logo" aria-hidden><Sprout size={21} /></span>
             <div className="min-w-0 leading-tight">
-              <h1 className="m-0 truncate text-[14.5px] font-black">مدیریت تملک و آزادسازی اراضی مسیر</h1>
+              <h1 className="la-head-title m-0 truncate text-[15px] font-black">مدیریت تملک و آزادسازی اراضی مسیر</h1>
               <p className="la-eyebrow m-0 hidden sm:block" dir="ltr">Land Acquisition &amp; Right of Way Management</p>
             </div>
           </div>
@@ -87,17 +97,29 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <div className="flex items-center gap-2 pb-1 text-[11.5px]" style={{ color: 'var(--la-ink-2)' }}>
-          <span className="font-semibold">روش کار:</span>
-          {[['۱', 'شناخت مسیر'], ['۲', 'برنامه آزادسازی'], ['۳', 'تطبیق با برنامه پیمانکار'], ['۴', 'بهینه‌سازی جبهه‌ها']].map(([n, l]) => <span key={n} className="inline-flex items-center gap-1"><b className="la-num inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }}>{n}</b>{l}</span>)}
-          <HelpButton topic="method" label="توضیح روش" className="ms-auto" />
-          <HelpButton topic={tab as HelpKey} label="راهنمای این بخش" />
+        <div className="la-steps" role="group" aria-label="چهار گام روش کار">
+          {PHASES.map((ph, i) => {
+            const cur = TABS.find((t) => t.key === tab)?.phase
+            return (
+              <div key={ph.n} className="la-step-wrap">
+                <button type="button" className="la-step" aria-current={cur === ph.n ? 'step' : undefined} style={{ '--p': ph.color } as React.CSSProperties} onClick={() => setTab(ph.first as TabKey)}>
+                  <b className="la-num">{faNum(ph.n)}</b>
+                  <span>{ph.label}</span>
+                </button>
+                {i < PHASES.length - 1 && <span className="la-step-line" aria-hidden />}
+              </div>
+            )
+          })}
+          <span className="ms-auto flex items-center gap-1.5">
+            <HelpButton topic="method" label="توضیح روش" />
+            <HelpButton topic={tab as HelpKey} label="راهنمای این بخش" />
+          </span>
         </div>
         <nav className="la-tabs" role="tablist" aria-label="بخش‌های مدیریت تملک و آزادسازی اراضی">
           {TABS.map((t) => (
-            <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
-              {t.phase && <b className="la-num inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px]" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }} aria-label={`گام ${t.phase}`}>{faNum(t.phase)}</b>}<t.icon size={15} aria-hidden /> {t.label}
-              {badge(t.key) > 0 && <span className="la-num rounded-full px-1.5 text-[10.5px] font-bold" style={{ background: '#ef4444', color: '#fff' }}>{faNum(badge(t.key))}</span>}
+            <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)} style={{ '--p': t.color } as React.CSSProperties}>
+              <t.icon size={15} aria-hidden /> {t.label}
+              {badge(t.key) > 0 && <span className="la-num la-tab-badge">{faNum(badge(t.key))}</span>}
             </button>
           ))}
         </nav>

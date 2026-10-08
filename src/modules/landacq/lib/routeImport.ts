@@ -1,4 +1,5 @@
-import { parseKml, type LonLat } from './geometry'
+import type { LonLat } from './geometry'
+import { parseKmlRoute, type KmlRoute } from './kml'
 import { fromUtm } from './utm'
 
 /**
@@ -39,10 +40,10 @@ export async function kmlFromKmz(buf: ArrayBuffer): Promise<string> {
   throw new Error('در فایل KMZ فایل KML پیدا نشد')
 }
 
-export async function readRouteFile(file: File): Promise<LonLat[]> {
+export async function readRouteFile(file: File): Promise<KmlRoute> {
   const name = file.name.toLowerCase()
-  if (name.endsWith('.kmz')) return parseKml(await kmlFromKmz(await file.arrayBuffer()))
-  if (name.endsWith('.kml') || name.endsWith('.xml')) return parseKml(await file.text())
+  if (name.endsWith('.kmz')) return parseKmlRoute(await kmlFromKmz(await file.arrayBuffer()))
+  if (name.endsWith('.kml') || name.endsWith('.xml')) return parseKmlRoute(await file.text())
   throw new Error('فرمت فایل پشتیبانی نمی‌شود (KML، KMZ، Excel یا CSV)')
 }
 

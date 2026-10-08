@@ -105,6 +105,6 @@ console.log('states', JSON.stringify(dist), 'levels', JSON.stringify(rows.reduce
   assert.deepEqual(reps.map((r) => r.key), ['critical', 'constraint', 'upcoming', 'last_action', 'overdue', 'ready', 'recommended', 'conflict'])
   for (const r of reps) assert.ok(r.rows.every((x) => x.cells.length === r.columns.length), r.key)
   assert.ok(reps[0].rows.length >= 2 && reps[3].rows.length === rs.length && reps[5].rows.length > 0 && reps[7].rows.length > 0)
-  assert.ok(toCsv(reps[0]).startsWith('﻿') && toCsv(reps[0]).split('\r\n').length === reps[0].rows.length + 1)
+  assert.ok(toCsv(reps[0]).startsWith('﻿') && toCsv(reps[0]).split('\r\n').length === reps[0].rows.length + 1 && toCsv(reps[0], { project: 'P', date: 'D' }).split('\r\n').length === reps[0].rows.length + 5)
   console.log('landacq/plan+reports: all assertions passed', JSON.stringify(reps.map((r) => r.rows.length)))
 }

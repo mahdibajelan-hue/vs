@@ -16,6 +16,7 @@ export interface ReportRow {
   /** Rows that deserve the red tint. */
   hot?: boolean
 }
+export const REPORT_COLOR: Record<ReportKey, string> = { critical: '#ef4444', constraint: '#f97316', upcoming: '#eab308', last_action: '#38bdf8', overdue: '#fb7185', ready: '#22c55e', recommended: '#a78bfa', conflict: '#f59e0b' }
 export interface Report {
   key: ReportKey
   title: string
@@ -104,7 +105,8 @@ export function buildReports(ctx: ReportCtx): Report[] {
 }
 
 /** Excel-friendly CSV (UTF-8 with BOM so Persian text opens correctly). */
-export function toCsv(r: Report): string {
+export function toCsv(r: Report, meta?: { project: string; date: string }): string {
   const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
-  return `﻿${[r.columns, ...r.rows.map((x) => x.cells)].map((l) => l.map(esc).join(',')).join('\r\n')}`
+  const head = meta ? [[`پروژه: ${meta.project}`], [`گزارش: ${r.title} — ${r.fa}`], [`تاریخ: ${meta.date}`], []] : []
+  return `\ufeff${[...head, r.columns, ...r.rows.map((x) => x.cells)].map((l) => l.map(esc).join(',')).join('\r\n')}`
 }

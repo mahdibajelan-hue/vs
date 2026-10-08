@@ -264,6 +264,21 @@ export interface Activity {
   isDemo: boolean
 }
 
+/** What the planner needs to lay the whole release out: all optional but the start date. */
+export interface PlanParams {
+  start: string
+  /** Target for the whole acquisition, months. */
+  totalMonths: number | null
+  /** Preparing the Article 9 package, collecting the signature and enacting it, days. */
+  art9Days: number | null
+  /** Average time to acquire one parcel, days. */
+  avgDays: number | null
+  /** Parcel files that can be handled per month on average. */
+  perMonth: number | null
+  order: 'need' | 'km'
+  onlyNew: boolean
+}
+
 export interface LandSettings {
   /** Safety margin added to the expected acquisition time when computing "start acquisition by". */
   bufferDays: number
@@ -273,6 +288,10 @@ export interface LandSettings {
   budgetAmount?: number | null
   budgetNote?: string
   /** The legal unit's proposed release plan, as last presented (see the «برنامه آزادسازی» tab). */
+  /** Days per step set by the project, per acquisition route (empty = typical values). */
+  stepDays?: Partial<Record<AcqRoute, Partial<Record<StageKey, number>>>>
+  /** The variables last used to generate the release plan. */
+  planParams?: PlanParams
   planProposal?: { at: string; by: string; note: string; urgent: number; total: number } | null
 }
 export const DEFAULT_SETTINGS: LandSettings = { bufferDays: 30, horizonDays: 90 }

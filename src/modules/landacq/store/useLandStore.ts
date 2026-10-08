@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import { useAuthStore, useProjectContextStore } from '../platform'
-import type { Activity, Crossing, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
+import type { Activity, Crossing, PlanParams, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput, PaymentInput } from '../repo/types'
 import { canEditData } from '../lib/approval'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
-import { isStarted, makeStages, orderOf } from '../lib/workflow'
-import { applyPlan, startForMode, startOf, type PlanMode } from '../lib/autoplan'
+import { isStarted, makeStages, orderOf, setStepDayOverrides } from '../lib/workflow'
+import { applyPlan, buildSchedule, candidatesOf, startOf } from '../lib/autoplan'
 import { nextDeadline } from '../lib/legal'
 import { crossingState } from '../lib/facilities'
 import { benchmarkFor, priceAllowed } from '../lib/pricing'
@@ -64,6 +64,8 @@ interface LandState {
   saveRoute: (route: RouteInfo) => Promise<void>
   /** Cut the route into equal parcels of about `segmentKm`. */
   generateParcels: (segmentKm: number, replace: boolean) => Promise<void>
+  /** Creates route parcels from explicit km ranges (manual mode); `replace` first removes the existing route parcels. */
+  buildParcels: (ranges: { kmStart: number; kmEnd: number; title?: string }[], replace: boolean) => Promise<void>
   addParcel: (draft: ParcelDraft) => Promise<Parcel | null>
   updateParcel: (id: string, patch: Partial<ParcelFields>) => Promise<void>
   deleteParcel: (id: string) => Promise<void>
@@ -75,7 +77,7 @@ interface LandState {
    */
   planParcel: (parcelId: string, start: string | null, estDays?: number | null) => Promise<void>
   /** Generates the plan of every unreleased route parcel from one project start date. */
-  planAll: (mode: PlanMode, projectStart: string, onlyNew: boolean) => Promise<number>
+  planAll: (params: PlanParams) => Promise<number>
   setStage: (parcelId: string, key: StageKey, patch: Partial<Stage>) => Promise<void>
   /** Finish the current step (today) and start the next one. */
   advanceStage: (parcelId: string) => Promise<void>
@@ -306,6 +308,21 @@ export const useLandStore = create<LandState>()((set, get) => {
       })
     },
 
+    buildParcels: async (ranges, replace) => {
+      const { data, projectId } = get()
+      if (!data?.route || !projectId) return
+      await run(async () => {
+        const routeParcels = data.parcels.filter((p) => p.kind !== 'station')
+        if (replace) for (const p of routeParcels) await repo().deleteParcel(p.id)
+        const used = new Set(replace ? [] : routeParcels.map((p) => p.code))
+        let i = 1
+        const code = () => { let c: string; do c = `LP-${String(i++).padStart(3, '0')}` ; while (used.has(c)); used.add(c); return c }
+        const drafts: ParcelDraft[] = [...ranges].sort((a, b) => a.kmStart - b.kmStart).map((r) => ({ code: code(), title: r.title ?? '', kmStart: +r.kmStart.toFixed(3), kmEnd: +r.kmEnd.toFixed(3), landType: 'unknown', ownershipClass: 'unknown', landUse: '', ownerCountEst: 0, ownerKnown: false, custodian: '', disputeProbability: 0, complexity: 1, estDurationDays: null, flags: {}, acquisitionRoute: 'normal', areaM2: null, estCost: null, notes: '', stages: makeStages() }))
+        await repo().addParcels(projectId, drafts)
+        await get().reload()
+      })
+    },
+
     addParcel: async (draft) => {
       const pid = get().projectId
       if (!pid) return null
@@ -352,6 +369,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     planParcel: async (parcelId, start, estDays) => {
       const p = get().data?.parcels.find((x) => x.id === parcelId)
       if (!p || !allowed(parcelId)) return
+      setStepDayOverrides(get().data?.route?.settings.stepDays)
       const patch: Partial<ParcelFields> = { planStart: start }
       if (estDays !== undefined) patch.estDurationDays = estDays
       const base: Parcel = { ...p, ...patch } as Parcel
@@ -365,25 +383,31 @@ export const useLandStore = create<LandState>()((set, get) => {
       await syncDeadline(parcelId)
     },
 
-    planAll: async (mode, projectStart, onlyNew) => {
+    planAll: async (params) => {
       const st = get()
       const data = st.data
       if (!data?.route) return 0
+      setStepDayOverrides(data.route.settings.stepDays)
       const settings = { ...DEFAULT_SETTINGS, ...data.route.settings }
       const routeParcels = data.parcels.filter((p) => p.kind !== 'station')
-      const rows = analyze(routeParcels, data.activities, st.today, settings).filter((a) => !a.released && !(onlyNew && a.parcel.planStart))
-      const edits: { p: Parcel; start: string; stages: Stage[] }[] = []
+      const rows = analyze(routeParcels, data.activities, st.today, settings).filter((a) => !a.released && !(params.onlyNew && a.parcel.planStart))
+      const plan = buildSchedule(params, candidatesOf(rows))
+      const edits: { p: Parcel; start: string; est: number | null; stages: Stage[] }[] = []
       for (const a of rows) {
         const p = a.parcel
-        const start = isStarted(p) ? (p.planStart ?? startOf(p) ?? projectStart) : startForMode(mode, projectStart, a.early.startBy)
-        edits.push({ p, start, stages: applyPlan(p, start, isStarted(p) ? st.today : undefined) })
+        const started = isStarted(p)
+        const start = started ? (p.planStart ?? startOf(p) ?? params.start) : (plan.starts.get(p.id) ?? params.start)
+        const est = started ? p.estDurationDays : (plan.days.get(p.id) ?? p.estDurationDays)
+        edits.push({ p, start, est, stages: applyPlan({ ...p, estDurationDays: est }, start, started ? st.today : undefined) })
       }
       if (edits.length === 0) return 0
       const byId = new Map(edits.map((e) => [e.p.id, e]))
-      patchData((d) => ({ ...d, parcels: d.parcels.map((x) => (byId.has(x.id) ? { ...x, planStart: byId.get(x.id)!.start, stages: byId.get(x.id)!.stages } : x)) }))
+      patchData((d) => ({ ...d, route: d.route ? { ...d.route, settings: { ...d.route.settings, planParams: params } } : d.route, parcels: d.parcels.map((x) => (byId.has(x.id) ? { ...x, planStart: byId.get(x.id)!.start, estDurationDays: byId.get(x.id)!.est, stages: byId.get(x.id)!.stages } : x)) }))
       await run(async () => {
-        for (const e of edits) await repo().updateParcel(e.p.id, { planStart: e.start })
+        for (const e of edits) await repo().updateParcel(e.p.id, { planStart: e.start, estDurationDays: e.est })
         await repo().saveStages(edits.flatMap((e) => e.stages.filter((s, i) => s.plannedDate !== e.p.stages[i].plannedDate).map((stage) => ({ parcelId: e.p.id, stage }))))
+        const route = get().data?.route
+        if (route) await repo().saveRoute(route)
       })
       for (const e of edits) await syncDeadline(e.p.id)
       return edits.length
@@ -403,6 +427,7 @@ export const useLandStore = create<LandState>()((set, get) => {
       // a generated plan follows reality: when a step really ends, the dates of the remaining steps move with it
       const after = get().data?.parcels.find((x) => x.id === parcelId)
       if (after?.planStart && next.status === 'done') {
+        setStepDayOverrides(get().data?.route?.settings.stepDays)
         const stages = applyPlan(after, after.planStart, get().today)
         const changed = stages.filter((s, i) => s.plannedDate !== after.stages[i].plannedDate)
         if (changed.length) {
@@ -573,6 +598,7 @@ export function useLandAnalysis(): LandAnalysis & { settings: typeof DEFAULT_SET
   const today = useLandStore((s) => s.today)
   return useMemo(() => {
     const settings = { ...DEFAULT_SETTINGS, ...(data?.route?.settings ?? {}) }
+    setStepDayOverrides(settings.stepDays)
     const all = analyze(data?.parcels ?? [], data?.activities ?? [], today, settings)
     const rows = all.filter((r) => r.parcel.kind !== 'station')
     const stations = all.filter((r) => r.parcel.kind === 'station')

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { CalendarPlus, ClipboardCheck } from 'lucide-react'
 import { JalaliDateInput } from '../platform'
 import { ReleaseCurve } from '../components/ReleaseCurve'
-import { plannedFinishOf, startOf, summarizePlan, type PlanMode } from '../lib/autoplan'
+import { buildSchedule, candidatesOf, plannedFinishOf, startOf, summarizePlan } from '../lib/autoplan'
+import type { PlanParams } from '../types'
 import { totalExpectedDays } from '../lib/workflow'
 import { useLandStore, useLandAnalysis } from '../store/useLandStore'
 import { useAuthStore } from '../platform'
@@ -34,9 +35,11 @@ export function PlanPage() {
   const { rows, settings, today } = useLandAnalysis()
   const [filter, setFilter] = useState<Filter>('open')
   const [note, setNote] = useState('')
-  const [gen, setGen] = useState<{ start: string; mode: PlanMode; onlyNew: boolean }>({ start: today, mode: 'jit', onlyNew: false })
+  const [gen, setGen] = useState<PlanParams>(() => ({ start: today, totalMonths: null, art9Days: null, avgDays: null, perMonth: null, order: 'need', onlyNew: false, ...(settings.planParams ?? {}) }))
   const [done, setDone] = useState<number | null>(null)
   const plan = useMemo(() => releasePlan(rows, settings), [rows, settings])
+  const cands = useMemo(() => candidatesOf(rows), [rows])
+  const preview = useMemo(() => buildSchedule(gen, cands), [gen, cands])
   const sum = useMemo(() => summarizePlan(rows.map((r) => r.parcel)), [rows])
   const urgent = plan.filter((x) => !x.a.released && x.startBy != null && x.startBy <= today && !x.a.parcel.planStart)
   const soon = plan.filter((x) => !x.a.released && x.startBy != null && x.startBy > today && x.startBy <= dayAfter(today, 30))
@@ -51,20 +54,35 @@ export function PlanPage() {
 
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
-      <Card title="ایجاد خودکار برنامهٔ تحصیل و آزادسازی" hint="فقط تاریخ شروع را بدهید؛ سامانه برای هر قطعه تاریخ برنامه‌ای همهٔ مراحل را می‌سازد و پایان تحصیل را پیش‌بینی می‌کند." help="plan">
-        <div className="grid gap-3 sm:grid-cols-[220px_1fr_auto] sm:items-end">
-          <div><span className="la-label">تاریخ شروع عملیات تحصیل</span><JalaliDateInput value={gen.start} onChange={(iso) => setGen({ ...gen, start: iso ?? today })} /></div>
+      <Card title="ایجاد خودکار برنامهٔ تحصیل و آزادسازی" hint="چند متغیر کلی بدهید؛ سامانه پرونده‌ها را با همان ظرفیت پشت‌سرهم می‌چیند، تاریخ مراحل هر قطعه را می‌سازد و پایان تحصیل را پیش‌بینی می‌کند." help="plan">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div><span className="la-label">تاریخ شروع عملیات تحصیل</span><JalaliDateInput value={gen.start} onChange={(iso) => setGen({ ...gen, start: iso || today })} /></div>
+          <NumField label="کل مدت تحصیل اراضی پروژه (ماه)" hint="هدف؛ اگر خالی بماند از ظرفیت ماهانه محاسبه می‌شود" value={gen.totalMonths} onChange={(v) => setGen({ ...gen, totalMonths: v })} />
+          <NumField label="تعداد پرونده قابل انجام در ماه (میانگین)" hint="خالی = حداقل ظرفیتِ رعایت نیاز پیمانکار" value={gen.perMonth} onChange={(v) => setGen({ ...gen, perMonth: v })} />
+          <NumField label="میانگین مدت تحصیل هر قطعه (روز)" hint={`خالی = متعارف (${faNum(preview.avgDays)} روز)`} value={gen.avgDays} onChange={(v) => setGen({ ...gen, avgDays: v })} />
+          <NumField label="مدت تهیهٔ مقدمات ماده ۹، اخذ امضا و جاری‌سازی (روز)" hint={`خالی = متعارف (${faNum(preview.art9Days)} روز)`} value={gen.art9Days} onChange={(v) => setGen({ ...gen, art9Days: v })} />
           <div>
-            <span className="la-label">روش شروع قطعه‌ها</span>
-            <Segmented label="روش" value={gen.mode} onChange={(mode) => setGen({ ...gen, mode })} options={[{ value: 'jit', label: 'به‌موقع: هر قطعه دیرتر از «شروع لازم» نه' }, { value: 'asap', label: 'سریع: همه از تاریخ شروع' }]} />
+            <span className="la-label">ترتیب پرونده‌ها</span>
+            <Segmented label="ترتیب" value={gen.order} onChange={(order) => setGen({ ...gen, order })} options={[{ value: 'need', label: 'بر اساس نیاز اجرایی' }, { value: 'km', label: 'بر اساس کیلومتر' }]} />
           </div>
-          <button className="la-btn la-btn-primary" onClick={async () => setDone(await planAll(gen.mode, gen.start, gen.onlyNew))}><CalendarPlus size={15} /> ایجاد برنامه</button>
         </div>
-        <label className="mt-3 flex cursor-pointer items-center gap-2 text-[12.5px]"><input type="checkbox" checked={gen.onlyNew} onChange={(e) => setGen({ ...gen, onlyNew: e.target.checked })} /> فقط قطعه‌هایی که هنوز برنامه ندارند (برنامهٔ دستی قطعه‌های دیگر حفظ شود)</label>
-        <p className="la-eyebrow mt-2 leading-7">
-          {done != null && <b style={{ color: '#22c55e' }}>برنامهٔ {faNum(done)} قطعه ایجاد شد. </b>}
-          در حالت «به‌موقع»، هر قطعه از «شروع لازم» (نیاز فعالیت اجرایی منهای مدت لازم و ذخیرهٔ اطمینان) شروع می‌شود و هیچ قطعه‌ای زودتر از تاریخ شروع نمی‌آید؛ اگر فعالیت پیمانکار تعریف نشده، قطعه از تاریخ شروع آغاز می‌شود. مراحل انجام‌شده دست نمی‌خورند.
+        <label className="mt-3 flex cursor-pointer items-center gap-2 text-[12.5px]"><input type="checkbox" checked={gen.onlyNew} onChange={(e) => setGen({ ...gen, onlyNew: e.target.checked })} /> فقط قطعه‌هایی که هنوز برنامه ندارند (برنامهٔ دستی بقیه حفظ شود)</label>
+
+        <div className="mt-4 grid gap-3 rounded-xl p-3 sm:grid-cols-2 lg:grid-cols-4" style={{ background: 'var(--la-surface-2)', border: '1px solid var(--la-line)' }} aria-live="polite">
+          <Stat3 label="پرونده‌های در انتظار شروع" value={faNum(preview.count)} />
+          <Stat3 label={`ظرفیت ماهانه (${preview.basis === 'given' ? 'ورودی' : preview.basis === 'target' ? 'از مدت هدف' : preview.basis === 'needed' ? 'حداقل لازم' : 'همه با هم'})`} value={`${faNum(+preview.perMonth.toFixed(1))} پرونده`} />
+          <Stat3 label="مدت کل تحصیل" value={preview.count ? `${faNum(+(preview.totalDays / 30).toFixed(1))} ماه` : '—'} />
+          <Stat3 label="پایان پیش‌بینی آزادسازی" value={fmtDateShort(preview.finish)} />
+        </div>
+        <p className="mt-2 text-[12.5px] leading-7" style={{ color: preview.misses > 0 ? '#f97316' : 'var(--la-ink-2)' }}>
+          {preview.count === 0 ? 'همهٔ قطعه‌ها شروع شده‌اند؛ برنامهٔ آن‌ها از مراحل واقعی ادامه می‌یابد.' : preview.misses > 0
+            ? <>با این ظرفیت <b>{faNum(preview.misses)} پرونده</b> دیرتر از نیاز پیمانکار آزاد می‌شود. {preview.neededPerMonth != null ? <>برای رعایت همهٔ نیازها دست‌کم <b>{faNum(preview.neededPerMonth)} پرونده در ماه</b> لازم است.</> : 'حتی با شروع همه از تاریخ شروع هم نیاز بعضی قطعه‌ها رعایت نمی‌شود؛ تاریخ شروع را زودتر یا مدت‌ها را کوتاه‌تر کنید.'}</>
+            : <>با این ظرفیت همهٔ پرونده‌ها پیش از نیاز پیمانکار آزاد می‌شوند{preview.neededPerMonth != null ? ` (حداقل ظرفیت لازم: ${faNum(preview.neededPerMonth)} پرونده در ماه)` : ''}.</>}
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button className="la-btn la-btn-primary" onClick={async () => setDone(await planAll(gen))}><CalendarPlus size={15} /> ایجاد برنامه</button>
+          {done != null && <b className="text-[12.5px]" style={{ color: '#22c55e' }}>برنامهٔ {faNum(done)} قطعه ایجاد شد.</b>}
+        </div>
       </Card>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="خلاصهٔ برنامه">
@@ -133,6 +151,24 @@ export function PlanPage() {
         </div>
         {soon.length > 0 && <p className="la-eyebrow m-0 px-4 py-3">{faNum(soon.length)} قطعه ظرف ۳۰ روز آینده باید شروع شود و {faNum(urgent.length)} قطعهٔ بدون برنامه، زمان شروعش رسیده است.</p>}
       </Card>
+    </div>
+  )
+}
+
+function NumField({ label, hint, value, onChange }: { label: string; hint?: string; value: number | null; onChange: (v: number | null) => void }) {
+  return (
+    <label className="block">
+      <span className="la-label">{label}</span>
+      <input className="la-input la-num" type="number" min={0} step="any" value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Math.max(0, Number(e.target.value)))} />
+      {hint && <p className="la-hint">{hint}</p>}
+    </label>
+  )
+}
+function Stat3({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="la-eyebrow m-0">{label}</p>
+      <p className="la-num m-0 mt-0.5 text-[18px] font-bold" style={{ color: 'var(--la-accent)' }}>{value}</p>
     </div>
   )
 }

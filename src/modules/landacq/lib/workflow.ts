@@ -33,6 +33,15 @@ export const STAGE_DAYS: Record<AcqRoute, Record<StageKey, number>> = {
   art9: { identification: 0, ownership_status: 0, owner_identification: 0, preliminary_assessment: 0, expert_referral: 0, valuation: 0, financial_settlement: 0, payment: 0, release: 0, ready_for_construction: 0, art9_necessity: 5, art9_minutes: 3, art9_possession: 2, art9_payment: 90 },
 }
 
+/** Durations the project has set in «تنظیمات» (days per step, per route); anything not set uses the typical values above. */
+export type StepDayOverrides = Partial<Record<AcqRoute, Partial<Record<StageKey, number>>>>
+let overrides: StepDayOverrides = {}
+export const setStepDayOverrides = (o: StepDayOverrides | null | undefined): void => {
+  overrides = o ?? {}
+}
+/** Days per step for a route: the project's own settings over the typical values. */
+export const daysFor = (route: AcqRoute): Record<StageKey, number> => ({ ...STAGE_DAYS[route], ...(overrides[route] ?? {}) })
+
 export const makeStages = (): Stage[] => ALL_STAGE_KEYS.map((key) => ({ key, status: 'not_started', responsible: '', plannedDate: null, actualDate: null, note: '' }))
 
 export const stageOf = (p: Pick<Parcel, 'stages'>, key: StageKey): Stage | undefined => p.stages.find((s) => s.key === key)
@@ -76,14 +85,14 @@ export const complexityFactor = (c: number): number => 0.8 + 0.1 * Math.max(1, M
 /** Total typical days if nothing were done yet, for this parcel's route and complexity (or the screening override). */
 export function totalExpectedDays(p: Pick<Parcel, 'acquisitionRoute' | 'complexity' | 'estDurationDays'>): number {
   if (p.estDurationDays != null && p.estDurationDays > 0) return p.estDurationDays
-  const base = orderOf(p).reduce((n, k) => n + STAGE_DAYS[p.acquisitionRoute][k], 0)
+  const base = orderOf(p).reduce((n, k) => n + daysFor(p.acquisitionRoute)[k], 0)
   return Math.round(base * complexityFactor(p.complexity))
 }
 
 /** Days still needed to reach "ready for construction" from the current state. */
 export function remainingDays(p: Pick<Parcel, 'stages' | 'acquisitionRoute' | 'complexity' | 'estDurationDays'>): number {
   if (isReleased(p)) return 0
-  const route = STAGE_DAYS[p.acquisitionRoute]
+  const route = daysFor(p.acquisitionRoute)
   // Article 9: "remaining" is only the time to take possession (necessity, minutes, possession), not the 3-month payment window.
   const keys = p.acquisitionRoute === 'art9' ? ART9_ORDER.slice(0, 3) : REGULAR_ORDER
   const baseTotal = keys.reduce((n, k) => n + route[k], 0)

@@ -118,6 +118,7 @@ export function ProfileEditor({ p, onChange }: { p: Parcel; onChange: (patch: Pa
   return (
     <section className="la-card-flat flex flex-col gap-4 p-4">
       <p className="la-title m-0">پروفایل اسکن قطعه</p>
+      {p.kind !== 'station' && <KmEditor p={p} onChange={onChange} />}
       <Field label="ماهیت مالکیت">
         <div className="flex flex-wrap gap-1.5">
           {OWNERSHIP_CLASSES.map((c) => (
@@ -157,5 +158,29 @@ export function ProfileEditor({ p, onChange }: { p: Parcel; onChange: (patch: Pa
       </div>
       <Field label="توضیح"><textarea className="la-input la-textarea" value={text.notes} onChange={(e) => setText({ ...text, notes: e.target.value })} onBlur={() => text.notes !== p.notes && onChange({ notes: text.notes })} /></Field>
     </section>
+  )
+}
+
+/** The parcel's own start and end kilometre — fixed at creation, but adjustable when the survey changes. */
+function KmEditor({ p, onChange }: { p: Parcel; onChange: (patch: Partial<Parcel>) => void }) {
+  const route = useLandStore((s) => s.data?.route)
+  const others = useLandStore((s) => s.data?.parcels)
+  const [a, setA] = useState(String(p.kmStart))
+  const [b, setB] = useState(String(p.kmEnd))
+  useEffect(() => { setA(String(p.kmStart)); setB(String(p.kmEnd)) }, [p.kmStart, p.kmEnd, p.id])
+  const lo = route?.startKm ?? 0
+  const hi = lo + (route?.totalKm ?? 0)
+  const x = Number(a), y = Number(b)
+  const bad = !Number.isFinite(x) || !Number.isFinite(y) ? 'عدد معتبر وارد کنید' : y <= x ? 'پایان باید بزرگ‌تر از شروع باشد' : x < lo - 1e-6 || y > hi + 1e-6 ? `خارج از مسیر (${faNum(lo)} تا ${faNum(hi)})` : ''
+  const overlap = !bad && (others ?? []).some((q) => q.id !== p.id && q.kind !== 'station' && q.kmStart < y - 1e-6 && q.kmEnd > x + 1e-6)
+  const save = () => { if (!bad && (x !== p.kmStart || y !== p.kmEnd)) onChange({ kmStart: x, kmEnd: y }) }
+  return (
+    <Field label="محدودهٔ کیلومتری قطعه" hint={bad || (overlap ? 'با قطعهٔ دیگری هم‌پوشانی دارد؛ در صورت نیاز آن را هم اصلاح کنید.' : 'کیلومتر شروع و پایان قطعه؛ پس از تغییر، همهٔ محاسبات و نقشه به‌روز می‌شود.')}>
+      <div className="flex items-center gap-2">
+        <input className="la-input la-km" inputMode="decimal" value={a} onChange={(e) => setA(e.target.value)} onBlur={save} aria-label="کیلومتر شروع" />
+        <span aria-hidden>تا</span>
+        <input className="la-input la-km" inputMode="decimal" value={b} onChange={(e) => setB(e.target.value)} onBlur={save} aria-label="کیلومتر پایان" />
+      </div>
+    </Field>
   )
 }

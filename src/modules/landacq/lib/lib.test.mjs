@@ -244,7 +244,7 @@ console.log('landacq/import+problems: all assertions passed')
 
 // ── auto plan ──
 {
-  const { stepDays, planDates, applyPlan, plannedFinishOf, startOf, summarizePlan, startForMode } = await import('./autoplan.ts')
+  const { stepDays, planDates, applyPlan, plannedFinishOf, startOf, summarizePlan, buildSchedule } = await import('./autoplan.ts')
   const { STAGE_ORDER, ART9_ORDER } = await import('./workflow.ts')
   const p = mk({ complexity: 2 })
   const d = stepDays(p)
@@ -269,10 +269,49 @@ console.log('landacq/import+problems: all assertions passed')
   assert.equal(plannedFinishOf({ ...a9, stages: applyPlan(a9, '2026-02-01') }), da.get('art9_possession'))
   assert.equal(stepDays(mk({ acquisitionRoute: 'art9', estDurationDays: 30 })).art9_payment, 90)
   // modes and summary
-  assert.equal(startForMode('asap', '2026-03-01', '2026-06-01'), '2026-03-01'); assert.equal(startForMode('jit', '2026-03-01', '2026-06-01'), '2026-06-01')
-  assert.equal(startForMode('jit', '2026-03-01', '2025-12-01'), '2026-03-01'); assert.equal(startForMode('jit', '2026-03-01', null), '2026-03-01')
+  // capacity planner: N files at a monthly rate, in order of need
+  const C = (id, needBy, extra = {}) => ({ id, route: 'normal', complexity: 2, needBy, crit: 10, kmStart: Number(id.slice(1)), ...extra })
+  const cs = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'].map((id, i) => C(id, addDays('2026-03-01', 130 + i * 30)))
+  const base = { start: '2026-03-01', totalMonths: null, art9Days: null, avgDays: 120, perMonth: 2, order: 'need', onlyNew: false }
+  const pl = buildSchedule(base, cs)
+  assert.equal(pl.count, 6); assert.equal(pl.perMonth, 2); assert.equal(pl.basis, 'given')
+  assert.equal(pl.starts.get('p1'), '2026-03-01'); assert.equal(pl.starts.get('p2'), addDays('2026-03-01', 15)); assert.equal(pl.starts.get('p3'), addDays('2026-03-01', 30))
+  assert.equal(pl.days.get('p1'), 120); assert.equal(pl.finish, addDays(pl.starts.get('p6'), 120))
+  // a slower rate pushes the end out and creates misses; the planner reports the rate that would be enough
+  const slow = buildSchedule({ ...base, perMonth: 0.5 }, cs); assert.ok(slow.finish > pl.finish && slow.misses > 0)
+  assert.ok(slow.neededPerMonth >= 1 && buildSchedule({ ...base, perMonth: slow.neededPerMonth }, cs).misses === 0)
+  // no rate given: the smallest rate that meets every need date; with a target duration the rate follows from it
+  const auto = buildSchedule({ ...base, perMonth: null }, cs); assert.equal(auto.basis, 'needed'); assert.equal(auto.misses, 0); assert.equal(auto.perMonth, auto.neededPerMonth)
+  const tgt = buildSchedule({ ...base, perMonth: null, totalMonths: 12 }, cs); assert.equal(tgt.basis, 'target'); assert.ok(Math.abs(tgt.totalDays - 360) < 40, String(tgt.totalDays))
+  // Article 9 files take the preparation time, disputes take longer than the average
+  const mixed = buildSchedule({ ...base, art9Days: 20 }, [C('p1', null, { route: 'art9' }), C('p2', null, { route: 'dispute' }), C('p3', null)])
+  assert.equal(mixed.days.get('p1'), 20); assert.ok(mixed.days.get('p2') > 120); assert.equal(mixed.days.get('p3'), 120)
+  // km order
+  assert.equal(buildSchedule({ ...base, order: 'km' }, [C('p9', '2026-04-01'), C('p2', '2027-01-01')]).starts.get('p2'), '2026-03-01')
   const ps = [{ ...p, planStart: '2026-01-01', stages: applyPlan(p, '2026-01-01') }, { ...mk(), planStart: null }]
   const sm = summarizePlan(ps); assert.equal(sm.start, '2026-01-01'); assert.equal(sm.planned, 1); assert.equal(sm.total, 2); assert.ok(sm.span > 100)
   assert.equal(startOf(q), '2026-01-20')
   console.log('landacq/autoplan: all assertions passed')
+}
+
+// ── KML route / chainage ──
+{
+  const { parseKmlRoute, kmFromName } = await import('./kml.ts')
+  const { haversine } = await import('./geometry.ts')
+  assert.equal(kmFromName('KM 12+500'), 12.5); assert.equal(kmFromName('۱۲+۵۰۰'), 12.5); assert.equal(kmFromName('KP 7.25'), 7.25); assert.equal(kmFromName('km0+000'), 0); assert.equal(kmFromName('Tower 4'), null)
+  const A = [50, 30], B = [50.1, 30], C = [50.2, 30.0], D = [50.3, 30.0]
+  const ls = (name, pts) => `<Placemark><name>${name}</name><LineString><coordinates>${pts.map((p) => `${p[0]},${p[1]},0`).join(' ')}</coordinates></LineString></Placemark>`
+  const pt = (name, p) => `<Placemark><name>${name}</name><Point><coordinates>${p[0]},${p[1]},0</coordinates></Point></Placemark>`
+  const dKm = haversine(A, D) / 1000
+  const kml = `<kml><Document>${ls('second half (reversed)', [D, C, B])}${ls('first half', [A, B])}${ls('side road', [[51, 31], [51.01, 31.01]])}${pt('KM 10+000', A)}${pt(`KM 19+${String(Math.round((10 + haversine(A, B) / 1000 - 19) * 1000)).padStart(3, '0')}`, [50.1, 30])}${pt('depot', [55, 33])}<Placemark><name>area</name><Polygon><outerBoundaryIs><LinearRing><coordinates>50,30 50.1,30 50.1,30.1 50,30</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>`
+  const r = parseKmlRoute(kml)
+  assert.equal(r.points.length, 4, 'pieces chained, points not mixed in'); assert.ok(Math.abs(r.lengthKm - dKm) < 0.01, `${r.lengthKm} vs ${dKm}`)
+  assert.equal(r.ignoredLines, 1); assert.equal(r.posts, 2)
+  assert.ok(r.startKm != null && Math.abs(r.startKm - 10) < 0.05, String(r.startKm)); assert.ok(Math.abs(r.endKm - (10 + dKm)) < 0.05)
+  assert.ok(Math.abs(r.postMismatchM) < 100)
+  // without posts the chainage is left alone; a lone point or empty file gives no route
+  const plain = parseKmlRoute(`<kml>${ls('r', [A, B, C])}${pt('x', A)}</kml>`)
+  assert.equal(plain.startKm, null); assert.equal(plain.points.length, 3)
+  assert.equal(parseKmlRoute('<kml></kml>').points.length, 0)
+  console.log('landacq/kml: all assertions passed')
 }
