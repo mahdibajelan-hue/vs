@@ -6819,7 +6819,10 @@ $$ language sql security definer stable;
 grant execute on function personality_candidate_get_responses(uuid) to anon, authenticated;
 
 -- Public "view results online" link (analogous to comp_public_results_get) — read-only,
--- non-sensitive projection only (no raw item-level answers, no reference content).
+-- non-sensitive projection only (no raw item-level answers, no reference content). Dropped first:
+-- a database that already has the later, wider version of this function (further below) would
+-- otherwise reject this earlier/narrower redefinition with 42P13.
+drop function if exists personality_public_results_get(uuid);
 create or replace function personality_public_results_get(p_token uuid)
 returns table (
   id uuid, job_role text, status text, submitted_at timestamptz,
