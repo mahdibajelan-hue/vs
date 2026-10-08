@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GanttChartSquare, GitBranch, LayoutDashboard, Loader2, Settings2, Target } from 'lucide-react'
+import { GanttChartSquare, GitBranch, ListTree, Route, LayoutDashboard, Loader2, Settings2, Target } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -12,6 +12,8 @@ import { StageGatePage } from './pages/StageGatePage'
 import { MilestonesPage } from './pages/MilestonesPage'
 import { MasterPlanPage } from './pages/MasterPlanPage'
 import { TemplatesPage } from './pages/TemplatesPage'
+import { PlanTreePage } from './pages/PlanTreePage'
+import { StrategyPage } from './pages/StrategyPage'
 
 type View =
   | { kind: 'portfolio' }
@@ -19,6 +21,8 @@ type View =
   | { kind: 'stage'; projectId: string; stageKey: string }
   | { kind: 'milestones'; projectId: string }
   | { kind: 'masterplan'; projectId: string }
+  | { kind: 'plantree'; projectId: string }
+  | { kind: 'strategy'; projectId: string }
   | { kind: 'templates' }
 
 export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -118,6 +122,18 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
                 icon={<GanttChartSquare size={13} />}
                 label="Master Plan"
               />
+              <TabButton
+                active={view.kind === 'plantree'}
+                onClick={() => setView({ kind: 'plantree', projectId: activeProject.id })}
+                icon={<ListTree size={13} />}
+                label="برنامه درختی"
+              />
+              <TabButton
+                active={view.kind === 'strategy'}
+                onClick={() => setView({ kind: 'strategy', projectId: activeProject.id })}
+                icon={<Route size={13} />}
+                label="راهبرد اجرا"
+              />
             </>
           )}
           {profile?.isAdmin && (
@@ -153,6 +169,10 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           />
         ) : view.kind === 'stage' ? (
           <StageGatePage stageKey={view.stageKey} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
+        ) : view.kind === 'plantree' ? (
+          <PlanTreePage projectId={activeProject.id} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
+        ) : view.kind === 'strategy' ? (
+          <StrategyPage projectId={activeProject.id} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
         ) : view.kind === 'masterplan' ? (
           <MasterPlanPage projectId={activeProject.id} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
         ) : (

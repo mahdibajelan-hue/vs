@@ -148,6 +148,12 @@ interface LifecycleState {
   createActivity: (projectId: string, data: Partial<Activity> & { name: string }) => Promise<void>
   updateActivity: (activity: Activity, patch: Partial<Activity>, reason?: string) => Promise<void>
   deleteActivity: (id: string, projectId: string) => Promise<void>
+  /** Batch edit (auto-fit, template apply) — one refresh instead of one per row. */
+  /** Inserts a whole tree in one statement (client-generated ids, parents referenced by id). */
+  insertActivityTree: (projectId: string, rows: { id: string; parentId: string | null; name: string; weight: number; start: string; finish: string; stageKey: string }[]) => Promise<void>
+  /** Writes planned dates onto stage rows (execution-strategy engine output). */
+  setStagePlan: (projectId: string, plans: { stageKey: string; start: string; finish: string; standardDays: number }[]) => Promise<void>
+  patchActivities: (projectId: string, items: { id: string; patch: Partial<Activity> }[], event: string) => Promise<void>
   /** Copies forecast dates onto baseline for every activity that has none yet — the one-shot
    * "freeze the plan" moment a project takes once, usually right after Master Plan is first
    * populated. Rows that already carry a baseline are left untouched, so this is safe to run
@@ -645,10 +651,51 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
       owner_id: data.ownerId ?? null,
       is_critical: data.isCritical ?? false,
       depends_on_id: data.dependsOnId ?? null,
+      parent_id: data.parentId ?? null,
+      weight: data.weight ?? 100,
+      manual_actual_pct: data.manualPct ?? 0,
+      progress: data.manualPct ?? 0,
       sequence,
     })
     if (reportError('ایجاد ردیف برنامه زمانی', error)) return
     await writeAudit({ projectId, entityType: 'activity', event: 'created', newValue: data.name })
+    await get().selectProject(projectId)
+  },
+
+  setStagePlan: async (projectId, plans) => {
+    for (const p of plans) {
+      const { error } = await supabase.from('plc_project_stages').update({
+        planned_start: p.start, planned_finish: p.finish, standard_days: p.standardDays,
+      }).eq('project_id', projectId).eq('stage_key', p.stageKey)
+      if (reportError('نوشتن تاریخ‌های برنامه‌ای گیت‌ها', error)) return
+    }
+    await writeAudit({ projectId, entityType: 'lifecycle', event: 'strategy_applied', newValue: `${plans.length} gates` })
+    await get().selectProject(projectId)
+  },
+
+  insertActivityTree: async (projectId, rows) => {
+    const base = get().bundle.activities.length
+    const { error } = await supabase.from('plc_activities').insert(rows.map((r, i) => ({
+      id: r.id, project_id: projectId, parent_id: r.parentId, name: r.name, weight: r.weight,
+      forecast_start: r.start, forecast_finish: r.finish, stage_key: r.stageKey, sequence: base + i,
+    })))
+    if (reportError('ایجاد درخت برنامه زمانی', error)) return
+    await writeAudit({ projectId, entityType: 'activity', event: 'tree_created', newValue: `${rows.length}` })
+    await get().selectProject(projectId)
+  },
+
+  patchActivities: async (projectId, items, event) => {
+    for (const { id, patch } of items) {
+      const row: Record<string, unknown> = {}
+      if (patch.weight !== undefined) row.weight = patch.weight
+      if (patch.forecastStart !== undefined) row.forecast_start = patch.forecastStart
+      if (patch.forecastFinish !== undefined) row.forecast_finish = patch.forecastFinish
+      if (patch.parentId !== undefined) row.parent_id = patch.parentId
+      if (Object.keys(row).length === 0) continue
+      const { error } = await supabase.from('plc_activities').update(row).eq('id', id)
+      if (reportError('به‌روزرسانی گروهی برنامه زمانی', error)) return
+    }
+    await writeAudit({ projectId, entityType: 'activity', event, newValue: `${items.length}` })
     await get().selectProject(projectId)
   },
 
@@ -668,6 +715,9 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     if (patch.isCritical !== undefined) row.is_critical = patch.isCritical
     if (patch.dependsOnId !== undefined) row.depends_on_id = patch.dependsOnId
     if (patch.status !== undefined) row.status = patch.status
+    if (patch.parentId !== undefined) row.parent_id = patch.parentId
+    if (patch.weight !== undefined) row.weight = patch.weight
+    if (patch.manualPct !== undefined) { row.manual_actual_pct = patch.manualPct; row.progress = patch.manualPct }
 
     const { error } = await supabase.from('plc_activities').update(row).eq('id', activity.id)
     if (reportError('به‌روزرسانی ردیف برنامه زمانی', error)) return

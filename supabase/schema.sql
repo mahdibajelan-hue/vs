@@ -4534,6 +4534,86 @@ drop policy if exists "plc_progress_log_insert" on plc_progress_log;
 create policy "plc_progress_log_insert" on plc_progress_log for insert with check (auth.uid() is not null);
 create index if not exists idx_plc_progress_log_gate on plc_progress_log (gate_id, recorded_at desc);
 
+-- 21e-3. Master-plan tree, dependencies, baselines, templates; execution strategy + versions
+alter table plc_activities add column if not exists parent_id uuid references plc_activities (id) on delete cascade;
+alter table plc_activities add column if not exists weight numeric(6,2) not null default 100 check (weight >= 0 and weight <= 100);
+alter table plc_activities add column if not exists manual_actual_pct smallint not null default 0 check (manual_actual_pct between 0 and 100);
+create index if not exists idx_plc_activities_parent on plc_activities (parent_id);
+create table if not exists plc_activity_deps (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  from_id uuid not null references plc_activities (id) on delete cascade,
+  to_id uuid not null references plc_activities (id) on delete cascade,
+  dep_type text not null default 'FS' check (dep_type in ('FS','SS','FF','SF')),
+  lag_days integer not null default 0,
+  unique (from_id, to_id),
+  check (from_id <> to_id)
+);
+alter table plc_activity_deps enable row level security;
+drop policy if exists "plc_activity_deps_all" on plc_activity_deps;
+create policy "plc_activity_deps_all" on plc_activity_deps for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create index if not exists idx_plc_activity_deps_project on plc_activity_deps (project_id);
+-- Frozen snapshots of planned dates: insert/select only, so a baseline can never be edited.
+create table if not exists plc_plan_baselines (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  label text not null,
+  rows jsonb not null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+alter table plc_plan_baselines enable row level security;
+drop policy if exists "plc_plan_baselines_select" on plc_plan_baselines;
+create policy "plc_plan_baselines_select" on plc_plan_baselines for select using (auth.uid() is not null);
+drop policy if exists "plc_plan_baselines_insert" on plc_plan_baselines;
+create policy "plc_plan_baselines_insert" on plc_plan_baselines for insert with check (auth.uid() is not null);
+create table if not exists plc_plan_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  nodes jsonb not null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+alter table plc_plan_templates enable row level security;
+drop policy if exists "plc_plan_templates_select" on plc_plan_templates;
+create policy "plc_plan_templates_select" on plc_plan_templates for select using (auth.uid() is not null);
+drop policy if exists "plc_plan_templates_insert" on plc_plan_templates;
+create policy "plc_plan_templates_insert" on plc_plan_templates for insert with check (auth.uid() is not null);
+drop policy if exists "plc_plan_templates_delete" on plc_plan_templates;
+create policy "plc_plan_templates_delete" on plc_plan_templates for delete using (created_by = auth.uid() or is_admin_user());
+create table if not exists plc_project_strategy (
+  project_id uuid primary key references master_projects (id) on delete cascade,
+  strategy text not null default 'sequential' check (strategy in ('sequential','overlapping','fast_track','emergency')),
+  start_date date,
+  gov_status text not null default 'draft' check (gov_status in ('draft','proposed','reviewed','approved','baseline','in_execution','revised','completed')),
+  durations jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table plc_project_strategy enable row level security;
+drop policy if exists "plc_project_strategy_all" on plc_project_strategy;
+create policy "plc_project_strategy_all" on plc_project_strategy for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create table if not exists plc_schedule_versions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  label text not null,
+  strategy text not null,
+  start_date date not null,
+  commissioning_start date not null,
+  finish_date date not null,
+  total_days integer not null,
+  snapshot jsonb not null,
+  note text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  unique (project_id, label)
+);
+alter table plc_schedule_versions enable row level security;
+drop policy if exists "plc_schedule_versions_select" on plc_schedule_versions;
+create policy "plc_schedule_versions_select" on plc_schedule_versions for select using (auth.uid() is not null);
+drop policy if exists "plc_schedule_versions_insert" on plc_schedule_versions;
+create policy "plc_schedule_versions_insert" on plc_schedule_versions for insert with check (auth.uid() is not null);
+
 -- ---------------------------------------------------------------------------
 -- 21e. Integration with the EXISTING action table rather than a second one.
 -- ---------------------------------------------------------------------------

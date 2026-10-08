@@ -248,6 +248,11 @@ export interface Activity {
   dependsOnId: string | null
   status: StageStatus | 'on_hold'
   sequence: number
+  parentId: string | null
+  /** Weight among siblings (each sibling group sums to 100). */
+  weight: number
+  /** Hand-entered progress — meaningful on leaves only; parents are rolled up bottom-up. */
+  manualPct: number
 }
 
 export interface ProjectStage {

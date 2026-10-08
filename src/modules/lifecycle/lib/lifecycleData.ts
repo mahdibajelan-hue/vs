@@ -242,6 +242,9 @@ export interface PlcActivityRow {
   depends_on_id: string | null
   status: string
   sequence: number
+  parent_id?: string | null
+  weight?: number | string
+  manual_actual_pct?: number
 }
 
 export function activityFromRow(r: PlcActivityRow): Activity {
@@ -263,6 +266,9 @@ export function activityFromRow(r: PlcActivityRow): Activity {
     dependsOnId: r.depends_on_id,
     status: r.status as Activity['status'],
     sequence: r.sequence,
+    parentId: r.parent_id ?? null,
+    weight: Number(r.weight ?? 100),
+    manualPct: r.manual_actual_pct ?? 0,
   }
 }
 
