@@ -243,6 +243,8 @@ export interface Parcel {
   approvalStatus: ApprovalStatus
   approvalNote: string
   priceException: PriceException | null
+  /** Planned start of the acquisition; the dates of all steps are generated from it. */
+  planStart: string | null
   plots: Plot[]
   stages: Stage[]
   owners: Owner[]

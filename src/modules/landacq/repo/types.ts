@@ -1,7 +1,7 @@
 import type { Activity, ApprovalStatus, Crossing, DocMeta, LandProjectData, Payment, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
 
 /** The editable fields of a parcel (everything but its children and ids). */
-export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException'>>
+export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException' | 'planStart'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException' | 'planStart'>>
 export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; plots?: Omit<Plot, 'id' | 'parcelId'>[]; approvalStatus?: ApprovalStatus; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
 export type OwnerInput = Omit<Owner, 'id'> & { id?: string }
 export type DocInput = Omit<DocMeta, 'id'> & { id?: string }
@@ -27,6 +27,8 @@ export interface LandRepo {
   updateParcel(id: string, patch: Partial<ParcelFields>): Promise<void>
   deleteParcel(id: string): Promise<void>
   saveStage(parcelId: string, stage: Stage): Promise<void>
+  /** Many steps at once (used when a whole plan is generated). */
+  saveStages(items: { parcelId: string; stage: Stage }[]): Promise<void>
   saveOwner(parcelId: string, owner: OwnerInput): Promise<Owner>
   deleteOwner(id: string): Promise<void>
   saveDoc(parcelId: string, doc: DocInput): Promise<DocMeta>

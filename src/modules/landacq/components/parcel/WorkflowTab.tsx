@@ -8,6 +8,9 @@ import { ART9_STEP_HINT, ROUTE_HINT, ROUTE_LABEL, STAGE_LABEL, STAGE_STATUS_LABE
 import { currentStage, orderOf, stageDelay, stageOf } from '../../lib/workflow'
 import { fmtDateShort, faNum, fmtDuration } from '../../lib/fa'
 import { Badge } from '../ui'
+import { HelpButton } from '../Help'
+import { plannedFinishOf, startOf } from '../../lib/autoplan'
+import { totalExpectedDays } from '../../lib/workflow'
 
 const STATUS_COLOR: Record<StageStatus, string> = { not_started: 'var(--la-muted)', in_progress: 'var(--la-accent)', done: 'var(--la-ok)', blocked: 'var(--la-bad)', skipped: 'var(--la-muted)' }
 
@@ -17,6 +20,7 @@ export function WorkflowTab({ a }: { a: Analysis }) {
   const setStage = useLandStore((s) => s.setStage)
   const advance = useLandStore((s) => s.advanceStage)
   const update = useLandStore((s) => s.updateParcel)
+  const planParcel = useLandStore((s) => s.planParcel)
   const today = useLandStore((s) => s.today)
   const cur = currentStage(p)
   const [open, setOpen] = useState<string | null>(cur?.key ?? null)
@@ -31,6 +35,18 @@ export function WorkflowTab({ a }: { a: Analysis }) {
           </button>
         ))}
       </div>
+
+      <section className="la-card-flat flex flex-col gap-3 p-4" aria-label="برنامهٔ این قطعه">
+        <p className="la-title m-0 flex items-center gap-1.5">برنامهٔ تحصیل این قطعه <HelpButton topic="plan" /></p>
+        <div className="grid gap-3 sm:grid-cols-[1fr_130px_auto] sm:items-end">
+          <div><span className="la-label">تاریخ شروع عملیات تحصیل</span><JalaliDateInput value={p.planStart ?? ''} onChange={(iso) => iso && planParcel(p.id, iso)} /></div>
+          <label className="block"><span className="la-label">مدت کل (روز)</span><input className="la-input la-num" type="number" min={1} defaultValue={totalExpectedDays(p)} key={`t${p.id}${totalExpectedDays(p)}`} onBlur={(e) => { const v = Math.round(Number(e.target.value)); const st = p.planStart ?? startOf(p); if (v > 0 && v !== totalExpectedDays(p)) void (st ? planParcel(p.id, st, v) : update(p.id, { estDurationDays: v })) }} /></label>
+          <button className="la-btn la-btn-primary" disabled={!(p.planStart ?? startOf(p))} onClick={() => planParcel(p.id, (p.planStart ?? startOf(p))!)}>ساخت دوبارهٔ تاریخ‌ها</button>
+        </div>
+        <p className="la-eyebrow m-0 leading-7">
+          {p.planStart ? <>با وارد کردن تاریخ شروع، تاریخ برنامه‌ایِ همهٔ مراحل باقی‌مانده خودکار ساخته می‌شود{plannedFinishOf(p) ? <> — پایان تحصیل و آزادسازی: <b>{fmtDateShort(plannedFinishOf(p))}</b></> : null}. هر مرحله‌ای که واقعاً تمام شود، تاریخ مراحل بعد را همراه خودش جابه‌جا می‌کند.</> : 'تاریخ شروع را بدهید تا تاریخ برنامه‌ای همهٔ مراحل خودکار ساخته شود؛ می‌توانید هر تاریخ را پایین‌تر دستی هم تغییر دهید.'}
+        </p>
+      </section>
 
       {cur && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl p-3" style={{ background: 'var(--la-accent-soft)', border: '1px solid color-mix(in srgb, var(--la-accent) 35%, transparent)' }}>
@@ -56,10 +72,6 @@ export function WorkflowTab({ a }: { a: Analysis }) {
                   <span className="min-w-0">
                     <span className="block text-[13px] font-semibold">{STAGE_LABEL[key]}</span>
                     {ART9_STEP_HINT[key] && <span className="la-eyebrow block leading-6" style={{ color: 'var(--la-ink-2)' }}>{ART9_STEP_HINT[key]}</span>}
-                    <span className="la-eyebrow block leading-6">
-                      {s.plannedDate ? `برنامه: ${fmtDateShort(s.plannedDate)}` : 'بدون تاریخ برنامه‌ای'}
-                      {s.actualDate ? ` · واقعی: ${fmtDateShort(s.actualDate)}` : ''}
-                    </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {delay > 0 && <Badge color="#ef4444">{fmtDuration(delay)} تأخیر</Badge>}
@@ -67,6 +79,10 @@ export function WorkflowTab({ a }: { a: Analysis }) {
                     <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : undefined, transition: 'transform .2s', color: 'var(--la-muted)' }} />
                   </span>
                 </button>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div><span className="la-eyebrow">تاریخ برنامه‌ای</span><JalaliDateInput value={s.plannedDate ?? ''} onChange={(iso) => iso !== (s.plannedDate ?? '') && setStage(p.id, key, { plannedDate: iso || null })} /></div>
+                  <div><span className="la-eyebrow">تاریخ واقعی (انجام)</span><JalaliDateInput value={s.actualDate ?? ''} onChange={(iso) => iso !== (s.actualDate ?? '') && setStage(p.id, key, iso ? { actualDate: iso, status: 'done' } : { actualDate: null, status: s.status === 'done' ? 'in_progress' : s.status })} /></div>
+                </div>
                 {expanded && <StageEditor parcelId={p.id} stage={s} onSave={(patch) => setStage(p.id, key, patch)} />}
               </div>
             </li>
@@ -87,10 +103,6 @@ function StageEditor({ stage, onSave }: { parcelId: string; stage: Stage; onSave
           {(Object.keys(STAGE_STATUS_LABEL) as StageStatus[]).map((s) => <option key={s} value={s}>{STAGE_STATUS_LABEL[s]}</option>)}
         </select></label>
       <label><span className="la-label">مسئول</span><input className="la-input" value={resp} onChange={(e) => setResp(e.target.value)} onBlur={() => resp !== stage.responsible && onSave({ responsible: resp })} /></label>
-      <div><span className="la-label">تاریخ برنامه‌ای</span>
-        <div className="flex gap-1.5"><div className="min-w-0 flex-1"><JalaliDateInput value={stage.plannedDate ?? ''} onChange={(iso) => onSave({ plannedDate: iso })} /></div>{stage.plannedDate && <button className="la-btn la-btn-icon la-btn-sm" aria-label="پاک کردن" onClick={() => onSave({ plannedDate: null })}>×</button>}</div></div>
-      <div><span className="la-label">تاریخ واقعی</span>
-        <div className="flex gap-1.5"><div className="min-w-0 flex-1"><JalaliDateInput value={stage.actualDate ?? ''} onChange={(iso) => onSave({ actualDate: iso })} /></div>{stage.actualDate && <button className="la-btn la-btn-icon la-btn-sm" aria-label="پاک کردن" onClick={() => onSave({ actualDate: null })}>×</button>}</div></div>
       <label className="sm:col-span-2"><span className="la-label">یادداشت</span><input className="la-input" value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => note !== stage.note && onSave({ note })} /></label>
     </div>
   )

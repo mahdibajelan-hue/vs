@@ -241,3 +241,38 @@ console.log('landacq/import+problems: all assertions passed')
   assert.deepEqual(ser.map((x) => [x.month, x.paid, x.cumulative]), [['2026-01-01', 15, 15], ['2026-02-01', 0, 15], ['2026-03-01', 7, 22], ['2026-04-01', 0, 22]])
   console.log('landacq/pricing+finance: all assertions passed')
 }
+
+// ── auto plan ──
+{
+  const { stepDays, planDates, applyPlan, plannedFinishOf, startOf, summarizePlan, startForMode } = await import('./autoplan.ts')
+  const { STAGE_ORDER, ART9_ORDER } = await import('./workflow.ts')
+  const p = mk({ complexity: 2 })
+  const d = stepDays(p)
+  const dates = planDates(p, '2026-01-01')
+  // each step ends its duration after the previous one, in order
+  let cur = '2026-01-01'
+  for (const k of STAGE_ORDER) { cur = addDays(cur, d[k]); assert.equal(dates.get(k), cur, k) }
+  assert.equal(plannedFinishOf({ ...p, stages: applyPlan(p, '2026-01-01') }), dates.get('ready_for_construction'))
+  // a hand-set total duration scales the steps
+  const sum = (x) => STAGE_ORDER.reduce((n, k) => n + stepDays(x)[k], 0)
+  assert.ok(Math.abs(sum(mk({ estDurationDays: 200 })) - 200) <= STAGE_ORDER.length, String(sum(mk({ estDurationDays: 200 }))))
+  // finished steps keep their dates and move the cursor to the day they really ended
+  const q = mk({ complexity: 2 }); setStage(q, 'identification', 'done', { plannedDate: '2026-01-08', actualDate: '2026-01-20' })
+  const dq = planDates(q, '2026-01-01')
+  assert.equal(dq.get('identification'), '2026-01-08'); assert.equal(dq.get('ownership_status'), addDays('2026-01-20', stepDays(q).ownership_status))
+  assert.ok(applyPlan(q, '2026-01-01').find((s) => s.key === 'identification').actualDate === '2026-01-20')
+  // never plan into the past when told so
+  assert.equal(planDates(mk(), '2025-01-01', '2026-01-15').get('identification'), addDays('2026-01-15', stepDays(mk()).identification))
+  // Article 9: possession is the release; the 3-month payment window stays fixed
+  const a9 = mk({ acquisitionRoute: 'art9' }); const da = planDates(a9, '2026-02-01')
+  assert.deepEqual([...da.keys()], ART9_ORDER); assert.equal(diffDays(da.get('art9_payment'), da.get('art9_possession')), 90)
+  assert.equal(plannedFinishOf({ ...a9, stages: applyPlan(a9, '2026-02-01') }), da.get('art9_possession'))
+  assert.equal(stepDays(mk({ acquisitionRoute: 'art9', estDurationDays: 30 })).art9_payment, 90)
+  // modes and summary
+  assert.equal(startForMode('asap', '2026-03-01', '2026-06-01'), '2026-03-01'); assert.equal(startForMode('jit', '2026-03-01', '2026-06-01'), '2026-06-01')
+  assert.equal(startForMode('jit', '2026-03-01', '2025-12-01'), '2026-03-01'); assert.equal(startForMode('jit', '2026-03-01', null), '2026-03-01')
+  const ps = [{ ...p, planStart: '2026-01-01', stages: applyPlan(p, '2026-01-01') }, { ...mk(), planStart: null }]
+  const sm = summarizePlan(ps); assert.equal(sm.start, '2026-01-01'); assert.equal(sm.planned, 1); assert.equal(sm.total, 2); assert.ok(sm.span > 100)
+  assert.equal(startOf(q), '2026-01-20')
+  console.log('landacq/autoplan: all assertions passed')
+}

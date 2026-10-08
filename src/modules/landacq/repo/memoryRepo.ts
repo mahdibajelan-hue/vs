@@ -37,7 +37,7 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
     const id = d.id ?? uid('p')
     const stages = makeStages().map((s) => d.stages?.find((x) => x.key === s.key) ?? s)
     return {
-      ...d, id, masterProjectId, approvalStatus: d.approvalStatus ?? 'draft', approvalNote: '', priceException: d.priceException ?? null, plots: (d.plots ?? []).map((x) => ({ ...x, id: uid('pl'), parcelId: id })), kind: d.kind ?? 'route', stationType: d.stationType ?? '', siteLon: d.siteLon ?? null, siteLat: d.siteLat ?? null, legal: d.legal ?? {}, nextDeadline: d.nextDeadline ?? null, nextDeadlineLabel: d.nextDeadlineLabel ?? '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
+      ...d, id, masterProjectId, approvalStatus: d.approvalStatus ?? 'draft', approvalNote: '', priceException: d.priceException ?? null, planStart: d.planStart ?? null, plots: (d.plots ?? []).map((x) => ({ ...x, id: uid('pl'), parcelId: id })), kind: d.kind ?? 'route', stationType: d.stationType ?? '', siteLon: d.siteLon ?? null, siteLat: d.siteLat ?? null, legal: d.legal ?? {}, nextDeadline: d.nextDeadline ?? null, nextDeadlineLabel: d.nextDeadlineLabel ?? '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
       owners: (d.owners ?? []).map((o) => ({ ...o, id: uid('o'), parcelId: id })),
       docs: (d.docs ?? []).map((x) => ({ ...x, id: uid('d'), parcelId: id })),
     }
@@ -67,6 +67,9 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
     },
     async deleteParcel(id) {
       for (const s of stores.values()) s.parcels = s.parcels.filter((p) => p.id !== id)
+    },
+    async saveStages(items) {
+      for (const x of items) await this.saveStage(x.parcelId, x.stage)
     },
     async saveStage(parcelId, stage: Stage) {
       const p = parcelById(parcelId)

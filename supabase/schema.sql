@@ -16659,3 +16659,6 @@ begin
   return v;
 end $$;
 
+
+-- 76. Land acquisition: planned start of the acquisition of a parcel (drives the auto-generated step dates)
+alter table la_parcels add column if not exists plan_start date;

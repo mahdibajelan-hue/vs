@@ -27,7 +27,7 @@ const num = (v: unknown): number | null => (v === null || v === undefined ? null
 
 // ------------------------------------------------------------------------------------------------ mappers
 const parcelRow = (f: Partial<ParcelFields>): Row => {
-  const m: Record<string, string> = { code: 'code', title: 'title', kmStart: 'km_start', kmEnd: 'km_end', landType: 'land_type', ownershipClass: 'ownership_class', landUse: 'land_use', ownerCountEst: 'owner_count_est', ownerKnown: 'owner_known', custodian: 'custodian', disputeProbability: 'dispute_probability', complexity: 'complexity', estDurationDays: 'est_duration_days', flags: 'flags', acquisitionRoute: 'acquisition_route', areaM2: 'area_m2', estCost: 'est_cost', notes: 'notes', kind: 'kind', stationType: 'station_type', siteLon: 'site_lon', siteLat: 'site_lat', legal: 'legal', nextDeadline: 'next_deadline', nextDeadlineLabel: 'next_deadline_label', priceException: 'price_exception' }
+  const m: Record<string, string> = { code: 'code', title: 'title', kmStart: 'km_start', kmEnd: 'km_end', landType: 'land_type', ownershipClass: 'ownership_class', landUse: 'land_use', ownerCountEst: 'owner_count_est', ownerKnown: 'owner_known', custodian: 'custodian', disputeProbability: 'dispute_probability', complexity: 'complexity', estDurationDays: 'est_duration_days', flags: 'flags', acquisitionRoute: 'acquisition_route', areaM2: 'area_m2', estCost: 'est_cost', notes: 'notes', kind: 'kind', stationType: 'station_type', siteLon: 'site_lon', siteLat: 'site_lat', legal: 'legal', nextDeadline: 'next_deadline', nextDeadlineLabel: 'next_deadline_label', priceException: 'price_exception', planStart: 'plan_start' }
   const out: Row = {}
   // undefined must never become an explicit NULL (PostgREST bulk inserts fill keys missing from some rows with NULL)
   for (const [k, v] of Object.entries(f)) if (m[k] && v !== undefined) out[m[k]] = k === 'priceException' && v === null ? {} : v
@@ -60,7 +60,7 @@ function parcelFromRow(r: Row, stages: Row[], owners: Row[], docs: Row[], plots:
     landUse: r.land_use ?? '', ownerCountEst: r.owner_count_est ?? 0, ownerKnown: !!r.owner_known, custodian: r.custodian ?? '', disputeProbability: r.dispute_probability ?? 0, complexity: r.complexity ?? 1,
     estDurationDays: r.est_duration_days, flags: r.flags ?? {}, acquisitionRoute: r.acquisition_route, areaM2: num(r.area_m2), estCost: num(r.est_cost), notes: r.notes ?? '',
     legal: r.legal ?? {}, nextDeadline: r.next_deadline ?? null, nextDeadlineLabel: r.next_deadline_label ?? '', riskId: r.risk_id, issueId: r.issue_id, scheduleWarningId: r.schedule_warning_id, isDemo: !!r.is_demo, stages: st, owners: owners.map(ownerFromRow), docs: docs.map(docFromRow), plots: plots.map(plotFromRow),
-    approvalStatus: r.approval_status ?? 'draft', approvalNote: r.approval_note ?? '', priceException: priceExceptionOf(r.price_exception),
+    approvalStatus: r.approval_status ?? 'draft', approvalNote: r.approval_note ?? '', priceException: priceExceptionOf(r.price_exception), planStart: r.plan_start ?? null,
   }
 }
 
@@ -138,6 +138,9 @@ export function createSupabaseRepo(): LandRepo {
     },
     async deleteParcel(id) {
       chk(await supabase.from('la_parcels').delete().eq('id', id))
+    },
+    async saveStages(items) {
+      for (let i = 0; i < items.length; i += 400) chk(await supabase.from('la_stages').upsert(items.slice(i, i + 400).map((x) => stageRow(x.parcelId, x.stage)), { onConflict: 'parcel_id,stage_key' }))
     },
     async saveStage(parcelId, stage) {
       chk(await supabase.from('la_stages').upsert(stageRow(parcelId, stage), { onConflict: 'parcel_id,stage_key' }))

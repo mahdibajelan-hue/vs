@@ -6,6 +6,8 @@ import type { DemoBundle, ParcelDraft } from './types'
 import { pointAt, polyline, type LonLat } from '../lib/geometry'
 import { toUtm } from '../lib/utm'
 import { BASE_PRICE, multOf } from '../lib/pricing'
+import { stepDays } from '../lib/autoplan'
+import { orderOf } from '../lib/workflow'
 import type { PaymentInput } from './types'
 import type { CrossingInput } from './types'
 import type { CrossingType, StationType } from '../types'
@@ -263,6 +265,11 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   cx('oil_pipe', 83.5, 'خط ۱۶ اینچ فرآورده', { permitStatus: 'rejected', permitRequestedDate: d(-60), legalNotes: 'متولی با تقاطع در عمق فعلی مخالفت کرده؛ طرح اصلاحی (عبور عمیق‌تر) تهیه شود.' })
   cx('dirt_road', 93.4, 'جادهٔ خاکی معدن')
 
+  // planned start of the parcels that already have a plan (the not-started ones are left for the auto-planner)
+  for (const p of parcels) {
+    const first = orderOf(p as Parcel).map((k) => (p.stages ?? []).find((s) => s.key === k)).find((s) => s?.plannedDate)
+    if (first?.plannedDate) p.planStart = addDays(first.plannedDate, -stepDays(p)[first.key])
+  }
   // land prices around the reference price of each land type; owners' amounts follow the parcel estimate
   for (const p of parcels) {
     const area = p.areaM2 ?? 0
