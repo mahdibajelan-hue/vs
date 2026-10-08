@@ -5252,7 +5252,9 @@ grant execute on function comp_self_service_get(uuid) to anon, authenticated;
 
 -- comp_self_service_list_attachments gains storage_path so the self-service page can render a real
 -- thumbnail preview for image attachments (via the new comp_docs_read_candidate policy above),
--- not just a filename.
+-- not just a filename. Needs an explicit drop first: this widens the OUT-parameter row type from
+-- the version above, and create-or-replace cannot change that on its own.
+drop function if exists comp_self_service_list_attachments(uuid);
 create or replace function comp_self_service_list_attachments(p_token uuid)
 returns table (id uuid, kind text, file_name text, storage_path text, created_at timestamptz) as $$
   select att.id, att.kind, att.file_name, att.storage_path, att.created_at
