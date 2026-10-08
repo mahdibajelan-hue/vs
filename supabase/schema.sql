@@ -15190,9 +15190,15 @@ end;
 $$;
 
 -- Replaces the Section 61 three-argument ms_transition (kept renamed below only because DROP FUNCTION is
--- not available in every deployment path; harmless and unused).
+-- not available in every deployment path; harmless and unused). A stale ms_transition_v1_unused from an
+-- earlier replay of this same file is dropped first — it's dead code by definition, so removing it can't
+-- break anything, and without this the rename below collides with it on a database that's already been
+-- this far once.
 do $$
 begin
+  if exists (select 1 from pg_proc where oid = to_regprocedure('ms_transition_v1_unused(uuid,text,text)')) then
+    drop function ms_transition_v1_unused(uuid, text, text);
+  end if;
   if exists (select 1 from pg_proc where oid = to_regprocedure('ms_transition(uuid,text,text)')) then
     alter function ms_transition(uuid, text, text) rename to ms_transition_v1_unused;
   end if;
