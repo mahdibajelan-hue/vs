@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GitBranch, LayoutDashboard, Loader2, Settings2, Target } from 'lucide-react'
+import { GanttChartSquare, GitBranch, LayoutDashboard, Loader2, Settings2, Target } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -10,6 +10,7 @@ import { PortfolioDashboardPage } from './pages/PortfolioDashboardPage'
 import { ControlTowerPage } from './pages/ControlTowerPage'
 import { StageGatePage } from './pages/StageGatePage'
 import { MilestonesPage } from './pages/MilestonesPage'
+import { MasterPlanPage } from './pages/MasterPlanPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 
 type View =
@@ -17,6 +18,7 @@ type View =
   | { kind: 'tower'; projectId: string }
   | { kind: 'stage'; projectId: string; stageKey: string }
   | { kind: 'milestones'; projectId: string }
+  | { kind: 'masterplan'; projectId: string }
   | { kind: 'templates' }
 
 export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -110,6 +112,12 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
                 icon={<GitBranch size={13} />}
                 label="Milestoneها"
               />
+              <TabButton
+                active={view.kind === 'masterplan'}
+                onClick={() => setView({ kind: 'masterplan', projectId: activeProject.id })}
+                icon={<GanttChartSquare size={13} />}
+                label="Master Plan"
+              />
             </>
           )}
           {profile?.isAdmin && (
@@ -145,6 +153,8 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           />
         ) : view.kind === 'stage' ? (
           <StageGatePage stageKey={view.stageKey} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
+        ) : view.kind === 'masterplan' ? (
+          <MasterPlanPage projectId={activeProject.id} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
         ) : (
           <MilestonesPage projectId={activeProject.id} onBack={() => setView({ kind: 'tower', projectId: activeProject.id })} />
         )}

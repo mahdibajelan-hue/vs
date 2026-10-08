@@ -107,6 +107,15 @@ interface LifecycleState {
   setHealthOverride: (projectId: string, status: HealthStatus | null, reason: string) => Promise<void>
   createAction: (projectId: string, data: Partial<LifecycleAction> & { title: string }) => Promise<void>
   updateAction: (action: LifecycleAction, patch: Partial<LifecycleAction>) => Promise<void>
+
+  createActivity: (projectId: string, data: Partial<Activity> & { name: string }) => Promise<void>
+  updateActivity: (activity: Activity, patch: Partial<Activity>, reason?: string) => Promise<void>
+  deleteActivity: (id: string, projectId: string) => Promise<void>
+  /** Copies forecast dates onto baseline for every activity that has none yet — the one-shot
+   * "freeze the plan" moment a project takes once, usually right after Master Plan is first
+   * populated. Rows that already carry a baseline are left untouched, so this is safe to run
+   * more than once as new rows are added. */
+  lockActivityBaselines: (projectId: string) => Promise<void>
 }
 
 export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
@@ -521,5 +530,90 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
       bundle: { ...s.bundle, actions: s.bundle.actions.map((a) => (a.id === action.id ? { ...a, ...patch } : a)) },
       allActions: s.allActions.map((a) => (a.id === action.id ? { ...a, ...patch } : a)),
     }))
+  },
+
+  createActivity: async (projectId, data) => {
+    const sequence = get().bundle.activities.length
+    const { error } = await supabase.from('plc_activities').insert({
+      project_id: projectId,
+      wbs_code: data.wbsCode ?? '',
+      name: data.name,
+      stage_key: data.stageKey ?? '',
+      baseline_start: data.baselineStart ?? null,
+      baseline_finish: data.baselineFinish ?? null,
+      forecast_start: data.forecastStart ?? null,
+      forecast_finish: data.forecastFinish ?? null,
+      owner_id: data.ownerId ?? null,
+      is_critical: data.isCritical ?? false,
+      depends_on_id: data.dependsOnId ?? null,
+      sequence,
+    })
+    if (reportError('ایجاد ردیف برنامه زمانی', error)) return
+    await writeAudit({ projectId, entityType: 'activity', event: 'created', newValue: data.name })
+    await get().selectProject(projectId)
+  },
+
+  updateActivity: async (activity, patch, reason) => {
+    const row: Record<string, unknown> = {}
+    if (patch.name !== undefined) row.name = patch.name
+    if (patch.wbsCode !== undefined) row.wbs_code = patch.wbsCode
+    if (patch.stageKey !== undefined) row.stage_key = patch.stageKey
+    if (patch.baselineStart !== undefined) row.baseline_start = patch.baselineStart
+    if (patch.baselineFinish !== undefined) row.baseline_finish = patch.baselineFinish
+    if (patch.forecastStart !== undefined) row.forecast_start = patch.forecastStart
+    if (patch.forecastFinish !== undefined) row.forecast_finish = patch.forecastFinish
+    if (patch.actualStart !== undefined) row.actual_start = patch.actualStart
+    if (patch.actualFinish !== undefined) row.actual_finish = patch.actualFinish
+    if (patch.progress !== undefined) row.progress = patch.progress
+    if (patch.ownerId !== undefined) row.owner_id = patch.ownerId
+    if (patch.isCritical !== undefined) row.is_critical = patch.isCritical
+    if (patch.dependsOnId !== undefined) row.depends_on_id = patch.dependsOnId
+    if (patch.status !== undefined) row.status = patch.status
+
+    const { error } = await supabase.from('plc_activities').update(row).eq('id', activity.id)
+    if (reportError('به‌روزرسانی ردیف برنامه زمانی', error)) return
+
+    // A moved forecast is audited the same way a milestone's is — the reason travels with the
+    // change rather than sitting only in the UI the user happened to be looking at.
+    if (patch.forecastStart !== undefined || patch.forecastFinish !== undefined) {
+      await writeAudit({
+        projectId: activity.projectId, entityType: 'activity', entityId: activity.id,
+        event: 'forecast_change', field: activity.name,
+        oldValue: `${activity.forecastStart ?? '—'} → ${activity.forecastFinish ?? '—'}`,
+        newValue: `${patch.forecastStart ?? activity.forecastStart ?? '—'} → ${patch.forecastFinish ?? activity.forecastFinish ?? '—'}`,
+        reason: reason ?? '',
+      })
+    }
+    if (patch.status && patch.status !== activity.status) {
+      await writeAudit({
+        projectId: activity.projectId, entityType: 'activity', entityId: activity.id,
+        event: 'status_change', field: activity.name, oldValue: activity.status, newValue: patch.status,
+      })
+    }
+
+    set((s) => ({
+      bundle: { ...s.bundle, activities: s.bundle.activities.map((a) => (a.id === activity.id ? { ...a, ...patch } : a)) },
+    }))
+  },
+
+  deleteActivity: async (id, projectId) => {
+    const { error } = await supabase.from('plc_activities').delete().eq('id', id)
+    if (reportError('حذف ردیف برنامه زمانی', error)) return
+    await writeAudit({ projectId, entityType: 'activity', entityId: id, event: 'deleted' })
+    set((s) => ({ bundle: { ...s.bundle, activities: s.bundle.activities.filter((a) => a.id !== id) } }))
+  },
+
+  lockActivityBaselines: async (projectId) => {
+    const toLock = get().bundle.activities.filter(
+      (a) => !a.baselineStart && !a.baselineFinish && (a.forecastStart || a.forecastFinish),
+    )
+    if (toLock.length === 0) return
+    for (const a of toLock) {
+      await supabase.from('plc_activities')
+        .update({ baseline_start: a.forecastStart, baseline_finish: a.forecastFinish })
+        .eq('id', a.id)
+    }
+    await writeAudit({ projectId, entityType: 'lifecycle', event: 'baseline_locked', newValue: `${toLock.length} ردیف` })
+    await get().selectProject(projectId)
   },
 }))
