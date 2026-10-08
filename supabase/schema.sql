@@ -16355,3 +16355,7 @@ revoke execute on function la_stage_after_write() from public, anon, authenticat
 -- computed with the same role helpers the modules use. It feeds the bell shown in every header.
 -- uc_admin_update_user now also accepts avatar_url; admins may write any file in the public 'avatars' bucket
 -- (users still only write their own folder).
+
+-- my_finance_notifications(): SECURITY INVOKER (RLS applies) + finance view permission. Guarantees expiring within 60 days,
+-- certificates unpaid for >30 days, claims undecided for >14 days, retention releases due within 60 days.
+-- my_notifications() also reports mission claims (ready_for_claim) for the requester and Admin Affairs.

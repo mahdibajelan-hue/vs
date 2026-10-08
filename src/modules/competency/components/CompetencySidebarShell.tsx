@@ -1,12 +1,8 @@
-import { useState, type ReactNode } from 'react'
-import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, Home, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, UserCircle2, Users } from 'lucide-react'
-import { SignOutButton } from '../../../components/Auth/SignOutButton'
-import { ProfileModal } from '../../../components/Auth/ProfileModal'
+import { type ReactNode } from 'react'
+import { Award, BookOpen, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
-import { useAuthStore } from '../../../store/useAuthStore'
-import { ThemeToggle } from './ThemeToggle'
-import { NotificationBell } from '../../../components/common/NotificationBell'
+import { ModuleHeaderActions } from '../../../components/common/ModuleHeaderActions'
 import { useThemeAttributeSync } from '../lib/useThemeAttributeSync'
 import '../styles/farinTheme.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
@@ -95,8 +91,6 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
   // exactly why colors read as "not distinguishable at all" once someone switched to light. It must
   // track the real theme, the same one ThemeToggle reads and toggles.
   const theme = useThemeAttributeSync()
-  const myProfile = useAuthStore((s) => s.profile)
-  const [showProfile, setShowProfile] = useState(false)
   return (
     <div className="comp-shell fixed inset-0 z-30 flex" style={{ background: 'var(--bg-app)', colorScheme: theme }}>
       <aside className="no-print flex w-14 shrink-0 flex-col gap-1 border-l border-white/10 bg-[#0b0f16] px-2 py-5 sm:w-56 sm:px-3">
@@ -115,22 +109,6 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
             <SidebarButton key={section} section={section} active={active} handler={nav[section]} />
           ))}
         </nav>
-        <div className="space-y-1 border-t border-white/10 pt-2">
-          <button
-            onClick={onExitToHub}
-            title="بازگشت به ماژول‌ها"
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-secondary transition-colors hover:bg-white/5 hover:text-primary sm:px-3"
-          >
-            <Home size={15} className="shrink-0" />
-            <span className="hidden flex-1 text-right sm:block">بازگشت به ماژول‌ها</span>
-          </button>
-          <SignOutButton
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/10 sm:px-3"
-            title="خروج از حساب"
-          >
-            <span className="hidden flex-1 text-right sm:block">خروج از حساب</span>
-          </SignOutButton>
-        </div>
         <p className="hidden px-2 text-[10px] text-muted sm:block">v1.0.0</p>
       </aside>
 
@@ -146,22 +124,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {headerRight}
-            {myProfile && (
-              <button
-                onClick={() => setShowProfile(true)}
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-secondary transition-colors hover:bg-white/5"
-                title="پروفایل من — مشخصات و رمز عبور"
-              >
-                {myProfile.avatarUrl ? (
-                  <img src={myProfile.avatarUrl} alt="" className="h-4 w-4 rounded-full bg-white object-cover" />
-                ) : (
-                  <UserCircle2 size={14} />
-                )}
-                <span className="hidden sm:inline">{myProfile.fullName || 'پروفایل من'}</span>
-              </button>
-            )}
-            <NotificationBell />
-            <ThemeToggle />
+            <ModuleHeaderActions onExitToHub={onExitToHub} />
           </div>
         </header>
 
@@ -181,7 +144,6 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
         </div>
       </div>
 
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   )
 }

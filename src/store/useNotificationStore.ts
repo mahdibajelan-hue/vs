@@ -22,7 +22,7 @@ interface NotificationState {
   refresh: () => Promise<void>
 }
 
-/** The bell's data: computed on the server by my_notifications() from the user's own missions, issues and risks. */
+/** The bell's data: computed on the server by my_notifications() (the user's own missions, issues, risks) and my_finance_notifications() (guarantees, certificates, claims, retention; RLS + finance permission apply). */
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
   items: [],
   loading: false,
@@ -31,9 +31,11 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     if (get().loading) return
     set({ loading: true })
     try {
-      const { data, error } = await supabase.rpc('my_notifications')
-      if (error) throw error
-      set({ items: (data as AppNotification[] | null) ?? [], loadedOnce: true })
+      const [main, fin] = await Promise.all([supabase.rpc('my_notifications'), supabase.rpc('my_finance_notifications')])
+      if (main.error && fin.error) throw main.error
+      const rank = { warn: 0, action: 1, info: 2 } as const
+      const items = [...((main.data as AppNotification[] | null) ?? []), ...((fin.data as AppNotification[] | null) ?? [])].sort((a, b) => rank[a.severity] - rank[b.severity])
+      set({ items, loadedOnce: true })
     } catch {
       // the bell must never break a page: keep what we had
       set({ loadedOnce: true })
