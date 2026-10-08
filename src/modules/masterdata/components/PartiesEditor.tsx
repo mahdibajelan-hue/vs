@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PARTY_ROLES, PARTY_ROLE_HINT_FA, PARTY_ROLE_LABEL_FA, ORG_TYPE_LABEL_FA, type PartyRole } from '../types'
 import { initials } from './md'
+import { ORG_COLOR, PARTY_COLOR } from '../lib/colors'
 
 const SHOWN: PartyRole[] = ['employer', 'contractor', 'design_consultant', 'supervision_consultant', 'partner']
 
@@ -20,17 +21,17 @@ export function PartiesEditor({ projectId }: { projectId: string }) {
         const taken = new Set(here.map((p) => p.organizationId))
         const free = organizations.filter((o) => o.isActive && !taken.has(o.id))
         return (
-          <div key={role} className="md-row md-in" data-hover style={{ '--i': i, alignItems: 'flex-start' } as React.CSSProperties}>
+          <div key={role} className="md-row md-in md-stripe" data-hover style={{ '--i': i, '--c': PARTY_COLOR[role], alignItems: 'flex-start' } as React.CSSProperties}>
             <div className="w-[190px] shrink-0">
-              <p className="text-[13px] font-bold">{PARTY_ROLE_LABEL_FA[role]}</p>
+              <p className="text-[13px] font-bold" style={{ color: 'var(--tc, inherit)' }}>{PARTY_ROLE_LABEL_FA[role]}</p>
               <p className="md-eyebrow">{PARTY_ROLE_HINT_FA[role]}</p>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               {here.map((p) => {
                 const o = organizations.find((x) => x.id === p.organizationId)
                 return (
-                  <span key={p.id} className="md-card" style={{ padding: '5px 6px 5px 10px', gap: 9 }}>
-                    <span className="md-avatar" style={{ width: 28, height: 28, borderRadius: 8, fontSize: 11 }} aria-hidden>{initials(o?.shortName || o?.name || '')}</span>
+                  <span key={p.id} className="md-card" style={{ padding: '5px 6px 5px 10px', gap: 9, '--c': PARTY_COLOR[role] } as React.CSSProperties}>
+                    <span className="md-avatar" style={{ width: 28, height: 28, borderRadius: 8, fontSize: 11, '--c': o ? ORG_COLOR[o.orgType] : undefined } as React.CSSProperties} aria-hidden>{initials(o?.shortName || o?.name || '')}</span>
                     <span className="leading-5"><b className="text-[12.5px]">{o?.name ?? 'سازمان حذف‌شده'}</b>{o && <span className="md-eyebrow block">{ORG_TYPE_LABEL_FA[o.orgType]}</span>}</span>
                     <button className="md-btn md-btn-ghost md-btn-icon md-btn-sm" style={{ width: 26, minHeight: 26 }} aria-label={`حذف ${o?.name ?? ''}`} onClick={() => remove(p.id)}><X size={13} /></button>
                   </span>

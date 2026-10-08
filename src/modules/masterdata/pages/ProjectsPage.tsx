@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { FolderKanban, Plus } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
-import { PROJECT_LIFECYCLE_STATUSES, PROJECT_STATUS_LABEL_FA, PROJECT_STATUS_TONE } from '../types'
+import { PROJECT_LIFECYCLE_STATUSES, PROJECT_STATUS_LABEL_FA } from '../types'
+import { LEVEL_COLOR, STATUS_COLOR } from '../lib/colors'
 import { Empty, Field, PageHead, SearchBox, Sheet, initials } from '../components/md'
 
-const TONE = { neutral: undefined, green: 'ok', amber: 'warn', red: 'bad' } as const
 
 /** Phase 4 of the set-up: the projects themselves. Opening one leads to its workspace (identity, organizations, team). */
 export function ProjectsPage({ onOpen }: { onOpen: (id: string) => void }) {
@@ -33,9 +33,9 @@ export function ProjectsPage({ onOpen }: { onOpen: (id: string) => void }) {
           const path = [portfolios.find((x) => x.id === p.portfolioId)?.name, programs.find((x) => x.id === p.programId)?.name].filter(Boolean).join(' / ')
           return (
             <button key={p.id} className="md-row md-in" style={{ '--i': i } as React.CSSProperties} onClick={() => onOpen(p.id)}>
-              <span className="md-avatar" aria-hidden>{initials(p.shortName || p.officialName)}</span>
+              <span className="md-avatar" style={{ '--c': LEVEL_COLOR.project } as React.CSSProperties} aria-hidden>{initials(p.shortName || p.officialName)}</span>
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{p.officialName}</b><span className="md-eyebrow md-num" dir="ltr">{p.projectCode || p.projectIdCode}</span><span className="md-badge" data-tone={TONE[PROJECT_STATUS_TONE[p.status]]}>{PROJECT_STATUS_LABEL_FA[p.status]}</span></span>
+                <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{p.officialName}</b><span className="md-eyebrow md-num" dir="ltr">{p.projectCode || p.projectIdCode}</span><span className="md-badge" style={{ '--c': STATUS_COLOR[p.status] } as React.CSSProperties}>{PROJECT_STATUS_LABEL_FA[p.status]}</span></span>
                 <span className="md-eyebrow block truncate">{path || 'بدون پورتفولیو و طرح'}</span>
               </span>
               <span className="hidden w-[300px] shrink-0 md:block"><span className="md-eyebrow block truncate">کارفرما: {partyName(p.id, 'employer') || '-'}</span><span className="md-eyebrow block truncate">پیمانکار: {partyName(p.id, 'contractor') || '-'}</span></span>

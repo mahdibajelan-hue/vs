@@ -3,6 +3,7 @@ import { FolderTree, Plus } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PORTFOLIO_PROGRAM_STATUSES, PORTFOLIO_PROGRAM_STATUS_LABEL_FA, type PortfolioProgramStatus, type Program } from '../types'
+import { LEVEL_COLOR } from '../lib/colors'
 import { DeleteButton, Empty, Field, PageHead, Sheet, faNum, initials } from '../components/md'
 
 const TONE: Record<PortfolioProgramStatus, 'ok' | 'warn' | undefined> = { active: 'ok', on_hold: 'warn', closed: undefined }
@@ -24,7 +25,7 @@ export function ProgramsPage() {
       <div className="md-panel overflow-hidden">
         {programs.length === 0 ? <Empty icon={<FolderTree size={20} />} title="هنوز طرحی ثبت نشده" text={portfolios.length ? 'اولین طرح را زیر یکی از پورتفولیوها بسازید.' : 'ابتدا یک پورتفولیو تعریف کنید.'} /> : programs.map((g, i) => (
           <button key={g.id} className="md-row md-in" style={{ '--i': i } as React.CSSProperties} onClick={() => setSheet(g)}>
-            <span className="md-avatar" aria-hidden>{initials(g.name)}</span>
+            <span className="md-avatar" style={{ '--c': LEVEL_COLOR.program } as React.CSSProperties} aria-hidden>{initials(g.name)}</span>
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{g.name}</b>{g.code && <span className="md-eyebrow md-num" dir="ltr">{g.code}</span>}<span className="md-badge" data-tone={TONE[g.status]}>{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[g.status]}</span></span>
               <span className="md-eyebrow block truncate">{portfolios.find((p) => p.id === g.portfolioId)?.name ?? 'بدون پورتفولیو'}{nameOf(g.programManagerId) ? `  |  مدیر طرح: ${nameOf(g.programManagerId)}` : ''}</span>

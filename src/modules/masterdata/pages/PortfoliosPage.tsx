@@ -3,6 +3,7 @@ import { Briefcase, Plus } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PORTFOLIO_PROGRAM_STATUSES, PORTFOLIO_PROGRAM_STATUS_LABEL_FA, type Portfolio, type PortfolioProgramStatus } from '../types'
+import { LEVEL_COLOR } from '../lib/colors'
 import { DeleteButton, Empty, Field, PageHead, Sheet, faNum, initials } from '../components/md'
 
 const TONE: Record<PortfolioProgramStatus, 'ok' | 'warn' | undefined> = { active: 'ok', on_hold: 'warn', closed: undefined }
@@ -22,7 +23,7 @@ export function PortfoliosPage() {
       <div className="md-panel overflow-hidden">
         {portfolios.length === 0 ? <Empty icon={<Briefcase size={20} />} title="هنوز پورتفولیویی ثبت نشده" text="یک پورتفولیو بسازید تا طرح‌ها و پروژه‌ها زیر آن قرار بگیرند." /> : portfolios.map((p, i) => (
           <button key={p.id} className="md-row md-in" style={{ '--i': i } as React.CSSProperties} onClick={() => setSheet(p)}>
-            <span className="md-avatar" aria-hidden>{initials(p.name)}</span>
+            <span className="md-avatar" style={{ '--c': LEVEL_COLOR.portfolio } as React.CSSProperties} aria-hidden>{initials(p.name)}</span>
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{p.name}</b>{p.code && <span className="md-eyebrow md-num" dir="ltr">{p.code}</span>}<span className="md-badge" data-tone={TONE[p.status]}>{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[p.status]}</span></span>
               <span className="md-eyebrow block truncate">{p.description || 'بدون توضیح'}</span>

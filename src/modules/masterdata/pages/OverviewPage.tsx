@@ -1,6 +1,7 @@
 import { ArrowLeft, Check } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PageHead, faNum } from '../components/md'
+import { STEP_COLORS } from '../lib/colors'
 
 export type NavTarget = 'organizations' | 'portfolios' | 'programs' | 'projects' | 'parties'
 
@@ -32,8 +33,8 @@ export function OverviewPage({ go }: { go: (t: NavTarget) => void }) {
           const current = next?.n === s.n
           return (
             <li key={s.n} className="md-in" style={{ '--i': i } as React.CSSProperties}>
-              <button className="md-row" style={{ background: current ? 'var(--md-accent-soft)' : undefined }} onClick={() => go(s.target)}>
-                <span className="md-avatar md-num" data-round aria-hidden style={s.done ? { background: 'var(--md-accent)', color: 'var(--md-accent-ink)', borderColor: 'transparent' } : undefined}>{s.done ? <Check size={16} strokeWidth={2.6} /> : faNum(s.n)}</span>
+              <button className="md-row" style={{ '--c': STEP_COLORS[i], background: current ? 'color-mix(in srgb, var(--c) 12%, transparent)' : undefined, boxShadow: `inset -3px 0 0 ${STEP_COLORS[i]}` } as React.CSSProperties} onClick={() => go(s.target)}>
+                <span className="md-avatar md-num" data-round aria-hidden style={{ '--c': STEP_COLORS[i], ...(s.done ? { background: STEP_COLORS[i], color: '#fff', borderColor: 'transparent' } : {}) } as React.CSSProperties}>{s.done ? <Check size={16} strokeWidth={2.6} /> : faNum(s.n)}</span>
                 <span className="min-w-0 flex-1"><b className="block text-[14px]">{s.title}</b><span className="md-eyebrow block">{s.text}</span></span>
                 <span className="md-eyebrow md-num shrink-0">{s.meta}</span>
                 <ArrowLeft size={15} aria-hidden style={{ color: 'var(--md-ink-3)' }} />

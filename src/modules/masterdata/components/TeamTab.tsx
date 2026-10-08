@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pencil, Plus, UserRound, Users } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { TEAM_POSITIONS, TEAM_POSITION_LABEL, type TeamMember } from '../types'
+import { positionColor } from '../lib/colors'
 import { DeleteButton, Empty, Field, Sheet, initials } from './md'
 
 const nameOf = (m: TeamMember, users: { id: string; fullName: string; email: string }[]) => m.personName || users.find((u) => u.id === m.userId)?.fullName || users.find((u) => u.id === m.userId)?.email || 'بدون نام'
@@ -26,7 +27,7 @@ export function TeamTab({ projectId }: { projectId: string }) {
 
   const Node = ({ m }: { m: TeamMember }) => (
     <li className="md-node">
-      <div className="md-card">
+      <div className="md-card" style={{ '--c': positionColor(m.positionKey) } as React.CSSProperties}>
         <span className="md-avatar" data-round aria-hidden>{initials(nameOf(m, users))}</span>
         <span className="min-w-0 flex-1 leading-6">
           <b className="block truncate text-[13px]">{nameOf(m, users)}</b>
@@ -44,7 +45,7 @@ export function TeamTab({ projectId }: { projectId: string }) {
         {[['executive', 'مجری طرح'], ['project_manager', 'مدیر پروژه']].map(([k, label], i) => {
           const m = key(k)
           return (
-            <div key={k} className="md-panel md-in flex items-center gap-3 p-4" style={{ '--i': i } as React.CSSProperties}>
+            <div key={k} className="md-panel md-tile md-in flex items-center gap-3 p-4" style={{ '--i': i, '--c': positionColor(k) } as React.CSSProperties}>
               <span className="md-avatar" data-round aria-hidden>{m ? initials(nameOf(m, users)) : <UserRound size={16} />}</span>
               <span className="min-w-0 flex-1"><span className="md-eyebrow block">{label}</span><b className="block truncate text-[14px]">{m ? nameOf(m, users) : 'تعیین نشده'}</b></span>
               <button className="md-btn md-btn-sm" onClick={() => setSheet(m ? { member: m } : { position: k })}>{m ? 'تغییر' : 'تعیین'}</button>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { AlignLeft, ArrowRight, Banknote, IdCard } from 'lucide-react'
+import { PALETTE } from '../lib/colors'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PROJECT_LIFECYCLE_STATUSES, PROJECT_STATUS_LABEL_FA, type MasterProject, type ProjectLifecycleStatus } from '../types'
@@ -9,11 +10,11 @@ import { TeamTab } from '../components/TeamTab'
 import { ProjectIdentityPage } from './ProjectIdentityPage'
 
 type Tab = 'identity' | 'parties' | 'team' | 'advanced'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'identity', label: 'شناسنامه' },
-  { id: 'parties', label: 'ارکان پروژه' },
-  { id: 'team', label: 'ساختار و تیم' },
-  { id: 'advanced', label: 'فازها و وابستگی‌ها' },
+const TABS: { id: Tab; label: string; color: string }[] = [
+  { id: 'identity', label: 'شناسنامه', color: PALETTE.blue },
+  { id: 'parties', label: 'ارکان پروژه', color: PALETTE.amber },
+  { id: 'team', label: 'ساختار و تیم', color: PALETTE.indigo },
+  { id: 'advanced', label: 'فازها و وابستگی‌ها', color: PALETTE.violet },
 ]
 
 /** One project: its identity card with a short description, the organizations around it, and its human-resources structure. */
@@ -29,7 +30,7 @@ export function ProjectWorkspace({ projectId, onBack, initialTab = 'identity' }:
         <div className="min-w-0"><h2 className="truncate text-[19px] font-extrabold leading-9">{project.officialName}</h2><p className="md-eyebrow md-num" dir="ltr" style={{ textAlign: 'right' }}>{project.projectCode || project.projectIdCode}</p></div>
       </div>
       <div className="md-nav mb-5" role="tablist" aria-label="بخش‌های پروژه">
-        {TABS.map((t) => <button key={t.id} role="tab" className="md-nav-item" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}{tab === t.id && <span className="md-nav-ind" style={{ insetInline: 12 }} />}</button>)}
+        {TABS.map((t) => <button key={t.id} role="tab" className="md-nav-item" style={{ '--c': t.color } as React.CSSProperties} aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.label}{tab === t.id && <span className="md-nav-ind" style={{ insetInline: 12, '--ind': t.color } as React.CSSProperties} />}</button>)}
       </div>
       <div key={tab} className="md-in">
         {tab === 'identity' && <IdentityTab project={project} />}
@@ -67,8 +68,8 @@ function IdentityTab({ project }: { project: MasterProject }) {
   const date = (k: keyof Draft, label: string) => <div><span className="md-label">{label}</span><JalaliDateInput value={d[k] as string} onChange={(v) => set(k, v as never)} /></div>
   return (
     <div className="grid gap-5 pb-24">
-      <section className="md-panel">
-        <div className="md-panel-head"><div><h3 className="text-[14px] font-bold">هویت پروژه</h3><p className="md-eyebrow">نام رسمی، کد و جایگاه پروژه در سلسله‌مراتب.</p></div></div>
+      <section className="md-panel md-sec" style={{ '--c': PALETTE.blue } as React.CSSProperties}>
+        <div className="md-panel-head"><div className="flex items-center gap-3"><span className="md-sec-ico"><IdCard size={16} /></span><div><h3 className="text-[14px] font-bold">هویت پروژه</h3><p className="md-eyebrow">نام رسمی، کد و جایگاه پروژه در سلسله‌مراتب.</p></div></div></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           <Field label="نام رسمی" className="sm:col-span-2"><input className="md-input" value={d.officialName} onChange={(e) => set('officialName', e.target.value)} /></Field>
           <Field label="نام کوتاه"><input className="md-input" value={d.shortName} onChange={(e) => set('shortName', e.target.value)} /></Field>
@@ -80,8 +81,8 @@ function IdentityTab({ project }: { project: MasterProject }) {
         </div>
       </section>
 
-      <section className="md-panel">
-        <div className="md-panel-head"><div><h3 className="text-[14px] font-bold">شرح مختصر</h3><p className="md-eyebrow">آنچه یک مدیر تازه‌وارد باید دربارهٔ پروژه بداند.</p></div></div>
+      <section className="md-panel md-sec" style={{ '--c': PALETTE.violet } as React.CSSProperties}>
+        <div className="md-panel-head"><div className="flex items-center gap-3"><span className="md-sec-ico"><AlignLeft size={16} /></span><div><h3 className="text-[14px] font-bold">شرح مختصر</h3><p className="md-eyebrow">آنچه یک مدیر تازه‌وارد باید دربارهٔ پروژه بداند.</p></div></div></div>
         <div className="grid gap-4 p-5">
           <Field label="شرح مختصر پروژه" hint="دو تا چهار جمله دربارهٔ اینکه پروژه چیست و چرا انجام می‌شود."><textarea className="md-input" value={d.description} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -92,8 +93,8 @@ function IdentityTab({ project }: { project: MasterProject }) {
         </div>
       </section>
 
-      <section className="md-panel">
-        <div className="md-panel-head"><div><h3 className="text-[14px] font-bold">قرارداد و برنامه</h3><p className="md-eyebrow">مبلغ به ریال؛ تاریخ‌ها شمسی.</p></div></div>
+      <section className="md-panel md-sec" style={{ '--c': PALETTE.amber } as React.CSSProperties}>
+        <div className="md-panel-head"><div className="flex items-center gap-3"><span className="md-sec-ico"><Banknote size={16} /></span><div><h3 className="text-[14px] font-bold">قرارداد و برنامه</h3><p className="md-eyebrow">مبلغ به ریال؛ تاریخ‌ها شمسی.</p></div></div></div>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           <Field label="شمارهٔ قرارداد"><input className="md-input md-num" dir="ltr" value={d.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} /></Field>
           <Field label="نوع قرارداد"><input className="md-input" value={d.contractType} onChange={(e) => set('contractType', e.target.value)} placeholder="مثلاً EPC" /></Field>

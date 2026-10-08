@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Building2, Plus } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { ORG_TYPE_LABEL_FA, ORG_TYPES, type Organization, type OrgType } from '../types'
+import { ORG_COLOR } from '../lib/colors'
 import { DeleteButton, Empty, Field, PageHead, SearchBox, Sheet, faNum, initials } from '../components/md'
 
 const BLANK = { name: '', shortName: '', orgType: 'contractor' as OrgType, description: '', contactName: '', contactEmail: '', contactPhone: '' }
@@ -31,7 +32,7 @@ export function OrganizationsPage() {
         <SearchBox value={q} onChange={setQ} placeholder="جستجوی نام یا رابط" />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="نوع سازمان">
           <button className="md-chip" aria-pressed={type === 'all'} onClick={() => setType('all')}>همه {faNum(organizations.length)}</button>
-          {ORG_TYPES.map((t) => { const n = organizations.filter((o) => o.orgType === t).length; return n ? <button key={t} className="md-chip" aria-pressed={type === t} onClick={() => setType(t)}>{ORG_TYPE_LABEL_FA[t]} {faNum(n)}</button> : null })}
+          {ORG_TYPES.map((t) => { const n = organizations.filter((o) => o.orgType === t).length; return n ? <button key={t} className="md-chip" style={{ '--c': ORG_COLOR[t] } as React.CSSProperties} aria-pressed={type === t} onClick={() => setType(t)}><i aria-hidden />{ORG_TYPE_LABEL_FA[t]} {faNum(n)}</button> : null })}
         </div>
       </div>
       <div className="md-panel overflow-hidden">
@@ -39,9 +40,9 @@ export function OrganizationsPage() {
           <Empty icon={<Building2 size={20} />} title={organizations.length ? 'سازمانی با این فیلتر نیست' : 'هنوز سازمانی ثبت نشده'} text={organizations.length ? undefined : 'با «سازمان جدید» شروع کنید: ابتدا کارفرما، پیمانکار و مشاورهای پروژه.'} />
         ) : shown.map((o, i) => (
           <button key={o.id} className="md-row md-in" style={{ '--i': i } as React.CSSProperties} onClick={() => setSheet(o)}>
-            <span className="md-avatar" aria-hidden>{initials(o.shortName || o.name)}</span>
+            <span className="md-avatar" style={{ '--c': ORG_COLOR[o.orgType] } as React.CSSProperties} aria-hidden>{initials(o.shortName || o.name)}</span>
             <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{o.name}</b><span className="md-badge">{ORG_TYPE_LABEL_FA[o.orgType]}</span>{!o.isActive && <span className="md-badge">غیرفعال</span>}</span>
+              <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{o.name}</b><span className="md-badge" style={{ '--c': ORG_COLOR[o.orgType] } as React.CSSProperties}>{ORG_TYPE_LABEL_FA[o.orgType]}</span>{!o.isActive && <span className="md-badge">غیرفعال</span>}</span>
               <span className="md-eyebrow block truncate">{[o.contactName, o.contactPhone, o.contactEmail].filter(Boolean).join('  |  ') || 'بدون اطلاعات تماس'}</span>
             </span>
             <span className="md-eyebrow md-num shrink-0">{counts.get(o.id) ? `${faNum(counts.get(o.id)!)} نقش در پروژه‌ها` : 'بدون پروژه'}</span>

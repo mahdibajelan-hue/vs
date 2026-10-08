@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link2 } from 'lucide-react'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PARTY_ROLE_LABEL_FA, type PartyRole } from '../types'
+import { LEVEL_COLOR, PARTY_COLOR } from '../lib/colors'
 import { Empty, PageHead, initials } from '../components/md'
 import { PartiesEditor } from '../components/PartiesEditor'
 
@@ -24,7 +25,7 @@ export function PartiesPage({ onOpen }: { onOpen: (id: string) => void }) {
       {projects.length === 0 ? <div className="md-panel"><Empty icon={<Link2 size={20} />} title="ابتدا پروژه تعریف کنید" text="ارکان به پروژه‌ها وصل می‌شوند." /></div> : view === 'table' ? (
         <div className="md-panel overflow-x-auto">
           <table className="w-full text-[12.5px]" style={{ borderCollapse: 'collapse' }}>
-            <thead><tr style={{ color: 'var(--md-ink-3)' }}><th className="px-4 py-3 text-right font-semibold">پروژه</th>{MATRIX.map((r) => <th key={r} className="px-4 py-3 text-right font-semibold">{PARTY_ROLE_LABEL_FA[r].split(' (')[0]}</th>)}</tr></thead>
+            <thead><tr style={{ color: 'var(--md-ink-3)' }}><th className="px-4 py-3 text-right font-semibold">پروژه</th>{MATRIX.map((r) => <th key={r} className="px-4 py-3 text-right font-semibold" style={{ color: PARTY_COLOR[r], boxShadow: `inset 0 -2px 0 ${PARTY_COLOR[r]}` }}>{PARTY_ROLE_LABEL_FA[r].split(' (')[0]}</th>)}</tr></thead>
             <tbody>
               {projects.map((p) => (
                 <tr key={p.id} className="cursor-pointer" style={{ borderTop: '1px solid var(--md-line)' }} onClick={() => { setPid(p.id); setView('edit') }}>
@@ -40,7 +41,7 @@ export function PartiesPage({ onOpen }: { onOpen: (id: string) => void }) {
           <div className="md-panel overflow-hidden lg:sticky lg:top-0">
             {projects.map((p, i) => (
               <button key={p.id} className="md-row md-in" style={{ '--i': i, background: current?.id === p.id ? 'var(--md-hover)' : undefined } as React.CSSProperties} onClick={() => setPid(p.id)} aria-current={current?.id === p.id}>
-                <span className="md-avatar" style={{ width: 32, height: 32, borderRadius: 9, fontSize: 11 }} aria-hidden>{initials(p.shortName || p.officialName)}</span>
+                <span className="md-avatar" style={{ width: 32, height: 32, borderRadius: 9, fontSize: 11, '--c': LEVEL_COLOR.project } as React.CSSProperties} aria-hidden>{initials(p.shortName || p.officialName)}</span>
                 <span className="min-w-0 flex-1"><b className="block truncate text-[12.5px]">{p.shortName || p.officialName}</b><span className="md-eyebrow block">{complete(p.id) ? 'ارکان کامل' : 'ناقص'}</span></span>
                 <span className="md-badge" data-tone={complete(p.id) ? 'ok' : 'warn'} aria-hidden style={{ padding: '0 6px' }}>{complete(p.id) ? '✓' : '!'}</span>
               </button>

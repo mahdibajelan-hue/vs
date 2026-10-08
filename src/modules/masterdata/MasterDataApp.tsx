@@ -10,6 +10,7 @@ import { ProjectsPage } from './pages/ProjectsPage'
 import { PartiesPage } from './pages/PartiesPage'
 import { ProjectWorkspace } from './pages/ProjectWorkspace'
 import { ProjectMappingPage } from './pages/ProjectMappingPage'
+import { NAV_COLOR } from './lib/colors'
 import { DataIntegrityPage } from './pages/DataIntegrityPage'
 import { DemoDataPage } from './pages/DemoDataPage'
 
@@ -57,10 +58,10 @@ export function MasterDataApp() {
   return (
     <div className="md-root flex h-full min-h-0 flex-col" dir="rtl">
       <div ref={nav} className="md-nav shrink-0 px-3 sm:px-6" role="tablist" aria-label="داده‌های پایه">
-        {TABS.map((t) => <button key={t.id} role="tab" className="md-nav-item" aria-selected={!openProject && tab === t.id || (openProject !== null && t.id === 'projects')} onClick={() => go(t.id)}>{t.label}</button>)}
+        {TABS.map((t) => <button key={t.id} role="tab" className="md-nav-item" style={{ '--c': NAV_COLOR[t.id] } as React.CSSProperties} aria-selected={!openProject && tab === t.id || (openProject !== null && t.id === 'projects')} onClick={() => go(t.id)}>{t.label}</button>)}
         <span className="md-nav-sep" aria-hidden />
-        {TOOLS.map((t) => <button key={t.id} role="tab" className="md-nav-item" aria-selected={!openProject && tab === t.id} onClick={() => go(t.id)}>{t.label}</button>)}
-        {ind && <span className="md-nav-ind" aria-hidden style={{ transform: `translateX(${ind.x}px)`, width: ind.w, left: 0 }} />}
+        {TOOLS.map((t) => <button key={t.id} role="tab" className="md-nav-item" style={{ '--c': NAV_COLOR[t.id] } as React.CSSProperties} aria-selected={!openProject && tab === t.id} onClick={() => go(t.id)}>{t.label}</button>)}
+        {ind && <span className="md-nav-ind" aria-hidden style={{ transform: `translateX(${ind.x}px)`, width: ind.w, left: 0, '--ind': NAV_COLOR[openProject ? 'projects' : tab] } as React.CSSProperties} />}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6">
