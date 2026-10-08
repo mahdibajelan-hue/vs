@@ -81,7 +81,7 @@ export function PasswordDialog({ user, onClose }: { user: UcUser; onClose: () =>
   }
 
   return (
-    <Modal title="رمز عبور" subtitle={displayName(user)} onClose={() => !busy && onClose()} width="max-w-md" isDirty={!done && (!!pw || ack)}>
+    <Modal panelClassName="uc-modal" title="رمز عبور" subtitle={displayName(user)} onClose={() => !busy && onClose()} width="max-w-md" isDirty={!done && (!!pw || ack)}>
       <div className="uc-root" dir="rtl">
         <div className="mb-4 flex items-center gap-3">
           <Avatar user={user} size={38} />

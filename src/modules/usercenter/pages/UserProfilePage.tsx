@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowRight, Ban, FolderKanban, KeyRound, LayoutGrid, MoreHorizontal, Pencil, Power, ScrollText, ShieldCheck, UserCog, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { useAccessData, useUserAccess } from '../lib/useAccessModel'
 import { ALL_ACTIONS, moduleGrantCount } from '../lib/access'
-import { displayName, faNum, relTime } from '../lib/format'
+import { displayName, faNum, hueOf, relTime } from '../lib/format'
 import { Avatar, Badge, EmptyState, Popover, StatusBadge, TypeBadge } from '../components/ui'
 import { AccessRing } from '../components/AccessRing'
 import { StatusDialog } from '../components/StatusDialog'
@@ -17,14 +17,23 @@ import { AccessTab } from '../tabs/AccessTab'
 import { ActivityTab } from '../tabs/ActivityTab'
 import type { AccountStatus } from '../types'
 
+const COVERS = [
+  'linear-gradient(120deg, #5b3df5, #9b4dff 55%, #ff5c9d)',
+  'linear-gradient(120deg, #0ea5e9, #6a4cff 60%, #c84cf0)',
+  'linear-gradient(120deg, #14b886, #2fa8ff 60%, #6a4cff)',
+  'linear-gradient(120deg, #ff8a3d, #ff5c9d 55%, #c84cf0)',
+  'linear-gradient(120deg, #ffb020, #ff6b81 60%, #9b4dff)',
+  'linear-gradient(120deg, #22c6a8, #4f8cff 55%, #b44cf0)',
+]
+
 export type ProfileTab = 'info' | 'roles' | 'projects' | 'modules' | 'access' | 'activity'
-const TABS: { id: ProfileTab; label: string; icon: typeof UserRound }[] = [
-  { id: 'info', label: 'اطلاعات پایه', icon: UserRound },
-  { id: 'roles', label: 'نقش و نوع کاربر', icon: UserCog },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
-  { id: 'modules', label: 'ماژول‌ها', icon: LayoutGrid },
-  { id: 'access', label: 'مدیریت دسترسی', icon: KeyRound },
-  { id: 'activity', label: 'تاریخچه', icon: ScrollText },
+const TABS: { id: ProfileTab; label: string; icon: typeof UserRound; color: string }[] = [
+  { id: 'info', label: 'اطلاعات پایه', icon: UserRound, color: '#6a4cff' },
+  { id: 'roles', label: 'نقش و نوع کاربر', icon: UserCog, color: '#c84cf0' },
+  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, color: '#2f9bff' },
+  { id: 'modules', label: 'ماژول‌ها', icon: LayoutGrid, color: '#14b886' },
+  { id: 'access', label: 'مدیریت دسترسی', icon: KeyRound, color: '#ff9d1a' },
+  { id: 'activity', label: 'تاریخچه', icon: ScrollText, color: '#ff5a7a' },
 ]
 
 export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: string; tab: ProfileTab; edit: boolean; onTab: (t: ProfileTab, edit?: boolean) => void; onBack: () => void }) {
@@ -67,10 +76,15 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
       <button className="uc-btn uc-btn-ghost uc-btn-sm self-start" onClick={onBack}><ArrowRight size={14} /> همهٔ کاربران</button>
 
       {/* ------------------------------------------------------------------ 360 header */}
-      <header className="uc-card p-5">
-        <div className="flex flex-wrap items-start gap-5">
-          <Avatar user={user} size={68} />
-          <div className="min-w-0 flex-1" style={{ minWidth: 240 }}>
+      <header className="uc-card overflow-hidden">
+        <div className="uc-cover" style={{ '--g': COVERS[hueOf(user.id) % COVERS.length] } as CSSProperties} aria-hidden>
+          <i style={{ width: 90, height: 90, insetInlineEnd: 40, top: -30 }} />
+          <i style={{ width: 46, height: 46, insetInlineEnd: 190, top: 40, animationDelay: '-2s' }} />
+          <i style={{ width: 66, height: 66, insetInlineStart: '38%', top: 26, animationDelay: '-4s' }} />
+        </div>
+        <div className="flex flex-wrap items-start gap-5 p-5 pt-0">
+          <span className="uc-avatar-ring" style={{ marginTop: -38 }}><Avatar user={user} size={84} /></span>
+          <div className="min-w-0 flex-1 pt-3" style={{ minWidth: 240 }}>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="m-0 text-[21px] font-bold leading-9">{displayName(user)}{user.id === myId && <span className="uc-eyebrow"> (شما)</span>}</h1>
               <StatusBadge status={user.accountStatus} />
@@ -102,7 +116,7 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
             </div>
           </div>
 
-          <div className="flex items-center gap-5 sm:ms-auto">
+          <div className="flex items-center gap-5 pt-3 sm:ms-auto">
             <AccessRing user={user} size={124} />
             <dl className="m-0 grid gap-3">
               {[
@@ -119,7 +133,7 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
           </div>
         </div>
         {flags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t pt-3" style={{ borderColor: 'var(--uc-line)' }}>
+          <div className="mx-5 mb-5 flex flex-wrap gap-2 border-t pt-3" style={{ borderColor: 'var(--uc-line)' }}>
             {flags.map((f) => <Badge key={f.text} tone={f.tone}>{f.text}</Badge>)}
           </div>
         )}
@@ -127,9 +141,9 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
 
       {/* ------------------------------------------------------------------ tabs */}
       <div className="uc-tabs" role="tablist" aria-label="بخش‌های پروفایل">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} role="tab" id={`uc-tab-${id}`} aria-selected={tab === id} aria-controls="uc-tabpanel" className="uc-tab" onClick={() => onTab(id)}>
-            <Icon size={15} /> {label}
+        {TABS.map(({ id, label, icon: Icon, color }) => (
+          <button key={id} role="tab" id={`uc-tab-${id}`} aria-selected={tab === id} aria-controls="uc-tabpanel" className="uc-tab" style={{ '--t': color } as CSSProperties} onClick={() => onTab(id)}>
+            <span className="uc-tab-ico"><Icon size={14} /></span> {label}
             {tabCount[id] != null && <span className="uc-tab-count uc-num">{faNum(tabCount[id]!)}</span>}
           </button>
         ))}

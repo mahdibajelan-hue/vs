@@ -191,7 +191,7 @@ export function ConfirmDialog({
   const blocked = !!reason?.required && !text.trim()
   const cls = tone === 'danger' ? 'uc-btn-danger' : tone === 'warn' ? 'uc-btn-warn' : 'uc-btn-primary'
   return (
-    <Modal title={title} onClose={() => !busy && onClose()} width="max-w-md">
+    <Modal panelClassName="uc-modal" title={title} onClose={() => !busy && onClose()} width="max-w-md">
       <div className="uc-root" dir="rtl">
         <div className="flex gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `color-mix(in srgb, var(--uc-${tone === 'primary' ? 'accent' : tone === 'danger' ? 'bad' : 'warn'}) 14%, transparent)`, color: `var(--uc-${tone === 'primary' ? 'accent' : tone === 'danger' ? 'bad' : 'warn'})` }}>

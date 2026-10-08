@@ -34,7 +34,7 @@ export function StatusDialog({ user, initial, onClose }: { user: UcUser; initial
   }
 
   return (
-    <Modal title="تغییر وضعیت حساب" subtitle={displayName(user)} onClose={() => !busy && onClose()} width="max-w-md">
+    <Modal panelClassName="uc-modal" title="تغییر وضعیت حساب" subtitle={displayName(user)} onClose={() => !busy && onClose()} width="max-w-md">
       <div className="uc-root" dir="rtl">
         <div className="mb-4 flex items-center gap-3">
           <Avatar user={user} size={40} />

@@ -125,7 +125,7 @@ function NewRoleDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (
   const [busy, setBusy] = useState(false)
   const notify = useToast()
   return (
-    <Modal title="تعریف نقش سفارشی" subtitle="نقش تازه برای همهٔ کاربران قابل استفاده است." onClose={() => !busy && onClose()} width="max-w-md" isDirty={!!(name || desc)}>
+    <Modal panelClassName="uc-modal" title="تعریف نقش سفارشی" subtitle="نقش تازه برای همهٔ کاربران قابل استفاده است." onClose={() => !busy && onClose()} width="max-w-md" isDirty={!!(name || desc)}>
       <div className="uc-root" dir="rtl">
         <label className="block"><span className="uc-label">نام نقش *</span><input className="uc-input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></label>
         <label className="mt-3 block"><span className="uc-label">توضیح</span><textarea className="uc-input uc-textarea" value={desc} onChange={(e) => setDesc(e.target.value)} /></label>

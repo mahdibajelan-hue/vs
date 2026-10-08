@@ -46,7 +46,7 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
   }
 
   return (
-    <Modal title="افزودن کاربر جدید" subtitle="مشخصات اصلی را وارد کنید؛ پروژه‌ها و دسترسی‌ها را در مرحلهٔ بعد از پروفایل کاربر تعیین می‌کنید." onClose={() => !busy && onClose()} width="max-w-xl" isDirty={dirty}>
+    <Modal panelClassName="uc-modal" title="افزودن کاربر جدید" subtitle="مشخصات اصلی را وارد کنید؛ پروژه‌ها و دسترسی‌ها را در مرحلهٔ بعد از پروفایل کاربر تعیین می‌کنید." onClose={() => !busy && onClose()} width="max-w-xl" isDirty={dirty}>
       <div className="uc-root" dir="rtl">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="نام و نام خانوادگی *" error={touched ? errors.full_name : ''}>

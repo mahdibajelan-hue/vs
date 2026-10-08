@@ -1,39 +1,36 @@
 /* ==========================================================================
    User 360° Management Center — scoped under .uc-root.
-   Direction: quiet executive console. It inherits the platform's dark/light tokens (so the theme switch just
-   works) and adds one accent, three status hues and a "source" colour language that is used for NOTHING else:
-     sky   = inherited from a role        violet = granted directly to this user
-     rose  = restricted / denied          amber  = needs attention
-   Hairline borders, tabular figures, no gradients, motion only where it explains state.
+   Direction: a bright, friendly people-hub. A light lavender canvas with soft colour washes, white cards, and one
+   playful colour per meaning (violet = primary, sky = inherited, pink = direct, mint = ok, amber = attention,
+   coral = restricted). Motion follows Emil Kowalski's rules: ease-out strong curves, <300ms, transform/opacity only,
+   hover gated to fine pointers, press = scale(.97), gentler under prefers-reduced-motion.
    ========================================================================== */
 .uc-root {
-  --uc-surface: var(--bg-panel-solid);
-  --uc-surface-2: color-mix(in srgb, var(--text-primary) 4%, var(--bg-panel-solid));
-  --uc-surface-3: color-mix(in srgb, var(--text-primary) 8%, var(--bg-panel-solid));
-  --uc-line: var(--border-soft);
-  --uc-line-2: color-mix(in srgb, var(--text-primary) 20%, transparent);
-  --uc-ink: var(--text-primary);
-  --uc-ink-2: var(--text-secondary);
-  --uc-muted: var(--text-muted);
-  --uc-accent: #38bdf8;
-  --uc-accent-soft: rgba(56, 189, 248, 0.14);
-  --uc-ok: #34d399;
-  --uc-warn: #fbbf24;
-  --uc-bad: #fb7185;
-  --uc-inherit: #38bdf8;
-  --uc-direct: #a78bfa;
+  --uc-surface: #ffffff;
+  --uc-surface-2: #f6f5ff;
+  --uc-surface-3: #ebe9ff;
+  --uc-line: rgba(91, 61, 245, 0.11);
+  --uc-line-2: rgba(40, 30, 110, 0.18);
+  --uc-ink: #1c1750;
+  --uc-ink-2: #4a4778;
+  --uc-muted: #76749e;
+  --uc-accent: #5b3df5;
+  --uc-accent-2: #ff5c9d;
+  --uc-accent-soft: rgba(91, 61, 245, 0.12);
+  --uc-ok: #0b9a6c;
+  --uc-warn: #b86e00;
+  --uc-bad: #d6285a;
+  --uc-inherit: #1d6fe0;
+  --uc-direct: #7c3aed;
   --uc-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --uc-shadow: 0 1px 2px rgba(40, 30, 110, 0.05), 0 10px 28px -14px rgba(60, 40, 180, 0.28);
   font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
   color: var(--uc-ink);
-}
-:root[data-theme='light'] .uc-root {
-  --uc-accent: #0369a1;
-  --uc-accent-soft: rgba(3, 105, 161, 0.1);
-  --uc-ok: #047857;
-  --uc-warn: #b45309;
-  --uc-bad: #be123c;
-  --uc-inherit: #0369a1;
-  --uc-direct: #6d28d9;
+  background:
+    radial-gradient(900px 420px at 92% -8%, rgba(255, 92, 157, 0.16), transparent 62%),
+    radial-gradient(760px 420px at 4% 2%, rgba(91, 61, 245, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 60% 108%, rgba(20, 200, 168, 0.13), transparent 60%),
+    #f4f3ff;
 }
 .uc-root *, .uc-root *::before, .uc-root *::after { box-sizing: border-box; }
 .uc-root :focus-visible { outline: 2px solid var(--uc-accent); outline-offset: 2px; border-radius: 6px; }
@@ -42,7 +39,7 @@
 .uc-num { font-variant-numeric: tabular-nums; }
 
 /* ---- surfaces ------------------------------------------------------------------------------------ */
-.uc-card { background: var(--uc-surface); border: 1px solid var(--uc-line); border-radius: 16px; }
+.uc-card { background: var(--uc-surface); border: 1px solid var(--uc-line); border-radius: 20px; box-shadow: var(--uc-shadow); }
 .uc-card-flat { background: var(--uc-surface-2); border: 1px solid var(--uc-line); border-radius: 12px; }
 .uc-section-title { font-size: 13px; font-weight: 700; color: var(--uc-ink); }
 .uc-eyebrow { font-size: 11px; font-weight: 500; color: var(--uc-muted); }
@@ -50,15 +47,14 @@
 
 /* ---- buttons ------------------------------------------------------------------------------------- */
 .uc-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 14px;
-  border-radius: 10px; border: 1px solid var(--uc-line-2); background: var(--uc-surface); color: var(--uc-ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 15px;
+  border-radius: 12px; border: 1px solid var(--uc-line-2); background: var(--uc-surface); color: var(--uc-ink);
   font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, transform 160ms var(--uc-ease), opacity 0.15s;
 }
 .uc-btn:active:not(:disabled) { transform: scale(0.97); }
 .uc-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.uc-btn-primary { background: var(--uc-accent); border-color: transparent; color: #04121c; font-weight: 700; }
-:root[data-theme='light'] .uc-btn-primary { color: #fff; }
+.uc-btn-primary { background: linear-gradient(135deg, #6a4cff, #b44cf0 60%, #ff5c9d); border-color: transparent; color: #fff; font-weight: 700; box-shadow: 0 8px 20px -8px rgba(110, 70, 255, 0.7); }
 .uc-btn-ghost { background: transparent; border-color: transparent; color: var(--uc-ink-2); }
 .uc-btn-danger { color: var(--uc-bad); border-color: color-mix(in srgb, var(--uc-bad) 40%, transparent); background: color-mix(in srgb, var(--uc-bad) 8%, transparent); }
 .uc-btn-warn { color: var(--uc-warn); border-color: color-mix(in srgb, var(--uc-warn) 40%, transparent); background: color-mix(in srgb, var(--uc-warn) 8%, transparent); }
@@ -66,7 +62,7 @@
 .uc-btn-icon { min-width: 32px; min-height: 32px; padding: 0; border-radius: 9px; }
 @media (hover: hover) and (pointer: fine) {
   .uc-btn:hover:not(:disabled) { background: var(--uc-surface-3); }
-  .uc-btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-accent) 88%, #fff); }
+  .uc-btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #6a4cff, #b44cf0 60%, #ff5c9d); filter: brightness(1.07); transform: translateY(-1px); }
   .uc-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-bad) 16%, transparent); }
   .uc-btn-warn:hover:not(:disabled) { background: color-mix(in srgb, var(--uc-warn) 16%, transparent); }
 }
@@ -144,21 +140,20 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 
 /* ---- directory table ----------------------------------------------------------------------------- */
 .uc-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
-.uc-table th { position: sticky; top: 0; z-index: 2; padding: 10px 14px; text-align: right; font-size: 11.5px; font-weight: 600; color: var(--uc-muted); background: var(--uc-surface); border-bottom: 1px solid var(--uc-line); white-space: nowrap; }
+.uc-table th { position: sticky; top: 0; z-index: 2; padding: 11px 14px; text-align: right; font-size: 11.5px; font-weight: 700; color: var(--uc-ink-2); background: var(--uc-surface-2); border-bottom: 1px solid var(--uc-line); white-space: nowrap; }
 .uc-table th button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
 .uc-table td { padding: 12px 14px; border-bottom: 1px solid var(--uc-line); vertical-align: middle; }
 .uc-table tbody tr { cursor: pointer; transition: background-color 0.15s; }
 .uc-table tbody tr:last-child td { border-bottom: 0; }
 .uc-row-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
 @media (hover: hover) and (pointer: fine) {
-  .uc-table tbody tr:hover { background: var(--uc-surface-2); }
+  .uc-table tbody tr:hover { background: color-mix(in srgb, var(--uc-accent) 5%, #fff); }
   .uc-table tbody tr:hover .uc-row-actions, .uc-table tbody tr:focus-within .uc-row-actions { opacity: 1; }
 }
 @media (hover: none) { .uc-row-actions { opacity: 1; } }
 
 /* ---- avatar -------------------------------------------------------------------------------------- */
-.uc-avatar { --h: 200; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; overflow: hidden; font-weight: 700; color: hsl(var(--h) 70% 82%); background: hsl(var(--h) 38% 24%); }
-:root[data-theme='light'] .uc-avatar { color: hsl(var(--h) 55% 28%); background: hsl(var(--h) 70% 90%); }
+.uc-avatar { --h: 200; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; overflow: hidden; font-weight: 800; color: #fff; background: linear-gradient(135deg, hsl(var(--h) 85% 58%), hsl(calc(var(--h) + 48) 88% 62%)); box-shadow: 0 0 0 2px #fff, 0 6px 14px -6px hsl(var(--h) 80% 45% / 0.7); }
 .uc-avatar img { width: 100%; height: 100%; object-fit: cover; background: #fff; }
 
 /* ---- matrices ------------------------------------------------------------------------------------ */
@@ -188,7 +183,7 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 /* ---- popover menu -------------------------------------------------------------------------------- */
 .uc-pop {
   position: absolute; z-index: 40; min-width: 220px; max-width: 280px; padding: 6px; border-radius: 12px; background: var(--uc-surface); border: 1px solid var(--uc-line-2);
-  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.55); text-align: right; animation: uc-pop 160ms var(--uc-ease) both; transform-origin: top;
+  box-shadow: 0 18px 40px -12px rgba(60, 40, 180, 0.35); text-align: right; animation: uc-pop 160ms var(--uc-ease) both; transform-origin: top;
 }
 .uc-pop-item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--uc-ink); font-family: inherit; font-size: 12.5px; font-weight: 500; text-align: right; cursor: pointer; }
 .uc-pop-item small { display: block; font-size: 10.5px; color: var(--uc-muted); font-weight: 400; }
@@ -197,8 +192,8 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 @keyframes uc-pop { from { opacity: 0; transform: scale(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ---- drawer -------------------------------------------------------------------------------------- */
-.uc-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 12, 0.55); backdrop-filter: blur(3px); animation: uc-fade 200ms ease both; }
-.uc-drawer { position: fixed; inset-block: 0; left: 0; z-index: 61; display: flex; flex-direction: column; width: min(520px, 100vw); background: var(--uc-surface); border-right: 1px solid var(--uc-line-2); box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6); animation: uc-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.uc-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(28, 23, 80, 0.38); backdrop-filter: blur(4px); animation: uc-fade 200ms ease both; }
+.uc-drawer { position: fixed; inset-block: 0; left: 0; z-index: 61; display: flex; flex-direction: column; width: min(520px, 100vw); background: var(--uc-surface); border-right: 1px solid var(--uc-line-2); box-shadow: 30px 0 60px -20px rgba(40, 30, 140, 0.45); animation: uc-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 @keyframes uc-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes uc-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
 
@@ -217,7 +212,7 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 @keyframes uc-shimmer { to { background-position: -200% 0; } }
 .uc-rise { animation: uc-rise 260ms var(--uc-ease) both; }
 @keyframes uc-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.uc-toast { position: fixed; z-index: 80; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: min(92vw, 520px); padding: 11px 16px; border-radius: 12px; background: var(--uc-surface); border: 1px solid var(--uc-line-2); box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6); font-size: 12.5px; animation: uc-rise 220ms var(--uc-ease) both; }
+.uc-toast { position: fixed; z-index: 80; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: min(92vw, 520px); padding: 11px 16px; border-radius: 12px; background: var(--uc-surface); border: 1px solid var(--uc-line-2); box-shadow: 0 18px 40px -12px rgba(60, 40, 180, 0.4); font-size: 12.5px; animation: uc-rise 220ms var(--uc-ease) both; }
 .uc-toast.is-bad { border-color: color-mix(in srgb, var(--uc-bad) 50%, transparent); }
 .uc-toast.is-ok { border-color: color-mix(in srgb, var(--uc-ok) 50%, transparent); }
 .uc-toast.is-warn { border-color: color-mix(in srgb, var(--uc-warn) 50%, transparent); }
@@ -236,4 +231,72 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 @media (hover: hover) and (pointer: fine) {
   .uc-matrix .uc-add-cell { opacity: 0.32; transition: opacity 0.15s; }
   .uc-matrix tr:hover .uc-add-cell, .uc-matrix .uc-add-cell:focus-visible { opacity: 1; }
+}
+
+/* ==========================================================================
+   Bright skin additions
+   ========================================================================== */
+/* dialogs (Modal portals outside .uc-root) get the same bright card */
+.uc-modal { background: #fff !important; color: #1c1750 !important; border: 1px solid rgba(91, 61, 245, 0.14) !important; border-radius: 22px !important; box-shadow: 0 30px 70px -20px rgba(60, 40, 180, 0.45) !important; --text-secondary: #4a4778; --text-muted: #76749e; --bg-panel-solid: #fff; font-family: 'Vazirmatn', 'Segoe UI', sans-serif; }
+.uc-modal .text-secondary { color: #4a4778; }
+.uc-modal button[class*='hover:bg-white/10']:hover { background: rgba(91, 61, 245, 0.1); }
+.uc-modal .uc-root { background: transparent; --uc-surface: #fff; --uc-surface-2: #f6f5ff; --uc-surface-3: #ebe9ff; --uc-line: rgba(91, 61, 245, 0.11); --uc-line-2: rgba(40, 30, 110, 0.18); --uc-ink: #1c1750; --uc-ink-2: #4a4778; --uc-muted: #76749e; --uc-accent: #5b3df5; --uc-accent-soft: rgba(91, 61, 245, 0.12); --uc-ok: #0b9a6c; --uc-warn: #b86e00; --uc-bad: #d6285a; --uc-ease: cubic-bezier(0.23, 1, 0.32, 1); }
+
+/* hero banner */
+.uc-hero { position: relative; isolation: isolate; overflow: hidden; border-radius: 26px; padding: 26px 28px; color: #fff; background: linear-gradient(120deg, #5b3df5 0%, #9b4dff 48%, #ff5c9d 100%); box-shadow: 0 22px 46px -22px rgba(100, 60, 240, 0.75); }
+.uc-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(420px 220px at 12% 120%, rgba(255, 190, 80, 0.55), transparent 65%), radial-gradient(300px 200px at 78% -20%, rgba(255, 255, 255, 0.28), transparent 70%); }
+.uc-hero h1, .uc-hero p { color: #fff; }
+.uc-hero .uc-hero-sub { color: rgba(255, 255, 255, 0.86); }
+.uc-hero .uc-btn { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.4); color: #fff; backdrop-filter: blur(6px); }
+.uc-hero .uc-btn-primary { background: #fff; color: #5b3df5; border-color: transparent; box-shadow: 0 10px 22px -10px rgba(0, 0, 0, 0.4); }
+@media (hover: hover) and (pointer: fine) { .uc-hero .uc-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.3); } .uc-hero .uc-btn-primary:hover:not(:disabled) { background: #fff; filter: none; transform: translateY(-1px); } }
+.uc-orb { position: absolute; border-radius: 50%; z-index: -1; opacity: 0.55; }
+.uc-bubble { position: absolute; display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 16px; color: #fff; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.45); backdrop-filter: blur(6px); box-shadow: 0 12px 26px -12px rgba(30, 10, 120, 0.6); animation: uc-float 5.5s ease-in-out infinite; }
+@keyframes uc-float { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-9px) rotate(3deg); } }
+.uc-stack { display: flex; }
+.uc-stack .uc-avatar { margin-inline-start: -12px; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 8px 16px -8px rgba(30, 10, 120, 0.5); }
+.uc-stack .uc-avatar:first-child { margin-inline-start: 0; }
+
+/* KPI = colourful quick filters */
+.uc-kpi { --k: var(--uc-accent); position: relative; overflow: hidden; border-radius: 20px; padding: 16px; box-shadow: var(--uc-shadow); gap: 2px; animation: uc-rise 380ms var(--uc-ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.uc-kpi::after { content: ''; position: absolute; inset-inline-end: -26px; top: -26px; width: 92px; height: 92px; border-radius: 50%; background: color-mix(in srgb, var(--k) 14%, transparent); transition: transform 320ms var(--uc-ease); }
+.uc-kpi-icon { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; margin-bottom: 8px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, var(--k), color-mix(in srgb, var(--k) 55%, #fff)); box-shadow: 0 8px 16px -8px var(--k); position: relative; z-index: 1; }
+.uc-kpi-value { font-size: 30px; font-weight: 800; color: color-mix(in srgb, var(--k) 70%, var(--uc-ink)); position: relative; z-index: 1; }
+.uc-kpi-label { font-weight: 700; color: var(--uc-ink); position: relative; z-index: 1; }
+.uc-kpi-sub { position: relative; z-index: 1; }
+button.uc-kpi[aria-pressed='true'] { border-color: var(--k); background: color-mix(in srgb, var(--k) 9%, #fff); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, transparent), var(--uc-shadow); }
+@media (hover: hover) and (pointer: fine) { button.uc-kpi:hover { transform: translateY(-3px); } button.uc-kpi:hover::after { transform: scale(1.25); } }
+
+/* rows enter with a stagger */
+.uc-table tbody tr, .uc-list-item { animation: uc-rise 320ms var(--uc-ease) both; animation-delay: calc(var(--i, 0) * 28ms); }
+
+/* profile cover */
+.uc-cover { position: relative; isolation: isolate; overflow: hidden; height: 112px; background: var(--g); }
+.uc-cover::before { content: ''; position: absolute; inset: 0; background: radial-gradient(260px 120px at 85% 0%, rgba(255, 255, 255, 0.4), transparent 70%), radial-gradient(220px 140px at 8% 130%, rgba(255, 220, 120, 0.5), transparent 70%); }
+.uc-cover i { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.22); animation: uc-float 7s ease-in-out infinite; }
+.uc-avatar-ring { position: relative; z-index: 2; display: inline-flex; border-radius: 50%; padding: 4px; background: #fff; box-shadow: 0 12px 28px -12px rgba(60, 40, 180, 0.6); }
+
+/* pill tabs with colour dots */
+.uc-tabs { gap: 6px; padding: 5px; border: 1px solid var(--uc-line); border-radius: 18px; background: #fff; box-shadow: var(--uc-shadow); }
+.uc-tab { padding: 9px 14px; border-radius: 13px; transition: color 0.15s, background-color 0.15s, transform 160ms var(--uc-ease); }
+.uc-tab::after { display: none; }
+.uc-tab:active { transform: scale(0.97); }
+.uc-tab .uc-tab-ico { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 8px; color: var(--t, var(--uc-accent)); background: color-mix(in srgb, var(--t, var(--uc-accent)) 13%, transparent); transition: background-color 0.2s, color 0.2s, transform 220ms var(--uc-ease); }
+.uc-tab[aria-selected='true'] { color: #fff; background: linear-gradient(135deg, var(--t, var(--uc-accent)), color-mix(in srgb, var(--t, var(--uc-accent)) 60%, #ff5c9d)); box-shadow: 0 8px 18px -8px var(--t, var(--uc-accent)); }
+.uc-tab[aria-selected='true'] .uc-tab-ico { color: #fff; background: rgba(255, 255, 255, 0.24); transform: scale(1.06); }
+.uc-tab[aria-selected='true'] .uc-tab-count { background: rgba(255, 255, 255, 0.25); color: #fff; }
+@media (hover: hover) and (pointer: fine) { .uc-tab:not([aria-selected='true']):hover { background: var(--uc-surface-2); } }
+
+/* chips & inputs get friendlier radii */
+.uc-input, .uc-select { border-radius: 12px; background: #fff; min-height: 40px; }
+.uc-seg { border-radius: 14px; background: var(--uc-surface-2); }
+.uc-seg button { border-radius: 11px; }
+.uc-seg button[aria-pressed='true'], .uc-seg button[aria-selected='true'] { background: #fff; color: var(--uc-accent); box-shadow: 0 2px 8px -2px rgba(60, 40, 180, 0.25); }
+.uc-switch[aria-checked='true'] { background: linear-gradient(135deg, #14c8a8, #2fd68a); }
+.uc-badge { font-weight: 700; }
+.uc-badge.is-ok { --c: #0b9a6c; } .uc-badge.is-info { --c: #1d6fe0; } .uc-badge.is-direct { --c: #7c3aed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .uc-bubble, .uc-cover i { animation: none; }
+  .uc-kpi, .uc-table tbody tr, .uc-list-item { animation: uc-fade 160ms ease both; animation-delay: 0ms; }
 }

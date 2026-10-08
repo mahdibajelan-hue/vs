@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { ArrowDownUp, ChevronLeft, ChevronRight, Eye, KeyRound, Pencil, Power, RefreshCw, Search, ShieldCheck, SlidersHorizontal, UserPlus, Users, X } from 'lucide-react'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { ArrowDownUp, ChevronLeft, ChevronRight, Eye, FolderX, KeyRound, LogIn, Pencil, Power, PowerOff, RefreshCw, Search, ShieldCheck, Sparkles, SlidersHorizontal, UserCheck, UserPlus, Users, X, FolderKanban } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { useAccessData, useDirectoryStats } from '../lib/useAccessModel'
@@ -7,6 +7,7 @@ import { displayName, faNum, fmtDateTime, relTime } from '../lib/format'
 import { USER_TYPES, USER_TYPE_LABEL, type UcUser, type UserType } from '../types'
 import { Avatar, Badge, EmptyState, Segmented, StatusBadge, TypeBadge } from '../components/ui'
 import { StatusDialog } from '../components/StatusDialog'
+import { KpiCard } from '../components/KpiCard'
 import type { ProfileTab } from './UserProfilePage'
 
 export type Quick = 'all' | 'active' | 'inactive' | 'admin' | 'noproject' | 'never'
@@ -104,13 +105,13 @@ export function UserListPage({
     </th>
   )
 
-  const kpis: { key: Quick; label: string; value: number; sub: string }[] = [
-    { key: 'all', label: 'همهٔ کاربران', value: counts.all, sub: 'در سامانه ثبت شده‌اند' },
-    { key: 'active', label: 'حساب فعال', value: counts.active, sub: `${faNum(counts.all ? Math.round((counts.active / counts.all) * 100) : 0)}٪ از کل` },
-    { key: 'inactive', label: 'غیرفعال یا مسدود', value: counts.inactive, sub: 'ورود بسته است' },
-    { key: 'admin', label: 'مدیر سیستم', value: counts.admin, sub: 'دسترسی کامل' },
-    { key: 'noproject', label: 'بدون دسترسی پروژه', value: counts.noproject, sub: 'نیازمند تعیین پروژه' },
-    ...(authInfoAvailable ? [{ key: 'never' as Quick, label: 'هرگز وارد نشده', value: counts.never, sub: 'دعوت‌شده یا بی‌استفاده' }] : []),
+  const kpis: { key: Quick; label: string; value: number; sub: string; icon: typeof Users; color: string }[] = [
+    { key: 'all', label: 'همهٔ کاربران', value: counts.all, sub: 'در سامانه ثبت شده‌اند', icon: Users, color: '#6a4cff' },
+    { key: 'active', label: 'حساب فعال', value: counts.active, sub: `${faNum(counts.all ? Math.round((counts.active / counts.all) * 100) : 0)}٪ از کل`, icon: UserCheck, color: '#14b886' },
+    { key: 'inactive', label: 'غیرفعال یا مسدود', value: counts.inactive, sub: 'ورود بسته است', icon: PowerOff, color: '#ff5a7a' },
+    { key: 'admin', label: 'مدیر سیستم', value: counts.admin, sub: 'دسترسی کامل', icon: ShieldCheck, color: '#ff9d1a' },
+    { key: 'noproject', label: 'بدون دسترسی پروژه', value: counts.noproject, sub: 'نیازمند تعیین پروژه', icon: FolderX, color: '#2f9bff' },
+    ...(authInfoAvailable ? [{ key: 'never' as Quick, label: 'هرگز وارد نشده', value: counts.never, sub: 'دعوت‌شده یا بی‌استفاده', icon: LogIn, color: '#c84cf0' }] : []),
   ]
 
   const RowActions = ({ u }: { u: UcUser }) => (
@@ -124,27 +125,35 @@ export function UserListPage({
 
   return (
     <div className="uc-rise mx-auto flex w-full max-w-[1280px] flex-col gap-5">
-      {/* ------------------------------------------------------------------ title */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="uc-eyebrow mb-1">User 360° Management Center</p>
-          <h1 className="text-[22px] font-bold leading-9">مرکز مدیریت کاربران</h1>
-          <p className="uc-eyebrow mt-0.5 leading-6">چرخهٔ کامل کاربر — از ساخت حساب تا نقش، پروژه، دسترسی و غیرفعال‌سازی — در یک‌جا.</p>
+      {/* ------------------------------------------------------------------ hero */}
+      <section className="uc-hero">
+        <i className="uc-orb" style={{ width: 220, height: 220, insetInlineStart: -60, top: -90, background: '#ffd36b' }} />
+        <i className="uc-orb" style={{ width: 160, height: 160, insetInlineEnd: '28%', bottom: -80, background: '#5ee7d3' }} />
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="min-w-0" style={{ maxWidth: 520 }}>
+            <p className="mb-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}><Sparkles size={12} aria-hidden /> User 360° Management Center</p>
+            <h1 className="m-0 text-[26px] font-extrabold leading-[1.5]">مرکز مدیریت کاربران</h1>
+            <p className="uc-hero-sub m-0 mt-1 text-[13px] leading-7">از ساخت حساب تا نقش، پروژه، دسترسی و غیرفعال‌سازی، همه‌چیز دربارهٔ آدم‌های سامانه در یک نگاه.</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button className="uc-btn uc-btn-primary" onClick={onCreate}><UserPlus size={15} /> افزودن کاربر</button>
+              <button className="uc-btn uc-btn-icon" onClick={() => load()} disabled={loading} title="بروزرسانی" aria-label="بروزرسانی"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+            </div>
+          </div>
+          <div className="relative hidden h-[150px] w-[300px] sm:block" aria-hidden>
+            <span className="uc-bubble" style={{ insetInlineEnd: 6, top: 4 }}><ShieldCheck size={21} /></span>
+            <span className="uc-bubble" style={{ insetInlineStart: 8, top: 30, animationDelay: '-1.8s' }}><KeyRound size={21} /></span>
+            <span className="uc-bubble" style={{ insetInlineEnd: 70, bottom: 0, animationDelay: '-3.2s' }}><FolderKanban size={21} /></span>
+            <div className="uc-stack absolute" style={{ insetInlineStart: 60, top: 50 }}>
+              {users.slice(0, 5).map((u) => <Avatar key={u.id} user={u} size={52} />)}
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="uc-btn uc-btn-icon" onClick={() => load()} disabled={loading} title="بروزرسانی" aria-label="بروزرسانی"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
-          <button className="uc-btn uc-btn-primary" onClick={onCreate}><UserPlus size={15} /> افزودن کاربر</button>
-        </div>
-      </div>
+      </section>
 
       {/* ------------------------------------------------------------------ KPI strip = quick filters */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {kpis.map((k) => (
-          <button key={k.key} className="uc-kpi" aria-pressed={state.quick === k.key} onClick={() => setState({ quick: state.quick === k.key && k.key !== 'all' ? 'all' : k.key, page: 0 })}>
-            <span className="uc-kpi-label">{k.label}</span>
-            <span className="uc-kpi-value">{faNum(k.value)}</span>
-            <span className="uc-kpi-sub">{k.sub}</span>
-          </button>
+        {kpis.map((k, i) => (
+          <KpiCard key={k.key} index={i} icon={k.icon} color={k.color} label={k.label} value={k.value} sub={k.sub} pressed={state.quick === k.key} onClick={() => setState({ quick: state.quick === k.key && k.key !== 'all' ? 'all' : k.key, page: 0 })} />
         ))}
       </div>
 
@@ -205,10 +214,10 @@ export function UserListPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map((u) => {
+                  {shown.map((u, i) => {
                     const st = stats.get(u.id)
                     return (
-                      <tr key={u.id} onClick={() => onOpen(u.id)}>
+                      <tr key={u.id} style={{ '--i': i } as CSSProperties} onClick={() => onOpen(u.id)}>
                         <td>
                           <div className="flex items-center gap-3">
                             <Avatar user={u} size={36} />
@@ -234,10 +243,10 @@ export function UserListPage({
 
             {/* -------------------------------------------------------------- mobile cards */}
             <ul className="divide-y border-t lg:hidden" style={{ borderColor: 'var(--uc-line)' }}>
-              {shown.map((u) => {
+              {shown.map((u, i) => {
                 const st = stats.get(u.id)
                 return (
-                  <li key={u.id} className="flex flex-col gap-2.5 p-4" onClick={() => onOpen(u.id)} style={{ cursor: 'pointer' }}>
+                  <li key={u.id} style={{ '--i': i, cursor: 'pointer' } as CSSProperties} className="uc-list-item flex flex-col gap-2.5 p-4" onClick={() => onOpen(u.id)}>
                     <div className="flex items-center gap-3">
                       <Avatar user={u} size={42} />
                       <div className="min-w-0 flex-1">
