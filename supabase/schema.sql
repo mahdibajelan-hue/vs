@@ -4475,10 +4475,13 @@ alter table rasta_actions add column if not exists completion_pct smallint not n
 alter table rasta_actions add column if not exists closed_date date;
 
 -- 'lifecycle' joins the existing source list so a Control Tower action is
--- distinguishable from one raised in the Decision Center.
+-- distinguishable from one raised in the Decision Center. 'mission_debrief' is
+-- included here too (ahead of the Missions module further below, which is the
+-- one that actually uses it) so that replaying this file top-to-bottom never
+-- re-narrows the constraint past values a live database already has rows with.
 alter table rasta_actions drop constraint if exists rasta_actions_source_check;
 alter table rasta_actions add constraint rasta_actions_source_check
-  check (source in ('risk', 'issue', 'decision', 'management_report', 'lifecycle', 'milestone', 'gate'));
+  check (source in ('risk', 'issue', 'decision', 'management_report', 'lifecycle', 'milestone', 'gate', 'mission_debrief'));
 
 -- The module registry row + its permission set (the cross-join re-seed in
 -- section 17 covers the actions once the module key exists).
