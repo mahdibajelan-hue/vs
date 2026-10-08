@@ -16662,3 +16662,43 @@ end $$;
 
 -- 76. Land acquisition: planned start of the acquisition of a parcel (drives the auto-generated step dates)
 alter table la_parcels add column if not exists plan_start date;
+
+-- 77. Master data: organizations take part in projects in named roles; project human-resources structure; identity fields
+alter table master_projects add column if not exists location text not null default '';
+alter table master_projects add column if not exists scope_summary text not null default '';
+alter table master_projects add column if not exists objectives text not null default '';
+create table if not exists master_project_parties (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  organization_id uuid not null references organizations (id) on delete cascade,
+  role text not null check (role in ('employer', 'contractor', 'design_consultant', 'supervision_consultant', 'partner', 'other')),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  unique (project_id, organization_id, role)
+);
+create index if not exists master_project_parties_project_idx on master_project_parties (project_id);
+alter table master_project_parties enable row level security;
+drop policy if exists master_project_parties_select on master_project_parties;
+create policy master_project_parties_select on master_project_parties for select using (auth.uid() is not null);
+drop policy if exists master_project_parties_write on master_project_parties;
+create policy master_project_parties_write on master_project_parties for all using (is_admin_user()) with check (is_admin_user());
+create table if not exists master_project_team (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  user_id uuid references profiles (id) on delete set null,
+  person_name text not null default '',
+  position_key text not null default 'other',
+  position_title text not null default '',
+  organization_id uuid references organizations (id) on delete set null,
+  parent_id uuid references master_project_team (id) on delete set null,
+  phone text not null default '',
+  email text not null default '',
+  sort int not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists master_project_team_project_idx on master_project_team (project_id);
+alter table master_project_team enable row level security;
+drop policy if exists master_project_team_select on master_project_team;
+create policy master_project_team_select on master_project_team for select using (auth.uid() is not null);
+drop policy if exists master_project_team_write on master_project_team;
+create policy master_project_team_write on master_project_team for all using (is_admin_user()) with check (is_admin_user());

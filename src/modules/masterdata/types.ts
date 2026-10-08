@@ -142,6 +142,12 @@ export interface MasterProject {
   programId: string | null
   status: ProjectLifecycleStatus
 
+  /** Where the project is (province, city, corridor). */
+  location: string
+  /** One short paragraph: what is being built. */
+  scopeSummary: string
+  objectives: string
+
   contractNumber: string
   contractType: string
   contractValue: number | null
@@ -220,4 +226,70 @@ export interface ProjectDependency {
   dependencyType: DependencyType
   notes: string
   createdAt: string
+}
+
+/** How an organization takes part in a project. A project can have several organizations in the same role (e.g. two supervision consultants). */
+export type PartyRole = 'employer' | 'contractor' | 'design_consultant' | 'supervision_consultant' | 'partner' | 'other'
+export const PARTY_ROLES: PartyRole[] = ['employer', 'contractor', 'design_consultant', 'supervision_consultant', 'partner', 'other']
+export const PARTY_ROLE_LABEL_FA: Record<PartyRole, string> = {
+  employer: 'کارفرما',
+  contractor: 'پیمانکار',
+  design_consultant: 'مشاور طراحی',
+  supervision_consultant: 'مشاور نظارت (عالیه و کارگاهی)',
+  partner: 'شریک',
+  other: 'سایر',
+}
+export const PARTY_ROLE_HINT_FA: Record<PartyRole, string> = {
+  employer: 'مالک و سفارش‌دهندهٔ پروژه',
+  contractor: 'اجراکنندهٔ پروژه طبق قرارداد',
+  design_consultant: 'تهیه‌کنندهٔ طراحی و مهندسی',
+  supervision_consultant: 'نظارت عالیه و نظارت کارگاهی',
+  partner: 'شریک یا سرمایه‌گذار',
+  other: 'هر سازمان دیگر دخیل در پروژه',
+}
+export interface ProjectParty {
+  id: string
+  projectId: string
+  organizationId: string
+  role: PartyRole
+  notes: string
+}
+
+/** The positions of a project's human-resources structure, top of the structure first. */
+export const TEAM_POSITIONS: { key: string; label: string }[] = [
+  { key: 'executive', label: 'مجری طرح' },
+  { key: 'project_manager', label: 'مدیر پروژه' },
+  { key: 'deputy_pm', label: 'معاون مدیر پروژه' },
+  { key: 'site_manager', label: 'مدیر کارگاه' },
+  { key: 'engineering_manager', label: 'مدیر مهندسی' },
+  { key: 'planning_manager', label: 'مدیر برنامه‌ریزی و کنترل پروژه' },
+  { key: 'procurement_manager', label: 'مدیر تدارکات' },
+  { key: 'contracts_manager', label: 'مدیر قراردادها' },
+  { key: 'finance_manager', label: 'مدیر مالی' },
+  { key: 'hse_manager', label: 'مدیر HSE' },
+  { key: 'qc_manager', label: 'مدیر کنترل کیفیت' },
+  { key: 'legal_officer', label: 'مسئول حقوقی' },
+  { key: 'land_officer', label: 'مسئول تملک اراضی' },
+  { key: 'employer_rep', label: 'نمایندهٔ کارفرما' },
+  { key: 'consultant_rep', label: 'نمایندهٔ مشاور' },
+  { key: 'contractor_rep', label: 'نمایندهٔ پیمانکار' },
+  { key: 'other', label: 'سایر سمت‌ها' },
+]
+export const TEAM_POSITION_LABEL: Record<string, string> = Object.fromEntries(TEAM_POSITIONS.map((p) => [p.key, p.label]))
+
+export interface TeamMember {
+  id: string
+  projectId: string
+  /** A platform user, when the person has an account; otherwise only `personName` is set. */
+  userId: string | null
+  personName: string
+  positionKey: string
+  /** Free title that overrides the position's label (e.g. «مدیر کارگاه بخش ۲»). */
+  positionTitle: string
+  organizationId: string | null
+  /** Who this person reports to in the structure. */
+  parentId: string | null
+  phone: string
+  email: string
+  sort: number
 }

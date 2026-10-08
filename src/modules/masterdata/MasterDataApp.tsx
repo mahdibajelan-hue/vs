@@ -1,121 +1,86 @@
-import { useEffect, useState } from 'react'
-import { Building2, Briefcase, FolderTree, FolderKanban, Loader2, ShieldCheck, Link2, ClipboardCheck, Database, Menu, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
+import './masterdata.css'
 import { useMasterDataStore } from './store/useMasterDataStore'
+import { OverviewPage, type NavTarget } from './pages/OverviewPage'
 import { OrganizationsPage } from './pages/OrganizationsPage'
 import { PortfoliosPage } from './pages/PortfoliosPage'
 import { ProgramsPage } from './pages/ProgramsPage'
 import { ProjectsPage } from './pages/ProjectsPage'
-import { ProjectIdentityPage } from './pages/ProjectIdentityPage'
-import { RolesPermissionsPage } from './pages/RolesPermissionsPage'
+import { PartiesPage } from './pages/PartiesPage'
+import { ProjectWorkspace } from './pages/ProjectWorkspace'
 import { ProjectMappingPage } from './pages/ProjectMappingPage'
 import { DataIntegrityPage } from './pages/DataIntegrityPage'
 import { DemoDataPage } from './pages/DemoDataPage'
-import { ContextSwitcher } from './components/ContextSwitcher'
 
-type Tab = 'organizations' | 'portfolios' | 'programs' | 'projects' | 'access' | 'mapping' | 'integrity' | 'demo'
-
-const TABS: { id: Tab; label: string; icon: typeof Building2 }[] = [
-  { id: 'organizations', label: 'سازمان‌ها', icon: Building2 },
-  { id: 'portfolios', label: 'پورتفولیوها', icon: Briefcase },
-  { id: 'programs', label: 'طرح‌ها', icon: FolderTree },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
-  { id: 'access', label: 'نقش‌ها و دسترسی‌ها', icon: ShieldCheck },
-  { id: 'mapping', label: 'نگاشت پروژه‌ها', icon: Link2 },
-  { id: 'integrity', label: 'یکپارچگی داده', icon: ClipboardCheck },
-  { id: 'demo', label: 'داده‌های نمایشی', icon: Database },
+type Tab = 'overview' | NavTarget | 'mapping' | 'integrity' | 'demo'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'شروع' },
+  { id: 'organizations', label: 'سازمان‌ها' },
+  { id: 'portfolios', label: 'پورتفولیوها' },
+  { id: 'programs', label: 'طرح‌ها' },
+  { id: 'projects', label: 'پروژه‌ها' },
+  { id: 'parties', label: 'ارکان پروژه‌ها' },
+]
+const TOOLS: { id: Tab; label: string }[] = [
+  { id: 'mapping', label: 'نگاشت پروژه‌ها' },
+  { id: 'integrity', label: 'یکپارچگی داده' },
+  { id: 'demo', label: 'داده‌های نمایشی' },
 ]
 
 /**
- * RASTA centralized Master Data: Organization → Portfolio → Program → Project → Phase, plus
- * the Role/Permission/Scope access model and the Project Mapping layer that connects Risk/
- * Issue/PipePulse's own project registries to a master_projects row (see
- * supabase/schema.sql sections 12-13). Reachable only from inside the admin-gated module
- * (see AdminApp).
+ * Master data of the platform: organizations, portfolios, programs and projects, how organizations take part in each project,
+ * and each project's identity and human-resources structure. Roles and access are managed per user in the «کاربران» tab.
  */
 export function MasterDataApp() {
-  const [tab, setTab] = useState<Tab>('organizations')
-  const [openProjectId, setOpenProjectId] = useState<string | null>(null)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('overview')
+  const [openProject, setOpenProject] = useState<{ id: string } | null>(null)
   const loaded = useMasterDataStore((s) => s.loaded)
   const loading = useMasterDataStore((s) => s.loading)
   const fetchAll = useMasterDataStore((s) => s.fetchAll)
+  const nav = useRef<HTMLDivElement>(null)
+  const [ind, setInd] = useState<{ x: number; w: number } | null>(null)
 
   useEffect(() => {
-    if (!loaded) fetchAll()
+    if (!loaded) void fetchAll()
   }, [loaded, fetchAll])
 
-  if (openProjectId) {
-    return <ProjectIdentityPage projectId={openProjectId} onBack={() => setOpenProjectId(null)} />
-  }
+  // the indicator glides to the selected item
+  useLayoutEffect(() => {
+    const el = nav.current?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (el) setInd({ x: el.offsetLeft + 12, w: el.offsetWidth - 24 })
+  }, [tab, openProject, loaded])
 
-  const currentTabLabel = TABS.find((t) => t.id === tab)?.label ?? ''
+  const open = (id: string) => setOpenProject({ id })
+  const go = (t: Tab) => { setOpenProject(null); setTab(t) }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b p-2.5 flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-soft)' }}>
-        <button
-          onClick={() => setMobileNavOpen(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-secondary hover:bg-white/5 lg:hidden"
-        >
-          <Menu size={14} /> {currentTabLabel}
-        </button>
-        <ContextSwitcher />
+    <div className="md-root flex h-full min-h-0 flex-col" dir="rtl">
+      <div ref={nav} className="md-nav shrink-0 px-3 sm:px-6" role="tablist" aria-label="داده‌های پایه">
+        {TABS.map((t) => <button key={t.id} role="tab" className="md-nav-item" aria-selected={!openProject && tab === t.id || (openProject !== null && t.id === 'projects')} onClick={() => go(t.id)}>{t.label}</button>)}
+        <span className="md-nav-sep" aria-hidden />
+        {TOOLS.map((t) => <button key={t.id} role="tab" className="md-nav-item" aria-selected={!openProject && tab === t.id} onClick={() => go(t.id)}>{t.label}</button>)}
+        {ind && <span className="md-nav-ind" aria-hidden style={{ transform: `translateX(${ind.x}px)`, width: ind.w, left: 0 }} />}
       </div>
 
-      <div className="flex flex-1 min-h-0">
-        {mobileNavOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMobileNavOpen(false)} />}
-        <nav
-          className={`fixed inset-y-0 right-0 z-40 flex w-64 shrink-0 flex-col gap-1 overflow-y-auto border-l bg-[var(--bg-panel-solid)] p-3 transition-transform duration-200 lg:static lg:z-auto lg:w-52 lg:translate-x-0 lg:bg-transparent ${
-            mobileNavOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-          style={{ borderColor: 'var(--border-soft)' }}
-        >
-          <div className="mb-1 flex items-center justify-between px-1 lg:hidden">
-            <span className="text-xs font-bold text-secondary">داده‌های پایه</span>
-            <button onClick={() => setMobileNavOpen(false)} className="rounded-lg p-1.5 text-muted hover:bg-white/5">
-              <X size={16} />
-            </button>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6">
+        {loading && !loaded ? (
+          <div className="flex h-64 items-center justify-center"><Loader2 size={22} className="animate-spin" style={{ color: 'var(--md-accent)' }} aria-label="در حال بارگذاری" /></div>
+        ) : openProject ? (
+          <ProjectWorkspace key={openProject.id} projectId={openProject.id} onBack={() => setOpenProject(null)} />
+        ) : (
+          <div key={tab} className="md-in">
+            {tab === 'overview' && <OverviewPage go={go} />}
+            {tab === 'organizations' && <OrganizationsPage />}
+            {tab === 'portfolios' && <PortfoliosPage />}
+            {tab === 'programs' && <ProgramsPage />}
+            {tab === 'projects' && <ProjectsPage onOpen={open} />}
+            {tab === 'parties' && <PartiesPage onOpen={open} />}
+            {tab === 'mapping' && <ProjectMappingPage />}
+            {tab === 'integrity' && <DataIntegrityPage />}
+            {tab === 'demo' && <DemoDataPage />}
           </div>
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => {
-                setTab(id)
-                setMobileNavOpen(false)
-              }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                tab === id ? 'bg-brand-500/15 text-brand-300 font-medium' : 'text-secondary hover:bg-white/5'
-              }`}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex-1 min-w-0 overflow-y-auto p-4">
-          {loading && !loaded ? (
-            <div className="flex h-full items-center justify-center">
-              <Loader2 size={22} className="animate-spin text-brand-400" />
-            </div>
-          ) : tab === 'organizations' ? (
-            <OrganizationsPage />
-          ) : tab === 'portfolios' ? (
-            <PortfoliosPage />
-          ) : tab === 'programs' ? (
-            <ProgramsPage />
-          ) : tab === 'projects' ? (
-            <ProjectsPage onOpenProject={setOpenProjectId} />
-          ) : tab === 'access' ? (
-            <RolesPermissionsPage />
-          ) : tab === 'mapping' ? (
-            <ProjectMappingPage />
-          ) : tab === 'integrity' ? (
-            <DataIntegrityPage />
-          ) : (
-            <DemoDataPage />
-          )}
-        </div>
+        )}
       </div>
     </div>
   )

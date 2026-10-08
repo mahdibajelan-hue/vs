@@ -30,9 +30,12 @@ export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => vo
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <h1 className="m-0 text-[14.5px] font-extrabold">مدیریت کاربران و داده‌های پایه</h1>
+          <span className="flex items-center gap-1">
           <TabButton active={tab === 'users'} icon={Users} label="کاربران" onClick={() => setTab('users')} />
           <TabButton active={tab === 'masterdata'} icon={Database} label="داده‌های پایه" onClick={() => setTab('masterdata')} />
+          </span>
         </div>
         <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>

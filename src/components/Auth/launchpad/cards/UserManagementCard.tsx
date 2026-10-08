@@ -5,9 +5,9 @@ export function UserManagementCard({ onSelect, locked }: { onSelect: () => void;
   return (
     <ModuleCard
       number="08"
-      title="مدیریت کاربران"
-      englishTag="Users, Roles & Access Control"
-      description="کاربران، نقش‌ها، سازمان و کنترل دسترسی یکپارچه به همه ماژول‌ها."
+      title="مدیریت کاربران و داده‌های پایه"
+      englishTag="Users, Access & Master Data"
+      description="کاربران و دسترسی‌ها، سازمان‌ها، پورتفولیو و طرح‌ها، پروژه‌ها و ساختار منابع انسانی هر پروژه."
       icon={Users}
       accent="#475569"
       locked={locked}
