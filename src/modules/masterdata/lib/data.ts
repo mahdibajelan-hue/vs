@@ -8,9 +8,12 @@ import type {
   PortfolioProgramStatus,
   Program,
   ProjectDependency,
+  PartyRole,
   ProjectLifecycleStatus,
+  ProjectParty,
   ProjectPhase,
   ScheduleStatus,
+  TeamMember,
 } from '../types'
 
 interface OrganizationRow {
@@ -155,6 +158,9 @@ interface MasterProjectRow {
   official_name: string
   short_name: string
   description: string
+  location: string | null
+  scope_summary: string | null
+  objectives: string | null
   project_type: string
   project_category: string
   portfolio_id: string | null
@@ -196,6 +202,9 @@ export function masterProjectFromRow(r: MasterProjectRow): MasterProject {
     officialName: r.official_name,
     shortName: r.short_name,
     description: r.description,
+    location: r.location ?? '',
+    scopeSummary: r.scope_summary ?? '',
+    objectives: r.objectives ?? '',
     projectType: r.project_type,
     projectCategory: r.project_category,
     portfolioId: r.portfolio_id,
@@ -238,6 +247,9 @@ export function masterProjectToRow(p: Partial<MasterProject>) {
   if (p.officialName !== undefined) row.official_name = p.officialName
   if (p.shortName !== undefined) row.short_name = p.shortName
   if (p.description !== undefined) row.description = p.description
+  if (p.location !== undefined) row.location = p.location
+  if (p.scopeSummary !== undefined) row.scope_summary = p.scopeSummary
+  if (p.objectives !== undefined) row.objectives = p.objectives
   if (p.projectType !== undefined) row.project_type = p.projectType
   if (p.projectCategory !== undefined) row.project_category = p.projectCategory
   if (p.portfolioId !== undefined) row.portfolio_id = p.portfolioId || null
@@ -342,5 +354,24 @@ export function projectDependencyToRow(p: { projectId: string; dependsOnProjectI
   const row: Record<string, unknown> = { project_id: p.projectId, depends_on_project_id: p.dependsOnProjectId }
   if (p.dependencyType !== undefined) row.dependency_type = p.dependencyType
   if (p.notes !== undefined) row.notes = p.notes
+  return row
+}
+
+export interface ProjectPartyRow { id: string; project_id: string; organization_id: string; role: string; notes: string }
+export const projectPartyFromRow = (r: ProjectPartyRow): ProjectParty => ({ id: r.id, projectId: r.project_id, organizationId: r.organization_id, role: r.role as PartyRole, notes: r.notes ?? '' })
+
+export interface TeamMemberRow { id: string; project_id: string; user_id: string | null; person_name: string; position_key: string; position_title: string; organization_id: string | null; parent_id: string | null; phone: string; email: string; sort: number }
+export const teamMemberFromRow = (r: TeamMemberRow): TeamMember => ({ id: r.id, projectId: r.project_id, userId: r.user_id, personName: r.person_name ?? '', positionKey: r.position_key, positionTitle: r.position_title ?? '', organizationId: r.organization_id, parentId: r.parent_id, phone: r.phone ?? '', email: r.email ?? '', sort: r.sort ?? 0 })
+export const teamMemberToRow = (projectId: string, m: Partial<TeamMember>) => {
+  const row: Record<string, unknown> = { project_id: projectId }
+  if (m.userId !== undefined) row.user_id = m.userId || null
+  if (m.personName !== undefined) row.person_name = m.personName
+  if (m.positionKey !== undefined) row.position_key = m.positionKey
+  if (m.positionTitle !== undefined) row.position_title = m.positionTitle
+  if (m.organizationId !== undefined) row.organization_id = m.organizationId || null
+  if (m.parentId !== undefined) row.parent_id = m.parentId || null
+  if (m.phone !== undefined) row.phone = m.phone
+  if (m.email !== undefined) row.email = m.email
+  if (m.sort !== undefined) row.sort = m.sort
   return row
 }

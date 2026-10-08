@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Camera, Check, Loader2, User } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { supabase } from '../../lib/supabaseClient'
 import { PasswordField } from './AuthGate'
+import { SignaturePad } from '../common/SignaturePad'
+import { loadMySignature, saveMySignature } from '../../lib/userSignature'
+import { cleanSignatureImage, prepareAvatar } from '../../lib/imageTools'
 
 export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSaved?: () => void }) {
   const profile = useAuthStore((s) => s.profile)
@@ -24,14 +27,58 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
   const [passInfo, setPassInfo] = useState('')
   const [savingPass, setSavingPass] = useState(false)
 
+  // Sample signature — printed under the user's mission reports. Saved on its own (not part of «ذخیره تغییرات»).
+  const [signature, setSignature] = useState<string | null>(null)
+  const [signatureLoaded, setSignatureLoaded] = useState(false)
+  const [savingSignature, setSavingSignature] = useState(false)
+  const [signatureError, setSignatureError] = useState('')
+  useEffect(() => {
+    loadMySignature().then(async (s) => {
+      setSignature(s)
+      setSignatureLoaded(true)
+      // A signature saved by an older version may carry black blocks around it (transparent margins flattened to black):
+      // repair it once and save the clean copy so new reports are signed with it.
+      if (s) {
+        try {
+          const cleaned = await cleanSignatureImage(s)
+          if (cleaned) {
+            await saveMySignature(cleaned)
+            setSignature(cleaned)
+          }
+        } catch {
+          /* leave the stored image as is */
+        }
+      }
+    })
+  }, [])
+
   if (!profile) return null
+
+  const handleSignature = async (png: string) => {
+    setSavingSignature(true)
+    setSignatureError('')
+    try {
+      await saveMySignature(png)
+      setSignature(png)
+    } catch (e) {
+      setSignatureError(e instanceof Error ? e.message : 'ثبت امضا انجام نشد')
+    }
+    setSavingSignature(false)
+  }
 
   const handleAvatarPick = async (file: File) => {
     setUploading(true)
     setError('')
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${profile.id}/avatar.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    let body: Blob = file
+    try {
+      // Square crop without black/transparent borders, 320 px, flattened on white (~30 KB).
+      body = await prepareAvatar(file)
+    } catch {
+      /* undecodable (e.g. HEIC in an old browser): upload the original */
+    }
+    const processed = body !== file
+    const path = `${profile.id}/avatar.${processed ? 'jpg' : file.name.split('.').pop() ?? 'jpg'}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, body, { upsert: true, contentType: processed ? 'image/jpeg' : file.type })
     setUploading(false)
     if (upErr) {
       setError('خطا در آپلود عکس — ' + upErr.message)
@@ -99,7 +146,7 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
           className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-white/10 bg-white/5"
         >
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            <img src={avatarUrl} alt="" className="h-full w-full bg-white object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center">
               <User size={28} className="text-muted" />
@@ -140,6 +187,14 @@ export function ProfileForm({ mode, onSaved }: { mode: 'forced' | 'edit'; onSave
         <span className="mb-1 block text-xs text-secondary">شماره تماس</span>
         <input value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="09xxxxxxxxx" dir="ltr" />
       </label>
+      <div className="space-y-2 rounded-xl border border-white/10 p-3">
+        <p className="text-xs font-bold text-secondary">امضای نمونه</p>
+        <p className="text-[11px] leading-5 text-muted">
+          امضای شما پای گزارش‌های مأموریتی که ارسال می‌کنید درج می‌شود. بدون امضای ثبت‌شده، ارسال گزارش مأموریت ممکن نیست. فقط خودتان می‌توانید آن را ببینید یا تغییر دهید.
+        </p>
+        {signatureLoaded ? <SignaturePad value={signature} onSave={handleSignature} saving={savingSignature} /> : <Loader2 size={14} className="animate-spin text-muted" />}
+        {signatureError && <p className="text-xs text-red-400">{signatureError}</p>}
+      </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
         onClick={submit}

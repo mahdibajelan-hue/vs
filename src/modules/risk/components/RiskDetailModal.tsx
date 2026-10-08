@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MissionOriginChip } from '../../missions/integration/originChip'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Check, MessageSquare, Pencil, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
@@ -119,6 +120,7 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
           >
             {RM_LIFECYCLE_STAGE_LABEL_FA[stage]}
           </span>
+          <MissionOriginChip recordId={risk.id} />
           {canEdit && (
             <button
               onClick={() => setShowEditForm(true)}

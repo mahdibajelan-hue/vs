@@ -17,16 +17,16 @@ import {
   LineChart,
   Loader2,
   Menu,
-  Moon,
   Receipt,
   Settings,
   ShieldCheck,
-  Sun,
   Wallet,
   X,
 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useAppTheme } from '../../components/common/useAppTheme'
+import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -107,13 +107,12 @@ const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   settings: { title: 'تنظیمات', subtitle: '' },
 }
 
-const FIN_THEME_KEY = 'rasta-finance-theme'
 
 /**
  * Financial Management — owner-side budget/contract/payment control. Deliberately not
  * accounting: no general ledger, no P&L, no contractor internal cost (see schema.sql section 19).
  */
-export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
@@ -131,7 +130,14 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
+  const finLight = !useAppTheme().dark
+
+  // Arrived here from Project Radar with a project already in context (Finance uses
+  // masterProjectId directly, no mapping table needed) — stay locked to it: hide the
+  // portfolio/program/project browse tabs and the cross-project dashboard, landing straight on
+  // this project's contracts instead.
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [lockedToProject, setLockedToProject] = useState(false)
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
@@ -140,17 +146,17 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
   }, [])
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) setProjectId(projects[0].id)
-  }, [projects, projectId])
+    if (projects.length === 0 || projectId) return
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
+      setProjectId(contextProjectId)
+      setLockedToProject(true)
+      setTab('contracts')
+    } else {
+      setProjectId(projects[0].id)
+    }
+  }, [projects, projectId, contextProjectId])
 
-  const toggleFinTheme = () => {
-    const next = !finLight
-    setFinLight(next)
-    localStorage.setItem(FIN_THEME_KEY, next ? 'light' : 'dark')
-    // Also flips the app-wide token set (data-theme) so any not-yet-restyled piece of this
-    // module (modals, shared components) still tracks light/dark consistently.
-    document.documentElement.setAttribute('data-theme', next ? 'light' : 'dark')
-  }
+  const visibleNav = lockedToProject ? NAV.filter((n) => PROJECT_SCOPED_TABS.has(n.id)) : NAV
 
   const jy = todayJalali().jy
   const notifications = useMemo(
@@ -201,7 +207,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {visibleNav.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => {
@@ -227,7 +233,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
             </div>
           </div>
           <div className="mt-3">
-            <ModuleHeaderActions onExitToHub={onExitToHub} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
       </aside>
@@ -244,7 +250,7 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {PROJECT_SCOPED_TABS.has(tab) && (
+            {PROJECT_SCOPED_TABS.has(tab) && !lockedToProject && (
               <select
                 value={projectId ?? ''}
                 onChange={(e) => setProjectId(e.target.value || null)}
@@ -266,14 +272,6 @@ export function FinanceApp({ onExitToHub }: { onExitToHub: () => void }) {
               <Calendar size={12} /> آخرین به‌روزرسانی: {jy.toLocaleString('fa-IR')}/{String(todayJalali().jm).padStart(2, '0')}/{String(todayJalali().jd).padStart(2, '0')} (
               {JALALI_MONTHS[todayJalali().jm - 1]})
             </span>
-            <button
-              onClick={toggleFinTheme}
-              title={finLight ? 'حالت تاریک' : 'حالت روشن'}
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
-            >
-              {finLight ? <Moon size={14} /> : <Sun size={14} />}
-            </button>
             <div className="relative">
               <button
                 onClick={() => setNotifOpen((v) => !v)}

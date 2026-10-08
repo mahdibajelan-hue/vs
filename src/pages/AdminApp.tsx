@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Database, Users } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
-import { UnifiedAdminPage } from './UnifiedAdminPage'
+import { UserCenterApp } from '../modules/usercenter/UserCenterApp'
 import { MasterDataApp } from '../modules/masterdata/MasterDataApp'
 import { ModuleHeaderActions } from '../components/common/ModuleHeaderActions'
 
@@ -9,12 +9,12 @@ type Tab = 'users' | 'masterdata'
 
 /**
  * Shell for the admin-gated 'admin' hub module — two tabs sharing one header/back-button:
- * "کاربران" (the existing cross-module user/membership view) and "داده‌های پایه" (the new
+ * "کاربران" (the User 360° Management Center) and "داده‌های پایه" (the new
  * centralized Organization/Portfolio/Program/Project master data, see
  * supabase/schema.sql section 12). Both are admin-only, mirroring RASTA's own Master Data
  * nav sketch which nests Users alongside Organizations/Portfolios/Programs/Projects.
  */
-export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
+export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   const [tab, setTab] = useState<Tab>('users')
 
@@ -22,7 +22,7 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 p-8" style={{ background: 'var(--bg-app)' }}>
         <p className="text-sm text-muted">این بخش فقط برای ادمین سامانه در دسترس است.</p>
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </div>
     )
   }
@@ -30,14 +30,17 @@ export function AdminApp({ onExitToHub }: { onExitToHub: () => void }) {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 glass-panel !rounded-none border-t-0 border-x-0 px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <h1 className="m-0 text-[14.5px] font-extrabold">مدیریت کاربران و داده‌های پایه</h1>
+          <span className="flex items-center gap-1">
           <TabButton active={tab === 'users'} icon={Users} label="کاربران" onClick={() => setTab('users')} />
           <TabButton active={tab === 'masterdata'} icon={Database} label="داده‌های پایه" onClick={() => setTab('masterdata')} />
+          </span>
         </div>
-        <ModuleHeaderActions onExitToHub={onExitToHub} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
-      <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UnifiedAdminPage /> : <MasterDataApp />}</div>
+      <div className="min-h-0 flex-1 flex flex-col">{tab === 'users' ? <UserCenterApp /> : <MasterDataApp />}</div>
     </div>
   )
 }

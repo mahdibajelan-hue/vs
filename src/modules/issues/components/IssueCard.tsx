@@ -2,6 +2,7 @@ import type { ImIssue } from '../types'
 import { IM_PRIORITY_LABEL_FA, IM_STATUS_LABEL_FA } from '../types'
 import type { ImProjectMember } from '../store/useIssuesMembersStore'
 import { IssueRing } from './IssueRing'
+import { MissionOriginChip } from '../../missions/integration/originChip'
 
 export function IssueCard({
   issue,
@@ -26,6 +27,7 @@ export function IssueCard({
             {IM_PRIORITY_LABEL_FA[issue.priority]}
           </span>
           <span className={`im-status-tag im-st-${issue.status}`}>{IM_STATUS_LABEL_FA[issue.status]}</span>
+          <MissionOriginChip recordId={issue.id} />
         </div>
       </div>
       <div style={{ textAlign: 'left', flexShrink: 0 }}>

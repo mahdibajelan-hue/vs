@@ -1,0 +1,616 @@
+/* ==========================================================================
+   Mission & Visit Debrief module ("بازدید") — scoped visual identity.
+   Everything lives under .ms-root so nothing leaks into the rest of the app.
+
+   Direction: a calm ops console. One accent (indigo) for actions and focus; every other hue is reserved for
+   meaning — the five finding kinds (Issue / Risk / Action / Commitment / Decision) and status tones — so a
+   manager reads them at a glance across every screen. Flat surfaces, hairline borders, no gradients. Persian
+   digits and Vazirmatn throughout (never the mono .num class: it breaks Persian shaping). Light and dark are
+   both first-class.
+   ========================================================================== */
+
+.ms-root,
+.ms-modal-panel {
+  /* Light "bento" skin — the same visual language as the Farin launchpad: a neutral sheet, white raised
+     cards with dark bold text (>= 7:1), one saturated colour per thing. It is deliberately independent of the
+     app-wide dark/light switch so every screen of the module looks the same. */
+  --ms-bg: #e8ecf4;
+  --ms-bg-2: #dfe4ef;
+  --ms-panel: #ffffff;
+  --ms-panel-2: #f2f5fa;
+  --ms-line: rgba(15, 23, 42, 0.12);
+  --ms-line-2: rgba(15, 23, 42, 0.24);
+  --ms-white: #ffffff;
+  --ms-mixink: #000000;
+  /* motion: strong ease-out for UI (entering / pressing) */
+  --ms-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ms-ink: #0b1220;
+  --ms-ink-2: #334155;
+  --ms-muted: #4a5a72;
+  --ms-accent: #4f46e5;
+  --ms-accent-2: #7c3aed;
+  --ms-accent-ink: #ffffff;
+  --ms-accent-soft: rgba(79, 70, 229, 0.11);
+  --ms-rose: #e11d48;
+  --ms-orange: #ea580c;
+  --ms-sky: #0284c7;
+  --ms-violet: #7c3aed;
+  --ms-emerald: #059669;
+  --ms-teal: #0d9488;
+  --ms-good: #059669;
+  --ms-warn: #b45309;
+  --ms-bad: #e11d48;
+  --ms-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 22px -16px rgba(15, 23, 42, 0.3);
+
+  font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+  font-weight: 400;
+  color: var(--ms-ink);
+  background: var(--ms-bg);
+  color-scheme: light;
+}
+
+/* ---- dark skin (toggle in the header) — same structure, deep navy surfaces ---------------------------- */
+.ms-root.ms-dark,
+.ms-modal-panel.ms-dark,
+.ms-dark .ms-root {
+  --ms-bg: #0a0f1e;
+  --ms-bg-2: #0e1528;
+  --ms-panel: #121a2f;
+  --ms-panel-2: #18233d;
+  --ms-white: #18233d;
+  --ms-mixink: #ffffff;
+  --ms-line: rgba(148, 163, 184, 0.16);
+  --ms-line-2: rgba(148, 163, 184, 0.3);
+  --ms-ink: #eef2fb;
+  --ms-ink-2: #c1cde2;
+  --ms-muted: #8fa0bd;
+  --ms-accent: #818cf8;
+  --ms-accent-2: #a78bfa;
+  --ms-accent-ink: #0a0f1e;
+  --ms-accent-soft: rgba(129, 140, 248, 0.16);
+  --ms-rose: #fb7185;
+  --ms-orange: #fb923c;
+  --ms-sky: #38bdf8;
+  --ms-violet: #a78bfa;
+  --ms-emerald: #34d399;
+  --ms-teal: #2dd4bf;
+  --ms-good: #34d399;
+  --ms-warn: #fbbf24;
+  --ms-bad: #fb7185;
+  --ms-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 34px -18px rgba(0, 0, 0, 0.8);
+  color-scheme: dark;
+}
+.ms-root.ms-dark { background: var(--ms-bg); }
+.ms-dark .ms-btn-primary { color: #0a0f1e; }
+.ms-dark .ms-chip.is-on, .ms-dark .ms-bottom-nav button.is-on { color: #0a0f1e; }
+
+/* dialogs live in a portal on the app's own (dark) glass panel — give them the module's card skin */
+.ms-modal-panel {
+  background: var(--ms-panel) !important;
+  border: 1px solid var(--ms-line-2) !important;
+  color: var(--ms-ink);
+}
+.ms-modal-panel:not(.ms-dark) { background: #ffffff !important; }
+.ms-modal-panel h2 { color: var(--ms-ink); font-weight: 800; }
+.ms-modal-panel .text-secondary { color: var(--ms-ink-2); }
+.ms-modal-panel button[class*='hover:bg-white'] { color: var(--ms-ink-2); }
+.ms-modal-panel .sticky { background: transparent !important; }
+
+/* the app-wide header actions (profile chip, back to hub, sign out) sit on the module's own header */
+.ms-root header .border-white\/10 { border-color: var(--ms-line-2) !important; }
+.ms-root header .text-secondary { color: var(--ms-ink-2) !important; }
+.ms-root header button[class*='hover:bg-white'] { background: var(--ms-white); }
+
+.ms-root *,
+.ms-root *::before,
+.ms-root *::after {
+  box-sizing: border-box;
+}
+.ms-root button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.ms-root :focus-visible {
+  outline: 2px solid var(--ms-accent);
+  outline-offset: 2px;
+}
+
+/* ---- finding kinds: one hue each, reserved ------------------------------------------------------ */
+.ms-k-issue { --c: var(--ms-rose); }
+.ms-k-risk { --c: var(--ms-orange); }
+.ms-k-action { --c: var(--ms-sky); }
+.ms-k-commitment { --c: var(--ms-violet); }
+.ms-k-decision { --c: var(--ms-emerald); }
+.ms-k-progress { --c: var(--ms-teal); }
+.ms-k-observation { --c: var(--ms-ink-2); }
+
+/* ---- surfaces ------------------------------------------------------------------------------------ */
+.ms-card {
+  position: relative;
+  background: var(--ms-panel);
+  border: 1px solid var(--ms-line);
+  border-radius: 18px;
+  box-shadow: var(--ms-shadow);
+}
+.ms-card-flat {
+  background: var(--ms-panel-2);
+  border: 1px solid var(--ms-line);
+  border-radius: 14px;
+}
+.ms-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 14px 12px;
+  text-align: right;
+  background: var(--ms-panel);
+  border: 1px solid var(--ms-line);
+  border-radius: 16px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+button.ms-kpi { cursor: pointer; }
+.ms-kpi-badge {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--ms-panel-2); color: var(--ms-ink-2);
+}
+.ms-kpi-label { color: var(--ms-ink-2); }
+.ms-kpi-value { color: var(--ms-ink); }
+.ms-kpi-sub { color: var(--ms-muted); }
+.ms-kpi-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--ms-orange); flex-shrink: 0; margin-top: 7px; }
+/* alert: only when there is something to see — the one place a KPI earns colour */
+.ms-kpi.is-alert { background: color-mix(in srgb, var(--h) 8%, var(--ms-panel)); border-color: color-mix(in srgb, var(--h) 38%, var(--ms-line)); }
+.ms-kpi.is-alert .ms-kpi-badge { background: var(--h); color: #fff; }
+.ms-kpi.is-alert .ms-kpi-value { color: var(--h); }
+.ms-dark .ms-kpi.is-alert .ms-kpi-badge { color: #0a0f1e; }
+/* hero: the one big number of the page, in the single accent colour */
+.ms-kpi.is-hero { background: var(--ms-accent); border-color: transparent; color: var(--ms-accent-ink); padding: 18px 18px 16px; box-shadow: 0 14px 26px -16px var(--ms-accent); }
+.ms-kpi.is-hero .ms-kpi-badge { background: rgba(255, 255, 255, 0.18); color: inherit; }
+.ms-kpi.is-hero .ms-kpi-label, .ms-kpi.is-hero .ms-kpi-value, .ms-kpi.is-hero .ms-kpi-sub { color: var(--ms-accent-ink); }
+.ms-kpi.is-hero .ms-kpi-sub { opacity: 0.85; }
+.ms-kpi.is-hero .ms-kpi-value { font-size: 44px; line-height: 52px; }
+.ms-dark .ms-kpi.is-hero .ms-kpi-badge { background: rgba(10, 15, 30, 0.14); }
+.ms-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ms-accent);
+  letter-spacing: 0;
+}
+.ms-eyebrow::before {
+  content: '';
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ms-accent);
+}
+.ms-muted { color: var(--ms-muted); }
+.ms-ink2 { color: var(--ms-ink-2); }
+
+/* ---- controls ------------------------------------------------------------------------------------ */
+.ms-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--ms-line-2);
+  background: var(--ms-panel);
+  color: var(--ms-ink);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  transition: background 0.15s, border-color 0.15s, transform 160ms var(--ms-ease-out), opacity 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.ms-btn:active:not(:disabled) { transform: scale(0.97); }
+.ms-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ms-btn-primary {
+  background: var(--ms-accent);
+  border-color: transparent;
+  color: var(--ms-accent-ink);
+  font-weight: 700;
+  box-shadow: 0 10px 20px -10px var(--ms-accent);
+}
+.ms-btn-danger { color: var(--ms-bad); border-color: color-mix(in srgb, var(--ms-bad) 45%, transparent); background: color-mix(in srgb, var(--ms-bad) 8%, var(--ms-white)); }
+.ms-btn-ghost { background: transparent; border-color: transparent; color: var(--ms-ink-2); box-shadow: none; }
+.ms-btn-sm { min-height: 32px; padding: 0 11px; font-size: 12px; border-radius: 10px; }
+.ms-btn-icon { min-height: 40px; min-width: 40px; padding: 0; }
+
+.ms-input,
+.ms-select,
+.ms-textarea {
+  width: 100%;
+  background: var(--ms-white);
+  border: 1.5px solid var(--ms-line-2);
+  border-radius: 12px;
+  color: var(--ms-ink);
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 14px;
+  padding: 10px 13px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ms-input::placeholder,
+.ms-textarea::placeholder { color: var(--ms-muted); }
+.ms-input:focus,
+.ms-select:focus,
+.ms-textarea:focus {
+  outline: none;
+  border-color: var(--ms-accent);
+  box-shadow: 0 0 0 3px var(--ms-accent-soft);
+}
+.ms-textarea { resize: vertical; min-height: 84px; line-height: 1.9; }
+.ms-label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; color: var(--ms-ink); }
+.ms-hint { margin-top: 5px; font-size: 11.5px; color: var(--ms-muted); line-height: 1.7; }
+
+/* ---- pills & chips ------------------------------------------------------------------------------- */
+.ms-pill {
+  --pc: var(--ms-ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--pc) 78%, var(--ms-mixink));
+  background: color-mix(in srgb, var(--pc) 14%, var(--ms-white));
+  border: 1px solid color-mix(in srgb, var(--pc) 38%, var(--ms-white));
+  white-space: nowrap;
+}
+.ms-pill-good { --pc: var(--ms-good); }
+.ms-pill-warn { --pc: var(--ms-warn); }
+.ms-pill-bad { --pc: var(--ms-bad); }
+.ms-pill-info { --pc: var(--ms-sky); }
+.ms-pill-accent { --pc: var(--ms-accent); }
+.ms-pill-kind { --pc: var(--c); }
+
+.ms-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ms-line-2);
+  background: transparent;
+  color: var(--ms-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s, box-shadow 0.15s, transform 160ms var(--ms-ease-out);
+}
+.ms-chip { background: var(--ms-white); font-weight: 600; }
+.ms-chip[aria-pressed='true'],
+.ms-chip.is-on { background: var(--ms-accent); border-color: transparent; color: #fff; box-shadow: 0 8px 16px -8px var(--ms-accent); }
+
+/* ---- mission timeline (six workflow steps) ------------------------------------------------------- */
+.ms-tl { --n: 38px; display: flex; align-items: flex-start; margin: 0; padding: 4px 0 6px; list-style: none; overflow-x: auto; }
+.ms-tl.is-compact { --n: 24px; padding: 0; overflow: visible; }
+.ms-tl-step { position: relative; flex: 1 1 0; min-width: 66px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ms-tl.is-compact .ms-tl-step { min-width: 0; }
+.ms-tl-node {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: center;
+  width: var(--n); height: var(--n); border-radius: 50%;
+  background: var(--ms-panel); border: 2px solid var(--ms-line-2); color: var(--ms-muted);
+  animation: ms-tl-pop 240ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms);
+}
+.ms-tl-step.is-done .ms-tl-node { background: var(--ms-good); border-color: var(--ms-good); color: #fff; }
+.ms-tl-step.is-now .ms-tl-node { background: var(--ms-accent); border-color: var(--ms-accent); color: var(--ms-accent-ink); }
+.ms-tl-step.is-now.is-warn .ms-tl-node { background: var(--ms-orange); border-color: var(--ms-orange); color: #fff; }
+.ms-dark .ms-tl-step.is-done .ms-tl-node { color: #0a0f1e; }
+/* current step: a slow ring, state indication only */
+.ms-tl-step.is-now .ms-tl-node::after {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid var(--ms-accent); opacity: 0; pointer-events: none;
+  animation: ms-tl-ring 2s var(--ms-ease-out) infinite; animation-delay: calc(var(--i) * 60ms + 600ms);
+}
+.ms-tl-step.is-now.is-warn .ms-tl-node::after { border-color: var(--ms-orange); }
+.ms-tl-tick {
+  position: absolute; inset-block-end: -3px; inset-inline-start: -3px; width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #fff; color: var(--ms-good); border: 1.5px solid var(--ms-good);
+}
+.ms-tl-label {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; font-size: 11.5px; font-weight: 600; line-height: 1.5; color: var(--ms-muted);
+  animation: ms-tl-fade 240ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms + 80ms);
+}
+.ms-tl-label small { font-size: 10px; font-weight: 500; color: var(--ms-muted); }
+.ms-tl-step.is-done .ms-tl-label, .ms-tl-step.is-now .ms-tl-label { color: var(--ms-ink); }
+/* connector to the next step: grey track, green fill drawn with transform */
+.ms-tl-link {
+  position: absolute; z-index: 0; top: calc(var(--n) / 2 - 1.5px); height: 3px; border-radius: 3px; background: var(--ms-line-2); overflow: hidden;
+  right: calc(50% + var(--n) / 2 + 4px); left: calc(-50% + var(--n) / 2 + 4px);
+}
+.ms-tl-link i { display: block; height: 100%; background: var(--ms-good); transform: scaleX(0); transform-origin: right; }
+.ms-tl-step.is-done .ms-tl-link i { animation: ms-tl-fill 360ms var(--ms-ease-out) both; animation-delay: calc(var(--i) * 60ms + 160ms); }
+.ms-tl.is-compact .ms-tl-node, .ms-tl.is-compact .ms-tl-label, .ms-tl.is-compact .ms-tl-link i, .ms-tl.is-compact .ms-tl-step.is-now .ms-tl-node::after { animation: none; }
+.ms-tl.is-compact .ms-tl-step.is-done .ms-tl-link i { transform: none; }
+.ms-tl.is-compact .ms-tl-step.is-now .ms-tl-node { box-shadow: 0 0 0 3px var(--ms-accent-soft); }
+.ms-tl.is-compact .ms-tl-step.is-now.is-warn .ms-tl-node { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ms-orange) 22%, transparent); }
+@media (max-width: 520px) {
+  .ms-tl:not(.is-compact) { --n: 32px; overflow: visible; }
+  .ms-tl:not(.is-compact) .ms-tl-step { min-width: 0; gap: 6px; }
+  .ms-tl:not(.is-compact) .ms-tl-label { font-size: 10px; }
+  .ms-tl:not(.is-compact) .ms-tl-label small { font-size: 9px; }
+}
+@keyframes ms-tl-pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes ms-tl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ms-tl-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ms-tl-ring { 0% { opacity: 0.55; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.55); } }
+
+/* a link to another record: unmistakably clickable (tint + underline + arrow that leans toward the target) */
+.ms-link {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px; border: 0; border-radius: 99px;
+  background: var(--ms-accent-soft); color: var(--ms-accent); font-size: 11.5px; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ms-accent) 45%, transparent); text-underline-offset: 3px;
+  transition: background-color 0.15s, transform 160ms var(--ms-ease-out);
+}
+.ms-link:active { transform: scale(0.97); }
+.ms-link-arrow { flex-shrink: 0; transition: transform 160ms var(--ms-ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .ms-link:hover { background: color-mix(in srgb, var(--ms-accent) 20%, transparent); text-decoration-color: var(--ms-accent); }
+  .ms-link:hover .ms-link-arrow { transform: translateX(-3px); }
+}
+
+/* ---- interview ----------------------------------------------------------------------------------- */
+.ms-chat { display: flex; flex-direction: column; gap: 14px; }
+.ms-bubble {
+  white-space: pre-wrap;
+  max-width: min(88%, 620px);
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 2;
+  animation: ms-rise 0.28s ease both;
+  word-break: break-word;
+}
+.ms-bubble-bot {
+  align-self: flex-start;
+  background: var(--ms-white);
+  border: 1px solid var(--ms-line-2);
+  box-shadow: 0 6px 14px -10px rgba(15, 23, 42, 0.4);
+  border-top-right-radius: 5px;
+}
+.ms-bubble-user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--ms-accent) 14%, var(--ms-white));
+  border: 1px solid color-mix(in srgb, var(--ms-accent) 40%, var(--ms-white));
+  border-top-left-radius: 5px;
+}
+.ms-bubble-system {
+  align-self: center;
+  max-width: 94%;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ms-ink-2);
+  background: transparent;
+  border: 1px dashed var(--ms-line-2);
+  line-height: 1.9;
+  text-align: center;
+}
+.ms-bubble-follow { border-right: 3px solid var(--ms-accent); }
+@keyframes ms-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ms-pop { 0% { opacity: 0; transform: scale(0.92) translateY(6px); } 60% { transform: scale(1.02); } 100% { opacity: 1; transform: none; } }
+@keyframes ms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes ms-mic { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ms-bad) 55%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+.ms-typing span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ms-ink-2); margin: 0 2px; animation: ms-pulse 1s infinite; }
+.ms-typing span:nth-child(2) { animation-delay: 0.15s; }
+.ms-typing span:nth-child(3) { animation-delay: 0.3s; }
+.ms-mic-live { animation: ms-mic 1.2s infinite; background: var(--ms-bad) !important; border-color: var(--ms-bad) !important; color: #fff !important; }
+
+.ms-ledger-item {
+  position: relative;
+  padding: 10px 12px 10px 12px;
+  border-radius: 12px;
+  background: var(--ms-white);
+  border: 1px solid var(--ms-line-2);
+  border-right: 4px solid var(--c, var(--ms-line-2));
+  box-shadow: 0 8px 16px -12px rgba(15, 23, 42, 0.45);
+  animation: ms-pop 0.4s ease both;
+}
+
+.ms-topic {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 11px; border-radius: 12px; border: 1px solid transparent;
+  background: transparent; color: var(--ms-ink-2); text-align: right; font-size: 12.5px; font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, transform 160ms var(--ms-ease-out);
+}
+.ms-topic.is-current { background: color-mix(in srgb, var(--ms-accent) 14%, var(--ms-white)); border-color: color-mix(in srgb, var(--ms-accent) 50%, var(--ms-white)); color: var(--ms-ink); font-weight: 700; }
+.ms-topic.is-done { color: var(--ms-ink); }
+
+/* ---- bars ---------------------------------------------------------------------------------------- */
+.ms-bar { height: 8px; border-radius: 999px; background: var(--ms-panel-2); border: 1px solid var(--ms-line); overflow: hidden; }
+.ms-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--ms-accent); transition: width 0.4s ease; }
+
+/* ---- tables -------------------------------------------------------------------------------------- */
+.ms-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.ms-table th { text-align: right; font-size: 11px; font-weight: 700; color: var(--ms-ink-2); background: var(--ms-panel-2); padding: 8px 12px; border-bottom: 1px solid var(--ms-line); white-space: nowrap; }
+.ms-table td { padding: 11px 12px; border-bottom: 1px solid var(--ms-line); vertical-align: middle; }
+.ms-table tr:last-child td { border-bottom: none; }
+.ms-table tbody tr.is-click { cursor: pointer; transition: background 0.12s; }
+
+/* ---- official report (paper) -------------------------------------------------------------------- */
+.ms-paper {
+  background: #fffefb;
+  color: #1c1917;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1), 0 28px 56px -26px rgba(15, 23, 42, 0.55);
+  padding: 44px 48px;
+  line-height: 2;
+}
+.ms-paper h2 { font-size: 15px; font-weight: 800; margin: 26px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #1c1917; color: #1c1917; }
+.ms-paper p { margin: 0 0 8px; font-size: 13.5px; color: #292524; }
+.ms-paper ul { margin: 0; padding: 0 20px 0 0; }
+.ms-paper li { font-size: 13px; color: #292524; margin-bottom: 4px; }
+.ms-paper .ms-paper-k { font-size: 11px; color: #78716c; }
+@media (max-width: 640px) { .ms-paper { padding: 26px 20px; } }
+@media print {
+  .ms-no-print { display: none !important; }
+  .ms-root { background: #fff !important; height: auto !important; overflow: visible !important; }
+  .ms-paper { box-shadow: none; padding: 0; }
+  .ms-card::before { display: none; }
+}
+
+
+/* ---- report paper: cover, KPIs, charts, tables, signatures -------------------------------------- */
+.ms-paper { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.ms-paper-cover { display: flex; align-items: stretch; justify-content: space-between; gap: 16px; background: #0f172a; color: #fafaf9; border-radius: 10px; padding: 22px 26px; margin: -6px 0 0; border-bottom: 5px solid #4f46e5; }
+.ms-paper .ms-paper-eyebrow { margin: 0; font-size: 11px; letter-spacing: 0.04em; color: #d6d3d1; }
+.ms-paper-title { margin: 2px 0 2px; font-size: 24px; font-weight: 900; line-height: 1.7; color: #fff; }
+.ms-paper .ms-paper-sub { margin: 0; font-size: 12px; color: #d6d3d1; }
+.ms-paper-logo { background: #fff; border-radius: 10px; padding: 6px; display: inline-flex; }
+.ms-paper-status { color: #fff; font-size: 11.5px; font-weight: 800; padding: 3px 12px; border-radius: 999px; white-space: nowrap; }
+.ms-paper-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 14px 0 0; border: 1px solid #e7e5e4; border-radius: 8px; overflow: hidden; }
+.ms-paper-meta > div { padding: 8px 14px; border-bottom: 1px solid #f0eeea; background: #fff; }
+.ms-paper-meta > div:nth-child(odd) { border-left: 1px solid #f0eeea; }
+.ms-paper-meta dt { font-size: 10.5px; color: #78716c; margin: 0; }
+.ms-paper-meta dd { font-size: 12.5px; font-weight: 700; margin: 0; color: #1c1917; line-height: 1.8; }
+.ms-paper-summary { margin-top: 14px; padding: 14px 18px; background: #f1f3fc; border-radius: 8px; border-right: 5px solid #4f46e5; }
+.ms-paper-summary p { font-size: 13.5px; line-height: 2.1; }
+.ms-paper-summary .ms-paper-lead { font-size: 14.5px; font-weight: 600; }
+.ms-paper-summary ul { margin: 8px 0 0; padding: 0 18px 0 0; }
+.ms-paper-summary li { font-size: 13px; line-height: 2; margin: 0; }
+.ms-paper-doc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 26px; border: 1px solid #d6d3d1; border-radius: 10px; overflow: hidden; break-inside: avoid; }
+.ms-paper-doc > div { padding: 8px 14px; border-inline-start: 1px solid #e7e5e4; }
+.ms-paper-doc > div:first-child { border-inline-start: 0; }
+.ms-paper-doc dt { font-size: 10.5px; color: #78716c; }
+.ms-paper-doc dd { margin: 0; font-size: 12.5px; font-weight: 700; color: #1c1917; }
+.ms-paper-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.ms-paper-kpi { border: 1px solid #e7e5e4; border-radius: 10px; padding: 10px 12px; background: #fff; display: flex; flex-direction: column; gap: 2px; }
+.ms-paper-kpi p { margin: 0; }
+.ms-paper-kv { font-size: 21px !important; font-weight: 900; line-height: 1.6 !important; color: #1c1917 !important; }
+.ms-paper h2.ms-paper-h { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 28px 0 10px; padding: 0 0 7px; border-bottom: 2px solid #1c1917; }
+.ms-paper h2.ms-paper-h-plain { margin-top: 22px; }
+.ms-paper-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; border-radius: 7px; background: #1c1917; color: #fff; font-size: 12px; font-weight: 800; }
+.ms-paper-count { margin-inline-start: auto; font-size: 11px; font-weight: 700; color: #78716c; }
+.ms-paper-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ms-paper-chart { border: 1px solid #e7e5e4; border-radius: 10px; padding: 12px 14px; background: #fff; break-inside: avoid; }
+.ms-paper-chart-t { margin: 0 0 8px !important; font-size: 12px !important; font-weight: 800; color: #1c1917 !important; }
+.ms-paper-legend { margin: 0; padding: 0; list-style: none; font-size: 10.5px; color: #44403c; line-height: 1.7; }
+.ms-paper-legend li { display: flex; align-items: center; gap: 5px; margin: 0 0 2px; font-size: 10.5px; }
+.ms-paper-legend span { display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 15px; border-radius: 99px; color: #fff; font-size: 9px; font-weight: 800; flex-shrink: 0; }
+.ms-paper-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+.ms-paper-table th { background: #eceffa; color: #334155; font-size: 11px; font-weight: 800; text-align: right; padding: 7px 9px; border: 1px solid #d9deee; }
+.ms-paper-table td { padding: 7px 9px; border: 1px solid #e3e7f3; vertical-align: top; line-height: 1.9; color: #292524; }
+.ms-paper-table tbody tr:nth-child(even) td { background: #f8f9fd; }
+.ms-paper-table tr { break-inside: avoid; }
+.ms-paper-table .block { display: block; }
+.ms-paper-c { text-align: center; color: #78716c; font-weight: 800; }
+.ms-paper-chip { display: inline-block; color: #fff; font-size: 10.5px; font-weight: 800; padding: 1px 9px; border-radius: 99px; line-height: 1.8; white-space: nowrap; }
+.ms-paper-missing { color: #b91c1c; font-weight: 800; font-size: 11.5px; }
+.ms-paper-sign { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 30px; break-inside: avoid; }
+.ms-paper-signbox { border: 1px solid #d6d3d1; border-radius: 10px; padding: 12px 16px; background: #fff; }
+.ms-paper-signbox p { margin: 0; }
+.ms-paper-signimg { height: 92px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #a8a29e; }
+.ms-paper-signimg img { max-height: 84px; max-width: 100%; object-fit: contain; }
+.ms-paper-stamp { display: inline-block; border: 3px double #047857; color: #047857; border-radius: 10px; padding: 6px 16px; font-weight: 900; font-size: 14px; line-height: 1.7; text-align: center; transform: rotate(-6deg); }
+.ms-paper-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d6d3d1; font-size: 10.5px; color: #78716c; line-height: 1.9; }
+@media (max-width: 640px) {
+  .ms-paper-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ms-paper-charts, .ms-paper-meta, .ms-paper-sign { grid-template-columns: 1fr; }
+  .ms-paper-doc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ms-paper-cover { flex-direction: column; }
+  .ms-paper-table { display: block; overflow-x: auto; }
+}
+@media print {
+  .ms-paper-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .ms-paper-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ms-paper-cover { margin: 0; }
+}
+
+/* ---- score gauge -------------------------------------------------------------------------------- */
+.ms-ring-track { stroke: var(--ms-line-2); }
+
+/* ---- scroll area -------------------------------------------------------------------------------- */
+.ms-scroll { scrollbar-width: thin; }
+
+/* ---- bottom nav (mobile) ------------------------------------------------------------------------ */
+.ms-bottom-nav {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 40;
+  display: flex; gap: 2px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--ms-white); box-shadow: 0 -10px 24px -16px rgba(15, 23, 42, 0.4);
+  border-top: 1px solid var(--ms-line);
+}
+.ms-bottom-nav button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px;
+  border-radius: 12px; border: none; background: transparent; color: var(--ms-muted); font-size: 10.5px; font-weight: 600;
+}
+.ms-bottom-nav button.is-on { color: #fff; background: var(--ms-accent); }
+@media (min-width: 768px) { .ms-bottom-nav { display: none; } }
+
+/* ---- press feedback: one subtle scale for everything pressable (works on touch, unlike :hover) ------- */
+.ms-chip:active:not(:disabled) { transform: scale(0.97); }
+.ms-topic:active { transform: scale(0.98); }
+button.ms-kpi:active, button.ms-card-flat:active { transform: scale(0.98); }
+.ms-bottom-nav button { transition: transform 160ms var(--ms-ease-out), background-color 0.15s, color 0.15s; }
+.ms-bottom-nav button:active { transform: scale(0.96); }
+button.ms-card-flat { transition: transform 160ms var(--ms-ease-out), border-color 0.15s; }
+
+/* ---- hover: only where a real pointer can hover. On touch screens :hover sticks after a tap, which left
+        the tapped KPI card lifted and the tapped button highlighted. ----------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+  .ms-root header button[class*='hover:bg-white']:hover { background: var(--ms-panel-2); }
+  button.ms-kpi:hover { transform: translateY(-2px); border-color: var(--ms-line-2); box-shadow: var(--ms-shadow); }
+  button.ms-kpi.is-alert:hover { border-color: var(--h); }
+  .ms-btn:hover:not(:disabled) { border-color: var(--ms-accent); }
+  .ms-btn-primary:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 14px 24px -10px var(--ms-accent); }
+  .ms-btn-ghost:hover:not(:disabled) { background: var(--ms-panel-2); border-color: var(--ms-line); }
+  .ms-chip:hover { border-color: var(--ms-accent); color: var(--ms-ink); }
+  .ms-chip.is-on:hover { color: #fff; }
+  .ms-topic:hover { background: var(--ms-panel-2); }
+  .ms-table tbody tr.is-click:hover { background: var(--ms-panel-2); }
+  button.ms-kpi:hover:active { transform: translateY(-1px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-bubble, .ms-ledger-item, .ms-typing span, .ms-mic-live { animation: none; }
+  .ms-bar > i { transition: none; }
+  button.ms-kpi:hover, button.ms-kpi:hover:active { transform: none; }
+  .ms-btn:active:not(:disabled), .ms-chip:active:not(:disabled), .ms-topic:active, button.ms-kpi:active, button.ms-card-flat:active, .ms-bottom-nav button:active { transform: none; }
+}
+
+@media (max-width: 640px) {
+  .ms-kpi { padding: 10px 11px 9px; }
+  .ms-kpi-badge { width: 30px; height: 30px; border-radius: 9px; }
+}
+
+/* ---- type scale: 400 body · 500 label · 600 emphasis · 700 headings · 800 numbers ------------------------------
+   The Tailwind weight utilities used across the module are remapped one step lighter, so hierarchy comes from
+   size + weight contrast instead of everything being bold. */
+.ms-root .font-semibold { font-weight: 500; }
+.ms-root .font-bold { font-weight: 600; }
+.ms-root .font-extrabold { font-weight: 700; }
+.ms-root .font-black { font-weight: 800; }
+.ms-root h1, .ms-root h2, .ms-root h3 { text-wrap: balance; }
+.ms-root p, .ms-root li { text-wrap: pretty; }
+
+/* list rows: one container card, hairline dividers, no per-row chrome */
+.ms-row { border-color: var(--ms-line); transition: background-color 0.15s; }
+.ms-row:first-child { border-radius: 18px 18px 0 0; }
+.ms-row:last-child { border-radius: 0 0 18px 18px; }
+.ms-row:only-child { border-radius: 18px; }
+.ms-row + .ms-row { border-top: 1px solid var(--ms-line); }
+@media (hover: hover) and (pointer: fine) { .ms-row:hover { background: var(--ms-panel-2); } }
+
+/* findings + ledger: one hue signal (the kind pill) — no coloured edge, no shadow */
+.ms-ledger-item.is-plain { border: 1px solid var(--ms-line); box-shadow: none; background: var(--ms-panel); }
+.ms-bubble-lead { display: inline-block; vertical-align: -2px; margin-inline-end: 6px; opacity: 0.75; }
+
+/* row overflow menu */
+.ms-menu { position: absolute; z-index: 20; top: calc(100% + 4px); inset-inline-end: 0; min-width: 150px; padding: 4px; background: var(--ms-panel); border: 1px solid var(--ms-line-2); border-radius: 12px; box-shadow: var(--ms-shadow); animation: ms-pop 0.16s var(--ms-ease-out) both; transform-origin: top; }
+.ms-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ms-ink); font-size: 12.5px; font-weight: 600; text-align: right; }
+.ms-menu button.is-danger { color: var(--ms-bad); }
+@media (hover: hover) and (pointer: fine) { .ms-menu button:hover { background: var(--ms-panel-2); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-tl-node { animation-name: ms-tl-fade; }
+  .ms-tl-link i { animation: none !important; transform: none; }
+  .ms-tl-step.is-now .ms-tl-node::after { animation: none; opacity: 0.35; transform: scale(1.25); }
+  .ms-link-arrow, .ms-link:active { transform: none !important; }
+}

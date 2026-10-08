@@ -1,265 +1,68 @@
 import { useState } from 'react'
-import { FolderTree, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { FolderTree, Plus } from 'lucide-react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMasterDataStore } from '../store/useMasterDataStore'
 import { PORTFOLIO_PROGRAM_STATUSES, PORTFOLIO_PROGRAM_STATUS_LABEL_FA, type PortfolioProgramStatus, type Program } from '../types'
+import { LEVEL_COLOR } from '../lib/colors'
+import { DeleteButton, Empty, Field, PageHead, Sheet, faNum, initials } from '../components/md'
 
-const EMPTY_FORM = {
-  code: '',
-  name: '',
-  description: '',
-  portfolioId: '',
-  programManagerId: '',
-  sponsorId: '',
-  status: 'active' as PortfolioProgramStatus,
-  startDate: '',
-  plannedFinish: '',
-  strategicObjectives: '',
-}
+const TONE: Record<PortfolioProgramStatus, 'ok' | 'warn' | undefined> = { active: 'ok', on_hold: 'warn', closed: undefined }
 
+/** Phase 3 of the set-up: a program (طرح) belongs to a portfolio and collects its projects. */
 export function ProgramsPage() {
   const programs = useMasterDataStore((s) => s.programs)
   const portfolios = useMasterDataStore((s) => s.portfolios)
+  const projects = useMasterDataStore((s) => s.projects)
   const users = useMasterDataStore((s) => s.users)
-  const createProgram = useMasterDataStore((s) => s.createProgram)
-  const updateProgram = useMasterDataStore((s) => s.updateProgram)
-  const deleteProgram = useMasterDataStore((s) => s.deleteProgram)
-
-  const [editing, setEditing] = useState<Program | null>(null)
-  const [showNew, setShowNew] = useState(false)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  const portfolioName = (id: string | null) => portfolios.find((p) => p.id === id)?.name ?? '—'
-  const userName = (id: string | null) => users.find((u) => u.id === id)?.fullName || users.find((u) => u.id === id)?.email || '—'
-
+  const create = useMasterDataStore((s) => s.createProgram)
+  const update = useMasterDataStore((s) => s.updateProgram)
+  const remove = useMasterDataStore((s) => s.deleteProgram)
+  const [sheet, setSheet] = useState<Program | 'new' | null>(null)
+  const nameOf = (id: string | null) => users.find((u) => u.id === id)?.fullName
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-extrabold">طرح‌ها (Program)</h2>
-          <p className="text-xs text-secondary">گروه هماهنگ‌شده‌ای از پروژه‌های مرتبط، زیرمجموعه یک پورتفولیو</p>
-        </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-medium text-white hover:bg-brand-400 transition-colors"
-        >
-          <Plus size={14} /> طرح جدید
-        </button>
+    <div className="mx-auto max-w-[1040px]">
+      <PageHead title="طرح‌ها" hint="هر طرح زیر یک پورتفولیو قرار می‌گیرد و مدیر طرح و حامی خودش را دارد." actions={<button className="md-btn md-btn-primary" onClick={() => setSheet('new')}><Plus size={15} /> طرح جدید</button>} />
+      <div className="md-panel overflow-hidden">
+        {programs.length === 0 ? <Empty icon={<FolderTree size={20} />} title="هنوز طرحی ثبت نشده" text={portfolios.length ? 'اولین طرح را زیر یکی از پورتفولیوها بسازید.' : 'ابتدا یک پورتفولیو تعریف کنید.'} /> : programs.map((g, i) => (
+          <button key={g.id} className="md-row md-in" style={{ '--i': i } as React.CSSProperties} onClick={() => setSheet(g)}>
+            <span className="md-avatar" style={{ '--c': LEVEL_COLOR.program } as React.CSSProperties} aria-hidden>{initials(g.name)}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-2"><b className="truncate text-[13.5px]">{g.name}</b>{g.code && <span className="md-eyebrow md-num" dir="ltr">{g.code}</span>}<span className="md-badge" data-tone={TONE[g.status]}>{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[g.status]}</span></span>
+              <span className="md-eyebrow block truncate">{portfolios.find((p) => p.id === g.portfolioId)?.name ?? 'بدون پورتفولیو'}{nameOf(g.programManagerId) ? `  |  مدیر طرح: ${nameOf(g.programManagerId)}` : ''}</span>
+            </span>
+            <span className="md-eyebrow md-num shrink-0">{faNum(projects.filter((j) => j.programId === g.id).length)} پروژه</span>
+          </button>
+        ))}
       </div>
-
-      <div className="glass-panel rounded-2xl overflow-hidden">
-        {programs.length === 0 ? (
-          <p className="p-6 text-center text-xs text-muted">هنوز طرحی ثبت نشده است</p>
-        ) : (
-          <div className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
-            {programs.map((pg) => (
-              <div key={pg.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-400">
-                  <FolderTree size={16} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    {pg.code && <span className="shrink-0 text-[10px] text-muted num">{pg.code}</span>}
-                    <p className="text-sm font-medium truncate">{pg.name}</p>
-                    <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
-                      {PORTFOLIO_PROGRAM_STATUS_LABEL_FA[pg.status]}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted truncate">
-                    {portfolioName(pg.portfolioId)} {pg.programManagerId && `— مدیر طرح: ${userName(pg.programManagerId)}`}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button onClick={() => setEditing(pg)} className="rounded-lg p-1.5 text-muted hover:text-brand-400 transition-colors" title="ویرایش">
-                    <Pencil size={13} />
-                  </button>
-                  {confirmDeleteId === pg.id ? (
-                    <>
-                      <button onClick={() => { deleteProgram(pg.id); setConfirmDeleteId(null) }} className="text-[11px] text-red-400 hover:underline px-1">
-                        تایید
-                      </button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] text-secondary hover:underline px-1">
-                        انصراف
-                      </button>
-                    </>
-                  ) : (
-                    <button onClick={() => setConfirmDeleteId(pg.id)} className="rounded-lg p-1.5 text-muted hover:text-red-400 transition-colors" title="حذف">
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {showNew && (
-        <ProgramModal
-          portfolios={portfolios}
-          users={users}
-          onClose={() => setShowNew(false)}
-          onSubmit={async (data) => {
-            await createProgram(data)
-            setShowNew(false)
-          }}
-        />
-      )}
-      {editing && (
-        <ProgramModal
-          initial={editing}
-          portfolios={portfolios}
-          users={users}
-          onClose={() => setEditing(null)}
-          onSubmit={async (data) => {
-            await updateProgram(editing.id, data)
-            setEditing(null)
-          }}
-        />
-      )}
+      {sheet && <ProgramSheet initial={sheet === 'new' ? undefined : sheet} onClose={() => setSheet(null)} onSave={async (d) => { if (sheet === 'new') await create(d); else await update(sheet.id, d); setSheet(null) }} onDelete={sheet === 'new' ? undefined : async () => { await remove(sheet.id); setSheet(null) }} />}
     </div>
   )
 }
 
-function ProgramModal({
-  initial,
-  portfolios,
-  users,
-  onClose,
-  onSubmit,
-}: {
-  initial?: Program
-  portfolios: { id: string; name: string }[]
-  users: { id: string; email: string; fullName: string }[]
-  onClose: () => void
-  onSubmit: (data: Partial<Program>) => Promise<void>
-}) {
-  const [form, setForm] = useState(
-    initial
-      ? {
-          code: initial.code,
-          name: initial.name,
-          description: initial.description,
-          portfolioId: initial.portfolioId ?? '',
-          programManagerId: initial.programManagerId ?? '',
-          sponsorId: initial.sponsorId ?? '',
-          status: initial.status,
-          startDate: initial.startDate ?? '',
-          plannedFinish: initial.plannedFinish ?? '',
-          strategicObjectives: initial.strategicObjectives,
-        }
-      : EMPTY_FORM,
-  )
-  const [saving, setSaving] = useState(false)
-
-  const submit = async () => {
-    if (!form.name.trim()) return
-    setSaving(true)
-    await onSubmit(form)
-    setSaving(false)
-  }
-
+function ProgramSheet({ initial, onClose, onSave, onDelete }: { initial?: Program; onClose: () => void; onSave: (d: Partial<Program>) => Promise<void>; onDelete?: () => void }) {
+  const portfolios = useMasterDataStore((s) => s.portfolios)
+  const users = useMasterDataStore((s) => s.users)
+  const [f, setF] = useState({ code: initial?.code ?? '', name: initial?.name ?? '', description: initial?.description ?? '', portfolioId: initial?.portfolioId ?? '', programManagerId: initial?.programManagerId ?? '', sponsorId: initial?.sponsorId ?? '', status: initial?.status ?? ('active' as PortfolioProgramStatus), startDate: initial?.startDate ?? '', plannedFinish: initial?.plannedFinish ?? '', strategicObjectives: initial?.strategicObjectives ?? '' })
+  const [busy, setBusy] = useState(false)
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }))
+  const userOpts = <>{<option value="">بدون انتخاب</option>}{users.map((u) => <option key={u.id} value={u.id}>{u.fullName || u.email}</option>)}</>
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="glass-panel w-full max-w-lg rounded-2xl p-5 space-y-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-extrabold">{initial ? 'ویرایش طرح' : 'طرح جدید'}</h3>
-          <button onClick={onClose} className="text-muted hover:text-current">
-            <X size={16} />
-          </button>
+    <Sheet title={initial ? 'ویرایش طرح' : 'طرح جدید'} onClose={onClose} footer={<>{onDelete && <span className="me-auto"><DeleteButton onConfirm={onDelete} label="حذف" /></span>}<button className="md-btn" onClick={onClose}>انصراف</button><button className="md-btn md-btn-primary" disabled={!f.name.trim() || busy} onClick={async () => { setBusy(true); await onSave({ ...f, portfolioId: f.portfolioId || null, programManagerId: f.programManagerId || null, sponsorId: f.sponsorId || null, startDate: f.startDate || null, plannedFinish: f.plannedFinish || null }); setBusy(false) }}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button></>}>
+      <div className="grid gap-4">
+        <div className="grid grid-cols-[110px_1fr] gap-3"><Field label="کد"><input className="md-input md-num" dir="ltr" value={f.code} onChange={(e) => set('code', e.target.value)} /></Field><Field label="نام طرح"><input className="md-input" value={f.name} onChange={(e) => set('name', e.target.value)} autoFocus /></Field></div>
+        <Field label="پورتفولیو"><select className="md-input" value={f.portfolioId} onChange={(e) => set('portfolioId', e.target.value)}><option value="">بدون انتخاب</option>{portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+        <Field label="توضیحات"><textarea className="md-input" value={f.description} onChange={(e) => set('description', e.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="مدیر طرح"><select className="md-input" value={f.programManagerId} onChange={(e) => set('programManagerId', e.target.value)}>{userOpts}</select></Field>
+          <Field label="حامی (Sponsor)"><select className="md-input" value={f.sponsorId} onChange={(e) => set('sponsorId', e.target.value)}>{userOpts}</select></Field>
         </div>
-
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <label className="col-span-1 block">
-            <span className="mb-1 block text-xs text-secondary">کد</span>
-            <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className="input" dir="ltr" />
-          </label>
-          <label className="col-span-2 block">
-            <span className="mb-1 block text-xs text-secondary">نام طرح</span>
-            <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="input" autoFocus />
-          </label>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="وضعیت"><select className="md-input" value={f.status} onChange={(e) => set('status', e.target.value as PortfolioProgramStatus)}>{PORTFOLIO_PROGRAM_STATUSES.map((s) => <option key={s} value={s}>{PORTFOLIO_PROGRAM_STATUS_LABEL_FA[s]}</option>)}</select></Field>
+          <div><span className="md-label">شروع</span><JalaliDateInput value={f.startDate} onChange={(v) => set('startDate', v)} /></div>
+          <div><span className="md-label">پایان برنامه‌ای</span><JalaliDateInput value={f.plannedFinish} onChange={(v) => set('plannedFinish', v)} /></div>
         </div>
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">توضیحات</span>
-          <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="input" rows={2} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">پورتفولیو</span>
-          <select value={form.portfolioId} onChange={(e) => setForm((f) => ({ ...f, portfolioId: e.target.value }))} className="input">
-            <option value="">—</option>
-            {portfolios.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">مدیر طرح</span>
-            <select value={form.programManagerId} onChange={(e) => setForm((f) => ({ ...f, programManagerId: e.target.value }))} className="input">
-              <option value="">—</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.fullName || u.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">حامی (Sponsor)</span>
-            <select value={form.sponsorId} onChange={(e) => setForm((f) => ({ ...f, sponsorId: e.target.value }))} className="input">
-              <option value="">—</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.fullName || u.email}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">وضعیت</span>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as PortfolioProgramStatus }))} className="input">
-              {PORTFOLIO_PROGRAM_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {PORTFOLIO_PROGRAM_STATUS_LABEL_FA[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">تاریخ شروع</span>
-            <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} className="input num" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-secondary">پایان برنامه‌ریزی‌شده</span>
-            <input type="date" value={form.plannedFinish} onChange={(e) => setForm((f) => ({ ...f, plannedFinish: e.target.value }))} className="input num" />
-          </label>
-        </div>
-        <label className="block">
-          <span className="mb-1 block text-xs text-secondary">اهداف راهبردی</span>
-          <textarea
-            value={form.strategicObjectives}
-            onChange={(e) => setForm((f) => ({ ...f, strategicObjectives: e.target.value }))}
-            className="input"
-            rows={2}
-          />
-        </label>
-
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-secondary hover:bg-white/5">
-            انصراف
-          </button>
-          <button
-            onClick={submit}
-            disabled={!form.name.trim() || saving}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-400 disabled:opacity-40 transition-colors"
-          >
-            {saving ? 'در حال ذخیره...' : 'ذخیره'}
-          </button>
-        </div>
+        <Field label="اهداف راهبردی"><textarea className="md-input" value={f.strategicObjectives} onChange={(e) => set('strategicObjectives', e.target.value)} /></Field>
       </div>
-    </div>
+    </Sheet>
   )
 }

@@ -1,0 +1,360 @@
+/* ==========================================================================
+   Public results link — "کارت صلاحیت حرفه‌ای" (Professional Qualification Card).
+   Self-contained (imported only by PublicResultsPage.tsx, an unauthenticated route) rather than
+   built on farinTheme.css's .fx tokens, since this page never mounts the module shell those rely on.
+   Light/cream physical-ID-card look by explicit product request: thick plastic-card feel (a second
+   card peeking out behind, via .cred-card-wrap::before), heavily rounded corners, set on a deep
+   teal backdrop so the cream card reads clearly as an object — always the same regardless of the
+   viewer's own device theme.
+   The card's internal layout is authored dir="ltr" (photo on the visual left, medal on the visual
+   right, exactly like the reference) with Persian text blocks individually right-aligned and given
+   dir="rtl" where they mix words and numbers — Persian glyph shaping doesn't depend on container
+   direction, only paragraph/bidi order does. No text on the card may use the app's `.num` class: it
+   forces JetBrains Mono, whose Persian fallback renders letters disconnected.
+   ========================================================================== */
+
+.cred-stage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+  background: radial-gradient(90% 65% at 50% 0%, #1f5568 0%, #11323f 52%, #0a202b 100%);
+}
+
+.cred-card-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+}
+
+/* Glossy PVC sheen: a soft diagonal highlight across the face, over everything (pointer-events off). */
+.cred-card-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 30px;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0) 26%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0.04) 44%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 12%);
+}
+
+/* A real card is a slab: the cream face sits on a visibly thick edge. The solid, stepped box-shadows
+ * below extrude that edge down-right (one 1px step per layer, darkening as it goes), and the inset
+ * highlights bevel the rim itself — bright where light hits (top/left), darker opposite. */
+.cred-card {
+  direction: ltr;
+  position: relative;
+  z-index: 1;
+  border-radius: 30px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(135deg, rgba(150, 125, 60, 0.035) 0 1px, transparent 1px 6px),
+    linear-gradient(160deg, #fbf5e4 0%, #f7eed5 52%, #f1e6c6 100%);
+  border: 1px solid #fff6dc;
+  box-shadow:
+    inset 2px 2px 1px rgba(255, 255, 255, 0.95),
+    inset -2px -3px 2px rgba(168, 138, 62, 0.55),
+    inset 0 0 0 6px rgba(255, 250, 232, 0.5),
+    inset 0 0 0 7px rgba(190, 160, 80, 0.22),
+    1px 1px 0 #d6c486,
+    2px 2px 0 #c7b477,
+    3px 3px 0 #b8a468,
+    4px 4px 0 #a99559,
+    5px 5px 0 #9a854a,
+    10px 18px 26px -6px rgba(0, 0, 0, 0.7);
+  padding: 1.4rem 1.5rem 1.3rem;
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
+}
+
+/* Faint gold arcs in the corners, echoing an engraved-line certificate background. */
+.cred-card::before,
+.cred-card::after {
+  content: '';
+  position: absolute;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(160, 125, 35, 0.28);
+  pointer-events: none;
+}
+.cred-card::before {
+  width: 260px;
+  height: 260px;
+  top: -130px;
+  right: -110px;
+}
+.cred-card::after {
+  width: 200px;
+  height: 200px;
+  bottom: -110px;
+  left: -90px;
+}
+
+.cred-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.cred-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.cred-logo-text {
+  text-align: right;
+  line-height: 1.15;
+}
+
+.cred-title {
+  text-align: right;
+}
+
+/* Photo (visual left) and medal (visual right) share one row, the candidate's name between them. */
+.cred-band {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.cred-photo {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  flex-shrink: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #efe5c8;
+  border: 2px solid #cdb872;
+  box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
+}
+
+.cred-band-name {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.cred-medal-box {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 96px;
+}
+
+.cred-medal-wrap {
+  position: relative;
+}
+
+.cred-medal {
+  width: 78px;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(120, 96, 30, 0.35));
+}
+
+/* The overall score sits inside the medal's gold disc, with "از ۱۰۰" right under it so the number
+ * reads as a mark out of 100. The disc occupies the top ~55% of the artwork (the rest is the ribbon
+ * tails), so the stack is anchored there rather than at the true center of the whole image. */
+.cred-medal-score {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  color: #6b3a0a;
+}
+.cred-medal-score b {
+  font-size: 21px;
+  font-weight: 900;
+}
+.cred-medal-score small {
+  margin-top: 1px;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.cred-level-label {
+  text-align: center;
+}
+
+/* QR (visual left, where the photo used to be) beside the card's identifying details. */
+.cred-details {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+/* Photo and QR each sit in this same-width column, centred, so their centres share one vertical axis. */
+.cred-left-col {
+  width: 120px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.cred-qr-box {
+  flex-shrink: 0;
+  padding: 6px;
+  background: #fff;
+  border-radius: 14px;
+  border: 2px solid #cdb872;
+  box-shadow: 0 6px 16px -8px rgba(120, 96, 30, 0.45);
+}
+
+.cred-details-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cred-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* A single, non-wrapping row of small rings — one per interview domain, or one per supplementary
+ * indicator. Tiles share the width equally so 4 always fits one line on a phone. */
+.cred-ring-section {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed #cfbb7e;
+}
+
+.cred-ring-section-title {
+  margin-bottom: 0.55rem;
+  text-align: center;
+}
+
+.cred-ring-block + .cred-ring-block {
+  margin-top: 0.95rem;
+}
+
+/* PMI-style proficiency bar, centred under the QR/details row. */
+.cred-spectrum {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed #cfbb7e;
+}
+
+.cred-spectrum-body {
+  position: relative;
+  padding-top: 40px;
+}
+
+.cred-spectrum-pill {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #fffdf5;
+  border: 2px solid;
+  box-shadow: 0 3px 8px -3px rgba(60, 40, 0, 0.45);
+}
+
+.cred-spectrum-caret {
+  position: absolute;
+  top: 25px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid;
+}
+
+.cred-spectrum-bar {
+  position: relative;
+  display: flex;
+  height: 11px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(80, 55, 0, 0.3);
+}
+
+.cred-spectrum-seg {
+  flex: 1;
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.5),
+    inset 0 -2px 2px rgba(0, 0, 0, 0.18);
+}
+.cred-spectrum-seg:nth-child(1) {
+  border-radius: 9999px 0 0 9999px;
+}
+.cred-spectrum-seg:nth-child(4) {
+  border-radius: 0 9999px 9999px 0;
+}
+
+.cred-spectrum-knob {
+  position: absolute;
+  top: 50%;
+  width: 19px;
+  height: 19px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: #fff;
+  border: 3px solid #3b2f12;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.cred-spectrum-labels {
+  display: flex;
+  margin-top: 6px;
+}
+
+.cred-spectrum-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  direction: rtl;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cred-ring-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-around;
+  gap: 0.35rem;
+}
+
+.cred-ring-tile {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}

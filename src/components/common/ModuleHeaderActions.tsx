@@ -1,29 +1,35 @@
-import { Home } from 'lucide-react'
-import { SignOutButton } from '../Auth/SignOutButton'
+import { Home, LayoutDashboard } from 'lucide-react'
+import { useModuleStore } from '../../store/useModuleStore'
+import { UserChip } from './UserChip'
+import { ThemeSwitch } from './ThemeSwitch'
+import { NotificationBell } from './NotificationBell'
+import { ToolbarButton } from './ToolbarButton'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
+  /** Kept for call-site compatibility; the radar shortcut is no longer part of the bar. */
+  onBackToRadar?: () => void
   className?: string
 }
 
 /**
- * The two buttons every module header ends with — back to the module hub, and sign out — were
- * each reimplemented ad hoc per module with drifting styles (rounded-lg vs rounded-full, icon-only
- * vs labeled, different positions/orders, some skipping the shared SignOutButton entirely). One
- * component now renders both, in the same order, style, and trailing position, everywhere a module
- * shell needs them, so a user recognizes them on sight regardless of which module they're in.
+ * THE shortcut bar of the whole system. Same buttons, same order, same look in every module:
+ *   [photo + name ▾ (my profile · sign out)]  [alerts]  [light/dark]  [module first page]  [home / launchpad]
+ * Alerts = system messages and things waiting for the user's action. «صفحهٔ اول ماژول» restarts the current module at its first page.
  */
 export function ModuleHeaderActions({ onExitToHub, className = '' }: ModuleHeaderActionsProps) {
+  const goModuleHome = useModuleStore((s) => s.goModuleHome)
   return (
-    <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
-      <button
-        onClick={onExitToHub}
-        title="بازگشت به ماژول‌ها"
-        className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
-      >
-        <Home size={14} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-      </button>
-      <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors sm:px-3" />
+    <div className={`flex shrink-0 items-center gap-1.5 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
+      <UserChip />
+      <NotificationBell />
+      <ThemeSwitch />
+      <ToolbarButton label="صفحهٔ اول این ماژول" onClick={goModuleHome}>
+        <LayoutDashboard size={16} />
+      </ToolbarButton>
+      <ToolbarButton label="خانه (صفحهٔ اول سامانه)" onClick={onExitToHub}>
+        <Home size={16} />
+      </ToolbarButton>
     </div>
   )
 }

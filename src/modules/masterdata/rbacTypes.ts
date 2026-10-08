@@ -8,6 +8,10 @@ export type ModuleKeyRef =
   | 'material'
   | 'pipelinedigitaltwin'
   | 'competency'
+  | 'estimator'
+  | 'lifecycle'
+  | 'missions'
+  | 'landacq'
   | 'admin'
 
 export interface RastaModule {

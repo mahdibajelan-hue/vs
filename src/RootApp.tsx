@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react'
+import { Fragment, lazy, Suspense } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
+import { useAppThemeSync } from './components/common/useAppTheme'
 import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
-import { LoginScreen, Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
+import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
@@ -15,8 +16,18 @@ import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
+import { EstimatorApp } from './modules/estimator/EstimatorApp'
+import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
+import { MissionsApp } from './modules/missions/MissionsApp'
+import { LandAcqApp } from './modules/landacq/LandAcqApp'
+import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
+import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
+import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
+
+// One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
+const landRepo = createLandRepo()
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -24,31 +35,51 @@ const PipelineDigitalTwinApp = lazy(() =>
 )
 
 /**
- * Top-level flow: authenticate once (single shared account across every module), THEN show the
- * module hub — not the other way around. Previously each module wrapped itself in its own
- * AuthGate, so the hub appeared before login and only prompted for credentials once a module was
- * picked; since it's really one global Supabase session, that just meant an extra detour.
+ * Top-level flow: one shared account across every module, authenticated inline on the launchpad
+ * itself — there's no separate login screen. ModuleHub renders unconditionally on both sides of
+ * isAuthed; before sign-in its module cards are just locked previews, and entering credentials in
+ * its header unlocks them in place.
  */
 export function RootApp() {
+  useAppThemeSync()
   const authLoading = useAuthStore((s) => s.authLoading)
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const profileLoading = useAuthStore((s) => s.profileLoading)
   const profile = useAuthStore((s) => s.profile)
   const activeModule = useModuleStore((s) => s.activeModule)
+  const moduleResetKey = useModuleStore((s) => s.moduleResetKey)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
+  const backToRadar = useModuleStore((s) => s.backToRadar)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
   // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
-  // auth-gated rendering below, since it must never require a RASTA login.
+  // auth-gated rendering below, since it must never require a FARIN login.
   const candidateToken = new URLSearchParams(window.location.search).get('candidate')
   if (candidateToken) return <CandidateSelfServicePage token={candidateToken} />
 
   // Public "view results online" link (?results=<token>) — same idea, but for sharing a read-only
-  // results report with anyone holding the link, never requiring a RASTA login either.
+  // results report with anyone holding the link, never requiring a FARIN login either.
   const resultsToken = new URLSearchParams(window.location.search).get('results')
   if (resultsToken) return <PublicResultsPage token={resultsToken} />
+
+  // The personality module's own candidate-taking link (?p_candidate=<token>) — same reasoning as
+  // the competency links above, kept as a separate query param so the two modules' tokens never
+  // collide. The personality module no longer has a standalone top-level presence (its dashboard/
+  // results/question-bank/settings/reports pages are now reached through the Competency module —
+  // see CompetencyApp.tsx and AssessmentWizardPage's panel/personality stages), but this one
+  // route survives: an unauthenticated candidate must still be able to answer via their link. The
+  // old public "view results online" link (?p_results=<token>, PersonalityPublicResultsPage) is no
+  // longer routed — staff now view personality results inline in the competency wizard instead.
+  const personalityCandidateToken = new URLSearchParams(window.location.search).get('p_candidate')
+  if (personalityCandidateToken) return <PersonalityCandidatePage token={personalityCandidateToken} />
+
+  // The competency module's online technical MCQ test link (?mcq=<token>, schema.sql Section 56) —
+  // the second ONLINE part of the candidate's plan next to the personality link above, on its own
+  // query param so the three candidate tokens never collide.
+  const mcqCandidateToken = new URLSearchParams(window.location.search).get('mcq')
+  if (mcqCandidateToken) return <McqCandidatePage token={mcqCandidateToken} />
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (
@@ -58,7 +89,10 @@ export function RootApp() {
     )
   }
 
-  if (!isAuthed) return <LoginScreen />
+  // Sign-in is inline on the launchpad itself (Header's login form) rather than a separate
+  // screen — ModuleHub renders the same page either way, just with module cards locked until
+  // isAuthed flips.
+  if (!isAuthed) return <ModuleHub onEnterModule={enterModule} />
 
   if (profile && !profile.profileCompleted) {
     return (
@@ -90,22 +124,30 @@ export function RootApp() {
     )
   }
 
-  return activeModule === 'pipepulse' ? (
+  const moduleView = activeModule === 'pipepulse' ? (
     <App />
   ) : activeModule === 'risk' ? (
-    <RiskApp onExitToHub={exitToHub} />
+    <RiskApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'issues' ? (
-    <IssuesApp onExitToHub={exitToHub} />
+    <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'reporting' ? (
-    <ReportingApp onExitToHub={exitToHub} />
+    <ReportingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'executive' ? (
-    <ExecutiveApp onExitToHub={exitToHub} />
+    <ExecutiveApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'finance' ? (
-    <FinanceApp onExitToHub={exitToHub} />
+    <FinanceApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'material' ? (
-    <MaterialApp onExitToHub={exitToHub} />
+    <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
     <CompetencyApp onExitToHub={exitToHub} />
+  ) : activeModule === 'estimator' ? (
+    <EstimatorApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'missions' ? (
+    <MissionsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'landacq' ? (
+    <LandAcqApp repo={landRepo} onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'lifecycle' ? (
+    <LifecycleApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pipelinedigitaltwin' ? (
     <Suspense
       fallback={
@@ -114,9 +156,12 @@ export function RootApp() {
         </div>
       }
     >
-      <PipelineDigitalTwinApp onExitToHub={exitToHub} />
+      <PipelineDigitalTwinApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
     </Suspense>
   ) : (
-    <AdminApp onExitToHub={exitToHub} />
+    <AdminApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   )
+
+  // «صفحهٔ اول ماژول» bumps moduleResetKey, which remounts the active module at its first page.
+  return <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
 }

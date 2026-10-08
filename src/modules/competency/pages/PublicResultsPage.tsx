@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Award, Briefcase, BookOpen, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, TrendingDown, TrendingUp, User } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { Calendar, CalendarCheck, IdCard, User } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
-import { formatJalali } from '../../../lib/jalali'
-import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
-import { ApprovalMedal } from '../components/ApprovalMedal'
-import { computeCompletion, computeDomainScores, computeOverallPercent, domainFlags, maturityBand, tierColor } from '../lib/competencyModel'
-import type { CompetencyAnswers, CompetencyDomainKey, CompetencyQuestion } from '../types'
+import { FarinMark } from '../../../components/common/Logo'
+import { formatJalali, isoToJalali } from '../../../lib/jalali'
+import { getCompDocSignedUrl } from '../lib/compStorage'
+import { approvalLevel, computeCompletion, computeDomainScores, computeOverallPercent, tierColor } from '../lib/competencyModel'
+import { OpenToWorkRing } from '../components/OpenToWorkRing'
+import { computeResultStatus, interpretMaturity } from '../lib/maturityGuidance'
+import { useRoleGuidanceStore } from '../store/useRoleGuidanceStore'
+import { computeCategoryScores, isProjectManagerRole } from '../lib/roleCompetencyModel'
+import type { CompetencyAnswers, JobRole, QuestionType } from '../types'
+import '../styles/idCard.css'
 
-/** The token-scoped question list the RPC returns alongside the result — just enough shape to
- * compute domain scores (key/domain/sortOrder), never text or referenceAnswer: this public link
- * shows aggregate scores only, so there's no reason to expose question wording or model answers. */
-interface PublicResultQuestionRow {
+interface ResolvedQuestion {
   id: string
-  domain_key: string
-  legacy_key: string | null
-  sort_order: number
+  category: QuestionType
+  score: number | null
 }
 
 interface PublicResultsRow {
   id: string
   candidate_name: string
   candidate_position: string
-  job_position_id: string | null
+  job_role: JobRole
   interview_date: string
   status: string
   answers: CompetencyAnswers
@@ -34,19 +36,119 @@ interface PublicResultsRow {
   is_approved: boolean
   strengths: string
   development_areas: string
-  questions: PublicResultQuestionRow[]
+  resolved_questions: ResolvedQuestion[]
+  photo_url: string | null
+  work_status?: string | null
+  work_project_name?: string | null
+}
+
+/** One behavioral/HSE interview competency from comp_public_competency_scores_get (schema.sql Section 60). */
+interface PublicCompetencyScore {
+  key: string
+  label_fa: string
+  score: number
+}
+
+interface RingTileData {
+  key: string
+  label: string
+  value: number
+  ring: string
+  text: string
+}
+
+// Two varied fixed palettes — one cycled over the interview domains, a different one for the
+// competency row so the two rows never read as the same series. Each entry pairs a vivid ring
+// color with a darker same-hue shade for the number inside it: the vivid tone alone was too low-contrast
+// to read at this size (especially amber/sky).
+const DOMAIN_PALETTE: { ring: string; text: string }[] = [
+  { ring: '#8b5cf6', text: '#5b21b6' },
+  { ring: '#0ea5e9', text: '#075985' },
+  { ring: '#f59e0b', text: '#92400e' },
+  { ring: '#10b981', text: '#065f46' },
+  { ring: '#ec4899', text: '#9d174d' },
+  { ring: '#6366f1', text: '#3730a3' },
+  { ring: '#ef4444', text: '#991b1b' },
+  { ring: '#14b8a6', text: '#115e59' },
+]
+const COMPETENCY_PALETTE: { ring: string; text: string }[] = [
+  { ring: '#ef4444', text: '#991b1b' },
+  { ring: '#0ea5e9', text: '#075985' },
+  { ring: '#8b5cf6', text: '#5b21b6' },
+  { ring: '#14b8a6', text: '#115e59' },
+]
+
+/** Zones of the proficiency bar, taken from the module's maturity bands (MATURITY_BAND_DEFS):
+ * red = پرریسک+پایه (0-49), orange = مشروط (50-59, the conditional-approval band), yellow = قابل‌قبول
+ * (60-74), green = توانمند+راهبردی (75-100). The bar draws the zones at equal width (like the PMI
+ * result bar) and maps the score piecewise onto them, so the marker lands in the zone the
+ * candidate's band actually belongs to. */
+const ZONES = [
+  { key: 'red', label: 'نیازمند توسعه', range: '۰ تا ۴۹', min: 0, span: 50, from: '#f87171', to: '#dc2626' },
+  { key: 'orange', label: 'مشروط', range: '۵۰ تا ۵۹', min: 50, span: 10, from: '#fdba74', to: '#ea580c' },
+  { key: 'yellow', label: 'قابل‌قبول', range: '۶۰ تا ۷۴', min: 60, span: 15, from: '#fde047', to: '#eab308' },
+  { key: 'green', label: 'توانمند', range: '۷۵ تا ۱۰۰', min: 75, span: 25, from: '#4ade80', to: '#16a34a' },
+] as const
+// The bar is drawn left→right red, orange, yellow, green, so green ends up on the right.
+
+function zoneIndex(score: number): number {
+  return score < 50 ? 0 : score < 60 ? 1 : score < 75 ? 2 : 3
+}
+
+/** 0-1 position of a 0-100 score along the equal-width zones. */
+function zonePosition(score: number): number {
+  const p = Math.max(0, Math.min(100, score))
+  const i = zoneIndex(p)
+  const z = ZONES[i]
+  return (i + Math.min(1, (p - z.min) / z.span)) / ZONES.length
+}
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
+const toFa = (s: string | number) => String(s).replace(/\d/g, (d) => FA_DIGITS[Number(d)])
+
+/** A short, stable 6-digit credential number derived from the assessment's own (immutable) id — no
+ * schema change needed, and it never changes on reload since it's a pure function of the id. */
+function credentialNumber(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return String(100000 + (h % 900000))
+}
+
+/** Same Jalali date the rest of the app shows for "issued", plus the same date 2 years later for
+ * "valid until" — a conventional certificate validity window, computed rather than stored. */
+function issueAndExpiry(iso: string): { issued: string; expires: string } {
+  const issued = formatJalali(iso)
+  const j = isoToJalali(iso)
+  const expires = j ? `${j.jy + 2}/${String(j.jm).padStart(2, '0')}/${String(j.jd).padStart(2, '0')}` : ''
+  return { issued: toFa(issued), expires: toFa(expires) }
 }
 
 /**
  * Public, unauthenticated "view results online" page reached via a secret-link token
- * (?results=<token>). Deliberately shows only what comp_public_results_get returns — the scored
- * result itself, never the interviewer panel (who scored, their names, their individual sheets)
- * and never the candidate's contact/personal-profile fields. See supabase/schema.sql section 19.
+ * (?results=<token>). Deliberately shows only what comp_public_results_get / comp_public_competency_scores_get
+ * return — the scored result itself and a few aggregate indicators, never the interviewer panel (who
+ * scored, their names, their individual sheets) and never the candidate's contact/personal-profile
+ * fields. See supabase/schema.sql sections 19 and 60.
+ *
+ * A permanent, printable-looking "Professional Qualification Card" matching a physical-ID-card
+ * reference: photo and qualification medal (carrying the overall score out of 100) on one row, a QR
+ * code pointing back at this same page beside the credential number and issue/expiry dates, a
+ * three-zone proficiency bar marking where the candidate stands, then rows of mini-rings for the
+ * structured interview — its own domain breakdown plus four behavioral/HSE competencies. The full report stays available
+ * to staff inside the app.
  */
 export function PublicResultsPage({ token }: { token: string }) {
   const [row, setRow] = useState<PublicResultsRow | null>(null)
+  const [competencies, setCompetencies] = useState<PublicCompetencyScore[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // Role- and band-specific interpretation text (Section 57; readable anonymously) — only the band
+  // label is shown here now, but interpretMaturity is what computes it.
+  const guidanceRows = useRoleGuidanceStore((s) => s.rows)
+  const fetchGuidance = useRoleGuidanceStore((s) => s.fetch)
+  useEffect(() => {
+    fetchGuidance()
+  }, [fetchGuidance])
 
   useEffect(() => {
     supabase
@@ -59,203 +161,276 @@ export function PublicResultsPage({ token }: { token: string }) {
         }
         setRow(data[0] as PublicResultsRow)
       })
+    // Best-effort: the card is complete without these, so a failure just hides the competency row.
+    supabase.rpc('comp_public_competency_scores_get', { p_token: token }).then(({ data, error }) => {
+      if (!error && Array.isArray(data)) setCompetencies(data as PublicCompetencyScore[])
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+      <div className="cred-stage">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
       </div>
     )
   }
 
   if (notFound || !row) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center p-6 text-center" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-        <p className="max-w-sm text-sm text-secondary">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
+      <div className="cred-stage">
+        <p className="max-w-sm text-center text-sm text-stone-200">این لینک نامعتبر است یا منقضی شده. لطفاً با تیم مصاحبه‌کننده تماس بگیرید.</p>
       </div>
     )
   }
 
-  const questions: CompetencyQuestion[] = row.questions.map((q) => ({
-    key: q.legacy_key ?? q.id,
-    id: q.id,
-    jobPositionId: row.job_position_id ?? '',
-    domain: q.domain_key as CompetencyDomainKey,
-    text: '',
-    referenceAnswer: '',
-    sortOrder: q.sort_order,
-    isActive: true,
-  }))
-  const domainScores = computeDomainScores(questions, row.answers)
+  // A PM candidate can now be scored either way — the fixed in-code rubric (legacy, resolved_questions
+  // empty) or the DB-backed question bank exactly like every other role (resolved_questions
+  // populated) — see usesLegacyPmRubric/comp_public_results_get.
+  const isPM = isProjectManagerRole(row.job_role) && row.resolved_questions.length === 0
+  const officialAnswers: CompetencyAnswers = isPM
+    ? row.answers
+    : Object.fromEntries(row.resolved_questions.map((q) => [q.id, { score: q.score, note: '' }]))
+  const domainScores = isPM ? computeDomainScores(officialAnswers) : computeCategoryScores(row.resolved_questions, officialAnswers)
   const overall = computeOverallPercent(domainScores)
-  const band = maturityBand(overall)
-  const completion = computeCompletion(questions, row.answers)
-  const { strengths, weaknesses } = domainFlags(domainScores)
+  const completion = isPM
+    ? computeCompletion(officialAnswers)
+    : {
+        answered: row.resolved_questions.filter((q) => q.score != null).length,
+        total: row.resolved_questions.length,
+        percent: row.resolved_questions.length === 0 ? 0 : Math.round((row.resolved_questions.filter((q) => q.score != null).length / row.resolved_questions.length) * 100),
+      }
+  const resultStatus = computeResultStatus(domainScores, overall, completion)
+  const interp = interpretMaturity({
+    jobRole: row.job_role,
+    roleLabel: row.candidate_position || row.job_role,
+    overall,
+    domainScores,
+    guidanceRows,
+    sufficient: resultStatus.state === 'final',
+  })
+  const tier = tierColor(overall)
+  const approval = approvalLevel(row.is_approved, overall)
 
-  const qualificationChips = [
-    { label: 'مدرک تحصیلی', icon: GraduationCap, value: row.education_score },
-    { label: 'سوابق کاری مرتبط', icon: Briefcase, value: row.experience_score },
-    { label: 'دوره‌های حرفه‌ای', icon: BookOpen, value: row.pm_training_score },
-    { label: 'صلاحیت حرفه‌ای', icon: Award, value: row.pm_certification_score },
-    { label: 'نتایج مصاحبه', icon: MessageSquareText, value: overall != null ? Math.round((overall / 20) * 10) / 10 : null },
-  ]
+  // The structured interview's own domain-level breakdown — real evidence specific to this candidate
+  // (their actual per-domain interview scores), never a generic placeholder set.
+  const domainTiles: RingTileData[] = domainScores
+    .filter((d) => d.percentScore != null)
+    .map((d, i) => ({ key: d.domain.key, label: d.domain.shortTitle, value: d.percentScore as number, ...DOMAIN_PALETTE[i % DOMAIN_PALETTE.length] }))
+
+  const competencyTiles: RingTileData[] = competencies.map((c, i) => ({
+    key: c.key,
+    label: c.label_fa,
+    value: c.score,
+    ...COMPETENCY_PALETTE[i % COMPETENCY_PALETTE.length],
+  }))
+
+  const { issued, expires } = issueAndExpiry(row.interview_date)
+  const cardNo = credentialNumber(row.id)
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
 
   return (
-    <div className="comp-shell min-h-screen p-4 sm:p-6" style={{ background: 'var(--bg-app)', colorScheme: 'dark' }}>
-      <div className="mx-auto max-w-3xl space-y-4">
-        <div className="glass-panel rounded-2xl p-4 text-center">
-          <p className="text-sm font-bold">نتیجه ارزیابی شایستگی — سامانه RASTA</p>
-          <p className="mt-1 text-[11px] text-muted">این نمای فقط‌خواندنی نتیجهٔ ارزیابی است.</p>
-        </div>
+    <div className="cred-stage">
+      <div className="cred-card-wrap">
+        <div className="cred-card" style={{ '--cred-tier': tier } as React.CSSProperties}>
+          <div className="cred-header">
+            <div className="cred-logo">
+              <FarinMark size={48} />
+              <div className="cred-logo-text">
+                <p className="text-[17px] font-extrabold text-stone-800">فرین</p>
+                <p className="text-[11.5px] font-medium text-stone-500">Farin</p>
+              </div>
+            </div>
+            <div className="cred-title">
+              <p className="text-[13.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
+              <p className="text-[10px] font-medium text-stone-500">Professional Qualification Card</p>
+              {row.candidate_position && <p className="mt-1 text-[12px] font-bold leading-5 text-stone-700">{row.candidate_position}</p>}
+            </div>
+          </div>
 
-        <div className="glass-panel relative overflow-hidden rounded-2xl">
-          <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-l from-purple-500/15 via-transparent to-transparent p-5 sm:flex-row sm:items-center">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-purple-400/40 bg-white/5">
-              <User size={28} className="text-muted" />
+          <div className="cred-band">
+            <div className="cred-left-col">
+              <OpenToWorkRing active={row.work_status === 'open_to_work'} size={112} shape="square" radius={20}>
+                <PublicPhoto path={row.photo_url} />
+              </OpenToWorkRing>
             </div>
-            <div className="flex-1 text-center sm:text-right">
-              <p className="flex items-center justify-center gap-1.5 text-lg font-extrabold sm:justify-start">
-                {row.candidate_name}
-                {row.is_approved && <ApprovalMedal />}
-              </p>
-              <p className="text-xs text-muted">{row.candidate_position}</p>
-              <p className="mt-2 text-[11px] text-secondary">تاریخ مصاحبه: {formatJalali(row.interview_date)}</p>
+            <div className="cred-band-name">
+              <p className="text-[22px] font-black leading-8 text-stone-900">{row.candidate_name}</p>
+              {row.work_status === 'on_project' && row.work_project_name && (
+                <p className="mt-1 text-[12px] font-extrabold leading-5 text-sky-800">شاغل در پروژه {row.work_project_name}</p>
+              )}
+              {approval === 'conditional' && <p className="mt-1 text-[11px] font-bold text-orange-700">دارای صلاحیت با تأیید مشروط</p>}
             </div>
-            <div
-              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-full text-center"
-              style={{ background: `conic-gradient(${tierColor(overall)} ${(overall ?? 0) * 3.6}deg, rgba(255,255,255,0.08) 0deg)` }}
-            >
-              <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#120a1e]">
-                <p className="num text-2xl font-extrabold" style={{ color: tierColor(overall) }}>
-                  {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-                </p>
-                <p className="mt-0.5 text-[10px] font-bold">{band.label}</p>
+            <div className="cred-medal-box">
+              <div className="cred-medal-wrap" role="img" aria-label={`امتیاز کلی ${overall != null ? toFa(overall) : '—'} از ۱۰۰`}>
+                <img src={`${import.meta.env.BASE_URL}credential-medal.png`} alt="" className="cred-medal" />
+                <span className="cred-medal-score">
+                  <b>{overall != null ? toFa(overall) : '—'}</b>
+                  <small>از ۱۰۰</small>
+                </span>
+              </div>
+              <p className="cred-level-label text-[11px] font-extrabold leading-4 text-stone-800">{interp.bandLabel}</p>
+            </div>
+          </div>
+
+          <div className="cred-details">
+            <div className="cred-left-col">
+              <div className="cred-qr-box">
+                <QRCodeSVG value={shareUrl} size={96} level="M" fgColor="#4a3c0f" bgColor="#ffffff" />
+              </div>
+            </div>
+            <div className="cred-details-text">
+              <div className="cred-meta-row">
+                <span dir="ltr" className="text-[12px] font-bold tracking-wide text-stone-700">
+                  FAR-{isoToJalali(row.interview_date)?.jy ?? ''}-{cardNo}
+                </span>
+                <IdCard size={13} className="shrink-0 text-stone-400" />
+              </div>
+              <div className="cred-meta-row">
+                <span dir="rtl" className="text-[11.5px] font-medium leading-5 text-stone-600">
+                  تاریخ صدور: {issued}
+                </span>
+                <Calendar size={13} className="shrink-0 text-stone-400" />
+              </div>
+              <div className="cred-meta-row">
+                <span dir="rtl" className="text-[11.5px] font-medium leading-5 text-stone-600">
+                  اعتبار تا: {expires}
+                </span>
+                <CalendarCheck size={13} className="shrink-0 text-stone-400" />
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="glass-panel rounded-2xl p-4">
-          <p className="mb-3 text-sm font-extrabold">کارت امتیاز شایستگی</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {qualificationChips.map((c) => {
-              const color = tierColor(c.value != null ? (c.value / 5) * 100 : null)
-              return (
-                <div
-                  key={c.label}
-                  className="relative overflow-hidden rounded-2xl border p-3.5 text-center"
-                  style={{ borderColor: `${color}40`, background: `linear-gradient(160deg, ${color}1c, transparent 70%)` }}
-                >
-                  <c.icon size={16} className="mx-auto mb-1.5" style={{ color }} />
-                  <p className="num text-2xl font-black leading-none" style={{ color }}>
-                    {c.value != null ? c.value.toLocaleString('fa-IR') : '—'}
-                    <span className="text-xs font-bold text-muted"> /۵</span>
-                  </p>
-                  <p className="mt-1.5 text-[10.5px] font-bold leading-4 text-secondary">{c.label}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+          {overall != null && <ProficiencyBar score={overall} label={interp.bandLabel} />}
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="glass-panel rounded-2xl p-4">
-            <p className="mb-2 text-xs font-bold">نمودار رادار بلوغ شایستگی</p>
-            <CompetencyRadarChart domainScores={domainScores} />
-            <p className="text-center text-[11px] text-muted">
-              {completion.answered.toLocaleString('fa-IR')} از {completion.total.toLocaleString('fa-IR')} سوال پاسخ داده شده ({completion.percent.toLocaleString('fa-IR')}٪)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="glass-panel rounded-2xl p-4">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold">
-                <Sparkles size={13} className="text-purple-300" /> تفسیر بلوغ و توصیه استفاده
-              </p>
-              <p className="text-[11px] leading-6 text-secondary">{band.guidance}</p>
-              <p className="mt-2 rounded-lg bg-purple-500/10 p-2.5 text-[11px] leading-6 text-purple-200">سمت‌های شغلی پیشنهادی: {band.suggestedPositions}</p>
+          {(domainTiles.length > 0 || competencyTiles.length > 0) && (
+            <div className="cred-ring-section">
+              <p className="cred-ring-section-title text-[11px] font-bold text-stone-600">نتایج مصاحبه ساختاریافته</p>
+              {domainTiles.length > 0 && <RingRow tiles={domainTiles} />}
+              {competencyTiles.length > 0 && <RingRow tiles={competencyTiles} />}
             </div>
-
-            {row.capstone_score != null && (
-              <div className="glass-panel rounded-2xl p-4">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-bold">
-                  <AlertTriangle size={13} className="text-amber-300" /> امتیاز سناریوی پایانی (بحران چندوجهی)
-                </p>
-                <p className="num text-lg font-extrabold">{row.capstone_score.toLocaleString('fa-IR')} / ۵</p>
-                {row.capstone_note && <p className="mt-1 text-[11px] leading-5 text-secondary">{row.capstone_note}</p>}
-              </div>
-            )}
-
-            {(strengths.length > 0 || weaknesses.length > 0) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                {strengths.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت برجسته (بر اساس امتیاز حوزه‌ها)
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{strengths.map((s) => s.domain.title).join('، ')}</p>
-                  </div>
-                )}
-                {weaknesses.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-300">
-                      <TrendingDown size={12} /> حوزه‌های نیازمند توسعه (بر اساس امتیاز حوزه‌ها)
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{weaknesses.map((s) => s.domain.title).join('، ')}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(row.strengths || row.development_areas) && (
-              <div className="glass-panel space-y-2.5 rounded-2xl p-4">
-                <p className="text-[11px] font-bold text-purple-200">جمع‌بندی مسئول ارزیابی</p>
-                {row.strengths && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-300">
-                      <TrendingUp size={12} /> نقاط قوت
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{row.strengths}</p>
-                  </div>
-                )}
-                {row.development_areas && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
-                      <TrendingDown size={12} /> زمینه‌های قابل بهبود
-                    </p>
-                    <p className="text-[11px] leading-6 text-secondary">{row.development_areas}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
+      </div>
 
-        <div className="glass-panel space-y-2 rounded-2xl p-4">
-          <p className="mb-1 text-xs font-bold">امتیاز به تفکیک حوزه (با وزن)</p>
-          {domainScores.map((d) => (
-            <div key={d.domain.key} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-[11px] text-secondary">
-                {d.domain.shortTitle} <span className="text-muted">(٪{d.domain.weight})</span>
+      <p className="max-w-[420px] text-center text-[10.5px] leading-5 text-stone-300">
+        این کارت خلاصه‌ای رسمی از نتیجه ارزیابی صلاحیت حرفه‌ای است؛ جزئیات کامل نزد تیم ارزیابی محفوظ است.
+      </p>
+    </div>
+  )
+}
+
+/** One non-wrapping row of mini rings. Ring size steps down as tiles are added so a longer series
+ * (the legacy PM rubric has 8 domains) still fits a single line on a phone. */
+function RingRow({ tiles }: { tiles: RingTileData[] }) {
+  const n = tiles.length
+  const size = n <= 4 ? 54 : n <= 6 ? 44 : 36
+  const numSize = n <= 4 ? 14 : n <= 6 ? 12 : 10
+  const labelSize = n <= 4 ? 9.5 : n <= 6 ? 9 : 8
+  return (
+    <div className="cred-ring-block">
+      <div className="cred-ring-row" dir="rtl">
+        {tiles.map((t) => (
+          <div key={t.key} className="cred-ring-tile">
+            <MiniRing value={t.value} color={t.ring} size={size} strokeWidth={size >= 44 ? 5 : 4}>
+              <span className="font-black leading-none" style={{ color: t.text, fontSize: numSize }}>
+                {toFa(Math.round(t.value))}
               </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full rounded-full transition-all" style={{ width: `${d.percentScore ?? 0}%`, background: tierColor(d.percentScore) }} />
-              </div>
-              <span className="num w-20 shrink-0 text-left text-[11px] text-muted">
-                {d.percentScore != null ? `٪${d.percentScore.toLocaleString('fa-IR')}` : '—'} ({d.answeredCount.toLocaleString('fa-IR')}/{d.totalCount.toLocaleString('fa-IR')})
-              </span>
+            </MiniRing>
+            <span className="font-bold leading-4 text-stone-600" style={{ fontSize: labelSize }}>
+              {t.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** PMI-style result bar: one continuous bar of three equal zones (red / yellow / green, green on the
+ * right) with a marker where the candidate stands. The knob sits at the exact position; the status
+ * pill above it is clamped inside the bar so it never leaves the card. */
+function ProficiencyBar({ score, label }: { score: number; label: string }) {
+  const t = zonePosition(score)
+  const zoneIdx = zoneIndex(score)
+  const pillT = Math.max(0.14, Math.min(0.86, t))
+  return (
+    <div className="cred-spectrum">
+      <p className="cred-ring-section-title text-[11px] font-bold text-stone-600">جایگاه متقاضی در ارزیابی</p>
+      <div className="cred-spectrum-body" dir="ltr">
+        <div className="cred-spectrum-pill" style={{ left: `${pillT * 100}%`, borderColor: ZONES[zoneIdx].to }}>
+          <span dir="rtl" className="text-[10.5px] font-extrabold text-stone-800">
+            وضعیت متقاضی: {label}
+          </span>
+        </div>
+        <div className="cred-spectrum-caret" style={{ left: `${t * 100}%`, borderTopColor: ZONES[zoneIdx].to }} />
+        <div className="cred-spectrum-bar">
+          {ZONES.map((z) => (
+            <div key={z.key} className="cred-spectrum-seg" style={{ background: `linear-gradient(180deg, ${z.from}, ${z.to})` }} />
+          ))}
+          <div className="cred-spectrum-knob" style={{ left: `${t * 100}%` }} />
+        </div>
+        <div className="cred-spectrum-labels">
+          {ZONES.map((z) => (
+            <div key={z.key} className="cred-spectrum-label">
+              <span className="text-[10.5px] font-bold text-stone-700">{z.label}</span>
+              <span className="text-[9.5px] font-medium text-stone-500">{z.range}</span>
             </div>
           ))}
         </div>
-
-        {row.is_approved && (
-          <div className="glass-panel flex items-center justify-center gap-1.5 rounded-2xl p-3 text-[11px] font-bold text-emerald-300">
-            <ShieldCheck size={14} /> صلاحیت این نامزد تایید شده است
-          </div>
-        )}
       </div>
+    </div>
+  )
+}
+
+/** Self-contained SVG ring (no farinTheme.css token dependency — this page must look identical
+ * regardless of the viewer's own device theme). */
+function MiniRing({ value, color, size, strokeWidth, children }: { value: number | null; color: string; size: number; strokeWidth: number; children?: React.ReactNode }) {
+  const r = (size - strokeWidth) / 2
+  const c = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value ?? 0))
+  const offset = c * (1 - pct / 100)
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${value != null ? toFa(Math.round(value)) : '—'} از ۱۰۰`}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#dccb9a" strokeWidth={strokeWidth} />
+        {value != null && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+          />
+        )}
+      </svg>
+      {children && <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>}
+    </div>
+  )
+}
+
+function PublicPhoto({ path }: { path: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    if (path) getCompDocSignedUrl(path).then((u) => active && setUrl(u))
+    return () => {
+      active = false
+    }
+  }, [path])
+  return (
+    <div className="cred-photo">
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <User size={28} className="text-stone-300" />
+        </div>
+      )}
     </div>
   )
 }

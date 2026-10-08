@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Plus } from 'lucide-react'
 import {
   DECISION_STATUS_LABEL_FA,
@@ -13,11 +13,14 @@ import {
 import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { formatJalali } from '../../../lib/jalali'
 import { ToneBadge } from '../components/ui'
+import { useDeepLinkStore } from '../../../store/useDeepLinkStore'
+import { MissionOriginChip } from '../../missions/integration/originChip'
 
 type Tab = 'decisions' | 'actions'
 
 export function DecisionCenterPage({ masterProjectId }: { masterProjectId: string }) {
-  const [tab, setTab] = useState<Tab>('decisions')
+  // Arrived from a mission finding («مشاهده در مدیریت اقدامات»): start on the actions tab.
+  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'reporting' ? 'actions' : 'decisions'))
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] p-1 w-fit">
@@ -173,6 +176,21 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
 
+  // Highlight the action a mission finding pointed at, once, then drop the request.
+  const pendingLink = useDeepLinkStore((s) => s.pending)
+  const clearLink = useDeepLinkStore((s) => s.clear)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const highlightRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (pendingLink?.module === 'reporting' && actions.some((a) => a.id === pendingLink.recordId)) {
+      setHighlightId(pendingLink.recordId)
+      clearLink()
+    }
+  }, [pendingLink, actions, clearLink])
+  useEffect(() => {
+    if (highlightId) highlightRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [highlightId])
+
   const submit = async () => {
     if (!form.title.trim()) return
     setCreating(true)
@@ -217,9 +235,14 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
       ) : (
         <div className="space-y-1.5">
           {actions.map((a) => (
-            <div key={a.id} className="glass-panel flex items-center justify-between gap-2 rounded-xl p-3">
+            <div
+              key={a.id}
+              ref={a.id === highlightId ? highlightRef : undefined}
+              className={`glass-panel flex items-center justify-between gap-2 rounded-xl p-3 ${a.id === highlightId ? 'ring-2 ring-teal-400' : ''}`}
+            >
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold">{a.title}</p>
+                <MissionOriginChip recordId={a.id} className="mt-1" />
                 <p className="mt-0.5 text-[10px] text-muted">
                   اولویت {RASTA_ACTION_PRIORITY_LABEL_FA[a.priority]}
                   {a.dueDate && ` · مهلت ${formatJalali(a.dueDate)}`}
