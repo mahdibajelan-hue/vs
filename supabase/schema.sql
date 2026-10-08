@@ -4554,7 +4554,7 @@ create policy "plc_docs_delete_admin" on storage.objects
 alter table im_issues add column if not exists source text not null default 'manual';
 alter table im_issues drop constraint if exists im_issues_source_check;
 alter table im_issues add constraint im_issues_source_check
-  check (source in ('manual', 'lifecycle_action'));
+  check (source in ('manual', 'lifecycle_action', 'mission_debrief', 'land_acquisition'));
 
 alter table im_issues add column if not exists related_action_id uuid references rasta_actions (id) on delete set null;
 
@@ -14615,7 +14615,7 @@ where m.key = 'missions'
 on conflict (module_key, action) do nothing;
 
 alter table im_issues drop constraint if exists im_issues_source_check;
-alter table im_issues add constraint im_issues_source_check check (source in ('manual', 'lifecycle_action', 'mission_debrief'));
+alter table im_issues add constraint im_issues_source_check check (source in ('manual', 'lifecycle_action', 'mission_debrief', 'land_acquisition'));
 
 alter table rasta_actions drop constraint if exists rasta_actions_source_check;
 alter table rasta_actions add constraint rasta_actions_source_check
