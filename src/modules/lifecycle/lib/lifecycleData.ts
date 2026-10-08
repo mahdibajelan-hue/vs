@@ -47,6 +47,7 @@ export interface PlcStageRow {
   actual_finish: string | null
   forecast_finish: string | null
   progress: number
+  standard_days?: number
 }
 
 export function stageFromRow(r: PlcStageRow): ProjectStage {
@@ -63,6 +64,7 @@ export function stageFromRow(r: PlcStageRow): ProjectStage {
     actualFinish: r.actual_finish,
     forecastFinish: r.forecast_finish,
     progress: r.progress,
+    standardDays: r.standard_days ?? 0,
   }
 }
 

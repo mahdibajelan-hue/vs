@@ -268,6 +268,7 @@ export interface ProjectStage {
   actualFinish: string | null
   forecastFinish: string | null
   progress: number
+  standardDays: number
 }
 
 /* ------------------------------------------------------------------- health */

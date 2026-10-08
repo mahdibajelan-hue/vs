@@ -17,6 +17,9 @@ import { EvidencePanel } from '../components/EvidencePanel'
 import { TowerTile } from '../components/TowerTile'
 import { GateDecisionPanel } from '../components/GateDecisionPanel'
 import { GateProgressPanel } from '../components/GateProgressPanel'
+import { GateHero } from '../components/GateHero'
+import { GateGantt } from '../components/GateGantt'
+import { plannedPct } from '../lib/gateProgress'
 import { gateProgressFromLog, KIND_LABEL_FA, type GateEngine, type GateItemKind } from '../lib/gateModel'
 
 /**
@@ -50,6 +53,31 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
   const isCurrent = bundle.lifecycle?.currentStageKey === stageKey
   const gateItems = items
   const gateProgress = gateProgressFromLog((gate?.engine ?? 'step') as GateEngine, gateItems, bundle.progressLog.filter((e) => e.gateId === gate?.id))
+  const orderedStages = bundle.stages.slice().sort((a, b) => a.sequence - b.sequence)
+  const stageRow = bundle.stages.find((s) => s.stageKey === stageKey)
+  const stageActivities = bundle.activities.filter((a) => a.stageKey === stageKey)
+  const insertTree = useLifecycleStore((s) => s.insertActivityTree)
+  /** One root per gate with a child per objective: equal weights, dates split across the gate window. */
+  async function createSubtasks() {
+    const objectives = items.filter((i) => i.kind === 'objective').sort((a, b) => a.sequence - b.sequence)
+    if (objectives.length === 0 || !stageRow?.plannedStart || !stageRow.plannedFinish) {
+      alert('برای ساخت زیرفعالیت‌ها، گیت باید «هدف» و تاریخ برنامه‌ای داشته باشد (از صفحهٔ راهبرد اجرا تاریخ‌ها را بنویسید).')
+      return
+    }
+    const root = crypto.randomUUID()
+    const span = Math.max(objectives.length, Math.round((Date.parse(stageRow.plannedFinish) - Date.parse(stageRow.plannedStart)) / 86_400_000))
+    const step = span / objectives.length
+    const add = (iso: string, d: number) => new Date(Date.parse(iso) + Math.round(d) * 86_400_000).toISOString().slice(0, 10)
+    const w = Math.floor(10000 / objectives.length) / 100
+    await insertTree(gate?.projectId ?? stageRow.projectId, [
+      { id: root, parentId: null, name: stageRow.nameFa, weight: 100, start: stageRow.plannedStart, finish: stageRow.plannedFinish, stageKey },
+      ...objectives.map((o, i) => ({
+        id: crypto.randomUUID(), parentId: root, name: o.title,
+        weight: i === objectives.length - 1 ? Math.round((100 - w * (objectives.length - 1)) * 100) / 100 : w,
+        start: add(stageRow.plannedStart!, step * i), finish: add(stageRow.plannedStart!, step * (i + 1)), stageKey,
+      })),
+    ])
+  }
   const stageName = STAGE_LABEL_FA[stageKey as StageKey] ?? stageKey
 
   const categories: ChecklistCategory[] = isPreProject
@@ -97,6 +125,15 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
           )}
         </div>
       </div>
+
+      <GateHero
+        stage={bundle.stages.find((s) => s.stageKey === stageKey)} gate={gate}
+        index={Math.max(0, orderedStages.findIndex((s) => s.stageKey === stageKey))} total={orderedStages.length}
+        status={derivedGateStatus} actual={gateProgress}
+        planned={plannedPct(bundle.stages.find((s) => s.stageKey === stageKey) ?? { plannedStart: null, plannedFinish: null, status: 'not_started' }, new Date().toISOString().slice(0, 10))}
+        ownerName="" canEdit={!!profile?.isAdmin || (!!gate?.gateOwnerId && gate.gateOwnerId === profile?.id)}
+        onCreateSubtasks={createSubtasks}
+      />
 
       <div className="plc-bento">
         {/* ── Readiness summary ────────────────────────────────────── */}
@@ -267,6 +304,10 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
             <GateProgressPanel gate={gate} items={gateItems} progress={gateProgress} />
           </TowerTile>
         )}
+
+        <TowerTile span={12} icon={<ClipboardList size={13} />} eyebrow="Gate schedule" title="جدول زمانی این مرحله">
+          <GateGantt activities={stageActivities} windowStart={stageRow?.plannedStart ?? null} windowEnd={stageRow?.plannedFinish ?? null} />
+        </TowerTile>
 
         {/* ── Checklist ─────────────────────────────────────────────── */}
         <TowerTile span={12} icon={<ClipboardList size={13} />} eyebrow="Checklist" title={`چک‌لیست مرحله (${faNum(items.length)})`}>

@@ -101,7 +101,7 @@ export function StrategyPage({ projectId, onBack }: { projectId: string; onBack:
                 <div key={g.code} className="flex items-center gap-2 text-[11px]">
                   <span className="w-20 shrink-0 font-bold">{m.icon} {g.code}</span>
                   <div className="relative h-5 flex-1 rounded bg-white/[0.04]">
-                    <div className="absolute top-0.5 h-4 rounded" style={{ right: `${left}%`, width: `${width}%`, background: g.critical ? STATUS_COLOR.red : '#38bdf8', opacity: 0.85 }} />
+                    <div className="absolute top-0.5 h-4 rounded" style={{ left: `${left}%`, width: `${width}%`, background: g.critical ? STATUS_COLOR.red : '#38bdf8', opacity: 0.85 }} />
                   </div>
                   <span className="w-44 shrink-0 text-muted">{fa(g.start)} ← {fa(g.finish)}</span>
                   <span className="w-16 shrink-0 text-muted">{g.critical ? 'بحرانی' : `شناوری ${faNum(g.float)}`}</span>
