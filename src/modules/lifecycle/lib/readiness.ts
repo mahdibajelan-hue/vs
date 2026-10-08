@@ -41,7 +41,11 @@ export interface ReadinessContext {
   threshold?: number
 }
 
-const DONE_STATUSES = new Set(['completed', 'waived'])
+const DONE_STATUSES = new Set(['completed', 'verified', 'waived'])
+/** A gate criterion is only met once someone other than the owner verified it. */
+function isMet(i: ChecklistItem): boolean {
+  return i.kind === 'criterion' ? i.status === 'verified' || i.status === 'waived' : DONE_STATUSES.has(i.status)
+}
 
 export function computeStageReadiness(
   stageKey: string,
@@ -53,8 +57,8 @@ export function computeStageReadiness(
   const mandatory = stageItems.filter((i) => i.isMandatory)
   const optional = stageItems.filter((i) => !i.isMandatory)
 
-  const mandatoryDone = mandatory.filter((i) => DONE_STATUSES.has(i.status)).length
-  const optionalDone = optional.filter((i) => DONE_STATUSES.has(i.status)).length
+  const mandatoryDone = mandatory.filter(isMet).length
+  const optionalDone = optional.filter(isMet).length
 
   // Mandatory items carry double weight: an organisation that finishes every optional item and
   // half the mandatory ones is not 75% ready, it is blocked.
@@ -65,11 +69,11 @@ export function computeStageReadiness(
   const blockers: ReadinessBlocker[] = []
 
   for (const item of mandatory) {
-    if (!DONE_STATUSES.has(item.status)) {
+    if (!isMet(item)) {
       blockers.push({
         kind: 'mandatory_checklist',
         label: item.title,
-        detail: 'بند الزامی تکمیل نشده است',
+        detail: item.kind === 'criterion' ? 'معیار الزامی هنوز توسط تأییدکننده تأیید نشده است' : 'بند الزامی تکمیل نشده است',
       })
       continue
     }
@@ -134,7 +138,7 @@ export function computeStageReadiness(
  * a person changes it — a recalculation must not silently un-approve a gate someone signed.
  */
 export function deriveGateStatus(gate: ProjectGate, readiness: StageReadiness): GateStatus {
-  if (gate.status === 'approved' || gate.status === 'rejected') return gate.status
+  if (gate.status === 'approved' || gate.status === 'rejected' || gate.status === 'conditional') return gate.status
   if (gate.overrideBy) return 'approved'
   if (readiness.blockers.some((b) => b.kind === 'critical_issue' || b.kind === 'milestone_not_achieved')) return 'blocked'
   if (readiness.isReady) return 'ready'

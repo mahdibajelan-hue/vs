@@ -1,4 +1,6 @@
 import type { ChecklistCategory, StageKey } from '../types'
+import { GATE_CONTENT } from './gateContent'
+import { GATE_META, type GateEngine, type GateItemKind, type PhaseGroup } from './gateModel'
 import { DEFAULT_STAGE_ORDER, STAGE_LABEL_EN, STAGE_LABEL_FA } from '../types'
 
 /** Lifecycle template engine.
@@ -17,6 +19,7 @@ export interface TemplateChecklistSeed {
   requiresDocument?: boolean
   requiresApproval?: boolean
   guidance?: string
+  kind?: GateItemKind
 }
 
 export interface TemplateStageSeed {
@@ -28,6 +31,12 @@ export interface TemplateStageSeed {
   gateName: string
   gateReadinessThreshold: number
   checklist: TemplateChecklistSeed[]
+  phaseGroup?: PhaseGroup
+  engine?: GateEngine
+  icon?: string
+  approvalDoc?: string
+  ownerRole?: string
+  standardDays?: number
 }
 
 export interface TemplateSeed {
@@ -198,17 +207,35 @@ export const DEFAULT_TEMPLATE_STAGES: TemplateStageSeed[] = [
  * with the real G1-G9 wording everywhere the UI displays a stage or gate name. Checklists are
  * reused from the closest-matching generic stage rather than invented from scratch.
  * gateReadinessThreshold mirrors the source model's own per-gate thresholds (30/50/70/80/90/100…). */
-const EPC_PIPELINE_STAGES: TemplateStageSeed[] = [
-  { stageKey: 'idea', nameFa: 'تعریف پروژه', nameEn: 'G1 — Project Definition', typicalDurationMonths: 1, gateName: 'تصویب و ابلاغ', gateReadinessThreshold: 30, checklist: IDEA_CHECKLIST },
-  { stageKey: 'pre_project', nameFa: 'شناسایی پروژه', nameEn: 'G2 — Project Identification', typicalDurationMonths: 2, gateName: 'صدور مجوز خرید خدمات', gateReadinessThreshold: 50, checklist: PRE_PROJECT_CHECKLIST },
-  { stageKey: 'initiation', nameFa: 'خرید خدمات مشاور', nameEn: 'G3 — Consultant Procurement', typicalDurationMonths: 2, gateName: 'ابلاغ شروع به کار مهندسی', gateReadinessThreshold: 70, checklist: INITIATION_CHECKLIST },
-  { stageKey: 'planning', nameFa: 'طراحی پایه', nameEn: 'G4 — Basic Design', typicalDurationMonths: 4, gateName: 'مجوز کمیسیون/هیات فنی برای برگزاری مناقصات', gateReadinessThreshold: 80, checklist: PLANNING_CHECKLIST },
-  { stageKey: 'procurement', nameFa: 'مناقصه انتخاب پیمانکار و انعقاد قرارداد', nameEn: 'G5 — Contractor Tender & Contract', typicalDurationMonths: 3, gateName: 'ابلاغ شروع به کار اجرا', gateReadinessThreshold: 90, checklist: PROCUREMENT_CHECKLIST },
-  { stageKey: 'execution', nameFa: 'اجرای پروژه', nameEn: 'G6 — Execution', typicalDurationMonths: 18, gateName: 'تایید شروع پیش‌راه‌اندازی', gateReadinessThreshold: 100, checklist: EXECUTION_CHECKLIST },
-  { stageKey: 'commissioning', nameFa: 'پیش‌راه‌اندازی و راه‌اندازی', nameEn: 'G7 — Pre-commissioning & Commissioning', typicalDurationMonths: 3, gateName: 'تحویل موقت توسط بهره‌بردار', gateReadinessThreshold: 100, checklist: COMMISSIONING_CHECKLIST },
-  { stageKey: 'handover', nameFa: 'دوره نگهداری', nameEn: 'G8 — Maintenance Period', typicalDurationMonths: 12, gateName: 'تحویل قطعی', gateReadinessThreshold: 100, checklist: HANDOVER_CHECKLIST },
-  { stageKey: 'close_out', nameFa: 'تسویه حساب', nameEn: 'G9 — Final Settlement', typicalDurationMonths: 1, gateName: 'تایید نهایی و بستن پروژه', gateReadinessThreshold: 100, checklist: CLOSEOUT_CHECKLIST },
+const EPC_PIPELINE_BASE: TemplateStageSeed[] = [
+  { stageKey: 'idea', nameFa: 'تعریف پروژه', nameEn: 'G1 — Project Definition', typicalDurationMonths: 1, gateName: 'تصویب و ابلاغ', gateReadinessThreshold: 30, checklist: [] },
+  { stageKey: 'pre_project', nameFa: 'شناسایی پروژه', nameEn: 'G2 — Project Identification', typicalDurationMonths: 2, gateName: 'صدور مجوز خرید خدمات', gateReadinessThreshold: 50, checklist: [] },
+  { stageKey: 'initiation', nameFa: 'خرید خدمات مشاور', nameEn: 'G3 — Consultant Procurement', typicalDurationMonths: 2, gateName: 'ابلاغ شروع به کار مهندسی', gateReadinessThreshold: 70, checklist: [] },
+  { stageKey: 'planning', nameFa: 'طراحی پایه', nameEn: 'G4 — Basic Design', typicalDurationMonths: 4, gateName: 'مجوز کمیسیون/هیات فنی برای برگزاری مناقصات', gateReadinessThreshold: 80, checklist: [] },
+  { stageKey: 'procurement', nameFa: 'مناقصه انتخاب پیمانکار و انعقاد قرارداد', nameEn: 'G5 — Contractor Tender & Contract', typicalDurationMonths: 3, gateName: 'ابلاغ شروع به کار اجرا', gateReadinessThreshold: 90, checklist: [] },
+  { stageKey: 'execution', nameFa: 'اجرای پروژه', nameEn: 'G6 — Execution', typicalDurationMonths: 18, gateName: 'تایید شروع پیش‌راه‌اندازی', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'commissioning', nameFa: 'پیش‌راه‌اندازی و راه‌اندازی', nameEn: 'G7 — Pre-commissioning & Commissioning', typicalDurationMonths: 3, gateName: 'تحویل موقت توسط بهره‌بردار', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'handover', nameFa: 'دوره نگهداری', nameEn: 'G8 — Maintenance Period', typicalDurationMonths: 12, gateName: 'تحویل قطعی', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'close_out', nameFa: 'تسویه حساب', nameEn: 'G9 — Final Settlement', typicalDurationMonths: 1, gateName: 'تایید نهایی و بستن پروژه', gateReadinessThreshold: 100, checklist: [] },
 ]
+
+
+/** Adds the per-gate metadata (owner, approval document, engine, phase, icon, standard duration)
+ * and the objectives / outputs / criteria from GATE_CONTENT. */
+const EPC_PIPELINE_STAGES: TemplateStageSeed[] = EPC_PIPELINE_BASE.map((s, i) => {
+  const meta = GATE_META[i]
+  return {
+    ...s,
+    gateName: meta.approvalDoc,
+    gateReadinessThreshold: meta.threshold,
+    phaseGroup: meta.phase, engine: meta.engine, icon: meta.icon,
+    approvalDoc: meta.approvalDoc, ownerRole: meta.owner, standardDays: meta.standardDays,
+    checklist: (GATE_CONTENT[meta.order] ?? []).map<TemplateChecklistSeed>((g) => ({
+      category: 'general', title: g.t, isMandatory: g.m !== false,
+      requiresDocument: g.doc, kind: g.k,
+    })),
+  }
+})
 
 export const TEMPLATE_SEEDS: TemplateSeed[] = [
   {

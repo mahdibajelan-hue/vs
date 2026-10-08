@@ -67,6 +67,8 @@ export function summariseProject(
     health,
     warnings: [],
     actions,
+    decisions: [],
+    progressLog: [],
   }
   const a = analyseProject(bundle)
 

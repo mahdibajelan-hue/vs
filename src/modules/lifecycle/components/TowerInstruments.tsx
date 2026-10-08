@@ -82,6 +82,7 @@ export function HealthGauge({
 const GATE_TONE: Record<GateStatus, string> = {
   approved: STATUS_TEXT_COLOR.green,
   ready: '#38bdf8',
+  conditional: '#a855f7',
   in_progress: STATUS_TEXT_COLOR.yellow,
   not_started: '#94a3b8',
   rejected: STATUS_TEXT_COLOR.red,

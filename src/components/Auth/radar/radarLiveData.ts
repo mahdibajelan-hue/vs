@@ -140,6 +140,8 @@ async function fetchLifecycleBundle(masterProjectId: string): Promise<ProjectLif
     health: ((hl.data ?? []) as PlcHealthRow[]).map(healthFromRow),
     warnings: [],
     actions: ((ac.data ?? []) as RastaActionRow[]).map(actionFromRow),
+    decisions: [],
+    progressLog: [],
   }
 }
 

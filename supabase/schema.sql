@@ -4372,6 +4372,7 @@ create table if not exists plc_milestone_forecast_history (
   milestone_id uuid not null references plc_milestones (id) on delete cascade,
   forecast_date date,
   variance_days integer not null default 0,
+  series text not null default 'overall' check (series in ('overall','engineering','procurement','construction')),
   note text not null default '',
   recorded_by uuid references profiles (id) default auth.uid(),
   recorded_at timestamptz not null default now()
@@ -4468,6 +4469,70 @@ create policy "plc_audit_insert_authenticated" on plc_audit_log
   for insert with check (auth.uid() is not null);
 
 create index if not exists idx_plc_audit_project on plc_audit_log (project_id, changed_at desc);
+
+-- 21e-2. Gate model extension (objectives / outputs / criteria, decisions, engines)
+alter table plc_checklist_items drop constraint if exists plc_checklist_items_status_check;
+alter table plc_checklist_items add constraint plc_checklist_items_status_check
+  check (status in ('not_started','in_progress','completed','pending','submitted','verified','rejected','failed','waived'));
+alter table plc_checklist_items add column if not exists kind text not null default 'objective';
+alter table plc_checklist_items drop constraint if exists plc_checklist_items_kind_check;
+alter table plc_checklist_items add constraint plc_checklist_items_kind_check check (kind in ('objective','output','criterion'));
+alter table plc_checklist_items add column if not exists submitted_by uuid references profiles (id);
+alter table plc_checklist_items add column if not exists verified_by uuid references profiles (id);
+alter table plc_checklist_items add column if not exists verification_date date;
+alter table plc_template_checklist_items add column if not exists kind text not null default 'objective';
+alter table plc_project_gates drop constraint if exists plc_project_gates_status_check;
+alter table plc_project_gates add constraint plc_project_gates_status_check
+  check (status in ('not_started','in_progress','ready','conditional','approved','rejected','blocked'));
+alter table plc_project_gates add column if not exists phase_group text not null default 'execution';
+alter table plc_project_gates add column if not exists engine text not null default 'step';
+alter table plc_project_gates add column if not exists icon text not null default '';
+alter table plc_project_gates add column if not exists approval_doc text not null default '';
+alter table plc_project_gates add column if not exists owner_role text not null default '';
+alter table plc_project_gates add column if not exists condition_text text not null default '';
+alter table plc_project_gates add column if not exists condition_owner_id uuid references profiles (id);
+alter table plc_project_gates add column if not exists condition_deadline date;
+alter table plc_template_stages add column if not exists phase_group text not null default 'execution';
+alter table plc_template_stages add column if not exists engine text not null default 'step';
+alter table plc_template_stages add column if not exists icon text not null default '';
+alter table plc_template_stages add column if not exists approval_doc text not null default '';
+alter table plc_template_stages add column if not exists owner_role text not null default '';
+alter table plc_template_stages add column if not exists standard_days integer not null default 0;
+alter table plc_project_stages add column if not exists standard_days integer not null default 0;
+create table if not exists plc_gate_decisions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  gate_id uuid not null references plc_project_gates (id) on delete cascade,
+  decision text not null check (decision in ('pass','conditional','return','cancel')),
+  reason text not null default '',
+  condition_text text not null default '',
+  condition_owner_id uuid references profiles (id),
+  condition_deadline date,
+  decided_by uuid references profiles (id) default auth.uid(),
+  decided_at timestamptz not null default now()
+);
+alter table plc_gate_decisions enable row level security;
+drop policy if exists "plc_gate_decisions_select" on plc_gate_decisions;
+create policy "plc_gate_decisions_select" on plc_gate_decisions for select using (auth.uid() is not null);
+drop policy if exists "plc_gate_decisions_insert" on plc_gate_decisions;
+create policy "plc_gate_decisions_insert" on plc_gate_decisions for insert with check (auth.uid() is not null);
+create index if not exists idx_plc_gate_decisions_gate on plc_gate_decisions (gate_id, decided_at desc);
+-- Immutable manual-% history (G4 basic design); append-only like the audit log.
+create table if not exists plc_progress_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  gate_id uuid not null references plc_project_gates (id) on delete cascade,
+  pct smallint not null check (pct between 0 and 100),
+  note text not null default '',
+  recorded_by uuid references profiles (id) default auth.uid(),
+  recorded_at timestamptz not null default now()
+);
+alter table plc_progress_log enable row level security;
+drop policy if exists "plc_progress_log_select" on plc_progress_log;
+create policy "plc_progress_log_select" on plc_progress_log for select using (auth.uid() is not null);
+drop policy if exists "plc_progress_log_insert" on plc_progress_log;
+create policy "plc_progress_log_insert" on plc_progress_log for insert with check (auth.uid() is not null);
+create index if not exists idx_plc_progress_log_gate on plc_progress_log (gate_id, recorded_at desc);
 
 -- ---------------------------------------------------------------------------
 -- 21e. Integration with the EXISTING action table rather than a second one.

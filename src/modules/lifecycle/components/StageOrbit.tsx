@@ -31,6 +31,7 @@ const PLANNED_COLOR = '#fb923c'
  */
 function orbitStatus(gateStatus: GateStatus | undefined, gate: ProjectGate | undefined, progress: number): OrbitStatus {
   if (gateStatus === 'blocked' || gateStatus === 'rejected') return 'blocked'
+  if (gateStatus === 'conditional') return 'conditional'
   if (gateStatus === 'approved') return gate?.overrideBy ? 'conditional' : 'completed'
   if (gateStatus === 'ready') return 'ready'
   return progress > 0 ? 'active' : 'upcoming'

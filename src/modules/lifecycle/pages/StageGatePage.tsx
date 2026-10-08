@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import {
   ArrowLeft, Check, CheckSquare, ChevronDown, ClipboardList, Lock, MessageSquareText,
-  Paperclip, ShieldAlert, ShieldCheck, Target, X,
+  Paperclip, ShieldAlert, ShieldCheck, Target,
 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useLifecycleStore } from '../store/useLifecycleStore'
 import { useProjectAnalysis } from '../lib/useProjectAnalysis'
 import { nextStageKey } from '../lib/templates'
 import {
-  CHECKLIST_CATEGORY_LABEL_FA, CHECKLIST_STATUS_LABEL_FA, GATE_STATUS_LABEL_FA,
+  CHECKLIST_CATEGORY_LABEL_FA, CHECKLIST_STATUS_LABEL_FA, STATUS_OPTIONS_BY_KIND, GATE_STATUS_LABEL_FA,
   PRE_PROJECT_CATEGORIES, STAGE_LABEL_FA, isChecklistOverdue,
   type ChecklistCategory, type ChecklistItem, type ChecklistStatus, type StageKey,
 } from '../types'
 import { Bar, EmptyState, StatusDot, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum } from '../components/ui'
 import { EvidencePanel } from '../components/EvidencePanel'
 import { TowerTile } from '../components/TowerTile'
+import { GateDecisionPanel } from '../components/GateDecisionPanel'
+import { GateProgressPanel } from '../components/GateProgressPanel'
+import { gateProgressFromLog, KIND_LABEL_FA, type GateEngine, type GateItemKind } from '../lib/gateModel'
 
 /**
  * Stage detail: the checklist that determines readiness, and the gate that consumes it.
@@ -30,14 +33,11 @@ import { TowerTile } from '../components/TowerTile'
 export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: () => void }) {
   const bundle = useLifecycleStore((s) => s.bundle)
   const updateChecklistItem = useLifecycleStore((s) => s.updateChecklistItem)
-  const approveGate = useLifecycleStore((s) => s.approveGate)
-  const rejectGate = useLifecycleStore((s) => s.rejectGate)
   const overrideGate = useLifecycleStore((s) => s.overrideGate)
   const advanceStage = useLifecycleStore((s) => s.advanceStage)
   const profile = useAuthStore((s) => s.profile)
   const analysis = useProjectAnalysis(bundle)
 
-  const [gateComment, setGateComment] = useState('')
   const [overrideMode, setOverrideMode] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
   const [openEvidence, setOpenEvidence] = useState<string | null>(null)
@@ -48,16 +48,32 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
   const items = bundle.checklist.filter((c) => c.stageKey === stageKey)
   const isPreProject = stageKey === 'pre_project'
   const isCurrent = bundle.lifecycle?.currentStageKey === stageKey
+  const gateItems = items
+  const gateProgress = gateProgressFromLog((gate?.engine ?? 'step') as GateEngine, gateItems, bundle.progressLog.filter((e) => e.gateId === gate?.id))
   const stageName = STAGE_LABEL_FA[stageKey as StageKey] ?? stageKey
 
   const categories: ChecklistCategory[] = isPreProject
     ? PRE_PROJECT_CATEGORIES
     : [...new Set(items.map((i) => i.category))]
 
+  const hasKinds = new Set(items.map((i) => i.kind)).size > 1
+  const groups: { key: string; label: string; list: ChecklistItem[] }[] = hasKinds
+    ? (['objective', 'output', 'criterion'] as GateItemKind[]).map((k) => ({
+        key: k, label: KIND_LABEL_FA[k], list: items.filter((i) => i.kind === k).sort((a, b) => a.sequence - b.sequence),
+      }))
+    : categories.map((cat) => ({
+        key: cat, label: CHECKLIST_CATEGORY_LABEL_FA[cat], list: items.filter((i) => i.category === cat).sort((a, b) => a.sequence - b.sequence),
+      }))
+
   async function setStatus(item: ChecklistItem, status: ChecklistStatus) {
+    const today = new Date().toISOString().slice(0, 10)
+    const done = status === 'completed' || status === 'verified'
     await updateChecklistItem(item, {
       status,
-      completionDate: status === 'completed' ? new Date().toISOString().slice(0, 10) : null,
+      completionDate: done ? today : null,
+      // A criterion is verified by someone other than whoever submitted it.
+      ...(status === 'submitted' ? { submittedBy: profile?.id ?? null } : {}),
+      ...(status === 'verified' ? { verifiedBy: profile?.id ?? null, verificationDate: today } : {}),
     })
   }
 
@@ -166,45 +182,19 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                 </div>
               )}
 
-              {gate.status !== 'approved' && (
-                <>
-                  <textarea
-                    value={gateComment}
-                    onChange={(e) => setGateComment(e.target.value)}
-                    placeholder="توضیحات تصمیم گیت..."
-                    rows={2}
-                    className="mb-2 w-full rounded-lg border bg-black/20 px-2.5 py-2 text-xs outline-none"
-                    style={{ borderColor: 'var(--border-soft)' }}
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      disabled={derivedGateStatus !== 'ready'}
-                      onClick={() => approveGate(gate, gateComment)}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
-                      style={{ background: STATUS_COLOR.green }}
-                      title={derivedGateStatus !== 'ready' ? 'تا رفع همه موانع، تصویب ممکن نیست' : undefined}
-                    >
-                      <ShieldCheck size={13} /> تصویب گیت
-                    </button>
-                    <button
-                      onClick={() => rejectGate(gate, gateComment)}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs"
-                      style={{ borderColor: 'var(--border-soft)' }}
-                    >
-                      <X size={13} /> رد گیت
-                    </button>
-                    {profile?.isAdmin && derivedGateStatus !== 'ready' && (
-                      <button
-                        onClick={() => setOverrideMode((v) => !v)}
-                        className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs"
-                        style={{ borderColor: `${STATUS_COLOR.yellow}55`, color: STATUS_COLOR.yellow }}
-                      >
-                        <Lock size={13} /> Override مدیریتی
-                      </button>
-                    )}
-                  </div>
-
-                  {overrideMode && (
+<div className="space-y-3">
+                <GateDecisionPanel gate={gate} items={gateItems} progress={gateProgress}
+                  canDecide={!!profile?.isAdmin || (!!gate.gateOwnerId && gate.gateOwnerId === profile?.id)} />
+                {gate.status !== 'approved' && profile?.isAdmin && !readiness?.isReady && (
+                  <button
+                    onClick={() => setOverrideMode((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs"
+                    style={{ borderColor: `${STATUS_COLOR.yellow}55`, color: STATUS_COLOR.yellow }}
+                  >
+                    <Lock size={13} /> Override مدیریتی
+                  </button>
+                )}
+                {overrideMode && (
                     <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${STATUS_COLOR.yellow}55` }}>
                       <p className="mb-2 plc-stat-sub">
                         عبور از گیت با وجود الزامات برآورده‌نشده. کاربر، تاریخ و دلیل به‌صورت دائمی در سابقه تغییرات ثبت می‌شود.
@@ -230,8 +220,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                       </button>
                     </div>
                   )}
-                </>
-              )}
+              </div>
 
               {canAdvance && next && (
                 <button
@@ -273,24 +262,30 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
           </TowerTile>
         )}
 
+        {gate && (
+          <TowerTile span={12} icon={<Target size={13} />} eyebrow="Progress" title="پیشرفت واقعی گیت (۵۰٪ اهداف · ۳۰٪ خروجی‌ها · ۲۰٪ معیارها)">
+            <GateProgressPanel gate={gate} items={gateItems} progress={gateProgress} />
+          </TowerTile>
+        )}
+
         {/* ── Checklist ─────────────────────────────────────────────── */}
         <TowerTile span={12} icon={<ClipboardList size={13} />} eyebrow="Checklist" title={`چک‌لیست مرحله (${faNum(items.length)})`}>
           {items.length === 0 ? (
             <EmptyState message="بندی برای این مرحله تعریف نشده است" />
           ) : (
             <div className="space-y-4">
-              {categories.map((cat) => {
-                const catItems = items.filter((i) => i.category === cat).sort((a, b) => a.sequence - b.sequence)
+              {groups.map((grp) => {
+                const catItems = grp.list
                 if (catItems.length === 0) return null
                 return (
-                  <div key={cat}>
-                    {categories.length > 1 && (
-                      <h3 className="mb-1.5 text-[11px] font-bold text-muted">{CHECKLIST_CATEGORY_LABEL_FA[cat]}</h3>
+                  <div key={grp.key}>
+                    {groups.length > 1 && (
+                      <h3 className="mb-1.5 text-[11px] font-bold text-muted">{grp.label} ({faNum(catItems.length)})</h3>
                     )}
                     <ul className="space-y-1.5">
                       {catItems.map((item) => {
                         const overdue = isChecklistOverdue(item)
-                        const done = item.status === 'completed' || item.status === 'waived'
+                        const done = item.status === 'completed' || item.status === 'verified' || item.status === 'waived'
                         const missingDoc = item.requiresDocument && !item.evidenceUrl
                         const expanded = openEvidence === item.id
                         return (
@@ -372,7 +367,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                   className="rounded-md border bg-black/20 px-1.5 py-1 text-[11px] outline-none"
                                   style={{ borderColor: 'var(--border-soft)' }}
                                 >
-                                  {(Object.keys(CHECKLIST_STATUS_LABEL_FA) as ChecklistStatus[]).map((s) => (
+                                  {STATUS_OPTIONS_BY_KIND[item.kind].map((s) => (
                                     <option key={s} value={s}>{CHECKLIST_STATUS_LABEL_FA[s]}</option>
                                   ))}
                                 </select>

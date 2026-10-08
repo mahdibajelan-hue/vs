@@ -3,20 +3,21 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
-  Activity, AuditEntry, ChecklistItem, EarlyWarning, HealthScore, HealthStatus, LifecycleAction,
+  Activity, AuditEntry, ChecklistItem, EarlyWarning, GateDecision, HealthScore, ProgressLogEntry, ProgressSeries, HealthStatus, LifecycleAction,
   LifecycleTemplate, Milestone, MilestoneForecastPoint, ProjectGate, ProjectLifecycle, ProjectStage,
 } from '../types'
 import {
-  actionFromRow, activityFromRow, auditFromRow, checklistFromRow, forecastPointFromRow,
+  actionFromRow, activityFromRow, auditFromRow, checklistFromRow, decisionFromRow, forecastPointFromRow, progressFromRow,
   gateFromRow, healthFromRow, lifecycleFromRow, milestoneFromRow, stageFromRow, templateFromRow,
   warningFromRow,
   type PlcActivityRow, type PlcAuditRow, type PlcChecklistRow, type PlcForecastHistoryRow,
-  type PlcGateRow, type PlcHealthRow, type PlcLifecycleRow, type PlcMilestoneRow, type PlcStageRow,
+  type PlcDecisionRow, type PlcProgressRow, type PlcGateRow, type PlcHealthRow, type PlcLifecycleRow, type PlcMilestoneRow, type PlcStageRow,
   type PlcTemplateRow, type PlcWarningRow, type RastaActionRow,
 } from '../lib/lifecycleData'
 import { milestoneVariance } from '../lib/milestones'
 import { DEFAULT_STAGE_ORDER } from '../types'
 import { TEMPLATE_SEEDS } from '../lib/templates'
+import { DECISION_LABEL_FA, decisionToStatus, validateDecision, gateReadiness, type DecisionInput, type GateItemLite } from '../lib/gateModel'
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
@@ -50,6 +51,36 @@ async function writeAudit(entry: {
   if (error) reportError('ثبت سابقه تغییرات', error)
 }
 
+function stageMetaRow(s: { phaseGroup?: string; engine?: string; icon?: string; approvalDoc?: string; ownerRole?: string; standardDays?: number }) {
+  return {
+    phase_group: s.phaseGroup ?? 'execution', engine: s.engine ?? 'step', icon: s.icon ?? '',
+    approval_doc: s.approvalDoc ?? '', owner_role: s.ownerRole ?? '', standard_days: s.standardDays ?? 0,
+  }
+}
+
+/** Re-syncs an existing template's stage metadata and checklist rows with the current seed. */
+async function refreshTemplate(templateId: string, seed: (typeof TEMPLATE_SEEDS)[number]) {
+  const { data: rows } = await supabase.from('plc_template_stages').select('id, stage_key').eq('template_id', templateId)
+  for (const stage of seed.stages) {
+    const row = (rows ?? []).find((r) => r.stage_key === stage.stageKey)
+    if (!row) continue
+    await supabase.from('plc_template_stages').update({
+      name_fa: stage.nameFa, name_en: stage.nameEn, gate_name: stage.gateName,
+      gate_readiness_threshold: stage.gateReadinessThreshold, ...stageMetaRow(stage),
+    }).eq('id', row.id)
+    await supabase.from('plc_template_checklist_items').delete().eq('template_stage_id', row.id)
+    if (stage.checklist.length > 0) {
+      await supabase.from('plc_template_checklist_items').insert(
+        stage.checklist.map((c, ci) => ({
+          template_stage_id: row.id, category: c.category, title: c.title, is_mandatory: c.isMandatory,
+          requires_document: !!c.requiresDocument, requires_approval: !!c.requiresApproval,
+          guidance: c.guidance ?? '', sequence: ci, kind: c.kind ?? 'objective',
+        })),
+      )
+    }
+  }
+}
+
 /** Everything the engines need for one project, loaded in a single pass. */
 export interface ProjectLifecycleBundle {
   lifecycle: ProjectLifecycle | null
@@ -62,11 +93,14 @@ export interface ProjectLifecycleBundle {
   health: HealthScore[]
   warnings: EarlyWarning[]
   actions: LifecycleAction[]
+  decisions: GateDecision[]
+  progressLog: ProgressLogEntry[]
 }
 
 const EMPTY_BUNDLE: ProjectLifecycleBundle = {
   lifecycle: null, stages: [], gates: [], checklist: [], milestones: [],
   forecastHistory: [], activities: [], health: [], warnings: [], actions: [],
+  decisions: [], progressLog: [],
 }
 
 interface LifecycleState {
@@ -103,6 +137,9 @@ interface LifecycleState {
   approveGate: (gate: ProjectGate, comments: string) => Promise<void>
   rejectGate: (gate: ProjectGate, comments: string) => Promise<void>
   overrideGate: (gate: ProjectGate, reason: string) => Promise<void>
+  /** Pass / Conditional / Return / Cancel — validated by the gate model, logged immutably. */
+  decideGate: (gate: ProjectGate, items: GateItemLite[], progress: number, input: DecisionInput) => Promise<string | null>
+  logProgress: (gate: ProjectGate, series: ProgressSeries, pct: number, note: string) => Promise<void>
   advanceStage: (projectId: string, fromStageKey: string, toStageKey: string) => Promise<void>
   setHealthOverride: (projectId: string, status: HealthStatus | null, reason: string) => Promise<void>
   createAction: (projectId: string, data: Partial<LifecycleAction> & { title: string }) => Promise<void>
@@ -172,7 +209,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     }
     set({ currentProjectId: projectId, loadingProject: true })
 
-    const [lc, st, gt, cl, ms, act, hl, wn, ac] = await Promise.all([
+    const [lc, st, gt, cl, ms, act, hl, wn, ac, dc, pl] = await Promise.all([
       supabase.from('plc_project_lifecycle').select('*').eq('project_id', projectId).maybeSingle(),
       supabase.from('plc_project_stages').select('*').eq('project_id', projectId).order('sequence'),
       supabase.from('plc_project_gates').select('*').eq('project_id', projectId),
@@ -182,6 +219,8 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
       supabase.from('plc_health_scores').select('*').eq('project_id', projectId),
       supabase.from('plc_early_warnings').select('*').eq('project_id', projectId).eq('status', 'open'),
       supabase.from('rasta_actions').select('*').eq('master_project_id', projectId),
+      supabase.from('plc_gate_decisions').select('*').eq('project_id', projectId).order('decided_at', { ascending: false }),
+      supabase.from('plc_progress_log').select('*').eq('project_id', projectId).order('recorded_at'),
     ])
 
     const milestones = ((ms.data ?? []) as PlcMilestoneRow[]).map(milestoneFromRow)
@@ -213,6 +252,8 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
               health: ((hl.data ?? []) as PlcHealthRow[]).map(healthFromRow),
               warnings: ((wn.data ?? []) as PlcWarningRow[]).map(warningFromRow),
               actions: ((ac.data ?? []) as RastaActionRow[]).map(actionFromRow),
+              decisions: ((dc.data ?? []) as PlcDecisionRow[]).map(decisionFromRow),
+              progressLog: ((pl.data ?? []) as PlcProgressRow[]).map(progressFromRow),
             },
           },
     )
@@ -231,7 +272,12 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     set({ saving: true })
     for (const seed of TEMPLATE_SEEDS) {
       const { data: existing } = await supabase.from('plc_templates').select('id').eq('name', seed.name).maybeSingle()
-      if (existing) continue
+      if (existing) {
+        // The gate-model template is refreshed in place (metadata + objectives/outputs/criteria);
+        // running projects keep their own copied rows, so nothing live is rewritten.
+        if (seed.stages.some((s) => s.checklist.some((c) => c.kind))) await refreshTemplate(existing.id as string, seed)
+        continue
+      }
 
       const { data: tpl, error } = await supabase
         .from('plc_templates')
@@ -249,6 +295,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
             template_id: tpl.id, stage_key: stage.stageKey, name_fa: stage.nameFa, name_en: stage.nameEn,
             sequence: i, typical_duration_months: stage.typicalDurationMonths,
             gate_name: stage.gateName, gate_readiness_threshold: stage.gateReadinessThreshold,
+            ...stageMetaRow(stage),
           })
           .select('id').single()
         if (!st) continue
@@ -259,6 +306,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
               template_stage_id: st.id, category: c.category, title: c.title,
               is_mandatory: c.isMandatory, requires_document: !!c.requiresDocument,
               requires_approval: !!c.requiresApproval, guidance: c.guidance ?? '', sequence: ci,
+              kind: c.kind ?? 'objective',
             })),
           )
         }
@@ -275,29 +323,33 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
 
     const { data: stages } = await supabase
       .from('plc_template_stages').select('*').eq('template_id', templateId).order('sequence')
-    const templateStages = ((stages ?? []) as { id: string; stage_key: string; name_fa: string; sequence: number; gate_name: string; gate_readiness_threshold: number }[])
+    const templateStages = ((stages ?? []) as { id: string; stage_key: string; name_fa: string; sequence: number; gate_name: string; gate_readiness_threshold: number; phase_group?: string; engine?: string; icon?: string; approval_doc?: string; owner_role?: string; standard_days?: number }[])
 
     for (const ts of templateStages) {
       await supabase.from('plc_project_stages').upsert({
         project_id: projectId, stage_key: ts.stage_key, name_fa: ts.name_fa, sequence: ts.sequence,
+        standard_days: ts.standard_days ?? 0,
       }, { onConflict: 'project_id,stage_key' })
 
       if (ts.gate_name) {
         await supabase.from('plc_project_gates').upsert({
           project_id: projectId, stage_key: ts.stage_key, name: ts.gate_name,
           readiness_threshold: ts.gate_readiness_threshold,
+          phase_group: ts.phase_group ?? 'execution', engine: ts.engine ?? 'step', icon: ts.icon ?? '',
+          approval_doc: ts.approval_doc ?? '', owner_role: ts.owner_role ?? '',
         }, { onConflict: 'project_id,stage_key' })
       }
 
       const { data: items } = await supabase
         .from('plc_template_checklist_items').select('*').eq('template_stage_id', ts.id).order('sequence')
-      const list = (items ?? []) as { category: string; title: string; is_mandatory: boolean; requires_document: boolean; requires_approval: boolean; guidance: string; sequence: number }[]
+      const list = (items ?? []) as { category: string; title: string; is_mandatory: boolean; requires_document: boolean; requires_approval: boolean; guidance: string; sequence: number; kind?: string }[]
       if (list.length > 0) {
         await supabase.from('plc_checklist_items').insert(
           list.map((c) => ({
             project_id: projectId, stage_key: ts.stage_key, category: c.category, title: c.title,
             is_mandatory: c.is_mandatory, requires_document: c.requires_document,
             requires_approval: c.requires_approval, guidance: c.guidance, sequence: c.sequence,
+            kind: c.kind ?? 'objective',
           })),
         )
       }
@@ -323,6 +375,9 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     if (patch.evidenceUrl !== undefined) row.evidence_url = patch.evidenceUrl
     if (patch.evidenceLabel !== undefined) row.evidence_label = patch.evidenceLabel
     if (patch.comment !== undefined) row.comment = patch.comment
+    if (patch.submittedBy !== undefined) row.submitted_by = patch.submittedBy
+    if (patch.verifiedBy !== undefined) row.verified_by = patch.verifiedBy
+    if (patch.verificationDate !== undefined) row.verification_date = patch.verificationDate
 
     const { error } = await supabase.from('plc_checklist_items').update(row).eq('id', item.id)
     if (reportError('به‌روزرسانی بند چک‌لیست', error)) return
@@ -449,6 +504,50 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     await writeAudit({
       projectId: gate.projectId, entityType: 'gate', entityId: gate.id,
       event: 'gate_override', field: gate.name, oldValue: gate.status, newValue: 'approved (override)', reason,
+    })
+    await get().selectProject(gate.projectId)
+  },
+
+  decideGate: async (gate, items, progress, input) => {
+    const readiness = gateReadiness(items, progress, gate.readinessThreshold)
+    const err = validateDecision(input, readiness)
+    if (err) return err
+    const userId = (await supabase.auth.getUser()).data.user?.id ?? null
+    const today = new Date().toISOString().slice(0, 10)
+    const status = decisionToStatus(input.kind)
+    const gateStatus = status === 'passed' ? 'approved' : status === 'conditional' ? 'conditional' : status === 'blocked' ? 'blocked' : 'in_progress'
+    const { error: e1 } = await supabase.from('plc_gate_decisions').insert({
+      project_id: gate.projectId, gate_id: gate.id, decision: input.kind, reason: input.reason ?? '',
+      condition_text: input.conditionText ?? '', condition_owner_id: input.conditionOwnerId ?? null,
+      condition_deadline: input.conditionDeadline ?? null,
+    })
+    if (reportError('ثبت تصمیم گیت', e1)) return 'ثبت تصمیم ناموفق بود'
+    const patch: Record<string, unknown> = { status: gateStatus, comments: input.reason ?? gate.comments }
+    if (gateStatus === 'approved' || gateStatus === 'conditional') { patch.approval_date = today; patch.approved_by = userId }
+    if (gateStatus === 'conditional') {
+      patch.condition_text = input.conditionText ?? ''
+      patch.condition_owner_id = input.conditionOwnerId ?? null
+      patch.condition_deadline = input.conditionDeadline ?? null
+    }
+    const { error: e2 } = await supabase.from('plc_project_gates').update(patch).eq('id', gate.id)
+    if (reportError('به‌روزرسانی وضعیت گیت', e2)) return 'به‌روزرسانی گیت ناموفق بود'
+    await writeAudit({
+      projectId: gate.projectId, entityType: 'gate', entityId: gate.id, event: `gate_${input.kind}`,
+      field: gate.name, oldValue: gate.status, newValue: gateStatus,
+      reason: input.reason || input.conditionText || DECISION_LABEL_FA[input.kind],
+    })
+    await get().selectProject(gate.projectId)
+    return null
+  },
+
+  logProgress: async (gate, series, pct, note) => {
+    const { error } = await supabase.from('plc_progress_log').insert({
+      project_id: gate.projectId, gate_id: gate.id, series, pct: Math.round(pct), note,
+    })
+    if (reportError('ثبت درصد پیشرفت', error)) return
+    await writeAudit({
+      projectId: gate.projectId, entityType: 'gate', entityId: gate.id, event: 'progress_logged',
+      field: `${gate.name} / ${series}`, newValue: String(Math.round(pct)), reason: note,
     })
     await get().selectProject(gate.projectId)
   },
