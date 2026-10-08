@@ -3707,6 +3707,10 @@ $$ language sql security definer;
 -- (previously tracked only in unpersisted React state, so a closed/reopened tab always looked
 -- empty even though the files were saved correctly all along). Scoped by the same unguessable
 -- token as every other comp_self_service_* function — never exposes another candidate's rows.
+-- Dropped first: a database that has already reached either later, wider definition of this
+-- function below (in an earlier, partially-applied run of this file) would otherwise reject this
+-- first, narrowest definition with 42P13 when the file is replayed from the top again.
+drop function if exists comp_self_service_list_attachments(uuid);
 create or replace function comp_self_service_list_attachments(p_token uuid)
 returns table (id uuid, kind text, file_name text, created_at timestamptz) as $$
   select att.id, att.kind, att.file_name, att.created_at
