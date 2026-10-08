@@ -6,6 +6,8 @@ import type { CriticalityLevel } from '../types'
 import { LEVEL_COLOR, LEVEL_LABEL } from '../lib/labels'
 import { STATUS_COLOR, STATUS_LABEL, type DisplayStatus } from '../lib/status'
 import { useState } from 'react'
+import { HelpButton } from './Help'
+import type { HelpKey } from '../lib/help'
 
 export function Badge({ color, children, title }: { color?: string; children: ReactNode; title?: string }) {
   return (
@@ -54,13 +56,13 @@ export function Field({ label, hint, children, className = '' }: { label: string
   )
 }
 
-export function Card({ title, hint, action, children, className = '', pad = true }: { title?: string; hint?: string; action?: ReactNode; children: ReactNode; className?: string; pad?: boolean }) {
+export function Card({ title, hint, action, children, className = '', pad = true, help }: { title?: string; hint?: string; action?: ReactNode; children: ReactNode; className?: string; pad?: boolean; help?: HelpKey }) {
   return (
     <section className={`la-card ${className}`}>
       {(title || action) && (
         <header className="flex items-start justify-between gap-3 px-4 pt-3.5">
           <div className="min-w-0">
-            {title && <h3 className="la-title">{title}</h3>}
+            {title && <h3 className="la-title flex items-center gap-1.5">{title}{help && <HelpButton topic={help} />}</h3>}
             {hint && <p className="la-eyebrow mt-0.5 leading-6">{hint}</p>}
           </div>
           {action}

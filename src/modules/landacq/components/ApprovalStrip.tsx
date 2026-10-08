@@ -6,6 +6,7 @@ import { useLandStore } from '../store/useLandStore'
 import { ACTION_LABEL, APPROVAL_LABEL, APPROVAL_STEPS, ROLE_LABEL, allowedActions } from '../lib/approval'
 import { fmtDate } from '../lib/fa'
 import { Field } from './ui'
+import { HelpButton } from './Help'
 
 const ORDER = ['draft', 'submitted', 'consultant_approved', 'legal_attested', 'approved'] as const
 const ICON: Record<string, typeof Check> = { submit: Send, approve: UserCheck, attest: Stamp, final: ShieldCheck, return: CornerUpLeft, reopen: CornerUpLeft }
@@ -33,6 +34,7 @@ export function ApprovalStrip({ p }: { p: Parcel }) {
 
   return (
     <section className="border-b px-5 py-4" style={{ borderColor: 'var(--la-line)', background: 'var(--la-surface-2)' }} aria-label="زنجیرهٔ تأیید">
+      <p className="la-eyebrow m-0 mb-2 flex items-center gap-1.5">زنجیرهٔ تأیید اطلاعات <HelpButton topic="approval" /></p>
       <ol className="m-0 flex list-none items-start gap-1 p-0">
         {APPROVAL_STEPS.map((s, i) => {
           const done = at > i

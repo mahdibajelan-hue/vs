@@ -14,7 +14,7 @@ import { benchmarkFor, priceAllowed } from '../lib/pricing'
 import { analyze, buildActions, computeKpis, criticalConstraints, lengthByStatus, type Analysis } from '../lib/kpis'
 
 export type ColorMode = 'status' | 'criticality' | 'ownership' | 'stage'
-export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'finance' | 'schedule' | 'actions' | 'settings'
+export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'plan' | 'schedule' | 'fronts' | 'reports' | 'finance' | 'actions' | 'settings'
 
 interface LandState {
   repo: LandRepo | null

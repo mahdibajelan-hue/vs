@@ -109,14 +109,14 @@ export function TowerPage() {
       )}
 
       {/* ------------------------------------------------------------ map + ribbon */}
-      <Card title="نقشهٔ وضعیت تحصیل" hint="روی هر بخش از مسیر بزنید تا جزئیات قطعه باز شود" action={<button className="la-btn la-btn-sm" onClick={() => setTab('map')}>نقشهٔ کامل <ArrowLeft size={13} /></button>}>
+      <Card help="tower" title="نقشهٔ وضعیت تحصیل" hint="روی هر بخش از مسیر بزنید تا جزئیات قطعه باز شود" action={<button className="la-btn la-btn-sm" onClick={() => setTab('map')}>نقشهٔ کامل <ArrowLeft size={13} /></button>}>
         <RouteMap route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={360} stations={stations} crossings={crossings} onSelectCrossing={(id) => { selectCrossing(id); setTab('crossings') }} />
         <div className="mt-4"><ChainageRibbon route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} /></div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---------------------------------------------------------- critical land constraints */}
-        <Card title="Critical Land Constraints" hint="زمین‌هایی که برنامهٔ اجرایی را متوقف می‌کنند — به ترتیب فوریت" pad={false}>
+        <Card help="readiness" title="Critical Land Constraints" hint="زمین‌هایی که برنامهٔ اجرایی را متوقف می‌کنند — به ترتیب فوریت" pad={false}>
           {constraints.length === 0 ? (
             <EmptyState icon={<AlertOctagon size={20} />} title="قیدی دیده نمی‌شود" text="هیچ زمین آزادنشده‌ای فعالیت‌های برنامه را تهدید نمی‌کند." />
           ) : (

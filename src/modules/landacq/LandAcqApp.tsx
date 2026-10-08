@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BellRing, CalendarRange, Coins, Factory, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
+import { BellRing, ClipboardList, Coins, Factory, FileBarChart, GitCompareArrows, Route as RouteIcon, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
 import './landacq.css'
 import { ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useLandStore, useLandAnalysis, type TabKey } from './store/useLandStore'
@@ -15,6 +15,11 @@ import { SettingsPage } from './pages/SettingsPage'
 import { StationsPage } from './pages/StationsPage'
 import { CrossingsPage } from './pages/CrossingsPage'
 import { FinancePage } from './pages/FinancePage'
+import { PlanPage } from './pages/PlanPage'
+import { FrontsPage } from './pages/FrontsPage'
+import { ReportsPage } from './pages/ReportsPage'
+import { HelpButton } from './components/Help'
+import type { HelpKey } from './lib/help'
 import { faNum } from './lib/fa'
 
 interface Props {
@@ -23,15 +28,19 @@ interface Props {
   onBackToRadar: () => void
 }
 
-const TABS: { key: TabKey; label: string; icon: typeof Rows3 }[] = [
-  { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard },
-  { key: 'map', label: 'نقشه', icon: MapIcon },
-  { key: 'parcels', label: 'قطعه‌ها', icon: Rows3 },
-  { key: 'stations', label: 'ایستگاه‌ها', icon: Factory },
-  { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline },
-  { key: 'finance', label: 'مالی و بودجه', icon: Coins },
-  { key: 'schedule', label: 'برنامه', icon: CalendarRange },
+/** `phase` is the step of the four-step method the tab belongs to (see the «روش کار» help). */
+const TABS: { key: TabKey; label: string; icon: typeof Rows3; phase?: 1 | 2 | 3 | 4 }[] = [
+  { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard, phase: 1 },
+  { key: 'map', label: 'نقشه', icon: MapIcon, phase: 1 },
+  { key: 'parcels', label: 'قطعه‌ها', icon: Rows3, phase: 1 },
+  { key: 'stations', label: 'ایستگاه‌ها', icon: Factory, phase: 1 },
+  { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline, phase: 1 },
+  { key: 'plan', label: 'برنامه آزادسازی', icon: ClipboardList, phase: 2 },
+  { key: 'schedule', label: 'تطبیق با برنامه', icon: GitCompareArrows, phase: 3 },
+  { key: 'fronts', label: 'جبهه‌های کاری', icon: RouteIcon, phase: 4 },
+  { key: 'reports', label: 'گزارش‌ها', icon: FileBarChart },
   { key: 'actions', label: 'اقدام‌ها', icon: BellRing },
+  { key: 'finance', label: 'مالی و بودجه', icon: Coins },
   { key: 'settings', label: 'تنظیمات', icon: Settings },
 ]
 
@@ -78,10 +87,16 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
+        <div className="flex items-center gap-2 pb-1 text-[11.5px]" style={{ color: 'var(--la-ink-2)' }}>
+          <span className="font-semibold">روش کار:</span>
+          {[['۱', 'شناخت مسیر'], ['۲', 'برنامه آزادسازی'], ['۳', 'تطبیق با برنامه پیمانکار'], ['۴', 'بهینه‌سازی جبهه‌ها']].map(([n, l]) => <span key={n} className="inline-flex items-center gap-1"><b className="la-num inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px]" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }}>{n}</b>{l}</span>)}
+          <HelpButton topic="method" label="توضیح روش" className="ms-auto" />
+          <HelpButton topic={tab as HelpKey} label="راهنمای این بخش" />
+        </div>
         <nav className="la-tabs" role="tablist" aria-label="بخش‌های مدیریت تملک و آزادسازی اراضی">
           {TABS.map((t) => (
             <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
-              <t.icon size={15} aria-hidden /> {t.label}
+              {t.phase && <b className="la-num inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px]" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }} aria-label={`گام ${t.phase}`}>{faNum(t.phase)}</b>}<t.icon size={15} aria-hidden /> {t.label}
               {badge(t.key) > 0 && <span className="la-num rounded-full px-1.5 text-[10.5px] font-bold" style={{ background: '#ef4444', color: '#fff' }}>{faNum(badge(t.key))}</span>}
             </button>
           ))}
@@ -103,6 +118,9 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             {tab === 'stations' && <StationsPage />}
             {tab === 'crossings' && <CrossingsPage />}
             {tab === 'finance' && <FinancePage />}
+            {tab === 'plan' && <PlanPage />}
+            {tab === 'fronts' && <FrontsPage />}
+            {tab === 'reports' && <ReportsPage />}
             {tab === 'schedule' && <SchedulePage />}
             {tab === 'actions' && <ActionsPage />}
             {tab === 'settings' && <SettingsPage />}

@@ -33,7 +33,7 @@ export function StationsPage() {
         <Kpi label="مساحت موردنیاز" value={<>{faNum(Math.round(stations.reduce((n, r) => n + (r.parcel.areaM2 ?? 0), 0) / 1000) / 10)} <small className="text-[13px]">هکتار</small></>} />
       </div>
 
-      <Card title="ایستگاه‌ها" hint="تحصیل زمین هر ایستگاه مثل یک قطعه: مالک، مراحل، مواعد قانونی و زنجیرهٔ تأیید" action={<button className="la-btn la-btn-primary la-btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> ایستگاه جدید</button>} pad={false}>
+      <Card help="stations" title="ایستگاه‌ها" hint="تحصیل زمین هر ایستگاه مثل یک قطعه: مالک، مراحل، مواعد قانونی و زنجیرهٔ تأیید" action={<button className="la-btn la-btn-primary la-btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> ایستگاه جدید</button>} pad={false}>
         {stations.length === 0 ? (
           <EmptyState icon={<Factory size={20} />} title="ایستگاهی ثبت نشده" text="ایستگاه ارسال توپک، شیرهای بین‌راهی و انشعاب، ایستگاه‌های کنترل و تقلیل فشار، حفاظت کاتدیک و دریافت توپک را با کیلومتر محل اضافه کنید." />
         ) : (

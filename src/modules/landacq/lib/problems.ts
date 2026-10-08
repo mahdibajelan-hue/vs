@@ -3,6 +3,8 @@ import { fmtKmRange } from './dates'
 import { faNum, fmtDate, fmtDuration } from './fa'
 import { STAGE_LABEL } from './labels'
 import { currentStage, overdueStages, stageDelay } from './workflow'
+import { lastActionOf } from './plan'
+import { fmtDateShort } from './fa'
 
 export type ProblemSeverity = 'critical' | 'high' | 'medium'
 export interface Reason {
@@ -74,10 +76,13 @@ export function problemsOf(a: Analysis, today: string): ProblemReport {
   const head = `قطعهٔ ${p.code}${p.title ? ` (${p.title})` : ''}، ${fmtKmRange(p.kmStart, p.kmEnd)}`
   const cur = currentStage(p)
   const status = `وضعیت فعلی: ${a.released ? (a.stay ? 'تصرف شده ولی عملیات متوقف است' : 'آزاد برای اجرا') : cur ? `مرحلهٔ «${STAGE_LABEL[cur.key]}»` : '—'} · Criticality ${faNum(a.crit.score)} از ۱۰۰ (${crit}) · احتمال تأخیر ${faNum(a.forecast.probability)}٪`
+  const la = lastActionOf(p, [], today)
+  const next = cur?.plannedDate ? `انجام «${STAGE_LABEL[cur.key]}» تا ${fmtDate(cur.plannedDate)}` : cur ? `انجام «${STAGE_LABEL[cur.key]}»` : ''
+  const track = `آخرین اقدام: ${la ? `${la.text} (${fmtDateShort(la.date)})` : 'اقدامی ثبت نشده است'}${next ? `\nاقدام بعدی: ${next}` : ''}`
   const list = reasons.map((r, i) => `${faNum(i + 1)}. ${r.text}`).join('\n')
   const todo = [...actions].map((x, i) => `${faNum(i + 1)}. ${x}`).join('\n')
 
-  const issueDesc = `${head}\n\nموارد شناسایی‌شده:\n${list}\n\n${status}${todo ? `\n\nاقدام‌های پیشنهادی:\n${todo}` : ''}`
+  const issueDesc = `${head}\n\nموارد شناسایی‌شده:\n${list}\n\n${status}\n${track}${todo ? `\n\nاقدام‌های پیشنهادی:\n${todo}` : ''}`
   const delay = Math.max(ea.delayDays, a.forecast.expectedDelayDays)
   const riskDesc = `ریسک تأخیر در آزادسازی زمین مسیر: ${head}\n\nعوامل:\n${list}\n\n${status}\n\nپیامد محتمل: ${delay > 0 ? `تأخیر حدود ${fmtDuration(delay)} در رسیدن فعالیت‌های اجرایی به این قطعه` : 'توقف یا تأخیر فعالیت‌های اجرایی در این قطعه'}${a.stay ? '؛ عملیات هم‌اکنون به دستور دادگاه متوقف است' : ''}.${todo ? `\n\nواکنش پیشنهادی:\n${todo}` : ''}`
   const probability = a.stay || compliance ? 5 : Math.min(5, Math.max(2, Math.ceil(a.forecast.probability / 20)))
@@ -93,3 +98,15 @@ export function problemsOf(a: Analysis, today: string): ProblemReport {
 
 export const SEVERITY_LABEL: Record<ProblemSeverity, string> = { critical: 'بحرانی', high: 'زیاد', medium: 'متوسط' }
 export const SEVERITY_RANK = RANK
+
+/** A ready Issue for any parcel — the detected problem when there is one, otherwise a plain status note the team can edit. */
+export function issueDraftFor(a: Analysis, today: string): Draft {
+  const rep = problemsOf(a, today)
+  if (rep.issue) return rep.issue
+  const p = a.parcel
+  const la = lastActionOf(p, [], today)
+  const cur = currentStage(p)
+  const sev: ProblemSeverity = a.crit.level === 'critical' ? 'critical' : a.crit.level === 'high' ? 'high' : 'medium'
+  const description = `قطعهٔ ${p.code}${p.title ? ` (${p.title})` : ''}، ${fmtKmRange(p.kmStart, p.kmEnd)}\n\nوضعیت: ${a.released ? 'آزاد برای اجرا' : cur ? `مرحلهٔ «${STAGE_LABEL[cur.key]}»` : '—'} · Criticality ${faNum(a.crit.score)} از ۱۰۰\nآخرین اقدام: ${la ? `${la.text} (${fmtDateShort(la.date)})` : 'اقدامی ثبت نشده است'}${cur ? `\nاقدام بعدی: انجام «${STAGE_LABEL[cur.key]}»${cur.plannedDate ? ` تا ${fmtDate(cur.plannedDate)}` : ''}` : ''}`
+  return { severity: sev, description, params: { description, severity: sev, deadline_days: sev === 'critical' ? 3 : sev === 'high' ? 7 : 14 } }
+}

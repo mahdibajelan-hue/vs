@@ -33,6 +33,7 @@ export function CrossingsPage() {
         <Kpi label="هزینهٔ عبور پرداخت‌نشده" value={<span className="text-[17px]">{fmtMoney(fees)}</span>} color="#eab308" />
       </div>
       <Card
+        help="crossings"
         title="عبور از تأسیسات و ابنیه"
         hint="هر عبور مجوز متولی، تعهدنامهٔ مخصوص و در صورت لزوم هزینه دارد؛ مهلت درخواست از روی برنامهٔ اجرایی و زمان معمول هر متولی حساب می‌شود"
         action={<button className="la-btn la-btn-primary la-btn-sm" onClick={() => setCreating(true)}><Plus size={14} /> عبور جدید</button>}

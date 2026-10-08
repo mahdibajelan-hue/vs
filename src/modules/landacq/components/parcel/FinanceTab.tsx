@@ -7,6 +7,7 @@ import { benchmarkFor, unitPrice, verdictOf } from '../../lib/pricing'
 import { PAYMENT_LABEL } from '../../lib/finance'
 import { faNum, fmtDateShort, fmtMoney } from '../../lib/fa'
 import { Field } from '../ui'
+import { HelpButton } from '../Help'
 import { MoneyInput } from '../MoneyInput'
 import { PaymentDialog } from '../PaymentDialog'
 
@@ -43,7 +44,7 @@ export function FinanceTab({ a }: { a: Analysis }) {
   return (
     <div className="flex flex-col gap-4 p-5">
       <section className="la-card-flat grid gap-3 p-4 sm:grid-cols-2">
-        <p className="la-title m-0 sm:col-span-2">قیمت زمین</p>
+        <p className="la-title m-0 flex items-center gap-1.5 sm:col-span-2">قیمت زمین <HelpButton topic="price" /></p>
         <Field label="مساحت (متر مربع)"><input className="la-input la-num" type="number" min={0} value={area ?? ''} onChange={(e) => setArea(e.target.value === '' ? null : Number(e.target.value))} /></Field>
         <Field label="قیمت هر متر مربع (ریال)"><MoneyInput value={unit} onChange={setUnit} /></Field>
         <div className="sm:col-span-2">

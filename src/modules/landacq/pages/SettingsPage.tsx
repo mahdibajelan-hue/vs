@@ -27,7 +27,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      <Card title="مسیر پروژه" hint="مبنای همهٔ قطعه‌ها، نقشه و برنامه زمان‌بندی: یک محور کیلومتراژ">
+      <Card help="settings" title="مسیر پروژه" hint="مبنای همهٔ قطعه‌ها، نقشه و برنامه زمان‌بندی: یک محور کیلومتراژ">
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="نام مسیر" className="sm:col-span-3"><input className="la-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثلاً خط لولهٔ ۳۶ اینچ ..." /></Field>
           <Field label="طول کل (km)"><input className="la-input la-num" type="number" min={0} step={0.5} value={form.totalKm} onChange={(e) => setForm({ ...form, totalKm: Number(e.target.value) })} /></Field>

@@ -9,6 +9,10 @@ import { addDays, diffDays, fmtKm } from '../lib/dates'
 import { fmtDateShort, fmtMonth } from '../lib/fa'
 import { Card, ConfirmDialog, EmptyState, Field } from '../components/ui'
 import { NoRoute } from '../components/shared'
+import { conflictsOf } from '../lib/plan'
+import { IssueButton } from '../components/IssueButton'
+import { fmtKmRange } from '../lib/dates'
+import { faNum } from '../lib/fa'
 
 const ACT_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#94a3b8']
 
@@ -26,6 +30,7 @@ export function SchedulePage() {
   const { rows, today } = useLandAnalysis()
   const [del, setDel] = useState<Activity | null>(null)
   const acts = useMemo(() => data?.activities ?? [], [data?.activities])
+  const conflicts = useMemo(() => conflictsOf(rows), [rows])
 
   const chart = useMemo(() => {
     if (!data?.route) return null
@@ -54,7 +59,7 @@ export function SchedulePage() {
 
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
-      <Card title="برنامهٔ زمان‌بندی خطی (زمان – کیلومتر)" hint="خطوط مورب پیشروی فعالیت‌ها هستند؛ میله‌های رنگی زمان تخمینی آزادسازی هر قطعه و نشانهٔ سفید زمانی است که فعالیت زمین را لازم دارد">
+      <Card help="schedule" title="برنامهٔ زمان‌بندی خطی (زمان – کیلومتر)" hint="خطوط مورب پیشروی فعالیت‌ها هستند؛ میله‌های رنگی زمان تخمینی آزادسازی هر قطعه و نشانهٔ سفید زمانی است که فعالیت زمین را لازم دارد">
         {acts.length === 0 ? (
           <EmptyState icon={<Plus size={20} />} title="فعالیتی تعریف نشده" text="فعالیت‌های اجرایی (Clearing، Stringing، Welding، Lowering، Backfilling) را با بازهٔ کیلومتر و تاریخ اضافه کنید تا مهلت آزادسازی هر قطعه محاسبه شود." action={<button className="la-btn la-btn-primary" onClick={add}>افزودن فعالیت</button>} />
         ) : (
@@ -98,6 +103,28 @@ export function SchedulePage() {
               <line x1={L} x2={W - R} y1={y(today)} y2={y(today)} stroke="var(--la-accent)" strokeDasharray="5 4" />
               <text x={W - R} y={y(today) - 5} textAnchor="end" fontSize={10.5} fontWeight={700} fill="var(--la-accent)">امروز · {fmtDateShort(today)}</text>
             </svg>
+          </div>
+        )}
+      </Card>
+
+      <Card title="مغایرت برنامهٔ آزادسازی با برنامهٔ پیمانکار" hint="جاهایی که زمین دیرتر از شروع فعالیت پیمانکار آزاد می‌شود؛ هر مغایرت را به مدیریت مسائل بفرستید." help="schedule" pad={false}>
+        {conflicts.length === 0 ? <p className="la-eyebrow m-0 p-4">{acts.length === 0 ? 'ابتدا فعالیت‌های پیمانکار را وارد کنید.' : 'مغایرتی دیده نمی‌شود: همهٔ زمین‌ها پیش از رسیدن فعالیت‌ها آزاد می‌شوند.'}</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+              <thead><tr style={{ color: 'var(--la-muted)' }}>{['قطعه', 'فعالیت', 'شروع فعالیت', 'آزادسازی پیش‌بینی', 'مغایرت', 'مسئله'].map((h) => <th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>)}</tr></thead>
+              <tbody>
+                {conflicts.map((c) => (
+                  <tr key={c.a.parcel.id} style={{ borderTop: '1px solid var(--la-line)' }}>
+                    <td className="px-3 py-2"><button className="la-btn la-btn-ghost la-btn-sm" onClick={() => select(c.a.parcel.id)}>{c.a.parcel.code} · {fmtKmRange(c.a.parcel.kmStart, c.a.parcel.kmEnd)}</button></td>
+                    <td className="px-3 py-2">{c.activity.name}</td>
+                    <td className="px-3 py-2">{fmtDateShort(c.needBy)}</td>
+                    <td className="px-3 py-2">{fmtDateShort(c.release)}</td>
+                    <td className="la-num px-3 py-2 font-bold" style={{ color: c.gapDays > 60 ? '#ef4444' : '#f97316' }}>{faNum(c.gapDays)} روز</td>
+                    <td className="px-3 py-2"><IssueButton a={c.a} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>

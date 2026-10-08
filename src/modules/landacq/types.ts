@@ -270,6 +270,8 @@ export interface LandSettings {
   /** The land-acquisition budget of the project (rial), asked for at the start of the project. */
   budgetAmount?: number | null
   budgetNote?: string
+  /** The legal unit's proposed release plan, as last presented (see the «برنامه آزادسازی» tab). */
+  planProposal?: { at: string; by: string; note: string; urgent: number; total: number } | null
 }
 export const DEFAULT_SETTINGS: LandSettings = { bufferDays: 30, horizonDays: 90 }
 

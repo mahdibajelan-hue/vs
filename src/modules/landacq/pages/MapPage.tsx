@@ -45,6 +45,7 @@ export function MapPage() {
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
       <Card
+        help="map"
         title="لایهٔ تملک و آزادسازی اراضی"
         hint="رنگ هر بخش از مسیر، وضعیت زمین همان بخش است"
         action={

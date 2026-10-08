@@ -45,7 +45,7 @@ export function FinancePage() {
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
       {/* ------------------------------------------------------------ budget */}
-      <Card title="بودجهٔ تحصیل اراضی پروژه" hint="در ابتدای پروژه بودجهٔ مصوب تحصیل اراضی را ثبت کنید؛ مصرف آن همواره با پرداخت‌ها سنجیده می‌شود." action={sum.budget == null ? <span className="la-badge" style={{ '--c': '#f59e0b' } as React.CSSProperties}><i /> بودجه ثبت نشده</span> : undefined}>
+      <Card help="budget" title="بودجهٔ تحصیل اراضی پروژه" hint="در ابتدای پروژه بودجهٔ مصوب تحصیل اراضی را ثبت کنید؛ مصرف آن همواره با پرداخت‌ها سنجیده می‌شود." action={sum.budget == null ? <span className="la-badge" style={{ '--c': '#f59e0b' } as React.CSSProperties}><i /> بودجه ثبت نشده</span> : undefined}>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_1fr_auto] sm:items-end">
           <div><span className="la-label">بودجهٔ مصوب (ریال)</span><MoneyInput value={budgetValue} onChange={setDraftBudget} ariaLabel="بودجهٔ مصوب" /></div>
           <label className="block"><span className="la-label">توضیح (منبع تأمین، شمارهٔ ابلاغ …)</span><input className="la-input" value={budgetNote ?? settings.budgetNote ?? ''} onChange={(e) => setBudgetNote(e.target.value)} /></label>
@@ -63,7 +63,7 @@ export function FinancePage() {
 
       {/* ------------------------------------------------------------ price exceptions */}
       {pending.length > 0 && (
-        <Card title="درخواست‌های ثبت استثنایی قیمت" hint="قیمت‌هایی که از محدودهٔ متعارف بیرون بودند و با دلیل برای تصمیم ارسال شده‌اند — مدیر پروژه، مجری طرح و مسئول حقوقی کارفرما هشدار گرفته‌اند." pad={false}>
+        <Card help="price" title="درخواست‌های ثبت استثنایی قیمت" hint="قیمت‌هایی که از محدودهٔ متعارف بیرون بودند و با دلیل برای تصمیم ارسال شده‌اند — مدیر پروژه، مجری طرح و مسئول حقوقی کارفرما هشدار گرفته‌اند." pad={false}>
           <ul className="m-0 list-none p-0">
             {pending.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ borderTop: '1px solid var(--la-line)' }}>

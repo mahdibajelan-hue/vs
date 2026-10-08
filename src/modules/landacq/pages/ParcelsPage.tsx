@@ -85,6 +85,7 @@ export function ParcelsPage() {
       </Card>
 
       <Card
+        help="parcels"
         pad={false}
         title={`قطعه‌ها (${faNum(shown.length)} از ${faNum(rows.length)})`}
         action={

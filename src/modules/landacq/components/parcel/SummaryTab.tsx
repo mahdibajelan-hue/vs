@@ -10,6 +10,7 @@ import { ownerCountOf } from '../../lib/scoring'
 import { fmtDate, fmtDuration, faNum, relDays } from '../../lib/fa'
 import { DELAY_HIGHLIGHT_THRESHOLD } from '../../lib/forecast'
 import { Field } from '../ui'
+import { HelpButton } from '../Help'
 import { STATION, STATION_TYPES } from '../../lib/facilities'
 import type { StationType } from '../../types'
 
@@ -132,6 +133,7 @@ export function ProfileEditor({ p, onChange }: { p: Parcel; onChange: (patch: Pa
         </div>
       </Field>
       <Field label="مسیر تحصیل" hint={ROUTE_HINT[p.acquisitionRoute]}>
+        <span className="la-hint"><HelpButton topic="routes" label="مسیرها چه فرقی دارند؟" /></span>
         <div className="la-seg" role="group" aria-label="مسیر تحصیل">
           {(Object.keys(ROUTE_LABEL) as AcqRoute[]).map((r) => <button key={r} aria-pressed={p.acquisitionRoute === r} onClick={() => onChange({ acquisitionRoute: r })}>{ROUTE_LABEL[r]}</button>)}
         </div>
