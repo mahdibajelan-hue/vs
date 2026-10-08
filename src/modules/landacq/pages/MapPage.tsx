@@ -7,8 +7,7 @@ import { MapLegend, NoRoute } from '../components/shared'
 import { Card, Segmented } from '../components/ui'
 import { BASEMAPS, type Basemap } from '../lib/tiles'
 import { CROSSING, CROSSING_TYPES, STATION, STATION_TYPES } from '../lib/facilities'
-import type { CrossingType, StationType } from '../types'
-import { faNum } from '../lib/fa'
+import { LayerMenu } from '../components/LayerMenu'
 
 const KEY = 'la-basemap'
 const readBasemap = (): Basemap => {
@@ -29,15 +28,16 @@ export function MapPage() {
   const select = useLandStore((s) => s.selectParcel)
   const selectCrossing = useLandStore((s) => s.selectCrossing)
   const { rows, stations, crossings, lengths, today } = useLandAnalysis()
-  const [stTypes, setStTypes] = useState<Set<StationType>>(() => new Set(STATION_TYPES))
-  const [crTypes, setCrTypes] = useState<Set<CrossingType>>(() => new Set(CROSSING_TYPES))
-  const flip = <T,>(set: Set<T>, v: T): Set<T> => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n }
+  const [stTypes, setStTypes] = useState<Set<string>>(() => new Set(STATION_TYPES))
+  const [crTypes, setCrTypes] = useState<Set<string>>(() => new Set(CROSSING_TYPES))
+  const [plotSrc, setPlotSrc] = useState<Set<string>>(() => new Set(['route', 'station']))
   const [basemap, setBasemap] = useState<Basemap>(readBasemap)
   const [tool, setTool] = useState<'none' | 'length' | 'area'>('none')
-  const [plots, setPlots] = useState(true)
   if (!data?.route) return <NoRoute />
   const live = data.route.geometry.length >= 2
-  const plotCount = rows.reduce((n, r) => n + r.parcel.plots.length, 0)
+  const plotsOf = (l: typeof rows) => l.reduce((n, r) => n + r.parcel.plots.length, 0)
+  const plotCount = plotsOf(rows) + plotsOf(stations)
+  const plotRows = [...(plotSrc.has('route') ? rows : []), ...(plotSrc.has('station') ? stations : [])]
   const pick = (b: Basemap) => {
     setBasemap(b)
     try { localStorage.setItem(KEY, b) } catch { /* not remembered */ }
@@ -67,22 +67,32 @@ export function MapPage() {
             <button className="la-btn la-btn-sm" aria-pressed={tool === 'length'} disabled={!live} onClick={() => setTool(tool === 'length' ? 'none' : 'length')} style={tool === 'length' ? { borderColor: 'var(--la-accent)', background: 'var(--la-accent-soft)' } : undefined}><Ruler size={14} /> طول</button>
             <button className="la-btn la-btn-sm" aria-pressed={tool === 'area'} disabled={!live} onClick={() => setTool(tool === 'area' ? 'none' : 'area')} style={tool === 'area' ? { borderColor: 'var(--la-accent)', background: 'var(--la-accent-soft)' } : undefined}><SquareDashed size={14} /> مساحت و محیط</button>
           </div>
-          <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={plots} onChange={(e) => setPlots(e.target.checked)} /> زمین‌های کاداستر با نام مالک ({plotCount.toLocaleString('fa-IR')})</label>
           {!live && <span className="la-eyebrow">برای پس‌زمینه و اندازه‌گیری، مختصات مسیر (KML) را در «تنظیمات» وارد کنید.</span>}
         </div>
-        <div className="mb-3 flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="نمایش ایستگاه‌ها">
-            <span className="la-eyebrow me-1">ایستگاه‌ها ({faNum(stations.length)}):</span>
-            {STATION_TYPES.map((t) => { const n = stations.filter((r) => r.parcel.stationType === t).length; return n ? <button key={t} className="la-chip" aria-pressed={stTypes.has(t)} onClick={() => setStTypes(flip(stTypes, t))}><span className="rounded px-1 text-[9.5px] font-bold text-white" style={{ background: STATION[t].color }}>{STATION[t].short}</span> {STATION[t].label} ({faNum(n)})</button> : null })}
-            {stations.length === 0 && <span className="la-eyebrow">ایستگاهی ثبت نشده است</span>}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="نمایش عبورها">
-            <span className="la-eyebrow me-1">عبور از تأسیسات ({faNum(crossings.length)}):</span>
-            {CROSSING_TYPES.map((t) => { const n = crossings.filter((x) => x.c.crossingType === t).length; return n ? <button key={t} className="la-chip" aria-pressed={crTypes.has(t)} onClick={() => setCrTypes(flip(crTypes, t))}><span style={{ width: 9, height: 9, background: CROSSING[t].color, transform: 'rotate(45deg)' }} /> {CROSSING[t].label} ({faNum(n)})</button> : null })}
-            {crossings.length === 0 && <span className="la-eyebrow">عبوری ثبت نشده است</span>}
-          </div>
+        <div className="mb-3 flex flex-wrap items-start gap-2" role="group" aria-label="لایه‌های نقشه">
+          <LayerMenu
+            title="زمین‌های کاداستر با نام مالک"
+            total={plotCount}
+            items={[{ key: 'route', label: 'مسیر پروژه', count: plotsOf(rows) }, { key: 'station', label: 'ایستگاه‌ها', count: plotsOf(stations) }]}
+            selected={plotSrc}
+            onChange={setPlotSrc}
+          />
+          <LayerMenu
+            title="ایستگاه‌ها"
+            total={stations.length}
+            items={STATION_TYPES.map((t) => ({ key: t, label: <><span className="rounded px-1 text-[9.5px] font-bold text-white" style={{ background: STATION[t].color }}>{STATION[t].short}</span> {STATION[t].label}</>, count: stations.filter((r) => r.parcel.stationType === t).length }))}
+            selected={stTypes}
+            onChange={setStTypes}
+          />
+          <LayerMenu
+            title="عبور عرضی از تأسیسات"
+            total={crossings.length}
+            items={CROSSING_TYPES.map((t) => ({ key: t, label: <><span style={{ width: 9, height: 9, background: CROSSING[t].color, transform: 'rotate(45deg)', display: 'inline-block' }} /> {CROSSING[t].label}</>, count: crossings.filter((x) => x.c.crossingType === t).length }))}
+            selected={crTypes}
+            onChange={setCrTypes}
+          />
         </div>
-        <RouteMap route={data.route} rows={rows} mode={mode} selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={560} basemap={basemap} tool={tool} showPlots={plots} stations={stations.filter((r) => r.parcel.stationType && stTypes.has(r.parcel.stationType))} crossings={crossings.filter((x) => crTypes.has(x.c.crossingType))} onSelectCrossing={(id) => { selectCrossing(id); useLandStore.getState().setTab('crossings') }} />
+        <RouteMap route={data.route} rows={rows} mode={mode} selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={560} basemap={basemap} tool={tool} showPlots={plotRows.length > 0} plotRows={plotRows} stations={stations.filter((r) => r.parcel.stationType && stTypes.has(r.parcel.stationType))} crossings={crossings.filter((x) => crTypes.has(x.c.crossingType))} onSelectCrossing={(id) => { selectCrossing(id); useLandStore.getState().setTab('crossings') }} />
         <div className="mt-4"><MapLegend mode={mode} counts={lengths} /></div>
         <div className="mt-4"><ChainageRibbon route={data.route} rows={rows} mode={mode} selectedId={selectedId} onSelect={select} activities={data.activities} today={today} /></div>
       </Card>

@@ -3,17 +3,18 @@ import { useMemo } from 'react'
 import { useAuthStore, useProjectContextStore } from '../platform'
 import type { Activity, Crossing, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
-import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput } from '../repo/types'
+import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput, PaymentInput } from '../repo/types'
 import { canEditData } from '../lib/approval'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
 import { makeStages, orderOf } from '../lib/workflow'
 import { nextDeadline } from '../lib/legal'
 import { crossingState } from '../lib/facilities'
+import { benchmarkFor, priceAllowed } from '../lib/pricing'
 import { analyze, buildActions, computeKpis, criticalConstraints, lengthByStatus, type Analysis } from '../lib/kpis'
 
 export type ColorMode = 'status' | 'criticality' | 'ownership' | 'stage'
-export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'schedule' | 'actions' | 'settings'
+export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'finance' | 'schedule' | 'actions' | 'settings'
 
 interface LandState {
   repo: LandRepo | null
@@ -38,6 +39,17 @@ interface LandState {
   saveCrossing: (c: CrossingInput) => Promise<void>
   deleteCrossing: (id: string) => Promise<void>
   transferCrossing: (id: string, target: 'issue' | 'risk', params?: Record<string, unknown>) => Promise<boolean>
+  savePayment: (p: PaymentInput) => Promise<void>
+  deletePayment: (id: string) => Promise<void>
+  /** The project's land-acquisition budget (rial); asked for at the start of the project. */
+  saveBudget: (amount: number | null, note: string) => Promise<void>
+  /**
+   * Records area and unit price. An unusual price (outside half..double of the expected one) is refused unless the project
+   * manager approved exactly that price as an exception — the result tells the screen to ask for one.
+   */
+  setLandPrice: (parcelId: string, areaM2: number | null, unit: number | null) => Promise<'saved' | 'needs_exception' | 'refused'>
+  requestPriceException: (parcelId: string, unit: number, reason: string) => Promise<boolean>
+  decidePriceException: (parcelId: string, approve: boolean, note: string) => Promise<void>
   setColorMode: (m: ColorMode) => void
   clearError: () => void
   /** Approval chain (contractor -> consultant -> employer legal -> project manager). */
@@ -191,6 +203,69 @@ export const useLandStore = create<LandState>()((set, get) => {
     selectParcel: (selectedId) => set({ selectedId, selectedCrossingId: null }),
     selectCrossing: (selectedCrossingId) => set({ selectedCrossingId, selectedId: null }),
     setColorMode: (colorMode) => set({ colorMode }),
+
+    savePayment: async (x) => {
+      const pid = get().projectId
+      if (!pid) return
+      await run(async () => {
+        const saved = await repo().savePayment(pid, x)
+        patchData((d) => ({ ...d, payments: (x.id ? d.payments.map((q) => (q.id === saved.id ? saved : q)) : [...d.payments, saved]).sort((a, b) => a.paidDate.localeCompare(b.paidDate)) }))
+      })
+    },
+    deletePayment: async (id) => {
+      patchData((d) => ({ ...d, payments: d.payments.filter((q) => q.id !== id) }))
+      await run(() => repo().deletePayment(id))
+    },
+    saveBudget: async (amount, note) => {
+      const route = get().data?.route
+      if (!route) return
+      await get().saveRoute({ ...route, settings: { ...route.settings, budgetAmount: amount, budgetNote: note } })
+    },
+
+    setLandPrice: async (parcelId, areaM2, unit) => {
+      const st = get()
+      const p = st.data?.parcels.find((x) => x.id === parcelId)
+      if (!p || !allowed(parcelId)) return 'refused'
+      const area = areaM2 != null && areaM2 > 0 ? areaM2 : null
+      const patch: Partial<ParcelFields> = { areaM2: area }
+      if (unit != null && unit > 0 && area) {
+        const bm = benchmarkFor(p, st.data!.parcels)
+        if (!priceAllowed(unit, bm, p.priceException)) return 'needs_exception'
+        patch.estCost = Math.round(unit * area)
+      } else if (unit == null) {
+        patch.estCost = null
+      }
+      patchParcel(parcelId, (x) => ({ ...x, ...patch }))
+      await run(() => repo().updateParcel(parcelId, patch))
+      return 'saved'
+    },
+    requestPriceException: async (parcelId, unit, reason) => {
+      const p = get().data?.parcels.find((x) => x.id === parcelId)
+      if (!p || !allowed(parcelId)) return false
+      if (reason.trim().length < 15) {
+        set({ error: 'برای درخواست استثنا، دلیل را با توضیح کافی (دست‌کم یک جمله) بنویسید.' })
+        return false
+      }
+      const ex = { status: 'requested' as const, price: Math.round(unit), reason: reason.trim(), requestedBy: useAuthStore.getState().profile?.fullName ?? '', requestedAt: new Date().toISOString() }
+      patchParcel(parcelId, (x) => ({ ...x, priceException: ex }))
+      return (await run(async () => { await repo().updateParcel(parcelId, { priceException: ex }); return true })) ?? false
+    },
+    decidePriceException: async (parcelId, approve, note) => {
+      const st = get()
+      const p = st.data?.parcels.find((x) => x.id === parcelId)
+      const role = st.data?.myRole ?? null
+      const isAdmin = !!useAuthStore.getState().profile?.isAdmin
+      if (!p?.priceException || p.priceException.status !== 'requested') return
+      if (!(isAdmin || role === 'project_manager' || role === 'executive')) {
+        set({ error: 'تصمیم دربارهٔ قیمت استثنایی با مدیر پروژه یا مجری طرح است.' })
+        return
+      }
+      const ex = { ...p.priceException, status: approve ? ('approved' as const) : ('rejected' as const), decidedBy: useAuthStore.getState().profile?.fullName ?? '', decidedAt: new Date().toISOString(), decisionNote: note.trim() }
+      const patch: Partial<ParcelFields> = { priceException: ex }
+      if (approve && p.areaM2) patch.estCost = Math.round(ex.price * p.areaM2)
+      patchParcel(parcelId, (x) => ({ ...x, ...patch }))
+      await run(() => repo().updateParcel(parcelId, patch))
+    },
     clearError: () => set({ error: null }),
 
     saveRoute: async (route) => {

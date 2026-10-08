@@ -147,8 +147,7 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-flow li.is-blocked .la-dot { --c: var(--la-bad); }
 
 /* ---- drawer / toast / misc --------------------------------------------------------------------- */
-.la-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(2, 6, 12, 0.5); backdrop-filter: blur(3px); animation: la-fade 200ms ease both; }
-.la-drawer { position: fixed; inset-block: 0; left: 0; z-index: 41; display: flex; flex-direction: column; width: min(560px, 100vw); background: var(--la-surface); border-right: 1px solid var(--la-line-2); box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6); animation: la-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.la-drawer { position: fixed; z-index: 41; display: flex; flex-direction: column; width: min(580px, calc(100vw - 16px)); height: min(84vh, 820px); min-width: 340px; min-height: 320px; max-width: 98vw; max-height: 96vh; resize: both; overflow: hidden; border-radius: 16px; background: var(--la-surface); border: 1px solid var(--la-line-2); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7); animation: la-rise 220ms var(--la-ease) both; }
 @keyframes la-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes la-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
 .la-rise { animation: la-rise 260ms var(--la-ease) both; }
@@ -159,7 +158,7 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-bar { display: flex; height: 12px; overflow: hidden; border-radius: 99px; background: var(--la-surface-3); }
 .la-bar > i { display: block; height: 100%; transition: flex-grow 0.5s var(--la-ease); }
 
-@media (max-width: 720px) { .la-drawer { width: 100vw; border-right: 0; } .la-kpi-value { font-size: 21px; } }
+@media (max-width: 720px) { .la-drawer { left: 8px !important; width: calc(100vw - 16px); min-width: 0; } .la-kpi-value { font-size: 21px; } }
 @media (prefers-reduced-motion: reduce) {
   .la-rise, .la-drawer, .la-toast, .la-skeleton, .la-pulse { animation-duration: 0.01ms; animation-iteration-count: 1; }
   .la-tab::after, .la-bar > i { transition: none; }

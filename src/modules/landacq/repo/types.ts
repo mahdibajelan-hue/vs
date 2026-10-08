@@ -1,12 +1,13 @@
-import type { Activity, ApprovalStatus, Crossing, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
+import type { Activity, ApprovalStatus, Crossing, DocMeta, LandProjectData, Payment, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
 
 /** The editable fields of a parcel (everything but its children and ids). */
-export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots' | 'kind' | 'stationType' | 'siteLon' | 'siteLat'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'kind' | 'stationType' | 'siteLon' | 'siteLat'>>
+export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'kind' | 'stationType' | 'siteLon' | 'siteLat' | 'priceException'>>
 export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; plots?: Omit<Plot, 'id' | 'parcelId'>[]; approvalStatus?: ApprovalStatus; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
 export type OwnerInput = Omit<Owner, 'id'> & { id?: string }
 export type DocInput = Omit<DocMeta, 'id'> & { id?: string }
 export type PlotInput = Omit<Plot, 'id' | 'parcelId'> & { id?: string }
 export type CrossingInput = Omit<Crossing, 'id' | 'masterProjectId' | 'riskId' | 'issueId'> & { id?: string }
+export type PaymentInput = Omit<Payment, 'id' | 'masterProjectId'> & { id?: string; /** Demo data only: the parcel is looked up by its code once the parcels exist. */ parcelCode?: string }
 export type ActivityInput = Omit<Activity, 'id' | 'masterProjectId'> & { id?: string }
 
 export interface DemoBundle {
@@ -14,6 +15,7 @@ export interface DemoBundle {
   parcels: ParcelDraft[]
   activities: ActivityInput[]
   crossings?: CrossingInput[]
+  payments?: PaymentInput[]
 }
 
 /** The module's only connection to storage. `supabaseRepo` is the product; `memoryRepo` powers the demo harness and tests. */
@@ -36,6 +38,8 @@ export interface LandRepo {
   saveCrossing(masterProjectId: string, c: CrossingInput): Promise<Crossing>
   deleteCrossing(id: string): Promise<void>
   transferCrossing(id: string, target: 'issue' | 'risk', params?: Record<string, unknown>): Promise<{ id: string }>
+  savePayment(masterProjectId: string, p: PaymentInput): Promise<Payment>
+  deletePayment(id: string): Promise<void>
   listPeople(): Promise<Person[]>
   setRole(masterProjectId: string, userId: string, role: LandRole | null): Promise<void>
   saveActivity(masterProjectId: string, a: ActivityInput): Promise<Activity>

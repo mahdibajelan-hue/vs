@@ -23,7 +23,7 @@ export function SettingsPage() {
   const valid = form.name.trim() !== '' && form.totalKm > 0 && form.buffer >= 0 && form.horizon > 0
 
   const save = (geometry = base.geometry, geometrySource = base.geometrySource, totalKm = form.totalKm) =>
-    saveRoute({ ...base, masterProjectId: projectId ?? base.masterProjectId, name: form.name.trim(), totalKm, startKm: form.startKm, geometry, geometrySource, settings: { bufferDays: form.buffer, horizonDays: form.horizon } })
+    saveRoute({ ...base, masterProjectId: projectId ?? base.masterProjectId, name: form.name.trim(), totalKm, startKm: form.startKm, geometry, geometrySource, settings: { ...base.settings, bufferDays: form.buffer, horizonDays: form.horizon } })
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">

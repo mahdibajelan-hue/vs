@@ -16375,7 +16375,7 @@ begin
     execute 'alter table ' || c.t || ' drop constraint ' || quote_ident(c.conname);
   end loop;
 end $$;
-alter table la_parcels add constraint la_parcels_route_check check (acquisition_route in ('normal', 'accelerated', 'dispute', 'art9'));
+alter table la_parcels add constraint la_parcels_route_check check (acquisition_route in ('normal', 'dispute', 'art9'));
 alter table la_stages add constraint la_stages_key_check check (stage_key in ('identification', 'ownership_status', 'owner_identification', 'preliminary_assessment', 'expert_referral', 'valuation', 'financial_settlement', 'payment', 'release', 'ready_for_construction', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment'));
 alter table la_parcels add column if not exists legal jsonb not null default '{}'::jsonb;
 alter table la_parcels add column if not exists next_deadline date;
@@ -16597,3 +16597,65 @@ begin
   end loop;
   return v;
 end $$;
+
+-- 75. Land acquisition: land-price exceptions and the payment ledger (budget lives in la_routes.settings)
+alter table la_parcels add column if not exists price_exception jsonb not null default '{}'::jsonb;
+create table if not exists la_payments (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  parcel_id uuid references la_parcels (id) on delete set null,
+  category text not null check (category in ('owner', 'expert', 'transfer', 'legal', 'other')),
+  payee text not null default '',
+  amount numeric not null check (amount >= 0),
+  paid_date date not null default current_date,
+  ref text not null default '',
+  note text not null default '',
+  is_demo boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists la_payments_project_idx on la_payments (master_project_id, paid_date);
+alter table la_payments enable row level security;
+drop policy if exists la_payments_select on la_payments;
+create policy la_payments_select on la_payments for select using (la_can_view(master_project_id));
+drop policy if exists la_payments_write on la_payments;
+create policy la_payments_write on la_payments for all using (la_can_edit(master_project_id)) with check (la_can_edit(master_project_id));
+
+create or replace function my_land_notifications() returns jsonb language plpgsql stable security invoker set search_path = public as $$
+declare v jsonb := '[]'::jsonb; r record;
+begin
+  if auth.uid() is null then return v; end if;
+  for r in select p.id, p.code, p.next_deadline, p.next_deadline_label, (p.next_deadline - current_date) as d
+    from la_parcels p where p.next_deadline is not null and p.next_deadline <= current_date + 14 order by p.next_deadline limit 30 loop
+    v := v || jsonb_build_object('id', 'la-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', case when r.d < 0 then 'warn' else 'action' end,
+      'title', 'قطعه ' || r.code,
+      'body', r.next_deadline_label || case when r.d < 0 then ' (' || (-r.d) || ' روز از مهلت قانونی گذشته)' when r.d = 0 then ' (امروز آخرین مهلت است)' else ' (' || r.d || ' روز تا مهلت قانونی)' end,
+      'at', now());
+  end loop;
+  for r in select c.id, c.code, c.name, c.next_deadline, c.next_deadline_label, (c.next_deadline - current_date) as d
+    from la_crossings c where c.next_deadline is not null and c.next_deadline <= current_date + 14 order by c.next_deadline limit 30 loop
+    v := v || jsonb_build_object('id', 'lc-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', case when r.d < 0 then 'warn' else 'action' end,
+      'title', 'عبور ' || coalesce(nullif(r.name, ''), r.code),
+      'body', r.next_deadline_label || case when r.d < 0 then ' (' || (-r.d) || ' روز گذشته)' when r.d = 0 then ' (امروز)' else ' (' || r.d || ' روز مانده)' end,
+      'at', now());
+  end loop;
+  for r in select p.id, p.code, p.approval_status, p.approval_note, ro.role from la_parcels p join la_roles ro on ro.master_project_id = p.master_project_id and ro.user_id = auth.uid()
+    where (ro.role = 'consultant' and p.approval_status = 'submitted')
+       or (ro.role = 'employer_legal' and p.approval_status = 'consultant_approved')
+       or (ro.role in ('project_manager', 'executive') and p.approval_status = 'legal_attested')
+       or (ro.role = 'contractor' and p.approval_status = 'draft' and p.approval_note <> '') limit 40 loop
+    v := v || jsonb_build_object('id', 'laa-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', 'action',
+      'title', 'قطعه ' || r.code,
+      'body', case r.role when 'consultant' then 'اطلاعات قطعه منتظر بررسی و تأیید مشاور است' when 'employer_legal' then 'قطعه منتظر صحه‌گذاری حقوقی کارفرماست' when 'contractor' then 'قطعه برگشت خورده: ' || r.approval_note else 'قطعه منتظر تأیید نهایی مدیر پروژه است' end,
+      'at', now());
+  end loop;
+  for r in select p.id, p.code, p.price_exception->>'reason' as reason, (p.price_exception->>'price')::numeric as price, ro.role from la_parcels p join la_roles ro on ro.master_project_id = p.master_project_id and ro.user_id = auth.uid()
+    where p.price_exception->>'status' = 'requested' and ro.role in ('employer_legal', 'project_manager', 'executive') limit 40 loop
+    v := v || jsonb_build_object('id', 'lap-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', 'action',
+      'title', 'قطعه ' || r.code || ' — قیمت غیرمتعارف',
+      'body', 'درخواست استثنا برای ثبت قیمت ' || to_char(r.price, 'FM999G999G999G999') || ' ریال بر متر مربع' || case when r.role = 'project_manager' then ' منتظر تصمیم مدیر پروژه است' else ' ثبت شد؛ برای اطلاع و بررسی' end || ': ' || left(coalesce(r.reason, ''), 120),
+      'at', now());
+  end loop;
+  return v;
+end $$;
+

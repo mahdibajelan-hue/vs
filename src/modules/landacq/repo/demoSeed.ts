@@ -1,10 +1,12 @@
-import type { Owner, Parcel, Stage, StageKey } from '../types'
+import type { AcqRoute, Owner, Parcel, Stage, StageKey } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import { addDays } from '../lib/dates'
 import { makeStages, STAGE_DAYS, STAGE_ORDER } from '../lib/workflow'
 import type { DemoBundle, ParcelDraft } from './types'
 import { pointAt, polyline, type LonLat } from '../lib/geometry'
 import { toUtm } from '../lib/utm'
+import { BASE_PRICE, multOf } from '../lib/pricing'
+import type { PaymentInput } from './types'
 import type { CrossingInput } from './types'
 import type { CrossingType, StationType } from '../types'
 
@@ -55,7 +57,7 @@ const ZONES: Zone[] = [
 
 const LENGTHS = [2.4, 1.8, 3.1, 2.0, 1.5, 2.8, 2.2, 1.6, 3.4, 2.6]
 
-function stagesFor(done: number, working: boolean, route: 'normal' | 'accelerated' | 'dispute' | 'art9', complexity: number, today: string, r: () => number): Stage[] {
+function stagesFor(done: number, working: boolean, route: AcqRoute, complexity: number, today: string, r: () => number): Stage[] {
   const days = STAGE_DAYS[route]
   const f = 0.8 + 0.1 * complexity
   const dur = (i: number) => Math.round(days[STAGE_ORDER[i]] * f)
@@ -116,7 +118,7 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   const crit2 = split(78.2, 79)
   Object.assign(crit2, { title: 'مالکیت نامشخص — سابقهٔ اختلاف', landType: 'desert', ownershipClass: 'unknown', ownerCountEst: 9, ownerKnown: false, disputeProbability: 75, complexity: 5, acquisitionRoute: 'dispute', flags: { past_dispute: true, critical_for_execution: true, high_value: false }, custodian: 'اداره املاک و اراضی', notes: 'ادعای مالکیت متعارض؛ پروندهٔ دادگاه در جریان.' })
   const river = split(47, 48.2)
-  Object.assign(river, { title: 'عبور از رودخانهٔ فصلی', landType: 'riverbed', ownershipClass: 'governmental', custodian: 'شرکت آب منطقه‌ای', flags: { sensitive_area: true, critical_for_execution: true }, acquisitionRoute: 'accelerated' })
+  Object.assign(river, { title: 'عبور از رودخانهٔ فصلی', landType: 'riverbed', ownershipClass: 'governmental', custodian: 'شرکت آب منطقه‌ای', flags: { sensitive_area: true, critical_for_execution: true }, acquisitionRoute: 'normal' })
   const rail = split(74.5, 75)
   Object.assign(rail, { title: 'تقاطع با خط راه‌آهن', landType: 'road_rail', ownershipClass: 'governmental', custodian: 'راه‌آهن جمهوری اسلامی', flags: { has_facilities: true, critical_for_execution: true }, complexity: 4 })
   const exempt = split(64, 65.2)
@@ -261,10 +263,51 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   cx('oil_pipe', 83.5, 'خط ۱۶ اینچ فرآورده', { permitStatus: 'rejected', permitRequestedDate: d(-60), legalNotes: 'متولی با تقاطع در عمق فعلی مخالفت کرده؛ طرح اصلاحی (عبور عمیق‌تر) تهیه شود.' })
   cx('dirt_road', 93.4, 'جادهٔ خاکی معدن')
 
+  // land prices around the reference price of each land type; owners' amounts follow the parcel estimate
+  for (const p of parcels) {
+    const area = p.areaM2 ?? 0
+    if (!area) continue
+    p.estCost = Math.round(area * BASE_PRICE[p.landType] * multOf(p) * (0.75 + 0.5 * r()))
+    const left = (p.owners ?? []).length
+    for (const o of p.owners ?? []) {
+      const part = (p.estCost * (o.sharePct ?? 100 / left)) / 100
+      o.estAmount = Math.round(part * 0.95)
+      if (o.finalAmount != null) o.finalAmount = Math.round(part)
+    }
+  }
+  // an unusual price waiting for the project manager, and one that was approved as an exception
+  const unit = (x: ParcelDraft) => Math.round((x.estCost ?? 0) / (x.areaM2 ?? 1))
+  crit1.estCost = Math.round((crit1.areaM2 ?? 0) * BASE_PRICE.garden * 5.2)
+  crit1.priceException = { status: 'requested', price: unit(crit1), reason: 'کارشناس رسمی به‌علت وجود درختان پستهٔ بارور و چاه کشاورزی، ارزش را بیش از سه برابر قیمت منطقه‌ای برآورد کرده است.', requestedBy: 'پیمانکار — کارشناس تحصیل اراضی', requestedAt: `${addDays(today, -2)}T08:30:00Z` }
+  river.estCost = Math.round((river.areaM2 ?? 0) * 2_600_000)
+  river.priceException = { status: 'approved', price: unit(river), reason: 'بستر رودخانه با حریم کیفی و مجوز برداشت شن؛ قیمت‌گذاری بر اساس نظر هیئت کارشناسی.', requestedBy: 'پیمانکار — کارشناس تحصیل اراضی', requestedAt: `${addDays(today, -40)}T09:00:00Z`, decidedBy: 'مدیر پروژه', decidedAt: `${addDays(today, -37)}T11:00:00Z`, decisionNote: 'با توجه به نظر هیئت کارشناسی تأیید شد.' }
+
+  // the payment ledger: fees of the official experts, title transfer and legal costs, and what the owners were paid
+  const payments: PaymentInput[] = []
+  const pay = (category: PaymentInput['category'], parcelCode: string, payee: string, amount: number, ago: number, ref: string, note = '') =>
+    payments.push({ category, parcelId: null, parcelCode, payee, amount: Math.round(amount), paidDate: addDays(today, -ago), ref, note, isDemo: true })
+  const EXPERTS = ['دفتر کارشناسان رسمی دادگستری فجر', 'کارشناس رسمی ۱۴۰۱/۲۳۴', 'هیئت کارشناسی ماده ۵', 'کارشناس رسمی ۱۳۹۸/۷۷۱']
+  parcels.forEach((p) => {
+    const done = p.stages?.filter((x) => x.status === 'done').length ?? 0
+    if (p.acquisitionRoute === 'art9' && p !== a9a) return
+    if (done >= 5) pay('expert', p.code, EXPERTS[Math.floor(r() * EXPERTS.length)], 12_000_000 + r() * 28_000_000 + (p.kind === 'station' ? 30_000_000 : 0), 20 + Math.floor(r() * 170), `ک-${Math.floor(1000 + r() * 8000)}`, 'حق‌الزحمهٔ ارزیابی ملک')
+    if (done >= 9) pay('transfer', p.code, 'دفتر اسناد رسمی ۱۱۲', 6_000_000 + r() * 22_000_000, 8 + Math.floor(r() * 90), `س-${Math.floor(1000 + r() * 8000)}`, 'هزینهٔ تنظیم سند و انتقال')
+    ;(p.owners ?? []).forEach((o) => {
+      if (o.payment === 'unpaid') return
+      const total = o.finalAmount ?? o.estAmount ?? 0
+      pay('owner', p.code, o.name, o.payment === 'paid' ? total : total * 0.5, 5 + Math.floor(r() * 150), `چ-${Math.floor(10000 + r() * 80000)}`, o.payment === 'paid' ? 'تسویه کامل' : 'علی‌الحساب')
+    })
+  })
+  pay('legal', crit2.code, 'دفتر وکالت حقوقی کارفرما', 85_000_000, 30, 'و-۲۱۷', 'حق‌الوکاله پروندهٔ مالکیت متعارض')
+  pay('other', parcels[0].code, 'اداره ثبت اسناد و املاک', 9_500_000, 140, 'ث-۸۸', 'هزینهٔ استعلام ثبتی')
+  const planned = parcels.reduce((n, x) => n + (x.estCost ?? 0), 0)
+  const budgetAmount = Math.round((planned * 1.18) / 1e9) * 1e9
+
   const act = (key: string, name: string, startOffset: number, endOffset: number, sequence: number) => ({ key, name, kmStart: 0, kmEnd: 100, startDate: addDays(today, startOffset), endDate: addDays(today, endOffset), sequence, isDemo: true })
   return {
     crossings,
-    route: { masterProjectId, name: 'خط لوله ۱۰۰ کیلومتری — نمونه', totalKm: 100, startKm: 0, geometry: demoGeometry(), geometrySource: 'demo', settings: { ...DEFAULT_SETTINGS }, isDemo: true },
+    payments,
+    route: { masterProjectId, name: 'خط لوله ۱۰۰ کیلومتری — نمونه', totalKm: 100, startKm: 0, geometry: demoGeometry(), geometrySource: 'demo', settings: { ...DEFAULT_SETTINGS, budgetAmount, budgetNote: 'بودجهٔ مصوب تحصیل اراضی — داده نمونه' }, isDemo: true },
     parcels,
     activities: [
       act('clearing', 'Clearing', -60, 300, 0),

@@ -29,7 +29,7 @@ setStage(p, 'identification', 'done'); setStage(p, 'ownership_status', 'in_progr
 assert.equal(currentStage(p).key, 'ownership_status'); assert.equal(isStarted(p), true); assert.equal(stageProgress(p), 0.15)
 assert.equal(isReleased(release(mk())), true)
 const full = totalExpectedDays(mk({ complexity: 3 }))
-assert.ok(full > totalExpectedDays(mk({ acquisitionRoute: 'accelerated', complexity: 3 })), 'accelerated is shorter')
+assert.ok(full > totalExpectedDays(mk({ acquisitionRoute: 'art9', complexity: 3 })), 'art9 is shorter')
 assert.ok(totalExpectedDays(mk({ acquisitionRoute: 'dispute', complexity: 3 })) > full, 'dispute is longer')
 assert.equal(totalExpectedDays(mk({ estDurationDays: 120 })), 120)
 assert.equal(remainingDays(release(mk())), 0)
@@ -207,4 +207,37 @@ console.log('landacq/import+problems: all assertions passed')
   assert.equal(stationLabel({ stationType: 'pig_launcher' }), 'ایستگاه ارسال توپک')
   assert.ok(parcelHeading({ kind: 'station', stationType: 'line_valve', kmStart: 25.4, kmEnd: 25.401 }).includes('KM'))
   console.log('landacq/facilities: all assertions passed')
+}
+
+// ── pricing & finance ──
+{
+  const { BASE_PRICE, benchmarkFor, verdictOf, priceAllowed, unitPrice, averagesByFactor, multOf } = await import('./pricing.ts')
+  const { summarize, spendSeries } = await import('./finance.ts')
+  const P = (o = {}) => ({ id: 'x', landType: 'agricultural', ownershipClass: 'private', flags: {}, areaM2: 1000, estCost: 6_000_000_000, landUse: 'کشاورزی', priceException: null, ...o })
+  const bm = benchmarkFor(P(), [])
+  assert.equal(bm.source, 'base'); assert.equal(Math.round(bm.expected), BASE_PRICE.agricultural)
+  assert.equal(verdictOf(6_000_000, bm), 'ok'); assert.equal(verdictOf(2_000_000, bm), 'low'); assert.equal(verdictOf(20_000_000, bm), 'high')
+  assert.equal(unitPrice(P()), 6_000_000); assert.equal(unitPrice(P({ areaM2: null })), null)
+  // factors move the expected price: residence +15%, national land x0.4
+  assert.ok(Math.abs(multOf(P({ flags: { residence_livelihood: true } })) - 1.15) < 1e-9)
+  assert.ok(benchmarkFor(P({ ownershipClass: 'natural_resources' }), []).expected < bm.expected / 2)
+  // an unusual price is only allowed once the project manager approved exactly that price
+  assert.equal(priceAllowed(20_000_000, bm, null), false)
+  assert.equal(priceAllowed(20_000_000, bm, { status: 'requested', price: 20_000_000 }), false)
+  assert.equal(priceAllowed(20_000_000, bm, { status: 'rejected', price: 20_000_000 }), false)
+  assert.equal(priceAllowed(20_000_000, bm, { status: 'approved', price: 20_000_000 }), true)
+  assert.equal(priceAllowed(21_000_000, bm, { status: 'approved', price: 20_000_000 }), false)
+  // with 3+ comparable parcels the project's own median replaces the reference table
+  const peers = [1, 2, 3].map((i) => P({ id: 'p' + i, estCost: 1000 * 9_000_000 }))
+  const bp = benchmarkFor(P(), peers); assert.equal(bp.source, 'project'); assert.equal(Math.round(bp.expected), 9_000_000)
+  const avg = averagesByFactor([P(), P({ estCost: 8_000_000_000 }), P({ landType: 'garden', estCost: 14_000_000_000 })])
+  const ag = avg.find((x) => x.group === 'landType' && x.key === 'agricultural'); assert.equal(ag.n, 2); assert.equal(Math.round(ag.avg), 7_000_000)
+  // finance
+  const pays = [{ category: 'owner', amount: 100 }, { category: 'expert', amount: 10 }, { category: 'transfer', amount: 5 }, { category: 'legal', amount: 1 }]
+  const sm = summarize([{ estCost: 500 }], pays, 232)
+  assert.equal(sm.owners, 100); assert.equal(sm.fees, 16); assert.equal(sm.total, 116); assert.equal(sm.expert, 10); assert.equal(sm.consumption, 0.5); assert.equal(sm.remaining, 116)
+  assert.equal(summarize([], pays, null).consumption, null); assert.equal(summarize([{ estCost: 500 }], pays, 400).overrun, true)
+  const ser = spendSeries([{ amount: 10, paidDate: '2026-01-15' }, { amount: 5, paidDate: '2026-01-20' }, { amount: 7, paidDate: '2026-03-02' }], '2026-04-10')
+  assert.deepEqual(ser.map((x) => [x.month, x.paid, x.cumulative]), [['2026-01-01', 15, 15], ['2026-02-01', 0, 15], ['2026-03-01', 7, 22], ['2026-04-01', 0, 22]])
+  console.log('landacq/pricing+finance: all assertions passed')
 }

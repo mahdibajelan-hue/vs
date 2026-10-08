@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BellRing, CalendarRange, Factory, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
+import { BellRing, CalendarRange, Coins, Factory, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
 import './landacq.css'
 import { ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useLandStore, useLandAnalysis, type TabKey } from './store/useLandStore'
@@ -14,6 +14,7 @@ import { ActionsPage } from './pages/ActionsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StationsPage } from './pages/StationsPage'
 import { CrossingsPage } from './pages/CrossingsPage'
+import { FinancePage } from './pages/FinancePage'
 import { faNum } from './lib/fa'
 
 interface Props {
@@ -28,6 +29,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Rows3 }[] = [
   { key: 'parcels', label: 'قطعه‌ها', icon: Rows3 },
   { key: 'stations', label: 'ایستگاه‌ها', icon: Factory },
   { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline },
+  { key: 'finance', label: 'مالی و بودجه', icon: Coins },
   { key: 'schedule', label: 'برنامه', icon: CalendarRange },
   { key: 'actions', label: 'اقدام‌ها', icon: BellRing },
   { key: 'settings', label: 'تنظیمات', icon: Settings },
@@ -54,7 +56,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
     void init(repo)
   }, [init, repo])
 
-  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : 0)
+  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : k === 'finance' ? (data?.parcels.filter((p) => p.priceException?.status === 'requested').length ?? 0) + (data?.route && !data.route.settings.budgetAmount ? 1 : 0) : 0)
 
   return (
     <div className="la-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
@@ -100,6 +102,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             {tab === 'parcels' && <ParcelsPage />}
             {tab === 'stations' && <StationsPage />}
             {tab === 'crossings' && <CrossingsPage />}
+            {tab === 'finance' && <FinancePage />}
             {tab === 'schedule' && <SchedulePage />}
             {tab === 'actions' && <ActionsPage />}
             {tab === 'settings' && <SettingsPage />}

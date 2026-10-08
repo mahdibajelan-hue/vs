@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, GripHorizontal, X } from 'lucide-react'
 import { Modal } from '../platform'
 import type { CriticalityLevel } from '../types'
 import { LEVEL_COLOR, LEVEL_LABEL } from '../lib/labels'
@@ -86,30 +86,56 @@ export function EmptyState({ icon, title, text, action }: { icon: ReactNode; tit
   )
 }
 
+/** Where the floating panel was left, shared by every panel so the next parcel opens in the same place. */
+let lastPos: { x: number; y: number } | null = null
+
+/**
+ * A floating work panel: it can be dragged by its title and resized from the corner, its body scrolls on its own, and —
+ * unlike a modal — clicking the page or the map behind it does not close it. Only «ذخیره و بستن» / «بستن» do.
+ * (Edits are saved as each field is left, so «ذخیره و بستن» first commits the field being typed in.)
+ */
 export function Drawer({ title, subtitle, onClose, children, footer, badge }: { title: ReactNode; subtitle?: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; badge?: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const [pos, setPos] = useState(() => lastPos ?? { x: 16, y: 72 })
+  const drag = useRef<{ dx: number; dy: number } | null>(null)
+  const clamp = (x: number, y: number) => ({ x: Math.max(-300, Math.min(window.innerWidth - 120, x)), y: Math.max(0, Math.min(window.innerHeight - 48, y)) })
+  const down = (e: React.PointerEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return
+    drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const move = (e: React.PointerEvent) => {
+    if (!drag.current) return
+    const next = clamp(e.clientX - drag.current.dx, e.clientY - drag.current.dy)
+    lastPos = next
+    setPos(next)
+  }
+  const saveAndClose = () => {
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    // let the blur handlers write their value before the panel unmounts
+    setTimeout(onClose, 0)
+  }
   return createPortal(
-    <div className="la-root" dir="rtl">
-      <div className="la-scrim" onClick={onClose} />
-      <aside className="la-drawer" role="dialog" aria-modal="true">
-        <header className="flex items-start justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--la-line)' }}>
+    <div className="la-root" dir="rtl" style={{ background: 'transparent' }}>
+      <aside className="la-drawer" role="dialog" aria-label="پنل جزئیات" style={{ left: pos.x, top: pos.y }}>
+        <header className="flex cursor-move touch-none select-none items-start justify-between gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--la-line)' }} onPointerDown={down} onPointerMove={move} onPointerUp={() => (drag.current = null)} onPointerCancel={() => (drag.current = null)}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <GripHorizontal size={14} aria-hidden style={{ color: 'var(--la-ink-2)' }} />
               <h2 className="m-0 text-[15px] font-bold">{title}</h2>
               {badge}
             </div>
             {subtitle && <p className="la-eyebrow mt-1 leading-6">{subtitle}</p>}
           </div>
-          <button className="la-btn la-btn-ghost la-btn-icon" onClick={onClose} aria-label="بستن">
+          <button className="la-btn la-btn-ghost la-btn-icon" onClick={saveAndClose} aria-label="بستن">
             <X size={16} />
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        {footer && <footer className="flex items-center justify-end gap-2 border-t px-5 py-3" style={{ borderColor: 'var(--la-line)' }}>{footer}</footer>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        <footer className="flex items-center justify-end gap-2 border-t px-5 py-3" style={{ borderColor: 'var(--la-line)' }}>
+          {footer}
+          <button className="la-btn" onClick={saveAndClose}>بستن</button>
+          <button className="la-btn la-btn-primary" onClick={saveAndClose}>ذخیره و بستن</button>
+        </footer>
       </aside>
     </div>,
     document.body,

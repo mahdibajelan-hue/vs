@@ -1,8 +1,8 @@
 import { supabase } from '../platform'
-import type { Activity, ApprovalEntry, ApprovalStatus, Crossing, DocMeta, LandEvent, LandProjectData, LinkedStatus, Owner, Parcel, Plot, RouteInfo, Stage, TransferTarget } from '../types'
+import type { Activity, ApprovalEntry, ApprovalStatus, Crossing, DocMeta, Payment, LandEvent, LandProjectData, LinkedStatus, Owner, Parcel, Plot, RouteInfo, Stage, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import { makeStages, STAGE_ORDER } from '../lib/workflow'
-import type { ActivityInput, DemoBundle, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput } from './types'
+import type { ActivityInput, DemoBundle, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput, PaymentInput } from './types'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -27,10 +27,10 @@ const num = (v: unknown): number | null => (v === null || v === undefined ? null
 
 // ------------------------------------------------------------------------------------------------ mappers
 const parcelRow = (f: Partial<ParcelFields>): Row => {
-  const m: Record<string, string> = { code: 'code', title: 'title', kmStart: 'km_start', kmEnd: 'km_end', landType: 'land_type', ownershipClass: 'ownership_class', landUse: 'land_use', ownerCountEst: 'owner_count_est', ownerKnown: 'owner_known', custodian: 'custodian', disputeProbability: 'dispute_probability', complexity: 'complexity', estDurationDays: 'est_duration_days', flags: 'flags', acquisitionRoute: 'acquisition_route', areaM2: 'area_m2', estCost: 'est_cost', notes: 'notes', kind: 'kind', stationType: 'station_type', siteLon: 'site_lon', siteLat: 'site_lat', legal: 'legal', nextDeadline: 'next_deadline', nextDeadlineLabel: 'next_deadline_label' }
+  const m: Record<string, string> = { code: 'code', title: 'title', kmStart: 'km_start', kmEnd: 'km_end', landType: 'land_type', ownershipClass: 'ownership_class', landUse: 'land_use', ownerCountEst: 'owner_count_est', ownerKnown: 'owner_known', custodian: 'custodian', disputeProbability: 'dispute_probability', complexity: 'complexity', estDurationDays: 'est_duration_days', flags: 'flags', acquisitionRoute: 'acquisition_route', areaM2: 'area_m2', estCost: 'est_cost', notes: 'notes', kind: 'kind', stationType: 'station_type', siteLon: 'site_lon', siteLat: 'site_lat', legal: 'legal', nextDeadline: 'next_deadline', nextDeadlineLabel: 'next_deadline_label', priceException: 'price_exception' }
   const out: Row = {}
   // undefined must never become an explicit NULL (PostgREST bulk inserts fill keys missing from some rows with NULL)
-  for (const [k, v] of Object.entries(f)) if (m[k] && v !== undefined) out[m[k]] = v
+  for (const [k, v] of Object.entries(f)) if (m[k] && v !== undefined) out[m[k]] = k === 'priceException' && v === null ? {} : v
   return out
 }
 const stageFromRow = (r: Row): Stage => ({ key: r.stage_key, status: r.status, responsible: r.responsible ?? '', plannedDate: r.planned_date, actualDate: r.actual_date, note: r.note ?? '' })
@@ -43,6 +43,9 @@ const plotFromRow = (r: Row): Plot => ({ id: r.id, parcelId: r.parcel_id, plotNo
 const plotRow = (parcelId: string, p: PlotInput): Row => ({ ...(p.id ? { id: p.id } : {}), parcel_id: parcelId, plot_no: p.plotNo, owner_name: p.ownerName, utm_zone: p.zone, utm_north: p.north, corners: p.corners, notes: p.notes, is_demo: p.isDemo })
 const crossingFromRow = (r: Row): Crossing => ({ id: r.id, masterProjectId: r.master_project_id, code: r.code ?? '', crossingType: r.crossing_type, name: r.name ?? '', km: Number(r.km), custodian: r.custodian ?? '', permitStatus: r.permit_status, permitRequestedDate: r.permit_requested_date, permitIssuedDate: r.permit_issued_date, permitNumber: r.permit_number ?? '', undertakingRequired: r.undertaking_required !== false, undertakingStatus: r.undertaking_status, undertakingDate: r.undertaking_date, undertakingNote: r.undertaking_note ?? '', feeRequired: !!r.fee_required, feeAmount: Number(r.fee_amount ?? 0), feePaidAmount: Number(r.fee_paid_amount ?? 0), feePaidDate: r.fee_paid_date, legalNotes: r.legal_notes ?? '', conditions: r.conditions ?? '', responsible: r.responsible ?? '', riskId: r.risk_id, issueId: r.issue_id, nextDeadline: r.next_deadline, nextDeadlineLabel: r.next_deadline_label ?? '', isDemo: !!r.is_demo })
 const crossingRow = (masterProjectId: string, c: CrossingInput): Row => ({ ...(c.id ? { id: c.id } : {}), master_project_id: masterProjectId, code: c.code, crossing_type: c.crossingType, name: c.name, km: c.km, custodian: c.custodian, permit_status: c.permitStatus, permit_requested_date: c.permitRequestedDate, permit_issued_date: c.permitIssuedDate, permit_number: c.permitNumber, undertaking_required: c.undertakingRequired, undertaking_status: c.undertakingStatus, undertaking_date: c.undertakingDate, undertaking_note: c.undertakingNote, fee_required: c.feeRequired, fee_amount: c.feeAmount, fee_paid_amount: c.feePaidAmount, fee_paid_date: c.feePaidDate, legal_notes: c.legalNotes, conditions: c.conditions, responsible: c.responsible, next_deadline: c.nextDeadline, next_deadline_label: c.nextDeadlineLabel, is_demo: c.isDemo })
+const priceExceptionOf = (v: unknown): Parcel['priceException'] => (v && typeof v === 'object' && (v as Row).status ? ({ status: (v as Row).status, price: Number((v as Row).price), reason: (v as Row).reason ?? '', requestedBy: (v as Row).requestedBy ?? '', requestedAt: (v as Row).requestedAt ?? '', decidedBy: (v as Row).decidedBy, decidedAt: (v as Row).decidedAt, decisionNote: (v as Row).decisionNote } as Parcel['priceException']) : null)
+const paymentFromRow = (r: Row): Payment => ({ id: r.id, masterProjectId: r.master_project_id, parcelId: r.parcel_id, category: r.category, payee: r.payee ?? '', amount: Number(r.amount), paidDate: r.paid_date, ref: r.ref ?? '', note: r.note ?? '', isDemo: !!r.is_demo })
+const paymentRow = (masterProjectId: string, x: PaymentInput, parcelId: string | null): Row => ({ ...(x.id ? { id: x.id } : {}), master_project_id: masterProjectId, parcel_id: parcelId, category: x.category, payee: x.payee, amount: x.amount, paid_date: x.paidDate, ref: x.ref, note: x.note, is_demo: x.isDemo })
 const activityFromRow = (r: Row): Activity => ({ id: r.id, masterProjectId: r.master_project_id, key: r.key, name: r.name, kmStart: Number(r.km_start), kmEnd: Number(r.km_end), startDate: r.start_date, endDate: r.end_date, sequence: r.sequence ?? 0, isDemo: !!r.is_demo })
 const activityRow = (masterProjectId: string, a: ActivityInput): Row => ({ ...(a.id ? { id: a.id } : {}), master_project_id: masterProjectId, key: a.key, name: a.name, km_start: a.kmStart, km_end: a.kmEnd, start_date: a.startDate, end_date: a.endDate, sequence: a.sequence, is_demo: a.isDemo })
 const routeFromRow = (r: Row): RouteInfo => ({ masterProjectId: r.master_project_id, name: r.name ?? '', totalKm: Number(r.total_km), startKm: Number(r.start_km), geometry: (r.geometry ?? []) as RouteInfo['geometry'], geometrySource: r.geometry_source, settings: { ...DEFAULT_SETTINGS, ...(r.settings ?? {}) }, isDemo: !!r.is_demo })
@@ -57,7 +60,7 @@ function parcelFromRow(r: Row, stages: Row[], owners: Row[], docs: Row[], plots:
     landUse: r.land_use ?? '', ownerCountEst: r.owner_count_est ?? 0, ownerKnown: !!r.owner_known, custodian: r.custodian ?? '', disputeProbability: r.dispute_probability ?? 0, complexity: r.complexity ?? 1,
     estDurationDays: r.est_duration_days, flags: r.flags ?? {}, acquisitionRoute: r.acquisition_route, areaM2: num(r.area_m2), estCost: num(r.est_cost), notes: r.notes ?? '',
     legal: r.legal ?? {}, nextDeadline: r.next_deadline ?? null, nextDeadlineLabel: r.next_deadline_label ?? '', riskId: r.risk_id, issueId: r.issue_id, scheduleWarningId: r.schedule_warning_id, isDemo: !!r.is_demo, stages: st, owners: owners.map(ownerFromRow), docs: docs.map(docFromRow), plots: plots.map(plotFromRow),
-    approvalStatus: r.approval_status ?? 'draft', approvalNote: r.approval_note ?? '',
+    approvalStatus: r.approval_status ?? 'draft', approvalNote: r.approval_note ?? '', priceException: priceExceptionOf(r.price_exception),
   }
 }
 
@@ -74,7 +77,7 @@ export function createSupabaseRepo(): LandRepo {
     },
 
     async load(masterProjectId): Promise<LandProjectData> {
-      const [route, parcels, activities, events, linked, approvals, roles, myRole, crossings] = await Promise.all([
+      const [route, parcels, activities, events, linked, approvals, roles, myRole, crossings, payments] = await Promise.all([
         supabase.from('la_routes').select('*').eq('master_project_id', masterProjectId).maybeSingle(),
         supabase.from('la_parcels').select('*').eq('master_project_id', masterProjectId).order('km_start'),
         supabase.from('la_activities').select('*').eq('master_project_id', masterProjectId).order('sequence'),
@@ -84,6 +87,7 @@ export function createSupabaseRepo(): LandRepo {
         supabase.from('la_roles').select('user_id, role').eq('master_project_id', masterProjectId),
         supabase.rpc('la_my_role', { p_master_project_id: masterProjectId }),
         supabase.from('la_crossings').select('*').eq('master_project_id', masterProjectId).order('km'),
+        supabase.from('la_payments').select('*').eq('master_project_id', masterProjectId).order('paid_date'),
       ])
       chk(route); chk(parcels); chk(activities); chk(events)
       const ids = ((parcels.data ?? []) as Row[]).map((p) => p.id)
@@ -105,6 +109,7 @@ export function createSupabaseRepo(): LandRepo {
         linked: linked.error ? [] : ((linked.data ?? []) as Row[]).map((l): LinkedStatus => ({ parcelId: l.parcel_id, target: l.target, linkedId: l.linked_id, linkedCode: l.linked_code ?? '', linkedStatus: l.linked_status ?? '' })),
         approvals: approvals.error ? [] : ((approvals.data ?? []) as Row[]).map((a): ApprovalEntry => ({ id: a.id, parcelId: a.parcel_id, at: a.at, actorId: a.actor_id, role: a.role ?? '', action: a.action, comment: a.comment ?? '' })),
         roles: roles.error ? [] : ((roles.data ?? []) as Row[]).map((x) => ({ userId: x.user_id, role: x.role })),
+        payments: payments.error ? [] : ((payments.data ?? []) as Row[]).map(paymentFromRow),
         crossings: crossings.error ? [] : ((crossings.data ?? []) as Row[]).map(crossingFromRow),
         myRole: myRole.error ? null : ((myRole.data as string | null) ?? null) as LandProjectData['myRole'],
       }
@@ -152,6 +157,14 @@ export function createSupabaseRepo(): LandRepo {
     },
     async deleteDoc(id) {
       chk(await supabase.from('la_docs').delete().eq('id', id))
+    },
+    async savePayment(masterProjectId, x) {
+      const { data, error } = await supabase.from('la_payments').upsert(paymentRow(masterProjectId, x, x.parcelId)).select('*').single()
+      if (error) fail(error)
+      return paymentFromRow(data as Row)
+    },
+    async deletePayment(id) {
+      chk(await supabase.from('la_payments').delete().eq('id', id))
     },
     async saveCrossing(masterProjectId, c) {
       const { data, error } = await supabase.from('la_crossings').upsert({ ...crossingRow(masterProjectId, c), updated_at: new Date().toISOString() }).select('*').single()
@@ -206,14 +219,16 @@ export function createSupabaseRepo(): LandRepo {
       chk(await supabase.from('la_parcels').delete().eq('master_project_id', masterProjectId).eq('is_demo', true))
       chk(await supabase.from('la_activities').delete().eq('master_project_id', masterProjectId).eq('is_demo', true))
       chk(await supabase.from('la_crossings').delete().eq('master_project_id', masterProjectId).eq('is_demo', true))
+      chk(await supabase.from('la_payments').delete().eq('master_project_id', masterProjectId).eq('is_demo', true))
       chk(await supabase.from('la_routes').delete().eq('master_project_id', masterProjectId).eq('is_demo', true))
     },
     async replaceDemo(masterProjectId, bundle: DemoBundle) {
       await this.clearDemo(masterProjectId)
       await this.saveRoute({ ...bundle.route, masterProjectId })
-      await this.addParcels(masterProjectId, bundle.parcels)
+      const made = await this.addParcels(masterProjectId, bundle.parcels)
       await insertChunks('la_activities', bundle.activities.map((a) => activityRow(masterProjectId, a)))
       await insertChunks('la_crossings', (bundle.crossings ?? []).map((c) => crossingRow(masterProjectId, c)))
+      await insertChunks('la_payments', (bundle.payments ?? []).map((x) => paymentRow(masterProjectId, x, x.parcelCode ? (made.find((q) => q.code === x.parcelCode)?.id ?? null) : x.parcelId)))
     },
   }
 }

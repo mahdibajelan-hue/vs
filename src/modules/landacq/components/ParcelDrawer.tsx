@@ -14,6 +14,7 @@ import { ScheduleTab } from './parcel/ScheduleTab'
 import { LinksTab } from './parcel/LinksTab'
 import { LegalTab } from './parcel/LegalTab'
 import { PlotsTab } from './parcel/PlotsTab'
+import { FinanceTab } from './parcel/FinanceTab'
 import { ApprovalStrip } from './ApprovalStrip'
 import { useAuthStore } from '../platform'
 import { APPROVAL_LABEL, ROLE_LABEL, canEditData } from '../lib/approval'
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'workflow', label: 'مراحل' },
   { key: 'owners', label: 'مالکین' },
   { key: 'plots', label: 'قطعات (UTM)' },
+  { key: 'finance', label: 'مالی و قیمت' },
   { key: 'docs', label: 'اسناد' },
   { key: 'legal', label: 'مواعد قانونی' },
   { key: 'schedule', label: 'برنامه' },
@@ -41,7 +43,7 @@ export function ParcelDrawer({ a, onClose }: { a: Analysis; onClose: () => void 
   const isAdmin = !!useAuthStore((s) => s.profile?.isAdmin)
   const editable = canEditData(p, role, isAdmin, true)
   // legal officers may still edit the legal dates; everything else is read-only outside the contractor's draft stage
-  const readOnly = !editable && !(role === 'employer_legal' && tab === 'legal')
+  const readOnly = !editable && !(role === 'employer_legal' && tab === 'legal') && !(tab === 'finance' && (role === 'project_manager' || role === 'executive'))
   return (
     <>
       <Drawer
@@ -73,6 +75,7 @@ export function ParcelDrawer({ a, onClose }: { a: Analysis; onClose: () => void 
           {tab === 'summary' && <SummaryTab a={a} />}
           {tab === 'workflow' && <WorkflowTab a={a} />}
           {tab === 'owners' && <OwnersTab a={a} />}
+          {tab === 'finance' && <FinanceTab a={a} />}
           {tab === 'docs' && <DocsTab a={a} />}
           {tab === 'legal' && <LegalTab a={a} />}
           {tab === 'schedule' && <ScheduleTab a={a} />}

@@ -25,16 +25,14 @@ export const LAND_TYPE_LABEL: Record<LandType, string> = {
 export const LAND_TYPES = Object.keys(LAND_TYPE_LABEL) as LandType[]
 
 export const ROUTE_LABEL: Record<AcqRoute, string> = {
-  normal: 'تحصیل عادی',
-  accelerated: 'مسیر قانونی تسریع',
+  normal: 'تحصیل عادی (مطابق الزامات قانونی)',
+  art9: 'ماده ۹ قانون و تصرف فوری',
   dispute: 'مسیر اختلاف / بحرانی',
-  art9: 'تصرف فوری (ماده ۹)',
 }
 export const ROUTE_HINT: Record<AcqRoute, string> = {
-  normal: 'مسیر معمول: توافق با مالک و پرداخت بر اساس کارشناسی.',
-  accelerated: 'استفاده از ظرفیت‌های قانونی تسریع در آزادسازی، با مجوزها و الزامات مربوط.',
-  dispute: 'اختلاف، مالکیت نامشخص یا مانع جدی؛ نیازمند پیگیری ویژه.',
+  normal: 'مسیر معمول: توافق با مالک و پرداخت بر اساس کارشناسی، مطابق مراحل قانونی.',
   art9: 'فوریت اجرای طرح به تشخیص وزیر: تصرف پیش از معامله قطعی با صورت‌مجلس، و پرداخت یا تودیع بهای عادله حداکثر ظرف ۳ ماه.',
+  dispute: 'اختلاف، مالکیت نامشخص یا مانع جدی؛ نیازمند پیگیری ویژه.',
 }
 
 export const STAGE_LABEL: Record<StageKey, string> = {

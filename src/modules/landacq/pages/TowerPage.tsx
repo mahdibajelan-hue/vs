@@ -10,6 +10,7 @@ import { faNum, fmtDate, fmtLen as km, relDays } from '../lib/fa'
 import { STAGE_LABEL } from '../lib/labels'
 import { currentStage } from '../lib/workflow'
 import { allowedActions } from '../lib/approval'
+import { Coins, Factory, Spline } from 'lucide-react'
 
 /** Executive home: where we stand (KPIs + stacked length bar), where the land is (map + ribbon), what hurts (constraints), what to do (actions). */
 export function TowerPage() {
@@ -89,6 +90,24 @@ export function TowerPage() {
         <Kpi label="تأخیر پیش‌بینی‌شده" value={faNum(kpis.delayExpected)} sub="قطعه" color="#eab308" />
       </section>
 
+      {(!settings.budgetAmount || data.parcels.some((p) => p.priceException?.status === 'requested')) && (
+        <section className="la-card la-rise flex flex-wrap items-center gap-3 p-4" style={{ borderColor: 'color-mix(in srgb, #f59e0b 50%, var(--la-line))', background: 'color-mix(in srgb, #f59e0b 7%, var(--la-surface))' }} aria-label="هشدار مالی">
+          <Coins size={20} style={{ color: '#f59e0b' }} aria-hidden />
+          <p className="m-0 min-w-0 flex-1 text-[12.5px] leading-7">
+            {!settings.budgetAmount && <span className="block"><b>بودجهٔ تحصیل اراضی این پروژه ثبت نشده است.</b> برای کنترل مصرف بودجه، مبلغ مصوب را در بخش «مالی و بودجه» وارد کنید.</span>}
+            {data.parcels.some((p) => p.priceException?.status === 'requested') && <span className="block"><b>{faNum(data.parcels.filter((p) => p.priceException?.status === 'requested').length)} درخواست ثبت قیمت استثنایی</b> منتظر تصمیم مدیر پروژه است.</span>}
+          </p>
+          <button className="la-btn la-btn-sm" onClick={() => setTab('finance')}>مالی و بودجه <ArrowLeft size={13} /></button>
+        </section>
+      )}
+
+      {(stations.length > 0 || crossings.length > 0) && (
+        <section className="la-card la-rise grid gap-px overflow-hidden sm:grid-cols-2" style={{ background: 'var(--la-line)' }} aria-label="ایستگاه‌ها و عبور از تأسیسات">
+          <FacilityStat icon={<Factory size={18} />} label="ایستگاه‌های تملک‌شده" done={stations.filter((r) => r.released).length} total={stations.length} color="#22c55e" onClick={() => setTab('stations')} />
+          <FacilityStat icon={<Spline size={18} />} label="عبورهای دارای مجوز" done={crossings.filter((x) => x.c.permitStatus === 'issued').length} total={crossings.length} color="#38bdf8" onClick={() => setTab('crossings')} />
+        </section>
+      )}
+
       {/* ------------------------------------------------------------ map + ribbon */}
       <Card title="نقشهٔ وضعیت تحصیل" hint="روی هر بخش از مسیر بزنید تا جزئیات قطعه باز شود" action={<button className="la-btn la-btn-sm" onClick={() => setTab('map')}>نقشهٔ کامل <ArrowLeft size={13} /></button>}>
         <RouteMap route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={360} stations={stations} crossings={crossings} onSelectCrossing={(id) => { selectCrossing(id); setTab('crossings') }} />
@@ -144,5 +163,20 @@ export function TowerPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function FacilityStat({ icon, label, done, total, color, onClick }: { icon: React.ReactNode; label: string; done: number; total: number; color: string; onClick: () => void }) {
+  const pct = total ? Math.round((done / total) * 100) : 0
+  return (
+    <button type="button" onClick={onClick} className="flex items-center gap-4 p-4 text-right" style={{ background: 'var(--la-surface)', border: 0, color: 'inherit', fontFamily: 'inherit', cursor: 'pointer' }}>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="la-eyebrow block">{label}</span>
+        <span className="la-num block text-[26px] font-bold leading-tight">{faNum(done)} <span className="text-[15px] font-semibold" style={{ color: 'var(--la-ink-2)' }}>از {faNum(total)}</span></span>
+        <span className="la-bar mt-1.5" aria-hidden><i style={{ flexGrow: done, background: color }} /><i style={{ flexGrow: total - done }} /></span>
+      </span>
+      <span className="la-num text-[13px] font-bold" style={{ color }}>{faNum(pct)}٪</span>
+    </button>
   )
 }

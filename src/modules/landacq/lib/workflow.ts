@@ -24,11 +24,10 @@ export const STAGE_ORDER = REGULAR_ORDER
 /** The steps that apply to this parcel's route, in order. */
 export const orderOf = (p: Pick<Parcel, 'acquisitionRoute'>): StageKey[] => (p.acquisitionRoute === 'art9' ? ART9_ORDER : REGULAR_ORDER)
 
-/** Typical days per step for each of the three routes. The accelerated route compresses the middle (legal tools instead of negotiation); the dispute route stretches everything. */
+/** Typical days per step for each of the three routes: regular acquisition, Article 9 immediate possession, and the dispute route (which stretches everything). */
 const NO_ART9 = { art9_necessity: 0, art9_minutes: 0, art9_possession: 0, art9_payment: 0 }
 export const STAGE_DAYS: Record<AcqRoute, Record<StageKey, number>> = {
   normal: { identification: 7, ownership_status: 21, owner_identification: 21, preliminary_assessment: 14, expert_referral: 30, valuation: 30, financial_settlement: 30, payment: 21, release: 14, ready_for_construction: 3, ...NO_ART9 },
-  accelerated: { identification: 5, ownership_status: 14, owner_identification: 10, preliminary_assessment: 7, expert_referral: 20, valuation: 15, financial_settlement: 15, payment: 10, release: 7, ready_for_construction: 2, ...NO_ART9 },
   dispute: { identification: 10, ownership_status: 45, owner_identification: 40, preliminary_assessment: 25, expert_referral: 55, valuation: 55, financial_settlement: 60, payment: 40, release: 30, ready_for_construction: 5, ...NO_ART9 },
   // necessity + signature (5), minutes with the prosecutor's representative (3), possession (2); payment is the 3-month legal window
   art9: { identification: 0, ownership_status: 0, owner_identification: 0, preliminary_assessment: 0, expert_referral: 0, valuation: 0, financial_settlement: 0, payment: 0, release: 0, ready_for_construction: 0, art9_necessity: 5, art9_minutes: 3, art9_possession: 2, art9_payment: 90 },

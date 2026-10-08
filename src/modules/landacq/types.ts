@@ -7,7 +7,7 @@ export type StationType = 'pig_launcher' | 'line_valve' | 'branch_valve' | 'pres
 export type CrossingType = 'dirt_road' | 'paved_road' | 'railway' | 'river' | 'floodway' | 'qanat' | 'water_canal' | 'water_pipe' | 'oil_pipe' | 'gas_pipe' | 'hv_cable'
 export type PermitStatus = 'not_started' | 'requested' | 'under_review' | 'conditional' | 'issued' | 'rejected'
 export type UndertakingStatus = 'pending' | 'submitted' | 'signed'
-export type AcqRoute = 'normal' | 'accelerated' | 'dispute' | 'art9'
+export type AcqRoute = 'normal' | 'art9' | 'dispute'
 export type StageKey =
   | 'identification'
   | 'ownership_status'
@@ -177,6 +177,34 @@ export interface Crossing {
   isDemo: boolean
 }
 
+/** An exceptional land price: a unit price outside the expected range can only be recorded after a written reason and the project manager's approval. */
+export interface PriceException {
+  status: 'requested' | 'approved' | 'rejected'
+  /** Requested unit price, rial per m². */
+  price: number
+  reason: string
+  requestedBy: string
+  requestedAt: string
+  decidedBy?: string
+  decidedAt?: string
+  decisionNote?: string
+}
+
+export type PaymentCategory = 'owner' | 'expert' | 'transfer' | 'legal' | 'other'
+/** One payment made for land acquisition: to an owner, or a fee (official expert, title transfer, legal, other). */
+export interface Payment {
+  id: string
+  masterProjectId: string
+  parcelId: string | null
+  category: PaymentCategory
+  payee: string
+  amount: number
+  paidDate: string
+  ref: string
+  note: string
+  isDemo: boolean
+}
+
 export interface Parcel {
   id: string
   masterProjectId: string
@@ -214,6 +242,7 @@ export interface Parcel {
   nextDeadlineLabel: string
   approvalStatus: ApprovalStatus
   approvalNote: string
+  priceException: PriceException | null
   plots: Plot[]
   stages: Stage[]
   owners: Owner[]
@@ -238,6 +267,9 @@ export interface LandSettings {
   bufferDays: number
   /** "Upcoming" look-ahead window used by the dashboard (X days). */
   horizonDays: number
+  /** The land-acquisition budget of the project (rial), asked for at the start of the project. */
+  budgetAmount?: number | null
+  budgetNote?: string
 }
 export const DEFAULT_SETTINGS: LandSettings = { bufferDays: 30, horizonDays: 90 }
 
@@ -282,6 +314,7 @@ export interface LandProjectData {
   myRole: LandRole | null
   roles: RoleAssignment[]
   crossings: Crossing[]
+  payments: Payment[]
 }
 
 export interface ProjectOption {

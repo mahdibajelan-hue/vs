@@ -29,6 +29,7 @@ export function RouteMap({
   basemap = 'none',
   tool = 'none',
   showPlots = true,
+  plotRows,
   stations = [],
   crossings = [],
   onSelectCrossing,
@@ -47,6 +48,8 @@ export function RouteMap({
   /** Rough surveying tools: click to add points. */
   tool?: 'none' | 'length' | 'area'
   showPlots?: boolean
+  /** Parcels whose cadastral plots are drawn (default: the route parcels in `rows`). */
+  plotRows?: Analysis[]
   /** Station sites (parcels of kind 'station') to mark on the map. */
   stations?: Analysis[]
   crossings?: { c: Crossing; st: CrossingState }[]
@@ -146,7 +149,7 @@ export function RouteMap({
   const plotShapes = useMemo(
     () =>
       live && showPlots
-        ? rows.flatMap((r) =>
+        ? (plotRows ?? rows).flatMap((r) =>
             r.parcel.plots.filter((x) => x.corners.length >= 3).map((x) => {
               const ll = x.corners.map((c) => fromUtm(c[0], c[1], x.zone, x.north) as LonLat)
               const px = ll.map(proj)
@@ -156,7 +159,7 @@ export function RouteMap({
             }),
           )
         : [],
-    [live, showPlots, rows, proj, mode],
+    [live, showPlots, plotRows, rows, proj, mode],
   )
   // station and crossing markers: explicit coordinates when given, else the chainage point on the route line
   const markers = useMemo(() => {
