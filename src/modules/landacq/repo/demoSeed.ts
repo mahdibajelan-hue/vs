@@ -3,7 +3,8 @@ import { DEFAULT_SETTINGS } from '../types'
 import { addDays } from '../lib/dates'
 import { makeStages, STAGE_DAYS, STAGE_ORDER } from '../lib/workflow'
 import type { DemoBundle, ParcelDraft } from './types'
-import type { LonLat } from '../lib/geometry'
+import { pointAt, polyline, type LonLat } from '../lib/geometry'
+import { toUtm } from '../lib/utm'
 
 /** Small deterministic PRNG so the demo looks the same every time. */
 function rng(seed: number) {
@@ -185,6 +186,38 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   }
   const crit1Draft = parcels.find((p) => p.title.startsWith('باغات'))!
   crit1Draft.owners = ['حاج علی رحیمی', 'ورثهٔ مرحوم کریمی', 'محمد نوری', 'شرکت کشاورزی بهار'].map((name, i) => ({ name, contact: i % 2 ? '' : `0912${Math.floor(1000000 + r() * 8999999)}`, sharePct: [35, 30, 20, 15][i], agreement: (['negotiating', 'refused', 'not_contacted', 'unknown'] as const)[i], estAmount: Math.round((crit1Draft.estCost ?? 0) * [0.35, 0.3, 0.2, 0.15][i]), finalAmount: null, payment: 'unpaid', released: false, notes: i === 1 ? 'وراث متعدد؛ تقسیم ارث نهایی نشده' : '' }))
+
+  // cadastral plots (UTM corners, ~40 m x 120 m) laid along the route inside the parcels that have private owners
+  const line = polyline(demoGeometry())
+  const plotsFor = (p: ParcelDraft, names: string[]) => {
+    if (!names.length) return
+    const span = Math.max(0.05, p.kmEnd - p.kmStart)
+    p.plots = names.map((name, i) => {
+      const f = (n: number) => Math.min(0.999, Math.max(0, (p.kmStart + (span * n) / (names.length + 1)) / 100))
+      const c = pointAt(line, f(i + 1))
+      const ahead = pointAt(line, Math.min(1, f(i + 1) + 0.0004))
+      const dx = (ahead[0] - c[0]) * Math.cos((c[1] * Math.PI) / 180)
+      const dy = ahead[1] - c[1]
+      const len = Math.hypot(dx, dy) || 1
+      const ux = dx / len, uy = dy / len // along the route
+      const m2deg = 1 / 111320
+      const corner = (along: number, across: number): [number, number] => {
+        const lon = c[0] + ((ux * along - uy * across) * m2deg) / Math.cos((c[1] * Math.PI) / 180)
+        const lat = c[1] + (uy * along + ux * across) * m2deg
+        const u = toUtm(lat, lon)
+        return [Math.round(u.e * 100) / 100, Math.round(u.n * 100) / 100]
+      }
+      const zone = toUtm(c[1], c[0]).zone
+      return { plotNo: `${p.code}-${i + 1}`, ownerName: name, zone, north: true, corners: [corner(-60, -22), corner(60, -22), corner(60, 22), corner(-60, 22)], notes: '', isDemo: true }
+    })
+  }
+  for (const p of parcels) {
+    if (p.acquisitionRoute === 'art9' || p.owners?.length) plotsFor(p, (p.owners ?? []).slice(0, 4).map((o) => o.name))
+  }
+  // where each parcel stands in the contractor -> consultant -> legal -> project manager chain
+  parcels.forEach((p, i) => {
+    p.approvalStatus = p === crit1 ? 'submitted' : p === a9b ? 'consultant_approved' : p === a9a ? 'legal_attested' : (p.stages ?? []).some((s) => s.key === 'release' && s.status === 'done') ? 'approved' : i % 7 === 3 ? 'submitted' : 'draft'
+  })
 
   const act = (key: string, name: string, startOffset: number, endOffset: number, sequence: number) => ({ key, name, kmStart: 0, kmEnd: 100, startDate: addDays(today, startOffset), endDate: addDays(today, endOffset), sequence, isDemo: true })
   return {

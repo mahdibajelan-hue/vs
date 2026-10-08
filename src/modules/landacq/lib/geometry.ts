@@ -53,22 +53,30 @@ export function slice(line: Polyline, f0: number, f1: number): LonLat[] {
 
 export interface Projector {
   (p: LonLat): [number, number]
+  /** Screen point -> lon/lat (inverse of the projection). */
+  invert(px: [number, number]): LonLat
+  /** Screen pixels per degree of longitude (Web Mercator: constant in x). */
+  pxPerDegLon: number
   width: number
   height: number
 }
-/** Equirectangular projection fitted into a box (cos-latitude corrected), y grows downward, north up. */
+const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + rad(Math.max(-85, Math.min(85, lat))) / 2))
+const invMercY = (y: number) => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * (180 / Math.PI)
+
+/** Web Mercator projection fitted into a box (north up, y grows downward) — the same one slippy-map tiles use, so tiles line up exactly. */
 export function fit(points: LonLat[], width: number, height: number, pad = 24): Projector {
-  const lons = points.map((p) => p[0])
-  const lats = points.map((p) => p[1])
-  const minLon = Math.min(...lons), maxLon = Math.max(...lons)
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-  const k = Math.cos(rad((minLat + maxLat) / 2))
-  const w = Math.max((maxLon - minLon) * k, 1e-9)
-  const h = Math.max(maxLat - minLat, 1e-9)
+  const xs = points.map((p) => rad(p[0]))
+  const ys = points.map((p) => mercY(p[1]))
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  const w = Math.max(maxX - minX, 1e-9)
+  const h = Math.max(maxY - minY, 1e-9)
   const scale = Math.min((width - pad * 2) / w, (height - pad * 2) / h)
   const offX = (width - w * scale) / 2
   const offY = (height - h * scale) / 2
-  const proj = ((p: LonLat) => [offX + (p[0] - minLon) * k * scale, offY + (maxLat - p[1]) * scale]) as Projector
+  const proj = ((p: LonLat) => [offX + (rad(p[0]) - minX) * scale, offY + (maxY - mercY(p[1])) * scale]) as Projector
+  proj.invert = (q) => [((q[0] - offX) / scale + minX) * (180 / Math.PI), invMercY(maxY - (q[1] - offY) / scale)]
+  proj.pxPerDegLon = scale * (Math.PI / 180)
   proj.width = width
   proj.height = height
   return proj

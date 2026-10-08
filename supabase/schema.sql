@@ -16383,3 +16383,103 @@ alter table la_parcels add column if not exists next_deadline_label text not nul
 update rasta_modules set label_fa = 'مدیریت تملک و آزادسازی اراضی مسیر' where key = 'landacq';
 -- la_parcel_after_insert(): creates the 4 Article-9 steps for an 'art9' parcel, the 10 regular steps otherwise (re-created above in this section's live run).
 -- my_land_notifications(): SECURITY INVOKER; parcels whose nearest legal deadline is within 14 days or already past (feeds the header bell).
+
+-- =============================================================================
+-- 73. Land acquisition: project roles + 4-step approval chain, cadastral plots (UTM)
+-- =============================================================================
+-- Roles per master project: contractor (enters data) -> consultant (reviews/approves) -> employer legal (attests)
+-- -> project manager (final approval); 'executive' (مجری طرح) sees everything and may give the final approval too.
+-- A parcel carries approval_status; every transition goes through la_review() (checks the caller's role) and is logged in la_approvals.
+create table if not exists la_roles (
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  role text not null check (role in ('contractor', 'consultant', 'employer_legal', 'project_manager', 'executive')),
+  created_at timestamptz not null default now(),
+  primary key (master_project_id, user_id)
+);
+alter table la_parcels add column if not exists approval_status text not null default 'draft' check (approval_status in ('draft', 'submitted', 'consultant_approved', 'legal_attested', 'approved'));
+alter table la_parcels add column if not exists approval_note text not null default '';
+create table if not exists la_approvals (
+  id bigserial primary key,
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  parcel_id uuid not null references la_parcels (id) on delete cascade,
+  at timestamptz not null default now(),
+  actor_id uuid references profiles (id) default auth.uid(),
+  role text not null default '',
+  action text not null,
+  comment text not null default ''
+);
+-- cadastral plots bought inside a parcel: corners in UTM (zone, hemisphere, easting/northing in metres), drawn on the map with the owner's name
+create table if not exists la_plots (
+  id uuid primary key default gen_random_uuid(),
+  parcel_id uuid not null references la_parcels (id) on delete cascade,
+  plot_no text not null default '',
+  owner_name text not null default '',
+  utm_zone smallint not null default 39 check (utm_zone between 1 and 60),
+  utm_north boolean not null default true,
+  corners jsonb not null default '[]'::jsonb,
+  notes text not null default '',
+  is_demo boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table la_roles enable row level security;
+alter table la_approvals enable row level security;
+alter table la_plots enable row level security;
+drop policy if exists la_roles_select on la_roles;
+create policy la_roles_select on la_roles for select using (la_can_view(master_project_id));
+drop policy if exists la_roles_write on la_roles;
+create policy la_roles_write on la_roles for all using (is_admin_user() or rasta_has_permission(auth.uid(), 'landacq', 'configure')) with check (is_admin_user() or rasta_has_permission(auth.uid(), 'landacq', 'configure'));
+drop policy if exists la_approvals_select on la_approvals;
+create policy la_approvals_select on la_approvals for select using (la_can_view(master_project_id));
+drop policy if exists la_plots_select on la_plots;
+create policy la_plots_select on la_plots for select using (la_can_view(la_parcel_project(parcel_id)));
+drop policy if exists la_plots_write on la_plots;
+create policy la_plots_write on la_plots for all using (la_can_edit(la_parcel_project(parcel_id))) with check (la_can_edit(la_parcel_project(parcel_id)));
+
+create or replace function la_my_role(p_master_project_id uuid) returns text language sql stable security definer set search_path = public as $$
+  select role from la_roles where master_project_id = p_master_project_id and user_id = auth.uid();
+$$;
+create or replace function la_people() returns table (id uuid, full_name text, position_title text) language sql stable security definer set search_path = public as $$
+  select p.id, p.full_name, p.position_title from profiles p
+  where is_admin_user() or rasta_has_permission(auth.uid(), 'landacq', 'configure') order by p.full_name;
+$$;
+create or replace function la_set_role(p_master_project_id uuid, p_user uuid, p_role text) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_admin_user() or rasta_has_permission(auth.uid(), 'landacq', 'configure')) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  if p_role is null or p_role = '' then
+    delete from la_roles where master_project_id = p_master_project_id and user_id = p_user;
+  else
+    insert into la_roles (master_project_id, user_id, role) values (p_master_project_id, p_user, p_role)
+    on conflict (master_project_id, user_id) do update set role = excluded.role;
+  end if;
+end $$;
+create or replace function la_review(p_parcel_id uuid, p_action text, p_comment text default '') returns text language plpgsql security definer set search_path = public as $$
+declare v_proj uuid; v_status text; v_role text; v_admin boolean; v_new text;
+begin
+  select master_project_id, approval_status into v_proj, v_status from la_parcels where id = p_parcel_id for update;
+  if not found then raise exception 'parcel_not_found'; end if;
+  if not la_can_view(v_proj) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  v_admin := is_admin_user();
+  v_role := coalesce(la_my_role(v_proj), '');
+  if p_action = 'submit' and v_status = 'draft' and (v_admin or v_role = 'contractor') then v_new := 'submitted';
+  elsif p_action = 'approve' and v_status = 'submitted' and (v_admin or v_role = 'consultant') then v_new := 'consultant_approved';
+  elsif p_action = 'attest' and v_status = 'consultant_approved' and (v_admin or v_role = 'employer_legal') then v_new := 'legal_attested';
+  elsif p_action = 'final' and v_status = 'legal_attested' and (v_admin or v_role in ('project_manager', 'executive')) then v_new := 'approved';
+  elsif p_action = 'return' and (
+      (v_status = 'submitted' and (v_admin or v_role = 'consultant'))
+      or (v_status = 'consultant_approved' and (v_admin or v_role = 'employer_legal'))
+      or (v_status = 'legal_attested' and (v_admin or v_role in ('project_manager', 'executive')))) then
+    if btrim(coalesce(p_comment, '')) = '' then raise exception 'comment_required'; end if;
+    v_new := 'draft';
+  elsif p_action = 'reopen' and v_status = 'approved' and (v_admin or v_role in ('project_manager', 'executive')) then
+    if btrim(coalesce(p_comment, '')) = '' then raise exception 'comment_required'; end if;
+    v_new := 'draft';
+  else raise exception 'not_allowed' using errcode = '42501';
+  end if;
+  update la_parcels set approval_status = v_new, approval_note = case when v_new = 'draft' then coalesce(p_comment, '') else '' end where id = p_parcel_id;
+  insert into la_approvals (master_project_id, parcel_id, role, action, comment) values (v_proj, p_parcel_id, case when v_admin and v_role = '' then 'admin' else v_role end, p_action, coalesce(p_comment, ''));
+  return v_new;
+end $$;
+revoke execute on function la_my_role(uuid), la_people(), la_set_role(uuid, uuid, text), la_review(uuid, text, text) from public, anon;
+grant execute on function la_my_role(uuid), la_people(), la_set_role(uuid, uuid, text), la_review(uuid, text, text) to authenticated;
+-- my_land_notifications() additionally lists parcels waiting for the caller's approval step (and returned ones for contractors).

@@ -1,10 +1,11 @@
-import type { Activity, DocMeta, LandProjectData, Owner, Parcel, ProjectOption, RouteInfo, Stage, TransferTarget } from '../types'
+import type { Activity, ApprovalStatus, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
 
 /** The editable fields of a parcel (everything but its children and ids). */
-export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel'>>
-export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
+export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel'>>
+export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; plots?: Omit<Plot, 'id' | 'parcelId'>[]; approvalStatus?: ApprovalStatus; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
 export type OwnerInput = Omit<Owner, 'id'> & { id?: string }
 export type DocInput = Omit<DocMeta, 'id'> & { id?: string }
+export type PlotInput = Omit<Plot, 'id' | 'parcelId'> & { id?: string }
 export type ActivityInput = Omit<Activity, 'id' | 'masterProjectId'> & { id?: string }
 
 export interface DemoBundle {
@@ -26,6 +27,12 @@ export interface LandRepo {
   deleteOwner(id: string): Promise<void>
   saveDoc(parcelId: string, doc: DocInput): Promise<DocMeta>
   deleteDoc(id: string): Promise<void>
+  savePlot(parcelId: string, plot: PlotInput): Promise<Plot>
+  deletePlot(id: string): Promise<void>
+  /** Moves the parcel along the approval chain (the server checks the caller's role). */
+  review(parcelId: string, action: ReviewAction, comment: string): Promise<ApprovalStatus>
+  listPeople(): Promise<Person[]>
+  setRole(masterProjectId: string, userId: string, role: LandRole | null): Promise<void>
   saveActivity(masterProjectId: string, a: ActivityInput): Promise<Activity>
   deleteActivity(id: string): Promise<void>
   transfer(parcelId: string, target: TransferTarget, params?: Record<string, unknown>): Promise<{ target: TransferTarget; id: string }>

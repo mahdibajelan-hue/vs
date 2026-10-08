@@ -9,6 +9,7 @@ import { fmtKmRange } from '../lib/dates'
 import { faNum, fmtDate, fmtLen as km, relDays } from '../lib/fa'
 import { STAGE_LABEL } from '../lib/labels'
 import { currentStage } from '../lib/workflow'
+import { allowedActions } from '../lib/approval'
 
 /** Executive home: where we stand (KPIs + stacked length bar), where the land is (map + ribbon), what hurts (constraints), what to do (actions). */
 export function TowerPage() {
@@ -21,6 +22,8 @@ export function TowerPage() {
   const route = data.route
   const total = route.totalKm || 1
   const legal = actions.filter((x) => x.kind === 'legal_deadline').sort((a, b) => a.daysFromToday - b.daysFromToday)
+  const myRole = data.myRole
+  const waitingForMe = myRole ? rows.filter((r) => allowedActions(r.parcel.approvalStatus, myRole, false).some((x) => x !== 'return' && x !== 'reopen' && x !== 'submit') || (myRole === 'contractor' && r.parcel.approvalStatus === 'draft' && !!r.parcel.approvalNote)).length : 0
   const urgent = actions.filter((x) => x.kind !== 'upcoming_stage' && x.kind !== 'legal_deadline')
   const upcoming = actions.filter((x) => x.kind !== 'legal_deadline').slice(0, 8)
 
@@ -38,6 +41,7 @@ export function TowerPage() {
           </div>
           <div className="text-[12.5px] leading-7" style={{ color: 'var(--la-ink-2)' }}>
             {kpis.actionRequired > 0 ? <p className="m-0 flex items-center gap-2" style={{ color: '#ef4444' }}><Siren size={15} /> <b>{faNum(kpis.actionRequired)} قطعه</b> باید همین حالا تحصیلش شروع شود</p> : <p className="m-0">اقدام فوری برای شروع تحصیل لازم نیست.</p>}
+            {waitingForMe > 0 && <p className="m-0 font-bold" style={{ color: 'var(--la-accent)' }}>{faNum(waitingForMe)} قطعه منتظر اقدام شما در زنجیرهٔ تأیید است</p>}
             <p className="m-0">{faNum(kpis.impactingSoon)} قطعه ظرف {faNum(settings.horizonDays)} روز آینده به فعالیت اجرایی می‌رسد و هنوز آزاد نیست.</p>
           </div>
         </div>

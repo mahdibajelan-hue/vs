@@ -6,9 +6,11 @@ import { diffDays, fmtKmRange } from '../../lib/dates'
 import { constraintsOf } from '../../lib/schedule'
 import { Badge, EmptyState } from '../ui'
 
+const NO_ACTIVITIES: never[] = []
 /** Which construction activities will meet this land, when, and whether the land will be ready by then. */
 export function ScheduleTab({ a }: { a: Analysis }) {
-  const activities = useLandStore((s) => s.data?.activities ?? [])
+  const activitiesRaw = useLandStore((s) => s.data?.activities)
+  const activities = activitiesRaw ?? NO_ACTIVITIES
   const today = useLandStore((s) => s.today)
   const p = a.parcel
   const ea = a.early

@@ -164,3 +164,7 @@ button.la-kpi:active { transform: scale(0.98); }
   .la-rise, .la-drawer, .la-toast, .la-skeleton, .la-pulse { animation-duration: 0.01ms; animation-iteration-count: 1; }
   .la-tab::after, .la-bar > i { transition: none; }
 }
+
+/* map: measuring panel + tile credit */
+.la-map-measure { position: absolute; z-index: 6; inset-inline-end: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(340px, calc(100% - 20px)); padding: 10px 12px; border-radius: 12px; background: var(--la-surface); border: 1px solid var(--la-line-2); box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5); font-size: 12px; line-height: 1.7; animation: la-rise 200ms var(--la-ease) both; }
+.la-map-credit { position: absolute; inset-inline-start: 8px; bottom: 6px; z-index: 5; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.75); color: #334; font-size: 9.5px; direction: ltr; pointer-events: none; }

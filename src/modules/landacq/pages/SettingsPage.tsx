@@ -6,6 +6,7 @@ import { parseKml } from '../lib/geometry'
 import { faNum } from '../lib/fa'
 import { LEGAL_REFERENCE } from '../lib/legal'
 import { Card, ConfirmDialog, Field } from '../components/ui'
+import { RolesCard } from '../components/RolesCard'
 
 export function SettingsPage() {
   const data = useLandStore((s) => s.data)
@@ -49,6 +50,8 @@ export function SettingsPage() {
         {kmlMsg && <p className="la-hint">{kmlMsg}</p>}
         <p className="la-hint">{base.geometry.length >= 2 ? `مختصات مسیر ثبت است (${faNum(base.geometry.length)} نقطه) — نقشه روی مسیر واقعی رسم می‌شود.` : 'مختصات مسیر ثبت نشده؛ نقشه نمای شماتیک نشان می‌دهد و همهٔ محاسبات با کیلومتراژ درست کار می‌کنند.'}</p>
       </Card>
+
+      <RolesCard />
 
       <Card title="قواعد هشدار زودهنگام">
         <div className="grid gap-3 sm:grid-cols-2">

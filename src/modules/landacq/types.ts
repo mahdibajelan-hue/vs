@@ -102,6 +102,43 @@ export interface DocMeta {
   ref: string
 }
 
+/** A cadastral plot bought inside a parcel: corners in UTM metres, drawn on the map with the owner's name. */
+export interface Plot {
+  id: string
+  parcelId: string
+  plotNo: string
+  ownerName: string
+  zone: number
+  north: boolean
+  /** [easting, northing] in metres, in order around the plot. */
+  corners: [number, number][]
+  notes: string
+  isDemo: boolean
+}
+
+export type ApprovalStatus = 'draft' | 'submitted' | 'consultant_approved' | 'legal_attested' | 'approved'
+/** Project roles: the contractor enters, the consultant reviews, the employer's legal officer attests, the project manager gives final approval. */
+export type LandRole = 'contractor' | 'consultant' | 'employer_legal' | 'project_manager' | 'executive'
+export type ReviewAction = 'submit' | 'approve' | 'attest' | 'final' | 'return' | 'reopen'
+export interface ApprovalEntry {
+  id: number
+  parcelId: string
+  at: string
+  actorId: string | null
+  role: string
+  action: string
+  comment: string
+}
+export interface RoleAssignment {
+  userId: string
+  role: LandRole
+}
+export interface Person {
+  id: string
+  name: string
+  position: string
+}
+
 export interface Parcel {
   id: string
   masterProjectId: string
@@ -132,6 +169,9 @@ export interface Parcel {
   /** Nearest open legal deadline, kept in sync by the client so the header bell can read it. */
   nextDeadline: string | null
   nextDeadlineLabel: string
+  approvalStatus: ApprovalStatus
+  approvalNote: string
+  plots: Plot[]
   stages: Stage[]
   owners: Owner[]
   docs: DocMeta[]
@@ -194,6 +234,10 @@ export interface LandProjectData {
   activities: Activity[]
   events: LandEvent[]
   linked: LinkedStatus[]
+  approvals: ApprovalEntry[]
+  /** Role of the signed-in user in this project (null = none assigned). */
+  myRole: LandRole | null
+  roles: RoleAssignment[]
 }
 
 export interface ProjectOption {

@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { useMemo } from 'react'
-import { useProjectContextStore } from '../platform'
-import type { Activity, DocMeta, LandProjectData, Owner, Parcel, ProjectOption, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
+import { useAuthStore, useProjectContextStore } from '../platform'
+import type { Activity, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
-import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields } from '../repo/types'
+import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput } from '../repo/types'
+import { canEditData } from '../lib/approval'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
 import { makeStages, orderOf } from '../lib/workflow'
@@ -33,6 +34,13 @@ interface LandState {
   selectParcel: (id: string | null) => void
   setColorMode: (m: ColorMode) => void
   clearError: () => void
+  /** Approval chain (contractor -> consultant -> employer legal -> project manager). */
+  review: (parcelId: string, action: ReviewAction, comment?: string) => Promise<boolean>
+  savePlot: (parcelId: string, plot: PlotInput) => Promise<void>
+  deletePlot: (parcelId: string, plotId: string) => Promise<void>
+  people: Person[]
+  loadPeople: () => Promise<void>
+  setRole: (userId: string, role: LandRole | null) => Promise<void>
 
   saveRoute: (route: RouteInfo) => Promise<void>
   /** Cut the route into equal parcels of about `segmentKm`. */
@@ -81,6 +89,17 @@ export const useLandStore = create<LandState>()((set, get) => {
     }
   }
   const patchParcel = (id: string, f: (p: Parcel) => Parcel) => patchData((d) => ({ ...d, parcels: d.parcels.map((p) => (p.id === id ? f(p) : p)) }))
+  /** Data entry belongs to the contractor while a parcel is a draft (users without a project role keep the permission-based rule). */
+  const allowed = (parcelId: string, onlyLegal = false): boolean => {
+    const st = get()
+    const p = st.data?.parcels.find((x) => x.id === parcelId)
+    if (!p) return false
+    const role = st.data?.myRole ?? null
+    const isAdmin = !!useAuthStore.getState().profile?.isAdmin
+    const ok = canEditData(p, role, isAdmin, true) || (onlyLegal && role === 'employer_legal')
+    if (!ok) set({ error: 'ورود و ویرایش اطلاعات فقط برای پیمانکار و پیش از ارسال برای بررسی ممکن است.' })
+    return ok
+  }
   /** Run a repo operation; on failure show the error and re-sync from the server so the screen never lies. */
   const run = async <T>(op: () => Promise<T>, fallback?: T): Promise<T | undefined> => {
     try {
@@ -100,6 +119,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     loading: false,
     error: null,
     tab: 'tower',
+    people: [],
     selectedId: null,
     colorMode: 'status',
     today: todayIso(),
@@ -183,12 +203,14 @@ export const useLandStore = create<LandState>()((set, get) => {
     },
 
     updateParcel: async (id, patch) => {
+      if (!allowed(id, Object.keys(patch).every((k) => k === 'legal'))) return
       patchParcel(id, (p) => ({ ...p, ...patch }))
       await run(() => repo().updateParcel(id, patch))
       await syncDeadline(id)
     },
 
     deleteParcel: async (id) => {
+      if (!allowed(id)) return
       await run(async () => {
         await repo().deleteParcel(id)
         patchData((d) => ({ ...d, parcels: d.parcels.filter((p) => p.id !== id) }))
@@ -197,14 +219,15 @@ export const useLandStore = create<LandState>()((set, get) => {
     },
 
     splitParcel: async (id, atKm) => {
+      if (!allowed(id)) return
       const p = get().data?.parcels.find((x) => x.id === id)
       if (!p || atKm <= p.kmStart + 0.01 || atKm >= p.kmEnd - 0.01) {
         set({ error: 'نقطهٔ برش باید داخل بازهٔ قطعه باشد' })
         return
       }
       await run(async () => {
-        const { id: _i, stages: _s, owners: _o, docs: _d, riskId: _r, issueId: _is, scheduleWarningId: _w, masterProjectId: _m, isDemo, ...fields } = p
-        void _i; void _s; void _o; void _d; void _r; void _is; void _w; void _m
+        const { id: _i, stages: _s, owners: _o, docs: _d, plots: _pl, approvalStatus: _a, approvalNote: _an, riskId: _r, issueId: _is, scheduleWarningId: _w, masterProjectId: _m, isDemo, ...fields } = p
+        void _i; void _s; void _o; void _d; void _pl; void _a; void _an; void _r; void _is; void _w; void _m
         await repo().updateParcel(id, { kmEnd: atKm })
         await repo().addParcels(p.masterProjectId, [{ ...fields, code: `${p.code}-B`, kmStart: atKm, kmEnd: p.kmEnd, isDemo, stages: makeStages() }])
         await get().reload()
@@ -212,6 +235,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     },
 
     setStage: async (parcelId, key, patch) => {
+      if (!allowed(parcelId)) return
       const p = get().data?.parcels.find((x) => x.id === parcelId)
       const cur = p?.stages.find((s) => s.key === key)
       if (!p || !cur) return
@@ -242,26 +266,62 @@ export const useLandStore = create<LandState>()((set, get) => {
     },
 
     saveOwner: async (parcelId, owner) => {
+      if (!allowed(parcelId)) return
       await run(async () => {
         const saved: Owner = await repo().saveOwner(parcelId, owner)
         patchParcel(parcelId, (p) => ({ ...p, owners: owner.id ? p.owners.map((o) => (o.id === saved.id ? saved : o)) : [...p.owners, saved] }))
       })
     },
     deleteOwner: async (parcelId, ownerId) => {
+      if (!allowed(parcelId)) return
       patchParcel(parcelId, (p) => ({ ...p, owners: p.owners.filter((o) => o.id !== ownerId) }))
       await run(() => repo().deleteOwner(ownerId))
     },
     saveDoc: async (parcelId, doc) => {
+      if (!allowed(parcelId)) return
       await run(async () => {
         const saved: DocMeta = await repo().saveDoc(parcelId, doc)
         patchParcel(parcelId, (p) => ({ ...p, docs: doc.id ? p.docs.map((d) => (d.id === saved.id ? saved : d)) : [...p.docs, saved] }))
       })
     },
     deleteDoc: async (parcelId, docId) => {
+      if (!allowed(parcelId)) return
       patchParcel(parcelId, (p) => ({ ...p, docs: p.docs.filter((d) => d.id !== docId) }))
       await run(() => repo().deleteDoc(docId))
     },
 
+    savePlot: async (parcelId, plot) => {
+      if (!allowed(parcelId)) return
+      await run(async () => {
+        const saved: Plot = await repo().savePlot(parcelId, plot)
+        patchParcel(parcelId, (p) => ({ ...p, plots: plot.id ? p.plots.map((x) => (x.id === saved.id ? saved : x)) : [...p.plots, saved] }))
+      })
+    },
+    deletePlot: async (parcelId, plotId) => {
+      if (!allowed(parcelId)) return
+      patchParcel(parcelId, (p) => ({ ...p, plots: p.plots.filter((x) => x.id !== plotId) }))
+      await run(() => repo().deletePlot(plotId))
+    },
+    review: async (parcelId, action, comment = '') => {
+      const ok = await run(async () => {
+        await repo().review(parcelId, action, comment)
+        await get().reload()
+        return true
+      })
+      return !!ok
+    },
+    loadPeople: async () => {
+      const people = await run(() => repo().listPeople())
+      if (people) set({ people })
+    },
+    setRole: async (userId, role) => {
+      const pid = get().projectId
+      if (!pid) return
+      await run(async () => {
+        await repo().setRole(pid, userId, role)
+        await get().reload()
+      })
+    },
     saveActivity: async (a) => {
       const pid = get().projectId
       if (!pid) return

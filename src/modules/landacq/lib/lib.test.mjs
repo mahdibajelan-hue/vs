@@ -145,3 +145,23 @@ assert.ok(stayActive(stayed)); assert.ok(!stayActive({ ...stayed, legal: { ...st
 const reg = mkp({ acquisitionRoute: 'normal', legal: { agreementDate: '2026-03-21', expertAssignedDate: '2026-03-21' } })
 const rc = legalClocks(reg, '2026-04-01'); assert.equal(rc.find((c) => c.key === 'agreement_payment').due, '2026-06-22'); assert.equal(rc.find((c) => c.key === 'expert_opinion').due, '2026-04-21')
 console.log('landacq/legal: all assertions passed')
+
+// ---- approval chain, UTM, measuring
+import { allowedActions, canEditData } from './approval.ts'
+assert.deepEqual(allowedActions('draft', 'contractor', false), ['submit']); assert.deepEqual(allowedActions('draft', 'consultant', false), [])
+assert.deepEqual(allowedActions('submitted', 'consultant', false), ['approve', 'return']); assert.deepEqual(allowedActions('submitted', 'employer_legal', false), [])
+assert.deepEqual(allowedActions('consultant_approved', 'employer_legal', false), ['attest', 'return'])
+assert.deepEqual(allowedActions('legal_attested', 'project_manager', false), ['final', 'return']); assert.deepEqual(allowedActions('legal_attested', 'executive', false), ['final', 'return'])
+assert.deepEqual(allowedActions('approved', 'project_manager', false), ['reopen']); assert.deepEqual(allowedActions('approved', 'contractor', false), [])
+assert.ok(allowedActions('submitted', null, true).includes('approve'), 'admin may act in any step')
+assert.ok(canEditData({ approvalStatus: 'draft' }, 'contractor', false, false)); assert.ok(!canEditData({ approvalStatus: 'submitted' }, 'contractor', false, true))
+assert.ok(!canEditData({ approvalStatus: 'draft' }, 'consultant', false, true)); assert.ok(canEditData({ approvalStatus: 'submitted' }, null, false, true)); assert.ok(!canEditData({ approvalStatus: 'draft' }, null, false, false))
+import { toUtm, fromUtm, polygonMetrics, utmZoneOf } from './utm.ts'
+const esb = toUtm(40.7484, -73.9857); assert.equal(esb.zone, 18); assert.ok(Math.abs(esb.e - 585628) < 3 && Math.abs(esb.n - 4511322) < 3)
+const rt = toUtm(35.6892, 51.389); assert.equal(rt.zone, 39); const back = fromUtm(rt.e, rt.n, rt.zone, rt.north); assert.ok(Math.abs(back[0] - 51.389) < 1e-8 && Math.abs(back[1] - 35.6892) < 1e-8)
+assert.equal(utmZoneOf(56.27), 40); assert.equal(polygonMetrics([[0, 0], [30, 0], [30, 100], [0, 100]]).area, 3000)
+import { pathLength, polygonAreaLonLat } from './measure.ts'
+const sq = [[51, 35], [51.001, 35], [51.001, 35.001], [51, 35.001]]
+const ar = polygonAreaLonLat(sq); assert.ok(ar > 10000 && ar < 10300, String(ar))   // ~ 91 m x 111 m
+assert.ok(Math.abs(pathLength([[51, 35], [51, 35.001]]) - 111.2) < 1)
+console.log('landacq/approval+utm+measure: all assertions passed')

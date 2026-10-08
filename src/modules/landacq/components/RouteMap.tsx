@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LocateFixed, Minus, Plus } from 'lucide-react'
+import { Eraser, LocateFixed, Minus, Plus, Undo2 } from 'lucide-react'
 import type { Activity, RouteInfo } from '../types'
-import { fit, pointAt, polyline, schematicGeometry, slice } from '../lib/geometry'
+import { fit, pointAt, polyline, schematicGeometry, slice, type LonLat } from '../lib/geometry'
+import { BASEMAPS, visibleTiles, type Basemap } from '../lib/tiles'
+import { fmtAreaM2, fmtLength, pathLength, polygonAreaLonLat } from '../lib/measure'
+import { fromUtm } from '../lib/utm'
 import { fmtKm, fmtKmRange } from '../lib/dates'
 import { frontKm } from '../lib/schedule'
 import { parcelColor, type ColorMode } from '../lib/colors'
@@ -21,6 +24,9 @@ export function RouteMap({
   today,
   height = 440,
   showFronts = true,
+  basemap = 'none',
+  tool = 'none',
+  showPlots = true,
 }: {
   route: RouteInfo
   rows: Analysis[]
@@ -31,6 +37,11 @@ export function RouteMap({
   today: string
   height?: number
   showFronts?: boolean
+  /** Optional satellite / street tiles under the route (needs real coordinates). */
+  basemap?: Basemap
+  /** Rough surveying tools: click to add points. */
+  tool?: 'none' | 'length' | 'area'
+  showPlots?: boolean
 }) {
   const hasGeo = route.geometry.length >= 2
   const pts = useMemo(() => (hasGeo ? route.geometry : schematicGeometry(route.totalKm)), [hasGeo, route.geometry, route.totalKm])
@@ -39,6 +50,8 @@ export function RouteMap({
   const wrap = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ k: 1, x: 0, y: 0 })
   const drag = useRef<{ px: number; py: number; vx: number; vy: number; moved: boolean } | null>(null)
+  /** A pan just ended: the click that follows it must not select / measure. */
+  const movedRef = useRef(false)
   const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
@@ -92,7 +105,7 @@ export function RouteMap({
 
   function zoomAt(f: number, cx: number, cy: number) {
     setView((v) => {
-      const k = Math.max(0.8, Math.min(12, v.k * f))
+      const k = Math.max(0.8, Math.min(800, v.k * f))
       const r = k / v.k
       return { k, x: cx - (cx - v.x) * r, y: cy - (cy - v.y) * r }
     })
@@ -100,24 +113,58 @@ export function RouteMap({
   const reset = () => setView({ k: 1, x: 0, y: 0 })
 
   const onDown = (e: React.PointerEvent) => {
+    movedRef.current = false
     drag.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false }
-    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
   }
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current
     if (!d) return
     const dx = e.clientX - d.px, dy = e.clientY - d.py
-    if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+      d.moved = true
+      movedRef.current = true
+      // capture only once it is a real pan, so plain clicks still reach the parcel under the cursor
+      ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+    }
     if (d.moved) setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
   }
   const onUp = () => {
     drag.current = null
   }
+  const live = hasGeo
+  const tiles = useMemo(() => (live && basemap !== 'none' ? visibleTiles(proj, box, view, basemap) : []), [live, basemap, proj, box, view])
+  // cadastral plots: UTM corners -> lon/lat -> screen (pre-zoom) coordinates, with the owner's name at the centroid
+  const plotShapes = useMemo(
+    () =>
+      live && showPlots
+        ? rows.flatMap((r) =>
+            r.parcel.plots.filter((x) => x.corners.length >= 3).map((x) => {
+              const ll = x.corners.map((c) => fromUtm(c[0], c[1], x.zone, x.north) as LonLat)
+              const px = ll.map(proj)
+              const cx = px.reduce((a, q) => a + q[0], 0) / px.length
+              const cy = px.reduce((a, q) => a + q[1], 0) / px.length
+              return { id: x.id, parcelId: r.parcel.id, label: x.ownerName || x.plotNo || '', d: px.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(' ') + ' Z', cx, cy, color: parcelColor(r, mode) }
+            }),
+          )
+        : [],
+    [live, showPlots, rows, proj, mode],
+  )
+  // measuring
+  const [mpts, setMpts] = useState<LonLat[]>([])
+  useEffect(() => setMpts([]), [tool])
+  const addMeasure = (e: React.MouseEvent) => {
+    if (movedRef.current || !wrap.current || !live) return
+    const rect = wrap.current.getBoundingClientRect()
+    setMpts((m) => [...m, proj.invert([(e.clientX - rect.left - view.x) / view.k, (e.clientY - rect.top - view.y) / view.k])])
+  }
+  const mpx = mpts.map(proj)
+  const mLen = pathLength(mpts, tool === 'area')
+  const mArea = tool === 'area' ? polygonAreaLonLat(mpts) : 0
   const tipRow = tip ? rows.find((r) => r.parcel.id === tip.id) : null
 
   return (
     <div className="la-map" ref={wrap} style={{ height }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onPointerLeave={() => setTip(null)}>
-      <svg viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label="نقشهٔ مسیر و وضعیت تحصیل اراضی" onClick={() => !drag.current?.moved && onSelect(null)}>
+      <svg viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label="نقشهٔ مسیر و وضعیت تحصیل اراضی" onClick={(e) => (tool !== 'none' ? addMeasure(e) : !movedRef.current && onSelect(null))} style={{ cursor: tool !== 'none' ? 'crosshair' : undefined }}>
         <defs>
           <pattern id="la-grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--la-grid)" strokeWidth="1" />
@@ -125,6 +172,8 @@ export function RouteMap({
         </defs>
         <rect width={box.w} height={box.h} fill="url(#la-grid)" />
         <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          {tiles.map((t) => <image key={t.key} href={t.url} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />)}
+          {tiles.length > 0 && <path d={base} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
           <path d={base} fill="none" stroke="var(--la-line-2)" strokeWidth={13} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           {segs.map(({ r, d }) => (
             <path key={`c${r.parcel.id}`} d={d} fill="none" stroke="var(--la-map)" strokeWidth={10} strokeLinecap="butt" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
@@ -145,7 +194,8 @@ export function RouteMap({
                 opacity={selectedId && !sel ? 0.55 : 1}
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (!drag.current?.moved) onSelect(r.parcel.id)
+                  if (tool !== 'none') return addMeasure(e)
+                  if (!movedRef.current) onSelect(r.parcel.id)
                 }}
                 onPointerEnter={(e) => {
                   const rect = wrap.current!.getBoundingClientRect()
@@ -159,6 +209,19 @@ export function RouteMap({
               />
             )
           })}
+          {plotShapes.map((x) => (
+            <g key={x.id} onClick={(e) => { e.stopPropagation(); if (tool !== 'none') addMeasure(e); else if (!movedRef.current) onSelect(x.parcelId) }} style={{ cursor: 'pointer' }}>
+              <path d={x.d} fill={x.color} fillOpacity={0.4} stroke={x.color} strokeWidth={1.6} vectorEffect="non-scaling-stroke" />
+              {x.label && view.k >= 1.6 && <text x={x.cx} y={x.cy} textAnchor="middle" fontSize={11 / view.k} fontWeight={700} fill="var(--la-ink)" stroke="var(--la-map)" strokeWidth={3 / view.k} paintOrder="stroke" style={{ pointerEvents: 'none' }}>{x.label}</text>}
+            </g>
+          ))}
+          {mpx.length > 0 && (
+            <g style={{ pointerEvents: 'none' }}>
+              {tool === 'area' && mpx.length >= 3 && <polygon points={mpx.map((q) => q.join(',')).join(' ')} fill="#f59e0b" fillOpacity={0.22} />}
+              <polyline points={(tool === 'area' && mpx.length >= 3 ? [...mpx, mpx[0]] : mpx).map((q) => q.join(',')).join(' ')} fill="none" stroke="#f59e0b" strokeWidth={2.2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+              {mpx.map((q, i) => <circle key={i} cx={q[0]} cy={q[1]} r={4 / view.k} fill="#fff" stroke="#f59e0b" strokeWidth={2 / view.k} />)}
+            </g>
+          )}
           {selectedId && segs.filter((s) => s.r.parcel.id === selectedId).map(({ d }) => (
             <path key="sel" d={d} fill="none" stroke="var(--la-ink)" strokeWidth={13} strokeOpacity={0.25} strokeLinecap="butt" strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
           ))}
@@ -187,6 +250,18 @@ export function RouteMap({
         <button className="la-btn la-btn-icon" onClick={() => zoomAt(1 / 1.4, box.w / 2, box.h / 2)} aria-label="کوچک‌نمایی"><Minus size={15} /></button>
         <button className="la-btn la-btn-icon" onClick={reset} aria-label="نمای کامل مسیر"><LocateFixed size={15} /></button>
       </div>
+      {tool !== 'none' && hasGeo && (
+        <div className="la-map-measure" role="status">
+          <b>{tool === 'length' ? 'خط‌کش طول' : 'اندازه‌گیری مساحت'}</b>
+          {mpts.length < (tool === 'area' ? 3 : 2) ? <span>برای شروع روی نقشه کلیک کنید{tool === 'area' ? ' (حداقل ۳ نقطه)' : ''}</span> : tool === 'length' ? <span>طول: <b>{fmtLength(mLen)}</b></span> : <span>مساحت: <b>{fmtAreaM2(mArea)}</b> · محیط: <b>{fmtLength(mLen)}</b></span>}
+          <span className="la-eyebrow">محاسبهٔ تقریبی؛ برای کار حقوقی از برداری رسمی استفاده کنید.</span>
+          <span className="flex gap-1.5">
+            <button className="la-btn la-btn-sm" onClick={() => setMpts((m) => m.slice(0, -1))} disabled={!mpts.length}><Undo2 size={13} /> برگشت</button>
+            <button className="la-btn la-btn-sm" onClick={() => setMpts([])} disabled={!mpts.length}><Eraser size={13} /> پاک کردن</button>
+          </span>
+        </div>
+      )}
+      {tiles.length > 0 && <span className="la-map-credit">{BASEMAPS[basemap as Exclude<Basemap, 'none'>].credit}</span>}
       {!hasGeo && <span className="la-badge" style={{ position: 'absolute', insetInlineEnd: 10, top: 10, background: 'var(--la-surface)' }}>نمای شماتیک — مختصات مسیر ثبت نشده</span>}
       {tip && tipRow && (
         <div className="la-map-tip" style={{ left: Math.min(tip.x + 14, box.w - 250), top: Math.max(8, tip.y - 70) }}>
