@@ -17,16 +17,15 @@ import {
   LineChart,
   Loader2,
   Menu,
-  Moon,
   Receipt,
   Settings,
   ShieldCheck,
-  Sun,
   Wallet,
   X,
 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useAppTheme } from '../../components/common/useAppTheme'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
@@ -108,7 +107,6 @@ const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   settings: { title: 'تنظیمات', subtitle: '' },
 }
 
-const FIN_THEME_KEY = 'rasta-finance-theme'
 
 /**
  * Financial Management — owner-side budget/contract/payment control. Deliberately not
@@ -132,7 +130,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const [tab, setTab] = useState<Tab>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [finLight, setFinLight] = useState(() => localStorage.getItem(FIN_THEME_KEY) === 'light')
+  const finLight = !useAppTheme().dark
 
   // Arrived here from Project Radar with a project already in context (Finance uses
   // masterProjectId directly, no mapping table needed) — stay locked to it: hide the
@@ -159,15 +157,6 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   }, [projects, projectId, contextProjectId])
 
   const visibleNav = lockedToProject ? NAV.filter((n) => PROJECT_SCOPED_TABS.has(n.id)) : NAV
-
-  const toggleFinTheme = () => {
-    const next = !finLight
-    setFinLight(next)
-    localStorage.setItem(FIN_THEME_KEY, next ? 'light' : 'dark')
-    // Also flips the app-wide token set (data-theme) so any not-yet-restyled piece of this
-    // module (modals, shared components) still tracks light/dark consistently.
-    document.documentElement.setAttribute('data-theme', next ? 'light' : 'dark')
-  }
 
   const jy = todayJalali().jy
   const notifications = useMemo(
@@ -283,14 +272,6 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
               <Calendar size={12} /> آخرین به‌روزرسانی: {jy.toLocaleString('fa-IR')}/{String(todayJalali().jm).padStart(2, '0')}/{String(todayJalali().jd).padStart(2, '0')} (
               {JALALI_MONTHS[todayJalali().jm - 1]})
             </span>
-            <button
-              onClick={toggleFinTheme}
-              title={finLight ? 'حالت تاریک' : 'حالت روشن'}
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
-            >
-              {finLight ? <Moon size={14} /> : <Sun size={14} />}
-            </button>
             <div className="relative">
               <button
                 onClick={() => setNotifOpen((v) => !v)}

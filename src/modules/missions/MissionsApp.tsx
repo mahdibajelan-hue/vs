@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Moon, Plus, Sparkles, Sun, Users } from 'lucide-react'
+import { ClipboardList, FileSearch, LayoutDashboard, ListTree, Loader2, MapPinned, Plus, Sparkles, Users } from 'lucide-react'
 import { BUILD_ID, ModuleHeaderActions, StorageErrorBanner, useDeepLinkStore } from './platform'
 import { useMissionStore } from './store/useMissionStore'
 import { useMsTheme } from './store/useMsTheme'
@@ -53,7 +53,6 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
     if (useDeepLinkStore.getState().pending?.module === 'missions') useDeepLinkStore.getState().clear()
   }, [])
   const dark = useMsTheme((s) => s.dark)
-  const toggleTheme = useMsTheme((s) => s.toggle)
   const init = useMissionStore((s) => s.init)
   const setRepo = useMissionStore((s) => s.setRepo)
   const ready = useMissionStore((s) => s.ready)
@@ -107,9 +106,6 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
                 </span>
               </span>
             )}
-            <button className="ms-btn ms-btn-sm ms-btn-icon" onClick={toggleTheme} aria-label={dark ? 'تم روشن' : 'تم تاریک'} title={dark ? 'تم روشن' : 'تم تاریک'} aria-pressed={dark}>
-              {dark ? <Sun size={15} aria-hidden /> : <Moon size={15} aria-hidden />}
-            </button>
             <button className="ms-btn ms-btn-primary ms-btn-sm" onClick={() => go({ kind: 'form' })}>
               <Plus size={14} aria-hidden /> <span className="hidden sm:inline">درخواست مأموریت</span>
               <span className="sm:hidden">جدید</span>

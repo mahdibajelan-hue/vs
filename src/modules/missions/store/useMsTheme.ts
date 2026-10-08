@@ -1,25 +1,7 @@
-import { create } from 'zustand'
+import { useAppTheme } from '../platform'
 
-const KEY = 'ms-theme'
-
-function read(): boolean {
-  try {
-    return localStorage.getItem(KEY) === 'dark'
-  } catch {
-    return false
-  }
+/** The missions skin follows the app-wide light/dark switch (the one in the shared header). Same call shape as before. */
+export function useMsTheme<T>(select: (s: { dark: boolean; toggle: () => void }) => T): T {
+  const { dark, toggle } = useAppTheme()
+  return select({ dark, toggle })
 }
-
-/** Light/dark skin of the missions module (independent of the app-wide theme). Remembered per browser. */
-export const useMsTheme = create<{ dark: boolean; toggle: () => void }>((set, get) => ({
-  dark: read(),
-  toggle: () => {
-    const dark = !get().dark
-    try {
-      localStorage.setItem(KEY, dark ? 'dark' : 'light')
-    } catch {
-      /* private mode: the choice just isn't remembered */
-    }
-    set({ dark })
-  },
-}))

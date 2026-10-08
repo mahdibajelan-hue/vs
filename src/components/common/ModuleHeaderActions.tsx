@@ -1,6 +1,7 @@
 import { Home, Radar } from 'lucide-react'
 import { SignOutButton } from '../Auth/SignOutButton'
 import { UserChip } from './UserChip'
+import { ThemeSwitch } from './ThemeSwitch'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -21,13 +22,14 @@ export function ModuleHeaderActions({ onExitToHub, onBackToRadar, className = ''
   return (
     <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
       <UserChip />
+      <ThemeSwitch />
       {onBackToRadar && (
         <button
           onClick={onBackToRadar}
-          title="بازگشت به رادار"
+          title="داشبورد پروژه‌ها (رادار)"
           className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
         >
-          <Radar size={14} /> <span className="hidden sm:inline">بازگشت به رادار</span>
+          <Radar size={14} /> <span className="hidden sm:inline">داشبورد</span>
         </button>
       )}
       <button

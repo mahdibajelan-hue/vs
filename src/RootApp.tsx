@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
+import { useAppThemeSync } from './components/common/useAppTheme'
 import { useModuleStore } from './store/useModuleStore'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
@@ -40,6 +41,7 @@ const PipelineDigitalTwinApp = lazy(() =>
  * its header unlocks them in place.
  */
 export function RootApp() {
+  useAppThemeSync()
   const authLoading = useAuthStore((s) => s.authLoading)
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const profileLoading = useAuthStore((s) => s.profileLoading)

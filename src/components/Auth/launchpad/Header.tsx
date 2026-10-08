@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Bell, Search, Settings, UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
+import { ThemeSwitch } from '../../common/ThemeSwitch'
 import { ProfileModal } from '../ProfileModal'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 
@@ -60,6 +61,7 @@ export function Header() {
           <IconButton icon={Search} label="جستجو" />
           <IconButton icon={Bell} label="اعلان‌ها" />
           <IconButton icon={Settings} label="تنظیمات" />
+          <ThemeSwitch />
 
           <div className="relative">
             <button
