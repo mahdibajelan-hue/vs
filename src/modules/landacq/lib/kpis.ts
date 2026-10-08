@@ -5,6 +5,7 @@ import { ACTION_RANK, earlyAction, type EarlyAction } from './schedule'
 import { displayStatus, type DisplayStatus } from './status'
 import { heuristicPredictor, type DelayForecast, DELAY_HIGHLIGHT_THRESHOLD } from './forecast'
 import { currentStage, isReleased, isStarted, overdueStages, stageProgress } from './workflow'
+import { legalClocks, stayActive, type LegalClock } from './legal'
 import { STAGE_LABEL } from './labels'
 
 /** Everything derived for one parcel, computed once per render pass. */
@@ -14,7 +15,11 @@ export interface Analysis {
   status: DisplayStatus
   early: EarlyAction
   forecast: DelayForecast
+  /** Free for construction. Land whose works a court has stayed is NOT free, even though possession was taken. */
   released: boolean
+  /** Legal clocks of the 1358 law that have started for this parcel (see lib/legal). */
+  clocks: LegalClock[]
+  stay: boolean
   progress: number
   length: number
 }
@@ -29,7 +34,9 @@ export function analyze(parcels: Parcel[], activities: Activity[], today: string
         status: displayStatus(parcel, crit),
         early: earlyAction(parcel, activities, today, settings),
         forecast: heuristicPredictor.predict(parcel, { activities, today, settings }),
-        released: isReleased(parcel),
+        released: isReleased(parcel) && !stayActive(parcel),
+        clocks: legalClocks(parcel, today),
+        stay: stayActive(parcel),
         progress: stageProgress(parcel),
         length: Math.max(0, parcel.kmEnd - parcel.kmStart),
       }
@@ -54,6 +61,11 @@ export interface Kpis {
   impactingSoon: number
   actionRequired: number
   delayExpected: number
+  /** Legal deadlines already missed / falling due soon (all clocks, all parcels). */
+  legalOverdue: number
+  legalSoon: number
+  /** Parcels whose works are stayed by a court order (Article 9 note). */
+  stayed: number
 }
 
 export function computeKpis(rows: Analysis[], totalKm: number, today: string, settings: Pick<LandSettings, 'horizonDays'>): Kpis {
@@ -75,6 +87,9 @@ export function computeKpis(rows: Analysis[], totalKm: number, today: string, se
     impactingSoon: rows.filter((r) => !r.released && r.early.needBy != null && r.early.daysToNeedBy != null && r.early.daysToNeedBy <= settings.horizonDays).length,
     actionRequired: rows.filter((r) => r.early.state === 'action_required').length,
     delayExpected: rows.filter((r) => r.early.state === 'delay_expected').length,
+    legalOverdue: rows.reduce((n, r) => n + r.clocks.filter((c) => c.status === 'overdue').length, 0),
+    legalSoon: rows.reduce((n, r) => n + r.clocks.filter((c) => c.status === 'due_soon').length, 0),
+    stayed: rows.filter((r) => r.stay).length,
   }
 }
 
@@ -95,7 +110,7 @@ export function criticalConstraints(rows: Analysis[]): Analysis[] {
     .sort((a, b) => ACTION_RANK[a.early.state] - ACTION_RANK[b.early.state] || (a.early.needBy ?? '9999').localeCompare(b.early.needBy ?? '9999') || b.crit.score - a.crit.score)
 }
 
-export type ActionKind = 'start_acquisition' | 'early_action' | 'overdue_stage' | 'upcoming_stage'
+export type ActionKind = 'start_acquisition' | 'early_action' | 'overdue_stage' | 'upcoming_stage' | 'legal_deadline'
 export interface ActionItem {
   id: string
   parcelId: string
@@ -112,6 +127,10 @@ export interface ActionItem {
 export function buildActions(rows: Analysis[], today: string, settings: Pick<LandSettings, 'horizonDays'>): ActionItem[] {
   const out: ActionItem[] = []
   for (const r of rows) {
+    for (const c of r.clocks) {
+      if (c.status !== 'overdue' && c.status !== 'due_soon') continue
+      out.push({ id: `${r.parcel.id}:legal:${c.key}`, parcelId: r.parcel.id, kind: 'legal_deadline', title: `${r.parcel.code || 'قطعه'}: ${c.article} - ${c.title}`, due: c.due, daysFromToday: c.daysLeft, severity: c.status === 'overdue' ? 'critical' : 'high' })
+    }
     if (r.released) continue
     const p = r.parcel
     const where = `${p.code || 'قطعه'}`

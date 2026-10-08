@@ -29,7 +29,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Rows3 }[] = [
   { key: 'settings', label: 'تنظیمات', icon: Settings },
 ]
 
-/** تحصیل اراضی — Land Acquisition Control Tower. */
+/** مدیریت تملک و آزادسازی اراضی مسیر — Land Acquisition & Right of Way Management. */
 export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
   const init = useLandStore((s) => s.init)
   const tab = useLandStore((s) => s.tab)
@@ -50,7 +50,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
     void init(repo)
   }, [init, repo])
 
-  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions : 0)
+  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : 0)
 
   return (
     <div className="la-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
@@ -59,8 +59,8 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--la-accent-soft)', color: 'var(--la-accent)' }}><Sprout size={20} aria-hidden /></span>
             <div className="min-w-0 leading-tight">
-              <h1 className="m-0 truncate text-[14.5px] font-black">تحصیل اراضی</h1>
-              <p className="la-eyebrow m-0 hidden sm:block" dir="ltr">Land Acquisition Control Tower</p>
+              <h1 className="m-0 truncate text-[14.5px] font-black">مدیریت تملک و آزادسازی اراضی مسیر</h1>
+              <p className="la-eyebrow m-0 hidden sm:block" dir="ltr">Land Acquisition &amp; Right of Way Management</p>
             </div>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -72,7 +72,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="la-tabs" role="tablist" aria-label="بخش‌های تحصیل اراضی">
+        <nav className="la-tabs" role="tablist" aria-label="بخش‌های مدیریت تملک و آزادسازی اراضی">
           {TABS.map((t) => (
             <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
               <t.icon size={15} aria-hidden /> {t.label}

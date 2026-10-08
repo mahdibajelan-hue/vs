@@ -1,4 +1,4 @@
-import { AlertOctagon, ArrowLeft, CalendarClock, Siren } from 'lucide-react'
+import { AlarmClockOff, AlertOctagon, ArrowLeft, CalendarClock, Siren } from 'lucide-react'
 import { useLandStore, useLandAnalysis } from '../store/useLandStore'
 import { RouteMap } from '../components/RouteMap'
 import { ChainageRibbon } from '../components/ChainageRibbon'
@@ -20,8 +20,9 @@ export function TowerPage() {
   if (!data?.route) return <NoRoute />
   const route = data.route
   const total = route.totalKm || 1
-  const urgent = actions.filter((x) => x.kind !== 'upcoming_stage')
-  const upcoming = actions.slice(0, 8)
+  const legal = actions.filter((x) => x.kind === 'legal_deadline').sort((a, b) => a.daysFromToday - b.daysFromToday)
+  const urgent = actions.filter((x) => x.kind !== 'upcoming_stage' && x.kind !== 'legal_deadline')
+  const upcoming = actions.filter((x) => x.kind !== 'legal_deadline').slice(0, 8)
 
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
@@ -46,6 +47,28 @@ export function TowerPage() {
         </div>
         <div className="mt-3"><MapLegend mode="status" counts={lengths} /></div>
       </section>
+
+      {/* ------------------------------------------------------------ legal alarms (1358 law) */}
+      {legal.length > 0 && (
+        <section className="la-card la-rise p-4" style={{ borderColor: 'color-mix(in srgb, #ef4444 45%, var(--la-line))', background: 'color-mix(in srgb, #ef4444 6%, var(--la-surface))' }} aria-label="هشدارهای مواعد قانونی">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="la-title m-0 flex items-center gap-2" style={{ color: '#ef4444' }}><AlarmClockOff size={16} /> هشدار مواعد قانونی</p>
+            <p className="la-eyebrow m-0">{faNum(kpis.legalOverdue)} مهلت گذشته · {faNum(kpis.legalSoon)} نزدیک مهلت{kpis.stayed > 0 ? ` · ${faNum(kpis.stayed)} توقف دادگاهی` : ''}</p>
+          </div>
+          <ul className="m-0 mt-2 list-none p-0">
+            {legal.slice(0, 5).map((x) => (
+              <li key={x.id}>
+                <button className="la-row" style={{ padding: '9px 6px' }} onClick={() => select(x.parcelId)}>
+                  <span style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, background: x.severity === 'critical' ? '#ef4444' : '#f59e0b' }} />
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{x.title}</span>
+                  <span className="la-num shrink-0 text-[11.5px] font-bold" style={{ color: x.severity === 'critical' ? '#ef4444' : '#f59e0b' }}>{x.daysFromToday < 0 ? `${faNum(-x.daysFromToday)} روز گذشته` : x.daysFromToday === 0 ? 'امروز' : `${faNum(x.daysFromToday)} روز مانده`}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {legal.length > 5 && <button className="la-btn la-btn-sm mt-2" onClick={() => setTab('actions')}>همهٔ هشدارها ({faNum(legal.length)}) <ArrowLeft size={13} /></button>}
+        </section>
+      )}
 
       {/* ------------------------------------------------------------ KPIs */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="شاخص‌های کلیدی">

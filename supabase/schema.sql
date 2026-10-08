@@ -16359,3 +16359,27 @@ revoke execute on function la_stage_after_write() from public, anon, authenticat
 -- my_finance_notifications(): SECURITY INVOKER (RLS applies) + finance view permission. Guarantees expiring within 60 days,
 -- certificates unpaid for >30 days, claims undecided for >14 days, retention releases due within 60 days.
 -- my_notifications() also reports mission claims (ready_for_claim) for the requester and Admin Affairs.
+
+-- =============================================================================
+-- 72. Land acquisition: Article 9 route (immediate possession) + legal deadlines
+-- =============================================================================
+-- Module renamed «مدیریت تملک و آزادسازی اراضی مسیر» (Land Acquisition & Right of Way Management).
+-- New route 'art9' with its own 4 steps (necessity signed by the minister -> minutes with the prosecutor's representative ->
+-- immediate possession -> fair price paid/deposited within 3 months) and the legal-deadline columns the client keeps in sync.
+do $$
+declare c record;
+begin
+  for c in select conname, conrelid::regclass::text as t from pg_constraint
+    where conrelid in ('la_parcels'::regclass, 'la_stages'::regclass) and contype = 'c'
+      and (pg_get_constraintdef(oid) like '%acquisition_route%' or pg_get_constraintdef(oid) like '%stage_key%') loop
+    execute 'alter table ' || c.t || ' drop constraint ' || quote_ident(c.conname);
+  end loop;
+end $$;
+alter table la_parcels add constraint la_parcels_route_check check (acquisition_route in ('normal', 'accelerated', 'dispute', 'art9'));
+alter table la_stages add constraint la_stages_key_check check (stage_key in ('identification', 'ownership_status', 'owner_identification', 'preliminary_assessment', 'expert_referral', 'valuation', 'financial_settlement', 'payment', 'release', 'ready_for_construction', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment'));
+alter table la_parcels add column if not exists legal jsonb not null default '{}'::jsonb;
+alter table la_parcels add column if not exists next_deadline date;
+alter table la_parcels add column if not exists next_deadline_label text not null default '';
+update rasta_modules set label_fa = 'مدیریت تملک و آزادسازی اراضی مسیر' where key = 'landacq';
+-- la_parcel_after_insert(): creates the 4 Article-9 steps for an 'art9' parcel, the 10 regular steps otherwise (re-created above in this section's live run).
+-- my_land_notifications(): SECURITY INVOKER; parcels whose nearest legal deadline is within 14 days or already past (feeds the header bell).

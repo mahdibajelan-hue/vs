@@ -31,7 +31,7 @@ export function createMemoryRepo(projects: ProjectOption[]): LandRepo {
     const id = d.id ?? uid('p')
     const stages = makeStages().map((s) => d.stages?.find((x) => x.key === s.key) ?? s)
     return {
-      ...d, id, masterProjectId, riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
+      ...d, id, masterProjectId, legal: d.legal ?? {}, nextDeadline: d.nextDeadline ?? null, nextDeadlineLabel: d.nextDeadlineLabel ?? '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
       owners: (d.owners ?? []).map((o) => ({ ...o, id: uid('o'), parcelId: id })),
       docs: (d.docs ?? []).map((x) => ({ ...x, id: uid('d'), parcelId: id })),
     }

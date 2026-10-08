@@ -5,7 +5,7 @@ import { useModuleStore } from '../../store/useModuleStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { ToolbarButton } from './ToolbarButton'
 
-const SOURCE_LABEL: Record<string, string> = { missions: 'مأموریت‌ها', issues: 'مدیریت مسائل', risk: 'مدیریت ریسک', finance: 'مدیریت مالی' }
+const SOURCE_LABEL: Record<string, string> = { missions: 'مأموریت‌ها', issues: 'مدیریت مسائل', risk: 'مدیریت ریسک', finance: 'مدیریت مالی', landacq: 'مواعد قانونی تملک اراضی' }
 const SEVERITY_COLOR = { action: '#38bdf8', warn: '#f59e0b', info: '#94a3b8' } as const
 const DEEP_LINKABLE = new Set(['issues', 'risk', 'missions'])
 

@@ -1,5 +1,6 @@
 import type { CriticalityLevel, Parcel } from '../types'
 import { isReleased, stageProgress } from './workflow'
+import { stayActive } from './legal'
 import { faNum } from './fa'
 
 export interface Factor {
@@ -36,6 +37,8 @@ const FLAG_LABEL = { sensitive_area: 'منطقهٔ حساس', has_facilities: '�
  * uncertainty is being retired; released land scores 0.
  */
 export function criticality(p: Parcel): Criticality {
+  // An owner's court stay of the works (Article 9 note) is a live construction stopper even though possession was taken.
+  if (stayActive(p)) return { score: 90, level: 'critical', factors: [{ key: 'stay', label: 'عملیات اجرایی به دستور دادگاه متوقف است (تبصرهٔ ماده ۹)', points: 90 }], resolved: false }
   if (isReleased(p)) return { score: 0, level: 'low', factors: [], resolved: true }
   const f: Factor[] = []
   const add = (key: string, label: string, points: number) => points > 0 && f.push({ key, label, points })

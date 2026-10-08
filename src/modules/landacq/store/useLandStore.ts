@@ -6,7 +6,8 @@ import { DEFAULT_SETTINGS } from '../types'
 import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields } from '../repo/types'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
-import { STAGE_ORDER, makeStages } from '../lib/workflow'
+import { makeStages, orderOf } from '../lib/workflow'
+import { nextDeadline } from '../lib/legal'
 import { analyze, buildActions, computeKpis, criticalConstraints, lengthByStatus, type Analysis } from '../lib/kpis'
 
 export type ColorMode = 'status' | 'criticality' | 'ownership' | 'stage'
@@ -64,6 +65,21 @@ export const useLandStore = create<LandState>()((set, get) => {
     return r
   }
   const patchData = (f: (d: LandProjectData) => LandProjectData) => set((s) => (s.data ? { data: f(s.data) } : s))
+  /** Keeps parcels.next_deadline (what the header bell reads) equal to the nearest open legal deadline. */
+  const syncDeadline = async (id: string) => {
+    const p = get().data?.parcels.find((x) => x.id === id)
+    if (!p) return
+    const nd = nextDeadline(p, get().today)
+    const date = nd?.date ?? null
+    const label = nd?.label ?? ''
+    if (p.nextDeadline === date && p.nextDeadlineLabel === label) return
+    patchParcel(id, (x) => ({ ...x, nextDeadline: date, nextDeadlineLabel: label }))
+    try {
+      await get().repo?.updateParcel(id, { nextDeadline: date, nextDeadlineLabel: label })
+    } catch {
+      /* read-only users cannot persist the derived value; the screen is still right */
+    }
+  }
   const patchParcel = (id: string, f: (p: Parcel) => Parcel) => patchData((d) => ({ ...d, parcels: d.parcels.map((p) => (p.id === id ? f(p) : p)) }))
   /** Run a repo operation; on failure show the error and re-sync from the server so the screen never lies. */
   const run = async <T>(op: () => Promise<T>, fallback?: T): Promise<T | undefined> => {
@@ -108,6 +124,7 @@ export const useLandStore = create<LandState>()((set, get) => {
       try {
         const data = await repo().load(id)
         set({ data, loading: false })
+        void Promise.all(data.parcels.map((p) => syncDeadline(p.id)))
       } catch (e) {
         set({ loading: false, data: null, error: msg(e) })
       }
@@ -168,6 +185,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     updateParcel: async (id, patch) => {
       patchParcel(id, (p) => ({ ...p, ...patch }))
       await run(() => repo().updateParcel(id, patch))
+      await syncDeadline(id)
     },
 
     deleteParcel: async (id) => {
@@ -203,18 +221,20 @@ export const useLandStore = create<LandState>()((set, get) => {
       if (next.status !== 'done') next.actualDate = patch.actualDate ?? (patch.status ? null : next.actualDate)
       patchParcel(parcelId, (x) => ({ ...x, stages: x.stages.map((s) => (s.key === key ? next : s)) }))
       await run(() => repo().saveStage(parcelId, next))
+      await syncDeadline(parcelId)
     },
 
     advanceStage: async (parcelId) => {
       const p = get().data?.parcels.find((x) => x.id === parcelId)
       if (!p) return
-      const idx = STAGE_ORDER.findIndex((k) => {
+      const order = orderOf(p)
+      const idx = order.findIndex((k) => {
         const s = p.stages.find((x) => x.key === k)
         return s && s.status !== 'done' && s.status !== 'skipped'
       })
       if (idx < 0) return
-      await get().setStage(parcelId, STAGE_ORDER[idx], { status: 'done' })
-      const nextKey = STAGE_ORDER[idx + 1]
+      await get().setStage(parcelId, order[idx], { status: 'done' })
+      const nextKey = order[idx + 1]
       if (nextKey) {
         const days = 14
         await get().setStage(parcelId, nextKey, { status: 'in_progress', plannedDate: p.stages.find((s) => s.key === nextKey)?.plannedDate ?? addDays(get().today, days) })

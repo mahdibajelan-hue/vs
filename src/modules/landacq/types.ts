@@ -1,6 +1,6 @@
 export type OwnershipClass = 'private' | 'natural_resources' | 'exempt' | 'governmental' | 'unknown'
 export type LandType = 'agricultural' | 'garden' | 'rangeland' | 'forest' | 'desert' | 'urban' | 'industrial' | 'riverbed' | 'road_rail' | 'other' | 'unknown'
-export type AcqRoute = 'normal' | 'accelerated' | 'dispute'
+export type AcqRoute = 'normal' | 'accelerated' | 'dispute' | 'art9'
 export type StageKey =
   | 'identification'
   | 'ownership_status'
@@ -12,11 +12,48 @@ export type StageKey =
   | 'payment'
   | 'release'
   | 'ready_for_construction'
+  | 'art9_necessity'
+  | 'art9_minutes'
+  | 'art9_possession'
+  | 'art9_payment'
 export type StageStatus = 'not_started' | 'in_progress' | 'done' | 'blocked' | 'skipped'
 export type AgreementStatus = 'unknown' | 'not_contacted' | 'negotiating' | 'agreed' | 'refused' | 'legal'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 export type DocStatus = 'pending' | 'submitted' | 'approved' | 'rejected'
 export type CriticalityLevel = 'low' | 'medium' | 'high' | 'critical'
+
+/**
+ * Dates that start the legal clocks of the 1358 land-acquisition law (ISO yyyy-mm-dd). Everything else (necessity, minutes,
+ * possession, payment of the Article 9 route) is read from the workflow steps themselves.
+ */
+export interface LegalData {
+  /** Art. 2 note 2: registry office must answer the inquiry within 15 days. */
+  inquiryDate?: string | null
+  registryReplyDate?: string | null
+  /** Art. 3 note 2: after agreement, buy/pay (or withdraw in writing) within 3 months. */
+  agreementDate?: string | null
+  settledDate?: string | null
+  /** Art. 4 note 2: owner names an expert within 1 month of notification; else the court appoints within 15 days of the application. */
+  ownerNoticeDate?: string | null
+  expertNamedDate?: string | null
+  courtAppointRequestDate?: string | null
+  courtAppointedDate?: string | null
+  /** Art. 5 note 5: the expert panel gives its opinion within 1 month. */
+  expertAssignedDate?: string | null
+  expertOpinionDate?: string | null
+  /** Art. 8: first notice (1 month), second notice (15 days), deposit, eviction within 1 month. */
+  notice1Date?: string | null
+  notice2Date?: string | null
+  depositDate?: string | null
+  evictedDate?: string | null
+  /** Art. 1 note (1388): after a court stay order, pay or deposit the day price within 6 months. */
+  annulmentStayOrderDate?: string | null
+  annulmentPaidDate?: string | null
+  /** Art. 9 note: owner's court application to stop the works until payment; lifted at once on payment/deposit. */
+  stayFiledDate?: string | null
+  stayOrderDate?: string | null
+  stayLiftedDate?: string | null
+}
 
 export interface ParcelFlags {
   sensitive_area?: boolean
@@ -24,6 +61,8 @@ export interface ParcelFlags {
   past_dispute?: boolean
   high_value?: boolean
   critical_for_execution?: boolean
+  /** Art. 5 note 1: dwelling or livelihood of the owner, +15% on the fair price. */
+  residence_livelihood?: boolean
 }
 
 export interface Stage {
@@ -88,6 +127,11 @@ export interface Parcel {
   issueId: string | null
   scheduleWarningId: string | null
   isDemo: boolean
+  /** Legal-clock start dates (see LegalData). */
+  legal: LegalData
+  /** Nearest open legal deadline, kept in sync by the client so the header bell can read it. */
+  nextDeadline: string | null
+  nextDeadlineLabel: string
   stages: Stage[]
   owners: Owner[]
   docs: DocMeta[]

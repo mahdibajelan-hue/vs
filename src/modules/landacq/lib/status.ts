@@ -1,6 +1,7 @@
 import type { Parcel } from '../types'
 import { criticality, type Criticality } from './scoring'
 import { isReleased, isStarted } from './workflow'
+import { stayActive } from './legal'
 
 /** The seven map colours of the Land Acquisition Layer. */
 export type DisplayStatus = 'released' | 'acquiring' | 'risk' | 'critical' | 'natural' | 'governmental' | 'review'
@@ -30,6 +31,7 @@ export const STATUS_ORDER: DisplayStatus[] = ['released', 'acquiring', 'risk', '
  * ownership classes (blue / purple), then "being acquired" (yellow); everything else still needs a look (white).
  */
 export function displayStatus(p: Parcel, crit: Criticality = criticality(p)): DisplayStatus {
+  if (stayActive(p)) return 'critical'
   if (isReleased(p)) return 'released'
   if (crit.level === 'critical') return 'critical'
   if (p.ownershipClass === 'natural_resources') return 'natural'

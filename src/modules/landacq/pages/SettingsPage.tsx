@@ -4,6 +4,7 @@ import { useLandStore } from '../store/useLandStore'
 import { DEFAULT_SETTINGS, type RouteInfo } from '../types'
 import { parseKml } from '../lib/geometry'
 import { faNum } from '../lib/fa'
+import { LEGAL_REFERENCE } from '../lib/legal'
 import { Card, ConfirmDialog, Field } from '../components/ui'
 
 export function SettingsPage() {
@@ -55,6 +56,23 @@ export function SettingsPage() {
           <Field label="افق «پیش‌رو» (روز)" hint="X روز آینده در داشبورد و اقدام‌های پیش‌رو"><input className="la-input la-num" type="number" min={1} value={form.horizon} onChange={(e) => setForm({ ...form, horizon: Number(e.target.value) })} /></Field>
         </div>
         <div className="mt-4 flex justify-end"><button className="la-btn la-btn-primary" disabled={!valid} onClick={() => save()}>ذخیرهٔ تنظیمات</button></div>
+      </Card>
+
+      <Card title="مواعد قانونی لایحهٔ ۱۳۵۸" hint="هر مهلت از رویداد آغازین حساب می‌شود و نزدیک یا گذشته‌بودنش در همهٔ بخش‌ها هشدار می‌دهد؛ «ماه» ماه شمسی است.">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+            <thead><tr style={{ color: 'var(--la-muted)' }}><th className="px-2 py-2 text-right font-semibold">ماده</th><th className="px-2 py-2 text-right font-semibold">رویداد</th><th className="px-2 py-2 text-right font-semibold">مهلت</th></tr></thead>
+            <tbody>
+              {LEGAL_REFERENCE.map((r) => (
+                <tr key={r.article + r.title} style={{ borderTop: '1px solid var(--la-line)' }}>
+                  <td className="whitespace-nowrap px-2 py-2 font-bold">{r.article}</td>
+                  <td className="px-2 py-2 leading-6"><b>{r.title}</b><span className="la-eyebrow block">{r.rule}</span></td>
+                  <td className="whitespace-nowrap px-2 py-2 font-bold" style={{ color: 'var(--la-accent)' }}>{r.period}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Card title="داده‌های نمونه" hint="یک خط لولهٔ ۱۰۰ کیلومتری با قطعه، مالک، فعالیت و نقاط بحرانی برای آشنایی با ماژول. داده‌های واقعی شما هرگز لمس نمی‌شود.">

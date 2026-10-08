@@ -1,7 +1,7 @@
 import type { Activity, DocMeta, LandProjectData, Owner, Parcel, ProjectOption, RouteInfo, Stage, TransferTarget } from '../types'
 
 /** The editable fields of a parcel (everything but its children and ids). */
-export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo'>
+export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel'>>
 export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
 export type OwnerInput = Omit<Owner, 'id'> & { id?: string }
 export type DocInput = Omit<DocMeta, 'id'> & { id?: string }

@@ -5,8 +5,8 @@
 export const LANDACQ_MODULE = {
   /** ModuleKey in useModuleStore, rasta_modules.key in the database, and RBAC module_key. */
   key: 'landacq',
-  labelFa: 'تحصیل اراضی',
-  labelEn: 'Land Acquisition Control Tower',
-  descriptionFa: 'غربالگری زمین مسیر، نقاط بحرانی، لایهٔ نقشه، هشدار زودهنگام شروع تحصیل و اتصال به برنامه، ریسک و مسائل.',
+  labelFa: 'مدیریت تملک و آزادسازی اراضی مسیر',
+  labelEn: 'Land Acquisition & Right of Way Management',
+  descriptionFa: 'غربالگری زمین مسیر، تصرف فوری ماده ۹، مواعد و هشدارهای قانونی، لایهٔ نقشه و اتصال به برنامه، ریسک و مسائل.',
   accent: '#b45309',
 } as const

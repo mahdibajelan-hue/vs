@@ -117,3 +117,31 @@ const pr = fit(pts, 400, 300, 20); const [x0, y0] = pr(pts[0]); assert.ok(x0 >= 
 assert.ok(pr(pts[3])[0] > pr(pts[0])[0], 'east is to the right'); assert.ok(pr(pts[2])[1] < pr(pts[0])[1], 'north is up')
 assert.ok(Math.abs(haversine([0, 0], [0, 1]) - 111195) < 400)
 console.log('landacq/lib: all assertions passed')
+
+// ---- legal clocks (1358 law)
+import { addJalaliMonths, isoToJalali } from './jalali.ts'
+import { legalClocks, nextDeadline, stayActive } from './legal.ts'
+assert.deepEqual(isoToJalali('2026-03-21'), { jy: 1405, jm: 1, jd: 1 })
+assert.equal(addJalaliMonths('2026-03-21', 3), '2026-06-22')   // 1405/1/1 + 3 months = 1405/4/1
+assert.equal(addJalaliMonths('2026-03-21', 6), '2026-09-23')   // 1405/7/1
+const mkp = (over) => ({ id: 'x', masterProjectId: 'm', code: 'LP', title: '', kmStart: 0, kmEnd: 1, landType: 'agricultural', ownershipClass: 'private', landUse: '', ownerCountEst: 1, ownerKnown: true, custodian: '', disputeProbability: 0, complexity: 1, estDurationDays: null, flags: {}, acquisitionRoute: 'art9', areaM2: null, estCost: null, notes: '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: false, legal: {}, nextDeadline: null, nextDeadlineLabel: '', owners: [], docs: [], stages: makeStages(), ...over })
+const done = (key, d) => ({ key, status: 'done', responsible: '', plannedDate: d, actualDate: d, note: '' })
+const bs9 = mkp({})
+bs9.stages = bs9.stages.map((s) => (s.key === 'art9_necessity' || s.key === 'art9_minutes' || s.key === 'art9_possession' ? done(s.key, '2026-03-21') : s))
+const c1 = legalClocks(bs9, '2026-06-10').find((c) => c.key === 'art9_payment')
+assert.equal(c1.due, '2026-06-22'); assert.equal(c1.status, 'due_soon'); assert.equal(c1.daysLeft, 12)
+assert.equal(legalClocks(bs9, '2026-06-23').find((c) => c.key === 'art9_payment').status, 'overdue')
+assert.equal(legalClocks(bs9, '2026-04-01').find((c) => c.key === 'art9_payment').status, 'running')
+assert.equal(nextDeadline(bs9, '2026-06-10').date, '2026-06-22')
+const paid = { ...bs9, stages: bs9.stages.map((s) => (s.key === 'art9_payment' ? done('art9_payment', '2026-05-01') : s)) }
+assert.equal(legalClocks(paid, '2026-07-30').find((c) => c.key === 'art9_payment').status, 'done'); assert.equal(nextDeadline(paid, '2026-07-30'), null)
+// possession without necessity/minutes is a compliance alarm
+const bad = mkp({}); bad.stages = bad.stages.map((s) => (s.key === 'art9_possession' ? done('art9_possession', '2026-03-21') : s))
+assert.ok(legalClocks(bad, '2026-03-25').some((c) => c.key === 'art9_compliance' && c.severity === 'critical'))
+// owner's court stay: active until payment / lifting
+const stayed = { ...bs9, legal: { stayFiledDate: '2026-07-01', stayOrderDate: '2026-07-05' } }
+assert.ok(stayActive(stayed)); assert.ok(!stayActive({ ...stayed, legal: { ...stayed.legal, stayLiftedDate: '2026-07-06' } })); assert.ok(!stayActive(paid))
+// regular route: Article 3 note 2 (3 months after agreement) and Article 5 note 5 (1 month for the experts)
+const reg = mkp({ acquisitionRoute: 'normal', legal: { agreementDate: '2026-03-21', expertAssignedDate: '2026-03-21' } })
+const rc = legalClocks(reg, '2026-04-01'); assert.equal(rc.find((c) => c.key === 'agreement_payment').due, '2026-06-22'); assert.equal(rc.find((c) => c.key === 'expert_opinion').due, '2026-04-21')
+console.log('landacq/legal: all assertions passed')

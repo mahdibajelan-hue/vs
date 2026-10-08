@@ -1,7 +1,7 @@
 import type { Owner, Parcel, Stage, StageKey } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import { addDays } from '../lib/dates'
-import { STAGE_DAYS, STAGE_ORDER } from '../lib/workflow'
+import { makeStages, STAGE_DAYS, STAGE_ORDER } from '../lib/workflow'
 import type { DemoBundle, ParcelDraft } from './types'
 import type { LonLat } from '../lib/geometry'
 
@@ -52,7 +52,7 @@ const ZONES: Zone[] = [
 
 const LENGTHS = [2.4, 1.8, 3.1, 2.0, 1.5, 2.8, 2.2, 1.6, 3.4, 2.6]
 
-function stagesFor(done: number, working: boolean, route: 'normal' | 'accelerated' | 'dispute', complexity: number, today: string, r: () => number): Stage[] {
+function stagesFor(done: number, working: boolean, route: 'normal' | 'accelerated' | 'dispute' | 'art9', complexity: number, today: string, r: () => number): Stage[] {
   const days = STAGE_DAYS[route]
   const f = 0.8 + 0.1 * complexity
   const dur = (i: number) => Math.round(days[STAGE_ORDER[i]] * f)
@@ -62,11 +62,12 @@ function stagesFor(done: number, working: boolean, route: 'normal' | 'accelerate
   for (let i = anchor - 1; i >= 0; i--) planned[i] = addDays(planned[i + 1], -dur(i))
   for (let i = anchor + 1; i < STAGE_ORDER.length; i++) planned[i] = addDays(planned[i - 1], dur(i - 1))
   const started = done > 0 || working
-  return STAGE_ORDER.map((key, i) => {
+  const regular = STAGE_ORDER.map((key, i) => {
     const status = i < done ? 'done' : i === done && working ? 'in_progress' : 'not_started'
     const slip = Math.floor(r() * 10) - 4
-    return { key, status, responsible: i < 5 ? 'کارشناس تحصیل اراضی' : 'مدیر امور مالی و حقوقی', plannedDate: started ? planned[i] : null, actualDate: status === 'done' ? addDays(planned[i], Math.max(0, slip)) : null, note: '' }
+    return { key, status, responsible: i < 5 ? 'کارشناس تحصیل اراضی' : 'مدیر امور مالی و حقوقی', plannedDate: started ? planned[i] : null, actualDate: status === 'done' ? addDays(planned[i], Math.max(0, slip)) : null, note: '' } as Stage
   })
+  return [...regular, ...makeStages().filter((s) => !STAGE_ORDER.includes(s.key))]
 }
 
 export function buildDemo(masterProjectId: string, today: string): DemoBundle {
@@ -118,11 +119,32 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   const exempt = split(64, 65.2)
   Object.assign(exempt, { title: 'مستثنیات قانونی', landType: 'garden', ownershipClass: 'exempt', ownerCountEst: 1, ownerKnown: true, complexity: 3 })
 
+  // Article 9 (immediate possession) stories: one inside its 3-month payment window, one past it with the owner's court stay, one still preparing
+  const a9a = split(30, 30.7)
+  Object.assign(a9a, { title: 'تصرف فوری ماده ۹ — در مهلت پرداخت', landType: 'agricultural', ownershipClass: 'private', ownerCountEst: 2, ownerKnown: true, acquisitionRoute: 'art9', complexity: 2, flags: { critical_for_execution: true } })
+  const a9b = split(55, 55.8)
+  Object.assign(a9b, { title: 'تصرف فوری ماده ۹ — مهلت پرداخت گذشته', landType: 'garden', ownershipClass: 'private', ownerCountEst: 3, ownerKnown: true, acquisitionRoute: 'art9', complexity: 3, flags: { critical_for_execution: true, past_dispute: true }, legal: { stayFiledDate: addDays(today, -20), stayOrderDate: addDays(today, -12) }, notes: 'مالک از دادگاه توقف عملیات را خواسته و دستور توقف صادر شده است.' })
+  const a9c = split(85, 85.6)
+  Object.assign(a9c, { title: 'ماده ۹ — در حال تهیهٔ صورت‌جلسه', landType: 'desert', ownershipClass: 'private', ownerCountEst: 1, ownerKnown: true, acquisitionRoute: 'art9', complexity: 2, flags: { critical_for_execution: true } })
+  const art9Stages = (rows: [StageKey, 'done' | 'in_progress' | 'not_started', number | null, number | null][]): Stage[] =>
+    makeStages().map((blank) => {
+      const row = rows.find((x) => x[0] === blank.key)
+      if (!row) return blank
+      const [key, status, planned, actual] = row
+      return { key, status, responsible: key === 'art9_necessity' ? 'وزیر / بالاترین مقام دستگاه' : key === 'art9_minutes' ? 'حقوقی با نمایندهٔ دادستانی' : key === 'art9_possession' ? 'مدیر اجرایی طرح' : 'مدیر امور مالی', plannedDate: planned == null ? null : addDays(today, planned), actualDate: actual == null ? null : addDays(today, actual), note: '' }
+    })
+  a9a.stages = art9Stages([['art9_necessity', 'done', -91, -90], ['art9_minutes', 'done', -82, -81], ['art9_possession', 'done', -76, -75], ['art9_payment', 'in_progress', 14, null]])
+  a9b.stages = art9Stages([['art9_necessity', 'done', -141, -140], ['art9_minutes', 'done', -133, -132], ['art9_possession', 'done', -126, -125], ['art9_payment', 'in_progress', -35, null]])
+  a9c.stages = art9Stages([['art9_necessity', 'done', -7, -6], ['art9_minutes', 'in_progress', 3, null], ['art9_possession', 'not_started', 8, null], ['art9_payment', 'not_started', null, null]])
+  a9a.owners = [{ name: 'حسین ناصری', contact: '09121234567', sharePct: 60, agreement: 'agreed', estAmount: 1_800_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: '' }, { name: 'اکرم ناصری', contact: '', sharePct: 40, agreement: 'negotiating', estAmount: 1_200_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: '' }]
+  a9b.owners = [{ name: 'جواد منصوری', contact: '09130001122', sharePct: 100, agreement: 'refused', estAmount: 6_400_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: 'درخواست توقف عملیات به دادگاه داده است' }]
+
   // renumber after the carving
   parcels.forEach((p, i) => (p.code = `LP-${String(i + 1).padStart(3, '0')}`))
 
   // workflow state, owners and document metadata
   for (const p of parcels) {
+    if (p.acquisitionRoute === 'art9') continue
     const zone = ZONES.find((z) => p.kmStart >= z.from && p.kmStart < z.to)!
     let done = zone.done
     let working = !!zone.working

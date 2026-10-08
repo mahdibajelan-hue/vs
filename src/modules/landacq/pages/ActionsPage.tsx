@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarClock, Siren } from 'lucide-react'
+import { AlarmClockOff, ArrowUpRight, CalendarClock, Siren } from 'lucide-react'
 import { useLandStore, useLandAnalysis } from '../store/useLandStore'
 import type { Analysis } from '../lib/kpis'
 
@@ -23,12 +23,29 @@ export function ActionsPage() {
   const { rows, actions, settings } = useLandAnalysis()
   if (!data?.route) return <NoRoute />
   const overdue = actions.filter((a) => a.kind === 'overdue_stage')
+  const legal = actions.filter((a) => a.kind === 'legal_deadline').sort((a, b) => a.daysFromToday - b.daysFromToday)
 
   return (
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
       <p className="la-eyebrow m-0 leading-7">
         تاریخ شروع تحصیل = نیاز فعالیت اجرایی − (زمان باقی‌ماندهٔ تحصیل + ذخیرهٔ اطمینان {faNum(settings.bufferDays)} روز). هر زمین پس از این تاریخ، خودش به‌تنهایی برنامه را عقب می‌اندازد.
       </p>
+      <Card title="مواعد قانونی (لایحهٔ ۱۳۵۸)" hint="مهلت‌هایی که قانون برای دستگاه اجرایی، مالک، کارشناس و دادگاه تعیین کرده و گذشته یا نزدیک است" pad={false}>
+        {legal.length === 0 ? <EmptyState icon={<AlarmClockOff size={20} />} title="مهلت قانونی نزدیک یا گذشته‌ای نیست" text="با ثبت تاریخ تصرف، استعلام، توافق یا ابلاغ در تب «مواعد قانونی» هر قطعه، مهلت‌ها اینجا هشدار می‌دهند." /> : (
+          <ul className="m-0 list-none p-0">
+            {legal.map((x) => (
+              <li key={x.id}>
+                <button className="la-row" onClick={() => select(x.parcelId)}>
+                  <span style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, background: x.severity === 'critical' ? '#ef4444' : '#f59e0b' }} />
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold leading-6">{x.title}</span><span className="la-eyebrow block">مهلت: {fmtDate(x.due)}</span></span>
+                  <span className="la-num shrink-0 text-[11.5px] font-bold" style={{ color: x.severity === 'critical' ? '#ef4444' : '#f59e0b' }}>{x.daysFromToday < 0 ? `${faNum(-x.daysFromToday)} روز گذشته` : x.daysFromToday === 0 ? 'امروز' : `${faNum(x.daysFromToday)} روز مانده`}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-3">
         {COLUMNS.map((c) => {
           const list = rows.filter((r) => r.early.state === c.state).sort((a, b) => (a.early.startBy ?? '').localeCompare(b.early.startBy ?? '') || b.crit.score - a.crit.score)
