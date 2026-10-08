@@ -1,4 +1,5 @@
-import { AlarmClockOff, ArrowUpRight, CalendarClock, Siren } from 'lucide-react'
+import { AlarmClockOff, ArrowUpRight, CalendarClock, Siren, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 import { useLandStore, useLandAnalysis } from '../store/useLandStore'
 import type { Analysis } from '../lib/kpis'
 
@@ -7,6 +8,7 @@ import { fmtDate, fmtDuration, relDays, faNum } from '../lib/fa'
 import { ROUTE_LABEL, STAGE_LABEL } from '../lib/labels'
 import { currentStage } from '../lib/workflow'
 import { Card, EmptyState, LevelBadge } from '../components/ui'
+import { problemsOf, SEVERITY_LABEL, SEVERITY_RANK } from '../lib/problems'
 import { NoRoute } from '../components/shared'
 
 const COLUMNS = [
@@ -20,9 +22,22 @@ export function ActionsPage() {
   const data = useLandStore((s) => s.data)
   const select = useLandStore((s) => s.selectParcel)
   const transfer = useLandStore((s) => s.transfer)
-  const { rows, actions, settings } = useLandAnalysis()
+  const { rows, actions, settings, today } = useLandAnalysis()
+  const [bulk, setBulk] = useState(false)
   if (!data?.route) return <NoRoute />
   const overdue = actions.filter((a) => a.kind === 'overdue_stage')
+  const ready = rows
+    .map((r) => ({ r, rep: problemsOf(r, today) }))
+    .filter((x) => (x.rep.issue && !x.r.parcel.issueId) || (x.rep.risk && !x.r.parcel.riskId))
+    .sort((a, b) => SEVERITY_RANK[b.rep.issue?.severity ?? 'medium'] - SEVERITY_RANK[a.rep.issue?.severity ?? 'medium'])
+  const sendAll = async (what: 'issue' | 'risk') => {
+    setBulk(true)
+    for (const x of ready) {
+      const d = what === 'issue' ? x.rep.issue : x.rep.risk
+      if (d && !(what === 'issue' ? x.r.parcel.issueId : x.r.parcel.riskId)) await transfer(x.r.parcel.id, what, d.params)
+    }
+    setBulk(false)
+  }
   const legal = actions.filter((a) => a.kind === 'legal_deadline').sort((a, b) => a.daysFromToday - b.daysFromToday)
 
   return (
@@ -30,6 +45,33 @@ export function ActionsPage() {
       <p className="la-eyebrow m-0 leading-7">
         تاریخ شروع تحصیل = نیاز فعالیت اجرایی − (زمان باقی‌ماندهٔ تحصیل + ذخیرهٔ اطمینان {faNum(settings.bufferDays)} روز). هر زمین پس از این تاریخ، خودش به‌تنهایی برنامه را عقب می‌اندازد.
       </p>
+      <Card
+        title="آمادهٔ ثبت در مدیریت مسائل و ریسک"
+        hint="قطعه‌هایی که مشکل (مثلاً گذشتن مواعد قانونی، توقف دادگاهی، تأخیر مراحل) دارند؛ متن و اهمیت آماده است"
+        pad={false}
+        action={ready.length > 0 ? (
+          <div className="flex gap-1.5">
+            <button className="la-btn la-btn-sm" disabled={bulk || !ready.some((x) => x.rep.issue && !x.r.parcel.issueId)} onClick={() => sendAll('issue')}>ثبت همهٔ مسئله‌ها</button>
+            <button className="la-btn la-btn-sm" disabled={bulk || !ready.some((x) => x.rep.risk && !x.r.parcel.riskId)} onClick={() => sendAll('risk')}>ثبت همهٔ ریسک‌ها</button>
+          </div>
+        ) : undefined}
+      >
+        {ready.length === 0 ? <EmptyState icon={<TriangleAlert size={20} />} title="موردی برای ثبت نیست" text="هر قطعه‌ای که مشکل جدی پیدا کند اینجا با توضیح آماده می‌آید." /> : (
+          <ul className="m-0 list-none p-0">
+            {ready.slice(0, 15).map(({ r, rep }) => (
+              <li key={r.parcel.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--la-line)' }}>
+                <button className="min-w-0 flex-1 text-right" onClick={() => select(r.parcel.id)} style={{ background: 'none', border: 0, color: 'inherit', fontFamily: 'inherit', cursor: 'pointer' }}>
+                  <span className="la-km block text-[12.5px] font-bold">{fmtKmRange(r.parcel.kmStart, r.parcel.kmEnd)} <span className="la-eyebrow">{r.parcel.code} · اهمیت {SEVERITY_LABEL[rep.issue?.severity ?? 'medium']}</span></span>
+                  <span className="la-eyebrow block truncate leading-6">{rep.reasons.slice(0, 2).map((x) => x.text).join(' · ')}</span>
+                </button>
+                <button className="la-btn la-btn-sm" disabled={!rep.issue || !!r.parcel.issueId || bulk} onClick={() => transfer(r.parcel.id, 'issue', rep.issue!.params)}>{r.parcel.issueId ? 'مسئله ثبت شد' : 'ثبت مسئله'}</button>
+                <button className="la-btn la-btn-sm" disabled={!rep.risk || !!r.parcel.riskId || bulk} onClick={() => transfer(r.parcel.id, 'risk', rep.risk!.params)}>{r.parcel.riskId ? 'ریسک ثبت شد' : rep.risk ? 'ثبت ریسک' : 'بدون ریسک'}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       <Card title="مواعد قانونی (لایحهٔ ۱۳۵۸)" hint="مهلت‌هایی که قانون برای دستگاه اجرایی، مالک، کارشناس و دادگاه تعیین کرده و گذشته یا نزدیک است" pad={false}>
         {legal.length === 0 ? <EmptyState icon={<AlarmClockOff size={20} />} title="مهلت قانونی نزدیک یا گذشته‌ای نیست" text="با ثبت تاریخ تصرف، استعلام، توافق یا ابلاغ در تب «مواعد قانونی» هر قطعه، مهلت‌ها اینجا هشدار می‌دهند." /> : (
           <ul className="m-0 list-none p-0">

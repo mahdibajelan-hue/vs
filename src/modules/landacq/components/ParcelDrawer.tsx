@@ -15,7 +15,8 @@ import { LegalTab } from './parcel/LegalTab'
 import { PlotsTab } from './parcel/PlotsTab'
 import { ApprovalStrip } from './ApprovalStrip'
 import { useAuthStore } from '../platform'
-import { canEditData } from '../lib/approval'
+import { APPROVAL_LABEL, ROLE_LABEL, canEditData } from '../lib/approval'
+import { Lock } from 'lucide-react'
 
 const TABS = [
   { key: 'summary', label: 'خلاصه' },
@@ -56,6 +57,17 @@ export function ParcelDrawer({ a, onClose }: { a: Analysis; onClose: () => void 
             return <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>{t.label}{alarms > 0 && <span className="la-num rounded-full px-1.5 text-[10.5px] font-bold" style={{ background: '#ef4444', color: '#fff' }}>{alarms.toLocaleString('fa-IR')}</span>}</button>
           })}
         </div>
+        {readOnly && (
+          <div role="alert" className="mx-5 mt-4 flex gap-3 rounded-xl p-3.5" style={{ background: 'color-mix(in srgb, #f59e0b 12%, var(--la-surface))', border: '1px solid color-mix(in srgb, #f59e0b 45%, transparent)' }}>
+            <Lock size={17} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 2 }} aria-hidden />
+            <p className="m-0 text-[12.5px] leading-7">
+              <b>امکان تغییر اطلاعات این قطعه وجود ندارد.</b>{' '}
+              {role === 'contractor' || !role
+                ? `قطعه در مرحلهٔ «${APPROVAL_LABEL[p.approvalStatus]}» است و پس از ارسال برای بررسی قفل می‌شود؛ برای اصلاح، مرحلهٔ بعدی باید آن را «برگشت برای اصلاح» بدهد.`
+                : `نقش شما «${ROLE_LABEL[role]}» است و فقط بررسی، تأیید یا برگشت‌دادن را در مرحلهٔ خودتان انجام می‌دهید؛ ورود و اصلاح داده با پیمانکار است و فقط تا پیش از ارسال برای بررسی ممکن است.`}
+            </p>
+          </div>
+        )}
         <fieldset key={tab} className="la-rise" disabled={readOnly} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
           {tab === 'summary' && <SummaryTab a={a} />}
           {tab === 'workflow' && <WorkflowTab a={a} />}

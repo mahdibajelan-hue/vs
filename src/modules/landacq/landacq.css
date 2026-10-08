@@ -147,8 +147,8 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-flow li.is-blocked .la-dot { --c: var(--la-bad); }
 
 /* ---- drawer / toast / misc --------------------------------------------------------------------- */
-.la-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 12, 0.5); backdrop-filter: blur(3px); animation: la-fade 200ms ease both; }
-.la-drawer { position: fixed; inset-block: 0; left: 0; z-index: 61; display: flex; flex-direction: column; width: min(560px, 100vw); background: var(--la-surface); border-right: 1px solid var(--la-line-2); box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6); animation: la-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.la-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(2, 6, 12, 0.5); backdrop-filter: blur(3px); animation: la-fade 200ms ease both; }
+.la-drawer { position: fixed; inset-block: 0; left: 0; z-index: 41; display: flex; flex-direction: column; width: min(560px, 100vw); background: var(--la-surface); border-right: 1px solid var(--la-line-2); box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6); animation: la-drawer-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 @keyframes la-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes la-drawer-in { from { transform: translateX(-100%); } to { transform: none; } }
 .la-rise { animation: la-rise 260ms var(--la-ease) both; }

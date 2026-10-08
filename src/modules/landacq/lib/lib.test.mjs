@@ -165,3 +165,23 @@ const sq = [[51, 35], [51.001, 35], [51.001, 35.001], [51, 35.001]]
 const ar = polygonAreaLonLat(sq); assert.ok(ar > 10000 && ar < 10300, String(ar))   // ~ 91 m x 111 m
 assert.ok(Math.abs(pathLength([[51, 35], [51, 35.001]]) - 111.2) < 1)
 console.log('landacq/approval+utm+measure: all assertions passed')
+
+// ---- route import (KMZ / IP tables) and problem drafts
+import { readFileSync } from 'node:fs'
+import { kmlFromKmz, parseIpTable, tableFromText } from './routeImport.ts'
+const kmzBuf = readFileSync(new URL('./t.kmz', import.meta.url))
+assert.ok((await kmlFromKmz(kmzBuf.buffer.slice(kmzBuf.byteOffset, kmzBuf.byteOffset + kmzBuf.byteLength))).includes('<coordinates>'))
+assert.equal(parseIpTable([['Lon', 'Lat'], [51.1, 35.1], [51.2, 35.2]]).format, 'lonlat')
+assert.deepEqual(parseIpTable(tableFromText('35.1 51.1\n35.2 51.2')).points[0], [51.1, 35.1])
+const ip1 = toUtm(35.1, 51.1, 39)
+const ipu = parseIpTable([['IP', 'Easting', 'Northing'], ['IP1', ip1.e, ip1.n], ['IP2', ip1.e + 1000, ip1.n]]); assert.equal(ipu.format, 'utm'); assert.ok(Math.abs(ipu.points[0][0] - 51.1) < 1e-6)
+assert.equal(parseIpTable([['نام', 'زون', 'شرقی', 'شمالی'], ['A', 40, 600000, 3000000]]).zone, 40)
+import { problemsOf } from './problems.ts'
+import { analyze as analyzeRows } from './kpis.ts'
+const probParcel = { ...bs9, legal: { stayFiledDate: '2026-07-01', stayOrderDate: '2026-07-05' } }
+const [pa] = analyzeRows([probParcel], [], '2026-08-01', { bufferDays: 30, horizonDays: 90 })
+const rep = problemsOf(pa, '2026-08-01')
+assert.ok(rep.issue && rep.risk && rep.issue.severity === 'critical'); assert.ok(rep.issue.description.includes('متوقف')); assert.equal(rep.risk.params.probability, 5)
+const [fine] = analyzeRows([mkp({ acquisitionRoute: 'normal' })], [], '2026-08-01', { bufferDays: 30, horizonDays: 90 })
+assert.equal(problemsOf(fine, '2026-08-01').issue, null)
+console.log('landacq/import+problems: all assertions passed')
