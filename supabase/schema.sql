@@ -5357,7 +5357,10 @@ create policy "comp_job_role_config_write_admin" on comp_job_role_config
 -- they read this function instead of the now-restricted comp_question_bank table directly, keeping
 -- "every evaluator sees every candidate's aggregate scores" working exactly as before. security
 -- definer so it can read past the table's row-level policy, same technique as every other
--- comp_self_service_* / comp_can_access_assessment function above.
+-- comp_self_service_* / comp_can_access_assessment function above. Dropped first: a database
+-- that already has the later, wider version of this function (section further below) would
+-- otherwise reject this earlier/narrower redefinition with 42P13.
+drop function if exists comp_question_bank_public();
 create or replace function comp_question_bank_public()
 returns table (
   id uuid, job_role text, category text, sub_category text, difficulty text,
