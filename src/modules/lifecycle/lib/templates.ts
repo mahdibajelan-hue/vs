@@ -190,17 +190,36 @@ export const DEFAULT_TEMPLATE_STAGES: TemplateStageSeed[] = [
   { stageKey: 'lessons_learned', nameFa: STAGE_LABEL_FA.lessons_learned, nameEn: STAGE_LABEL_EN.lessons_learned, typicalDurationMonths: 1, gateName: '', gateReadinessThreshold: 100, checklist: LESSONS_CHECKLIST },
 ]
 
-/** Variant templates. Each starts from the default set and adapts durations/stages — a Building
- * project has no procurement-heavy long-lead phase the way a pipeline EPC does, and a station
- * project runs shorter execution. Only the deltas are expressed here. */
+/** The real 9-gate (G1-G9) EPC pipeline lifecycle, as run in practice — stage/gate names and
+ * approval-document wording taken directly from the company's own gate model, not the generic
+ * 11-stage default. Reuses 9 of the 11 StageKey values (dropping 'engineering' and
+ * 'lessons_learned', which this sequence folds into neighbouring gates) purely as internal row
+ * keys — STAGE_LABEL_FA is never read for this template, since nameFa/gateName below override it
+ * with the real G1-G9 wording everywhere the UI displays a stage or gate name. Checklists are
+ * reused from the closest-matching generic stage rather than invented from scratch.
+ * gateReadinessThreshold mirrors the source model's own per-gate thresholds (30/50/70/80/90/100…). */
+const EPC_PIPELINE_STAGES: TemplateStageSeed[] = [
+  { stageKey: 'idea', nameFa: 'تعریف پروژه', nameEn: 'G1 — Project Definition', typicalDurationMonths: 1, gateName: 'تصویب و ابلاغ', gateReadinessThreshold: 30, checklist: IDEA_CHECKLIST },
+  { stageKey: 'pre_project', nameFa: 'شناسایی پروژه', nameEn: 'G2 — Project Identification', typicalDurationMonths: 2, gateName: 'صدور مجوز خرید خدمات', gateReadinessThreshold: 50, checklist: PRE_PROJECT_CHECKLIST },
+  { stageKey: 'initiation', nameFa: 'خرید خدمات مشاور', nameEn: 'G3 — Consultant Procurement', typicalDurationMonths: 2, gateName: 'ابلاغ شروع به کار مهندسی', gateReadinessThreshold: 70, checklist: INITIATION_CHECKLIST },
+  { stageKey: 'planning', nameFa: 'طراحی پایه', nameEn: 'G4 — Basic Design', typicalDurationMonths: 4, gateName: 'مجوز کمیسیون/هیات فنی برای برگزاری مناقصات', gateReadinessThreshold: 80, checklist: PLANNING_CHECKLIST },
+  { stageKey: 'procurement', nameFa: 'مناقصه انتخاب پیمانکار و انعقاد قرارداد', nameEn: 'G5 — Contractor Tender & Contract', typicalDurationMonths: 3, gateName: 'ابلاغ شروع به کار اجرا', gateReadinessThreshold: 90, checklist: PROCUREMENT_CHECKLIST },
+  { stageKey: 'execution', nameFa: 'اجرای پروژه', nameEn: 'G6 — Execution', typicalDurationMonths: 18, gateName: 'تایید شروع پیش‌راه‌اندازی', gateReadinessThreshold: 100, checklist: EXECUTION_CHECKLIST },
+  { stageKey: 'commissioning', nameFa: 'پیش‌راه‌اندازی و راه‌اندازی', nameEn: 'G7 — Pre-commissioning & Commissioning', typicalDurationMonths: 3, gateName: 'تحویل موقت توسط بهره‌بردار', gateReadinessThreshold: 100, checklist: COMMISSIONING_CHECKLIST },
+  { stageKey: 'handover', nameFa: 'دوره نگهداری', nameEn: 'G8 — Maintenance Period', typicalDurationMonths: 12, gateName: 'تحویل قطعی', gateReadinessThreshold: 100, checklist: HANDOVER_CHECKLIST },
+  { stageKey: 'close_out', nameFa: 'تسویه حساب', nameEn: 'G9 — Final Settlement', typicalDurationMonths: 1, gateName: 'تایید نهایی و بستن پروژه', gateReadinessThreshold: 100, checklist: CLOSEOUT_CHECKLIST },
+]
+
 export const TEMPLATE_SEEDS: TemplateSeed[] = [
   {
     name: 'خط لوله EPC',
-    description: 'چرخه عمر کامل ۱۱ مرحله‌ای برای پروژه‌های EPC خط لوله — شامل مراحل تدارکات و اجرای طولانی.',
+    description: 'چرخه عمر ۹ گیتی (G1 تا G9) پروژه‌های EPC خط لوله، مطابق مدل گیت واقعی شرکت.',
     projectType: 'pipeline_epc',
     isDefault: true,
-    stages: DEFAULT_TEMPLATE_STAGES,
+    stages: EPC_PIPELINE_STAGES,
   },
+  // Station and building keep the generic 11-stage default rather than the real EPC gate model
+  // above — only the pipeline template has had its actual gate names supplied so far.
   {
     name: 'ایستگاه تقویت فشار',
     description: 'مناسب پروژه‌های ایستگاهی؛ اجرای کوتاه‌تر و راه‌اندازی طولانی‌تر نسبت به خط لوله.',
