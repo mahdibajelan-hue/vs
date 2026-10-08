@@ -1,17 +1,19 @@
-import type { Activity, ApprovalStatus, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
+import type { Activity, ApprovalStatus, Crossing, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, TransferTarget } from '../types'
 
 /** The editable fields of a parcel (everything but its children and ids). */
-export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel'>>
+export type ParcelFields = Omit<Parcel, 'id' | 'masterProjectId' | 'stages' | 'owners' | 'docs' | 'riskId' | 'issueId' | 'scheduleWarningId' | 'isDemo' | 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'approvalStatus' | 'approvalNote' | 'plots' | 'kind' | 'stationType' | 'siteLon' | 'siteLat'> & Partial<Pick<Parcel, 'legal' | 'nextDeadline' | 'nextDeadlineLabel' | 'kind' | 'stationType' | 'siteLon' | 'siteLat'>>
 export type ParcelDraft = ParcelFields & { id?: string; stages?: Stage[]; plots?: Omit<Plot, 'id' | 'parcelId'>[]; approvalStatus?: ApprovalStatus; owners?: Omit<Owner, 'id' | 'parcelId'>[]; docs?: Omit<DocMeta, 'id' | 'parcelId'>[]; isDemo?: boolean }
 export type OwnerInput = Omit<Owner, 'id'> & { id?: string }
 export type DocInput = Omit<DocMeta, 'id'> & { id?: string }
 export type PlotInput = Omit<Plot, 'id' | 'parcelId'> & { id?: string }
+export type CrossingInput = Omit<Crossing, 'id' | 'masterProjectId' | 'riskId' | 'issueId'> & { id?: string }
 export type ActivityInput = Omit<Activity, 'id' | 'masterProjectId'> & { id?: string }
 
 export interface DemoBundle {
   route: RouteInfo
   parcels: ParcelDraft[]
   activities: ActivityInput[]
+  crossings?: CrossingInput[]
 }
 
 /** The module's only connection to storage. `supabaseRepo` is the product; `memoryRepo` powers the demo harness and tests. */
@@ -31,6 +33,9 @@ export interface LandRepo {
   deletePlot(id: string): Promise<void>
   /** Moves the parcel along the approval chain (the server checks the caller's role). */
   review(parcelId: string, action: ReviewAction, comment: string): Promise<ApprovalStatus>
+  saveCrossing(masterProjectId: string, c: CrossingInput): Promise<Crossing>
+  deleteCrossing(id: string): Promise<void>
+  transferCrossing(id: string, target: 'issue' | 'risk', params?: Record<string, unknown>): Promise<{ id: string }>
   listPeople(): Promise<Person[]>
   setRole(masterProjectId: string, userId: string, role: LandRole | null): Promise<void>
   saveActivity(masterProjectId: string, a: ActivityInput): Promise<Activity>

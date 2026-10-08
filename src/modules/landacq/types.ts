@@ -1,5 +1,12 @@
 export type OwnershipClass = 'private' | 'natural_resources' | 'exempt' | 'governmental' | 'unknown'
 export type LandType = 'agricultural' | 'garden' | 'rangeland' | 'forest' | 'desert' | 'urban' | 'industrial' | 'riverbed' | 'road_rail' | 'other' | 'unknown'
+export type ParcelKind = 'route' | 'station'
+/** Project stations that each need their own site: pig launcher/receiver, line & branch valves, pressure control/reduction, cathodic protection. */
+export type StationType = 'pig_launcher' | 'line_valve' | 'branch_valve' | 'pressure_control' | 'pressure_reduction' | 'cp_station' | 'pig_receiver'
+/** Existing facilities / obstacles the pipeline has to cross. */
+export type CrossingType = 'dirt_road' | 'paved_road' | 'railway' | 'river' | 'floodway' | 'qanat' | 'water_canal' | 'water_pipe' | 'oil_pipe' | 'gas_pipe' | 'hv_cable'
+export type PermitStatus = 'not_started' | 'requested' | 'under_review' | 'conditional' | 'issued' | 'rejected'
+export type UndertakingStatus = 'pending' | 'submitted' | 'signed'
 export type AcqRoute = 'normal' | 'accelerated' | 'dispute' | 'art9'
 export type StageKey =
   | 'identification'
@@ -139,9 +146,45 @@ export interface Person {
   position: string
 }
 
+/** Permit / undertaking (تعهدنامه) / fee follow-up for one crossing. */
+export interface Crossing {
+  id: string
+  masterProjectId: string
+  code: string
+  crossingType: CrossingType
+  name: string
+  km: number
+  custodian: string
+  permitStatus: PermitStatus
+  permitRequestedDate: string | null
+  permitIssuedDate: string | null
+  permitNumber: string
+  undertakingRequired: boolean
+  undertakingStatus: UndertakingStatus
+  undertakingDate: string | null
+  undertakingNote: string
+  feeRequired: boolean
+  feeAmount: number
+  feePaidAmount: number
+  feePaidDate: string | null
+  legalNotes: string
+  conditions: string
+  responsible: string
+  riskId: string | null
+  issueId: string | null
+  nextDeadline: string | null
+  nextDeadlineLabel: string
+  isDemo: boolean
+}
+
 export interface Parcel {
   id: string
   masterProjectId: string
+  /** 'station' = a station site at one chainage (1 m long), 'route' = a km stretch of the pipeline corridor. */
+  kind: ParcelKind
+  stationType: StationType | ''
+  siteLon: number | null
+  siteLat: number | null
   code: string
   title: string
   kmStart: number
@@ -238,6 +281,7 @@ export interface LandProjectData {
   /** Role of the signed-in user in this project (null = none assigned). */
   myRole: LandRole | null
   roles: RoleAssignment[]
+  crossings: Crossing[]
 }
 
 export interface ProjectOption {

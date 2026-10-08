@@ -22,7 +22,7 @@ export async function loadLandLayer(masterProjectId: string): Promise<LandLayerS
   if (!data.route || data.parcels.length === 0) return null
   const settings = { ...DEFAULT_SETTINGS, ...data.route.settings }
   const startKm = data.route.startKm
-  return analyze(data.parcels, data.activities, todayIso(), settings).map((r) => ({
+  return analyze(data.parcels.filter((p) => p.kind !== 'station'), data.activities, todayIso(), settings).map((r) => ({
     startMeters: Math.max(0, (r.parcel.kmStart - startKm) * 1000),
     endMeters: Math.max(0, (r.parcel.kmEnd - startKm) * 1000),
     color: STATUS_COLOR[r.status],

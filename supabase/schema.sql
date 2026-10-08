@@ -16483,3 +16483,117 @@ end $$;
 revoke execute on function la_my_role(uuid), la_people(), la_set_role(uuid, uuid, text), la_review(uuid, text, text) from public, anon;
 grant execute on function la_my_role(uuid), la_people(), la_set_role(uuid, uuid, text), la_review(uuid, text, text) to authenticated;
 -- my_land_notifications() additionally lists parcels waiting for the caller's approval step (and returned ones for contractors).
+
+-- =============================================================================
+-- 74. Land acquisition: project stations (as parcels of kind 'station') and crossings of existing facilities
+-- =============================================================================
+-- Stations (pig launcher/receiver, line/branch valves, pressure control/reduction, cathodic protection) need land like any parcel,
+-- so they are la_parcels rows with kind = 'station' (1 m long at their chainage; optional site_lon/site_lat) and reuse the
+-- whole workflow: owners, documents, UTM plots, legal clocks, approval chain, issue/risk hand-over.
+-- Crossings of roads, rail, rivers, qanats, canals, pipelines and HV cables need permits, undertakings (تعهدنامه) and fees: la_crossings.
+alter table la_parcels add column if not exists kind text not null default 'route' check (kind in ('route', 'station'));
+alter table la_parcels add column if not exists station_type text not null default '';
+alter table la_parcels add column if not exists site_lon double precision;
+alter table la_parcels add column if not exists site_lat double precision;
+create table if not exists la_crossings (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  code text not null default '',
+  crossing_type text not null check (crossing_type in ('dirt_road', 'paved_road', 'railway', 'river', 'floodway', 'qanat', 'water_canal', 'water_pipe', 'oil_pipe', 'gas_pipe', 'hv_cable')),
+  name text not null default '',
+  km numeric(9, 3) not null,
+  custodian text not null default '',
+  permit_status text not null default 'not_started' check (permit_status in ('not_started', 'requested', 'under_review', 'conditional', 'issued', 'rejected')),
+  permit_requested_date date,
+  permit_issued_date date,
+  permit_number text not null default '',
+  undertaking_required boolean not null default true,
+  undertaking_status text not null default 'pending' check (undertaking_status in ('pending', 'submitted', 'signed')),
+  undertaking_date date,
+  undertaking_note text not null default '',
+  fee_required boolean not null default false,
+  fee_amount numeric not null default 0,
+  fee_paid_amount numeric not null default 0,
+  fee_paid_date date,
+  legal_notes text not null default '',
+  conditions text not null default '',
+  responsible text not null default '',
+  risk_id uuid,
+  issue_id uuid,
+  next_deadline date,
+  next_deadline_label text not null default '',
+  is_demo boolean not null default false,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table la_crossings enable row level security;
+drop policy if exists la_crossings_select on la_crossings;
+create policy la_crossings_select on la_crossings for select using (la_can_view(master_project_id));
+drop policy if exists la_crossings_write on la_crossings;
+create policy la_crossings_write on la_crossings for all using (la_can_edit(master_project_id)) with check (la_can_edit(master_project_id));
+
+create or replace function la_transfer_crossing(p_crossing_id uuid, p_target text, p_params jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare c la_crossings%rowtype; v_proj uuid; v_new uuid; v_label text; v_desc text; v_sev text; v_prob smallint; v_imp smallint;
+begin
+  select * into c from la_crossings where id = p_crossing_id for update;
+  if not found then raise exception 'crossing_not_found'; end if;
+  if not la_can_edit(c.master_project_id) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  v_label := 'عبور از تأسیسات KM ' || c.km || case when c.name <> '' then ' - ' || c.name else '' end;
+  v_desc := coalesce(nullif(p_params ->> 'description', ''), 'عبور خط لوله از ' || coalesce(nullif(c.name, ''), c.crossing_type) || ' در KM ' || c.km) || E'\n\n- منبع: ماژول مدیریت تملک و آزادسازی اراضی مسیر (عبور از تأسیسات)';
+  v_sev := case coalesce(p_params ->> 'severity', 'high') when 'critical' then 'critical' when 'low' then 'low' when 'medium' then 'medium' else 'high' end;
+  if p_target = 'issue' then
+    if c.issue_id is not null then raise exception 'already_transferred'; end if;
+    select source_project_id into v_proj from rasta_project_mappings where master_project_id = c.master_project_id and source_module = 'issues' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_issue_mapping'; end if;
+    insert into im_issues (project_id, title, description, priority, deadline_days, status, created_by, source)
+    values (v_proj, v_label, v_desc, v_sev, coalesce(nullif(p_params ->> 'deadline_days', '')::smallint, 14), 'open', auth.uid(), 'land_acquisition') returning id into v_new;
+    update la_crossings set issue_id = v_new where id = c.id;
+  elsif p_target = 'risk' then
+    if c.risk_id is not null then raise exception 'already_transferred'; end if;
+    select source_project_id into v_proj from rasta_project_mappings where master_project_id = c.master_project_id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_risk_mapping'; end if;
+    v_prob := least(5, greatest(1, coalesce(nullif(p_params ->> 'probability', '')::smallint, 3)));
+    v_imp := least(5, greatest(1, coalesce(nullif(p_params ->> 'impact', '')::smallint, 3)));
+    insert into rm_risks (project_id, code, title, description, category, risk_type, initial_probability, initial_impact, created_by)
+    values (v_proj, '', v_label, v_desc, 'external', 'threat', v_prob, v_imp, auth.uid()) returning id into v_new;
+    update la_crossings set risk_id = v_new where id = c.id;
+  else raise exception 'invalid_target';
+  end if;
+  return jsonb_build_object('target', p_target, 'id', v_new);
+end $$;
+revoke execute on function la_transfer_crossing(uuid, text, jsonb) from public, anon;
+grant execute on function la_transfer_crossing(uuid, text, jsonb) to authenticated;
+
+-- Final shape of my_land_notifications(): legal deadlines of parcels and crossings, plus approval-chain tasks for the caller's role.
+create or replace function my_land_notifications() returns jsonb language plpgsql stable security invoker set search_path = public as $$
+declare v jsonb := '[]'::jsonb; r record;
+begin
+  if auth.uid() is null then return v; end if;
+  for r in select p.id, p.code, p.next_deadline, p.next_deadline_label, (p.next_deadline - current_date) as d
+    from la_parcels p where p.next_deadline is not null and p.next_deadline <= current_date + 14 order by p.next_deadline limit 30 loop
+    v := v || jsonb_build_object('id', 'la-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', case when r.d < 0 then 'warn' else 'action' end,
+      'title', 'قطعه ' || r.code,
+      'body', r.next_deadline_label || case when r.d < 0 then ' (' || (-r.d) || ' روز از مهلت قانونی گذشته)' when r.d = 0 then ' (امروز آخرین مهلت است)' else ' (' || r.d || ' روز تا مهلت قانونی)' end,
+      'at', now());
+  end loop;
+  for r in select c.id, c.code, c.name, c.next_deadline, c.next_deadline_label, (c.next_deadline - current_date) as d
+    from la_crossings c where c.next_deadline is not null and c.next_deadline <= current_date + 14 order by c.next_deadline limit 30 loop
+    v := v || jsonb_build_object('id', 'lc-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', case when r.d < 0 then 'warn' else 'action' end,
+      'title', 'عبور ' || coalesce(nullif(r.name, ''), r.code),
+      'body', r.next_deadline_label || case when r.d < 0 then ' (' || (-r.d) || ' روز گذشته)' when r.d = 0 then ' (امروز)' else ' (' || r.d || ' روز مانده)' end,
+      'at', now());
+  end loop;
+  for r in select p.id, p.code, p.approval_status, p.approval_note, ro.role from la_parcels p join la_roles ro on ro.master_project_id = p.master_project_id and ro.user_id = auth.uid()
+    where (ro.role = 'consultant' and p.approval_status = 'submitted')
+       or (ro.role = 'employer_legal' and p.approval_status = 'consultant_approved')
+       or (ro.role in ('project_manager', 'executive') and p.approval_status = 'legal_attested')
+       or (ro.role = 'contractor' and p.approval_status = 'draft' and p.approval_note <> '') limit 40 loop
+    v := v || jsonb_build_object('id', 'laa-' || r.id, 'source', 'landacq', 'module', 'landacq', 'severity', 'action',
+      'title', 'قطعه ' || r.code,
+      'body', case r.role when 'consultant' then 'اطلاعات قطعه منتظر بررسی و تأیید مشاور است' when 'employer_legal' then 'قطعه منتظر صحه‌گذاری حقوقی کارفرماست' when 'contractor' then 'قطعه برگشت خورده: ' || r.approval_note else 'قطعه منتظر تأیید نهایی مدیر پروژه است' end,
+      'at', now());
+  end loop;
+  return v;
+end $$;

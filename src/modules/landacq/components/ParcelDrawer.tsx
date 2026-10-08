@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { useLandStore } from '../store/useLandStore'
 import type { Analysis } from '../lib/kpis'
 import { fmtKmRange } from '../lib/dates'
+import { parcelHeading } from '../lib/facilities'
 import { LAND_TYPE_LABEL, OWNERSHIP_LABEL } from '../lib/labels'
 import { Drawer, ConfirmDialog, LevelBadge, StatusBadge } from './ui'
 import { SummaryTab } from './parcel/SummaryTab'
@@ -45,7 +46,7 @@ export function ParcelDrawer({ a, onClose }: { a: Analysis; onClose: () => void 
     <>
       <Drawer
         onClose={onClose}
-        title={<span className="la-km">{fmtKmRange(p.kmStart, p.kmEnd)}</span>}
+        title={p.kind === 'station' ? <span>{parcelHeading(p)}</span> : <span className="la-km">{fmtKmRange(p.kmStart, p.kmEnd)}</span>}
         badge={<>{a.status !== 'critical' && <StatusBadge status={a.status} />}<LevelBadge level={a.crit.level} score={a.crit.score} /></>}
         subtitle={`${p.code}${p.title ? ` · ${p.title}` : ''} · ${OWNERSHIP_LABEL[p.ownershipClass]} · ${LAND_TYPE_LABEL[p.landType]}`}
         footer={<button className="la-btn la-btn-danger la-btn-sm me-auto" onClick={() => setConfirm(true)}><Trash2 size={13} /> حذف قطعه</button>}

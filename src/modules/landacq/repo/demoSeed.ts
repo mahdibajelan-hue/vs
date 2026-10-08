@@ -5,6 +5,8 @@ import { makeStages, STAGE_DAYS, STAGE_ORDER } from '../lib/workflow'
 import type { DemoBundle, ParcelDraft } from './types'
 import { pointAt, polyline, type LonLat } from '../lib/geometry'
 import { toUtm } from '../lib/utm'
+import type { CrossingInput } from './types'
+import type { CrossingType, StationType } from '../types'
 
 /** Small deterministic PRNG so the demo looks the same every time. */
 function rng(seed: number) {
@@ -187,6 +189,27 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   const crit1Draft = parcels.find((p) => p.title.startsWith('باغات'))!
   crit1Draft.owners = ['حاج علی رحیمی', 'ورثهٔ مرحوم کریمی', 'محمد نوری', 'شرکت کشاورزی بهار'].map((name, i) => ({ name, contact: i % 2 ? '' : `0912${Math.floor(1000000 + r() * 8999999)}`, sharePct: [35, 30, 20, 15][i], agreement: (['negotiating', 'refused', 'not_contacted', 'unknown'] as const)[i], estAmount: Math.round((crit1Draft.estCost ?? 0) * [0.35, 0.3, 0.2, 0.15][i]), finalAmount: null, payment: 'unpaid', released: false, notes: i === 1 ? 'وراث متعدد؛ تقسیم ارث نهایی نشده' : '' }))
 
+  // station sites: one parcel (1 m long) at each station chainage, same workflow as any parcel
+  const stationAt = (type: StationType, km: number, title: string, done: number, working: boolean, over: Partial<ParcelDraft> = {}, owners: string[] = []): void => {
+    const p: ParcelDraft = {
+      code: `ST-${{ pig_launcher: 'PL', line_valve: 'LV', branch_valve: 'BV', pressure_control: 'PC', pressure_reduction: 'PR', cp_station: 'CP', pig_receiver: 'RC' }[type]}-${String(parcels.filter((x) => x.kind === 'station').length + 1).padStart(2, '0')}`,
+      title, kmStart: km, kmEnd: +(km + 0.001).toFixed(3), kind: 'station', stationType: type, landType: 'agricultural', ownershipClass: 'private', landUse: 'ایستگاه خط لوله', ownerCountEst: owners.length || 1, ownerKnown: owners.length > 0,
+      custodian: '', disputeProbability: 15, complexity: 2, estDurationDays: null, flags: { critical_for_execution: true }, acquisitionRoute: 'normal', areaM2: { pig_launcher: 3000, pig_receiver: 3000, line_valve: 900, branch_valve: 1500, pressure_control: 4000, pressure_reduction: 4000, cp_station: 400 }[type], estCost: 2_400_000_000, notes: '', isDemo: true, ...over,
+    }
+    p.stages = stagesFor(done, working, p.acquisitionRoute, p.complexity, today, r)
+    p.owners = owners.map((name, i) => ({ name, contact: '', sharePct: +(100 / owners.length).toFixed(1), agreement: done >= 6 ? 'agreed' : i === 0 ? 'negotiating' : 'not_contacted', estAmount: 800_000_000, finalAmount: done >= 6 ? 800_000_000 : null, payment: done >= 9 ? 'paid' : 'unpaid', released: done >= 10, notes: '' }))
+    parcels.push(p)
+  }
+  stationAt('pig_launcher', 0.15, 'ایستگاه ارسال توپک ابتدای خط', 10, false, { landType: 'industrial', ownershipClass: 'governmental', custodian: 'شرکت ملی گاز' })
+  stationAt('line_valve', 25.4, 'شیر بین‌راهی شمارهٔ ۱', 10, false, {}, ['حمید رضایی'])
+  stationAt('cp_station', 33.6, 'ایستگاه حفاظت کاتدیک شمارهٔ ۱', 0, false)
+  stationAt('pressure_control', 38.2, 'ایستگاه کنترل فشار', 6, true, { complexity: 3, flags: { critical_for_execution: true, high_value: true } }, ['شرکت کشت و صنعت نگین', 'محمود فرهادی'])
+  stationAt('line_valve', 51.2, 'شیر بین‌راهی شمارهٔ ۲', 4, true, {}, ['ابوالفضل کریمی'])
+  stationAt('branch_valve', 60.5, 'شیر انشعاب شهرک صنعتی', 2, true, { acquisitionRoute: 'dispute', disputeProbability: 60, complexity: 4, flags: { critical_for_execution: true, past_dispute: true } }, ['ورثهٔ مرحوم صالحی', 'سعید صالحی'])
+  stationAt('line_valve', 76.8, 'شیر بین‌راهی شمارهٔ ۳', 0, false, { ownershipClass: 'unknown' })
+  stationAt('pressure_reduction', 91.5, 'ایستگاه تقلیل فشار', 1, true, { complexity: 3 }, ['علی‌اکبر بهرامی'])
+  stationAt('pig_receiver', 99.8, 'ایستگاه دریافت توپک انتهای خط', 3, true, { landType: 'industrial', ownershipClass: 'governmental', custodian: 'شرکت پخش و پالایش' })
+
   // cadastral plots (UTM corners, ~40 m x 120 m) laid along the route inside the parcels that have private owners
   const line = polyline(demoGeometry())
   const plotsFor = (p: ParcelDraft, names: string[]) => {
@@ -219,8 +242,28 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
     p.approvalStatus = p === crit1 ? 'submitted' : p === a9b ? 'consultant_approved' : p === a9a ? 'legal_attested' : (p.stages ?? []).some((s) => s.key === 'release' && s.status === 'done') ? 'approved' : i % 7 === 3 ? 'submitted' : 'draft'
   })
 
+  // crossings of existing facilities (permit, undertaking, fee)
+  const d = (n: number) => addDays(today, n)
+  const crossings: CrossingInput[] = []
+  const cx = (type: CrossingType, km: number, name: string, over: Partial<CrossingInput> = {}) =>
+    crossings.push({ code: `X-${String(crossings.length + 1).padStart(2, '0')}`, crossingType: type, name, km, custodian: '', permitStatus: 'not_started', permitRequestedDate: null, permitIssuedDate: null, permitNumber: '', undertakingRequired: true, undertakingStatus: 'pending', undertakingDate: null, undertakingNote: '', feeRequired: false, feeAmount: 0, feePaidAmount: 0, feePaidDate: null, legalNotes: '', conditions: '', responsible: 'کارشناس حقوقی پیمانکار', nextDeadline: null, nextDeadlineLabel: '', isDemo: true, ...over })
+  cx('dirt_road', 8.2, 'جادهٔ خاکی روستای نصرآباد', { permitStatus: 'issued', permitRequestedDate: d(-120), permitIssuedDate: d(-90), permitNumber: '1404/ر/812', undertakingStatus: 'signed', undertakingDate: d(-95) })
+  cx('paved_road', 14.6, 'جادهٔ آسفالتهٔ فرعی ۱۲', { permitStatus: 'issued', permitRequestedDate: d(-150), permitIssuedDate: d(-100), permitNumber: '1404/ر/777', undertakingStatus: 'signed', undertakingDate: d(-105), feeRequired: true, feeAmount: 120_000_000, feePaidAmount: 120_000_000, feePaidDate: d(-98), conditions: 'عبور به‌صورت حفاری زیرکوب با غلاف فولادی و عمق ۱٫۵ متر' })
+  cx('gas_pipe', 19.4, 'خط ۳۰ اینچ گاز شمال-جنوب', { permitStatus: 'requested', permitRequestedDate: d(-25), undertakingStatus: 'submitted', undertakingDate: d(-10), legalNotes: 'نامهٔ شمارهٔ ۴۱۲ به شرکت ملی گاز ارسال شده؛ پیگیری حضوری لازم است.' })
+  cx('hv_cable', 22.8, 'کابل ۲۳۰ کیلوولت پست شمال', { feeRequired: true, feeAmount: 650_000_000, legalNotes: 'متولی هنوز نقشهٔ مسیر کابل را ارائه نکرده است.' })
+  cx('water_canal', 27.3, 'کانال اصلی آبیاری', { permitStatus: 'conditional', permitRequestedDate: d(-70), undertakingStatus: 'submitted', undertakingDate: d(-12), feeRequired: true, feeAmount: 450_000_000, conditions: 'اجرا خارج از فصل آبیاری و بازسازی کامل پوشش بتنی' })
+  cx('water_pipe', 31, 'لولهٔ انتقال آب شرب ۸۰۰ میلی‌متر', { permitStatus: 'under_review', permitRequestedDate: d(-20) })
+  cx('qanat', 41.2, 'قنات حسین‌آباد (مادر چاه ۴۲ متر)', { legalNotes: 'مالکین قنات ۷ نفر؛ توافق‌نامهٔ جمعی لازم است.' })
+  cx('river', 47.6, 'رودخانهٔ فصلی ریگان', { permitStatus: 'under_review', permitRequestedDate: d(-35), undertakingStatus: 'submitted', feeRequired: true, feeAmount: 900_000_000, feePaidAmount: 300_000_000, feePaidDate: d(-15) })
+  cx('floodway', 55.3, 'مسیل شمال روستا', { permitStatus: 'conditional', permitRequestedDate: d(-45), feeRequired: true, feeAmount: 1_800_000_000 })
+  cx('paved_road', 66, 'محور اصلی کرمان-بم', { permitStatus: 'requested', permitRequestedDate: d(-12) })
+  cx('railway', 74.7, 'خط راه‌آهن کرمان-زاهدان', { feeRequired: true, feeAmount: 2_500_000_000 })
+  cx('oil_pipe', 83.5, 'خط ۱۶ اینچ فرآورده', { permitStatus: 'rejected', permitRequestedDate: d(-60), legalNotes: 'متولی با تقاطع در عمق فعلی مخالفت کرده؛ طرح اصلاحی (عبور عمیق‌تر) تهیه شود.' })
+  cx('dirt_road', 93.4, 'جادهٔ خاکی معدن')
+
   const act = (key: string, name: string, startOffset: number, endOffset: number, sequence: number) => ({ key, name, kmStart: 0, kmEnd: 100, startDate: addDays(today, startOffset), endDate: addDays(today, endOffset), sequence, isDemo: true })
   return {
+    crossings,
     route: { masterProjectId, name: 'خط لوله ۱۰۰ کیلومتری — نمونه', totalKm: 100, startKm: 0, geometry: demoGeometry(), geometrySource: 'demo', settings: { ...DEFAULT_SETTINGS }, isDemo: true },
     parcels,
     activities: [

@@ -10,6 +10,8 @@ import { ownerCountOf } from '../../lib/scoring'
 import { fmtDate, fmtDuration, faNum, relDays } from '../../lib/fa'
 import { DELAY_HIGHLIGHT_THRESHOLD } from '../../lib/forecast'
 import { Field } from '../ui'
+import { STATION, STATION_TYPES } from '../../lib/facilities'
+import type { StationType } from '../../types'
 
 /** The one-glance answer: where is the problem, what is its state, what must be done — then the editable screening profile. */
 export function SummaryTab({ a }: { a: Analysis }) {
@@ -44,6 +46,15 @@ export function SummaryTab({ a }: { a: Analysis }) {
         </div>
       )}
 
+      {p.kind === 'station' && (
+        <section className="la-card-flat grid grid-cols-2 gap-3 p-4">
+          <p className="la-title col-span-2 m-0">مشخصات ایستگاه</p>
+          <Field label="نوع ایستگاه"><select className="la-select" value={p.stationType} onChange={(e) => update(p.id, { stationType: e.target.value as StationType })}>{STATION_TYPES.map((t) => <option key={t} value={t}>{STATION[t].label}</option>)}</select></Field>
+          <Field label="کیلومتر محل"><input className="la-input la-num" type="number" step={0.05} defaultValue={p.kmStart} key={`k${p.kmStart}`} onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== p.kmStart) update(p.id, { kmStart: v, kmEnd: +(v + 0.001).toFixed(3) }) }} /></Field>
+          <Field label="مساحت موردنیاز (م²)"><input className="la-input la-num" type="number" min={0} defaultValue={p.areaM2 ?? ''} key={`a${p.areaM2}`} onBlur={(e) => update(p.id, { areaM2: e.target.value === '' ? null : Number(e.target.value) })} /></Field>
+          <Field label="طول / عرض جغرافیایی (اختیاری)" hint="برای نمایش دقیق روی نقشه"><div className="flex gap-1.5"><input className="la-input la-km" placeholder="lon" defaultValue={p.siteLon ?? ''} key={`o${p.siteLon}`} onBlur={(e) => update(p.id, { siteLon: e.target.value === '' ? null : Number(e.target.value) })} /><input className="la-input la-km" placeholder="lat" defaultValue={p.siteLat ?? ''} key={`t${p.siteLat}`} onBlur={(e) => update(p.id, { siteLat: e.target.value === '' ? null : Number(e.target.value) })} /></div></Field>
+        </section>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Stat label="شروع عملیات اجرایی" value={ea.needBy ? fmtDate(ea.needBy) : 'بدون فعالیت مرتبط'} sub={ea.daysToNeedBy != null ? relDays(ea.daysToNeedBy) : undefined} />
         <Stat label="شروع موردنیاز تحصیل" value={ea.startBy ? fmtDate(ea.startBy) : '—'} sub={ea.daysToStartBy != null ? relDays(ea.daysToStartBy) : undefined} danger={ea.daysToStartBy != null && ea.daysToStartBy <= 0 && ea.state !== 'ready'} />

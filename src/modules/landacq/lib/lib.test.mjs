@@ -185,3 +185,26 @@ assert.ok(rep.issue && rep.risk && rep.issue.severity === 'critical'); assert.ok
 const [fine] = analyzeRows([mkp({ acquisitionRoute: 'normal' })], [], '2026-08-01', { bufferDays: 30, horizonDays: 90 })
 assert.equal(problemsOf(fine, '2026-08-01').issue, null)
 console.log('landacq/import+problems: all assertions passed')
+
+// ── facilities: stations & crossings ──
+{
+  const { crossingState, crossingDrafts, parcelHeading, stationLabel } = await import('./facilities.ts')
+  const acts = [{ id: 'a', name: 'Welding', sequence: 1, kmStart: 0, kmEnd: 100, startDate: '2026-03-01', endDate: '2026-09-01' }]
+  const cr = (o = {}) => ({ id: 'c', masterProjectId: 'm', crossingType: 'railway', name: '', km: 50, custodian: '', permitStatus: 'not_started', permitNumber: '', undertakingRequired: true, undertakingStatus: 'pending', feeRequired: true, feeAmount: 100, feePaidAmount: 0, ...o })
+  // railway needs 120 days lead; front reaches km 50 about mid-June → request-by ≈ mid-Feb. Today in March → late.
+  const late = crossingState(cr(), acts, '2026-03-01')
+  assert.equal(late.status, 'critical'); assert.ok(late.alarms.some((a) => a.key === 'request_late'))
+  const fine = crossingState(cr(), acts, '2025-06-01')
+  assert.equal(fine.status, 'ok'); assert.equal(fine.alarms.length, 0)
+  const done = crossingState(cr({ permitStatus: 'issued', undertakingStatus: 'signed', feePaidAmount: 100 }), acts, '2026-06-01')
+  assert.ok(done.ready && done.status === 'ready' && done.progress === 1)
+  const noFee = crossingState(cr({ feeRequired: false, undertakingRequired: false, permitStatus: 'issued' }), acts, '2026-06-01')
+  assert.ok(noFee.ready)
+  assert.equal(crossingState(cr({ permitStatus: 'rejected' }), acts, '2025-06-01').status, 'critical')
+  const d = crossingDrafts(cr(), late, '2026-03-01')
+  assert.ok(d.issue && d.risk && d.issue.description.includes('تعهدنامه'))
+  assert.equal(crossingDrafts(cr(), fine, '2025-06-01').issue, null)
+  assert.equal(stationLabel({ stationType: 'pig_launcher' }), 'ایستگاه ارسال توپک')
+  assert.ok(parcelHeading({ kind: 'station', stationType: 'line_valve', kmStart: 25.4, kmEnd: 25.401 }).includes('KM'))
+  console.log('landacq/facilities: all assertions passed')
+}

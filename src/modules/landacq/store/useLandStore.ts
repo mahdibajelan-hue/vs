@@ -1,18 +1,19 @@
 import { create } from 'zustand'
 import { useMemo } from 'react'
 import { useAuthStore, useProjectContextStore } from '../platform'
-import type { Activity, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
+import type { Activity, Crossing, DocMeta, LandProjectData, LandRole, Owner, Parcel, Person, Plot, ProjectOption, ReviewAction, RouteInfo, Stage, StageKey, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
-import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput } from '../repo/types'
+import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput } from '../repo/types'
 import { canEditData } from '../lib/approval'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
 import { makeStages, orderOf } from '../lib/workflow'
 import { nextDeadline } from '../lib/legal'
+import { crossingState } from '../lib/facilities'
 import { analyze, buildActions, computeKpis, criticalConstraints, lengthByStatus, type Analysis } from '../lib/kpis'
 
 export type ColorMode = 'status' | 'criticality' | 'ownership' | 'stage'
-export type TabKey = 'tower' | 'map' | 'parcels' | 'schedule' | 'actions' | 'settings'
+export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'schedule' | 'actions' | 'settings'
 
 interface LandState {
   repo: LandRepo | null
@@ -24,6 +25,7 @@ interface LandState {
   error: string | null
   tab: TabKey
   selectedId: string | null
+  selectedCrossingId: string | null
   colorMode: ColorMode
   today: string
 
@@ -32,6 +34,10 @@ interface LandState {
   reload: () => Promise<void>
   setTab: (t: TabKey) => void
   selectParcel: (id: string | null) => void
+  selectCrossing: (id: string | null) => void
+  saveCrossing: (c: CrossingInput) => Promise<void>
+  deleteCrossing: (id: string) => Promise<void>
+  transferCrossing: (id: string, target: 'issue' | 'risk', params?: Record<string, unknown>) => Promise<boolean>
   setColorMode: (m: ColorMode) => void
   clearError: () => void
   /** Approval chain (contractor -> consultant -> employer legal -> project manager). */
@@ -88,6 +94,28 @@ export const useLandStore = create<LandState>()((set, get) => {
       /* read-only users cannot persist the derived value; the screen is still right */
     }
   }
+  const syncCrossing = async (id: string) => {
+    const c = get().data?.crossings.find((x) => x.id === id)
+    if (!c) return
+    const nd = crossingState(c, get().data?.activities ?? [], get().today).next
+    const date = nd?.date ?? null
+    const label = nd?.label ?? ''
+    if (c.nextDeadline === date && c.nextDeadlineLabel === label) return
+    patchData((d) => ({ ...d, crossings: d.crossings.map((x) => (x.id === id ? { ...x, nextDeadline: date, nextDeadlineLabel: label } : x)) }))
+    try {
+      await get().repo?.saveCrossing(c.masterProjectId, { ...c, nextDeadline: date, nextDeadlineLabel: label })
+    } catch {
+      /* read-only users cannot persist the derived value */
+    }
+  }
+  const crossingAllowed = (): boolean => {
+    const st = get()
+    const role = st.data?.myRole ?? null
+    const isAdmin = !!useAuthStore.getState().profile?.isAdmin
+    const ok = isAdmin || role === 'contractor' || !role
+    if (!ok) set({ error: 'ورود و ویرایش اطلاعات عبورها فقط برای پیمانکار ممکن است؛ نقش شما بررسی و تأیید است.' })
+    return ok
+  }
   const patchParcel = (id: string, f: (p: Parcel) => Parcel) => patchData((d) => ({ ...d, parcels: d.parcels.map((p) => (p.id === id ? f(p) : p)) }))
   /** Data entry belongs to the contractor while a parcel is a draft (users without a project role keep the permission-based rule). */
   const allowed = (parcelId: string, onlyLegal = false): boolean => {
@@ -121,6 +149,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     tab: 'tower',
     people: [],
     selectedId: null,
+    selectedCrossingId: null,
     colorMode: 'status',
     today: todayIso(),
 
@@ -145,6 +174,7 @@ export const useLandStore = create<LandState>()((set, get) => {
         const data = await repo().load(id)
         set({ data, loading: false })
         void Promise.all(data.parcels.map((p) => syncDeadline(p.id)))
+        void Promise.all(data.crossings.map((c) => syncCrossing(c.id)))
       } catch (e) {
         set({ loading: false, data: null, error: msg(e) })
       }
@@ -158,7 +188,8 @@ export const useLandStore = create<LandState>()((set, get) => {
     },
 
     setTab: (tab) => set({ tab }),
-    selectParcel: (selectedId) => set({ selectedId }),
+    selectParcel: (selectedId) => set({ selectedId, selectedCrossingId: null }),
+    selectCrossing: (selectedCrossingId) => set({ selectedCrossingId, selectedId: null }),
     setColorMode: (colorMode) => set({ colorMode }),
     clearError: () => set({ error: null }),
 
@@ -174,8 +205,9 @@ export const useLandStore = create<LandState>()((set, get) => {
       if (!data?.route || !projectId) return
       const route = data.route
       await run(async () => {
-        if (replace) for (const p of data.parcels) await repo().deleteParcel(p.id)
-        else if (data.parcels.length) throw new Error('قطعه‌ای از قبل وجود دارد؛ برای ساخت دوباره گزینهٔ جایگزینی را بزنید')
+        const routeParcels = data.parcels.filter((p) => p.kind !== 'station')
+        if (replace) for (const p of routeParcels) await repo().deleteParcel(p.id)
+        else if (routeParcels.length) throw new Error('قطعه‌ای از قبل وجود دارد؛ برای ساخت دوباره گزینهٔ جایگزینی را بزنید')
         const drafts: ParcelDraft[] = []
         const end = route.startKm + route.totalKm
         let km = route.startKm
@@ -290,6 +322,29 @@ export const useLandStore = create<LandState>()((set, get) => {
       await run(() => repo().deleteDoc(docId))
     },
 
+    saveCrossing: async (c) => {
+      const pid = get().projectId
+      if (!pid || !crossingAllowed()) return
+      await run(async () => {
+        const saved: Crossing = await repo().saveCrossing(pid, c)
+        patchData((d) => ({ ...d, crossings: (c.id ? d.crossings.map((x) => (x.id === saved.id ? saved : x)) : [...d.crossings, saved]).sort((a, b) => a.km - b.km) }))
+        await syncCrossing(saved.id)
+      })
+    },
+    deleteCrossing: async (id) => {
+      if (!crossingAllowed()) return
+      patchData((d) => ({ ...d, crossings: d.crossings.filter((x) => x.id !== id) }))
+      if (get().selectedCrossingId === id) set({ selectedCrossingId: null })
+      await run(() => repo().deleteCrossing(id))
+    },
+    transferCrossing: async (id, target, params) => {
+      const ok = await run(async () => {
+        await repo().transferCrossing(id, target, params)
+        await get().reload()
+        return true
+      })
+      return !!ok
+    },
     savePlot: async (parcelId, plot) => {
       if (!allowed(parcelId)) return
       await run(async () => {
@@ -368,7 +423,10 @@ export const useLandStore = create<LandState>()((set, get) => {
 // ------------------------------------------------------------------------------------------------ derived data
 
 export interface LandAnalysis {
+  /** Route parcels only (km stretches). Stations are in `stations`; `byId` has both. */
   rows: Analysis[]
+  stations: Analysis[]
+  crossings: { c: Crossing; st: ReturnType<typeof crossingState> }[]
   byId: Map<string, Analysis>
   kpis: ReturnType<typeof computeKpis>
   lengths: ReturnType<typeof lengthByStatus>
@@ -382,14 +440,19 @@ export function useLandAnalysis(): LandAnalysis & { settings: typeof DEFAULT_SET
   const today = useLandStore((s) => s.today)
   return useMemo(() => {
     const settings = { ...DEFAULT_SETTINGS, ...(data?.route?.settings ?? {}) }
-    const rows = analyze(data?.parcels ?? [], data?.activities ?? [], today, settings)
+    const all = analyze(data?.parcels ?? [], data?.activities ?? [], today, settings)
+    const rows = all.filter((r) => r.parcel.kind !== 'station')
+    const stations = all.filter((r) => r.parcel.kind === 'station')
+    const crossings = (data?.crossings ?? []).map((c) => ({ c, st: crossingState(c, data?.activities ?? [], today) }))
     return {
       rows,
-      byId: new Map(rows.map((r) => [r.parcel.id, r])),
+      stations,
+      crossings,
+      byId: new Map(all.map((r) => [r.parcel.id, r])),
       kpis: computeKpis(rows, data?.route?.totalKm ?? 0, today, settings),
       lengths: lengthByStatus(rows),
-      constraints: criticalConstraints(rows),
-      actions: buildActions(rows, today, settings),
+      constraints: criticalConstraints(all),
+      actions: buildActions(all, today, settings),
       settings,
       today,
     }

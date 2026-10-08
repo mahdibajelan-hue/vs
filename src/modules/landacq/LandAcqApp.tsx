@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BellRing, CalendarRange, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Sprout } from 'lucide-react'
+import { BellRing, CalendarRange, Factory, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
 import './landacq.css'
 import { ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useLandStore, useLandAnalysis, type TabKey } from './store/useLandStore'
@@ -12,6 +12,8 @@ import { ParcelsPage } from './pages/ParcelsPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { ActionsPage } from './pages/ActionsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { StationsPage } from './pages/StationsPage'
+import { CrossingsPage } from './pages/CrossingsPage'
 import { faNum } from './lib/fa'
 
 interface Props {
@@ -24,6 +26,8 @@ const TABS: { key: TabKey; label: string; icon: typeof Rows3 }[] = [
   { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard },
   { key: 'map', label: 'نقشه', icon: MapIcon },
   { key: 'parcels', label: 'قطعه‌ها', icon: Rows3 },
+  { key: 'stations', label: 'ایستگاه‌ها', icon: Factory },
+  { key: 'crossings', label: 'عبور از تأسیسات', icon: Spline },
   { key: 'schedule', label: 'برنامه', icon: CalendarRange },
   { key: 'actions', label: 'اقدام‌ها', icon: BellRing },
   { key: 'settings', label: 'تنظیمات', icon: Settings },
@@ -43,14 +47,14 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
   const selectedId = useLandStore((s) => s.selectedId)
   const select = useLandStore((s) => s.selectParcel)
   const data = useLandStore((s) => s.data)
-  const { byId, kpis } = useLandAnalysis()
+  const { byId, kpis, crossings } = useLandAnalysis()
   const selected = selectedId ? byId.get(selectedId) : undefined
 
   useEffect(() => {
     void init(repo)
   }, [init, repo])
 
-  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : 0)
+  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : 0)
 
   return (
     <div className="la-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
@@ -94,6 +98,8 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             {tab === 'tower' && <TowerPage />}
             {tab === 'map' && <MapPage />}
             {tab === 'parcels' && <ParcelsPage />}
+            {tab === 'stations' && <StationsPage />}
+            {tab === 'crossings' && <CrossingsPage />}
             {tab === 'schedule' && <SchedulePage />}
             {tab === 'actions' && <ActionsPage />}
             {tab === 'settings' && <SettingsPage />}

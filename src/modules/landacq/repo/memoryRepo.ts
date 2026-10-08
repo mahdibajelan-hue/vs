@@ -1,7 +1,7 @@
-import type { Activity, ApprovalEntry, ApprovalStatus, DocMeta, LandProjectData, LandRole, Owner, Parcel, Plot, ProjectOption, Stage, TransferTarget } from '../types'
+import type { Activity, ApprovalEntry, Crossing, ApprovalStatus, DocMeta, LandProjectData, LandRole, Owner, Parcel, Plot, ProjectOption, Stage, TransferTarget } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import { makeStages } from '../lib/workflow'
-import type { ActivityInput, DemoBundle, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput } from './types'
+import type { ActivityInput, DemoBundle, DocInput, LandRepo, OwnerInput, ParcelDraft, ParcelFields, PlotInput, CrossingInput } from './types'
 import { allowedActions, NEXT_STATUS } from '../lib/approval'
 
 let seq = 0
@@ -11,6 +11,7 @@ interface Store {
   route: LandProjectData['route']
   parcels: Parcel[]
   activities: Activity[]
+  crossings: Crossing[]
 }
 
 /** In-memory repo for the demo harness and tests; same contract as the Supabase one. */
@@ -21,7 +22,7 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
   const stores = new Map<string, Store>()
   const get = (id: string): Store => {
     let s = stores.get(id)
-    if (!s) stores.set(id, (s = { route: null, parcels: [], activities: [] }))
+    if (!s) stores.set(id, (s = { route: null, parcels: [], activities: [], crossings: [] }))
     return s
   }
   const parcelById = (id: string) => {
@@ -35,7 +36,7 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
     const id = d.id ?? uid('p')
     const stages = makeStages().map((s) => d.stages?.find((x) => x.key === s.key) ?? s)
     return {
-      ...d, id, masterProjectId, approvalStatus: d.approvalStatus ?? 'draft', approvalNote: '', plots: (d.plots ?? []).map((x) => ({ ...x, id: uid('pl'), parcelId: id })), legal: d.legal ?? {}, nextDeadline: d.nextDeadline ?? null, nextDeadlineLabel: d.nextDeadlineLabel ?? '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
+      ...d, id, masterProjectId, approvalStatus: d.approvalStatus ?? 'draft', approvalNote: '', plots: (d.plots ?? []).map((x) => ({ ...x, id: uid('pl'), parcelId: id })), kind: d.kind ?? 'route', stationType: d.stationType ?? '', siteLon: d.siteLon ?? null, siteLat: d.siteLat ?? null, legal: d.legal ?? {}, nextDeadline: d.nextDeadline ?? null, nextDeadlineLabel: d.nextDeadlineLabel ?? '', riskId: null, issueId: null, scheduleWarningId: null, isDemo: !!d.isDemo, stages,
       owners: (d.owners ?? []).map((o) => ({ ...o, id: uid('o'), parcelId: id })),
       docs: (d.docs ?? []).map((x) => ({ ...x, id: uid('d'), parcelId: id })),
     }
@@ -50,7 +51,7 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
     },
     async load(masterProjectId) {
       const s = get(masterProjectId)
-      return { route: s.route, parcels: structuredClone(s.parcels), activities: structuredClone(s.activities), events: [], linked: [], approvals: structuredClone(approvals), myRole, roles: structuredClone(roles) }
+      return { route: s.route, parcels: structuredClone(s.parcels), activities: structuredClone(s.activities), events: [], linked: [], approvals: structuredClone(approvals), myRole, roles: structuredClone(roles), crossings: structuredClone(s.crossings) }
     },
     async saveRoute(route) {
       get(route.masterProjectId).route = { ...route, settings: { ...DEFAULT_SETTINGS, ...route.settings } }
@@ -87,6 +88,27 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
     },
     async deleteDoc(id) {
       for (const s of stores.values()) for (const p of s.parcels) p.docs = p.docs.filter((d) => d.id !== id)
+    },
+    async saveCrossing(masterProjectId, c: CrossingInput) {
+      const s = get(masterProjectId)
+      const saved: Crossing = { ...c, id: c.id ?? uid('x'), masterProjectId, riskId: s.crossings.find((x) => x.id === c.id)?.riskId ?? null, issueId: s.crossings.find((x) => x.id === c.id)?.issueId ?? null }
+      s.crossings = c.id ? s.crossings.map((x) => (x.id === c.id ? saved : x)) : [...s.crossings, saved]
+      return saved
+    },
+    async deleteCrossing(id) {
+      for (const s of stores.values()) s.crossings = s.crossings.filter((x) => x.id !== id)
+    },
+    async transferCrossing(id, target) {
+      for (const s of stores.values()) {
+        const c = s.crossings.find((x) => x.id === id)
+        if (c) {
+          const nid = uid(target)
+          if (target === 'issue') c.issueId = nid
+          else c.riskId = nid
+          return { id: nid }
+        }
+      }
+      throw new Error('crossing_not_found')
     },
     async savePlot(parcelId, plot: PlotInput) {
       const p = parcelById(parcelId)
@@ -139,11 +161,14 @@ export function createMemoryRepo(projects: ProjectOption[], initialRole: LandRol
       s.route = { ...bundle.route, masterProjectId }
       s.parcels.push(...bundle.parcels.map((d) => toParcel(masterProjectId, d)))
       s.activities.push(...bundle.activities.map((a) => ({ ...a, id: uid('a'), masterProjectId })))
+      s.crossings = s.crossings.filter((c) => !c.isDemo)
+      s.crossings.push(...(bundle.crossings ?? []).map((c) => ({ ...c, id: uid('x'), masterProjectId, riskId: null, issueId: null })))
     },
     async clearDemo(masterProjectId) {
       const s = get(masterProjectId)
       s.parcels = s.parcels.filter((p) => !p.isDemo)
       s.activities = s.activities.filter((a) => !a.isDemo)
+      s.crossings = s.crossings.filter((c) => !c.isDemo)
       if (s.route?.isDemo) s.route = null
     },
   }

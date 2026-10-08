@@ -17,7 +17,8 @@ export function TowerPage() {
   const selectedId = useLandStore((s) => s.selectedId)
   const select = useLandStore((s) => s.selectParcel)
   const setTab = useLandStore((s) => s.setTab)
-  const { rows, kpis, lengths, constraints, actions, settings, today } = useLandAnalysis()
+  const { rows, stations, crossings, kpis, lengths, constraints, actions, settings, today } = useLandAnalysis()
+  const selectCrossing = useLandStore((s) => s.selectCrossing)
   if (!data?.route) return <NoRoute />
   const route = data.route
   const total = route.totalKm || 1
@@ -90,7 +91,7 @@ export function TowerPage() {
 
       {/* ------------------------------------------------------------ map + ribbon */}
       <Card title="نقشهٔ وضعیت تحصیل" hint="روی هر بخش از مسیر بزنید تا جزئیات قطعه باز شود" action={<button className="la-btn la-btn-sm" onClick={() => setTab('map')}>نقشهٔ کامل <ArrowLeft size={13} /></button>}>
-        <RouteMap route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={360} />
+        <RouteMap route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} height={360} stations={stations} crossings={crossings} onSelectCrossing={(id) => { selectCrossing(id); setTab('crossings') }} />
         <div className="mt-4"><ChainageRibbon route={route} rows={rows} mode="status" selectedId={selectedId} onSelect={select} activities={data.activities} today={today} /></div>
       </Card>
 

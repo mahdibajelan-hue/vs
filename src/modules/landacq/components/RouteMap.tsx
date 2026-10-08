@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Eraser, LocateFixed, Minus, Plus, Undo2 } from 'lucide-react'
-import type { Activity, RouteInfo } from '../types'
+import type { Activity, Crossing, RouteInfo } from '../types'
+import { CROSSING, CROSSING_STATUS_COLOR, STATION, type CrossingState } from '../lib/facilities'
+import { STATUS_COLOR } from '../lib/status'
 import { fit, pointAt, polyline, schematicGeometry, slice, type LonLat } from '../lib/geometry'
 import { BASEMAPS, visibleTiles, type Basemap } from '../lib/tiles'
 import { fmtAreaM2, fmtLength, pathLength, polygonAreaLonLat } from '../lib/measure'
@@ -27,6 +29,9 @@ export function RouteMap({
   basemap = 'none',
   tool = 'none',
   showPlots = true,
+  stations = [],
+  crossings = [],
+  onSelectCrossing,
 }: {
   route: RouteInfo
   rows: Analysis[]
@@ -42,6 +47,10 @@ export function RouteMap({
   /** Rough surveying tools: click to add points. */
   tool?: 'none' | 'length' | 'area'
   showPlots?: boolean
+  /** Station sites (parcels of kind 'station') to mark on the map. */
+  stations?: Analysis[]
+  crossings?: { c: Crossing; st: CrossingState }[]
+  onSelectCrossing?: (id: string) => void
 }) {
   const hasGeo = route.geometry.length >= 2
   const pts = useMemo(() => (hasGeo ? route.geometry : schematicGeometry(route.totalKm)), [hasGeo, route.geometry, route.totalKm])
@@ -149,6 +158,15 @@ export function RouteMap({
         : [],
     [live, showPlots, rows, proj, mode],
   )
+  // station and crossing markers: explicit coordinates when given, else the chainage point on the route line
+  const markers = useMemo(() => {
+    const at = (km: number, lon: number | null, lat: number | null) => (lon != null && lat != null ? proj([lon, lat]) : proj(pointAt(line, frac(km))))
+    return {
+      stations: stations.map((r) => ({ r, p: at(r.parcel.kmStart, r.parcel.siteLon, r.parcel.siteLat) })),
+      crossings: crossings.map((x) => ({ x, p: at(x.c.km, null, null) })),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stations, crossings, line, proj, route.startKm, route.totalKm])
   // measuring
   const [mpts, setMpts] = useState<LonLat[]>([])
   useEffect(() => setMpts([]), [tool])
@@ -231,6 +249,25 @@ export function RouteMap({
               <circle r={5} fill="#ef4444" stroke="var(--la-map)" strokeWidth={2} />
             </g>
           ))}
+          {markers.crossings.map(({ x, p }) => (
+            <g key={x.c.id} transform={`translate(${p[0]} ${p[1]}) scale(${1 / view.k})`} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); if (tool !== 'none') addMeasure(e); else if (!movedRef.current) onSelectCrossing?.(x.c.id) }}>
+              <title>{`${CROSSING[x.c.crossingType].label}${x.c.name ? ` ${x.c.name}` : ''} · KM ${fmtKm(x.c.km)}`}</title>
+              <path d="M0 -9 L9 0 L0 9 L-9 0 Z" fill={CROSSING[x.c.crossingType].color} stroke={x.st.status === 'critical' || x.st.status === 'attention' ? CROSSING_STATUS_COLOR[x.st.status] : '#fff'} strokeWidth={x.st.status === 'critical' || x.st.status === 'attention' ? 3 : 1.6} />
+              {x.st.ready && <circle r={3} fill="#fff" />}
+            </g>
+          ))}
+          {markers.stations.map(({ r, p }) => {
+            const t = r.parcel.stationType
+            const col = t ? STATION[t].color : '#94a3b8'
+            return (
+              <g key={r.parcel.id} transform={`translate(${p[0]} ${p[1] - 16 / view.k}) scale(${1 / view.k})`} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); if (tool !== 'none') addMeasure(e); else if (!movedRef.current) onSelect(r.parcel.id) }}>
+                <title>{`${t ? STATION[t].label : 'ایستگاه'} · KM ${fmtKm(r.parcel.kmStart)} · ${STATUS_LABEL[r.status]}`}</title>
+                <rect x={-13} y={-10} width={26} height={20} rx={5} fill={col} stroke={r.parcel.id === selectedId ? 'var(--la-ink)' : '#fff'} strokeWidth={r.parcel.id === selectedId ? 3 : 1.6} />
+                <rect x={-13} y={7} width={26} height={4} rx={2} fill={STATUS_COLOR[r.status]} stroke="#fff" strokeWidth={1} />
+                <text y={4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#fff" style={{ pointerEvents: 'none', fontFamily: 'var(--font-mono)' }}>{t ? STATION[t].short : 'ST'}</text>
+              </g>
+            )
+          })}
           {[...fronts].sort((a, b) => a.km - b.km).map((f, i) => (
             <g key={f.name} className="la-pin" transform={`translate(${f.p[0]} ${f.p[1]}) scale(${1 / view.k})`}>
               <circle r={4.5} fill="var(--la-surface)" stroke="var(--la-ink)" strokeWidth={2} />
