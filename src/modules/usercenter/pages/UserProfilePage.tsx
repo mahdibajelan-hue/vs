@@ -18,22 +18,22 @@ import { ActivityTab } from '../tabs/ActivityTab'
 import type { AccountStatus } from '../types'
 
 const COVERS = [
-  'linear-gradient(120deg, #5b3df5, #9b4dff 55%, #ff5c9d)',
-  'linear-gradient(120deg, #0ea5e9, #6a4cff 60%, #c84cf0)',
-  'linear-gradient(120deg, #14b886, #2fa8ff 60%, #6a4cff)',
-  'linear-gradient(120deg, #ff8a3d, #ff5c9d 55%, #c84cf0)',
-  'linear-gradient(120deg, #ffb020, #ff6b81 60%, #9b4dff)',
-  'linear-gradient(120deg, #22c6a8, #4f8cff 55%, #b44cf0)',
+  'linear-gradient(115deg, #0a2358, #1d4ed8)',
+  'linear-gradient(115deg, #0b3a4f, #0e7490)',
+  'linear-gradient(115deg, #14312b, #15803d)',
+  'linear-gradient(115deg, #2a1a5e, #4338ca)',
+  'linear-gradient(115deg, #1e293b, #475569)',
+  'linear-gradient(115deg, #0c2d57, #2563eb)',
 ]
 
 export type ProfileTab = 'info' | 'roles' | 'projects' | 'modules' | 'access' | 'activity'
 const TABS: { id: ProfileTab; label: string; icon: typeof UserRound; color: string }[] = [
-  { id: 'info', label: 'اطلاعات پایه', icon: UserRound, color: '#6a4cff' },
-  { id: 'roles', label: 'نقش و نوع کاربر', icon: UserCog, color: '#c84cf0' },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, color: '#2f9bff' },
-  { id: 'modules', label: 'ماژول‌ها', icon: LayoutGrid, color: '#14b886' },
-  { id: 'access', label: 'مدیریت دسترسی', icon: KeyRound, color: '#ff9d1a' },
-  { id: 'activity', label: 'تاریخچه', icon: ScrollText, color: '#ff5a7a' },
+  { id: 'info', label: 'اطلاعات پایه', icon: UserRound, color: '#1d4ed8' },
+  { id: 'roles', label: 'نقش و نوع کاربر', icon: UserCog, color: '#6d28d9' },
+  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, color: '#0369a1' },
+  { id: 'modules', label: 'ماژول‌ها', icon: LayoutGrid, color: '#15803d' },
+  { id: 'access', label: 'مدیریت دسترسی', icon: KeyRound, color: '#b45309' },
+  { id: 'activity', label: 'تاریخچه', icon: ScrollText, color: '#b91c1c' },
 ]
 
 export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: string; tab: ProfileTab; edit: boolean; onTab: (t: ProfileTab, edit?: boolean) => void; onBack: () => void }) {

@@ -12,6 +12,9 @@ interface ModuleState {
    * module land back on Radar specifically, distinct from "بازگشت به ماژول‌ها" which always goes
    * to the plain launchpad. */
   radarOpen: boolean
+  /** Bumped by «صفحهٔ اول ماژول»: RootApp keys the active module on it, so it remounts at its first page. */
+  moduleResetKey: number
+  goModuleHome: () => void
   enterModule: (key: ModuleKey) => void
   /** "بازگشت به ماژول‌ها" — always the plain launchpad, never Radar. */
   exitToHub: () => void
@@ -24,6 +27,8 @@ interface ModuleState {
 export const useModuleStore = create<ModuleState>()((set) => ({
   activeModule: null,
   radarOpen: false,
+  moduleResetKey: 0,
+  goModuleHome: () => set((s) => ({ moduleResetKey: s.moduleResetKey + 1 })),
   enterModule: (key) => set({ activeModule: key }),
   exitToHub: () => set({ activeModule: null, radarOpen: false }),
   backToRadar: () => set({ activeModule: null, radarOpen: true }),

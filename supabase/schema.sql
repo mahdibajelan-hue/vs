@@ -16347,3 +16347,11 @@ grant execute on function la_linked_status(uuid) to authenticated;
 revoke execute on function la_parcel_after_insert() from public, anon, authenticated;
 revoke execute on function la_parcel_after_update() from public, anon, authenticated;
 revoke execute on function la_stage_after_write() from public, anon, authenticated;
+
+-- =============================================================================
+-- 71. Header notifications, admin-managed user photos
+-- =============================================================================
+-- my_notifications(): everything that is waiting for the signed-in user (missions, issues, risks) as one JSON array,
+-- computed with the same role helpers the modules use. It feeds the bell shown in every header.
+-- uc_admin_update_user now also accepts avatar_url; admins may write any file in the public 'avatars' bucket
+-- (users still only write their own folder).

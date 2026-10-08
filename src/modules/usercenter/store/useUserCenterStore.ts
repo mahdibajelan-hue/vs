@@ -104,7 +104,7 @@ interface UcState {
   load: () => Promise<void>
   loadAudit: (userId: string) => Promise<void>
 
-  updateProfile: (userId: string, patch: Partial<{ full_name: string; position_title: string; phone: string; organization: string; user_type: UserType; is_admin: boolean }>) => Promise<Result>
+  updateProfile: (userId: string, patch: Partial<{ full_name: string; position_title: string; phone: string; organization: string; user_type: UserType; is_admin: boolean; avatar_url: string }>) => Promise<Result>
   setStatus: (userId: string, status: AccountStatus, reason: string) => Promise<Result>
   setPassword: (userId: string, password: string) => Promise<Result>
   sendResetEmail: (email: string) => Promise<Result>

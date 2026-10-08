@@ -21,15 +21,18 @@ type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => Reac
  * module used to have its own card/area-f here; it's now reached through the Competency module's
  * own candidate wizard instead (see AssessmentWizardPage's panel/personality stages) rather
  * than as an independently-navigable top-level module. */
-const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent; area: string }[] = [
-  { key: 'executive', Card: PortfolioManagementCard, area: 'area-a' },
-  { key: 'reporting', Card: SmartAnalyticsCard, area: 'area-b' },
-  { key: 'competency', Card: TechnicalCompetencyCard, area: 'area-c' },
-  { key: 'estimator', Card: ProjectEstimationCard, area: 'area-d' },
-  { key: 'admin', Card: UserManagementCard, area: 'area-e' },
-  { key: 'missions', Card: MissionDebriefCard, area: 'area-f' },
-  { key: 'landacq', Card: LandAcquisitionCard, area: 'area-g' },
+const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent }[] = [
+  { key: 'executive', Card: PortfolioManagementCard },
+  { key: 'reporting', Card: SmartAnalyticsCard },
+  { key: 'competency', Card: TechnicalCompetencyCard },
+  { key: 'estimator', Card: ProjectEstimationCard },
+  { key: 'missions', Card: MissionDebriefCard },
+  { key: 'landacq', Card: LandAcquisitionCard },
+  // User management is deliberately always the LAST tile.
+  { key: 'admin', Card: UserManagementCard },
 ]
+/** Grid areas are handed out by position among the modules the user can see, so there are never holes and the last module stays last. */
+const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g']
 
 /** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
  * page-level width/padding and no hint line, just the icon grid. */
@@ -51,8 +54,8 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
         <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>
           <ProjectRadarCard onSelect={() => onSelect('radar')} locked={locked} />
         </div>
-        {visibleModules.map(({ key, Card, area }, i) => (
-          <div key={key} className={`hub-fade-in ${area}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
+        {visibleModules.map(({ key, Card }, i) => (
+          <div key={key} className={`hub-fade-in ${AREAS[i]}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
             <Card onSelect={() => onSelect(key)} locked={locked} />
           </div>
         ))}

@@ -5,6 +5,9 @@ import { useAccessData } from '../lib/useAccessModel'
 import { displayName, fmtDate, fmtDateTime, relTime } from '../lib/format'
 import { STATUS_LABEL, type UcUser } from '../types'
 import { Badge, Field, Section, StatusBadge, useToast } from '../components/ui'
+import { PhotoCard } from '../components/PhotoCard'
+import { MyAccountCard } from '../components/MyAccountCard'
+import { useAuthStore } from '../../../store/useAuthStore'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -20,6 +23,7 @@ export function InfoTab({ user, editing, setEditing, onPassword, onStatus }: { u
   const users = useUserCenterStore((s) => s.users)
   const authInfoAvailable = useUserCenterStore((s) => s.authInfoAvailable)
   const { organizations } = useAccessData()
+  const isMe = useAuthStore((s) => s.profile?.id) === user.id
   const notify = useToast()
   const [form, setForm] = useState({ full_name: user.fullName, position_title: user.positionTitle, organization: user.organization, phone: user.phone })
   const [busy, setBusy] = useState(false)
@@ -126,6 +130,7 @@ export function InfoTab({ user, editing, setEditing, onPassword, onStatus }: { u
       </Section>
 
       <div className="flex flex-col gap-4 lg:col-span-2">
+        <PhotoCard user={user} />
         <Section title="ورود و امنیت" hint="نام کاربری، رمز عبور و وضعیت حساب">
           <dl className="m-0">
             <Row label="نام کاربری"><span dir="ltr">{user.email}</span></Row>
@@ -150,6 +155,9 @@ export function InfoTab({ user, editing, setEditing, onPassword, onStatus }: { u
           </dl>
         </Section>
 
+        {isMe ? <MyAccountCard /> : (
+          <p className="uc-eyebrow m-0 rounded-xl px-4 py-3 leading-7" style={{ background: 'var(--uc-surface-2)', border: '1px solid var(--uc-line)' }}>رمز عبور این کاربر را با «تغییر / بازنشانی» تعیین کنید. امضای نمونه را فقط خود کاربر از پروفایل خودش تعریف می‌کند.</p>
+        )}
         <Section title="سوابق حساب">
           <dl className="m-0">
             <Row label="تاریخ ایجاد"><span className="inline-flex items-center gap-1.5"><CalendarClock size={13} style={{ color: 'var(--uc-muted)' }} /> {fmtDate(user.authCreatedAt ?? user.createdAt)}</span></Row>

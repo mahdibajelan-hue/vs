@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { Fragment, lazy, Suspense } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAppThemeSync } from './components/common/useAppTheme'
 import { useModuleStore } from './store/useModuleStore'
@@ -47,6 +47,7 @@ export function RootApp() {
   const profileLoading = useAuthStore((s) => s.profileLoading)
   const profile = useAuthStore((s) => s.profile)
   const activeModule = useModuleStore((s) => s.activeModule)
+  const moduleResetKey = useModuleStore((s) => s.moduleResetKey)
   const enterModule = useModuleStore((s) => s.enterModule)
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const backToRadar = useModuleStore((s) => s.backToRadar)
@@ -123,7 +124,7 @@ export function RootApp() {
     )
   }
 
-  return activeModule === 'pipepulse' ? (
+  const moduleView = activeModule === 'pipepulse' ? (
     <App />
   ) : activeModule === 'risk' ? (
     <RiskApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
@@ -160,4 +161,7 @@ export function RootApp() {
   ) : (
     <AdminApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   )
+
+  // «صفحهٔ اول ماژول» bumps moduleResetKey, which remounts the active module at its first page.
+  return <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
 }

@@ -4,7 +4,7 @@ import { ModuleCard } from '../ModuleCard'
 export function UserManagementCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
   return (
     <ModuleCard
-      number="06"
+      number="08"
       title="مدیریت کاربران"
       englishTag="Users, Roles & Access Control"
       description="کاربران، نقش‌ها، سازمان و کنترل دسترسی یکپارچه به همه ماژول‌ها."

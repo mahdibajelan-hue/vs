@@ -106,12 +106,12 @@ export function UserListPage({
   )
 
   const kpis: { key: Quick; label: string; value: number; sub: string; icon: typeof Users; color: string }[] = [
-    { key: 'all', label: 'همهٔ کاربران', value: counts.all, sub: 'در سامانه ثبت شده‌اند', icon: Users, color: '#6a4cff' },
-    { key: 'active', label: 'حساب فعال', value: counts.active, sub: `${faNum(counts.all ? Math.round((counts.active / counts.all) * 100) : 0)}٪ از کل`, icon: UserCheck, color: '#14b886' },
-    { key: 'inactive', label: 'غیرفعال یا مسدود', value: counts.inactive, sub: 'ورود بسته است', icon: PowerOff, color: '#ff5a7a' },
-    { key: 'admin', label: 'مدیر سیستم', value: counts.admin, sub: 'دسترسی کامل', icon: ShieldCheck, color: '#ff9d1a' },
-    { key: 'noproject', label: 'بدون دسترسی پروژه', value: counts.noproject, sub: 'نیازمند تعیین پروژه', icon: FolderX, color: '#2f9bff' },
-    ...(authInfoAvailable ? [{ key: 'never' as Quick, label: 'هرگز وارد نشده', value: counts.never, sub: 'دعوت‌شده یا بی‌استفاده', icon: LogIn, color: '#c84cf0' }] : []),
+    { key: 'all', label: 'همهٔ کاربران', value: counts.all, sub: 'در سامانه ثبت شده‌اند', icon: Users, color: '#1d4ed8' },
+    { key: 'active', label: 'حساب فعال', value: counts.active, sub: `${faNum(counts.all ? Math.round((counts.active / counts.all) * 100) : 0)}٪ از کل`, icon: UserCheck, color: '#15803d' },
+    { key: 'inactive', label: 'غیرفعال یا مسدود', value: counts.inactive, sub: 'ورود بسته است', icon: PowerOff, color: '#b91c1c' },
+    { key: 'admin', label: 'مدیر سیستم', value: counts.admin, sub: 'دسترسی کامل', icon: ShieldCheck, color: '#b45309' },
+    { key: 'noproject', label: 'بدون دسترسی پروژه', value: counts.noproject, sub: 'نیازمند تعیین پروژه', icon: FolderX, color: '#0369a1' },
+    ...(authInfoAvailable ? [{ key: 'never' as Quick, label: 'هرگز وارد نشده', value: counts.never, sub: 'دعوت‌شده یا بی‌استفاده', icon: LogIn, color: '#4338ca' }] : []),
   ]
 
   const RowActions = ({ u }: { u: UcUser }) => (
@@ -127,8 +127,8 @@ export function UserListPage({
     <div className="uc-rise mx-auto flex w-full max-w-[1280px] flex-col gap-5">
       {/* ------------------------------------------------------------------ hero */}
       <section className="uc-hero">
-        <i className="uc-orb" style={{ width: 220, height: 220, insetInlineStart: -60, top: -90, background: '#ffd36b' }} />
-        <i className="uc-orb" style={{ width: 160, height: 160, insetInlineEnd: '28%', bottom: -80, background: '#5ee7d3' }} />
+        <i className="uc-orb" style={{ width: 220, height: 220, insetInlineStart: -60, top: -90, background: '#7fb0ff' }} />
+        <i className="uc-orb" style={{ width: 160, height: 160, insetInlineEnd: '28%', bottom: -80, background: '#4d7fff' }} />
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div className="min-w-0" style={{ maxWidth: 520 }}>
             <p className="mb-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: 'rgba(255,255,255,.2)' }}><Sparkles size={12} aria-hidden /> User 360° Management Center</p>

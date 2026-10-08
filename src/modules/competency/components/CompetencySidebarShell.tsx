@@ -6,6 +6,7 @@ import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanne
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { ThemeToggle } from './ThemeToggle'
+import { NotificationBell } from '../../../components/common/NotificationBell'
 import { useThemeAttributeSync } from '../lib/useThemeAttributeSync'
 import '../styles/farinTheme.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
@@ -159,6 +160,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
                 <span className="hidden sm:inline">{myProfile.fullName || 'پروفایل من'}</span>
               </button>
             )}
+            <NotificationBell />
             <ThemeToggle />
           </div>
         </header>

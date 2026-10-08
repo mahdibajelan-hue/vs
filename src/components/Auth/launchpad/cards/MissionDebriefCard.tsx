@@ -5,7 +5,7 @@ import { MISSIONS_MODULE } from '../../../../modules/missions/integration/manife
 export function MissionDebriefCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
   return (
     <ModuleCard
-      number="07"
+      number="06"
       title={MISSIONS_MODULE.labelFa}
       englishTag={MISSIONS_MODULE.labelEn}
       description={MISSIONS_MODULE.descriptionFa}

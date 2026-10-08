@@ -42,7 +42,7 @@ export function RolesTab({ user }: { user: UcUser }) {
                 className="flex items-start gap-3 rounded-xl p-3 text-right"
                 style={{ border: `1px solid ${on ? 'var(--uc-accent)' : 'var(--uc-line)'}`, background: on ? 'var(--uc-accent-soft)' : 'var(--uc-surface-2)', fontFamily: 'inherit', color: 'inherit', cursor: 'pointer', transition: 'border-color .15s, background-color .15s' }}
               >
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={{ border: `1.5px solid ${on ? 'var(--uc-accent)' : 'var(--uc-line-2)'}`, background: on ? 'var(--uc-accent)' : 'transparent', color: '#04121c' }}>
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={{ border: `1.5px solid ${on ? 'var(--uc-accent)' : 'var(--uc-line-2)'}`, background: on ? 'var(--uc-accent)' : 'transparent', color: 'var(--uc-on-accent)' }}>
                   {on && <Check size={12} strokeWidth={3.5} />}
                 </span>
                 <span className="min-w-0">

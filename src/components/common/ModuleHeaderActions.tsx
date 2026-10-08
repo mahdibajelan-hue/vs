@@ -1,7 +1,12 @@
-import { Home, Radar } from 'lucide-react'
-import { SignOutButton } from '../Auth/SignOutButton'
+import { Home, LayoutDashboard, LogOut, Radar, UserCog } from 'lucide-react'
+import { useState } from 'react'
+import { useAuthStore } from '../../store/useAuthStore'
+import { useModuleStore } from '../../store/useModuleStore'
+import { ProfileModal } from '../Auth/ProfileModal'
 import { UserChip } from './UserChip'
 import { ThemeSwitch } from './ThemeSwitch'
+import { NotificationBell } from './NotificationBell'
+import { ToolbarButton } from './ToolbarButton'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -11,35 +16,37 @@ interface ModuleHeaderActionsProps {
 }
 
 /**
- * The three buttons every module header ends with — back to Project Radar, back to the module
- * hub, and sign out — were each reimplemented ad hoc per module with drifting styles (rounded-lg
- * vs rounded-full, icon-only vs labeled, different positions/orders, some skipping the shared
- * SignOutButton entirely). One component now renders all three, in the same order, style, and
- * trailing position, everywhere a module shell needs them, so a user recognizes them on sight
- * regardless of which module they're in.
+ * THE shortcut bar of the whole system. Same buttons, same order, same look in every module:
+ *   [photo + name]  [alerts]  [light/dark]  [module first page]  [home / launchpad]  [dashboard]  [my settings]  [sign out]
+ * Alerts = system messages and things waiting for the user's action. «صفحهٔ اول ماژول» restarts the current module at its first page.
  */
 export function ModuleHeaderActions({ onExitToHub, onBackToRadar, className = '' }: ModuleHeaderActionsProps) {
+  const goModuleHome = useModuleStore((s) => s.goModuleHome)
+  const signOut = useAuthStore((s) => s.signOut)
+  const [profile, setProfile] = useState(false)
   return (
-    <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${className}`}>
+    <div className={`flex shrink-0 items-center gap-1.5 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
       <UserChip />
+      <NotificationBell />
       <ThemeSwitch />
+      <ToolbarButton label="صفحهٔ اول این ماژول" onClick={goModuleHome}>
+        <LayoutDashboard size={16} />
+      </ToolbarButton>
+      <ToolbarButton label="خانه (صفحهٔ اول سامانه)" onClick={onExitToHub}>
+        <Home size={16} />
+      </ToolbarButton>
       {onBackToRadar && (
-        <button
-          onClick={onBackToRadar}
-          title="داشبورد پروژه‌ها (رادار)"
-          className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
-        >
-          <Radar size={14} /> <span className="hidden sm:inline">داشبورد</span>
-        </button>
+        <ToolbarButton label="داشبورد پروژه‌ها (رادار)" onClick={onBackToRadar}>
+          <Radar size={16} />
+        </ToolbarButton>
       )}
-      <button
-        onClick={onExitToHub}
-        title="بازگشت به ماژول‌ها"
-        className="flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1.5 text-xs text-secondary hover:bg-white/5 transition-colors sm:px-3"
-      >
-        <Home size={14} /> <span className="hidden sm:inline">بازگشت به ماژول‌ها</span>
-      </button>
-      <SignOutButton className="flex items-center gap-1.5 rounded-full border border-red-400/25 px-2 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors sm:px-3" />
+      <ToolbarButton label="تنظیمات کاربری من" onClick={() => setProfile(true)}>
+        <UserCog size={16} />
+      </ToolbarButton>
+      <ToolbarButton label="خروج از حساب" tone="danger" onClick={() => signOut()}>
+        <LogOut size={16} />
+      </ToolbarButton>
+      {profile && <ProfileModal onClose={() => setProfile(false)} />}
     </div>
   )
 }
