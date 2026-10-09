@@ -7,7 +7,7 @@ import { ToolbarButton } from './ToolbarButton'
 
 const SOURCE_LABEL: Record<string, string> = { missions: 'مأموریت‌ها', issues: 'مدیریت مسائل', risk: 'مدیریت ریسک', finance: 'مدیریت مالی', landacq: 'مواعد قانونی تملک اراضی' }
 const SEVERITY_COLOR = { action: '#38bdf8', warn: '#f59e0b', info: '#94a3b8' } as const
-const DEEP_LINKABLE = new Set(['issues', 'risk', 'missions'])
+const DEEP_LINKABLE = new Set(['issues', 'risk', 'missions', 'change'])
 
 /** Bell for system messages and things that need the user's action. Polls gently; clicking an item opens that record in its module. */
 export function NotificationBell() {
@@ -38,7 +38,7 @@ export function NotificationBell() {
 
   const go = (n: AppNotification) => {
     setOpen(false)
-    if (n.recordId && DEEP_LINKABLE.has(n.module)) useDeepLinkStore.getState().request({ module: n.module as 'issues' | 'risk' | 'missions', recordId: n.recordId })
+    if (n.recordId && DEEP_LINKABLE.has(n.module)) useDeepLinkStore.getState().request({ module: n.module as 'issues' | 'risk' | 'missions' | 'change', recordId: n.recordId })
     useModuleStore.getState().enterModule(n.module)
   }
   const grouped = Object.entries(

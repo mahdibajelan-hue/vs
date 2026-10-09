@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeftRight, ExternalLink, FileText, Link2, Network, Trash2 } from 'lucide-react'
 import { formatJalali } from '../../../../lib/jalali'
 import { supabase } from '../../../../lib/supabaseClient'
+import { ProposeChangeButton } from '../../../changeManagement/components/ProposeChangeButton'
 import { useDeepLinkStore } from '../../../../store/useDeepLinkStore'
 import { useModuleStore } from '../../../../store/useModuleStore'
 import { useProjectContextStore } from '../../../../store/useProjectContextStore'
@@ -54,8 +55,14 @@ export function LinksTab({ risk, canEdit, canManage }: TabProps) {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {out.some((l) => l.targetType === 'change') && (
+        <section>
+          <div className="im-section-title">تغییرات مرتبط (مدیریت تغییرات)</div>
+          {out.filter((l) => l.targetType === 'change').map((l) => <div key={l.id} className="im-task" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}><div><span className="rk-flag">درخواست تغییر</span> {l.targetLabel}</div><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => { useDeepLinkStore.getState().request({ module: 'change', recordId: l.targetId }); useModuleStore.getState().enterModule('change') }}>مشاهده</button></div>)}
+        </section>
+      )}
       <section>
-        <div className="im-section-title"><ArrowLeftRight size={15} style={{ color: 'var(--im-sky)' }} /> مسائل مرتبط (مدیریت مسائل)</div>
+        <div className="im-section-title"><span><ArrowLeftRight size={15} style={{ color: 'var(--im-sky)' }} /> مسائل مرتبط (مدیریت مسائل)</span>{canEdit && <ProposeChangeButton type="risk" id={risk.id} />}</div>
         {issues === null ? <div className="im-skeleton" style={{ height: 50 }} /> : issues.length === 0 ? <div className="im-helper">مسئلهٔ تحقق‌یافته‌ای برای این ریسک ثبت نشده است.</div> : issues.map((i) => (
           <div key={i.id} className="im-task" style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
             <div><span className="im-code">{i.code}</span> <b>{i.title}</b><div className="im-helper">مرحله: {i.stage ?? i.status} — ریسک بالقوه و مسئلهٔ تحقق‌یافته دو رکورد جدا با سوابق مستقل‌اند.</div></div>

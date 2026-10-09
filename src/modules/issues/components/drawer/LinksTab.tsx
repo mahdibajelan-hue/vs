@@ -4,8 +4,9 @@ import { formatJalali } from '../../../../lib/jalali'
 import type { ImIssue } from '../../types'
 import { useIssueWorkStore } from '../../store/useIssueWorkStore'
 import type { ImAttachment, ImLink } from '../../lib/issueDataV2'
+import { ProposeChangeButton } from '../../../changeManagement/components/ProposeChangeButton'
 
-const TYPES: [string, string][] = [['mission', 'بازدید/مأموریت'], ['risk', 'ریسک'], ['lifecycle', 'چرخه عمر'], ['land', 'تملک اراضی'], ['document', 'مدرک/نامه'], ['decision', 'تصمیم'], ['issue', 'مسئلهٔ دیگر'], ['other', 'سایر']]
+const TYPES: [string, string][] = [['change', 'درخواست تغییر'], ['mission', 'بازدید/مأموریت'], ['risk', 'ریسک'], ['lifecycle', 'چرخه عمر'], ['land', 'تملک اراضی'], ['document', 'مدرک/نامه'], ['decision', 'تصمیم'], ['issue', 'مسئلهٔ دیگر'], ['other', 'سایر']]
 const REL: [string, string][] = [['related', 'مرتبط'], ['derived_from', 'منشأ'], ['blocks', 'مانع'], ['duplicate_of', 'تکراری'], ['caused_by', 'ناشی از']]
 
 export function LinksTab({ issue, links, attachments, roles }: { issue: ImIssue; links: ImLink[]; attachments: ImAttachment[]; roles: string[] }) {
@@ -49,7 +50,7 @@ export function LinksTab({ issue, links, attachments, roles }: { issue: ImIssue;
       </div>
 
       <div className="im-card">
-        <div className="im-section-title">پیوندها <Link2 size={14} /></div>
+        <div className="im-section-title">پیوندها <Link2 size={14} /> {canEdit && <ProposeChangeButton type="issue" id={issue.id} />}</div>
         <div className="im-grid" style={{ gap: 8 }}>
           {links.length === 0 && <div className="im-helper">پیوندی ثبت نشده است.</div>}
           {links.map((l) => (

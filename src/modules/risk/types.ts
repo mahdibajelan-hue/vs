@@ -388,7 +388,7 @@ export const RM_EVIDENCE_KIND_LABEL_FA = { document: 'مدرک', photo: 'عکس'
 
 export type RmLinkRelation = 'related' | 'shared_cause' | 'depends_on' | 'duplicate_of' | 'derived_issue' | 'source' | 'mitigated_by' | 'aggregates'
 export const RM_LINK_RELATION_LABEL_FA: Record<RmLinkRelation, string> = { related: 'مرتبط', shared_cause: 'علت مشترک', depends_on: 'وابسته به', duplicate_of: 'تکراری', derived_issue: 'مسئلهٔ ناشی از تحقق', source: 'منبع', mitigated_by: 'کاهش‌یافته با', aggregates: 'تجمیع‌کننده' }
-export interface RmLink { id: string; riskId: string; targetType: 'risk' | 'issue' | 'mission' | 'finding' | 'external'; targetId: string; targetLabel: string; relation: RmLinkRelation; createdAt: string }
+export interface RmLink { id: string; riskId: string; targetType: 'risk' | 'issue' | 'mission' | 'finding' | 'external' | 'change'; targetId: string; targetLabel: string; relation: RmLinkRelation; createdAt: string }
 
 export interface RmCorporateRisk { id: string; code: string; title: string; description: string; category: string | null; ownerId: string | null; status: 'open' | 'monitoring' | 'closed'; correctivePlan: string; createdAt: string }
 

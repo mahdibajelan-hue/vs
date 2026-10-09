@@ -75,7 +75,7 @@ create table if not exists cm_request_steps (
   kind text not null check (kind in ('opinion','approval','body')), role_name text not null, label text not null default '', route_code text not null default '', rule_codes text[] not null default '{}',
   status text not null default 'waiting' check (status in ('waiting','active','approved','rejected','returned','skipped')), opinion text not null default '', reference_no text not null default '', reference_date date,
   requires_reference boolean not null default false, decided_by uuid references profiles(id), decided_by_name text, decided_as_admin boolean not null default false, decided_at timestamptz,
-  entered_at timestamptz, due_at timestamptz, reminded_at timestamptz, escalated_at timestamptz);
+  entered_at timestamptz, due_at timestamptz, reminded_at timestamptz, escalated_at timestamptz, sla_days int not null default 5);
 create index if not exists cm_steps_req on cm_request_steps (request_id, attempt, seq);
 create table if not exists cm_exceptions (
   id uuid primary key default gen_random_uuid(), request_id uuid not null references chg_change_requests(id) on delete cascade, justification text not null, evidence_ref text not null default '',

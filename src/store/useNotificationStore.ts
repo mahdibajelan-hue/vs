@@ -31,10 +31,10 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     if (get().loading) return
     set({ loading: true })
     try {
-      const [main, fin, land] = await Promise.all([supabase.rpc('my_notifications'), supabase.rpc('my_finance_notifications'), supabase.rpc('my_land_notifications')])
+      const [main, fin, land, chg] = await Promise.all([supabase.rpc('my_notifications'), supabase.rpc('my_finance_notifications'), supabase.rpc('my_land_notifications'), supabase.rpc('cm_my_notifications')])
       if (main.error && fin.error) throw main.error
       const rank = { warn: 0, action: 1, info: 2 } as const
-      const items = [...((main.data as AppNotification[] | null) ?? []), ...((fin.data as AppNotification[] | null) ?? []), ...((land.data as AppNotification[] | null) ?? [])].sort((a, b) => rank[a.severity] - rank[b.severity])
+      const items = [...((main.data as AppNotification[] | null) ?? []), ...((fin.data as AppNotification[] | null) ?? []), ...((land.data as AppNotification[] | null) ?? []), ...((chg.data as AppNotification[] | null) ?? [])].sort((a, b) => rank[a.severity] - rank[b.severity])
       set({ items, loadedOnce: true })
     } catch {
       // the bell must never break a page: keep what we had
