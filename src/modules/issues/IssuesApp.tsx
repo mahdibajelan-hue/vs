@@ -134,7 +134,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
               </select>
             )}
             {tab !== 'help' && <HelpButton topic={cur.help} />}
-            <button className="im-btn im-btn-primary im-btn-sm" onClick={() => openNew()}><Plus size={15} /> مسئلهٔ جدید</button>
+            <button className="im-btn im-btn-primary im-btn-lg" onClick={() => openNew()}><Plus size={18} strokeWidth={2.6} /> مسئلهٔ جدید</button>
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>

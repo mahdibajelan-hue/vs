@@ -13,6 +13,12 @@ import { suggestIssue } from '../lib/imAiClient'
 import { relevantLessons } from '../lib/imKnowledge'
 import { useKnowledgeStore } from '../store/useKnowledgeStore'
 import { HelpButton } from './Help'
+import { JalaliDateField } from './JalaliDateField'
+import { todayIso } from '../lib/issueRing'
+
+const toEn = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+const digits = (v: string) => Number(toEn(v).replace(/[^\d]/g, '')) || 0
+const sep = (n: number) => (n ? n.toLocaleString('en-US') : '')
 
 const LV = [[0, 'ندارد'], [1, 'کم'], [2, 'متوسط'], [3, 'زیاد']] as const
 type FieldKey = 'project' | 'title' | 'category' | 'days'
@@ -43,6 +49,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
   const [severity, setSeverity] = useState<ImIssuePriority>('medium')
   const [urgency, setUrgency] = useState<ImIssuePriority>('medium')
   const [days, setDays] = useState(7)
+  const [identifiedOn, setIdentifiedOn] = useState(todayIso())
   const [criteria, setCriteria] = useState('')
   const [imp, setImp] = useState({ timeDays: 0, cost: 0, quality: 0, safety: 0, contract: 0, objectives: '' })
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({})
@@ -116,7 +123,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
     setBusy(true)
     const r = await createIssueV2(projectId, {
       title: title.trim(), description: description.trim(), pursuerId: pursuerId || null, approverId: approverId || null, ownerId: ownerId || null, followUpId: followUpId || null,
-      severity, urgency, category, discipline, location, deadlineDays: Math.max(1, days), acceptanceCriteria: criteria.trim(),
+      severity, urgency, category, discipline, location, deadlineDays: Math.max(1, days), acceptanceCriteria: criteria.trim(), identifiedAt: identifiedOn === todayIso() ? null : `${identifiedOn}T12:00:00`,
       impacts: { timeDays: imp.timeDays || undefined, cost: imp.cost || undefined, quality: imp.quality, safety: imp.safety, contract: imp.contract, objectives: imp.objectives },
     })
     if (!r.id) { setBusy(false); setServerError(r.error ?? 'ثبت انجام نشد'); return }
@@ -136,7 +143,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
   )
 
   return (
-    <div className="im-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 680 }} role="dialog" aria-modal="true" aria-label="ثبت مسئلهٔ جدید">
         <div className="im-modal-head">
           <div className="im-modal-title">ثبت مسئلهٔ جدید</div>
@@ -156,6 +163,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
                 <select id="ni-project" ref={refs.project} value={projectId} aria-invalid={!!errors.project} onChange={(e) => { setProjectId(e.target.value); clear('project') }}>
                   <option value="">— انتخاب کنید —</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.shortCode ? p.shortCode + ' · ' : ''}{p.name}</option>)}
                 </select>{errors.project && <div className="im-err">{errors.project}</div>}</div>
+              <div className="im-field"><label htmlFor="ni-date">تاریخ ثبت / شناسایی</label><JalaliDateField id="ni-date" value={identifiedOn} onChange={setIdentifiedOn} max={todayIso()} /><div className="im-helper">پیش‌فرض امروز؛ برای مسائل با تأخیر ثبت، از تقویم تاریخ واقعی را انتخاب کنید.</div></div>
               <div className="im-field"><label htmlFor="ni-tpl">الگو (اختیاری)</label>
                 <select id="ni-tpl" value={templateKey} onChange={(e) => applyTemplate(e.target.value)}><option value="">— بدون الگو —</option>{cfg.templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}</select></div>
             </div>
@@ -196,7 +204,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
               <div className="im-section-title" style={{ marginBottom: 8 }}>اثر بر پروژه <span className="im-helper">برای پیشنهاد شدت</span></div>
               <div className="im-row">
                 <div className="im-field"><label>اثر زمانی (روز)</label><input type="number" min={0} value={imp.timeDays} onChange={(e) => setImp({ ...imp, timeDays: Math.max(0, Number(e.target.value) || 0) })} /></div>
-                <div className="im-field"><label>اثر مالی (ریال)</label><input type="number" min={0} value={imp.cost} onChange={(e) => setImp({ ...imp, cost: Math.max(0, Number(e.target.value) || 0) })} /></div>
+                <div className="im-field"><label>اثر مالی (ریال)</label><input type="text" inputMode="numeric" dir="ltr" style={{ textAlign: 'right' }} value={sep(imp.cost)} placeholder="مثلاً 1,500,000,000" onChange={(e) => setImp({ ...imp, cost: digits(e.target.value) })} /></div>
               </div>
               <div className="im-row">
                 {([['quality', 'کیفیت'], ['safety', 'ایمنی'], ['contract', 'قرارداد']] as const).map(([k, l]) => (
@@ -229,7 +237,10 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
 
             <div className="im-field"><label htmlFor="ni-crit">معیار پذیرش (رفع واقعی یعنی چه؟)</label><textarea id="ni-crit" style={{ minHeight: 56 }} value={criteria} onChange={(e) => setCriteria(e.target.value)} placeholder="بدون معیار پذیرش، مسئله بسته نمی‌شود" /></div>
             {templateKey && <div className="im-helper" style={{ marginBottom: 10 }}>{cfg.templates.find((t) => t.key === templateKey)?.tasks.length ?? 0} اقدام پیشنهادی الگو همراه مسئله ساخته می‌شود.</div>}
-            <button className="im-btn im-btn-primary" style={{ width: '100%' }} onClick={submit} disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت مسئله'}</button>
+            <div className="im-actions" style={{ marginTop: 6 }}>
+              <button className="im-btn im-btn-primary im-btn-lg" style={{ flex: 1 }} onClick={submit} disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت مسئله'}</button>
+              <button type="button" className="im-btn im-btn-ghost im-btn-lg" onClick={onClose} disabled={busy}>بستن</button>
+            </div>
           </>
         )}
       </div>

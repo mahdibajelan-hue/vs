@@ -291,3 +291,16 @@ import * as cal from './imCalendar.ts'
   assert.equal(kpi.taskStatusDistribution([task({ status: 'blocked' }), task({ status: 'done' })]).find((x) => x.status === 'blocked').count, 1)
   console.log('trend lib ok')
 }
+
+{
+  const intel = await import('./imIntel.ts')
+  const today = '2026-04-20'
+  const mk = (o) => issue({ stage: 'in_progress', updatedAt: '2026-04-19T08:00:00Z', ...o })
+  const list = [mk({ projectId: 'A', deadlineDate: '2026-04-01', severity: 'critical' }), mk({ projectId: 'A', deadlineDate: '2026-04-05', pursuerId: null }), mk({ projectId: 'B', deadlineDate: '2026-06-01' })]
+  const h = intel.projectHealth(list, ['A', 'B'], today)
+  assert.equal(h[0].projectId, 'A'); assert.equal(h[0].level, 'bad'); assert.equal(h[1].level, 'ok')
+  const adv = intel.advise(list, [], (id) => id, today)
+  assert.ok(adv.some((a) => a.id === 'crit-late')); assert.ok(adv.some((a) => a.id === 'orphan'))
+  assert.ok(adv.every((a) => a.why && a.todo))
+  console.log('intel lib ok')
+}

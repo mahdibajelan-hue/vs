@@ -8,6 +8,7 @@ import { useScoped } from '../lib/useScoped'
 import { useUserDirectory } from '../lib/useUsers'
 import { HelpButton } from '../components/Help'
 
+const WD_FULL = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
 const KINDS: { id: ItemKind; label: string; color: string; icon: typeof CircleDot }[] = [
   { id: 'issue', label: 'مسئله', color: '#f97316', icon: CircleDot },
   { id: 'task', label: 'اقدام', color: '#0ea5e9', icon: ListChecks },
@@ -44,7 +45,10 @@ export function CalendarPage({ onOpen }: { onOpen: (issueId: string, tab?: 'over
         <div className="im-actions"><HelpButton topic="calendar" /></div>
       </div>
 
-      <div className="im-cal-bar">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 14, alignItems: 'start' }} className="im-cal-layout">
+        <div>
+          <div className="im-calbox">
+          <div className="im-cal-bar">
         <div className="im-actions">
           <button className="im-cal-nav" onClick={() => nav(-1)} aria-label="ماه قبل"><ChevronRight size={18} /></button>
           <div className="im-cal-title" aria-live="polite">{JALALI_MONTHS[ym.jm - 1]} {ym.jy}</div>
@@ -59,15 +63,12 @@ export function CalendarPage({ onOpen }: { onOpen: (issueId: string, tab?: 'over
           ))}
         </div>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 14, alignItems: 'start' }} className="im-cal-layout">
-        <div>
           <div className="im-cal" role="grid" aria-label="تقویم">
-            {JALALI_WEEKDAYS.map((w) => <div key={w} className="im-cal-wd">{w}</div>)}
+            {JALALI_WEEKDAYS.map((w, wi) => <div key={w} className={`im-cal-wd ${wi === 6 ? 'fri' : ''}`}>{WD_FULL[wi]}</div>)}
             {grid.map((c, k) => {
               const list = byDate.get(c.iso) ?? []
               return (
-                <button key={c.iso} role="gridcell" className={`im-cal-day ${c.inMonth ? '' : 'out'} ${c.iso === today ? 'today' : ''} ${c.iso === sel ? 'sel' : ''}`} style={{ ['--i' as string]: k }} onClick={() => setSel(c.iso)} aria-label={`${formatJalali(c.iso)}، ${list.length} مورد`}>
+                <button key={c.iso} role="gridcell" className={`im-cal-day ${k % 7 === 6 ? 'fri' : ''} ${c.inMonth ? '' : 'out'} ${c.iso === today ? 'today' : ''} ${c.iso === sel ? 'sel' : ''}`} style={{ ['--i' as string]: k }} onClick={() => setSel(c.iso)} aria-label={`${formatJalali(c.iso)}، ${list.length} مورد`}>
                   <span className="im-cal-d"><span>{c.jd}</span>{list.length > 0 && <span className="cnt">{list.length}</span>}</span>
                   {list.slice(0, 3).map((it) => <span key={it.key} className={`im-cal-ev ${it.done ? 'done' : ''}`} style={{ ['--c' as string]: colorOf(it) }} title={it.title}>{it.title}</span>)}
                   {list.length > 3 && <span className="im-cal-more">+{list.length - 3} مورد دیگر</span>}
@@ -75,6 +76,7 @@ export function CalendarPage({ onOpen }: { onOpen: (issueId: string, tab?: 'over
                 </button>
               )
             })}
+          </div>
           </div>
           <div className="im-legend" style={{ marginTop: 12 }}>
             {KINDS.map((k) => <span key={k.id} style={{ ['--c' as string]: k.color }}><i />{k.label}</span>)}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bookmark, Download, LayoutList, Columns3, GanttChart, Plus, Search, Sparkles, Upload } from 'lucide-react'
+import { Bookmark, Download, Printer, LayoutList, Columns3, GanttChart, Plus, Search, Sparkles, Upload } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
@@ -11,6 +11,7 @@ import { EMPTY_FILTER, KANBAN_STAGES, applyFilter, groupByStage, parseImport, so
 import { todayIso } from '../lib/issueRing'
 import { useUserDirectory } from '../lib/useUsers'
 import { useScoped } from '../lib/useScoped'
+import { issuesPrintHtml, openPrint } from '../lib/imPrint'
 import { askRegister, extractIssues } from '../lib/imAiClient'
 import { IssueCode, Segmented, SeverityChip, SlaBadge, StageChip } from '../components/ui'
 
@@ -62,6 +63,22 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
     URL.revokeObjectURL(url)
   }
 
+  const printReport = () => {
+    const summary: string[] = []
+    if (f.q) summary.push(`جستجو: ${f.q}`)
+    if (f.projectId !== 'all') summary.push(`پروژه: ${projectName(f.projectId)}`)
+    if (f.stage !== 'active') summary.push(`مرحله: ${f.stage === 'all' ? 'همه' : IM_STAGE_LABEL_FA[f.stage as keyof typeof IM_STAGE_LABEL_FA] ?? f.stage}`)
+    else summary.push('مرحله: فعال (باز)')
+    if (f.severity !== 'all') summary.push(`شدت: ${IM_PRIORITY_LABEL_FA[f.severity as keyof typeof IM_PRIORITY_LABEL_FA] ?? f.severity}`)
+    if (f.category !== 'all') summary.push(`دسته: ${IM_CATEGORY_FA[f.category] ?? f.category}`)
+    if (f.userId !== 'all') summary.push(`فرد: ${users.name(f.userId)}`)
+    if (f.source !== 'all') summary.push(`منبع: ${IM_SOURCE_FA[f.source] ?? f.source}`)
+    if (f.overdueOnly) summary.push('فقط تأخیردار')
+    if (f.blockedOnly) summary.push('فقط مسدود')
+    const ok = openPrint(issuesPrintHtml(list, { project: projectName, user: (id) => (id ? users.name(id) : '—'), today, filterSummary: summary }))
+    if (!ok) window.alert('مرورگر پنجرهٔ چاپ را مسدود کرد؛ اجازهٔ پنجرهٔ بازشو را بدهید.')
+  }
+
   const runAsk = async () => {
     if (!ask.trim()) return
     setAsking(true)
@@ -78,6 +95,7 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
         <div><div className="im-page-title">ثبت‌نامهٔ مسائل</div><div className="im-page-sub">{list.length} از {issues.length} مسئله</div></div>
         <div className="im-actions">
           <Segmented<View> value={view} onChange={setView} options={[{ id: 'table', label: <><LayoutList size={14} /> جدول</> }, { id: 'kanban', label: <><Columns3 size={14} /> کانبان</> }, { id: 'timeline', label: <><GanttChart size={14} /> زمان‌بندی</> }]} />
+          <button className="im-btn im-btn-ghost im-btn-sm" onClick={printReport} title="چاپ / گزارش بر اساس فیلترهای اعمال‌شده" disabled={list.length === 0}><Printer size={14} /> چاپ</button>
           <button className="im-btn im-btn-ghost im-btn-sm" onClick={exportCsv} title="خروجی CSV (سازگار با Excel)"><Download size={14} /> خروجی</button>
           <button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setImportOpen(true)}><Upload size={14} /> ورود انبوه</button>
           <button className="im-btn im-btn-primary" onClick={onNewIssue}><Plus size={16} /> مسئلهٔ جدید</button>
