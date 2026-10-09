@@ -64,7 +64,7 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
     <div>
       <div className="im-topbar">
         <div><div className="im-page-title">ثبت‌نامهٔ مسائل</div><div className="im-page-sub">{list.length} از {issues.length} مسئله</div></div>
-        <div className="im-row" style={{ flex: '0 0 auto', gap: 8 }}>
+        <div className="im-actions">
           <Segmented<View> value={view} onChange={setView} options={[{ id: 'table', label: <><LayoutList size={14} /> جدول</> }, { id: 'kanban', label: <><Columns3 size={14} /> کانبان</> }, { id: 'timeline', label: <><GanttChart size={14} /> زمان‌بندی</> }]} />
           <button className="im-btn im-btn-ghost im-btn-sm" onClick={exportCsv} title="خروجی CSV (سازگار با Excel)"><Download size={14} /> خروجی</button>
           <button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setImportOpen(true)}><Upload size={14} /> ورود انبوه</button>
@@ -84,7 +84,7 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
         <select value={f.userId} onChange={(e) => set('userId', e.target.value)} aria-label="مسئول"><option value="all">همهٔ افراد</option>{me && <option value={me}>من</option>}{users.all.filter((u) => u.userId !== me).map((u) => <option key={u.userId} value={u.userId}>{u.name}</option>)}</select>
         <select value={f.source} onChange={(e) => set('source', e.target.value)} aria-label="منبع"><option value="all">همهٔ منابع</option>{Object.entries(IM_SOURCE_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       </div>
-      <div className="im-row" style={{ marginBottom: 14, alignItems: 'center', gap: 8 }}>
+      <div className="im-actions" style={{ marginBottom: 14 }}>
         <label className="im-chip" style={{ cursor: 'pointer', margin: 0 }}><input type="checkbox" style={{ width: 'auto', marginLeft: 6 }} checked={f.overdueOnly} onChange={(e) => set('overdueOnly', e.target.checked)} /> فقط دارای تأخیر</label>
         <label className="im-chip" style={{ cursor: 'pointer', margin: 0 }}><input type="checkbox" style={{ width: 'auto', marginLeft: 6 }} checked={f.blockedOnly} onChange={(e) => set('blockedOnly', e.target.checked)} /> فقط مسدود</label>
         {activeCount > 0 && <button className="im-ghostlink" onClick={() => setF({ ...EMPTY_FILTER, ...(lockedProjectId ? { projectId: lockedProjectId } : {}) })}>پاک‌کردن فیلترها ({activeCount})</button>}

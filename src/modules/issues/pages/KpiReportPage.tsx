@@ -102,5 +102,5 @@ export function KpiReportPage({ onSelectIssue }: { onSelectIssue: (id: string) =
     </div>
   )
 }
-const pct = (v: number | null) => (v === null ? '—' : `${v.toLocaleString('fa-IR')}٪`)
-const num = (v: number | null, unit = '') => (v === null ? '—' : `${v.toLocaleString('fa-IR')}${unit}`)
+const pct = (v: number | null) => (v === null ? '—' : `${v.toLocaleString('en-US')}٪`)
+const num = (v: number | null, unit = '') => (v === null ? '—' : `${v.toLocaleString('en-US')}${unit}`)

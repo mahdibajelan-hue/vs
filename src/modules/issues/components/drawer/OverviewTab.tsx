@@ -3,7 +3,7 @@ import { ArrowLeft, Check, Copy, Pencil } from 'lucide-react'
 import { formatJalali } from '../../../../lib/jalali'
 import { MissionOriginChip } from '../../../missions/integration/originChip'
 import { IM_PRIORITIES, IM_PRIORITY_LABEL_FA, type ImIssue, type ImIssuePriority, type ImStage, type ImTask } from '../../types'
-import { IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, effectiveDue, stageOf } from '../../lib/imModel'
+import { IM_BLOCK_KIND_FA, IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, effectiveDue, stageOf } from '../../lib/imModel'
 import { allowedNext, closeBlockers } from '../../lib/imWorkflow'
 import { findSimilarIssues } from '../../lib/imText'
 import { useIssuesStore } from '../../store/useIssuesStore'
@@ -110,7 +110,7 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
           </div>
           <div className="im-kv"><span>منبع</span><span>{IM_SOURCE_FA[issue.source] ?? issue.source} <MissionOriginChip recordId={issue.id} /></span></div>
           {issue.externalSystem && <div className="im-kv"><span>سامانهٔ خارجی</span><span>{issue.externalSystem} · {issue.externalId} · <b>{issue.syncStatus}</b></span></div>}
-          {issue.blockedSince && <div className="im-notice bad" style={{ marginTop: 10 }}>این مسئله به‌دلیل اقدام مسدود در انتظار است ({issue.blockedKind || 'نامشخص'}) از {formatJalali(issue.blockedSince.slice(0, 10))}</div>}
+          {issue.blockedSince && <div className="im-notice bad" style={{ marginTop: 10 }}>این مسئله به‌دلیل اقدام مسدود در انتظار است ({IM_BLOCK_KIND_FA[issue.blockedKind ?? ''] ?? 'نامشخص'}) از {formatJalali(issue.blockedSince.slice(0, 10))}</div>}
           {isStaff && <div style={{ marginTop: 10 }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setEditing(true)}><Pencil size={13} /> ویرایش مشخصات</button></div>}
         </div>
       )}

@@ -15,7 +15,7 @@ import { useUserDirectory } from '../lib/useUsers'
 import { useIssuesMembersStore } from '../store/useIssuesMembersStore'
 
 type Lens = 'exec' | 'follow' | 'me'
-const fmt = (v: number | null, unit = '') => (v === null ? '—' : `${v.toLocaleString('fa-IR')}${unit}`)
+const fmt = (v: number | null, unit = '') => (v === null ? '—' : `${v.toLocaleString('en-US')}${unit}`)
 
 export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: { onSelectIssue: (id: string) => void; onOpenRegister: (f: { overdueOnly?: boolean; blockedOnly?: boolean; severity?: 'critical' }) => void; onOpenMyWork: () => void }) {
   const projects = useIssuesStore((s) => s.projects)
@@ -63,7 +63,7 @@ export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: {
             <button onClick={() => onOpenRegister({ overdueOnly: true })} style={{ textAlign: 'right' }}><Kpi label="دارای تأخیر" value={fmt(kpi.overdueCount)} tone={kpi.overdueCount ? 'bad' : 'good'} hint={def('overdueRate')} /></button>
             <button onClick={() => onOpenRegister({ severity: 'critical' })} style={{ textAlign: 'right' }}><Kpi label="بحرانی فعال" value={fmt(active.filter((i) => priorityRank(i.severity ?? i.priority) >= 4).length)} tone="warn" /></button>
             <button onClick={() => onOpenRegister({ blockedOnly: true })} style={{ textAlign: 'right' }}><Kpi label="مسدود (منتظر تصمیم/منبع)" value={fmt(kpi.blockedCount)} tone={kpi.blockedCount ? 'warn' : 'good'} hint={def('blockedCount')} /></button>
-            <Kpi label="جریان خالص ۳۰ روز" value={`${kpi.backlogNetFlow > 0 ? '+' : ''}${kpi.backlogNetFlow.toLocaleString('fa-IR')}`} tone={kpi.backlogNetFlow >= 0 ? 'good' : 'bad'} hint={def('backlogNetFlow')} />
+            <Kpi label="جریان خالص ۳۰ روز" value={`${kpi.backlogNetFlow > 0 ? '+' : ''}${kpi.backlogNetFlow.toLocaleString('en-US')}`} tone={kpi.backlogNetFlow >= 0 ? 'good' : 'bad'} hint={def('backlogNetFlow')} />
             <Kpi label="منتظر تأیید مستقل" value={fmt(kpi.pendingVerification)} hint={def('pendingVerification')} />
           </div>
 
@@ -87,7 +87,7 @@ export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: {
                 <div key={a.key} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 28px', gap: 8, alignItems: 'center', marginBottom: 7, fontSize: 12 }}>
                   <span style={{ color: 'var(--im-muted)' }}>{a.label}</span>
                   <div className="im-bar"><i style={{ width: `${(a.count / maxAging) * 100}%`, background: a.key === '60+' || a.key === '31-60' ? 'var(--im-coral)' : a.key === '15-30' ? 'var(--im-amber)' : 'var(--im-mint)' }} /></div>
-                  <b>{a.count.toLocaleString('fa-IR')}</b>
+                  <b>{a.count.toLocaleString('en-US')}</b>
                 </div>
               ))}
             </div>
@@ -97,7 +97,7 @@ export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: {
                 <div key={s.stage} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 28px', gap: 8, alignItems: 'center', marginBottom: 7, fontSize: 12 }}>
                   <span style={{ color: 'var(--im-muted)' }}>{IM_STAGE_LABEL_FA[s.stage as keyof typeof IM_STAGE_LABEL_FA]}</span>
                   <div className="im-bar"><i style={{ width: `${(s.count / Math.max(1, kpi.active)) * 100}%`, background: 'var(--im-amber)' }} /></div>
-                  <b>{s.count.toLocaleString('fa-IR')}</b>
+                  <b>{s.count.toLocaleString('en-US')}</b>
                 </div>
               ))}
             </div>
