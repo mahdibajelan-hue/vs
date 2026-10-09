@@ -230,3 +230,7 @@
 .im-ghostlink { color: var(--im-amber); font-size: 12px; font-weight: 700; }
 @media (max-width: 860px) { .im-drawer { width: 100%; } .im-table .hide-sm { display: none; } }
 @media (prefers-reduced-motion: reduce) { .im-drawer, .im-overlay, .im-modal { animation: none; } }
+
+.im-more-sheet { position: absolute; bottom: 74px; left: 10px; right: 10px; background: var(--im-bg-2); border: 1px solid var(--im-line-2); border-radius: 16px; padding: 8px; z-index: 55; display: grid; gap: 2px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.6); }
+@media (min-width: 861px) { .im-more-sheet { display: none; } }
+.im-ghostlink { color: var(--im-amber); font-size: 12px; font-weight: 700; }
