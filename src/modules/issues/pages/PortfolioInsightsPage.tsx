@@ -1,14 +1,13 @@
 import { useMemo } from 'react'
-import { useIssuesStore } from '../store/useIssuesStore'
 import { IM_CATEGORY_FA } from '../lib/imModel'
 import { corporateRollup, heatmap, sharedCauses } from '../lib/imPortfolio'
 import { todayIso } from '../lib/issueRing'
+import { useScoped } from '../lib/useScoped'
 import { IssueCode, SeverityChip } from '../components/ui'
 
 /** Cross-project view: where issues concentrate (heatmap), causes that recur in several projects, and corporate/parent issues with their children. */
 export function PortfolioInsightsPage({ onSelectIssue }: { onSelectIssue: (id: string) => void }) {
-  const issues = useIssuesStore((s) => s.issues)
-  const projects = useIssuesStore((s) => s.projects)
+  const { issues, projects } = useScoped()
   const today = todayIso()
   const hm = useMemo(() => heatmap(issues, today), [issues, today])
   const causes = useMemo(() => sharedCauses(issues), [issues])
@@ -18,7 +17,7 @@ export function PortfolioInsightsPage({ onSelectIssue }: { onSelectIssue: (id: s
   const name = (id: string) => projects.find((p) => p.id === id)?.name ?? '—'
 
   return (
-    <div>
+    <div className="im-page">
       <div className="im-topbar"><div><div className="im-page-title">هم‌افزایی پورتفولیو</div><div className="im-page-sub">تمرکز مسائل، علل مشترک و مسائل مادر در سطح شرکت</div></div></div>
 
       <div className="im-card" style={{ marginBottom: 14 }}>

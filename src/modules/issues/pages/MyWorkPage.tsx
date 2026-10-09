@@ -2,19 +2,16 @@ import { useMemo } from 'react'
 import { AlertOctagon, CalendarClock, CheckCircle2, ClipboardCheck, Hourglass } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { useIssuesStore } from '../store/useIssuesStore'
-import { useIssueWorkStore } from '../store/useIssueWorkStore'
 import { isActiveIssue, stageOf, effectiveDue, dayDiff, IM_TASK_STATUS_LABEL_FA } from '../lib/imModel'
 import { canVerifyTask } from '../lib/imWorkflow'
 import { todayIso } from '../lib/issueRing'
+import { useScoped } from '../lib/useScoped'
 import { IssueCode, StageChip } from '../components/ui'
 import type { ImTask } from '../types'
 
 export function MyWorkPage({ onOpen }: { onOpen: (issueId: string, tab?: 'overview' | 'tasks' | 'extensions') => void }) {
   const me = useAuthStore((s) => s.profile?.id) ?? ''
-  const issues = useIssuesStore((s) => s.issues)
-  const tasks = useIssueWorkStore((s) => s.tasks)
-  const exts = useIssueWorkStore((s) => s.extensions)
+  const { issues, tasks, extensions: exts } = useScoped()
   const today = todayIso()
   const issueOf = (id: string) => issues.find((i) => i.id === id)
 
@@ -49,7 +46,7 @@ export function MyWorkPage({ onOpen }: { onOpen: (issueId: string, tab?: 'overvi
 
   const g = data.groups
   return (
-    <div>
+    <div className="im-page">
       <div className="im-topbar"><div><div className="im-page-title">کارهای من</div><div className="im-page-sub">آنچه امروز از شما انتظار می‌رود، به ترتیب اولویت</div></div></div>
       <div className="im-grid" style={{ gap: 14 }}>
         <Section icon={<ClipboardCheck size={16} />} title="منتظر تأیید/تصمیم شما" count={data.toVerify.length + data.extToDecide.length + data.toReview.length} tone="var(--im-violet)">

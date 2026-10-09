@@ -6,8 +6,8 @@ import { useIssueConfigStore } from '../store/useIssueConfigStore'
 import { IM_PRIORITY_LABEL_FA } from '../types'
 import { IM_STAGE_LABEL_FA } from '../lib/imModel'
 import { validateWorkflow } from '../lib/imWorkflow'
-import { NotificationSettings } from '../components/NotificationSettings'
-import { Segmented } from '../components/ui'
+import { supabase } from '../../../lib/supabaseClient'
+import { HelpButton } from '../components/Help'
 import { aiStatus } from '../lib/imAiClient'
 
 /** Read-mostly configuration. Admin-only edits (SLA, category rules) are written straight to the config tables; the workflow graph is shown with a live validity check. */
@@ -16,9 +16,9 @@ export function SettingsPage() {
   const projects = useIssuesStore((s) => s.projects)
   const members = useIssuesMembersStore((s) => s.membersByProject)
   const me = useAuthStore((s) => s.profile?.id)
-  const isAdmin = projects.some((p) => (members[p.id] ?? []).some((m) => m.userId === me && m.role === 'admin'))
+  const platformAdmin = !!useAuthStore((st) => st.profile?.isAdmin)
+  const isAdmin = platformAdmin || projects.some((p) => (members[p.id] ?? []).some((m) => m.userId === me && m.role === 'admin'))
   const [msg, setMsg] = useState('')
-  const [section, setSection] = useState<'rules' | 'notify'>('rules')
   const [ai, setAi] = useState<{ available: boolean; provider: string | null } | null>(null)
   useEffect(() => { aiStatus(true).then(setAi) }, [])
   useEffect(() => { if (!cfg.loaded) cfg.fetch() }, [cfg])
@@ -26,13 +26,16 @@ export function SettingsPage() {
   const flash = (ok: boolean) => { setMsg(ok ? 'ذخیره شد' : 'ذخیره نشد — دسترسی مدیر لازم است'); setTimeout(() => setMsg(''), 2500) }
 
   return (
-    <div>
-      <div className="im-topbar"><div><div className="im-page-title">تنظیمات و قوانین</div><div className="im-page-sub">{isAdmin ? 'شما مدیر هستید؛ تغییرات بلافاصله اعمال می‌شود' : 'فقط مشاهده — ویرایش با مدیر پروژه'}</div></div>{msg && <span className="im-chip">{msg}</span>}</div>
-      <div style={{ marginBottom: 14 }}><Segmented value={section} onChange={setSection} options={[{ id: 'rules', label: 'قوانین و SLA' }, { id: 'notify', label: 'اعلان‌ها و تشدید' }]} /></div>
+    <div className="im-page">
+      <div className="im-topbar"><div><div className="im-page-title">تنظیمات و قوانین</div><div className="im-page-sub">{isAdmin ? 'شما مدیر هستید؛ تغییرات بلافاصله اعمال می‌شود' : 'فقط مشاهده — ویرایش با مدیر پروژه'}</div></div><div className="im-actions">{msg && <span className="im-chip">{msg}</span>}<HelpButton topic="settings" /></div></div>
+      <div className="im-card" style={{ marginBottom: 14 }}>
+        <div className="im-section-title">کاربران و پروژه‌ها <span className="im-helper">از سامانهٔ مرکزی</span></div>
+        <div className="im-helper" style={{ marginBottom: 8 }}>کاربران از «مدیریت کاربران» و پروژه‌ها از «اطلاعات پایه» خوانده می‌شوند و دسترسی به هر پروژه با تخصیص پروژه به کاربر (دامنهٔ دسترسی/نقش پروژه) تعیین می‌شود. در این ماژول کاربر یا پروژهٔ جداگانه ساخته نمی‌شود.</div>
+        {isAdmin && <button className="im-btn im-btn-ghost im-btn-sm" onClick={async () => { const r = await supabase.rpc('im_sync_master_projects'); flash(!r.error); if (!r.error) useIssuesStore.getState().fetchAll() }}>همگام‌سازی پروژه‌ها با اطلاعات پایه</button>}
+      </div>
       <div className="im-notice" style={{ marginBottom: 14, ...(ai?.available ? {} : {}) }}>
         <b>هوش مصنوعی:</b> {ai === null ? 'در حال بررسی…' : ai.available ? `فعال (${ai.provider}) — خروجی‌ها فقط پیشنهاد هستند و بدون تأیید شما اعمال نمی‌شوند.` : 'پیکربندی نشده — دستیار با قواعد داخلی (قاعده‌محور و قابل‌توضیح) کار می‌کند. برای فعال‌سازی، کلید ارائه‌دهنده (GEMINI_API_KEY یا آدرس/کلید سرویس سازگار با OpenAI) را در تنظیمات توابع Supabase ثبت کنید.'}
       </div>
-      {section === 'notify' ? <NotificationSettings isAdmin={isAdmin} /> : <>
 
       <div className="im-card" style={{ marginBottom: 14 }}>
         <div className="im-section-title">سطح خدمات (SLA) بر اساس شدت</div>
@@ -67,7 +70,6 @@ export function SettingsPage() {
         <div className="im-section-title">الگوهای مسئله</div>
         <div className="im-grid" style={{ gap: 8 }}>{cfg.templates.map((t) => <div key={t.key} className="im-check" style={{ justifyContent: 'space-between' }}><span><b>{t.name}</b><div className="im-helper">{t.tasks.length} اقدام پیشنهادی · مهلت {t.defaults.deadline_days ?? '—'} روز</div></span></div>)}</div>
       </div>
-      </>}
     </div>
   )
 }

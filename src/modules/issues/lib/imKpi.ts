@@ -123,3 +123,27 @@ export function workload(issues: ImIssue[], tasks: ImTask[], today: string): { u
   }
   return [...m.entries()].map(([userId, v]) => ({ userId, ...v })).sort((a, b) => b.overdue - a.overdue || b.open - a.open)
 }
+
+/** Weekly flow for the last `weeks` weeks (oldest first): issues created vs closed. Week = 7 days ending on `today - 7*k`. */
+export function weeklyTrend(issues: ImIssue[], today: string, weeks = 8): { labels: string[]; created: number[]; closed: number[] } {
+  const labels: string[] = [], created: number[] = [], closed: number[] = []
+  for (let w = weeks - 1; w >= 0; w--) {
+    const endOff = w * 7
+    const inWeek = (iso: string) => { const d = dayDiff(iso, today); return d >= endOff && d < endOff + 7 }
+    created.push(issues.filter((i) => inWeek(i.createdAt.slice(0, 10))).length)
+    closed.push(issues.filter((i) => isClosedIssue(i) && inWeek(closedDay(i))).length)
+    const d = new Date(Date.parse(today) - endOff * 86400000)
+    labels.push(d.toISOString().slice(5, 10))
+  }
+  return { labels, created, closed }
+}
+
+export function severityDistribution(issues: ImIssue[]): { severity: string; count: number }[] {
+  const act = issues.filter(isActiveIssue)
+  return (['critical', 'high', 'medium', 'low'] as const).map((s) => ({ severity: s, count: act.filter((i) => (i.severity ?? i.priority) === s).length }))
+}
+
+export function taskStatusDistribution(tasks: ImTask[]): { status: string; count: number }[] {
+  const keys = ['not_started', 'in_progress', 'blocked', 'pending_verification', 'done', 'cancelled'] as const
+  return keys.map((status) => ({ status, count: tasks.filter((t) => t.status === status).length }))
+}

@@ -1,4 +1,4 @@
-# Issue Management («رصد») — وضعیت فعلی پیش از بازطراحی
+# Issue Management — وضعیت فعلی پیش از بازطراحی
 
 > تاریخ بررسی: ۲۰۲۶-۱۰-۰۹ — پایگاه‌داده زنده: ۱۶ پروژه‌ی Issue، ۱۱۸ Issue، ۳۱ عضو، ۱۶ نگاشت تأییدشده به `master_projects`.
 > منابع Issue موجود: `manual` و `mission_debrief`. ریسک (`rm_risks`): ۱۷۹، یافته‌های مأموریت: ۴۰، اقدامات `rasta_actions`: ۸۴.

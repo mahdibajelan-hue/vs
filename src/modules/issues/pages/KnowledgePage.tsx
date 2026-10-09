@@ -27,7 +27,7 @@ export function KnowledgePage({ onOpenIssue }: { onOpenIssue: (id: string) => vo
   const [draft, setDraft] = useState<Record<string, { rootCause: string; solution: string; prevention: string }>>({})
 
   return (
-    <div>
+    <div className="im-page">
       <div className="im-topbar"><div><div className="im-page-title">دانش و درس‌آموخته‌ها</div><div className="im-page-sub">تجربه‌های بسته‌شده، قابل‌جستجو برای پروژه‌های بعدی</div></div>
         <Segmented value={tab} onChange={setTab} options={[{ id: 'published', label: 'منتشرشده' }, { id: 'mine', label: 'پیش‌نویس‌ها' }]} /></div>
       <div className="im-filters">

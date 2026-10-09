@@ -238,3 +238,56 @@ import * as kb from './imKnowledge.ts'
   assert.deepEqual(kb.lessonReady({ title: 'عنوان خوب', rootCause: '', solution: 'x' }), ['علت ریشه‌ای'])
   console.log('knowledge lib ok')
 }
+
+// ── tracking list + calendar grid
+import * as trk from './imTracking.ts'
+import * as cal from './imCalendar.ts'
+{
+  const today = '2026-04-01'
+  const I = (id, o) => issue({ id, code: 'ISS-' + id, ...o })
+  const issues = [
+    I('a', { projectId: 'p1', title: 'باز و دیر', deadlineDate: '2026-03-25', stage: 'in_progress', status: 'in_progress', severity: 'high' }),
+    I('b', { projectId: 'p1', title: 'بسته', deadlineDate: '2026-03-20', stage: 'closed', status: 'approved' }),
+    I('c', { projectId: 'p1', title: 'در مهلت', deadlineDate: '2026-04-04' }),
+    I('d', { projectId: 'p2', title: 'امروز', deadlineDate: '2026-04-01' }),
+  ]
+  const tasks = [task({ id: 't1', issueId: 'a', title: 'اقدام دیر', dueDate: '2026-03-30' }), task({ id: 't2', issueId: 'a', title: 'اقدام انجام', status: 'done', dueDate: '2026-03-20' })]
+  const items = trk.buildItems(issues, tasks, [], today)
+  assert.equal(items.length, 6)
+  const g = trk.groupByProject(items)
+  assert.equal(g[0].projectId, 'p1') // most late first
+  assert.equal(g[0].items[0].key, 'i:a'); assert.equal(g[0].items[0].lateDays, 7)
+  assert.equal(g[0].items.at(-1).done, true) // finished items sink to the end
+  assert.equal(g[0].late, 2); assert.equal(g[0].done, 2); assert.equal(g[0].progress, 40)
+  assert.deepEqual(trk.delayText(items.find((x) => x.key === 'i:a')), { text: '7 روز تأخیر', tone: 'late' })
+  assert.deepEqual(trk.delayText(items.find((x) => x.key === 'i:b')), { text: 'انجام‌شده', tone: 'done' })
+  assert.deepEqual(trk.delayText(items.find((x) => x.key === 'i:d')), { text: 'امروز سررسید', tone: 'today' })
+  assert.deepEqual(trk.delayText(items.find((x) => x.key === 'i:c')), { text: '3 روز مانده', tone: 'soon' })
+  const onlyTasks = trk.buildItems(issues, tasks, [], today, ['task'])
+  assert.equal(onlyTasks.length, 2)
+  const decs = trk.buildItems([], [], [{ id: 'd1', code: 'DEC-1', projectId: 'p1', issueId: null, title: 'ت', question: '', requestedBy: null, deciderId: 'u', neededBy: '2026-03-30', status: 'pending', chosenOption: null, rationale: '', decidedAt: null, createdAt: '' }], today, ['decision'])
+  assert.equal(decs[0].lateDays, 2)
+
+  // Jalali grid: farvardin 1405 starts on Saturday 2026-03-21 (nowruz) → no leading days; 31 days
+  const grid = cal.monthGrid(1405, 1)
+  assert.equal(grid.length % 7, 0)
+  assert.equal(grid.filter((c) => c.inMonth).length, 31)
+  const first = grid.find((c) => c.inMonth)
+  assert.equal(first.iso, '2026-03-21'); assert.equal(first.weekday, grid.indexOf(first) % 7)
+  assert.ok(grid.every((c, k) => c.weekday === k % 7))
+  assert.deepEqual(cal.shiftMonth(1405, 12, 1), { jy: 1406, jm: 1 }); assert.deepEqual(cal.shiftMonth(1405, 1, -1), { jy: 1404, jm: 12 })
+  assert.deepEqual(cal.monthOfIso('2026-03-21'), { jy: 1405, jm: 1 })
+  assert.equal(cal.itemsByDate(items).get('2026-04-01').length, 1)
+  console.log('tracking + calendar libs ok')
+}
+
+{
+  const today = '2026-04-15'
+  const I = (id, c, closed) => issue({ id, createdAt: c + 'T08:00:00Z', ...(closed ? { stage: 'closed', status: 'approved', closedAt: closed } : {}) })
+  const tr = kpi.weeklyTrend([I('a', '2026-04-14'), I('b', '2026-04-10'), I('c', '2026-04-01', '2026-04-13'), I('d', '2026-03-20')], today, 4)
+  assert.equal(tr.labels.length, 4); assert.deepEqual(tr.created, [1, 1, 0, 2])
+  assert.deepEqual(tr.closed, [0, 0, 0, 1])
+  assert.deepEqual(kpi.severityDistribution([issue({ severity: 'critical' }), issue({ severity: 'critical' }), issue({ severity: 'low', stage: 'closed', status: 'approved' })]).map((x) => x.count), [2, 0, 0, 0])
+  assert.equal(kpi.taskStatusDistribution([task({ status: 'blocked' }), task({ status: 'done' })]).find((x) => x.status === 'blocked').count, 1)
+  console.log('trend lib ok')
+}

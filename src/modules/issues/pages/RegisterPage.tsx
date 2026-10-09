@@ -4,13 +4,13 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
 import { useIssuesStore } from '../store/useIssuesStore'
-import { useIssueWorkStore } from '../store/useIssueWorkStore'
 import { useIssueConfigStore } from '../store/useIssueConfigStore'
 import { IM_PRIORITIES, IM_PRIORITY_LABEL_FA, type ImIssue } from '../types'
 import { IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, dayDiff, effectiveDue, stageOf } from '../lib/imModel'
 import { EMPTY_FILTER, KANBAN_STAGES, applyFilter, groupByStage, parseImport, sortIssues, toCsv, type IssueFilter, type SortKey } from '../lib/imRegister'
 import { todayIso } from '../lib/issueRing'
 import { useUserDirectory } from '../lib/useUsers'
+import { useScoped } from '../lib/useScoped'
 import { askRegister, extractIssues } from '../lib/imAiClient'
 import { IssueCode, Segmented, SeverityChip, SlaBadge, StageChip } from '../components/ui'
 
@@ -18,9 +18,9 @@ type View = 'table' | 'kanban' | 'timeline'
 interface Saved { id: string; name: string; filter: IssueFilter; isShared: boolean }
 
 export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initialFilter }: { onSelectIssue: (id: string) => void; onNewIssue: () => void; lockedProjectId?: string | null; initialFilter?: Partial<IssueFilter> }) {
-  const projects = useIssuesStore((s) => s.projects)
-  const issues = useIssuesStore((s) => s.issues)
-  const tasks = useIssueWorkStore((s) => s.tasks)
+  const sc = useScoped()
+  const { projects, issues, tasks } = sc
+  if (sc.scope !== 'all') lockedProjectId = sc.scope
   const cfg = useIssueConfigStore()
   const users = useUserDirectory()
   const me = useAuthStore((s) => s.profile?.id)
@@ -73,7 +73,7 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
   const activeCount = (Object.keys(EMPTY_FILTER) as (keyof IssueFilter)[]).filter((k) => f[k] !== EMPTY_FILTER[k]).length
 
   return (
-    <div>
+    <div className="im-page">
       <div className="im-topbar">
         <div><div className="im-page-title">ثبت‌نامهٔ مسائل</div><div className="im-page-sub">{list.length} از {issues.length} مسئله</div></div>
         <div className="im-actions">

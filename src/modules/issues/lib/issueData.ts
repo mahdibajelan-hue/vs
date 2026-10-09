@@ -7,10 +7,12 @@ export interface ImProjectRow {
   created_by: string | null
   created_at: string
   scope_level?: string | null
+  short_code?: string | null
+  master_ref_id?: string | null
 }
 
 export function imProjectFromRow(r: ImProjectRow): ImProject {
-  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at, scopeLevel: (r.scope_level as ImProject['scopeLevel']) ?? 'project' }
+  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at, scopeLevel: (r.scope_level as ImProject['scopeLevel']) ?? 'project', shortCode: r.short_code ?? '', masterRefId: r.master_ref_id ?? null }
 }
 
 export interface ImIssueRow {

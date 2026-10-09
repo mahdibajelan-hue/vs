@@ -1,21 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { useIssuesStore } from '../store/useIssuesStore'
-import { useIssueWorkStore } from '../store/useIssueWorkStore'
 import { useDecisionStore } from '../store/useDecisionStore'
 import { DECISION_STATUS_FA, decisionHealth, decisionLateDays, delayImpact } from '../lib/imDecisions'
 import { todayIso } from '../lib/issueRing'
+import { useScoped } from '../lib/useScoped'
 import { useUserDirectory } from '../lib/useUsers'
 import { Kpi, Segmented } from '../components/ui'
 
 const COLOR = { on_time: 'var(--im-mint)', due_soon: 'var(--im-amber)', overdue: 'var(--im-coral)', closed: 'var(--im-muted)' } as const
 
 export function DecisionsPage({ onOpenIssue }: { onOpenIssue: (issueId: string) => void }) {
-  const { decisions, loaded, fetchAll } = useDecisionStore()
-  const issues = useIssuesStore((s) => s.issues)
-  const projects = useIssuesStore((s) => s.projects)
-  const tasks = useIssueWorkStore((s) => s.tasks)
+  const { loaded, fetchAll } = useDecisionStore()
+  const { decisions, issues, projects, tasks } = useScoped()
   const users = useUserDirectory()
   const me = useAuthStore((s) => s.profile?.id)
   const [scope, setScope] = useState<'pending' | 'mine' | 'all'>('pending')
@@ -30,7 +27,7 @@ export function DecisionsPage({ onOpenIssue }: { onOpenIssue: (issueId: string) 
   const avgLate = decided.length ? Math.round((decided.reduce((s, d) => s + decisionLateDays(d, today), 0) / decided.length) * 10) / 10 : 0
 
   return (
-    <div>
+    <div className="im-page">
       <div className="im-topbar">
         <div><div className="im-page-title">تصمیم‌ها</div><div className="im-page-sub">تصمیم‌های منتظر، معوق و هزینهٔ انتظار آن‌ها</div></div>
         <Segmented value={scope} onChange={setScope} options={[{ id: 'pending', label: 'منتظر تصمیم' }, { id: 'mine', label: 'با من' }, { id: 'all', label: 'همه' }]} />

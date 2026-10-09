@@ -13,7 +13,7 @@ type Section = 'tasks' | 'issues'
 /** مدیریت موانع و اقدامات (Issue & Task Management) — two sections in one module:
  *  «پایش اقدامات» (task control tower) and «پیگیری موانع پروژه‌ها» (issue tracker with calendar and reports).
  *  Both are the original engines from the Quick-Win Challenge app, mounted on their original markup. */
-export function TaskIssueApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
+export function TaskIssueApp({ onExitToHub, onBackToRadar, embedded = false }: { onExitToHub: () => void; onBackToRadar: () => void; /** inside the Issue & Task hub: no own title bar / shortcuts, fills the parent */ embedded?: boolean }) {
   const profile = useAuthStore((s) => s.profile)
   const [section, setSection] = useState<Section>('tasks')
   const [access, setAccess] = useState<{ project_name: string }[] | null>(null)
@@ -51,22 +51,24 @@ export function TaskIssueApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   }, [engine, section])
 
   return (
-    <div className="ti-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl">
+    <div className={`ti-root flex flex-col overflow-hidden ${embedded ? 'h-full w-full rounded-2xl' : 'h-screen w-screen'}`} dir="rtl">
       <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ background: '#101a30' }}>
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[#ffffff]" style={{ background: 'linear-gradient(135deg, #7c2d12, #b45309)' }}>
-            <ListChecks size={20} />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-extrabold text-slate-800">مدیریت موانع و اقدامات</h2>
-            <p className="text-xs text-slate-500" dir="ltr">Issue &amp; Task Management</p>
+        {!embedded && (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[#ffffff]" style={{ background: 'linear-gradient(135deg, #7c2d12, #b45309)' }}>
+              <ListChecks size={20} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-extrabold text-slate-800">مدیریت موانع و اقدامات</h2>
+              <p className="text-xs text-slate-500" dir="ltr">Issue &amp; Task Management</p>
+            </div>
           </div>
-        </div>
+        )}
         <nav className="flex items-center gap-1 rounded-xl bg-white/5 p-1">
           <TabBtn active={section === 'tasks'} onClick={() => setSection('tasks')} icon={<ListChecks size={14} />} label="پایش اقدامات" />
           <TabBtn active={section === 'issues'} onClick={() => setSection('issues')} icon={<OctagonAlert size={14} />} label="پیگیری موانع پروژه‌ها" />
         </nav>
-        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+        {!embedded && <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />}
       </header>
       <StorageErrorBanner />
 

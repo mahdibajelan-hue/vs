@@ -19,6 +19,8 @@ export interface ImProject {
   createdBy: string | null
   createdAt: string
   scopeLevel?: 'project' | 'program' | 'corporate'
+  shortCode?: string
+  masterRefId?: string | null
 }
 
 export type ImIssuePriority = 'low' | 'medium' | 'high' | 'critical'

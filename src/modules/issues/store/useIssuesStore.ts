@@ -17,10 +17,11 @@ interface IssuesState {
   projects: ImProject[]
   issues: ImIssue[]
   loading: boolean
+  /** Header project picker: 'all' or an im_projects id. Pages read it through useScoped(). */
+  scopeProjectId: string
+  setScope: (id: string) => void
 
   fetchAll: () => Promise<void>
-  createProject: (name: string, description: string) => Promise<string>
-  deleteProject: (projectId: string) => Promise<void>
   createIssue: (
     projectId: string,
     data: { title: string; description: string; pursuerId: string | null; approverId: string | null; priority: ImIssuePriority; deadlineDays: number },
@@ -34,7 +35,7 @@ interface IssuesState {
   deleteIssue: (issueId: string) => Promise<void>
   /** Re-read one row after a server-side transition (stage, due dates, counters change in triggers). */
   refreshIssue: (issueId: string) => Promise<void>
-  createIssueV2: (projectId: string, data: NewIssueV2) => Promise<string | null>
+  createIssueV2: (projectId: string, data: NewIssueV2) => Promise<{ id?: string; error?: string }>
   /** Whitelisted column patch (snake_case). Due dates are NOT patchable here — they move only through approved extensions. */
   patchIssue: (issueId: string, row: Record<string, unknown>, action?: string) => Promise<boolean>
 }
@@ -49,9 +50,13 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
   projects: [],
   issues: [],
   loading: true,
+  scopeProjectId: 'all',
+  setScope: (id) => set({ scopeProjectId: id }),
 
   fetchAll: async () => {
     set({ loading: true })
+    // Projects are owned by Master Data: platform admins keep the issue projects in step with it (names, new projects).
+    if (useAuthStore.getState().profile?.isAdmin) await supabase.rpc('im_sync_master_projects')
     const { data: projectRows, error: projectError } = await supabase.from('im_projects').select('*').order('created_at', { ascending: false })
     if (reportError('بارگذاری پروژه‌ها', projectError)) {
       set({ loading: false })
@@ -69,22 +74,6 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
       return
     }
     set({ projects, issues: ((issueRows ?? []) as ImIssueRow[]).map(imIssueFromRow), loading: false })
-  },
-
-  createProject: async (name, description) => {
-    const { data, error } = await supabase.rpc('create_im_project_with_admin', { p_name: name, p_description: description })
-    if (error || !data) {
-      reportError('ایجاد پروژه', error ?? { message: 'خطای نامشخص' })
-      throw new Error(error?.message ?? 'خطا در ایجاد پروژه')
-    }
-    await get().fetchAll()
-    return data.id as string
-  },
-
-  deleteProject: async (projectId) => {
-    const { error } = await supabase.from('im_projects').delete().eq('id', projectId)
-    if (reportError('حذف پروژه', error)) return
-    set((s) => ({ projects: s.projects.filter((p) => p.id !== projectId), issues: s.issues.filter((i) => i.projectId !== projectId) }))
   },
 
   createIssue: async (projectId, data) => {
@@ -157,15 +146,20 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
       project_id: projectId, title: d.title, description: d.description, pursuer_id: d.pursuerId, approver_id: d.approverId,
       owner_id: d.ownerId ?? useAuthStore.getState().profile?.id ?? null, follow_up_id: d.followUpId ?? null,
       priority: d.severity, severity: d.severity, urgency: d.urgency, category: d.category, discipline: d.discipline ?? '', location: d.location ?? '',
-      deadline_days: d.deadlineDays, acceptance_criteria: d.acceptanceCriteria ?? '', identified_at: d.identifiedAt ?? null,
+      deadline_days: d.deadlineDays, acceptance_criteria: d.acceptanceCriteria ?? '',
       impact_time_days: imp.timeDays ?? null, impact_cost: imp.cost ?? null, impact_quality: imp.quality ?? 0, impact_safety: imp.safety ?? 0, impact_contract: imp.contract ?? 0, impact_objectives: imp.objectives ?? '',
       created_by: useAuthStore.getState().profile?.id ?? null,
     }
+    if (d.identifiedAt) row.identified_at = d.identifiedAt // omitted = database default (now)
     const { data, error } = await supabase.from('im_issues').insert(row).select().single()
-    if (reportError('ثبت مشکل', error) || !data) return null
+    if (error || !data) {
+      const raw = error?.message ?? 'خطای نامشخص'
+      const error2 = /row-level security|permission/i.test(raw) ? 'دسترسی ثبت مسئله در این پروژه را ندارید' : /null value in column "?(\w+)"?/.test(raw) ? `فیلد «${raw.match(/column "?(\w+)"?/)?.[1]}» خالی است` : friendlyErrorMessage({ message: raw })
+      return { error: error2 }
+    }
     const created = imIssueFromRow(data as ImIssueRow)
     set((s) => ({ issues: [created, ...s.issues] }))
-    return created.id
+    return { id: created.id }
   },
 
   deleteIssue: async (issueId) => {

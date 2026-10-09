@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { IM_PRIORITY_LABEL_FA, type ImIssue, type ImIssuePriority, type ImStage } from '../types'
 import { IM_STAGE_LABEL_FA, IM_STAGE_COARSE, stageOf } from '../lib/imModel'
 import { resolutionSla, slaColor } from '../lib/imSla'
@@ -43,9 +44,11 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
   )
 }
 
-export function Kpi({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: 'bad' | 'good' | 'warn' }) {
+export function Kpi({ label, value, hint, tone, icon: Icon, color, index = 0 }: { label: string; value: ReactNode; hint?: string; tone?: 'bad' | 'good' | 'warn'; icon?: LucideIcon; color?: string; index?: number }) {
+  const c = color ?? (tone === 'bad' ? 'var(--im-coral)' : tone === 'good' ? 'var(--im-mint)' : tone === 'warn' ? 'var(--im-amber)' : 'var(--im-accent)')
   return (
-    <div className={`im-stat-card ${tone === 'bad' ? 'warn' : ''}`} title={hint}>
+    <div className={`im-stat-card ${tone === 'bad' ? 'warn' : ''}`} title={hint} style={{ ['--c' as string]: c, ['--i' as string]: index }}>
+      {Icon && <span className="im-stat-ico"><Icon size={16} aria-hidden /></span>}
       <div className="im-num" style={tone === 'good' ? { color: 'var(--im-mint)' } : tone === 'warn' ? { color: 'var(--im-amber)' } : undefined}>{value}</div>
       <div className="im-lbl">{label}</div>
     </div>
