@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Trash2, X } from 'lucide-react'
+import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useIssuesStore } from '../store/useIssuesStore'
 import { useIssueWorkStore } from '../store/useIssueWorkStore'
@@ -41,6 +42,8 @@ export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { iss
 
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
   useEffect(() => { fetchDetail(issueId) }, [issueId, fetchDetail, tasks.length])
+  // opening the issue acknowledges its in-app notifications
+  useEffect(() => { supabase.rpc('im_notif_mark_issue_read', { p_issue: issueId }).then(() => undefined) }, [issueId])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)

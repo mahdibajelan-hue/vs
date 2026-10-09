@@ -6,6 +6,8 @@ import { useIssueConfigStore } from '../store/useIssueConfigStore'
 import { IM_PRIORITY_LABEL_FA } from '../types'
 import { IM_STAGE_LABEL_FA } from '../lib/imModel'
 import { validateWorkflow } from '../lib/imWorkflow'
+import { NotificationSettings } from '../components/NotificationSettings'
+import { Segmented } from '../components/ui'
 
 /** Read-mostly configuration. Admin-only edits (SLA, category rules) are written straight to the config tables; the workflow graph is shown with a live validity check. */
 export function SettingsPage() {
@@ -15,6 +17,7 @@ export function SettingsPage() {
   const me = useAuthStore((s) => s.profile?.id)
   const isAdmin = projects.some((p) => (members[p.id] ?? []).some((m) => m.userId === me && m.role === 'admin'))
   const [msg, setMsg] = useState('')
+  const [section, setSection] = useState<'rules' | 'notify'>('rules')
   useEffect(() => { if (!cfg.loaded) cfg.fetch() }, [cfg])
   const errors = useMemo(() => validateWorkflow(cfg.stages.map((s) => ({ key: s.key, terminal: s.isTerminal, start: s.key === 'registered' })), cfg.transitions), [cfg.stages, cfg.transitions])
   const flash = (ok: boolean) => { setMsg(ok ? 'ذخیره شد' : 'ذخیره نشد — دسترسی مدیر لازم است'); setTimeout(() => setMsg(''), 2500) }
@@ -22,6 +25,8 @@ export function SettingsPage() {
   return (
     <div>
       <div className="im-topbar"><div><div className="im-page-title">تنظیمات و قوانین</div><div className="im-page-sub">{isAdmin ? 'شما مدیر هستید؛ تغییرات بلافاصله اعمال می‌شود' : 'فقط مشاهده — ویرایش با مدیر پروژه'}</div></div>{msg && <span className="im-chip">{msg}</span>}</div>
+      <div style={{ marginBottom: 14 }}><Segmented value={section} onChange={setSection} options={[{ id: 'rules', label: 'قوانین و SLA' }, { id: 'notify', label: 'اعلان‌ها و تشدید' }]} /></div>
+      {section === 'notify' ? <NotificationSettings isAdmin={isAdmin} /> : <>
 
       <div className="im-card" style={{ marginBottom: 14 }}>
         <div className="im-section-title">سطح خدمات (SLA) بر اساس شدت</div>
@@ -56,6 +61,7 @@ export function SettingsPage() {
         <div className="im-section-title">الگوهای مسئله</div>
         <div className="im-grid" style={{ gap: 8 }}>{cfg.templates.map((t) => <div key={t.key} className="im-check" style={{ justifyContent: 'space-between' }}><span><b>{t.name}</b><div className="im-helper">{t.tasks.length} اقدام پیشنهادی · مهلت {t.defaults.deadline_days ?? '—'} روز</div></span></div>)}</div>
       </div>
+      </>}
     </div>
   )
 }
