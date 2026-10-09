@@ -21,6 +21,7 @@ import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
 import { MissionsApp } from './modules/missions/MissionsApp'
 import { LandAcqApp } from './modules/landacq/LandAcqApp'
 import { StageGateApp } from './modules/stagegate/StageGateApp'
+import { TaskIssueApp } from './modules/taskissue/TaskIssueApp'
 import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
@@ -147,6 +148,8 @@ export function RootApp() {
     <MissionsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'landacq' ? (
     <LandAcqApp repo={landRepo} onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'taskissue' ? (
+    <TaskIssueApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'stagegate' ? (
     <StageGateApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (

@@ -1,0 +1,45 @@
+/* Task & issue management module — scoped re-creation of the source app's dark "control-room" colour tokens.
+   Tailwind v4 reads colours from --color-*, so remapping them under .ti-root reproduces the look of the
+   original (where `bg-white` is the dark card surface and `text-slate-800` the emphasis text). */
+.ti-root {
+  --color-white: #101a30;
+  --color-slate-50: #18213c;
+  --color-slate-100: #1f2944;
+  --color-slate-200: #293356;
+  --color-slate-300: #8b96ad;
+  --color-slate-400: #8b96ad;
+  --color-slate-500: #8b96ad;
+  --color-slate-600: #c7cede;
+  --color-slate-700: #dde1ec;
+  --color-slate-800: #f2f4f8;
+  --color-slate-900: #0a0f1e;
+  --color-slate-950: #080d18;
+  --color-blue-50: rgba(59,130,246,.10); --color-blue-100: rgba(59,130,246,.16); --color-blue-200: rgba(59,130,246,.16);
+  --color-blue-700: #60a5fa; --color-blue-800: #2563eb; --color-blue-900: #3b82f6;
+  --color-emerald-50: rgba(16,185,129,.12); --color-emerald-100: rgba(16,185,129,.16); --color-emerald-200: rgba(16,185,129,.35);
+  --color-emerald-600: #34d399; --color-emerald-700: #34d399; --color-emerald-800: #34d399; --color-emerald-900: #34d399;
+  --color-amber-50: rgba(245,158,11,.10); --color-amber-100: rgba(245,158,11,.16); --color-amber-500: #f59e0b; --color-amber-600: #fbbf24;
+  --color-amber-700: #fbbf24; --color-amber-800: #fbbf24; --color-amber-900: #fbbf24;
+  --color-red-50: rgba(239,68,68,.10); --color-red-100: rgba(239,68,68,.16); --color-red-200: rgba(239,68,68,.35);
+  --color-red-600: #f87171; --color-red-700: #f87171; --color-red-800: #f87171;
+  --color-purple-50: rgba(168,85,247,.10); --color-purple-100: rgba(168,85,247,.16); --color-purple-200: rgba(168,85,247,.16);
+  --color-purple-700: #c084fc; --color-purple-800: #c084fc;
+  --c-border: #22304f;
+  --c-input-bg: #18213c;
+  --c-input-text: #f2f4f8;
+
+  background: #080d18;
+  color: #dde1ec;
+  font-family: 'Vazirmatn', sans-serif;
+  color-scheme: dark;
+}
+.ti-root .border { border-color: var(--c-border); }
+.ti-root input:not([type=checkbox]):not([type=radio]),
+.ti-root select,
+.ti-root textarea {
+  background-color: var(--c-input-bg);
+  color: var(--c-input-text);
+}
+.ti-root select option { background-color: #101a30; color: var(--c-input-text); }
+.ti-root input::placeholder, .ti-root textarea::placeholder { color: #64748b; }
+.ti-root *:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }

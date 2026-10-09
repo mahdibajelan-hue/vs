@@ -1601,7 +1601,7 @@ select option {
 }
 @media (min-width: 1024px) {
   .launchpad-module-grid {
-    grid-template-areas: 'a radar b' 'c d e' 'f g h';
+    grid-template-areas: 'a radar b' 'c d e' 'f g h' 'i . .';
   }
   .launchpad-module-grid .area-a { grid-area: a; }
   .launchpad-module-grid .area-radar { grid-area: radar; }
@@ -1612,6 +1612,7 @@ select option {
   .launchpad-module-grid .area-f { grid-area: f; }
   .launchpad-module-grid .area-g { grid-area: g; }
   .launchpad-module-grid .area-h { grid-area: h; }
+  .launchpad-module-grid .area-i { grid-area: i; }
 }
 
 /* ===== Farin launchpad showcase box =====
@@ -1685,7 +1686,7 @@ select option {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     grid-auto-rows: minmax(104px, auto);
     gap: 0.7rem;
-    grid-template-areas: 'radar radar a b' 'radar radar c c' 'd e f g' 'h h h h';
+    grid-template-areas: 'radar radar a b' 'radar radar c c' 'd e f g' 'h h i i';
   }
   .launchpad-bento .area-radar { grid-area: radar; }
   .launchpad-bento .area-a { grid-area: a; }
@@ -1696,6 +1697,7 @@ select option {
   .launchpad-bento .area-f { grid-area: f; }
   .launchpad-bento .area-g { grid-area: g; }
   .launchpad-bento .area-h { grid-area: h; }
+  .launchpad-bento .area-i { grid-area: i; }
 }
 
 .lp-tile {
