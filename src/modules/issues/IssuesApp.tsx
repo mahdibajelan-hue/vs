@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, FolderKanban, Gauge, Info, LayoutDashboard, ListChecks, Loader2, MoreHorizontal, Network, Plus, Settings2 } from 'lucide-react'
+import { BarChart3, ClipboardList, FolderKanban, Gauge, Info, LayoutDashboard, ListChecks, Loader2, MoreHorizontal, Network, Plus, Scale, Settings2, Layers } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -14,6 +14,9 @@ import { RegisterPage } from './pages/RegisterPage'
 import { MyWorkPage } from './pages/MyWorkPage'
 import { KpiReportPage } from './pages/KpiReportPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { DecisionsPage } from './pages/DecisionsPage'
+import { PortfolioInsightsPage } from './pages/PortfolioInsightsPage'
+import { useDecisionStore } from './store/useDecisionStore'
 import { useIssueWorkStore } from './store/useIssueWorkStore'
 import { useIssueConfigStore } from './store/useIssueConfigStore'
 import type { IssueFilter } from './lib/imRegister'
@@ -24,7 +27,7 @@ import { NewIssueModal } from './components/NewIssueModal'
 import { IssueDrawer } from './components/IssueDrawer'
 import './issues.css'
 
-type Tab = 'dashboard' | 'mywork' | 'issues' | 'projects' | 'kpi' | 'report' | 'portfolio' | 'settings' | 'about'
+type Tab = 'dashboard' | 'mywork' | 'issues' | 'decisions' | 'projects' | 'kpi' | 'report' | 'portfolio' | 'insights' | 'settings' | 'about'
 
 // Per-project member management (پیگیری/تایید roles) lives inside هر پروژه (ProjectsPage ->
 // MembersModal) — a standalone cross-project "کاربران" tab here duplicated that and is gone;
@@ -34,9 +37,11 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard; primary?: boo
   { id: 'mywork', label: 'کارهای من', icon: ListChecks, primary: true },
   { id: 'issues', label: 'مسائل', icon: ClipboardList, primary: true },
   { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, primary: true },
+  { id: 'decisions', label: 'تصمیم‌ها', icon: Scale },
   { id: 'kpi', label: 'شاخص‌ها', icon: Gauge },
   { id: 'report', label: 'گزارش تاخیر', icon: BarChart3 },
   { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network },
+  { id: 'insights', label: 'هم‌افزایی پورتفولیو', icon: Layers },
   { id: 'settings', label: 'تنظیمات و قوانین', icon: Settings2 },
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
@@ -52,7 +57,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [newIssueProjectId, setNewIssueProjectId] = useState<string | null | 'pick'>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
-  const [drawerTab, setDrawerTab] = useState<'overview' | 'tasks' | 'extensions'>('overview')
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'tasks' | 'extensions' | 'decisions'>('overview')
   const [registerFilter, setRegisterFilter] = useState<Partial<IssueFilter> | undefined>(undefined)
   const [registerKey, setRegisterKey] = useState(0)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -60,7 +65,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const fetchWork = useIssueWorkStore((st) => st.fetchAll)
   const cfgLoaded = useIssueConfigStore((st) => st.loaded)
   const fetchCfg = useIssueConfigStore((st) => st.fetch)
-  const openIssue = (id: string, tab: 'overview' | 'tasks' | 'extensions' = 'overview') => { setDrawerTab(tab); setSelectedIssueId(id) }
+  const openIssue = (id: string, tab: 'overview' | 'tasks' | 'extensions' | 'decisions' = 'overview') => { setDrawerTab(tab); setSelectedIssueId(id) }
   const goRegister = (f?: Partial<IssueFilter>) => { setRegisterFilter(f); setRegisterKey((k) => k + 1); setTab('issues') }
 
   useEffect(() => {
@@ -70,6 +75,8 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
   // tasks/extensions follow the issue list (reloaded whenever the set of visible issues changes)
   useEffect(() => { if (!loading) fetchWork() }, [loading, issuesCount, fetchWork])
+  const fetchDecisions = useDecisionStore((st) => st.fetchAll)
+  useEffect(() => { if (!loading) fetchDecisions() }, [loading, issuesCount, fetchDecisions])
 
   // Arrived here from Project Radar with a project already in context: open straight into that
   // project's issue list instead of the dashboard, and stay locked to it — hide every
@@ -170,6 +177,10 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             />
           ) : tab === 'issues' ? (
             <RegisterPage key={registerKey} onSelectIssue={openIssue} onNewIssue={() => openNewIssue()} initialFilter={registerFilter} />
+          ) : tab === 'decisions' ? (
+            <DecisionsPage onOpenIssue={(id) => openIssue(id, 'decisions')} />
+          ) : tab === 'insights' ? (
+            <PortfolioInsightsPage onSelectIssue={openIssue} />
           ) : tab === 'kpi' ? (
             <KpiReportPage onSelectIssue={openIssue} />
           ) : tab === 'settings' ? (

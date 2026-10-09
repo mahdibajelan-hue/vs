@@ -16,8 +16,10 @@ import { AnalysisTab } from './drawer/AnalysisTab'
 import { ExtensionsTab } from './drawer/ExtensionsTab'
 import { LinksTab } from './drawer/LinksTab'
 import { HistoryTab } from './drawer/HistoryTab'
+import { DecisionsTab } from './drawer/DecisionsTab'
+import { useDecisionStore } from '../store/useDecisionStore'
 
-type Tab = 'overview' | 'tasks' | 'analysis' | 'extensions' | 'links' | 'history'
+type Tab = 'overview' | 'tasks' | 'decisions' | 'analysis' | 'extensions' | 'links' | 'history'
 
 /** Full issue workspace. Replaces the legacy modal; every action here goes through the server-side workflow guards. */
 export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { issueId: string; onClose: () => void; initialTab?: Tab }) {
@@ -34,6 +36,9 @@ export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { iss
   const fetchCfg = useIssueConfigStore((s) => s.fetch)
   const userId = useAuthStore((s) => s.profile?.id)
   const role = useIssuesCurrentRole(issue?.projectId ?? null)
+  const decisions = useDecisionStore((s) => s.decisions)
+  const decisionsLoaded = useDecisionStore((s) => s.loaded)
+  const fetchDecisions = useDecisionStore((s) => s.fetchAll)
   const [tab, setTab] = useState<Tab>(initialTab)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -41,6 +46,7 @@ export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { iss
   const exts = useMemo(() => allExt.filter((e) => e.issueId === issueId), [allExt, issueId])
 
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
+  useEffect(() => { if (!decisionsLoaded) fetchDecisions() }, [decisionsLoaded, fetchDecisions])
   useEffect(() => { fetchDetail(issueId) }, [issueId, fetchDetail, tasks.length])
   // opening the issue acknowledges its in-app notifications
   useEffect(() => { supabase.rpc('im_notif_mark_issue_read', { p_issue: issueId }).then(() => undefined) }, [issueId])
@@ -56,6 +62,7 @@ export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { iss
   const tabs: { id: Tab; label: string; n?: number }[] = [
     { id: 'overview', label: 'نمای کلی' },
     { id: 'tasks', label: 'اقدامات', n: tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length },
+    { id: 'decisions', label: 'تصمیم‌ها', n: decisions.filter((x) => x.issueId === issueId && x.status === 'pending').length },
     { id: 'analysis', label: 'تحلیل علت' },
     { id: 'extensions', label: 'تمدیدها', n: exts.filter((e) => e.status === 'pending').length },
     { id: 'links', label: 'پیوند و شواهد', n: (links?.length ?? 0) + (attachments?.length ?? 0) },
@@ -85,6 +92,7 @@ export function IssueDrawer({ issueId, onClose, initialTab = 'overview' }: { iss
         <div className="im-drawer-body">
           {tab === 'overview' && <OverviewTab issue={issue} tasks={tasks} attachments={attachments ?? []} roles={roles} />}
           {tab === 'tasks' && <TasksTab issue={issue} tasks={tasks} roles={roles} />}
+          {tab === 'decisions' && <DecisionsTab issue={issue} roles={roles} />}
           {tab === 'analysis' && <AnalysisTab issue={issue} roles={roles} />}
           {tab === 'extensions' && <ExtensionsTab issue={issue} tasks={tasks} extensions={exts} roles={roles} />}
           {tab === 'links' && <LinksTab issue={issue} links={links ?? []} attachments={attachments ?? []} roles={roles} />}

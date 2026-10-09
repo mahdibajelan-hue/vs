@@ -1,0 +1,8 @@
+-- Issue Management v2 — extends im_generate_notifications() with the «decision_overdue» rule (applied live as a patch of the
+-- function body; this file documents the appended block). Block, inserted before the final RETURN:
+--   for e in select dc.*, i2.id as iid from im_decisions dc left join im_issues i2 on i2.id = dc.issue_id
+--            where dc.status = 'pending' and dc.needed_by is not null and dc.needed_by < current_date loop
+--     (skips decisions without an issue) → decider gets level 1 (key decision:<id>:L1:<decider>);
+--     after 3 overdue days project admins get level 2 (key decision:<id>:L2:<admin>)
+--   end loop;
+-- Patch procedure (idempotent): pg_get_functiondef → replace the RETURN line → EXECUTE. See git history of this file for the exact DO block.

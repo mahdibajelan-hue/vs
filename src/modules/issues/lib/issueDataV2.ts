@@ -5,13 +5,13 @@ export interface ImTaskRow {
   start_date: string | null; due_date: string | null; original_due_date: string | null; extension_count: number
   status: string; progress: number; blocked_kind: string | null; blocked_since: string | null
   completion_claimed_at: string | null; verified_at: string | null; verified_by: string | null; last_progress_at: string | null
-  description?: string; expected_output?: string
+  blocked_decision_id?: string | null; description?: string; expected_output?: string
 }
 export const imTaskFromRow = (r: ImTaskRow): ImTask => ({
   id: r.id, issueId: r.issue_id, title: r.title, executorId: r.executor_id, approverId: r.approver_id, startDate: r.start_date, dueDate: r.due_date,
   originalDueDate: r.original_due_date, extensionCount: r.extension_count ?? 0, status: r.status as ImTaskStatus, progress: r.progress ?? 0,
   blockedKind: r.blocked_kind, blockedSince: r.blocked_since, completionClaimedAt: r.completion_claimed_at, verifiedAt: r.verified_at,
-  verifiedBy: r.verified_by, lastProgressAt: r.last_progress_at,
+  verifiedBy: r.verified_by, lastProgressAt: r.last_progress_at, blockedDecisionId: r.blocked_decision_id ?? null,
 })
 
 export interface ImExtensionRow { id: string; issue_id: string; task_id: string | null; from_due: string; to_due: string; reason: string; status: string; requested_by: string | null; requested_at: string }

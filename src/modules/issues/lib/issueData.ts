@@ -6,10 +6,11 @@ export interface ImProjectRow {
   description: string
   created_by: string | null
   created_at: string
+  scope_level?: string | null
 }
 
 export function imProjectFromRow(r: ImProjectRow): ImProject {
-  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at }
+  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at, scopeLevel: (r.scope_level as ImProject['scopeLevel']) ?? 'project' }
 }
 
 export interface ImIssueRow {

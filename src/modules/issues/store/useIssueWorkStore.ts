@@ -57,7 +57,7 @@ interface WorkState {
 
   transition: (issueId: string, to: ImStage, reason: string, patch?: Record<string, unknown>) => Promise<WorkResult>
   addTask: (issueId: string, t: { title: string; executorId: string | null; approverId: string | null; dueDate: string | null; startDate?: string | null }) => Promise<WorkResult>
-  setTaskStatus: (taskId: string, status: ImTaskStatus, extra?: { blockedKind?: string; blockedNote?: string }) => Promise<WorkResult>
+  setTaskStatus: (taskId: string, status: ImTaskStatus, extra?: { blockedKind?: string; blockedNote?: string; blockedDecisionId?: string | null }) => Promise<WorkResult>
   setTaskProgress: (taskId: string, progress: number) => Promise<WorkResult>
   verifyTask: (taskId: string, accept: boolean) => Promise<WorkResult>
   setTaskDeps: (taskId: string, dependsOn: string[]) => Promise<WorkResult>
@@ -146,7 +146,7 @@ export const useIssueWorkStore = create<WorkState>()((set, get) => ({
 
   setTaskStatus: async (taskId, status, extra) => {
     const patch: Record<string, unknown> = { status }
-    if (status === 'blocked') { patch.blocked_kind = extra?.blockedKind ?? ''; patch.blocked_note = extra?.blockedNote ?? '' }
+    if (status === 'blocked') { patch.blocked_kind = extra?.blockedKind ?? ''; patch.blocked_note = extra?.blockedNote ?? ''; patch.blocked_decision_id = extra?.blockedDecisionId ?? null }
     if (status === 'pending_verification') { patch.completion_claimed_at = new Date().toISOString(); patch.completion_claimed_by = uid() }
     const { data, error } = await supabase.from('im_issue_tasks').update(patch).eq('id', taskId).select().single()
     if (error) return fail('تغییر وضعیت اقدام', error)

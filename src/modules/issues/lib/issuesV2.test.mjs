@@ -148,3 +148,44 @@ import * as rg from './imRegister.ts'
   assert.ok(rg.parseImport('x,y\n1,2').errors[0].message.includes('عنوان'))
   console.log('register lib ok')
 }
+
+// ── decisions + portfolio
+import * as dc from './imDecisions.ts'
+import * as pf from './imPortfolio.ts'
+{
+  const D = (o) => ({ id: 'd1', code: 'DEC-00001', projectId: 'p1', issueId: 'i', title: 't', question: '', requestedBy: null, deciderId: 'u', neededBy: '2026-04-10', status: 'pending', chosenOption: null, rationale: '', decidedAt: null, createdAt: '', ...o })
+  assert.equal(dc.decisionHealth(D(), '2026-04-01'), 'on_time')
+  assert.equal(dc.decisionHealth(D(), '2026-04-09'), 'due_soon')
+  assert.equal(dc.decisionHealth(D(), '2026-04-12'), 'overdue')
+  assert.equal(dc.decisionHealth(D({ status: 'decided' }), '2026-05-01'), 'closed')
+  assert.equal(dc.decisionHealth(D({ neededBy: null }), '2026-05-01'), 'on_time')
+  assert.equal(dc.decisionLateDays(D(), '2026-04-15'), 5)
+  assert.equal(dc.decisionLateDays(D({ status: 'decided', decidedAt: '2026-04-12T08:00:00Z' }), '2026-09-01'), 2) // stops counting at the decision
+  assert.equal(dc.decisionLateDays(D({ status: 'decided', decidedAt: '2026-04-08T08:00:00Z' }), '2026-09-01'), 0)
+  const tk = [{ id: 'a', status: 'blocked', blockedSince: '2026-04-01T00:00:00Z', blockedDecisionId: 'd1' }, { id: 'b', status: 'blocked', blockedSince: '2026-04-05T00:00:00Z', blockedDecisionId: 'd1' }, { id: 'c', status: 'blocked', blockedSince: '2026-04-01T00:00:00Z', blockedDecisionId: 'zz' }, { id: 'd', status: 'in_progress', blockedSince: null, blockedDecisionId: 'd1' }]
+  assert.deepEqual(dc.delayImpact('d1', tk, '2026-04-11'), { blockedTasks: 2, taskDays: 10 + 6 })
+  const O = (id, o) => ({ id, decisionId: 'd1', title: id, pros: '', cons: '', costImpact: null, timeImpactDays: null, recommended: false, ...o })
+  assert.deepEqual(dc.rankOptions([O('x', { timeImpactDays: 5 }), O('y', { recommended: true, timeImpactDays: 30 }), O('z', { timeImpactDays: 2, costImpact: 9 }), O('w', { timeImpactDays: 2, costImpact: 3 })]).map((o) => o.id), ['y', 'w', 'z', 'x'])
+
+  const ISS = (id, o) => issue({ id, ...o })
+  const L = [
+    ISS('a', { projectId: 'p1', category: 'procurement', severity: 'critical', deadlineDate: '2026-03-01', stage: 'in_progress', status: 'in_progress', rootCauseSummary: 'ضعف در پایش تأمین‌کننده' }),
+    ISS('b', { projectId: 'p2', category: 'procurement', deadlineDate: '2026-09-01', rootCauseSummary: 'ضعف پایش تامین کننده' }),
+    ISS('c', { projectId: 'p1', category: 'engineering', deadlineDate: '2026-09-01', rootCauseSummary: 'ضعف پایش تامین کننده کالا', stage: 'closed', status: 'approved' }),
+    ISS('d', { projectId: 'p1', category: 'hse', deadlineDate: '2026-09-01', rootCauseSummary: 'خطای طراحی' }),
+    ISS('corp', { projectId: 'pc', category: 'procurement', title: 'پایش تأمین‌کنندگان در سطح شرکت', deadlineDate: '2026-12-01' }),
+  ]
+  L[0].corporateIssueId = 'corp'; L[1].corporateIssueId = 'corp'
+  const h = pf.heatmap(L, '2026-04-01')
+  assert.equal(h.cells.find((c) => c.projectId === 'p1' && c.category === 'procurement').overdue, 1)
+  assert.equal(h.cells.find((c) => c.projectId === 'p1' && c.category === 'procurement').critical, 1)
+  assert.equal(h.cells.some((c) => c.category === 'engineering'), false) // closed issues are not on the heatmap
+  const sc2 = pf.sharedCauses(L)
+  assert.equal(sc2.length, 1); assert.deepEqual(sc2[0].projectIds.sort(), ['p1', 'p2']); assert.equal(sc2[0].issueIds.length, 3); assert.equal(sc2[0].closedCount, 1)
+  const cr = pf.corporateRollup(L, '2026-04-01')
+  assert.equal(cr.length, 1); assert.equal(cr[0].projects, 2); assert.equal(cr[0].active, 2); assert.equal(cr[0].overdue, 1); assert.equal(cr[0].worstSeverity, 4)
+  assert.equal(pf.wouldCreateCycle(L, 'corp', 'a'), true) // corp is a's parent → attaching corp under a closes a loop
+  assert.equal(pf.wouldCreateCycle(L, 'd', 'corp'), false)
+  assert.equal(pf.wouldCreateCycle(L, 'a', 'a'), true)
+  console.log('decisions + portfolio libs ok')
+}

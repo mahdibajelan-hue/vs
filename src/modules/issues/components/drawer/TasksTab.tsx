@@ -9,6 +9,7 @@ import { canVerifyTask, hasDependencyCycle } from '../../lib/imWorkflow'
 import { todayIso } from '../../lib/issueRing'
 import { useIssueWorkStore } from '../../store/useIssueWorkStore'
 import { useUserDirectory } from '../../lib/useUsers'
+import { useDecisionStore } from '../../store/useDecisionStore'
 
 const STATUS_COLOR: Record<string, string> = { not_started: 'var(--im-muted)', in_progress: 'var(--im-amber)', blocked: 'var(--im-coral)', pending_verification: 'var(--im-violet)', done: 'var(--im-mint)', cancelled: 'var(--im-muted)' }
 
@@ -23,6 +24,8 @@ export function TasksTab({ issue, tasks, roles }: { issue: ImIssue; tasks: ImTas
   const [blocking, setBlocking] = useState<string | null>(null)
   const [blockKind, setBlockKind] = useState('decision')
   const [blockNote, setBlockNote] = useState('')
+  const [blockDecision, setBlockDecision] = useState('')
+  const decisions = useDecisionStore((s) => s.decisions).filter((d) => d.issueId === issue.id && d.status === 'pending')
   const [depFor, setDepFor] = useState<string | null>(null)
   const today = todayIso()
   const byId = new Map(tasks.map((t) => [t.id, t]))
@@ -95,8 +98,13 @@ export function TasksTab({ issue, tasks, roles }: { issue: ImIssue; tasks: ImTas
             {blocking === t.id && (
               <div className="im-row" style={{ alignItems: 'flex-end' }}>
                 <div className="im-field" style={{ margin: 0 }}><label>علت انسداد</label><select value={blockKind} onChange={(e) => setBlockKind(e.target.value)}>{Object.entries(IM_BLOCK_KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+                {blockKind === 'decision' && (
+                  <div className="im-field" style={{ margin: 0 }}><label>تصمیم مرتبط</label>
+                    <select value={blockDecision} onChange={(e) => setBlockDecision(e.target.value)}><option value="">— انتخاب (توصیه می‌شود) —</option>{decisions.map((d) => <option key={d.id} value={d.id}>{d.code} · {d.title}</option>)}</select>
+                  </div>
+                )}
                 <div className="im-field" style={{ margin: 0 }}><label>توضیح</label><input value={blockNote} onChange={(e) => setBlockNote(e.target.value)} /></div>
-                <button className="im-btn im-btn-danger im-btn-sm" onClick={async () => { const r = await w.setTaskStatus(t.id, 'blocked', { blockedKind: blockKind, blockedNote: blockNote }); if (r.ok) { setBlocking(null); setBlockNote('') } }}>ثبت انسداد</button>
+                <button className="im-btn im-btn-danger im-btn-sm" onClick={async () => { const r = await w.setTaskStatus(t.id, 'blocked', { blockedKind: blockKind, blockedNote: blockNote, blockedDecisionId: blockKind === 'decision' && blockDecision ? blockDecision : null }); if (r.ok) { setBlocking(null); setBlockNote(''); setBlockDecision('') } }}>ثبت انسداد</button>
               </div>
             )}
             {depFor === t.id && (

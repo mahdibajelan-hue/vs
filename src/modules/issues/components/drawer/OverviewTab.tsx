@@ -6,6 +6,7 @@ import { IM_PRIORITIES, IM_PRIORITY_LABEL_FA, type ImIssue, type ImIssuePriority
 import { IM_BLOCK_KIND_FA, IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, effectiveDue, stageOf } from '../../lib/imModel'
 import { allowedNext, closeBlockers } from '../../lib/imWorkflow'
 import { findSimilarIssues } from '../../lib/imText'
+import { wouldCreateCycle } from '../../lib/imPortfolio'
 import { useIssuesStore } from '../../store/useIssuesStore'
 import { useIssueWorkStore } from '../../store/useIssueWorkStore'
 import { useIssueConfigStore } from '../../store/useIssueConfigStore'
@@ -19,6 +20,7 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
   const addLink = useIssueWorkStore((s) => s.addLink)
   const patchIssue = useIssuesStore((s) => s.patchIssue)
   const allIssues = useIssuesStore((s) => s.issues)
+  const allProjects = useIssuesStore((s) => s.projects)
   const stage = stageOf(issue)
   const [pending, setPending] = useState<ImStage | null>(null)
   const [reason, setReason] = useState('')
@@ -33,6 +35,12 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
   const cat = cfg.categories.find((c) => c.key === issue.category)
   const blockers = closeBlockers({ ...issue, resolutionSummary: resolution, acceptanceCriteria: criteria }, tasks, attachments.filter((a) => a.kind === 'resolution_evidence').length, cat)
   const similar = useMemo(() => findSimilarIssues({ title: issue.title, description: issue.description, projectId: issue.projectId, category: issue.category, location: issue.location }, allIssues, { excludeId: issue.id, limit: 4 }), [issue, allIssues])
+  const parentCandidates = useMemo(() => {
+    const corp = new Set(allProjects.filter((p) => p.scopeLevel === 'corporate' || p.scopeLevel === 'program').map((p) => p.id))
+    return allIssues.filter((x) => corp.has(x.projectId) && x.id !== issue.id && !wouldCreateCycle(allIssues, issue.id, x.id))
+  }, [allIssues, allProjects, issue.id])
+  const parent = allIssues.find((x) => x.id === issue.corporateIssueId)
+  const children = allIssues.filter((x) => x.corporateIssueId === issue.id)
   const labelOf = (s: string) => cfg.stages.find((x) => x.key === s)?.labelFa ?? IM_STAGE_LABEL_FA[s as ImStage] ?? s
   const pendingDef = pending ? cfg.transitions.find((t) => t.from === stage && t.to === pending) : null
   const needsText = pending === 'resolution_review' || pending === 'closed' || pending === 'effectiveness_check'
@@ -111,6 +119,8 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
           <div className="im-kv"><span>منبع</span><span>{IM_SOURCE_FA[issue.source] ?? issue.source} <MissionOriginChip recordId={issue.id} /></span></div>
           {issue.externalSystem && <div className="im-kv"><span>سامانهٔ خارجی</span><span>{issue.externalSystem} · {issue.externalId} · <b>{issue.syncStatus}</b></span></div>}
           {issue.blockedSince && <div className="im-notice bad" style={{ marginTop: 10 }}>این مسئله به‌دلیل اقدام مسدود در انتظار است ({IM_BLOCK_KIND_FA[issue.blockedKind ?? ''] ?? 'نامشخص'}) از {formatJalali(issue.blockedSince.slice(0, 10))}</div>}
+          <div className="im-kv"><span>مسئلهٔ مادر (سطح شرکت)</span><span>{parent ? <span><span className="im-code">{parent.code}</span> {parent.title}</span> : '—'}{isStaff && parentCandidates.length > 0 && <select style={{ width: 'auto', marginRight: 8, padding: 5 }} value={issue.corporateIssueId ?? ''} onChange={(e) => patchIssue(issue.id, { corporate_issue_id: e.target.value || null }, 'پیوند به مسئلهٔ مادر')} aria-label="مسئلهٔ مادر"><option value="">— بدون مادر —</option>{parentCandidates.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.title}</option>)}</select>}</span></div>
+          {children.length > 0 && <div className="im-kv"><span>مسائل فرزند</span><span>{children.length} مسئله در {new Set(children.map((c) => c.projectId)).size} پروژه</span></div>}
           {isStaff && <div style={{ marginTop: 10 }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setEditing(true)}><Pencil size={13} /> ویرایش مشخصات</button></div>}
         </div>
       )}

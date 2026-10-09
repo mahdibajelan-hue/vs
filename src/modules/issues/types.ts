@@ -18,6 +18,7 @@ export interface ImProject {
   description: string
   createdBy: string | null
   createdAt: string
+  scopeLevel?: 'project' | 'program' | 'corporate'
 }
 
 export type ImIssuePriority = 'low' | 'medium' | 'high' | 'critical'
@@ -130,6 +131,7 @@ export interface ImTask {
   verifiedAt: string | null
   verifiedBy: string | null
   lastProgressAt: string | null
+  blockedDecisionId?: string | null
   dependsOn?: string[]
 }
 
