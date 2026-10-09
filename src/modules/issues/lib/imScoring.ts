@@ -1,10 +1,21 @@
 import type { ImIssuePriority } from '../types'
 import { priorityRank, rankToPriority } from './imModel'
 
-export type ImpactLevel = 0 | 1 | 2 | 3 | 4
+/** 0 none · 1 minor · 2 moderate · 3 major (db: quality/safety/contract are stored as 0..3) */
+export type ImpactLevel = 0 | 1 | 2 | 3
 export interface ImpactInput { time: ImpactLevel; cost: ImpactLevel; quality: ImpactLevel; safety: ImpactLevel; contract: ImpactLevel; objectives: ImpactLevel }
 
 export const IMPACT_LABEL_FA: Record<keyof ImpactInput, string> = { time: 'زمان', cost: 'هزینه', quality: 'کیفیت', safety: 'ایمنی', contract: 'قرارداد', objectives: 'اهداف پروژه' }
+
+export function timeLevel(days: number | null | undefined): ImpactLevel {
+  const d = days ?? 0
+  return d <= 0 ? 0 : d <= 7 ? 1 : d <= 30 ? 2 : 3
+}
+/** Cost level against configurable thresholds (default in Rials: 100M / 1B / 10B). */
+export function costLevel(amount: number | null | undefined, th: [number, number, number] = [1e8, 1e9, 1e10]): ImpactLevel {
+  const a = amount ?? 0
+  return a <= 0 ? 0 : a < th[0] ? 1 : a < th[1] ? 2 : 3
+}
 
 /** Severity = worst impact dimension, bumped one level when ≥3 dimensions are impacted at level ≥2. Explainable. */
 export function suggestSeverity(imp: ImpactInput): { severity: ImIssuePriority; reasons: string[] } {
