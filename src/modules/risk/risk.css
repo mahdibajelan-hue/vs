@@ -1,0 +1,82 @@
+/* ==========================================================================
+   Enterprise Risk Management — shares the design system of «مدیریت موانع و اقدامات» (issues.css, class prefix im-*) so both modules
+   look and behave the same; this file only adds what risk needs: the risk accent, score triples, the 5×5 matrix, KRI cards.
+   ========================================================================== */
+.rk-root { --im-accent: #ef4444; --im-navy-a: #3b0d1a; --im-navy-b: #8a1c3a; }
+:root[data-theme='light'] .rk-root { --im-accent: #b91c1c; }
+.rk-root .im-banner { background: linear-gradient(135deg, #14213d 0%, #1b3a6b 55%, #5b1a3a 120%); }
+
+/* inherent → current → residual */
+.rk-s3 { display: inline-flex; align-items: center; gap: 4px; direction: rtl; }
+.rk-s3 .arr { color: var(--im-muted); font-size: 11px; }
+.rk-sc { --c: var(--im-muted); min-width: 34px; padding: 3px 7px; border-radius: 9px; text-align: center; font-weight: 800; font-size: 12.5px; line-height: 1.35; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+.rk-sc small { display: block; font-size: 8.5px; font-weight: 700; opacity: 0.75; margin-top: -1px; }
+.rk-s3.lg .rk-sc { min-width: 62px; padding: 8px 10px; font-size: 22px; border-radius: 14px; }
+.rk-s3.lg .rk-sc small { font-size: 10.5px; }
+.rk-s3.lg .arr { font-size: 16px; }
+.rk-lv-low { --c: #22c55e; } .rk-lv-medium { --c: #eab308; } .rk-lv-high { --c: #f97316; } .rk-lv-critical { --c: #ef4444; }
+:root[data-theme='light'] .rk-lv-low { --c: #15803d; } :root[data-theme='light'] .rk-lv-medium { --c: #a16207; } :root[data-theme='light'] .rk-lv-high { --c: #c2410c; } :root[data-theme='light'] .rk-lv-critical { --c: #b91c1c; }
+.rk-flag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 20px; background: color-mix(in srgb, var(--c, var(--im-coral)) 13%, transparent); color: var(--c, var(--im-coral)); border: 1px solid color-mix(in srgb, var(--c, var(--im-coral)) 35%, transparent); white-space: nowrap; }
+.rk-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+/* 5 × 5 matrix */
+.rk-matrix-wrap { display: grid; grid-template-columns: 26px 1fr; gap: 6px; direction: ltr; }
+.rk-matrix { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.rk-cell { position: relative; aspect-ratio: 1.25; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 20px; background: var(--c); transition: transform 160ms var(--im-ease), box-shadow 160ms, opacity 160ms; overflow: hidden; }
+.rk-cell small { font-size: 9.5px; font-weight: 700; opacity: 0.8; position: absolute; top: 4px; inset-inline-start: 6px; }
+.rk-cell:active { transform: scale(0.96); }
+.rk-cell.dim { opacity: 0.35; }
+.rk-cell.sel { box-shadow: 0 0 0 3px var(--im-text); }
+.rk-cell.tol { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55); }
+.rk-axis-y { display: grid; grid-template-rows: repeat(5, 1fr); gap: 5px; align-items: center; justify-items: center; font-size: 11px; color: var(--im-muted); font-weight: 700; }
+.rk-axis-x { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; text-align: center; font-size: 11px; color: var(--im-muted); font-weight: 700; margin-top: 6px; }
+@media (hover: hover) and (pointer: fine) { .rk-cell:hover { transform: translateY(-2px); } }
+.rk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-inline-end: 5px; }
+
+/* KRI */
+.rk-kri { --c: var(--im-muted); position: relative; background: var(--im-panel); border: 1px solid var(--im-line); border-inline-start: 4px solid var(--c); border-radius: 16px; padding: 12px 14px; box-shadow: var(--im-shadow); display: grid; gap: 8px; }
+.rk-kri-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.rk-kri-val { font-size: 26px; font-weight: 900; color: var(--c); line-height: 1; }
+.rk-kri-val small { font-size: 11px; font-weight: 700; color: var(--im-muted); margin-inline-start: 4px; }
+.rk-band { height: 8px; border-radius: 6px; position: relative; background: linear-gradient(90deg, #22c55e 0 var(--w, 50%), #f59e0b var(--w, 50%) var(--c2, 75%), #ef4444 var(--c2, 75%) 100%); opacity: 0.8; }
+.rk-band i { position: absolute; top: -4px; width: 3px; height: 16px; border-radius: 2px; background: var(--im-text); transform: translateX(-50%); }
+.rk-spark { width: 100%; height: 44px; }
+.rk-spark path.l { fill: none; stroke: var(--c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rk-spark path.a { fill: color-mix(in srgb, var(--c) 16%, transparent); stroke: none; }
+.rk-spark line { stroke: var(--im-line-2); stroke-dasharray: 3 3; }
+
+/* form helpers */
+.rk-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.rk-scale button { padding: 8px 4px; border-radius: 10px; background: var(--im-panel-2); border: 1px solid var(--im-line); font-weight: 800; font-size: 13px; color: var(--im-muted-2); line-height: 1.3; transition: transform 140ms var(--im-ease), background-color 0.15s, border-color 0.15s; }
+.rk-scale button small { display: block; font-size: 9.5px; font-weight: 600; opacity: 0.85; }
+.rk-scale button:active { transform: scale(0.96); }
+.rk-scale button.on { background: color-mix(in srgb, var(--c, var(--im-accent)) 18%, transparent); border-color: var(--c, var(--im-accent)); color: var(--c, var(--im-accent)); }
+.rk-dims { display: grid; gap: 8px; }
+.rk-dim { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; }
+.rk-dim > label { font-size: 12.5px; font-weight: 700; margin: 0; }
+.rk-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--c, var(--im-accent)) 8%, var(--im-panel)); border: 1px solid color-mix(in srgb, var(--c, var(--im-accent)) 35%, var(--im-line)); }
+.rk-sect { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--im-line); }
+.rk-sect > h3 { margin: 0 0 10px; font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+.rk-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rk-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .rk-grid2, .rk-grid3 { grid-template-columns: 1fr; } .rk-dim { grid-template-columns: 1fr; } }
+.rk-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--im-line); margin: 0 0 14px; scrollbar-width: none; }
+.rk-tabs::-webkit-scrollbar { display: none; }
+.rk-row-click { cursor: pointer; }
+.rk-pill-ok { --c: var(--im-mint); } .rk-pill-warn { --c: var(--im-amber); } .rk-pill-bad { --c: var(--im-coral); }
+.rk-drawer-wide { width: min(900px, 100%) !important; }
+.rk-timeline { position: relative; padding-inline-start: 18px; display: grid; gap: 10px; }
+.rk-timeline::before { content: ''; position: absolute; inset-inline-start: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--im-line-2); border-radius: 2px; }
+.rk-tl { position: relative; font-size: 12.5px; }
+.rk-tl::before { content: ''; position: absolute; inset-inline-start: -17px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--im-accent)); border: 2px solid var(--im-bg-2); }
+.rk-tl time { color: var(--im-muted); font-size: 11px; }
+.rk-step { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--im-panel-2); border: 1px solid var(--im-line); }
+.rk-compare { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rk-compare th, .rk-compare td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--im-line); }
+.rk-compare th { color: var(--im-muted-2); font-weight: 700; font-size: 11.5px; }
+.rk-bar-cell { position: relative; min-width: 90px; }
+.rk-bar-cell i { position: absolute; inset-block: 4px; inset-inline-start: 0; border-radius: 6px; background: color-mix(in srgb, var(--c, var(--im-accent)) 22%, transparent); }
+.rk-bar-cell b { position: relative; }
+.rk-quad { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .rk-quad { grid-template-columns: repeat(2, 1fr); } }
+@media print { .im-head, .im-fab, .im-nav { display: none !important; } .rk-root { height: auto; overflow: visible; } }

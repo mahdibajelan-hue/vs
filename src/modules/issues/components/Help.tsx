@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CircleHelp, GripHorizontal, X } from 'lucide-react'
-import { HELP, type HelpKey } from '../lib/help'
+import { HELP, type HelpKey, type HelpTopic } from '../lib/help'
 
 let lastPos: { x: number; y: number } | null = null
 
 /** Floating, draggable explanation box. Stays open (no scrim) until its own × is pressed. */
-function HelpPanel({ topic, onClose }: { topic: HelpKey; onClose: () => void }) {
-  const t = HELP[topic]
+function HelpPanel({ topic, content, onClose }: { topic?: HelpKey; content?: HelpTopic; onClose: () => void }) {
+  const t = content ?? HELP[topic ?? 'hub']
   const [pos, setPos] = useState(() => lastPos ?? { x: Math.max(12, window.innerWidth - 460), y: 96 })
   const drag = useRef<{ dx: number; dy: number } | null>(null)
   const down = (e: React.PointerEvent<HTMLElement>) => {
@@ -51,14 +51,15 @@ function Block({ title, items, ordered }: { title: string; items: string[]; orde
 }
 
 /** The «راهنما» button: opens the explanation of one part of the module. */
-export function HelpButton({ topic, label = 'راهنما' }: { topic: HelpKey; label?: string }) {
+export function HelpButton({ topic, content, label = 'راهنما' }: { topic?: HelpKey; content?: HelpTopic; label?: string }) {
   const [open, setOpen] = useState(false)
+  const t = content ?? HELP[topic ?? 'hub']
   return (
     <>
-      <button type="button" className="im-help-btn" aria-label={`راهنما: ${HELP[topic].title}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="im-help-btn" aria-label={`راهنما: ${t.title}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <CircleHelp size={14} aria-hidden />{label}
       </button>
-      {open && <HelpPanel topic={topic} onClose={() => setOpen(false)} />}
+      {open && <HelpPanel topic={topic} content={content} onClose={() => setOpen(false)} />}
     </>
   )
 }

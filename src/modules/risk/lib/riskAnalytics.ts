@@ -67,7 +67,7 @@ export function computeExposureTimeline(risks: RmRisk[], assessments: RmRiskAsse
 }
 
 export function computeStatusCounts(risks: RmRisk[]): Record<RmRiskStatus, number> {
-  const counts: Record<RmRiskStatus, number> = { open: 0, monitoring: 0, escalated: 0, closed: 0 }
+  const counts: Record<RmRiskStatus, number> = { open: 0, monitoring: 0, escalated: 0, closed: 0, realized: 0 }
   for (const r of risks) counts[r.status]++
   return counts
 }
