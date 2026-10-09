@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
 
   // 1) generate (idempotent) — only needs the service role
   const gen = await db.rpc('im_generate_notifications')
+  const genRisk = await db.rpc('rm_generate_notifications') // Risk module (same outbox, scope 'risk'); failure must not block delivery
 
   // 2) deliver due rows
   const { data: rows } = await db.from('im_notif_outbox').select('*').neq('channel', 'in_app').eq('status', 'queued').lte('scheduled_at', new Date().toISOString()).lt('attempts', 5).order('level', { ascending: false }).limit(200)
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     let ok = false, error = ''
     if (prov && to) {
       try {
-        const res = await fetch(prov.url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(prov.token ? { Authorization: `Bearer ${prov.token}` } : {}) }, body: JSON.stringify({ channel: ch, to, title: r.title, body: r.body, issue_id: r.issue_id, code: r.payload?.code, level: r.level, severity: r.severity }) })
+        const res = await fetch(prov.url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(prov.token ? { Authorization: `Bearer ${prov.token}` } : {}) }, body: JSON.stringify({ channel: ch, to, title: r.title, body: r.body, issue_id: r.issue_id, risk_id: r.risk_id, code: r.payload?.code, level: r.level, severity: r.severity }) })
         ok = res.ok
         if (!ok) error = `http_${res.status}`
       } catch (e) { error = e instanceof Error ? e.message : 'network_error' }
@@ -75,5 +76,5 @@ Deno.serve(async (req) => {
     await db.from('im_notif_outbox').update(patch).eq('id', r.id)
     stats[o.status]++
   }
-  return json({ channels, generated: gen.data ?? null, delivered: stats, picked: rows?.length ?? 0 })
+  return json({ channels, generated: gen.data ?? null, generated_risk: genRisk.data ?? null, delivered: stats, picked: rows?.length ?? 0 })
 })
