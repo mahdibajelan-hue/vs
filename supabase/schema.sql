@@ -15175,9 +15175,18 @@ begin
       when 'engineering' then 'technical' when 'procurement' then 'procurement' when 'construction' then 'technical'
       when 'hse' then 'hse' when 'quality' then 'quality' when 'schedule' then 'schedule' when 'cost' then 'cost'
       else 'other' end;
-    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by)
-    values (v_proj, '', f.title, f.description || E'\n\n— منبع: بازدید ' || m.code, v_cat, 'threat', f.owner_id, v_prob, v_imp, auth.uid())
-    returning id into v_new;
+    select id into v_new from rm_risks where external_system = 'missions' and external_id = f.id::text;
+    if v_new is null then
+      v_cat := rm_cat_from_topic(f.topic_key);
+      insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by,
+                            source, source_ref_type, source_ref_id, external_system, external_id, sync_status, synced_at, source_snapshot)
+      values (v_proj, '', f.title, f.description || E'\n\n— منبع: بازدید ' || m.code, v_cat, 'threat', f.owner_id, v_prob, v_imp, auth.uid(),
+              'mission_debrief', 'finding', f.id::text, 'missions', f.id::text, 'synced', now(),
+              jsonb_build_object('mission_id', m.id, 'mission_code', m.code, 'finding_id', f.id, 'topic', f.topic_key, 'destination', m.destination, 'visit_date', m.start_date))
+      returning id into v_new;
+      insert into rm_risk_links (risk_id, target_type, target_id, target_label, relation, created_by) values (v_new, 'finding', f.id::text, m.code, 'source', auth.uid()) on conflict do nothing;
+    end if;
+    update rm_suggestions set status = 'accepted', created_risk_id = v_new, decided_by = auth.uid(), decided_at = now() where source = 'mission_debrief' and source_ref_id = f.id::text and status = 'pending';
     v_label := 'Risk';
   elsif p_target = 'action' then
     insert into rasta_actions (master_project_id, title, owner_id, due_date, priority, status, source, created_by)
@@ -18398,3 +18407,1031 @@ end;
 $$;
 grant execute on function im_sync_master_projects() to authenticated;
 revoke execute on function im_sync_master_projects() from public, anon;
+
+
+-- ============================================================================
+-- 79. Enterprise Risk Management v2 (supabase/risk_mgmt/001..007) — identity card, guards, controls, KRIs, policy, acceptances,
+--     central access, ingestion, Issue link, alert rules. Section 61's ms_transfer_finding (above) uses rm_cat_from_topic()/rm_suggestions defined here.
+-- ============================================================================
+
+-- ---------------------------------------------------------------- 001_core.sql
+-- ============================================================================
+-- Enterprise Risk Management v2 — core: configurable categories, richer risk identity card, immutable inherent score,
+-- append-only assessments, action effectiveness. Additive & idempotent: existing rows are kept (categories are re-mapped).
+-- ============================================================================
+create table if not exists rm_categories (
+  key text primary key,
+  label_fa text not null,
+  label_en text not null default '',
+  parent_key text references rm_categories (key) on delete set null,
+  sort smallint not null default 0,
+  active boolean not null default true,
+  legacy boolean not null default false
+);
+alter table rm_categories enable row level security;
+drop policy if exists rm_cat_read on rm_categories;
+create policy rm_cat_read on rm_categories for select using (auth.uid() is not null);
+drop policy if exists rm_cat_admin on rm_categories;
+create policy rm_cat_admin on rm_categories for all using (is_admin_user()) with check (is_admin_user());
+
+insert into rm_categories (key, label_fa, label_en, sort) values
+ ('engineering',  'مهندسی و طراحی', 'Engineering & design', 10),
+ ('procurement',  'تأمین کالا و تجهیزات', 'Procurement & supply', 20),
+ ('contractor',   'پیمانکاران و مدیریت قرارداد', 'Contractors & contracts', 30),
+ ('schedule',     'زمان‌بندی و پیشرفت پروژه', 'Schedule & progress', 40),
+ ('cost',         'هزینه، بودجه و تأمین مالی', 'Cost, budget & funding', 50),
+ ('land',         'تملک، معارضین و آزادسازی مسیر', 'Land & right-of-way', 60),
+ ('permits',      'مجوزها و هماهنگی‌های بین‌دستگاهی', 'Permits & inter-agency', 70),
+ ('construction', 'ساخت، نصب، جوشکاری و پوشش', 'Construction, welding & coating', 80),
+ ('quality',      'کنترل کیفیت و آزمون‌ها', 'Quality & testing', 90),
+ ('hse',          'HSE و محیط زیست', 'HSE & environment', 100),
+ ('logistics',    'لجستیک و حمل‌ونقل', 'Logistics & transport', 110),
+ ('hr',           'منابع انسانی و ظرفیت واحدهای تخصصی', 'People & capacity', 120),
+ ('stakeholders', 'ذی‌نفعان و تصمیمات مدیریتی', 'Stakeholders & decisions', 130),
+ ('commissioning','پیش‌راه‌اندازی، راه‌اندازی و تحویل', 'Pre-commissioning & handover', 140),
+ ('legal',        'ریسک‌های حقوقی، قانونی و حاکمیتی', 'Legal & governance', 150),
+ ('other',        'سایر', 'Other', 999)
+on conflict (key) do nothing;
+insert into rm_categories (key, label_fa, parent_key, sort) values
+ ('eng_design',  'طراحی تفصیلی و نقشه‌ها', 'engineering', 11), ('eng_change', 'تغییرات مهندسی', 'engineering', 12),
+ ('proc_longlead','اقلام با زمان تأمین طولانی', 'procurement', 21), ('proc_supplier', 'تأمین‌کننده و واردات', 'procurement', 22),
+ ('land_owner',  'معارض و مالک', 'land', 61), ('land_art9', 'ماده ۹ و ارزیابی', 'land', 62),
+ ('con_weld',    'جوشکاری', 'construction', 81), ('con_coat', 'پوشش و عایق', 'construction', 82), ('con_lower', 'خوابانیدن و پرکردن', 'construction', 83),
+ ('hse_env',     'محیط زیست', 'hse', 101), ('hse_safety', 'ایمنی کار', 'hse', 102),
+ ('comm_hydro',  'تست هیدرواستاتیک', 'commissioning', 141), ('comm_handover', 'تحویل موقت', 'commissioning', 142)
+on conflict (key) do nothing;
+
+-- legacy 8-value list → new keys (rows kept; same key where it already existed)
+alter table rm_risks drop constraint if exists rm_risks_category_check;
+update rm_risks set category = 'engineering' where category = 'technical';
+update rm_risks set category = 'stakeholders' where category = 'external';
+
+-- identity card
+alter table rm_risks add column if not exists cause text not null default '';
+alter table rm_risks add column if not exists risk_event text not null default '';
+alter table rm_risks add column if not exists consequence text not null default '';
+alter table rm_risks add column if not exists source text not null default 'manual';
+alter table rm_risks add column if not exists source_ref_type text;
+alter table rm_risks add column if not exists source_ref_id text;
+alter table rm_risks add column if not exists source_snapshot jsonb not null default '{}'::jsonb;
+alter table rm_risks add column if not exists external_system text;
+alter table rm_risks add column if not exists external_id text;
+alter table rm_risks add column if not exists sync_status text not null default 'none';
+alter table rm_risks add column if not exists synced_at timestamptz;
+alter table rm_risks add column if not exists subcategory text;
+alter table rm_risks add column if not exists discipline text not null default '';
+alter table rm_risks add column if not exists impact_dims jsonb not null default '{}'::jsonb;      -- {time,cost,quality,hse,env,legal,objective}: 0..5
+alter table rm_risks add column if not exists impact_time_days integer;
+alter table rm_risks add column if not exists impact_cost numeric;
+alter table rm_risks add column if not exists impact_objectives text not null default '';
+alter table rm_risks add column if not exists assumptions text not null default '';
+alter table rm_risks add column if not exists assessment_basis text not null default '';
+alter table rm_risks add column if not exists km_from numeric;
+alter table rm_risks add column if not exists km_to numeric;
+alter table rm_risks add column if not exists route_segment text not null default '';
+alter table rm_risks add column if not exists station text not null default '';
+alter table rm_risks add column if not exists work_front text not null default '';
+alter table rm_risks add column if not exists contractor text not null default '';
+alter table rm_risks add column if not exists work_package text not null default '';
+alter table rm_risks add column if not exists exec_stage text not null default '';
+alter table rm_risks add column if not exists monitor_id uuid references profiles (id);
+alter table rm_risks add column if not exists approver_id uuid references profiles (id);
+alter table rm_risks add column if not exists response_owner_id uuid references profiles (id);
+alter table rm_risks add column if not exists review_interval_days integer check (review_interval_days is null or review_interval_days between 1 and 730);
+alter table rm_risks add column if not exists next_review_date date;
+alter table rm_risks add column if not exists review_requested_at timestamptz;
+alter table rm_risks add column if not exists review_request_reason text not null default '';
+alter table rm_risks add column if not exists corporate_risk_id uuid;
+alter table rm_risks add column if not exists realized_at timestamptz;
+alter table rm_risks add column if not exists closed_at timestamptz;
+alter table rm_risks add column if not exists closed_reason text not null default '';
+alter table rm_risks add column if not exists tags text[] not null default '{}';
+
+alter table rm_risks drop constraint if exists rm_risks_status_check;
+alter table rm_risks add constraint rm_risks_status_check check (status in ('open', 'monitoring', 'escalated', 'closed', 'realized'));
+alter table rm_risks drop constraint if exists rm_risks_source_check;
+alter table rm_risks add constraint rm_risks_source_check check (source in ('manual', 'mission_debrief', 'issue', 'import', 'meeting', 'api', 'ai', 'lifecycle', 'kri'));
+alter table rm_risks drop constraint if exists rm_risks_category_fk;
+alter table rm_risks add constraint rm_risks_category_fk foreign key (category) references rm_categories (key) on update cascade;
+create unique index if not exists uq_rm_risks_external on rm_risks (external_system, external_id) where external_id is not null;
+create index if not exists idx_rm_risks_project_status on rm_risks (project_id, status);
+create index if not exists idx_rm_risks_owner on rm_risks (owner_id) where owner_id is not null;
+create index if not exists idx_rm_risks_next_review on rm_risks (next_review_date) where status <> 'closed';
+update rm_risks set closed_at = updated_at where status = 'closed' and closed_at is null;
+
+-- assessments: method/basis/multi-dimension + kind. Still append-only.
+alter table rm_risk_assessments add column if not exists method text not null default 'qualitative' check (method in ('qualitative', 'semi_quantitative', 'quantitative'));
+alter table rm_risk_assessments add column if not exists basis text not null default '';
+alter table rm_risk_assessments add column if not exists impact_dims jsonb not null default '{}'::jsonb;
+alter table rm_risk_assessments add column if not exists probability_pct numeric check (probability_pct is null or probability_pct between 0 and 100);
+alter table rm_risk_assessments add column if not exists exposure_cost numeric;
+alter table rm_risk_assessments add column if not exists kind text not null default 'review' check (kind in ('review', 'post_action', 'kri_triggered', 'periodic'));
+alter table rm_risk_assessments add column if not exists related_action_ids uuid[] not null default '{}';
+alter table rm_risk_assessments add column if not exists approved_by uuid references profiles (id);
+alter table rm_risk_assessments add column if not exists approved_at timestamptz;
+create index if not exists idx_rm_assess_risk on rm_risk_assessments (risk_id, review_date desc);
+
+-- actions: type, deliverable, resources, completion rule, blocking, sub-actions, and the verified EFFECT (completion ≠ effect)
+alter table rm_risk_actions add column if not exists action_type text not null default 'mitigating' check (action_type in ('preventive', 'mitigating', 'corrective', 'contingency'));
+alter table rm_risk_actions add column if not exists expected_output text not null default '';
+alter table rm_risk_actions add column if not exists expected_effect text not null default '';
+alter table rm_risk_actions add column if not exists resources text not null default '';
+alter table rm_risk_actions add column if not exists completion_criteria text not null default '';
+alter table rm_risk_actions add column if not exists cost_estimate numeric;
+alter table rm_risk_actions add column if not exists benefit_estimate numeric;
+alter table rm_risk_actions add column if not exists planned_start date;
+alter table rm_risk_actions add column if not exists parent_action_id uuid references rm_risk_actions (id) on delete cascade;
+alter table rm_risk_actions add column if not exists blocked_reason text not null default '';
+alter table rm_risk_actions add column if not exists blocked_since timestamptz;
+alter table rm_risk_actions add column if not exists completed_at timestamptz;
+alter table rm_risk_actions add column if not exists evidence_note text not null default '';
+alter table rm_risk_actions add column if not exists effect_status text not null default 'pending' check (effect_status in ('pending', 'effective', 'partial', 'ineffective', 'not_applicable'));
+alter table rm_risk_actions add column if not exists effect_note text not null default '';
+alter table rm_risk_actions add column if not exists effect_verified_by uuid references profiles (id);
+alter table rm_risk_actions add column if not exists effect_verified_at timestamptz;
+alter table rm_risk_actions drop constraint if exists rm_risk_actions_status_check;
+alter table rm_risk_actions add constraint rm_risk_actions_status_check check (status in ('not_started', 'in_progress', 'completed', 'blocked', 'cancelled'));
+create index if not exists idx_rm_actions_risk on rm_risk_actions (risk_id);
+update rm_risk_actions set completed_at = updated_at where status = 'completed' and completed_at is null;
+
+-- ---------------------------------------------------------------- 002_guards.sql
+-- ============================================================================
+-- ERM v2 — server-side guards & audit.
+--  * inherent (initial) probability/impact are frozen after creation (admin only, logged)
+--  * closing a risk needs a reason; «realized» is stamped
+--  * assessments are append-only; lowering a score needs a written basis (no undocumented reductions)
+--  * completing an action NEVER changes a score; the action's effect is verified separately (with a note)
+--  * notable field changes are written to rm_risk_history by the database itself
+-- ============================================================================
+create index if not exists idx_rm_risks_owner on rm_risks (owner_id) where owner_id is not null;
+create index if not exists idx_rm_risks_next_review on rm_risks (next_review_date) where status <> 'closed';
+create index if not exists idx_rm_assess_risk on rm_risk_assessments (risk_id, review_date desc);
+create index if not exists idx_rm_actions_risk on rm_risk_actions (risk_id);
+create index if not exists idx_rm_history_risk on rm_risk_history (risk_id, created_at desc);
+
+create or replace function rm_guard_risk() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (new.initial_probability <> old.initial_probability or new.initial_impact <> old.initial_impact) and not is_admin_user() then
+    raise exception 'initial_assessment_is_immutable';
+  end if;
+  if new.status = 'closed' and old.status <> 'closed' then
+    if length(trim(coalesce(new.closed_reason, ''))) < 3 then raise exception 'closed_reason_required'; end if;
+    new.closed_at := now();
+  elsif new.status <> 'closed' and old.status = 'closed' then
+    new.closed_at := null;
+  end if;
+  if new.status = 'realized' and old.status <> 'realized' and new.realized_at is null then new.realized_at := now(); end if;
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists trg_rm_guard_risk on rm_risks;
+create trigger trg_rm_guard_risk before update on rm_risks for each row execute function rm_guard_risk();
+
+create or replace function rm_audit_risk() returns trigger language plpgsql security definer set search_path = public as $$
+declare k text; a jsonb := to_jsonb(old); b jsonb := to_jsonb(new);
+begin
+  foreach k in array array['owner_id','monitor_id','approver_id','response_owner_id','status','response_strategy','category','subcategory','risk_type','project_phase','escalation_status','escalation_level','next_review_date','review_interval_days','corporate_risk_id','initial_probability','initial_impact'] loop
+    if a -> k is distinct from b -> k then
+      insert into rm_risk_history (risk_id, user_id, activity, previous_value, new_value, comment)
+      values (new.id, auth.uid(), 'field:' || k, a -> k, b -> k, case when k = 'status' and b ->> k = 'closed' then coalesce(new.closed_reason, '') else '' end);
+    end if;
+  end loop;
+  return null;
+end $$;
+drop trigger if exists trg_rm_audit_risk on rm_risks;
+create trigger trg_rm_audit_risk after update on rm_risks for each row execute function rm_audit_risk();
+
+create or replace function rm_guard_assessment() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_prev smallint; v_cur smallint; v_init smallint; v_text text;
+begin
+  if tg_op = 'INSERT' then
+    select current_score into v_prev from rm_risk_assessments where risk_id = new.risk_id order by review_date desc, created_at desc limit 1;
+    if v_prev is null then select initial_score into v_prev from rm_risks where id = new.risk_id; end if;
+    v_text := trim(coalesce(new.basis, '') || ' ' || coalesce(new.reviewer_comment, ''));
+    if new.current_score < coalesce(v_prev, 0) and length(v_text) < 5 then raise exception 'basis_required_for_score_reduction'; end if;
+    if new.method <> 'qualitative' and length(trim(coalesce(new.basis, ''))) < 5 then raise exception 'basis_required_for_quantitative_method'; end if;
+    new.created_by := coalesce(new.created_by, auth.uid());
+    return new;
+  elsif tg_op = 'UPDATE' then
+    -- only the approval stamp may be added, nothing else may change
+    if (to_jsonb(new) - 'approved_by' - 'approved_at') is distinct from (to_jsonb(old) - 'approved_by' - 'approved_at') then raise exception 'assessments_are_immutable'; end if;
+    return new;
+  else
+    if pg_trigger_depth() > 1 or is_admin_user() then return old; end if;   -- cascade from deleting the risk itself, or admin
+    raise exception 'assessments_are_immutable';
+  end if;
+end $$;
+drop trigger if exists trg_rm_guard_assessment on rm_risk_assessments;
+create trigger trg_rm_guard_assessment before insert or update or delete on rm_risk_assessments for each row execute function rm_guard_assessment();
+
+create or replace function rm_guard_action() returns trigger language plpgsql security definer set search_path = public as $$
+declare k text; a jsonb; b jsonb;
+begin
+  if tg_op = 'INSERT' then
+    if new.status = 'blocked' then new.blocked_since := now(); end if;
+    return new;
+  end if;
+  if new.status = 'completed' and old.status <> 'completed' then new.completed_at := now(); new.completion_percentage := 100; end if;
+  if old.status = 'completed' and new.status <> 'completed' then new.completed_at := null; new.effect_status := 'pending'; new.effect_note := ''; new.effect_verified_by := null; new.effect_verified_at := null; end if;
+  if new.status = 'blocked' and old.status <> 'blocked' then
+    if length(trim(coalesce(new.blocked_reason, ''))) < 3 then raise exception 'blocked_reason_required'; end if;
+    new.blocked_since := now();
+  elsif new.status <> 'blocked' and old.status = 'blocked' then new.blocked_since := null; new.blocked_reason := ''; end if;
+  if new.effect_status is distinct from old.effect_status and new.effect_status <> 'pending' then
+    if new.status <> 'completed' then raise exception 'effect_requires_completed_action'; end if;
+    if new.effect_status <> 'not_applicable' and length(trim(coalesce(new.effect_note, ''))) < 3 then raise exception 'effect_note_required'; end if;
+    new.effect_verified_by := auth.uid(); new.effect_verified_at := now();
+  end if;
+  new.updated_at := now();
+  a := to_jsonb(old); b := to_jsonb(new);
+  foreach k in array array['status', 'owner_id', 'due_date', 'effect_status', 'action_type'] loop
+    if a -> k is distinct from b -> k then
+      insert into rm_risk_history (risk_id, user_id, activity, previous_value, new_value, comment)
+      values (new.risk_id, auth.uid(), 'action:' || k, a -> k, b -> k, left(new.description, 120));
+    end if;
+  end loop;
+  return new;
+end $$;
+drop trigger if exists trg_rm_guard_action on rm_risk_actions;
+create trigger trg_rm_guard_action before insert or update on rm_risk_actions for each row execute function rm_guard_action();
+
+-- ---------------------------------------------------------------- 003_children.sql
+-- ============================================================================
+-- ERM v2 — access helpers (central roles) + child tables: controls, contingency plans, evidence, links,
+-- corporate risks, formal acceptances, KRIs (+ readings, events), policy, config audit, suggestions.
+-- ============================================================================
+create or replace function rm_central_access(p_project uuid, p_user uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from rasta_project_mappings m
+    where m.source_module = 'risk' and m.source_project_id = p_project and m.status = 'confirmed'
+      and (rasta_project_scope_ok(p_user, m.master_project_id)
+           or exists (select 1 from rasta_project_role_assignments a where a.project_id = m.master_project_id and a.user_id = p_user))
+  );
+$$;
+create or replace function rm_project_role(p_project_id uuid) returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select role from rm_project_members where project_id = p_project_id and user_id = auth.uid() limit 1),
+                  case when rm_central_access(p_project_id, auth.uid()) then 'team_member' end);
+$$;
+create or replace function rm_can_view(p_project uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select rm_is_project_member(p_project) or is_admin_user() or rasta_scope_ok_for_source('risk', p_project) or rm_central_access(p_project, auth.uid());
+$$;
+create or replace function rm_risk_project(p_risk uuid) returns uuid language sql stable security definer set search_path = public as $$
+  select project_id from rm_risks where id = p_risk;
+$$;
+create or replace function rm_can_write_risk(p_risk uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from rm_risks r where r.id = p_risk and (rm_can_edit(r.project_id) or r.owner_id = auth.uid() or r.response_owner_id = auth.uid() or is_admin_user()));
+$$;
+create or replace function rm_is_any_manager() returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or exists (select 1 from rm_project_members where user_id = auth.uid() and role in ('project_manager', 'risk_manager'));
+$$;
+
+create table if not exists rm_controls (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  name text not null,
+  description text not null default '',
+  control_type text not null default 'preventive' check (control_type in ('preventive', 'detective', 'corrective', 'contingency')),
+  owner_id uuid references profiles (id),
+  is_critical boolean not null default false,
+  status text not null default 'active' check (status in ('planned', 'active', 'inactive', 'expired')),
+  effectiveness text not null default 'not_tested' check (effectiveness in ('not_tested', 'effective', 'partial', 'ineffective')),
+  last_tested_at date,
+  test_interval_days integer check (test_interval_days is null or test_interval_days between 1 and 730),
+  expires_on date,
+  evidence_note text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists rm_contingency_plans (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  trigger_condition text not null,
+  plan text not null,
+  owner_id uuid references profiles (id),
+  budget numeric,
+  status text not null default 'draft' check (status in ('draft', 'ready', 'activated', 'retired')),
+  activated_at timestamptz,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists rm_risk_evidence (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  kind text not null default 'document' check (kind in ('document', 'photo', 'letter', 'report', 'assumption', 'calculation', 'link', 'other')),
+  title text not null,
+  note text not null default '',
+  url text not null default '',
+  storage_path text,
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+create table if not exists rm_risk_links (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  target_type text not null check (target_type in ('risk', 'issue', 'mission', 'finding', 'external')),
+  target_id text not null,
+  target_label text not null default '',
+  relation text not null default 'related' check (relation in ('related', 'shared_cause', 'depends_on', 'duplicate_of', 'derived_issue', 'source', 'mitigated_by', 'aggregates')),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now(),
+  unique (risk_id, target_type, target_id, relation)
+);
+create index if not exists idx_rm_links_target on rm_risk_links (target_type, target_id);
+
+create table if not exists rm_corporate_risks (
+  id uuid primary key default gen_random_uuid(),
+  code text not null default '',
+  title text not null,
+  description text not null default '',
+  category text references rm_categories (key) on update cascade,
+  owner_id uuid references profiles (id),
+  status text not null default 'open' check (status in ('open', 'monitoring', 'closed')),
+  corrective_plan text not null default '',
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+create or replace function rm_assign_corp_code() returns trigger language plpgsql as $$
+begin
+  if new.code is null or new.code = '' then new.code := 'CR-' || lpad((select coalesce(max(split_part(code, '-', 2)::int), 0) + 1 from rm_corporate_risks)::text, 3, '0'); end if;
+  return new;
+end $$;
+drop trigger if exists trg_rm_corp_code on rm_corporate_risks;
+create trigger trg_rm_corp_code before insert on rm_corporate_risks for each row execute function rm_assign_corp_code();
+alter table rm_risks drop constraint if exists rm_risks_corporate_fk;
+alter table rm_risks add constraint rm_risks_corporate_fk foreign key (corporate_risk_id) references rm_corporate_risks (id) on delete set null;
+
+create table if not exists rm_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  risk_id uuid not null references rm_risks (id) on delete cascade,
+  requested_by uuid references profiles (id),
+  requested_at timestamptz not null default now(),
+  residual_score smallint not null,
+  rationale text not null,
+  valid_until date,
+  status text not null default 'requested' check (status in ('requested', 'approved', 'rejected', 'withdrawn', 'expired')),
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  decision_note text not null default ''
+);
+
+create table if not exists rm_kris (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references rm_projects (id) on delete cascade,
+  risk_id uuid references rm_risks (id) on delete cascade,
+  name text not null,
+  definition text not null default '',
+  unit text not null default '',
+  domain text not null default 'general',
+  direction text not null default 'higher_worse' check (direction in ('higher_worse', 'lower_worse')),
+  baseline numeric,
+  warn_threshold numeric not null,
+  critical_threshold numeric not null,
+  frequency_days integer not null default 7 check (frequency_days between 1 and 365),
+  owner_id uuid references profiles (id),
+  data_source text not null default 'manual' check (data_source in ('manual', 'external')),
+  external_system text,
+  external_key text,
+  active boolean not null default true,
+  current_value numeric,
+  last_reading_at timestamptz,
+  state text not null default 'no_data' check (state in ('no_data', 'normal', 'warn', 'critical')),
+  created_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_rm_kris_project on rm_kris (project_id);
+create index if not exists idx_rm_kris_risk on rm_kris (risk_id);
+create table if not exists rm_kri_readings (
+  id bigint generated always as identity primary key,
+  kri_id uuid not null references rm_kris (id) on delete cascade,
+  value numeric not null,
+  read_at timestamptz not null default now(),
+  source text not null default 'manual' check (source in ('manual', 'api', 'import')),
+  external_ref text,
+  note text not null default '',
+  created_by uuid references profiles (id)
+);
+create unique index if not exists uq_rm_kri_reading_ext on rm_kri_readings (kri_id, external_ref) where external_ref is not null;
+create index if not exists idx_rm_kri_readings on rm_kri_readings (kri_id, read_at desc);
+create table if not exists rm_kri_events (
+  id bigint generated always as identity primary key,
+  kri_id uuid not null references rm_kris (id) on delete cascade,
+  from_state text not null,
+  to_state text not null,
+  value numeric,
+  at timestamptz not null default now()
+);
+create index if not exists idx_rm_kri_events on rm_kri_events (kri_id, at desc);
+
+create table if not exists rm_policy (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references rm_projects (id) on delete cascade,
+  appetite_max smallint not null default 5 check (appetite_max between 1 and 25),
+  tolerance_max smallint not null default 10 check (tolerance_max between 1 and 25),
+  escalation_min smallint not null default 16 check (escalation_min between 1 and 25),
+  level_bounds smallint[] not null default '{6,11,16}',
+  review_days jsonb not null default '{"low":90,"medium":45,"high":30,"critical":14}'::jsonb,
+  stale_assessment_days integer not null default 90 check (stale_assessment_days between 7 and 730),
+  scale_labels jsonb not null default '{}'::jsonb,
+  auto_accept_confidence numeric check (auto_accept_confidence is null or auto_accept_confidence between 0 and 1),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  check (appetite_max <= tolerance_max and tolerance_max < escalation_min)
+);
+create unique index if not exists uq_rm_policy_scope on rm_policy ((coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)));
+insert into rm_policy (project_id) select null where not exists (select 1 from rm_policy where project_id is null);
+
+create table if not exists rm_config_audit (
+  id bigint generated always as identity primary key,
+  entity text not null,
+  entity_id text not null,
+  actor uuid,
+  before jsonb,
+  after jsonb,
+  at timestamptz not null default now()
+);
+create or replace function rm_config_audit_trg() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into rm_config_audit (entity, entity_id, actor, before, after)
+  values (tg_table_name, coalesce((to_jsonb(coalesce(new, old)) ->> 'id'), (to_jsonb(coalesce(new, old)) ->> 'key')), auth.uid(), case when tg_op = 'INSERT' then null else to_jsonb(old) end, case when tg_op = 'DELETE' then null else to_jsonb(new) end);
+  return null;
+end $$;
+
+create table if not exists rm_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references rm_projects (id) on delete cascade,
+  source text not null,
+  source_ref_type text not null,
+  source_ref_id text not null,
+  title text not null,
+  description text not null default '',
+  payload jsonb not null default '{}'::jsonb,
+  confidence numeric not null default 0.5,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
+  created_risk_id uuid references rm_risks (id) on delete set null,
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (source, source_ref_id)
+);
+
+-- ---------------------------------------------------------------- 004_security_and_kri.sql
+-- ============================================================================
+-- ERM v2 — RLS for the new tables, KRI state machine, formal residual-risk acceptance, effective policy lookup.
+-- ============================================================================
+alter table rm_controls enable row level security;
+alter table rm_contingency_plans enable row level security;
+alter table rm_risk_evidence enable row level security;
+alter table rm_risk_links enable row level security;
+alter table rm_acceptances enable row level security;
+alter table rm_corporate_risks enable row level security;
+alter table rm_kris enable row level security;
+alter table rm_kri_readings enable row level security;
+alter table rm_kri_events enable row level security;
+alter table rm_policy enable row level security;
+alter table rm_config_audit enable row level security;
+alter table rm_suggestions enable row level security;
+
+create policy rm_controls_sel on rm_controls for select using (rm_can_view(rm_risk_project(risk_id)));
+create policy rm_controls_wr on rm_controls for all using (rm_can_write_risk(risk_id)) with check (rm_can_write_risk(risk_id));
+create policy rm_cont_sel on rm_contingency_plans for select using (rm_can_view(rm_risk_project(risk_id)));
+create policy rm_cont_wr on rm_contingency_plans for all using (rm_can_write_risk(risk_id)) with check (rm_can_write_risk(risk_id));
+create policy rm_evid_sel on rm_risk_evidence for select using (rm_can_view(rm_risk_project(risk_id)));
+create policy rm_evid_wr on rm_risk_evidence for all using (rm_can_write_risk(risk_id)) with check (rm_can_write_risk(risk_id));
+create policy rm_links_sel on rm_risk_links for select using (rm_can_view(rm_risk_project(risk_id)));
+create policy rm_links_wr on rm_risk_links for all using (rm_can_write_risk(risk_id)) with check (rm_can_write_risk(risk_id));
+create policy rm_accept_sel on rm_acceptances for select using (rm_can_view(rm_risk_project(risk_id)));
+
+create policy rm_corp_sel on rm_corporate_risks for select using (is_admin_user() or created_by = auth.uid() or exists (select 1 from rm_risks r where r.corporate_risk_id = rm_corporate_risks.id and rm_can_view(r.project_id)));
+create policy rm_corp_ins on rm_corporate_risks for insert with check (rm_is_any_manager());
+create policy rm_corp_upd on rm_corporate_risks for update using (rm_is_any_manager()) with check (rm_is_any_manager());
+create policy rm_corp_del on rm_corporate_risks for delete using (is_admin_user());
+
+create policy rm_kris_sel on rm_kris for select using (rm_can_view(project_id));
+create policy rm_kris_wr on rm_kris for all using (rm_can_edit(project_id) or is_admin_user() or owner_id = auth.uid()) with check (rm_can_edit(project_id) or is_admin_user() or owner_id = auth.uid());
+create policy rm_kread_sel on rm_kri_readings for select using (exists (select 1 from rm_kris k where k.id = kri_id and rm_can_view(k.project_id)));
+create policy rm_kread_ins on rm_kri_readings for insert with check (exists (select 1 from rm_kris k where k.id = kri_id and (rm_can_edit(k.project_id) or is_admin_user() or k.owner_id = auth.uid())));
+create policy rm_kread_del on rm_kri_readings for delete using (is_admin_user());
+create policy rm_kev_sel on rm_kri_events for select using (exists (select 1 from rm_kris k where k.id = kri_id and rm_can_view(k.project_id)));
+
+create policy rm_policy_sel on rm_policy for select using (auth.uid() is not null);
+create policy rm_policy_wr on rm_policy for all using (is_admin_user() or (project_id is not null and rm_can_manage(project_id))) with check (is_admin_user() or (project_id is not null and rm_can_manage(project_id)));
+create policy rm_cfgaudit_sel on rm_config_audit for select using (rm_is_any_manager());
+create policy rm_sugg_sel on rm_suggestions for select using (rm_can_view(project_id));
+create policy rm_sugg_upd on rm_suggestions for update using (rm_can_edit(project_id) or is_admin_user()) with check (rm_can_edit(project_id) or is_admin_user());
+
+-- replace the free-for-all project creation: projects come from the central master data (rm_sync_master_projects)
+-- (DROP POLICY hangs through the SQL gateway used for live migrations, so the policies are altered in place)
+alter policy "rm_projects_insert_any_authenticated" on rm_projects with check (is_admin_user());
+alter policy "rm_history_insert_member" on rm_risk_history with check (rm_can_view(rm_risk_project(risk_id)));
+
+create or replace function rm_touch() returns trigger language plpgsql as $$ begin new.updated_at := now(); return new; end $$;
+create trigger trg_rm_controls_touch before update on rm_controls for each row execute function rm_touch();
+create trigger trg_rm_cont_touch before update on rm_contingency_plans for each row execute function rm_touch();
+create trigger trg_rm_audit_policy after insert or update or delete on rm_policy for each row execute function rm_config_audit_trg();
+create trigger trg_rm_audit_cat after insert or update or delete on rm_categories for each row execute function rm_config_audit_trg();
+create trigger trg_rm_audit_kri after insert or update or delete on rm_kris for each row execute function rm_config_audit_trg();
+
+-- ---------------------------------------------------------------- KRI
+create or replace function rm_kri_state(p_val numeric, p_dir text, p_warn numeric, p_crit numeric) returns text language sql immutable as $$
+  select case when p_val is null then 'no_data'
+    when p_dir = 'higher_worse' then case when p_val >= p_crit then 'critical' when p_val >= p_warn then 'warn' else 'normal' end
+    else case when p_val <= p_crit then 'critical' when p_val <= p_warn then 'warn' else 'normal' end end;
+$$;
+create or replace function rm_kri_guard() returns trigger language plpgsql as $$
+begin
+  if (new.direction = 'higher_worse' and new.warn_threshold > new.critical_threshold) or (new.direction = 'lower_worse' and new.warn_threshold < new.critical_threshold) then raise exception 'invalid_kri_thresholds'; end if;
+  if tg_op = 'UPDATE' and new.current_value is not null and (new.warn_threshold is distinct from old.warn_threshold or new.critical_threshold is distinct from old.critical_threshold or new.direction is distinct from old.direction) then
+    new.state := rm_kri_state(new.current_value, new.direction, new.warn_threshold, new.critical_threshold);
+  end if;
+  return new;
+end $$;
+create trigger trg_rm_kri_guard before insert or update on rm_kris for each row execute function rm_kri_guard();
+
+create or replace function rm_kri_on_reading() returns trigger language plpgsql security definer set search_path = public as $$
+declare k rm_kris; v_state text; v_old text;
+begin
+  select * into k from rm_kris where id = new.kri_id for update;
+  if k.last_reading_at is not null and new.read_at < k.last_reading_at then return null; end if;
+  v_old := k.state;
+  v_state := rm_kri_state(new.value, k.direction, k.warn_threshold, k.critical_threshold);
+  update rm_kris set current_value = new.value, last_reading_at = new.read_at, state = v_state where id = k.id;
+  if v_state is distinct from v_old then
+    insert into rm_kri_events (kri_id, from_state, to_state, value, at) values (k.id, v_old, v_state, new.value, new.read_at);
+    if v_state in ('warn', 'critical') and k.risk_id is not null then
+      update rm_risks set review_requested_at = now(),
+             review_request_reason = 'شاخص «' || k.name || '» وارد محدودهٔ ' || case v_state when 'critical' then 'بحرانی' else 'هشدار' end || ' شد (' || new.value || ' ' || k.unit || ')'
+       where id = k.risk_id and status <> 'closed';
+      insert into rm_risk_history (risk_id, user_id, activity, new_value, comment)
+      values (k.risk_id, auth.uid(), 'kri_breach', jsonb_build_object('kri', k.name, 'state', v_state, 'value', new.value), k.name || ': ' || new.value || ' ' || k.unit);
+    end if;
+  end if;
+  return null;
+end $$;
+create trigger trg_rm_kri_reading after insert on rm_kri_readings for each row execute function rm_kri_on_reading();
+
+-- ---------------------------------------------------------------- policy + acceptance
+create or replace function rm_policy_for(p_project uuid) returns rm_policy language sql stable security definer set search_path = public as $$
+  select * from rm_policy where project_id = p_project or project_id is null order by project_id nulls last limit 1;
+$$;
+
+create or replace function rm_request_acceptance(p_risk uuid, p_rationale text, p_valid_until date default null) returns uuid language plpgsql security definer set search_path = public as $$
+declare r rm_risks; v_score smallint; v_id uuid;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not rm_can_write_risk(p_risk) then raise exception 'not_authorized'; end if;
+  select * into r from rm_risks where id = p_risk;
+  if length(trim(coalesce(p_rationale, ''))) < 10 then raise exception 'rationale_required'; end if;
+  if exists (select 1 from rm_acceptances where risk_id = p_risk and status = 'requested') then raise exception 'acceptance_already_requested'; end if;
+  select residual_score into v_score from rm_risk_assessments where risk_id = p_risk order by review_date desc, created_at desc limit 1;
+  if v_score is null then v_score := r.initial_score; end if;
+  insert into rm_acceptances (risk_id, requested_by, residual_score, rationale, valid_until) values (p_risk, auth.uid(), v_score, p_rationale, p_valid_until) returning id into v_id;
+  insert into rm_risk_history (risk_id, user_id, activity, new_value, comment) values (p_risk, auth.uid(), 'acceptance_requested', jsonb_build_object('residual_score', v_score), left(p_rationale, 200));
+  return v_id;
+end $$;
+
+create or replace function rm_decide_acceptance(p_id uuid, p_approve boolean, p_note text default '') returns rm_acceptances language plpgsql security definer set search_path = public as $$
+declare a rm_acceptances; r rm_risks; pol rm_policy; v_role text; v_ok boolean;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into a from rm_acceptances where id = p_id and status = 'requested' for update;
+  if not found then raise exception 'acceptance_not_pending'; end if;
+  select * into r from rm_risks where id = a.risk_id;
+  pol := rm_policy_for(r.project_id);
+  v_role := rm_project_role(r.project_id);
+  if a.residual_score >= pol.escalation_min then v_ok := is_admin_user() or v_role = 'management';
+  else v_ok := is_admin_user() or r.approver_id = auth.uid() or v_role = 'project_manager'; end if;
+  if not v_ok then raise exception 'authority_required'; end if;
+  if a.requested_by = auth.uid() and not is_admin_user() then raise exception 'cannot_decide_own_request'; end if;
+  if not p_approve and length(trim(coalesce(p_note, ''))) < 3 then raise exception 'note_required_for_rejection'; end if;
+  update rm_acceptances set status = case when p_approve then 'approved' else 'rejected' end, decided_by = auth.uid(), decided_at = now(), decision_note = coalesce(p_note, '') where id = p_id returning * into a;
+  if p_approve then update rm_risks set response_strategy = 'accept', status = case when status = 'open' then 'monitoring' else status end where id = a.risk_id; end if;
+  insert into rm_risk_history (risk_id, user_id, activity, new_value, comment) values (a.risk_id, auth.uid(), case when p_approve then 'acceptance_approved' else 'acceptance_rejected' end, jsonb_build_object('residual_score', a.residual_score), coalesce(p_note, ''));
+  return a;
+end $$;
+
+grant execute on function rm_request_acceptance(uuid, text, date) to authenticated;
+grant execute on function rm_decide_acceptance(uuid, boolean, text) to authenticated;
+grant execute on function rm_policy_for(uuid) to authenticated;
+revoke execute on function rm_request_acceptance(uuid, text, date) from public, anon;
+revoke execute on function rm_decide_acceptance(uuid, boolean, text) from public, anon;
+
+-- ---------------------------------------------------------------- 005_central_integrations.sql
+-- ============================================================================
+-- ERM v2 — central master data (projects/people), idempotent ingestion (missions, API, import), suggestions, Issue link.
+-- ============================================================================
+alter table rm_projects add column if not exists master_ref_id uuid;
+alter table rm_projects add column if not exists short_code text not null default '';
+
+create or replace function rm_sync_master_projects() returns jsonb language plpgsql security definer set search_path = public as $$
+declare mp record; v_new uuid; n_created int := 0; n_renamed int := 0;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not is_admin_user() then return jsonb_build_object('created', 0, 'renamed', 0, 'skipped', 'admin_only'); end if;
+  for mp in select id, project_code, official_name from master_projects loop
+    select source_project_id into v_new from rasta_project_mappings where master_project_id = mp.id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_new is null then
+      insert into rm_projects (name, client, created_by, master_ref_id, short_code) values (mp.official_name, '', auth.uid(), mp.id, coalesce(mp.project_code, '')) returning id into v_new;
+      insert into rasta_project_mappings (master_project_id, source_module, source_project_id, alias_name, status) values (mp.id, 'risk', v_new, mp.official_name, 'confirmed');
+      n_created := n_created + 1;
+    else
+      update rm_projects set name = mp.official_name, master_ref_id = mp.id, short_code = coalesce(mp.project_code, short_code)
+       where id = v_new and (name is distinct from mp.official_name or master_ref_id is distinct from mp.id or short_code is distinct from coalesce(mp.project_code, short_code));
+      if found then n_renamed := n_renamed + 1; end if;
+    end if;
+  end loop;
+  return jsonb_build_object('created', n_created, 'renamed', n_renamed);
+end $$;
+grant execute on function rm_sync_master_projects() to authenticated;
+revoke execute on function rm_sync_master_projects() from public, anon;
+
+create or replace function rm_people(p_project uuid default null)
+returns table (id uuid, full_name text, email text, position_title text, organization text, project_roles text[], rm_role text, is_admin boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  if p_project is not null and not rm_can_view(p_project) then return; end if;
+  return query
+  select p.id, p.full_name, p.email, coalesce(p.position_title, ''), coalesce(p.organization, ''),
+         coalesce((select array_agg(distinct r.name) from rasta_project_role_assignments a join rasta_project_roles r on r.id = a.project_role_id
+                    join rasta_project_mappings m on m.master_project_id = a.project_id and m.source_module = 'risk' and m.status = 'confirmed'
+                   where a.user_id = p.id and (p_project is null or m.source_project_id = p_project)), '{}'),
+         (select x.role from rm_project_members x where x.project_id = p_project and x.user_id = p.id limit 1),
+         coalesce(p.is_admin, false)
+    from profiles p
+   where p.account_status = 'active'
+     and (p_project is null or p.is_admin or rm_central_access(p_project, p.id) or exists (select 1 from rm_project_members x where x.project_id = p_project and x.user_id = p.id))
+   order by p.full_name;
+end $$;
+grant execute on function rm_people(uuid) to authenticated;
+revoke execute on function rm_people(uuid) from public, anon;
+
+create or replace function rm_cat_from_topic(p_topic text) returns text language sql immutable as $$
+  select case p_topic when 'engineering' then 'engineering' when 'procurement' then 'procurement' when 'construction' then 'construction' when 'hse' then 'hse'
+                      when 'quality' then 'quality' when 'schedule' then 'schedule' when 'cost' then 'cost' when 'land' then 'land' when 'contract' then 'contractor'
+                      when 'legal' then 'legal' when 'logistics' then 'logistics' else 'other' end;
+$$;
+
+-- Idempotent creation of ONE risk from an external source; re-sending never duplicates and never overwrites an assessment.
+create or replace function rm_ingest_risk(p_source text, p_external_system text, p_external_id text, p_master_project uuid, p_payload jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_project uuid; v_id uuid; v_created boolean := false; v_cat text;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if p_source not in ('mission_debrief', 'issue', 'import', 'meeting', 'api', 'ai', 'lifecycle') then raise exception 'invalid_source'; end if;
+  if coalesce(p_external_id, '') = '' or coalesce(p_external_system, '') = '' then raise exception 'external_reference_required'; end if;
+  select source_project_id into v_project from rasta_project_mappings where master_project_id = p_master_project and source_module = 'risk' and status = 'confirmed' limit 1;
+  if v_project is null then raise exception 'no_risk_mapping'; end if;
+  if not (rm_can_edit(v_project) or is_admin_user()) then raise exception 'not_authorized_for_project'; end if;
+  select id into v_id from rm_risks where external_system = p_external_system and external_id = p_external_id;
+  if v_id is null then
+    v_cat := coalesce(nullif(p_payload ->> 'category', ''), 'other');
+    if not exists (select 1 from rm_categories where key = v_cat) then v_cat := 'other'; end if;
+    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by,
+                          cause, risk_event, consequence, source, source_ref_type, source_ref_id, source_snapshot, external_system, external_id, sync_status, synced_at,
+                          route_segment, station, discipline)
+    values (v_project, '', left(p_payload ->> 'title', 300), coalesce(p_payload ->> 'description', ''), v_cat, 'threat', nullif(p_payload ->> 'owner_id', '')::uuid,
+            least(5, greatest(1, coalesce((p_payload ->> 'probability')::int, 3))), least(5, greatest(1, coalesce((p_payload ->> 'impact')::int, 3))), auth.uid(),
+            coalesce(p_payload ->> 'cause', ''), coalesce(p_payload ->> 'risk_event', ''), coalesce(p_payload ->> 'consequence', ''),
+            p_source, nullif(p_payload ->> 'source_ref_type', ''), nullif(p_payload ->> 'source_ref_id', ''), coalesce(p_payload -> 'snapshot', '{}'::jsonb), p_external_system, p_external_id, 'synced', now(),
+            coalesce(p_payload ->> 'route_segment', ''), coalesce(p_payload ->> 'station', ''), coalesce(p_payload ->> 'discipline', ''))
+    returning id into v_id;
+    v_created := true;
+    if p_payload ->> 'source_ref_type' in ('mission', 'finding') then
+      insert into rm_risk_links (risk_id, target_type, target_id, target_label, relation, created_by)
+      values (v_id, case when p_payload ->> 'source_ref_type' = 'mission' then 'mission' else 'finding' end, p_payload ->> 'source_ref_id', coalesce(p_payload #>> '{snapshot,mission_code}', ''), 'source', auth.uid()) on conflict do nothing;
+    end if;
+  else
+    update rm_risks set source_snapshot = coalesce(p_payload -> 'snapshot', source_snapshot), sync_status = 'synced', synced_at = now() where id = v_id;
+  end if;
+  return jsonb_build_object('id', v_id, 'created', v_created);
+end $$;
+grant execute on function rm_ingest_risk(text, text, text, uuid, jsonb) to authenticated;
+revoke execute on function rm_ingest_risk(text, text, text, uuid, jsonb) from public, anon;
+
+-- Accept one suggestion → creates the risk through the same idempotent path.
+create or replace function rm_accept_suggestion(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare s rm_suggestions; v_master uuid; v_res jsonb;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into s from rm_suggestions where id = p_id for update;
+  if not found then raise exception 'suggestion_not_found'; end if;
+  if not (rm_can_edit(s.project_id) or is_admin_user()) then raise exception 'not_authorized_for_project'; end if;
+  if s.status = 'accepted' and s.created_risk_id is not null then return jsonb_build_object('id', s.created_risk_id, 'created', false); end if;
+  select master_project_id into v_master from rasta_project_mappings where source_module = 'risk' and source_project_id = s.project_id and status = 'confirmed' limit 1;
+  v_res := rm_ingest_risk(s.source, s.source_ref_type, s.source_ref_id, v_master, s.payload || jsonb_build_object('title', s.title, 'description', s.description));
+  update rm_suggestions set status = 'accepted', created_risk_id = (v_res ->> 'id')::uuid, decided_by = auth.uid(), decided_at = now() where id = p_id;
+  return v_res;
+end $$;
+grant execute on function rm_accept_suggestion(uuid) to authenticated;
+revoke execute on function rm_accept_suggestion(uuid) from public, anon;
+
+-- Scan approved/unapproved mission debrief findings of risk nature for one project and queue them as suggestions
+-- (rule: kind = 'risk', or an observation/issue with high/critical severity). With policy.auto_accept_confidence set, confident + manager-approved ones are created directly.
+create or replace function rm_scan_mission_findings(p_project uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_master uuid; f record; v_n int := 0; v_auto int := 0; pol rm_policy; v_new uuid;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not (rm_can_manage(p_project) or is_admin_user()) then raise exception 'not_authorized_for_project'; end if;
+  select master_project_id into v_master from rasta_project_mappings where source_module = 'risk' and source_project_id = p_project and status = 'confirmed' limit 1;
+  if v_master is null then return jsonb_build_object('queued', 0, 'auto', 0, 'skipped', 'no_mapping'); end if;
+  pol := rm_policy_for(p_project);
+  for f in
+    select fi.*, m.code as mission_code, m.id as mission_uuid, m.destination, m.start_date
+      from ms_findings fi join ms_missions m on m.id = fi.mission_id
+     where m.master_project_id = v_master and fi.approval <> 'rejected' and coalesce(fi.transferred_to, '') <> 'risk'
+       and (fi.kind = 'risk' or (fi.kind in ('observation', 'issue') and fi.severity in ('high', 'critical')))
+       and not exists (select 1 from rm_suggestions s where s.source = 'mission_debrief' and s.source_ref_id = fi.id::text)
+       and not exists (select 1 from rm_risks r where r.external_system = 'missions' and r.external_id = fi.id::text)
+  loop
+    insert into rm_suggestions (project_id, source, source_ref_type, source_ref_id, title, description, confidence, payload)
+    values (p_project, 'mission_debrief', 'missions', f.id::text, f.title, f.description, f.confidence,
+            jsonb_build_object('category', rm_cat_from_topic(f.topic_key),
+                               'probability', case f.severity when 'critical' then 4 when 'high' then 4 when 'medium' then 3 else 2 end,
+                               'impact', case f.severity when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end,
+                               'snapshot', jsonb_build_object('mission_id', f.mission_uuid, 'mission_code', f.mission_code, 'finding_id', f.id, 'finding_kind', f.kind, 'topic', f.topic_key, 'destination', f.destination, 'visit_date', f.start_date),
+                               'source_ref_type', 'finding', 'source_ref_id', f.id::text))
+    on conflict (source, source_ref_id) do nothing returning id into v_new;
+    if v_new is not null then
+      v_n := v_n + 1;
+      if pol.auto_accept_confidence is not null and f.confidence >= pol.auto_accept_confidence and f.approval = 'approved' then perform rm_accept_suggestion(v_new); v_auto := v_auto + 1; end if;
+    end if;
+    v_new := null;
+  end loop;
+  return jsonb_build_object('queued', v_n, 'auto', v_auto);
+end $$;
+grant execute on function rm_scan_mission_findings(uuid) to authenticated;
+revoke execute on function rm_scan_mission_findings(uuid) from public, anon;
+
+-- ---------------------------------------------------------------- 006_issue_and_mission_links.sql
+-- ============================================================================
+-- ERM v2 — two-way Issue link, mission hand-off traceability.
+--  * im_convert_risk_to_issue: idempotent; risk becomes «realized» (history kept, never deleted), review is requested, both sides are linked
+--  * ms_transfer_finding (risk branch): idempotent on (external_system='missions', finding id); source fields + link back to the report
+--  * a manual risk link added from an Issue marks the risk for review and appears in the risk's links
+-- Full function bodies are installed live; see the definitions below.
+-- ============================================================================
+create or replace function im_convert_risk_to_issue(p_risk uuid, p_cause text default '', p_pursuer uuid default null, p_deadline_days integer default 7)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  k rm_risks%rowtype; v_master uuid; v_project uuid; v_id uuid; v_created boolean := false; v_sev text; v_cat text; v_score int; v_code text;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into k from rm_risks where id = p_risk;
+  if not found then raise exception 'risk_not_found'; end if;
+  select master_project_id into v_master from rasta_project_mappings where source_module = 'risk' and source_project_id = k.project_id and status = 'confirmed' limit 1;
+  if v_master is null then raise exception 'risk_project_not_mapped'; end if;
+  if not rasta_user_can_access_master_project(v_master) then raise exception 'not_authorized_for_project'; end if;
+  select source_project_id into v_project from rasta_project_mappings where source_module = 'issues' and master_project_id = v_master and status = 'confirmed' limit 1;
+  if v_project is null then raise exception 'no_issue_mapping'; end if;
+
+  select id into v_id from im_issues where source = 'risk' and source_ref_id = p_risk::text;
+  if v_id is null then
+    select coalesce((select current_score from rm_risk_assessments where risk_id = p_risk order by review_date desc, created_at desc limit 1), k.initial_score) into v_score;
+    v_sev := case when v_score >= 16 then 'critical' when v_score >= 11 then 'high' when v_score >= 6 then 'medium' else 'low' end;
+    v_cat := case k.category when 'engineering' then 'engineering' when 'procurement' then 'procurement' when 'contractor' then 'contractor' when 'cost' then 'finance'
+                             when 'land' then 'land_right_of_way' when 'permits' then 'permits' when 'hse' then 'hse' when 'quality' then 'quality' when 'legal' then 'contract_commercial' else 'other' end;
+    insert into im_issues (project_id, title, description, priority, severity, urgency, category, deadline_days, source, source_ref_type, source_ref_id, source_snapshot, created_by, pursuer_id, owner_id)
+    values (v_project, k.title, coalesce(nullif(p_cause, ''), 'ریسک محقق‌شده') || E'\n\n— ریسک مبدأ: ' || k.code || E'\n' || k.description,
+            v_sev, v_sev, 'high', v_cat, greatest(1, coalesce(p_deadline_days, 7)), 'risk', 'risk', p_risk::text,
+            jsonb_build_object('risk_code', k.code, 'risk_status', k.status, 'initial_probability', k.initial_probability, 'initial_impact', k.initial_impact, 'initial_score', k.initial_score,
+                               'current_score', v_score, 'response_strategy', k.response_strategy, 'realization_cause', p_cause, 'cause', k.cause, 'risk_event', k.risk_event, 'consequence', k.consequence),
+            auth.uid(), p_pursuer, coalesce(k.owner_id, auth.uid()))
+    returning id, code into v_id, v_code;
+    insert into im_issue_links (issue_id, target_type, target_id, target_label, relation) values (v_id, 'risk', p_risk::text, k.code || ' · ' || k.title, 'derived_from') on conflict do nothing;
+    insert into rm_risk_links (risk_id, target_type, target_id, target_label, relation, created_by) values (p_risk, 'issue', v_id::text, coalesce(v_code, ''), 'derived_issue', auth.uid()) on conflict do nothing;
+    if k.status not in ('closed', 'realized') then update rm_risks set status = 'realized', review_requested_at = now(), review_request_reason = 'ریسک محقق شد و به مسئله تبدیل شد؛ ارزیابی بازنگری شود' where id = p_risk; end if;
+    insert into rm_risk_history (risk_id, user_id, activity, new_value, comment) values (p_risk, auth.uid(), 'realized_to_issue', jsonb_build_object('issue_id', v_id, 'issue_code', v_code), left(coalesce(p_cause, ''), 200));
+    v_created := true;
+  end if;
+  return jsonb_build_object('id', v_id, 'created', v_created);
+end;
+$$;
+
+create or replace function rm_on_issue_link() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_risk uuid; v_code text;
+begin
+  if new.target_type <> 'risk' then return null; end if;
+  begin v_risk := new.target_id::uuid; exception when others then return null; end;
+  if not exists (select 1 from rm_risks where id = v_risk) then return null; end if;
+  select code into v_code from im_issues where id = new.issue_id;
+  insert into rm_risk_links (risk_id, target_type, target_id, target_label, relation) values (v_risk, 'issue', new.issue_id::text, coalesce(v_code, ''), case when new.relation = 'derived_from' then 'derived_issue' else 'related' end) on conflict do nothing;
+  update rm_risks set review_requested_at = coalesce(review_requested_at, now()), review_request_reason = case when review_request_reason = '' then 'مسئلهٔ مرتبط ثبت شد: ' || coalesce(v_code, '') || '؛ ارزیابی بازنگری شود' else review_request_reason end where id = v_risk and status <> 'closed';
+  return null;
+end $$;
+drop trigger if exists trg_rm_on_issue_link on im_issue_links;
+create trigger trg_rm_on_issue_link after insert on im_issue_links for each row execute function rm_on_issue_link();
+
+-- ms_transfer_finding: see supabase/schema.sql section 61 for the full body; the risk branch is replaced by:
+--   select id into v_new from rm_risks where external_system = 'missions' and external_id = f.id::text;
+--   if v_new is null then insert into rm_risks (..., source, source_ref_type, source_ref_id, external_system, external_id, sync_status, synced_at, source_snapshot) ...; insert link 'finding'; end if;
+--   update rm_suggestions set status = 'accepted', created_risk_id = v_new ... where source = 'mission_debrief' and source_ref_id = f.id::text and status = 'pending';
+
+-- ---------------------------------------------------------------- 007_notifications.sql
+-- ============================================================================
+-- ERM v2 — alert rules + escalation, on the platform's shared notification engine (im_notif_* tables, prefs, outbox, im-notify dispatcher).
+-- Rules are rows (editable by an admin without code changes): recipients, escalation recipients, channels, thresholds, de-duplication.
+-- External channels are only delivered when a provider is configured on the edge function; otherwise rows end as `skipped` (never faked).
+-- ============================================================================
+alter table im_notif_rules add column if not exists scope text not null default 'issues';
+alter table im_notif_outbox add column if not exists risk_id uuid;
+alter table im_notif_outbox add column if not exists kri_id uuid;
+create index if not exists idx_im_outbox_risk on im_notif_outbox (risk_id) where risk_id is not null;
+
+insert into im_notif_rules (key, name, description, kind, recipients, escalate_to, channels, min_severity, threshold_hours, dedupe_hours, sort, scope) values
+ ('rk_review_due',        'نزدیک‌شدن موعد بازنگری ریسک', 'موعد بازنگری ریسک تا ۷۲ ساعت دیگر است',                           'state', '{owner,monitor}',                 '{}',                       '{in_app,email}',       'low', 72, 72, 210, 'risk'),
+ ('rk_review_overdue',    'گذشتن موعد بازنگری ریسک',      'بازنگری انجام نشده؛ با تأخیر بیشتر به مدیر پروژه و مرجع تأیید تشدید می‌شود', 'state', '{owner,monitor}',          '{project_manager,approver}', '{in_app,email,sms}', 'low', 0, 24, 220, 'risk'),
+ ('rk_critical',          'ریسک بحرانی یا جهش امتیاز',    'امتیاز ریسک از آستانهٔ ارجاع گذشت یا ناگهان بالا رفت',               'event', '{owner,project_manager,approver}', '{management}',            '{in_app,email,sms,push}', 'low', 0, 0, 230, 'risk'),
+ ('rk_kri_breach',        'عبور شاخص هشدار (KRI) از آستانه', 'یک شاخص هشدار زودهنگام وارد محدودهٔ هشدار یا بحرانی شد',         'event', '{owner,monitor}',                 '{project_manager}',        '{in_app,email,push}',  'low', 0, 0, 240, 'risk'),
+ ('rk_action_overdue',    'تأخیر اقدام کاهشی',            'اقدام کاهشی از سررسید گذشته',                                       'state', '{action_owner,owner}',            '{project_manager,approver}', '{in_app,email}',     'low', 0, 24, 250, 'risk'),
+ ('rk_control_expired',   'کنترل حیاتی منقضی/آزمون‌نشده', 'کنترل حیاتی منقضی شده یا آزمون دوره‌ای آن عقب افتاده است',         'state', '{owner}',                         '{project_manager}',        '{in_app,email}',       'low', 0, 168, 260, 'risk'),
+ ('rk_no_owner',          'ریسک بدون مالک',               'ریسک فعال مالک ندارد',                                              'state', '{project_manager,risk_manager}',  '{}',                       '{in_app}',             'low', 0, 168, 270, 'risk'),
+ ('rk_no_response_plan',  'ریسک مهم بدون برنامهٔ پاسخ',    'ریسک زیاد/بحرانی بدون اقدام کاهشی باز',                              'state', '{owner,project_manager}',         '{approver}',               '{in_app,email}',       'low', 0, 168, 280, 'risk'),
+ ('rk_stale_assessment',  'ارزیابی قدیمی',                'ارزیابی ریسک از سقف مجاز سن گذشته است',                              'state', '{monitor,owner}',                 '{project_manager}',        '{in_app}',             'low', 0, 168, 290, 'risk'),
+ ('rk_acceptance_pending','درخواست پذیرش ریسک باقیمانده',  'پذیرش رسمی ریسک باقیمانده منتظر تصمیم مرجع مجاز است',               'event', '{approver,project_manager}',      '{management}',             '{in_app,email}',       'low', 0, 0, 300, 'risk'),
+ ('rk_action_ineffective','اقدام تکمیل‌شده بدون اثر',      'اقدام کاهشی تکمیل شد ولی اثر مورد انتظار حاصل نشد',                 'event', '{owner,project_manager}',         '{approver}',               '{in_app,email}',       'low', 0, 0, 310, 'risk'),
+ ('rk_realized',          'تحقق ریسک و تبدیل به مسئله',    'ریسک محقق شد و مسئله ایجاد شد؛ بازنگری لازم است',                    'event', '{owner,project_manager}',         '{}',                       '{in_app,email}',       'low', 0, 0, 320, 'risk')
+on conflict (key) do nothing;
+
+-- Current state of every risk (latest assessment, level by policy, review due date). security_invoker → RLS of the caller applies.
+create or replace view rm_risk_state with (security_invoker = true) as
+select r.id as risk_id, r.project_id, r.status, r.initial_score,
+       coalesce(a.current_score, r.initial_score) as current_score,
+       coalesce(a.residual_score, r.initial_score) as residual_score,
+       a.review_date as last_review_date,
+       coalesce(a.n, 0) as assessment_count,
+       lvl.level,
+       coalesce(r.next_review_date, coalesce(a.review_date, r.identified_date) + coalesce(r.review_interval_days, (p.review_days ->> lvl.level)::int, 60)) as review_due
+  from rm_risks r
+  left join lateral (select x.current_score, x.residual_score, x.review_date, count(*) over () as n from rm_risk_assessments x where x.risk_id = r.id order by x.review_date desc, x.created_at desc limit 1) a on true
+  cross join lateral rm_policy_for(r.project_id) p
+  cross join lateral (select case when coalesce(a.current_score, r.initial_score) >= p.level_bounds[3] then 'critical'
+                                  when coalesce(a.current_score, r.initial_score) >= p.level_bounds[2] then 'high'
+                                  when coalesce(a.current_score, r.initial_score) >= p.level_bounds[1] then 'medium' else 'low' end as level) lvl;
+grant select on rm_risk_state to authenticated;
+
+create or replace function rm_resolve_recipients(p_risk rm_risks, p_roles text[]) returns setof uuid language sql stable security definer set search_path = public as $$
+  select distinct u from (
+    select p_risk.owner_id u where 'owner' = any(p_roles)
+    union all select p_risk.monitor_id where 'monitor' = any(p_roles)
+    union all select p_risk.approver_id where 'approver' = any(p_roles)
+    union all select p_risk.response_owner_id where 'response_owner' = any(p_roles)
+    union all select m.user_id from rm_project_members m where m.project_id = p_risk.project_id and m.role = 'project_manager' and 'project_manager' = any(p_roles)
+    union all select m.user_id from rm_project_members m where m.project_id = p_risk.project_id and m.role = 'risk_manager' and 'risk_manager' = any(p_roles)
+    union all select m.user_id from rm_project_members m where m.project_id = p_risk.project_id and m.role = 'management' and 'management' = any(p_roles)
+    union all select pr.id from profiles pr where pr.is_admin and pr.account_status = 'active' and 'admins' = any(p_roles)
+  ) x where u is not null;
+$$;
+
+create or replace function rm_enqueue(p_rule text, p_risk rm_risks, p_kri uuid, p_user uuid, p_title text, p_body text, p_dedupe text, p_level smallint, p_sev text)
+returns integer language plpgsql security definer set search_path = public as $$
+declare r im_notif_rules; pr im_notif_prefs; v_haspr boolean; ch text; v_ok boolean; n int := 0; v_at timestamptz := now(); v_hour int; v_quiet boolean := false; v_crit boolean;
+begin
+  select * into r from im_notif_rules where key = p_rule and is_active;
+  if not found then return 0; end if;
+  select * into pr from im_notif_prefs where user_id = p_user;
+  v_haspr := found;
+  v_crit := p_sev = 'critical' or p_level >= 3;
+  v_hour := extract(hour from (now() at time zone 'Asia/Tehran'))::int;
+  if v_haspr and pr.quiet_start is not null and pr.quiet_end is not null and not v_crit then
+    v_quiet := case when pr.quiet_start <= pr.quiet_end then v_hour >= pr.quiet_start and v_hour < pr.quiet_end else v_hour >= pr.quiet_start or v_hour < pr.quiet_end end;
+    if v_quiet then v_at := date_trunc('hour', now()) + make_interval(hours => ((pr.quiet_end - v_hour + 24) % 24)); end if;
+  end if;
+  foreach ch in array r.channels loop
+    if ch = 'in_app' then v_ok := true;
+    elsif v_haspr then v_ok := (ch = 'email' and pr.email) or (ch = 'sms' and pr.sms) or (ch = 'push' and pr.push) or (ch = 'messenger' and pr.messenger);
+    else v_ok := (ch = 'email');
+    end if;
+    if not v_ok then continue; end if;
+    insert into im_notif_outbox (rule_key, risk_id, kri_id, recipient_id, channel, title, body, level, severity, dedupe_key, scheduled_at, payload)
+    values (p_rule, p_risk.id, p_kri, p_user, ch, p_title, p_body, p_level, p_sev, p_dedupe, case when ch = 'in_app' then now() else v_at end, jsonb_build_object('code', p_risk.code, 'project_id', p_risk.project_id, 'module', 'risk'))
+    on conflict (dedupe_key, channel) do nothing;
+    if found then n := n + 1; end if;
+  end loop;
+  return n;
+end $$;
+
+create or replace function rm_generate_notifications() returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  r rm_risks; s rm_risk_state; k rm_kris; a rm_risk_actions; c rm_controls; e record; u uuid; n int := 0; v_rule im_notif_rules; v_days int; v_lvl smallint; pol rm_policy;
+  v_last bigint; v_max bigint; v_prev smallint; v_wk text := to_char(date_trunc('week', now()), 'YYYYMMDD');
+begin
+  -- 1) KRI threshold crossings
+  select coalesce((select value from im_notif_state where key = 'rk_last_kri_event'), 0) into v_last; v_max := v_last;
+  for e in select * from rm_kri_events where id > v_last and to_state in ('warn', 'critical') order by id limit 500 loop
+    v_max := greatest(v_max, e.id);
+    select * into k from rm_kris where id = e.kri_id;
+    if k.risk_id is null then continue; end if;
+    select * into r from rm_risks where id = k.risk_id;
+    if not found or r.status = 'closed' then continue; end if;
+    select * into v_rule from im_notif_rules where key = 'rk_kri_breach' and is_active;
+    if not found then continue; end if;
+    for u in select * from rm_resolve_recipients(r, v_rule.recipients || array[]::text[] || case when e.to_state = 'critical' then v_rule.escalate_to else '{}'::text[] end) union select k.owner_id where k.owner_id is not null loop
+      n := n + rm_enqueue('rk_kri_breach', r, k.id, u, 'شاخص هشدار: ' || k.name || ' (' || r.code || ')', case e.to_state when 'critical' then 'بحرانی' else 'هشدار' end || ' · مقدار ' || coalesce(e.value::text, '') || ' ' || k.unit, 'kri:' || e.id || ':' || u, (case when e.to_state = 'critical' then 2 else 1 end)::smallint, case when e.to_state = 'critical' then 'critical' else 'high' end);
+    end loop;
+  end loop;
+  insert into im_notif_state (key, value) values ('rk_last_kri_event', v_max) on conflict (key) do update set value = excluded.value;
+
+  -- 2) new assessments: crossing the escalation threshold or a sudden jump
+  select coalesce((select value from im_notif_state where key = 'rk_last_assess'), 0) into v_last; v_max := v_last;
+  for e in select x.*, (floor(extract(epoch from x.created_at) * 1000))::bigint as ts from rm_risk_assessments x where floor(extract(epoch from x.created_at) * 1000) > v_last order by x.created_at limit 500 loop
+    v_max := greatest(v_max, e.ts);
+    select * into r from rm_risks where id = e.risk_id;
+    if not found or r.status = 'closed' then continue; end if;
+    pol := rm_policy_for(r.project_id);
+    select current_score into v_prev from rm_risk_assessments where risk_id = e.risk_id and (review_date, created_at) < (e.review_date, e.created_at) order by review_date desc, created_at desc limit 1;
+    if v_prev is null then v_prev := r.initial_score; end if;
+    if (e.current_score >= pol.escalation_min and v_prev < pol.escalation_min) or e.current_score - v_prev >= 6 then
+      select * into v_rule from im_notif_rules where key = 'rk_critical' and is_active;
+      if found then
+        for u in select * from rm_resolve_recipients(r, v_rule.recipients || case when e.current_score >= pol.escalation_min then v_rule.escalate_to else '{}'::text[] end) loop
+          n := n + rm_enqueue('rk_critical', r, null, u, 'ریسک ' || case when e.current_score >= pol.escalation_min then 'بحرانی' else 'با جهش امتیاز' end || ': ' || r.code, r.title || ' — امتیاز ' || v_prev || ' → ' || e.current_score, 'crit:' || e.id || ':' || u, (case when e.current_score >= pol.escalation_min then 2 else 1 end)::smallint, case when e.current_score >= pol.escalation_min then 'critical' else 'high' end);
+        end loop;
+      end if;
+    end if;
+  end loop;
+  insert into im_notif_state (key, value) values ('rk_last_assess', v_max) on conflict (key) do update set value = excluded.value;
+
+  -- 3) history events: realized / ineffective action / acceptance requested
+  select coalesce((select value from im_notif_state where key = 'rk_last_hist'), 0) into v_last; v_max := v_last;
+  for e in select h.*, (floor(extract(epoch from h.created_at) * 1000))::bigint as ts from rm_risk_history h where floor(extract(epoch from h.created_at) * 1000) > v_last and (h.activity in ('realized_to_issue', 'acceptance_requested') or (h.activity = 'action:effect_status' and h.new_value = '"ineffective"'::jsonb)) order by h.created_at limit 500 loop
+    v_max := greatest(v_max, e.ts);
+    select * into r from rm_risks where id = e.risk_id;
+    if not found then continue; end if;
+    select * into v_rule from im_notif_rules where key = case e.activity when 'realized_to_issue' then 'rk_realized' when 'acceptance_requested' then 'rk_acceptance_pending' else 'rk_action_ineffective' end and is_active;
+    if not found then continue; end if;
+    for u in select * from rm_resolve_recipients(r, v_rule.recipients) loop
+      n := n + rm_enqueue(v_rule.key, r, null, u, v_rule.name || ': ' || r.code, r.title, v_rule.key || ':' || e.id || ':' || u, 1::smallint, 'high');
+    end loop;
+  end loop;
+  insert into im_notif_state (key, value) values ('rk_last_hist', v_max) on conflict (key) do update set value = excluded.value;
+  -- the history scan above also needs the timestamp of the last scan in *ms*; ids are bigint-safe
+
+  -- 4) state rules over active risks
+  for r in select * from rm_risks where status <> 'closed' loop
+    select * into s from rm_risk_state where risk_id = r.id;
+    pol := rm_policy_for(r.project_id);
+    v_days := current_date - s.review_due;
+    if v_days between -3 and 0 then
+      select * into v_rule from im_notif_rules where key = 'rk_review_due' and is_active;
+      if found then for u in select * from rm_resolve_recipients(r, v_rule.recipients) loop n := n + rm_enqueue('rk_review_due', r, null, u, 'نزدیک موعد بازنگری: ' || r.code, r.title, 'rdue:' || r.id || ':' || s.review_due || ':' || u, 0::smallint, s.level); end loop; end if;
+    elsif v_days > 0 then
+      v_lvl := case when v_days <= 7 then 1 when v_days <= 21 then 2 else 3 end;
+      select * into v_rule from im_notif_rules where key = 'rk_review_overdue' and is_active;
+      if found then for u in select * from rm_resolve_recipients(r, v_rule.recipients || case when v_lvl >= 2 then v_rule.escalate_to else '{}'::text[] end) loop n := n + rm_enqueue('rk_review_overdue', r, null, u, 'بازنگری عقب‌افتاده ' || v_days || ' روزه: ' || r.code, r.title, 'rover:' || r.id || ':L' || v_lvl || ':' || u, v_lvl, s.level); end loop; end if;
+    end if;
+    if r.owner_id is null then
+      select * into v_rule from im_notif_rules where key = 'rk_no_owner' and is_active;
+      if found then for u in select * from rm_resolve_recipients(r, v_rule.recipients) loop n := n + rm_enqueue('rk_no_owner', r, null, u, 'ریسک بدون مالک: ' || r.code, r.title, 'noown:' || r.id || ':' || v_wk || ':' || u, 0::smallint, s.level); end loop; end if;
+    end if;
+    if s.level in ('high', 'critical') and r.response_strategy <> 'accept' and not exists (select 1 from rm_risk_actions x where x.risk_id = r.id and x.status not in ('completed', 'cancelled')) then
+      select * into v_rule from im_notif_rules where key = 'rk_no_response_plan' and is_active;
+      if found then for u in select * from rm_resolve_recipients(r, v_rule.recipients) loop n := n + rm_enqueue('rk_no_response_plan', r, null, u, 'ریسک مهم بدون اقدام کاهشی: ' || r.code, r.title, 'noplan:' || r.id || ':' || v_wk || ':' || u, 1::smallint, s.level); end loop; end if;
+    end if;
+    if coalesce(s.last_review_date, r.identified_date) < current_date - pol.stale_assessment_days then
+      select * into v_rule from im_notif_rules where key = 'rk_stale_assessment' and is_active;
+      if found then for u in select * from rm_resolve_recipients(r, v_rule.recipients) loop n := n + rm_enqueue('rk_stale_assessment', r, null, u, 'ارزیابی قدیمی: ' || r.code, r.title, 'stale:' || r.id || ':' || v_wk || ':' || u, 0::smallint, s.level); end loop; end if;
+    end if;
+    for a in select * from rm_risk_actions x where x.risk_id = r.id and x.status not in ('completed', 'cancelled') and x.due_date < current_date loop
+      v_days := current_date - a.due_date;
+      v_lvl := case when v_days <= 3 then 1 when v_days <= 10 then 2 else 3 end;
+      select * into v_rule from im_notif_rules where key = 'rk_action_overdue' and is_active;
+      if found then
+        for u in select a.owner_id where a.owner_id is not null union select * from rm_resolve_recipients(r, array_remove(v_rule.recipients, 'action_owner') || case when v_lvl >= 2 then v_rule.escalate_to else '{}'::text[] end) loop
+          n := n + rm_enqueue('rk_action_overdue', r, null, u, 'اقدام کاهشی معوق ' || v_days || ' روزه: ' || r.code, left(a.description, 140), 'aover:' || a.id || ':L' || v_lvl || ':' || u, v_lvl, s.level);
+        end loop;
+      end if;
+    end loop;
+    for c in select * from rm_controls x where x.risk_id = r.id and x.is_critical and x.status in ('active', 'expired') and (x.expires_on < current_date or (x.test_interval_days is not null and coalesce(x.last_tested_at, r.identified_date) + x.test_interval_days < current_date)) loop
+      select * into v_rule from im_notif_rules where key = 'rk_control_expired' and is_active;
+      if found then for u in select c.owner_id where c.owner_id is not null union select * from rm_resolve_recipients(r, v_rule.recipients) loop n := n + rm_enqueue('rk_control_expired', r, null, u, 'کنترل حیاتی نیازمند آزمون/تمدید: ' || c.name, r.code || ' · ' || r.title, 'ctl:' || c.id || ':' || v_wk || ':' || u, 1::smallint, s.level); end loop; end if;
+    end loop;
+  end loop;
+  return jsonb_build_object('queued', n);
+end $$;
+revoke execute on function rm_generate_notifications() from public, anon, authenticated;
+-- start the event cursors at "now" so history before this migration does not flood users
+insert into im_notif_state (key, value) values
+ ('rk_last_kri_event', 0),
+ ('rk_last_assess', coalesce((select floor(extract(epoch from max(created_at)) * 1000)::bigint from rm_risk_assessments), 0)),
+ ('rk_last_hist', coalesce((select floor(extract(epoch from max(created_at)) * 1000)::bigint from rm_risk_history), 0))
+on conflict (key) do nothing;
+
+create or replace function rm_notif_mark_risk_read(p_risk uuid) returns integer language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update im_notif_outbox set status = 'read', read_at = now() where recipient_id = auth.uid() and channel = 'in_app' and risk_id = p_risk and status in ('queued', 'sent');
+  get diagnostics n = row_count;
+  return n;
+end $$;
+grant execute on function rm_notif_mark_risk_read(uuid) to authenticated;
+revoke execute on function rm_notif_mark_risk_read(uuid) from public, anon;
+
+-- my_notifications() (bell) additionally returns the engine's unread in-app risk rows (ids prefixed `rq-`):
+--   for r in select o.id, o.title, o.body, o.level, o.risk_id, o.created_at from im_notif_outbox o
+--     where o.recipient_id = auth.uid() and o.channel = 'in_app' and o.status in ('queued','sent') and o.risk_id is not null and o.created_at > now() - interval '14 days'
+--     order by o.level desc, o.created_at desc limit 40 loop
+--     v := v || jsonb_build_object('id','rq-'||r.id,'source','risk','module','risk','severity',case when r.level >= 2 then 'warn' else 'action' end,'title',r.title,'body',r.body,'recordId',r.risk_id,'at',r.created_at);
+--   end loop;
+-- Scheduling: select cron.schedule('rm-generate-notifications', '*/15 * * * *', $$select public.rm_generate_notifications()$$);   (the im-notify edge function also calls it)
