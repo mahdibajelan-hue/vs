@@ -118,3 +118,33 @@ assert.equal(sc.escalationLevel({ daysOverdue: 0, severity: 'high', blockedDays:
 assert.ok(sc.escalationLevel({ daysOverdue: 10, severity: 'low', blockedDays: 0 }) >= 2)
 assert.ok(sc.escalationLevel({ daysOverdue: 3, severity: 'critical', blockedDays: 0 }) > sc.escalationLevel({ daysOverdue: 3, severity: 'low', blockedDays: 0 }))
 console.log('issues v2 libs: all assertions passed')
+
+// ── register: filter / sort / csv
+import * as rg from './imRegister.ts'
+{
+  const base = (o) => issue({ code: 'ISS-' + Math.random().toString(36).slice(2, 5), ...o })
+  const L = [
+    base({ id: 'x1', title: 'تأخیر در تأیید نقشه‌های سازه', severity: 'high', category: 'engineering', stage: 'in_progress', status: 'in_progress', deadlineDate: '2026-03-01', ownerId: 'uA' }),
+    base({ id: 'x2', title: 'کمبود مصالح', severity: 'low', category: 'procurement', stage: 'closed', status: 'approved', deadlineDate: '2026-03-01' }),
+    base({ id: 'x3', title: 'مغایرت نقشه و اجرا', severity: 'critical', category: 'engineering', stage: 'registered', status: 'open', deadlineDate: '2026-05-01', blockedSince: '2026-03-02T00:00:00Z', followUpId: 'uB' }),
+  ]
+  const f = rg.EMPTY_FILTER
+  assert.deepEqual(rg.applyFilter(L, f, '2026-04-01').map((i) => i.id), ['x1', 'x3']) // «active» hides closed
+  assert.equal(rg.applyFilter(L, { ...f, stage: 'all' }, '2026-04-01').length, 3)
+  assert.deepEqual(rg.applyFilter(L, { ...f, overdueOnly: true }, '2026-04-01').map((i) => i.id), ['x1'])
+  assert.deepEqual(rg.applyFilter(L, { ...f, blockedOnly: true }, '2026-04-01').map((i) => i.id), ['x3'])
+  assert.deepEqual(rg.applyFilter(L, { ...f, userId: 'uB' }, '2026-04-01').map((i) => i.id), ['x3'])
+  assert.deepEqual(rg.applyFilter(L, { ...f, q: 'نقشه ساز' }, '2026-04-01').map((i) => i.id), ['x1']) // all words, Persian-normalised
+  assert.deepEqual(rg.sortIssues(L, 'severity', -1, '2026-04-01').map((i) => i.id), ['x3', 'x1', 'x2'])
+  assert.deepEqual(rg.sortIssues(L, 'due', 1, '2026-04-01').map((i) => i.id), ['x1', 'x2', 'x3'])
+  const g = rg.groupByStage(L)
+  assert.equal(g.registered.length, 1); assert.equal(g.closed.length, 1); assert.equal(g.other.length, 0)
+  const csv = rg.toCsv([L[0]], { project: () => 'P', user: (id) => id ?? '', tasks: [] })
+  assert.ok(csv.startsWith('﻿شناسه')); assert.ok(csv.includes('تأخیر در تأیید نقشه‌های سازه'))
+  assert.deepEqual(rg.parseCsv('a,"b,c","d ""q"""\r\n1,2,3\n'), [['a', 'b,c', 'd "q"'], ['1', '2', '3']])
+  const imp = rg.parseImport('عنوان,شدت,دسته,مهلت\nنشتی خط لوله,بالا,ایمنی و محیط‌زیست,5\n,کم,,\nبدون دسته,خیلی,,\nمهلت بد,کم,,999\nخوب,critical,engineering,\n')
+  assert.equal(imp.rows.length, 2); assert.equal(imp.rows[0].severity, 'high'); assert.equal(imp.rows[0].category, 'hse'); assert.equal(imp.rows[0].deadline_days, 5); assert.equal(imp.rows[0].source, 'import')
+  assert.equal(imp.errors.length, 3); assert.deepEqual(imp.errors.map((e) => e.line), [3, 4, 5])
+  assert.ok(rg.parseImport('x,y\n1,2').errors[0].message.includes('عنوان'))
+  console.log('register lib ok')
+}

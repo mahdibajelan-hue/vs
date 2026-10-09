@@ -35,6 +35,8 @@ interface IssuesState {
   /** Re-read one row after a server-side transition (stage, due dates, counters change in triggers). */
   refreshIssue: (issueId: string) => Promise<void>
   createIssueV2: (projectId: string, data: NewIssueV2) => Promise<string | null>
+  /** Whitelisted column patch (snake_case). Due dates are NOT patchable here — they move only through approved extensions. */
+  patchIssue: (issueId: string, row: Record<string, unknown>, action?: string) => Promise<boolean>
 }
 
 export interface NewIssueV2 {
@@ -131,6 +133,15 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
     const { error } = await supabase.from('im_issues').update({ action_date: iso, updated_at: new Date().toISOString() }).eq('id', issueId)
     if (reportError('ثبت تاریخ اقدام', error)) return
     set((s) => ({ issues: s.issues.map((i) => (i.id === issueId ? { ...i, actionDate: iso } : i)) }))
+  },
+
+  patchIssue: async (issueId, row, action = 'ویرایش مشکل') => {
+    const allowed = ['title', 'description', 'priority', 'severity', 'urgency', 'category', 'discipline', 'location', 'pursuer_id', 'approver_id', 'owner_id', 'follow_up_id', 'acceptance_criteria', 'resolution_summary', 'tags', 'identified_at', 'corporate_issue_id']
+    const clean = Object.fromEntries(Object.entries(row).filter(([k]) => allowed.includes(k)))
+    const { error } = await supabase.from('im_issues').update(clean).eq('id', issueId)
+    if (reportError(action, error)) return false
+    await get().refreshIssue(issueId)
+    return true
   },
 
   refreshIssue: async (issueId) => {
