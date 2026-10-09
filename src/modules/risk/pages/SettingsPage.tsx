@@ -57,7 +57,9 @@ export function SettingsPage({ onOpenRisk }: PageProps) {
   // ---- members (module roles); people themselves come from User Management
   const [mp, setMp] = useState(d.scope !== 'all' ? d.scope : projects[0]?.id ?? '')
   const [members, setMembers] = useState<{ user_id: string; role: RmUserRole }[]>([])
-  const people = useRiskPeopleStore((s) => s.byProject[mp])
+  const people = dir.all // every active user of the central platform, not only those already scoped to this project
+  const projectPeople = useRiskPeopleStore((s) => s.byProject[mp])
+  const scoped = new Set((projectPeople ?? []).map((x) => x.userId))
   const fetchProject = useRiskPeopleStore((s) => s.fetchProject)
   const loadMembers = async () => { if (!mp) return; const { data } = await supabase.from('rm_project_members').select('user_id, role').eq('project_id', mp); setMembers((data ?? []) as { user_id: string; role: RmUserRole }[]) }
   useEffect(() => { if (tab === 'members' && mp) { fetchProject(mp); loadMembers() } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tab, mp])
@@ -142,7 +144,7 @@ export function SettingsPage({ onOpenRisk }: PageProps) {
             {members.length === 0 && <tr><td colSpan={3} className="im-helper">نقش ویژه‌ای تعریف نشده؛ کاربران مرکزی با نقش «عضو تیم» کار می‌کنند.</td></tr>}
           </tbody></table></div>
           <div className="im-actions" style={{ marginTop: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: '1 1 240px' }}><Field label="کاربر (از مدیریت کاربران)"><select value={add.user} onChange={(e) => setAdd({ ...add, user: e.target.value })}><option value="">— انتخاب کنید —</option>{(people ?? []).filter((x) => !members.some((m) => m.user_id === x.userId)).map((x) => <option key={x.userId} value={x.userId}>{x.name}{x.position ? ' · ' + x.position : ''}</option>)}</select></Field></div>
+            <div style={{ flex: '1 1 240px' }}><Field label="کاربر (از مدیریت کاربران)"><select value={add.user} onChange={(e) => setAdd({ ...add, user: e.target.value })}><option value="">— انتخاب کنید —</option>{(() => { const free = (people ?? []).filter((x) => !members.some((m) => m.user_id === x.userId)); const opt = (x: (typeof free)[number]) => <option key={x.userId} value={x.userId}>{x.name}{x.position ? ' · ' + x.position : ''}</option>; return <><optgroup label="دارای دسترسی به این پروژه">{free.filter((x) => scoped.has(x.userId)).map(opt)}</optgroup><optgroup label="سایر کاربران فعال سامانه">{free.filter((x) => !scoped.has(x.userId)).map(opt)}</optgroup></> })()}</select></Field></div>
             <div style={{ flex: '0 1 200px' }}><Field label="نقش"><select value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value as RmUserRole })}>{RM_ROLES.map((r) => <option key={r} value={r}>{RM_ROLE_LABEL_FA[r]}</option>)}</select></Field></div>
             <button className="im-btn im-btn-primary" style={{ marginBottom: 12 }} disabled={!add.user} onClick={addMember}><UserPlus size={14} /> افزودن</button>
           </div>

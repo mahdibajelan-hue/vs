@@ -63,7 +63,6 @@ export function AssessmentPage({ onOpenRisk }: PageProps) {
             <div className="im-section-title">توزیع سطح (فعلی)</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <Donut slices={levelSlices} centerLabel="ریسک فعال" size={140} stroke={20} />
-              <div className="im-grid" style={{ gap: 6, flex: 1 }}>{levelSlices.map((s) => <div key={s.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}><span><span className="rk-dot" style={{ ['--c' as string]: s.color }} />{s.label}</span><b>{s.value}</b></div>)}</div>
             </div>
           </div>
           <div className="im-card">

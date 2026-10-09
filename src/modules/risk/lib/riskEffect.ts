@@ -30,7 +30,7 @@ export function analyzeActionEffects(risk: RmRisk, assessments: RmRiskAssessment
   const own = assessments.filter((a) => a.riskId === risk.id).sort((a, b) => (a.reviewDate !== b.reviewDate ? (a.reviewDate < b.reviewDate ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1))
   return actions.filter((a) => a.riskId === risk.id && a.status !== 'cancelled').map((action) => {
     if (action.status !== 'completed') return { action, before: null, after: null, delta: null, verdict: 'not_completed' as const, verified: false, overdueForReassessment: false }
-    const doneDay = (action.completedAt ?? action.updatedAt).slice(0, 10)
+    const doneDay = (action.completedAt ?? action.updatedAt ?? action.createdAt ?? '').slice(0, 10)
     const prior = [...own].reverse().find((a) => a.reviewDate <= doneDay)
     const next = own.find((a) => a.reviewDate > doneDay)
     const before = prior ? prior.currentScore : risk.initialScore

@@ -6,6 +6,8 @@ import type { RiskState } from '../lib/riskState'
 export type MatrixMode = 'inherent' | 'current' | 'residual'
 export const MODE_LABEL: Record<MatrixMode, string> = { inherent: 'ذاتی', current: 'فعلی', residual: 'باقیمانده' }
 const COLOR = { low: '#22c55e', medium: '#eab308', high: '#f97316', critical: '#ef4444' }
+/** Heat-map colour: continuous green → yellow → orange → red by score (1…25), so neighbouring cells differ even inside one level. */
+const heat = (score: number): string => `hsl(${Math.round(135 - ((score - 1) / 24) * 135)} 78% 46%)`
 
 /** Probability (x) × impact (y). Colour = policy level; a white inner ring marks cells beyond tolerance. Click a cell to filter. */
 export function RiskMatrix({ risks, states, policy, mode, selected, onSelect }: { risks: RmRisk[]; states: Map<string, RiskState>; policy: RmPolicy; mode: MatrixMode; selected: { p: number; i: number } | null; onSelect: (c: { p: number; i: number } | null) => void }) {
@@ -33,7 +35,7 @@ export function RiskMatrix({ risks, states, policy, mode, selected, onSelect }: 
               const on = selected?.p === p && selected?.i === i
               return (
                 <button key={`${p}-${i}`} type="button" className={`rk-cell ${on ? 'sel' : ''} ${zoneOf(score, policy) === 'above_tolerance' || zoneOf(score, policy) === 'escalate' ? 'tol' : ''} ${selected && !on ? 'dim' : ''}`}
-                  style={{ ['--c' as string]: COLOR[levelOf(score, policy)] }} onClick={() => onSelect(on ? null : { p, i })} aria-label={`احتمال ${p} اثر ${i} امتیاز ${score}: ${n} ریسک`} aria-pressed={on}>
+                  style={{ ['--c' as string]: heat(score), ['--lc' as string]: COLOR[levelOf(score, policy)] }} onClick={() => onSelect(on ? null : { p, i })} aria-label={`احتمال ${p} اثر ${i} امتیاز ${score}: ${n} ریسک`} aria-pressed={on}>
                   <small>{score}</small>{n > 0 ? n : ''}
                 </button>
               )
