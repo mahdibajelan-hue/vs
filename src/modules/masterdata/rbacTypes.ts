@@ -12,6 +12,7 @@ export type ModuleKeyRef =
   | 'lifecycle'
   | 'missions'
   | 'landacq'
+  | 'stagegate'
   | 'admin'
 
 export interface RastaModule {

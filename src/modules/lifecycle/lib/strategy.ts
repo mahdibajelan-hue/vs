@@ -35,16 +35,15 @@ export function canTransition(from: GovStatus, to: GovStatus): boolean {
 export const STANDARD_DAYS: number[] = GATE_META.map((g) => g.standardDays)
 
 /** Dependencies between gate N and N+1 (1-based) — SS+lag where overlapped, FS elsewhere.
- * Overlapping values for G4→G5 / G6→G7 are from the brief; Fast-Track and Emergency lags are
- * the module's own defaults and are meant to be tuned by the organisation. */
+ * Values are the organisation's own (lifecycle_strategy_phase_dependencies in the Stage-Gate source app). */
 const SS = (lag: number): { type: 'SS' | 'FS'; lag: number } => ({ type: 'SS', lag })
 const FS0 = { type: 'FS' as const, lag: 0 }
 const LINKS: Record<StrategyKey, ({ type: 'SS' | 'FS'; lag: number })[]> = {
   //                G1→2  2→3  3→4  4→5   5→6   6→7    7→8  8→9
   sequential:  [FS0, FS0, FS0, FS0, FS0, FS0, FS0, FS0],
   overlapping: [FS0, FS0, FS0, SS(90), FS0, SS(540), FS0, FS0],
-  fast_track:  [FS0, SS(15), SS(60), SS(90), SS(120), SS(480), SS(30), FS0],
-  emergency:   [SS(30), SS(10), SS(30), SS(60), SS(60), SS(420), SS(20), SS(60)],
+  fast_track:  [FS0, SS(0), SS(60), SS(60), FS0, SS(510), SS(30), FS0],
+  emergency:   [SS(30), SS(0), SS(30), SS(60), SS(90), SS(480), SS(15), FS0],
 }
 
 export function strategyDeps(strategy: StrategyKey): CpmDep[] {
