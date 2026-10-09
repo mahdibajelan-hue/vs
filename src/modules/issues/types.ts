@@ -58,7 +58,7 @@ export const IM_STATUS_COLOR: Record<ImIssueStatus, string> = {
   rejected: 'var(--im-coral)',
 }
 
-export type ImIssueSource = 'manual' | 'lifecycle_action'
+export type ImIssueSource = 'manual' | 'lifecycle_action' | 'mission_debrief' | 'land_acquisition' | 'risk' | 'correspondence' | 'meeting' | 'report' | 'import' | 'api'
 
 export interface ImIssue {
   id: string
@@ -78,4 +78,69 @@ export interface ImIssue {
   updatedAt: string
   source: ImIssueSource
   relatedActionId: string | null
+  /** v2 (all optional so legacy callers keep compiling) */
+  code?: string
+  stage?: ImStage
+  severity?: ImIssuePriority
+  urgency?: ImIssuePriority
+  category?: string | null
+  discipline?: string
+  location?: string
+  identifiedAt?: string | null
+  ownerId?: string | null
+  followUpId?: string | null
+  resolveDueDate?: string | null
+  originalDueDate?: string | null
+  extensionCount?: number
+  rootCauseSummary?: string
+  rootCauseConfirmed?: boolean
+  acceptanceCriteria?: string
+  resolutionSummary?: string
+  reopenCount?: number
+  blockedSince?: string | null
+  blockedKind?: string | null
+  externalSystem?: string | null
+  externalId?: string | null
+  syncStatus?: string
+  corporateIssueId?: string | null
+  tags?: string[]
+}
+
+export type ImStage =
+  | 'registered' | 'validated' | 'analysis' | 'action_plan' | 'in_progress' | 'resolution_review'
+  | 'effectiveness_check' | 'closed' | 'returned' | 'reopened' | 'cancelled' | 'duplicate'
+
+export type ImTaskStatus = 'not_started' | 'in_progress' | 'blocked' | 'pending_verification' | 'done' | 'cancelled'
+
+export interface ImTask {
+  id: string
+  issueId: string
+  title: string
+  executorId: string | null
+  approverId: string | null
+  startDate: string | null
+  dueDate: string | null
+  originalDueDate: string | null
+  extensionCount: number
+  status: ImTaskStatus
+  progress: number
+  blockedKind: string | null
+  blockedSince: string | null
+  completionClaimedAt: string | null
+  verifiedAt: string | null
+  verifiedBy: string | null
+  lastProgressAt: string | null
+  dependsOn?: string[]
+}
+
+export interface ImExtension {
+  id: string
+  issueId: string
+  taskId: string | null
+  fromDue: string
+  toDue: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedBy: string | null
+  requestedAt: string
 }
