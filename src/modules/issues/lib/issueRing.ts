@@ -24,11 +24,12 @@ export function ringState(issue: ImIssue, today = todayIso()): RingState {
   if (issue.status === 'approved') return { color: 'var(--im-mint)', label: '✓', progress: 1, overdue: false, days: 0 }
   if (issue.status === 'rejected') return { color: 'var(--im-coral)', label: '✕', progress: 1, overdue: false, days: 0 }
 
-  const diff = isoDiffDays(today, issue.deadlineDate)
+  const due = issue.resolveDueDate ?? issue.deadlineDate
+  const diff = isoDiffDays(today, due)
   if (diff < 0) {
     return { color: 'var(--im-coral)', label: `+${-diff}`, progress: 1, overdue: true, days: -diff }
   }
-  const total = Math.max(1, isoDiffDays(issue.createdAt.slice(0, 10), issue.deadlineDate))
+  const total = Math.max(1, isoDiffDays(issue.createdAt.slice(0, 10), due))
   const elapsed = Math.max(0, isoDiffDays(issue.createdAt.slice(0, 10), today))
   const progress = Math.min(1, elapsed / total)
   const color = diff <= 2 ? 'var(--im-amber)' : 'var(--im-mint)'
@@ -40,5 +41,5 @@ export function isIssueOpen(issue: ImIssue): boolean {
 }
 
 export function isIssueOverdue(issue: ImIssue, today = todayIso()): boolean {
-  return isIssueOpen(issue) && isoDiffDays(today, issue.deadlineDate) < 0
+  return isIssueOpen(issue) && isoDiffDays(today, issue.resolveDueDate ?? issue.deadlineDate) < 0
 }

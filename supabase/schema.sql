@@ -4372,6 +4372,7 @@ create table if not exists plc_milestone_forecast_history (
   milestone_id uuid not null references plc_milestones (id) on delete cascade,
   forecast_date date,
   variance_days integer not null default 0,
+  series text not null default 'overall' check (series in ('overall','engineering','procurement','construction')),
   note text not null default '',
   recorded_by uuid references profiles (id) default auth.uid(),
   recorded_at timestamptz not null default now()
@@ -4468,6 +4469,150 @@ create policy "plc_audit_insert_authenticated" on plc_audit_log
   for insert with check (auth.uid() is not null);
 
 create index if not exists idx_plc_audit_project on plc_audit_log (project_id, changed_at desc);
+
+-- 21e-2. Gate model extension (objectives / outputs / criteria, decisions, engines)
+alter table plc_checklist_items drop constraint if exists plc_checklist_items_status_check;
+alter table plc_checklist_items add constraint plc_checklist_items_status_check
+  check (status in ('not_started','in_progress','completed','pending','submitted','verified','rejected','failed','waived'));
+alter table plc_checklist_items add column if not exists kind text not null default 'objective';
+alter table plc_checklist_items drop constraint if exists plc_checklist_items_kind_check;
+alter table plc_checklist_items add constraint plc_checklist_items_kind_check check (kind in ('objective','output','criterion'));
+alter table plc_checklist_items add column if not exists submitted_by uuid references profiles (id);
+alter table plc_checklist_items add column if not exists verified_by uuid references profiles (id);
+alter table plc_checklist_items add column if not exists verification_date date;
+alter table plc_template_checklist_items add column if not exists kind text not null default 'objective';
+alter table plc_project_gates drop constraint if exists plc_project_gates_status_check;
+alter table plc_project_gates add constraint plc_project_gates_status_check
+  check (status in ('not_started','in_progress','ready','conditional','approved','rejected','blocked'));
+alter table plc_project_gates add column if not exists phase_group text not null default 'execution';
+alter table plc_project_gates add column if not exists engine text not null default 'step';
+alter table plc_project_gates add column if not exists icon text not null default '';
+alter table plc_project_gates add column if not exists approval_doc text not null default '';
+alter table plc_project_gates add column if not exists owner_role text not null default '';
+alter table plc_project_gates add column if not exists condition_text text not null default '';
+alter table plc_project_gates add column if not exists condition_owner_id uuid references profiles (id);
+alter table plc_project_gates add column if not exists condition_deadline date;
+alter table plc_template_stages add column if not exists phase_group text not null default 'execution';
+alter table plc_template_stages add column if not exists engine text not null default 'step';
+alter table plc_template_stages add column if not exists icon text not null default '';
+alter table plc_template_stages add column if not exists approval_doc text not null default '';
+alter table plc_template_stages add column if not exists owner_role text not null default '';
+alter table plc_template_stages add column if not exists standard_days integer not null default 0;
+alter table plc_project_stages add column if not exists standard_days integer not null default 0;
+create table if not exists plc_gate_decisions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  gate_id uuid not null references plc_project_gates (id) on delete cascade,
+  decision text not null check (decision in ('pass','conditional','return','cancel')),
+  reason text not null default '',
+  condition_text text not null default '',
+  condition_owner_id uuid references profiles (id),
+  condition_deadline date,
+  decided_by uuid references profiles (id) default auth.uid(),
+  decided_at timestamptz not null default now()
+);
+alter table plc_gate_decisions enable row level security;
+drop policy if exists "plc_gate_decisions_select" on plc_gate_decisions;
+create policy "plc_gate_decisions_select" on plc_gate_decisions for select using (auth.uid() is not null);
+drop policy if exists "plc_gate_decisions_insert" on plc_gate_decisions;
+create policy "plc_gate_decisions_insert" on plc_gate_decisions for insert with check (auth.uid() is not null);
+create index if not exists idx_plc_gate_decisions_gate on plc_gate_decisions (gate_id, decided_at desc);
+-- Immutable manual-% history (G4 basic design); append-only like the audit log.
+create table if not exists plc_progress_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  gate_id uuid not null references plc_project_gates (id) on delete cascade,
+  pct smallint not null check (pct between 0 and 100),
+  note text not null default '',
+  recorded_by uuid references profiles (id) default auth.uid(),
+  recorded_at timestamptz not null default now()
+);
+alter table plc_progress_log enable row level security;
+drop policy if exists "plc_progress_log_select" on plc_progress_log;
+create policy "plc_progress_log_select" on plc_progress_log for select using (auth.uid() is not null);
+drop policy if exists "plc_progress_log_insert" on plc_progress_log;
+create policy "plc_progress_log_insert" on plc_progress_log for insert with check (auth.uid() is not null);
+create index if not exists idx_plc_progress_log_gate on plc_progress_log (gate_id, recorded_at desc);
+
+-- 21e-3. Master-plan tree, dependencies, baselines, templates; execution strategy + versions
+alter table plc_activities add column if not exists parent_id uuid references plc_activities (id) on delete cascade;
+alter table plc_activities add column if not exists weight numeric(6,2) not null default 100 check (weight >= 0 and weight <= 100);
+alter table plc_activities add column if not exists manual_actual_pct smallint not null default 0 check (manual_actual_pct between 0 and 100);
+create index if not exists idx_plc_activities_parent on plc_activities (parent_id);
+create table if not exists plc_activity_deps (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  from_id uuid not null references plc_activities (id) on delete cascade,
+  to_id uuid not null references plc_activities (id) on delete cascade,
+  dep_type text not null default 'FS' check (dep_type in ('FS','SS','FF','SF')),
+  lag_days integer not null default 0,
+  unique (from_id, to_id),
+  check (from_id <> to_id)
+);
+alter table plc_activity_deps enable row level security;
+drop policy if exists "plc_activity_deps_all" on plc_activity_deps;
+create policy "plc_activity_deps_all" on plc_activity_deps for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create index if not exists idx_plc_activity_deps_project on plc_activity_deps (project_id);
+-- Frozen snapshots of planned dates: insert/select only, so a baseline can never be edited.
+create table if not exists plc_plan_baselines (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  label text not null,
+  rows jsonb not null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+alter table plc_plan_baselines enable row level security;
+drop policy if exists "plc_plan_baselines_select" on plc_plan_baselines;
+create policy "plc_plan_baselines_select" on plc_plan_baselines for select using (auth.uid() is not null);
+drop policy if exists "plc_plan_baselines_insert" on plc_plan_baselines;
+create policy "plc_plan_baselines_insert" on plc_plan_baselines for insert with check (auth.uid() is not null);
+create table if not exists plc_plan_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  nodes jsonb not null,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+alter table plc_plan_templates enable row level security;
+drop policy if exists "plc_plan_templates_select" on plc_plan_templates;
+create policy "plc_plan_templates_select" on plc_plan_templates for select using (auth.uid() is not null);
+drop policy if exists "plc_plan_templates_insert" on plc_plan_templates;
+create policy "plc_plan_templates_insert" on plc_plan_templates for insert with check (auth.uid() is not null);
+drop policy if exists "plc_plan_templates_delete" on plc_plan_templates;
+create policy "plc_plan_templates_delete" on plc_plan_templates for delete using (created_by = auth.uid() or is_admin_user());
+create table if not exists plc_project_strategy (
+  project_id uuid primary key references master_projects (id) on delete cascade,
+  strategy text not null default 'sequential' check (strategy in ('sequential','overlapping','fast_track','emergency')),
+  start_date date,
+  gov_status text not null default 'draft' check (gov_status in ('draft','proposed','reviewed','approved','baseline','in_execution','revised','completed')),
+  durations jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table plc_project_strategy enable row level security;
+drop policy if exists "plc_project_strategy_all" on plc_project_strategy;
+create policy "plc_project_strategy_all" on plc_project_strategy for all using (auth.uid() is not null) with check (auth.uid() is not null);
+create table if not exists plc_schedule_versions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references master_projects (id) on delete cascade,
+  label text not null,
+  strategy text not null,
+  start_date date not null,
+  commissioning_start date not null,
+  finish_date date not null,
+  total_days integer not null,
+  snapshot jsonb not null,
+  note text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  unique (project_id, label)
+);
+alter table plc_schedule_versions enable row level security;
+drop policy if exists "plc_schedule_versions_select" on plc_schedule_versions;
+create policy "plc_schedule_versions_select" on plc_schedule_versions for select using (auth.uid() is not null);
+drop policy if exists "plc_schedule_versions_insert" on plc_schedule_versions;
+create policy "plc_schedule_versions_insert" on plc_schedule_versions for insert with check (auth.uid() is not null);
 
 -- ---------------------------------------------------------------------------
 -- 21e. Integration with the EXISTING action table rather than a second one.
@@ -16726,3 +16871,1446 @@ drop policy if exists master_project_team_select on master_project_team;
 create policy master_project_team_select on master_project_team for select using (auth.uid() is not null);
 drop policy if exists master_project_team_write on master_project_team;
 create policy master_project_team_write on master_project_team for all using (is_admin_user()) with check (is_admin_user());
+
+-- =============================================================================
+-- 78. Issue Management v2 (رصد) — enterprise issue / task / decision management
+-- =============================================================================
+-- Concatenation of supabase/issue_mgmt/*.sql in dependency order (010, 012, 011, 013 … 021). Idempotent (if not exists / or replace).
+-- Rollback: supabase/issue_mgmt/rollback.sql. Docs: docs/issue-management/. On Supabase MCP apply statements in small calls (60 s limit); triggers separately.
+
+-- ---- 010_core.sql ----
+-- ============================================================================
+-- Issue Management v2 — core extension (additive; nothing is dropped, legacy `status` is kept).
+-- ============================================================================
+
+-- Scope of an Issue container: a normal project, or a program-/organisation-level space.
+alter table im_projects add column if not exists scope_level text not null default 'project';
+alter table im_projects drop constraint if exists im_projects_scope_level_check;
+alter table im_projects add constraint im_projects_scope_level_check check (scope_level in ('project', 'program', 'organization'));
+alter table im_projects add column if not exists master_ref_id uuid;
+alter table im_projects add column if not exists short_code text not null default '';
+
+-- Standard classification (admin-managed, org-wide).
+create table if not exists im_categories (
+  key text primary key,
+  label_fa text not null,
+  sort smallint not null default 0,
+  default_severity text not null default 'medium' check (default_severity in ('low', 'medium', 'high', 'critical')),
+  require_evidence boolean not null default false,
+  require_root_cause boolean not null default false,
+  acceptance_hint text not null default '',
+  is_active boolean not null default true
+);
+insert into im_categories (key, label_fa, sort, default_severity, require_evidence, require_root_cause, acceptance_hint) values
+  ('engineering', 'مهندسی و طراحی', 10, 'medium', true, false, 'نقشه/سند بازنگری‌شده و تأییدشده'),
+  ('document_approval', 'تأیید مدارک', 20, 'medium', true, false, 'نامه یا گواهی تأیید مدرک'),
+  ('procurement', 'تأمین و کالا', 30, 'high', true, true, 'سند ورود کالا یا برنامه تحویل مصوب'),
+  ('contractor', 'عملکرد پیمانکار', 40, 'high', false, true, 'صورتجلسه یا مکاتبه رفع'),
+  ('contract_commercial', 'قرارداد و بازرگانی', 50, 'medium', true, false, 'الحاقیه، مصوبه یا نامه رسمی'),
+  ('land_right_of_way', 'آزادسازی مسیر و اراضی', 60, 'high', true, false, 'صورتجلسه تحویل زمین'),
+  ('permits', 'مجوزها و استعلام‌ها', 70, 'medium', true, false, 'مجوز صادرشده'),
+  ('hse', 'ایمنی، بهداشت و محیط‌زیست', 80, 'high', true, true, 'گزارش بازرسی و اقدام اصلاحی'),
+  ('quality', 'کیفیت', 90, 'medium', true, true, 'گزارش بازرسی/آزمون پذیرفته‌شده'),
+  ('finance', 'مالی و پرداخت', 100, 'medium', false, false, 'سند پرداخت یا تأیید مالی'),
+  ('interface', 'تعامل بین‌واحدی', 110, 'medium', false, false, 'صورتجلسه توافق'),
+  ('other', 'سایر', 999, 'medium', false, false, '')
+on conflict (key) do nothing;
+
+-- Configurable workflow: stages (custom statuses are just more rows) + allowed transitions.
+create table if not exists im_workflow_stages (
+  workflow_key text not null default 'standard',
+  key text not null,
+  label_fa text not null,
+  sort smallint not null default 0,
+  coarse_status text not null check (coarse_status in ('open', 'in_progress', 'pending_approval', 'approved', 'rejected')),
+  is_terminal boolean not null default false,
+  color text not null default '#8b93a7',
+  is_system boolean not null default false,
+  is_active boolean not null default true,
+  primary key (workflow_key, key)
+);
+create table if not exists im_workflow_transitions (
+  workflow_key text not null default 'standard',
+  from_stage text not null,
+  to_stage text not null,
+  requires_reason boolean not null default false,
+  allowed_roles text[] not null default '{admin,owner,pursuer,approver,follow_up,member}',
+  primary key (workflow_key, from_stage, to_stage),
+  foreign key (workflow_key, from_stage) references im_workflow_stages (workflow_key, key) on delete cascade,
+  foreign key (workflow_key, to_stage) references im_workflow_stages (workflow_key, key) on delete cascade
+);
+insert into im_workflow_stages (workflow_key, key, label_fa, sort, coarse_status, is_terminal, color, is_system) values
+  ('standard', 'registered', 'ثبت‌شده', 10, 'open', false, '#8b7cf6', true),
+  ('standard', 'validated', 'اعتبارسنجی‌شده', 20, 'open', false, '#a78bfa', true),
+  ('standard', 'analysis', 'در تحلیل', 30, 'open', false, '#60a5fa', true),
+  ('standard', 'action_plan', 'برنامه اقدام', 40, 'open', false, '#38bdf8', true),
+  ('standard', 'in_progress', 'در حال اجرا', 50, 'in_progress', false, '#f5b248', true),
+  ('standard', 'resolution_review', 'درخواست تأیید رفع', 60, 'pending_approval', false, '#c8cedb', true),
+  ('standard', 'effectiveness_check', 'کنترل اثربخشی', 70, 'pending_approval', false, '#2dd4bf', true),
+  ('standard', 'closed', 'بسته‌شده (رفع تأییدشده)', 80, 'approved', true, '#4ade9e', true),
+  ('standard', 'returned', 'برگشت برای اصلاح', 55, 'rejected', false, '#fb923c', true),
+  ('standard', 'reopened', 'بازگشایی‌شده', 15, 'open', false, '#f472b6', true),
+  ('standard', 'cancelled', 'ابطال‌شده', 90, 'rejected', true, '#64748b', true),
+  ('standard', 'duplicate', 'تکراری', 91, 'rejected', true, '#64748b', true)
+on conflict do nothing;
+insert into im_workflow_transitions (workflow_key, from_stage, to_stage, requires_reason, allowed_roles) values
+  ('standard', 'registered', 'validated', false, '{admin,owner,follow_up,approver}'),
+  ('standard', 'registered', 'in_progress', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'registered', 'cancelled', true, '{admin,owner,approver}'),
+  ('standard', 'registered', 'duplicate', true, '{admin,owner,approver,follow_up}'),
+  ('standard', 'validated', 'analysis', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'validated', 'action_plan', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'validated', 'in_progress', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'validated', 'cancelled', true, '{admin,owner,approver}'),
+  ('standard', 'validated', 'duplicate', true, '{admin,owner,approver,follow_up}'),
+  ('standard', 'analysis', 'action_plan', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'analysis', 'in_progress', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'action_plan', 'in_progress', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'in_progress', 'resolution_review', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'in_progress', 'action_plan', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'resolution_review', 'effectiveness_check', false, '{admin,approver}'),
+  ('standard', 'resolution_review', 'closed', false, '{admin,approver}'),
+  ('standard', 'resolution_review', 'returned', true, '{admin,approver}'),
+  ('standard', 'effectiveness_check', 'closed', false, '{admin,approver}'),
+  ('standard', 'effectiveness_check', 'returned', true, '{admin,approver}'),
+  ('standard', 'returned', 'in_progress', false, '{admin,owner,pursuer,follow_up}'),
+  ('standard', 'closed', 'reopened', true, '{admin,owner,approver,follow_up}'),
+  ('standard', 'reopened', 'analysis', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'reopened', 'action_plan', false, '{admin,owner,follow_up,pursuer}'),
+  ('standard', 'reopened', 'in_progress', false, '{admin,owner,pursuer,follow_up}')
+on conflict do nothing;
+
+-- Service levels per severity (organisation default; response = first reaction, resolve = target closing).
+create table if not exists im_sla_policies (
+  severity text primary key check (severity in ('low', 'medium', 'high', 'critical')),
+  respond_hours integer not null,
+  resolve_days integer not null,
+  review_days integer not null default 2
+);
+insert into im_sla_policies (severity, respond_hours, resolve_days, review_days) values
+  ('critical', 4, 3, 1), ('high', 24, 7, 2), ('medium', 72, 14, 3), ('low', 120, 30, 5)
+on conflict do nothing;
+
+-- ---- im_issues: new columns --------------------------------------------------
+alter table im_issues add column if not exists seq_no bigint;
+alter table im_issues add column if not exists code text;
+alter table im_issues add column if not exists category text references im_categories (key);
+alter table im_issues add column if not exists discipline text not null default '';
+alter table im_issues add column if not exists location text not null default '';
+alter table im_issues add column if not exists identified_at date not null default current_date;
+alter table im_issues add column if not exists severity text not null default 'medium';
+alter table im_issues add column if not exists urgency text not null default 'medium';
+alter table im_issues add column if not exists impact_time_days integer;
+alter table im_issues add column if not exists impact_cost numeric;
+alter table im_issues add column if not exists impact_quality smallint not null default 0;
+alter table im_issues add column if not exists impact_safety smallint not null default 0;
+alter table im_issues add column if not exists impact_contract smallint not null default 0;
+alter table im_issues add column if not exists impact_objectives text not null default '';
+alter table im_issues add column if not exists owner_id uuid references profiles (id);
+alter table im_issues add column if not exists follow_up_id uuid references profiles (id);
+alter table im_issues add column if not exists review_due_date date;
+alter table im_issues add column if not exists resolve_due_date date;
+alter table im_issues add column if not exists original_due_date date;
+alter table im_issues add column if not exists extension_count integer not null default 0;
+alter table im_issues add column if not exists authority_level text not null default 'project_team';
+alter table im_issues add column if not exists workflow_key text not null default 'standard';
+alter table im_issues add column if not exists stage text not null default 'registered';
+alter table im_issues add column if not exists stage_changed_at timestamptz not null default now();
+alter table im_issues add column if not exists root_cause_summary text not null default '';
+alter table im_issues add column if not exists root_cause_confirmed boolean not null default false;
+alter table im_issues add column if not exists acceptance_criteria text not null default '';
+alter table im_issues add column if not exists resolution_summary text not null default '';
+alter table im_issues add column if not exists resolution_requested_at timestamptz;
+alter table im_issues add column if not exists resolution_verified_by uuid references profiles (id);
+alter table im_issues add column if not exists resolution_verified_at timestamptz;
+alter table im_issues add column if not exists effectiveness_result text not null default '';
+alter table im_issues add column if not exists lessons_learned text not null default '';
+alter table im_issues add column if not exists reopen_count integer not null default 0;
+alter table im_issues add column if not exists last_reopened_at timestamptz;
+alter table im_issues add column if not exists blocked_since timestamptz;
+alter table im_issues add column if not exists blocked_kind text not null default '';
+alter table im_issues add column if not exists blocked_note text not null default '';
+alter table im_issues add column if not exists source_ref_type text;
+alter table im_issues add column if not exists source_ref_id text;
+alter table im_issues add column if not exists external_system text;
+alter table im_issues add column if not exists external_id text;
+alter table im_issues add column if not exists sync_status text not null default 'native';
+alter table im_issues add column if not exists synced_at timestamptz;
+alter table im_issues add column if not exists tags text[] not null default '{}';
+alter table im_issues add column if not exists template_key text;
+alter table im_issues add column if not exists corporate_issue_id uuid;
+
+alter table im_issues drop constraint if exists im_issues_severity_check;
+alter table im_issues add constraint im_issues_severity_check check (severity in ('low', 'medium', 'high', 'critical'));
+alter table im_issues drop constraint if exists im_issues_urgency_check;
+alter table im_issues add constraint im_issues_urgency_check check (urgency in ('low', 'medium', 'high', 'critical'));
+alter table im_issues drop constraint if exists im_issues_impact_levels_check;
+alter table im_issues add constraint im_issues_impact_levels_check check (impact_quality between 0 and 3 and impact_safety between 0 and 3 and impact_contract between 0 and 3);
+alter table im_issues drop constraint if exists im_issues_authority_check;
+alter table im_issues add constraint im_issues_authority_check check (authority_level in ('project_team', 'project_manager', 'program_manager', 'management'));
+alter table im_issues drop constraint if exists im_issues_sync_status_check;
+alter table im_issues add constraint im_issues_sync_status_check check (sync_status in ('native', 'synced', 'pending', 'error', 'stale'));
+alter table im_issues drop constraint if exists im_issues_source_check;
+alter table im_issues add constraint im_issues_source_check
+  check (source in ('manual', 'lifecycle_action', 'mission_debrief', 'land_acquisition', 'risk', 'correspondence', 'meeting', 'report', 'import', 'api'));
+
+-- ---- 012_children.sql ----
+-- ============================================================================
+-- Issue Management v2 — child tables (events/audit, tasks, links, evidence, RCA/CAPA, people, saved filters, templates)
+-- RLS rule used everywhere: visible/writable when the caller can see the parent issue.
+-- ============================================================================
+
+create or replace function im_can_see_issue(p_issue_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from im_issues i
+    where i.id = p_issue_id
+      and (im_is_project_member(i.project_id) or is_admin_user() or rasta_scope_ok_for_source('issues', i.project_id)
+           or i.pursuer_id = auth.uid() or i.approver_id = auth.uid() or i.owner_id = auth.uid() or i.follow_up_id = auth.uid())
+  );
+$$;
+
+create or replace function im_can_write_issue(p_issue_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from im_issues i
+    where i.id = p_issue_id
+      and (im_is_project_member(i.project_id) or is_admin_user()
+           or i.pursuer_id = auth.uid() or i.approver_id = auth.uid() or i.owner_id = auth.uid() or i.follow_up_id = auth.uid())
+  );
+$$;
+
+-- Append-only audit trail. issue_id is deliberately NOT a foreign key so the trail survives a deletion.
+create table if not exists im_issue_events (
+  id bigint generated always as identity primary key,
+  issue_id uuid not null,
+  issue_code text not null default '',
+  task_id uuid,
+  kind text not null,
+  field text not null default '',
+  old_value text,
+  new_value text,
+  reason text not null default '',
+  meta jsonb not null default '{}'::jsonb,
+  actor_id uuid default auth.uid(),
+  at timestamptz not null default now()
+);
+create index if not exists idx_im_events_issue on im_issue_events (issue_id, at desc);
+
+create table if not exists im_issue_tasks (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  parent_task_id uuid references im_issue_tasks (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  expected_output text not null default '',
+  accountable_id uuid references profiles (id),
+  executor_id uuid references profiles (id),
+  approver_id uuid references profiles (id),
+  collaborators uuid[] not null default '{}',
+  start_date date,
+  due_date date,
+  original_due_date date,
+  extension_count integer not null default 0,
+  status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'blocked', 'pending_verification', 'done', 'cancelled')),
+  progress smallint not null default 0 check (progress between 0 and 100),
+  hours_spent numeric not null default 0,
+  blocked_kind text not null default '' check (blocked_kind in ('', 'decision', 'permit', 'material', 'drawing', 'unit_response', 'contractor', 'finance', 'other')),
+  blocked_note text not null default '',
+  blocked_since timestamptz,
+  blocked_decision_id uuid,
+  completion_claimed_at timestamptz,
+  completion_claimed_by uuid references profiles (id),
+  verified_by uuid references profiles (id),
+  verified_at timestamptz,
+  last_progress_at timestamptz not null default now(),
+  sort smallint not null default 0,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_im_tasks_issue on im_issue_tasks (issue_id);
+create index if not exists idx_im_tasks_exec on im_issue_tasks (executor_id) where status not in ('done', 'cancelled');
+create index if not exists idx_im_tasks_due on im_issue_tasks (due_date) where status not in ('done', 'cancelled');
+
+create table if not exists im_task_deps (
+  task_id uuid not null references im_issue_tasks (id) on delete cascade,
+  depends_on_task_id uuid not null references im_issue_tasks (id) on delete cascade,
+  primary key (task_id, depends_on_task_id),
+  check (task_id <> depends_on_task_id)
+);
+
+create table if not exists im_task_updates (
+  id bigint generated always as identity primary key,
+  task_id uuid not null references im_issue_tasks (id) on delete cascade,
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  kind text not null default 'progress' check (kind in ('progress', 'note', 'followup', 'claim', 'verify', 'block', 'unblock', 'reject')),
+  progress smallint check (progress between 0 and 100),
+  hours numeric,
+  note text not null default '',
+  at timestamptz not null default now(),
+  by_id uuid references profiles (id) default auth.uid()
+);
+create index if not exists idx_im_task_updates_task on im_task_updates (task_id, at desc);
+
+-- Controlled due-date extensions (issue-level when task_id is null, task-level otherwise). The original date is never overwritten.
+create table if not exists im_extensions (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  task_id uuid references im_issue_tasks (id) on delete cascade,
+  from_due date not null,
+  to_due date not null,
+  reason text not null check (length(trim(reason)) > 2),
+  impact text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  requested_by uuid references profiles (id) default auth.uid(),
+  requested_at timestamptz not null default now(),
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  decision_note text not null default ''
+);
+create index if not exists idx_im_ext_issue on im_extensions (issue_id);
+
+create table if not exists im_issue_links (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  target_type text not null check (target_type in ('issue', 'risk', 'decision', 'task', 'project', 'unit', 'action', 'mission', 'finding', 'land_parcel', 'document')),
+  target_id text not null,
+  target_label text not null default '',
+  relation text not null default 'relates' check (relation in ('relates', 'blocks', 'blocked_by', 'duplicates', 'caused_by', 'derived_from', 'resolves')),
+  link_status text not null default 'confirmed' check (link_status in ('suggested', 'confirmed', 'rejected')),
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  unique (issue_id, target_type, target_id, relation)
+);
+create index if not exists idx_im_links_target on im_issue_links (target_type, target_id);
+
+create table if not exists im_attachments (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  task_id uuid references im_issue_tasks (id) on delete set null,
+  decision_id uuid,
+  kind text not null default 'document' check (kind in ('image', 'document', 'correspondence', 'expert_opinion', 'resolution_evidence', 'other')),
+  storage_path text not null,
+  file_name text not null,
+  mime text not null default '',
+  size_bytes bigint not null default 0,
+  note text not null default '',
+  uploaded_by uuid references profiles (id) default auth.uid(),
+  uploaded_at timestamptz not null default now()
+);
+create index if not exists idx_im_att_issue on im_attachments (issue_id);
+
+create table if not exists im_rca (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  method text not null check (method in ('five_whys', 'fishbone', 'free')),
+  data jsonb not null default '{}'::jsonb,
+  root_cause text not null default '',
+  confirmed boolean not null default false,
+  confirmed_by uuid references profiles (id),
+  confirmed_at timestamptz,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_im_rca_issue on im_rca (issue_id);
+
+create table if not exists im_capa (
+  id uuid primary key default gen_random_uuid(),
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  kind text not null check (kind in ('corrective', 'preventive')),
+  description text not null,
+  owner_id uuid references profiles (id),
+  due_date date,
+  status text not null default 'planned' check (status in ('planned', 'in_progress', 'done', 'verified', 'cancelled')),
+  effectiveness text not null default '' check (effectiveness in ('', 'effective', 'partial', 'ineffective')),
+  effectiveness_note text not null default '',
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_im_capa_issue on im_capa (issue_id);
+
+-- Stakeholders beyond the fixed owner / follow-up / pursuer / approver.
+create table if not exists im_issue_people (
+  issue_id uuid not null references im_issues (id) on delete cascade,
+  user_id uuid not null references profiles (id) on delete cascade,
+  role text not null check (role in ('watcher', 'consulted', 'informed', 'expert')),
+  created_at timestamptz not null default now(),
+  primary key (issue_id, user_id, role)
+);
+
+create table if not exists im_saved_filters (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles (id) on delete cascade default auth.uid(),
+  scope text not null default 'issues' check (scope in ('issues', 'tasks', 'decisions')),
+  name text not null,
+  filter jsonb not null default '{}'::jsonb,
+  is_shared boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists im_templates (
+  key text primary key,
+  name text not null,
+  category text references im_categories (key),
+  defaults jsonb not null default '{}'::jsonb,
+  tasks jsonb not null default '[]'::jsonb,
+  is_active boolean not null default true,
+  created_by uuid references profiles (id) default auth.uid(),
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------- RLS
+alter table im_categories enable row level security;
+alter table im_workflow_stages enable row level security;
+alter table im_workflow_transitions enable row level security;
+alter table im_sla_policies enable row level security;
+alter table im_issue_events enable row level security;
+alter table im_issue_tasks enable row level security;
+alter table im_task_deps enable row level security;
+alter table im_task_updates enable row level security;
+alter table im_extensions enable row level security;
+alter table im_issue_links enable row level security;
+alter table im_attachments enable row level security;
+alter table im_rca enable row level security;
+alter table im_capa enable row level security;
+alter table im_issue_people enable row level security;
+alter table im_saved_filters enable row level security;
+alter table im_templates enable row level security;
+
+-- reference data: everyone signed in reads, admins write
+drop policy if exists im_categories_read on im_categories; create policy im_categories_read on im_categories for select using (auth.uid() is not null);
+drop policy if exists im_categories_write on im_categories; create policy im_categories_write on im_categories for all using (is_admin_user()) with check (is_admin_user());
+drop policy if exists im_wf_stages_read on im_workflow_stages; create policy im_wf_stages_read on im_workflow_stages for select using (auth.uid() is not null);
+drop policy if exists im_wf_stages_write on im_workflow_stages; create policy im_wf_stages_write on im_workflow_stages for all using (is_admin_user()) with check (is_admin_user());
+drop policy if exists im_wf_trans_read on im_workflow_transitions; create policy im_wf_trans_read on im_workflow_transitions for select using (auth.uid() is not null);
+drop policy if exists im_wf_trans_write on im_workflow_transitions; create policy im_wf_trans_write on im_workflow_transitions for all using (is_admin_user()) with check (is_admin_user());
+drop policy if exists im_sla_read on im_sla_policies; create policy im_sla_read on im_sla_policies for select using (auth.uid() is not null);
+drop policy if exists im_sla_write on im_sla_policies; create policy im_sla_write on im_sla_policies for all using (is_admin_user()) with check (is_admin_user());
+drop policy if exists im_templates_read on im_templates; create policy im_templates_read on im_templates for select using (auth.uid() is not null);
+drop policy if exists im_templates_write on im_templates; create policy im_templates_write on im_templates for all using (is_admin_user()) with check (is_admin_user());
+
+-- audit trail: read when the issue is visible; NO insert/update/delete policy (only security-definer triggers write)
+drop policy if exists im_events_read on im_issue_events;
+create policy im_events_read on im_issue_events for select using (im_can_see_issue(issue_id) or is_admin_user());
+
+-- child records follow the parent issue
+do $$
+declare t text;
+begin
+  foreach t in array array['im_issue_tasks', 'im_task_updates', 'im_extensions', 'im_issue_links', 'im_attachments', 'im_rca', 'im_capa', 'im_issue_people']
+  loop
+    execute format('drop policy if exists %I on %I', t || '_read', t);
+    execute format('create policy %I on %I for select using (im_can_see_issue(issue_id))', t || '_read', t);
+    execute format('drop policy if exists %I on %I', t || '_write', t);
+    execute format('create policy %I on %I for all using (im_can_write_issue(issue_id)) with check (im_can_write_issue(issue_id))', t || '_write', t);
+  end loop;
+end $$;
+-- task dependencies: through the task's issue
+drop policy if exists im_task_deps_read on im_task_deps;
+create policy im_task_deps_read on im_task_deps for select using (exists (select 1 from im_issue_tasks t where t.id = task_id and im_can_see_issue(t.issue_id)));
+drop policy if exists im_task_deps_write on im_task_deps;
+create policy im_task_deps_write on im_task_deps for all using (exists (select 1 from im_issue_tasks t where t.id = task_id and im_can_write_issue(t.issue_id))) with check (exists (select 1 from im_issue_tasks t where t.id = task_id and im_can_write_issue(t.issue_id)));
+-- personal filters
+drop policy if exists im_saved_filters_own on im_saved_filters;
+create policy im_saved_filters_own on im_saved_filters for all using (user_id = auth.uid() or is_shared) with check (user_id = auth.uid());
+
+-- ---- 011_guards.sql ----
+-- ============================================================================
+-- Issue Management v2 — server-side rules: roles, closing blockers, lifecycle guard, due-date control, audit trail.
+-- ============================================================================
+
+create or replace function im_actor_roles(p_issue im_issues)
+returns text[] language sql stable security definer set search_path = public as $$
+  select array_remove(array[
+    case when is_admin_user() or im_can_manage(p_issue.project_id) then 'admin' end,
+    case when p_issue.owner_id = auth.uid() then 'owner' end,
+    case when p_issue.pursuer_id = auth.uid() then 'pursuer' end,
+    case when p_issue.approver_id = auth.uid() then 'approver' end,
+    case when p_issue.follow_up_id = auth.uid() then 'follow_up' end,
+    case when im_is_project_member(p_issue.project_id) then 'member' end
+  ], null);
+$$;
+
+-- What still stops an issue from being closed (empty array = may close). «اقدام انجام شد» ≠ «مسئله رفع شد».
+create or replace function im_close_blockers(p_issue im_issues)
+returns text[] language plpgsql stable security definer set search_path = public as $$
+declare
+  b text[] := '{}';
+  cat im_categories%rowtype;
+  v_open int;
+  v_ev int;
+  v_cat boolean;
+begin
+  if coalesce(trim(p_issue.resolution_summary), '') = '' then b := array_append(b, ('خلاصه و نتیجه نهایی رفع ثبت نشده است')::text); end if;
+  if coalesce(trim(p_issue.acceptance_criteria), '') = '' then b := array_append(b, ('معیار پذیرش تعریف نشده است')::text); end if;
+  if p_issue.category is null then b := array_append(b, ('دسته‌بندی مسئله مشخص نیست')::text); end if;
+  select * into cat from im_categories where key = p_issue.category;
+  v_cat := found;
+  if v_cat and cat.require_evidence then
+    select count(*) into v_ev from im_attachments a where a.issue_id = p_issue.id and a.kind = 'resolution_evidence';
+    if v_ev = 0 then b := array_append(b, ('شاهد رفع (پیوست) برای این دسته الزامی است و بارگذاری نشده')::text); end if;
+  end if;
+  if ((v_cat and cat.require_root_cause) or p_issue.severity in ('high', 'critical')) and not p_issue.root_cause_confirmed then
+    b := array_append(b, ('علت ریشه‌ای تأیید نشده است')::text);
+  end if;
+  select count(*) into v_open from im_issue_tasks t where t.issue_id = p_issue.id and t.status not in ('done', 'cancelled');
+  if v_open > 0 then b := array_append(b, (v_open::text || ' اقدام باز یا تأییدنشده وجود دارد')::text); end if;
+  return b;
+end;
+$$;
+
+-- Lifecycle guard: workflow transitions, role checks, closing blockers, reopen bookkeeping, due-date control.
+create or replace function im_issue_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_stage im_workflow_stages%rowtype;
+  v_tr im_workflow_transitions%rowtype;
+  v_roles text[];
+  v_reason text := coalesce(current_setting('im.reason', true), '');
+  v_blockers text[];
+begin
+  if tg_op = 'INSERT' then
+    if new.code is null or new.code = '' then new.code := 'ISS-' || lpad(coalesce(new.seq_no, nextval('im_issue_seq'))::text, 5, '0'); end if;
+    new.original_due_date := coalesce(new.original_due_date, new.resolve_due_date, ((new.created_at at time zone 'utc')::date + new.deadline_days));
+    select * into v_stage from im_workflow_stages where workflow_key = new.workflow_key and key = new.stage and is_active;
+    if not found then raise exception 'unknown_stage: %', new.stage; end if;
+    new.status := v_stage.coarse_status;
+    return new;
+  end if;
+
+  -- due date is only changed through an approved extension
+  if (new.deadline_days is distinct from old.deadline_days or new.resolve_due_date is distinct from old.resolve_due_date)
+     and coalesce(current_setting('im.ext', true), 'off') <> 'on' then
+    raise exception 'due_date_change_requires_extension';
+  end if;
+  new.original_due_date := old.original_due_date;
+
+  -- legacy clients only know `status`: translate it to the matching stage
+  if new.status is distinct from old.status and new.stage is not distinct from old.stage then
+    new.stage := case new.status
+      when 'open' then 'registered' when 'in_progress' then 'in_progress' when 'pending_approval' then 'resolution_review'
+      when 'approved' then 'closed' else 'returned' end;
+  end if;
+
+  if new.stage is distinct from old.stage then
+    select * into v_tr from im_workflow_transitions where workflow_key = new.workflow_key and from_stage = old.stage and to_stage = new.stage;
+    if not found then raise exception 'transition_not_allowed: % -> %', old.stage, new.stage; end if;
+    v_roles := im_actor_roles(new);
+    if auth.uid() is not null and not (v_roles && v_tr.allowed_roles) then raise exception 'role_not_allowed_for_transition'; end if;
+    if v_tr.requires_reason and length(trim(v_reason)) < 3 then raise exception 'reason_required'; end if;
+    select * into v_stage from im_workflow_stages where workflow_key = new.workflow_key and key = new.stage;
+
+    if new.stage = 'validated' and new.category is null then raise exception 'category_required_for_validation'; end if;
+    if new.stage = 'resolution_review' then
+      if coalesce(trim(new.resolution_summary), '') = '' then raise exception 'resolution_summary_required'; end if;
+      new.resolution_requested_at := now();
+    end if;
+    if new.stage = 'closed' then
+      v_blockers := im_close_blockers(new);
+      if array_length(v_blockers, 1) > 0 then raise exception 'cannot_close: %', array_to_string(v_blockers, ' | '); end if;
+      if new.pursuer_id = auth.uid() and new.approver_id is distinct from auth.uid() and not is_admin_user() then
+        raise exception 'the assigned pursuer cannot verify their own resolution';
+      end if;
+      new.closed_at := current_date;
+      new.resolution_verified_by := auth.uid();
+      new.resolution_verified_at := now();
+    end if;
+    if old.stage = 'closed' and new.stage = 'reopened' then
+      new.reopen_count := old.reopen_count + 1;
+      new.last_reopened_at := now();
+      new.closed_at := null;
+      new.resolution_verified_by := null;
+      new.resolution_verified_at := null;
+    end if;
+    new.status := v_stage.coarse_status;
+    new.stage_changed_at := now();
+  elsif new.status is distinct from old.status then
+    -- same stage but the coarse status was edited directly: keep them consistent
+    select * into v_stage from im_workflow_stages where workflow_key = new.workflow_key and key = new.stage;
+    new.status := v_stage.coarse_status;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_00_im_issue_guard on im_issues;
+create trigger trg_00_im_issue_guard before insert or update on im_issues for each row execute function im_issue_guard();
+
+-- Audit trail ------------------------------------------------------------------
+create or replace function im_log_event(p_issue uuid, p_code text, p_task uuid, p_kind text, p_field text, p_old text, p_new text, p_meta jsonb default '{}'::jsonb)
+returns void language sql security definer set search_path = public as $$
+  insert into im_issue_events (issue_id, issue_code, task_id, kind, field, old_value, new_value, reason, meta)
+  values (p_issue, coalesce(p_code, ''), p_task, p_kind, coalesce(p_field, ''), p_old, p_new, coalesce(current_setting('im.reason', true), ''), coalesce(p_meta, '{}'::jsonb));
+$$;
+
+create or replace function im_issue_audit()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    perform im_log_event(new.id, new.code, null, 'created', '', null, new.title, jsonb_build_object('source', new.source, 'project_id', new.project_id));
+    return new;
+  end if;
+  if tg_op = 'DELETE' then
+    perform im_log_event(old.id, old.code, null, 'deleted', '', old.title, null, jsonb_build_object('snapshot', to_jsonb(old)));
+    return old;
+  end if;
+  if new.stage is distinct from old.stage then perform im_log_event(new.id, new.code, null, 'stage_change', 'stage', old.stage, new.stage); end if;
+  if new.owner_id is distinct from old.owner_id then perform im_log_event(new.id, new.code, null, 'assignment_change', 'owner_id', old.owner_id::text, new.owner_id::text); end if;
+  if new.follow_up_id is distinct from old.follow_up_id then perform im_log_event(new.id, new.code, null, 'assignment_change', 'follow_up_id', old.follow_up_id::text, new.follow_up_id::text); end if;
+  if new.pursuer_id is distinct from old.pursuer_id then perform im_log_event(new.id, new.code, null, 'assignment_change', 'pursuer_id', old.pursuer_id::text, new.pursuer_id::text); end if;
+  if new.approver_id is distinct from old.approver_id then perform im_log_event(new.id, new.code, null, 'assignment_change', 'approver_id', old.approver_id::text, new.approver_id::text); end if;
+  if new.severity is distinct from old.severity then perform im_log_event(new.id, new.code, null, 'field_change', 'severity', old.severity, new.severity); end if;
+  if new.urgency is distinct from old.urgency then perform im_log_event(new.id, new.code, null, 'field_change', 'urgency', old.urgency, new.urgency); end if;
+  if new.priority is distinct from old.priority then perform im_log_event(new.id, new.code, null, 'field_change', 'priority', old.priority, new.priority); end if;
+  if new.category is distinct from old.category then perform im_log_event(new.id, new.code, null, 'field_change', 'category', old.category, new.category); end if;
+  if new.title is distinct from old.title then perform im_log_event(new.id, new.code, null, 'field_change', 'title', old.title, new.title); end if;
+  if new.root_cause_confirmed is distinct from old.root_cause_confirmed then perform im_log_event(new.id, new.code, null, 'field_change', 'root_cause_confirmed', old.root_cause_confirmed::text, new.root_cause_confirmed::text); end if;
+  if new.resolve_due_date is distinct from old.resolve_due_date or new.deadline_days is distinct from old.deadline_days then
+    perform im_log_event(new.id, new.code, null, 'due_change', 'due_date', old.deadline_date::text, coalesce(new.resolve_due_date, new.deadline_date)::text, jsonb_build_object('extension_count', new.extension_count));
+  end if;
+  if new.blocked_since is distinct from old.blocked_since then
+    perform im_log_event(new.id, new.code, null, case when new.blocked_since is null then 'unblocked' else 'blocked' end, 'blocked', old.blocked_kind, new.blocked_kind);
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_im_issue_audit on im_issues;
+create trigger trg_im_issue_audit after insert or update on im_issues for each row execute function im_issue_audit();
+drop trigger if exists trg_im_issue_audit_del on im_issues;
+create trigger trg_im_issue_audit_del before delete on im_issues for each row execute function im_issue_audit();
+
+-- Tasks -------------------------------------------------------------------------
+create or replace function im_task_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_issue im_issues%rowtype;
+  v_roles text[];
+  v_pending int;
+begin
+  select * into v_issue from im_issues where id = new.issue_id;
+  if tg_op = 'INSERT' then
+    new.original_due_date := coalesce(new.original_due_date, new.due_date);
+    if new.parent_task_id is not null and not exists (select 1 from im_issue_tasks p where p.id = new.parent_task_id and p.issue_id = new.issue_id) then
+      raise exception 'parent_task_must_belong_to_same_issue';
+    end if;
+    return new;
+  end if;
+
+  new.updated_at := now();
+  new.original_due_date := coalesce(old.original_due_date, new.due_date);
+  if new.due_date is distinct from old.due_date and old.due_date is not null and coalesce(current_setting('im.ext', true), 'off') <> 'on' then
+    raise exception 'due_date_change_requires_extension';
+  end if;
+  if new.progress is distinct from old.progress then new.last_progress_at := now(); end if;
+  v_roles := im_actor_roles(v_issue);
+
+  if new.status is distinct from old.status then
+    if new.status in ('in_progress', 'pending_verification', 'done') then
+      select count(*) into v_pending from im_task_deps d join im_issue_tasks p on p.id = d.depends_on_task_id
+        where d.task_id = new.id and p.status not in ('done', 'cancelled');
+      if v_pending > 0 then raise exception 'blocked_by_dependency'; end if;
+    end if;
+    if new.status = 'blocked' then
+      if coalesce(new.blocked_kind, '') = '' then raise exception 'blocked_reason_required'; end if;
+      new.blocked_since := coalesce(new.blocked_since, now());
+    elsif old.status = 'blocked' then
+      new.blocked_since := null;
+    end if;
+    if new.status = 'pending_verification' then
+      new.completion_claimed_at := now();
+      new.completion_claimed_by := auth.uid();
+      new.progress := 100;
+    end if;
+    if new.status = 'done' then
+      if old.status <> 'pending_verification' and not (v_roles && array['admin']) then raise exception 'completion_must_be_verified'; end if;
+      if auth.uid() is not null and old.completion_claimed_by = auth.uid() and not (v_roles && array['admin']) then raise exception 'executor_cannot_verify_own_completion'; end if;
+      if auth.uid() is not null and not (v_roles && array['admin', 'approver', 'owner', 'follow_up']) and new.approver_id is distinct from auth.uid() and new.accountable_id is distinct from auth.uid() then
+        raise exception 'role_not_allowed_to_verify_task';
+      end if;
+      new.verified_by := auth.uid();
+      new.verified_at := now();
+      new.progress := 100;
+    end if;
+    if old.status in ('done', 'pending_verification') and new.status in ('not_started', 'in_progress') then
+      new.completion_claimed_at := null; new.completion_claimed_by := null; new.verified_by := null; new.verified_at := null;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_im_task_guard on im_issue_tasks;
+create trigger trg_im_task_guard before insert or update on im_issue_tasks for each row execute function im_task_guard();
+
+create or replace function im_task_audit()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_code text;
+  v_blocked timestamptz;
+begin
+  select code into v_code from im_issues where id = new.issue_id;
+  if tg_op = 'INSERT' then
+    perform im_log_event(new.issue_id, v_code, new.id, 'task_created', '', null, new.title);
+    return new;
+  end if;
+  if new.status is distinct from old.status then perform im_log_event(new.issue_id, v_code, new.id, 'task_status', 'status', old.status, new.status, jsonb_build_object('title', new.title)); end if;
+  if new.executor_id is distinct from old.executor_id then perform im_log_event(new.issue_id, v_code, new.id, 'task_assignment', 'executor_id', old.executor_id::text, new.executor_id::text, jsonb_build_object('title', new.title)); end if;
+  if new.accountable_id is distinct from old.accountable_id then perform im_log_event(new.issue_id, v_code, new.id, 'task_assignment', 'accountable_id', old.accountable_id::text, new.accountable_id::text, jsonb_build_object('title', new.title)); end if;
+  if new.due_date is distinct from old.due_date then perform im_log_event(new.issue_id, v_code, new.id, 'task_due_change', 'due_date', old.due_date::text, new.due_date::text, jsonb_build_object('title', new.title, 'extension_count', new.extension_count)); end if;
+  select min(blocked_since) into v_blocked from im_issue_tasks where issue_id = new.issue_id and status = 'blocked';
+  update im_issues set blocked_since = v_blocked,
+         blocked_kind = case when v_blocked is null then '' else coalesce((select blocked_kind from im_issue_tasks where issue_id = new.issue_id and status = 'blocked' order by blocked_since limit 1), '') end
+   where id = new.issue_id and blocked_since is distinct from v_blocked;
+  return new;
+end;
+$$;
+drop trigger if exists trg_im_task_audit on im_issue_tasks;
+create trigger trg_im_task_audit after insert or update on im_issue_tasks for each row execute function im_task_audit();
+
+-- Dependency cycles are rejected.
+create or replace function im_task_dep_cycle_guard()
+returns trigger language plpgsql as $$
+begin
+  if exists (
+    with recursive walk(id) as (
+      select new.depends_on_task_id
+      union
+      select d.depends_on_task_id from im_task_deps d join walk w on d.task_id = w.id
+    ) select 1 from walk where id = new.task_id
+  ) then
+    raise exception 'dependency_cycle';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_im_task_dep_cycle on im_task_deps;
+create trigger trg_im_task_dep_cycle before insert on im_task_deps for each row execute function im_task_dep_cycle_guard();
+
+-- ---- 013_rpcs.sql ----
+-- ============================================================================
+-- Issue Management v2 — RPCs: workflow transition, controlled extensions, bulk create, idempotent ingestion, risk conversion.
+-- ============================================================================
+alter table im_issues add column if not exists source_snapshot jsonb not null default '{}'::jsonb;
+
+-- Stage transition with reason + a whitelist of fields saved in the same statement (SECURITY INVOKER: RLS applies,
+-- the guard trigger enforces workflow, roles and closing blockers).
+create or replace function im_transition(p_issue uuid, p_to text, p_reason text default '', p_patch jsonb default '{}'::jsonb)
+returns im_issues language plpgsql security invoker set search_path = public as $$
+declare r im_issues;
+begin
+  perform set_config('im.reason', coalesce(p_reason, ''), true);
+  update im_issues set
+    stage = p_to,
+    resolution_summary = coalesce(p_patch->>'resolution_summary', resolution_summary),
+    acceptance_criteria = coalesce(p_patch->>'acceptance_criteria', acceptance_criteria),
+    effectiveness_result = coalesce(p_patch->>'effectiveness_result', effectiveness_result),
+    lessons_learned = coalesce(p_patch->>'lessons_learned', lessons_learned),
+    root_cause_summary = coalesce(p_patch->>'root_cause_summary', root_cause_summary),
+    root_cause_confirmed = coalesce((p_patch->>'root_cause_confirmed')::boolean, root_cause_confirmed)
+  where id = p_issue
+  returning * into r;
+  if not found then raise exception 'issue_not_found_or_not_visible'; end if;
+  return r;
+end;
+$$;
+
+-- Extension request (issue-level when p_task is null).
+create or replace function im_request_extension(p_issue uuid, p_task uuid, p_to date, p_reason text, p_impact text default '')
+returns uuid language plpgsql security invoker set search_path = public as $$
+declare v_from date; v_id uuid; v_code text;
+begin
+  if p_task is null then
+    select coalesce(resolve_due_date, deadline_date), code into v_from, v_code from im_issues where id = p_issue;
+  else
+    select due_date into v_from from im_issue_tasks where id = p_task and issue_id = p_issue;
+    select code into v_code from im_issues where id = p_issue;
+  end if;
+  if v_from is null then raise exception 'no_current_due_date'; end if;
+  if p_to <= v_from then raise exception 'new_date_must_be_later'; end if;
+  if length(trim(coalesce(p_reason, ''))) < 3 then raise exception 'reason_required'; end if;
+  insert into im_extensions (issue_id, task_id, from_due, to_due, reason, impact) values (p_issue, p_task, v_from, p_to, p_reason, coalesce(p_impact, '')) returning id into v_id;
+  perform set_config('im.reason', p_reason, true);
+  perform im_log_event(p_issue, v_code, p_task, 'extension_requested', 'due_date', v_from::text, p_to::text, jsonb_build_object('extension_id', v_id, 'impact', p_impact));
+  return v_id;
+end;
+$$;
+
+create or replace function im_decide_extension(p_ext uuid, p_approve boolean, p_note text default '')
+returns im_extensions language plpgsql security invoker set search_path = public as $$
+declare e im_extensions; i im_issues; v_roles text[]; v_code text;
+begin
+  select * into e from im_extensions where id = p_ext and status = 'pending';
+  if not found then raise exception 'extension_not_pending'; end if;
+  select * into i from im_issues where id = e.issue_id;
+  v_roles := im_actor_roles(i);
+  if not (v_roles && array['admin', 'approver']) then raise exception 'only_approver_or_admin_may_decide'; end if;
+  if e.requested_by = auth.uid() and not (v_roles && array['admin']) then raise exception 'cannot_decide_own_request'; end if;
+  perform set_config('im.reason', coalesce(nullif(p_note, ''), e.reason), true);
+  if p_approve then
+    perform set_config('im.ext', 'on', true);
+    if e.task_id is null then
+      update im_issues set resolve_due_date = e.to_due, extension_count = extension_count + 1 where id = e.issue_id;
+    else
+      update im_issue_tasks set due_date = e.to_due, extension_count = extension_count + 1 where id = e.task_id;
+    end if;
+    perform set_config('im.ext', 'off', true);
+  end if;
+  update im_extensions set status = case when p_approve then 'approved' else 'rejected' end, decided_by = auth.uid(), decided_at = now(), decision_note = coalesce(p_note, '')
+   where id = p_ext returning * into e;
+  perform im_log_event(e.issue_id, i.code, e.task_id, case when p_approve then 'extension_approved' else 'extension_rejected' end, 'due_date', e.from_due::text, e.to_due::text, jsonb_build_object('extension_id', e.id));
+  return e;
+end;
+$$;
+
+-- Bulk create (RLS applies per row). Rows carrying (source, source_ref_id) are de-duplicated.
+create or replace function im_bulk_create(p_project uuid, p_rows jsonb)
+returns jsonb language plpgsql security invoker set search_path = public as $$
+declare r jsonb; v_created int := 0; v_skipped int := 0; v_id uuid;
+begin
+  for r in select * from jsonb_array_elements(p_rows) loop
+    insert into im_issues (project_id, title, description, priority, severity, urgency, category, deadline_days, location, discipline, source, source_ref_id, source_ref_type, created_by)
+    values (p_project, r->>'title', coalesce(r->>'description', ''), coalesce(r->>'priority', 'medium'), coalesce(r->>'severity', coalesce(r->>'priority', 'medium')),
+            coalesce(r->>'urgency', coalesce(r->>'priority', 'medium')), nullif(r->>'category', ''), coalesce((r->>'deadline_days')::int, 7), coalesce(r->>'location', ''), coalesce(r->>'discipline', ''),
+            coalesce(r->>'source', 'import'), nullif(r->>'source_ref_id', ''), nullif(r->>'source_ref_type', ''), auth.uid())
+    on conflict do nothing
+    returning id into v_id;
+    if v_id is null then v_skipped := v_skipped + 1; else v_created := v_created + 1; end if;
+    v_id := null;
+  end loop;
+  return jsonb_build_object('created', v_created, 'skipped', v_skipped);
+end;
+$$;
+
+-- Idempotent ingestion for external systems (visit reports, correspondence, land acquisition, …).
+create or replace function im_ingest_issue(p_source text, p_external_system text, p_external_id text, p_master_project uuid, p_payload jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_project uuid; v_id uuid; v_created boolean := false;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if p_source not in ('mission_debrief', 'land_acquisition', 'risk', 'correspondence', 'meeting', 'report', 'api', 'lifecycle_action') then raise exception 'invalid_source'; end if;
+  if coalesce(p_external_id, '') = '' or coalesce(p_external_system, '') = '' then raise exception 'external_reference_required'; end if;
+  if not rasta_user_can_access_master_project(p_master_project) then raise exception 'not_authorized_for_project'; end if;
+  select source_project_id into v_project from rasta_project_mappings where master_project_id = p_master_project and source_module = 'issues' and status = 'confirmed' limit 1;
+  if v_project is null then raise exception 'no_issue_mapping'; end if;
+
+  select id into v_id from im_issues where external_system = p_external_system and external_id = p_external_id;
+  if v_id is null then
+    insert into im_issues (project_id, title, description, priority, severity, urgency, category, deadline_days, location, discipline, source, source_ref_type, source_ref_id,
+                           external_system, external_id, sync_status, synced_at, source_snapshot, created_by, pursuer_id, owner_id)
+    values (v_project, p_payload->>'title', coalesce(p_payload->>'description', ''), coalesce(p_payload->>'priority', 'medium'), coalesce(p_payload->>'severity', coalesce(p_payload->>'priority', 'medium')),
+            coalesce(p_payload->>'urgency', 'medium'), nullif(p_payload->>'category', ''), coalesce((p_payload->>'deadline_days')::int, 7), coalesce(p_payload->>'location', ''), coalesce(p_payload->>'discipline', ''),
+            p_source, p_external_system, p_external_id, p_external_system, p_external_id, 'synced', now(), coalesce(p_payload->'snapshot', '{}'::jsonb), auth.uid(),
+            nullif(p_payload->>'pursuer_id', '')::uuid, coalesce(nullif(p_payload->>'owner_id', '')::uuid, auth.uid()))
+    returning id into v_id;
+    v_created := true;
+  else
+    perform set_config('im.reason', 'همگام‌سازی از ' || p_external_system, true);
+    update im_issues set
+      title = coalesce(p_payload->>'title', title),
+      description = coalesce(p_payload->>'description', description),
+      location = coalesce(p_payload->>'location', location),
+      source_snapshot = coalesce(p_payload->'snapshot', source_snapshot),
+      sync_status = 'synced', synced_at = now()
+    where id = v_id;
+  end if;
+  return jsonb_build_object('id', v_id, 'created', v_created);
+end;
+$$;
+
+-- Realised risk → Issue. The risk record is never modified or removed; a link and a snapshot of its assessment are kept.
+create or replace function im_convert_risk_to_issue(p_risk uuid, p_cause text default '', p_pursuer uuid default null, p_deadline_days integer default 7)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  k rm_risks%rowtype; v_master uuid; v_project uuid; v_id uuid; v_created boolean := false; v_sev text; v_cat text;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into k from rm_risks where id = p_risk;
+  if not found then raise exception 'risk_not_found'; end if;
+  select master_project_id into v_master from rasta_project_mappings where source_module = 'risk' and source_project_id = k.project_id and status = 'confirmed' limit 1;
+  if v_master is null then raise exception 'risk_project_not_mapped'; end if;
+  if not rasta_user_can_access_master_project(v_master) then raise exception 'not_authorized_for_project'; end if;
+  select source_project_id into v_project from rasta_project_mappings where source_module = 'issues' and master_project_id = v_master and status = 'confirmed' limit 1;
+  if v_project is null then raise exception 'no_issue_mapping'; end if;
+
+  select id into v_id from im_issues where source = 'risk' and source_ref_id = p_risk::text;
+  if v_id is null then
+    v_sev := case when k.initial_probability * k.initial_impact >= 15 then 'critical' when k.initial_probability * k.initial_impact >= 10 then 'high' when k.initial_probability * k.initial_impact >= 5 then 'medium' else 'low' end;
+    v_cat := case k.category when 'technical' then 'engineering' when 'procurement' then 'procurement' when 'hse' then 'hse' when 'quality' then 'quality' when 'cost' then 'finance' else 'other' end;
+    insert into im_issues (project_id, title, description, priority, severity, urgency, category, deadline_days, source, source_ref_type, source_ref_id, source_snapshot, created_by, pursuer_id, owner_id)
+    values (v_project, k.title, coalesce(nullif(p_cause, ''), 'ریسک محقق‌شده') || E'\n\n— ریسک مبدأ: ' || k.code || E'\n' || k.description,
+            v_sev, v_sev, 'high', v_cat, greatest(1, coalesce(p_deadline_days, 7)), 'risk', 'risk', p_risk::text,
+            jsonb_build_object('risk_code', k.code, 'risk_status', k.status, 'initial_probability', k.initial_probability, 'initial_impact', k.initial_impact, 'initial_score', k.initial_probability * k.initial_impact,
+                               'response_strategy', k.response_strategy, 'realization_cause', p_cause),
+            auth.uid(), p_pursuer, coalesce(k.owner_id, auth.uid()))
+    returning id into v_id;
+    insert into im_issue_links (issue_id, target_type, target_id, target_label, relation) values (v_id, 'risk', p_risk::text, k.code || ' · ' || k.title, 'derived_from') on conflict do nothing;
+    v_created := true;
+  end if;
+  return jsonb_build_object('id', v_id, 'created', v_created);
+end;
+$$;
+
+grant execute on function im_transition(uuid, text, text, jsonb) to authenticated;
+grant execute on function im_request_extension(uuid, uuid, date, text, text) to authenticated;
+grant execute on function im_decide_extension(uuid, boolean, text) to authenticated;
+grant execute on function im_bulk_create(uuid, jsonb) to authenticated;
+grant execute on function im_ingest_issue(text, text, text, uuid, jsonb) to authenticated;
+grant execute on function im_convert_risk_to_issue(uuid, text, uuid, integer) to authenticated;
+
+-- ---- 014_storage.sql ----
+-- Issue Management v2 — evidence bucket. Object path convention: <issue_id>/<uuid>-<filename>
+-- (apply each statement separately on Supabase MCP; storage.objects DDL can exceed the 60 s limit when batched).
+insert into storage.buckets (id, name, public, file_size_limit) values ('issue-evidence', 'issue-evidence', false, 20971520) on conflict (id) do nothing;
+
+drop policy if exists im_evidence_read on storage.objects;
+create policy im_evidence_read on storage.objects for select to authenticated
+  using (bucket_id = 'issue-evidence' and (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$' and im_can_see_issue(((storage.foldername(name))[1])::uuid));
+drop policy if exists im_evidence_write on storage.objects;
+create policy im_evidence_write on storage.objects for insert to authenticated
+  with check (bucket_id = 'issue-evidence' and (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$' and im_can_write_issue(((storage.foldername(name))[1])::uuid));
+drop policy if exists im_evidence_delete on storage.objects;
+create policy im_evidence_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'issue-evidence' and (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$' and im_can_write_issue(((storage.foldername(name))[1])::uuid));
+
+-- ---- 015_integrations.sql ----
+-- Issue Management v2 — integrations. Mission finding → Issue now carries category/severity/discipline, a back-reference
+-- (source_ref_type='finding') and an im_issue_links row to the mission, so the full trail is kept. Everything else is unchanged.
+create or replace function public.ms_transfer_finding(p_finding_id uuid, p_target text, p_params jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security definer set search_path to 'public' as $function$
+declare
+  f ms_findings%rowtype;
+  m ms_missions%rowtype;
+  v_proj uuid;
+  v_new uuid;
+  v_label text;
+  v_prob smallint;
+  v_imp smallint;
+  v_cat text;
+  v_prio text;
+begin
+  if not ms_is_manager() then raise exception 'manager_only'; end if;
+  select * into f from ms_findings where id = p_finding_id for update;
+  if not found then raise exception 'finding_not_found'; end if;
+  if ms_is_interested(f.mission_id) then raise exception 'conflict_of_interest'; end if;
+  if f.transferred_id is not null then raise exception 'already_transferred'; end if;
+  select * into m from ms_missions where id = f.mission_id;
+  v_prio := case f.severity when 'critical' then 'critical' when 'high' then 'high' when 'low' then 'low' else 'medium' end;
+
+  if p_target = 'issue' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'issues' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_issue_mapping'; end if;
+    v_cat := case f.topic_key
+      when 'engineering' then 'engineering' when 'procurement' then 'procurement' when 'construction' then 'contractor'
+      when 'hse' then 'hse' when 'quality' then 'quality' when 'cost' then 'finance' when 'legal' then 'contract_commercial'
+      else 'other' end;
+    insert into im_issues (project_id, title, description, pursuer_id, priority, severity, urgency, category, discipline, deadline_days, status, created_by, source,
+                           source_ref_type, source_ref_id, source_snapshot, owner_id)
+    values (v_proj, f.title,
+            f.description || E'\n\n— منبع: بازدید ' || m.code,
+            coalesce(f.owner_id, nullif(p_params->>'pursuer_id', '')::uuid),
+            v_prio, v_prio, 'medium', v_cat, coalesce(f.topic_key, ''), coalesce(nullif(p_params->>'deadline_days', '')::smallint, 7), 'open', auth.uid(), 'mission_debrief',
+            'finding', f.id::text, jsonb_build_object('mission_code', m.code, 'mission_id', m.id, 'finding_severity', f.severity, 'topic', f.topic_key),
+            coalesce(f.owner_id, auth.uid()))
+    returning id into v_new;
+    insert into im_issue_links (issue_id, target_type, target_id, target_label, relation, created_by)
+    values (v_new, 'mission', m.id::text, 'بازدید ' || m.code, 'derived_from', auth.uid()) on conflict do nothing;
+    v_label := 'Issue';
+  elsif p_target = 'risk' then
+    select source_project_id into v_proj from rasta_project_mappings
+     where master_project_id = m.master_project_id and source_module = 'risk' and status = 'confirmed' limit 1;
+    if v_proj is null then raise exception 'no_risk_mapping'; end if;
+    v_prob := least(5, greatest(1, coalesce(nullif(p_params->>'probability', '')::smallint,
+                case f.severity when 'critical' then 4 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_imp := least(5, greatest(1, coalesce(nullif(p_params->>'impact', '')::smallint,
+                case f.severity when 'critical' then 5 when 'high' then 4 when 'medium' then 3 else 2 end)));
+    v_cat := case f.topic_key
+      when 'engineering' then 'technical' when 'procurement' then 'procurement' when 'construction' then 'technical'
+      when 'hse' then 'hse' when 'quality' then 'quality' when 'schedule' then 'schedule' when 'cost' then 'cost'
+      else 'other' end;
+    insert into rm_risks (project_id, code, title, description, category, risk_type, owner_id, initial_probability, initial_impact, created_by)
+    values (v_proj, '', f.title, f.description || E'\n\n— منبع: بازدید ' || m.code, v_cat, 'threat', f.owner_id, v_prob, v_imp, auth.uid())
+    returning id into v_new;
+    v_label := 'Risk';
+  elsif p_target = 'action' then
+    insert into rasta_actions (master_project_id, title, owner_id, due_date, priority, status, source, created_by)
+    values (m.master_project_id, f.title, f.owner_id, f.due_date, v_prio, 'not_started', 'mission_debrief', auth.uid())
+    returning id into v_new;
+    v_label := 'Action';
+  else
+    raise exception 'invalid_target';
+  end if;
+
+  perform set_config('ms.transition', 'on', true);
+  update ms_findings set approval = 'approved', transferred_to = p_target, transferred_id = v_new, transferred_at = now(),
+         manager_note = coalesce(nullif(p_params->>'note', ''), manager_note)
+   where id = f.id;
+  insert into ms_events (mission_id, actor_id, event, detail)
+  values (f.mission_id, auth.uid(), 'transfer_' || p_target, jsonb_build_object('finding_id', f.id, 'target_id', v_new));
+  perform set_config('ms.transition', 'off', true);
+  return jsonb_build_object('target', p_target, 'id', v_new, 'label', v_label);
+end;
+$function$;
+
+-- ---- 016_templates.sql ----
+-- Issue Management v2 — starter templates for frequent EPC issues (editable by admins; tasks use offset days from creation).
+insert into im_templates (key, name, category, defaults, tasks) values
+ ('doc_approval_delay', 'تأخیر در تأیید مدرک مهندسی', 'document_approval',
+  '{"severity":"medium","urgency":"high","deadline_days":10,"acceptance_criteria":"نامه یا گواهی تأیید مدرک دریافت و در سامانه مدارک ثبت شده باشد"}',
+  '[{"title":"بررسی وضعیت مدرک نزد مشاور/کارفرما","offset_days":2},{"title":"پیگیری رسمی و ثبت مکاتبه","offset_days":5},{"title":"دریافت تأییدیه و بایگانی","offset_days":10}]'),
+ ('material_delivery_delay', 'تأخیر تحویل کالا / تجهیز', 'procurement',
+  '{"severity":"high","urgency":"high","deadline_days":14,"acceptance_criteria":"کالا در سایت تحویل و بازرسی ورودی (IR) تأیید شده باشد"}',
+  '[{"title":"استعلام وضعیت ساخت/حمل از تأمین‌کننده","offset_days":2},{"title":"بازنگری برنامهٔ نصب و اثر بر مسیر بحرانی","offset_days":5},{"title":"تحویل و بازرسی ورودی","offset_days":14}]'),
+ ('drawing_conflict', 'مغایرت نقشه با وضعیت اجرا', 'engineering',
+  '{"severity":"high","urgency":"high","deadline_days":7,"acceptance_criteria":"نقشهٔ بازنگری‌شده تأیید و به کارگاه ابلاغ شده باشد"}',
+  '[{"title":"ثبت مغایرت و ارسال به مهندسی","offset_days":1},{"title":"صدور نقشهٔ اصلاحی","offset_days":5},{"title":"ابلاغ به کارگاه و اجرای اصلاح","offset_days":7}]'),
+ ('contractor_performance', 'ضعف عملکرد پیمانکار', 'contractor',
+  '{"severity":"high","urgency":"medium","deadline_days":14,"acceptance_criteria":"برنامهٔ جبرانی پذیرفته و عملکرد دو هفتهٔ متوالی مطابق برنامه باشد"}',
+  '[{"title":"اخطار رسمی به پیمانکار","offset_days":2},{"title":"دریافت برنامهٔ جبرانی","offset_days":6},{"title":"پایش اجرای برنامهٔ جبرانی","offset_days":14}]'),
+ ('right_of_way', 'مانع تصرف زمین / حریم', 'land_right_of_way',
+  '{"severity":"high","urgency":"high","deadline_days":21,"acceptance_criteria":"زمین یا حریم مورد نیاز با صورت‌جلسهٔ تحویل آزاد شده باشد"}',
+  '[{"title":"شناسایی مالک و وضعیت حقوقی","offset_days":3},{"title":"مذاکره/اقدام حقوقی","offset_days":14},{"title":"تحویل زمین با صورت‌جلسه","offset_days":21}]')
+on conflict (key) do nothing;
+
+-- ---- 017_notifications.sql ----
+-- ============================================================================
+-- Issue Management v2 — notification & escalation engine.
+-- Rules → generator (state scan + audit-event scan) → outbox → dispatcher (edge function im-notify).
+-- In-app rows are served through my_notifications(); external channels (email/SMS/push/messenger) are only
+-- «sent» when a provider is configured on the edge function — otherwise rows end as `skipped` (never faked).
+-- ============================================================================
+create table if not exists im_notif_prefs (
+  user_id uuid primary key references profiles (id) on delete cascade,
+  in_app boolean not null default true,
+  email boolean not null default true,
+  sms boolean not null default false,
+  push boolean not null default false,
+  messenger boolean not null default false,
+  quiet_start smallint check (quiet_start between 0 and 23),
+  quiet_end smallint check (quiet_end between 0 and 23),
+  digest boolean not null default false,
+  muted_projects uuid[] not null default '{}',
+  contact jsonb not null default '{}'::jsonb,           -- {phone, messenger_id} filled by the user; never read by other users
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists im_notif_rules (
+  key text primary key,
+  name text not null,
+  description text not null default '',
+  kind text not null check (kind in ('state', 'event')),
+  recipients text[] not null default '{}',               -- owner | follow_up | pursuer | approver | admins
+  escalate_to text[] not null default '{}',              -- recipients added at the next escalation level
+  channels text[] not null default '{in_app,email}',
+  min_severity text not null default 'low' check (min_severity in ('low', 'medium', 'high', 'critical')),
+  threshold_hours integer not null default 0,
+  dedupe_hours integer not null default 24,
+  is_active boolean not null default true,
+  sort smallint not null default 0
+);
+insert into im_notif_rules (key, name, description, kind, recipients, escalate_to, channels, min_severity, threshold_hours, dedupe_hours, sort) values
+ ('assigned',            'ارجاع مسئله به من',            'وقتی مسئله‌ای به شما ارجاع شد',                                 'event', '{}',                        '{}',                '{in_app,email,push}', 'low',    0,   0,   10),
+ ('approval_requested',  'درخواست تأیید رفع',            'مسئله برای تأیید نهایی آماده است',                               'event', '{approver}',                '{}',                '{in_app,email,push}', 'low',    0,   0,   20),
+ ('extension_requested', 'درخواست تمدید',                'تمدید سررسید منتظر تصمیم مسئول تأیید است',                       'event', '{approver,admins}',         '{}',                '{in_app,email}',      'low',    0,   0,   30),
+ ('reopened',            'بازگشایی مسئله',               'مسئلهٔ بسته‌شده دوباره باز شد',                                  'event', '{owner,follow_up,pursuer}', '{}',                '{in_app,email}',      'low',    0,   0,   40),
+ ('due_soon',            'نزدیک سررسید',                 'سررسید تا ۴۸ ساعت دیگر',                                         'state', '{pursuer,follow_up}',       '{}',                '{in_app,email}',      'low',    48,  48,  50),
+ ('overdue',             'گذشتن از سررسید',              'مسئله از سررسید مؤثر گذشته؛ با طولانی‌شدن تأخیر تشدید می‌شود',    'state', '{pursuer,follow_up}',       '{approver,owner}',  '{in_app,email,sms}',  'low',    0,   24,  60),
+ ('overdue_critical',    'تأخیر مسئلهٔ بحرانی/بالا',     'تأخیر مسائل با شدت بالا سریع‌تر به مدیر می‌رسد',                 'state', '{pursuer,follow_up,owner}', '{approver,admins}', '{in_app,email,sms,push}', 'high', 0,   12,  65),
+ ('blocked_long',        'انسداد طولانی',                'اقدامی بیش از ۴۸ ساعت مسدود مانده است',                          'state', '{follow_up,owner}',         '{admins}',          '{in_app,email}',      'low',    48,  48,  70),
+ ('stale',               'مسئلهٔ بی‌حرکت',               'بیش از ۷ روز بدون هیچ رویدادی',                                  'state', '{follow_up,owner}',         '{approver}',        '{in_app}',            'low',    168, 168, 80),
+ ('response_sla',        'نقض SLA پاسخ اولیه',           'مسئله پس از مهلت SLA همچنان در مرحلهٔ «ثبت‌شده» است',            'state', '{follow_up,owner}',         '{admins}',          '{in_app,email,sms}',  'low',    0,   24,  90),
+ ('verify_waiting',      'اقدام منتظر تأیید',            'اقدام انجام‌شده بیش از ۲۴ ساعت منتظر تأیید مستقل است',           'state', '{approver}',                '{admins}',          '{in_app,email}',      'low',    24,  48,  100)
+on conflict (key) do nothing;
+
+create table if not exists im_notif_outbox (
+  id bigint generated always as identity primary key,
+  rule_key text not null references im_notif_rules (key),
+  issue_id uuid,
+  task_id uuid,
+  recipient_id uuid not null references profiles (id) on delete cascade,
+  channel text not null check (channel in ('in_app', 'email', 'sms', 'push', 'messenger')),
+  title text not null,
+  body text not null default '',
+  level smallint not null default 0,
+  severity text not null default 'medium',
+  payload jsonb not null default '{}'::jsonb,
+  dedupe_key text not null,
+  status text not null default 'queued' check (status in ('queued', 'sent', 'failed', 'skipped', 'read')),
+  attempts smallint not null default 0,
+  last_error text not null default '',
+  scheduled_at timestamptz not null default now(),
+  sent_at timestamptz,
+  read_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (dedupe_key, channel)
+);
+create index if not exists idx_im_outbox_due on im_notif_outbox (status, scheduled_at);
+create index if not exists idx_im_outbox_user on im_notif_outbox (recipient_id, channel, status);
+
+create table if not exists im_notif_state (key text primary key, value bigint not null default 0);
+
+alter table im_notif_prefs enable row level security;
+alter table im_notif_rules enable row level security;
+alter table im_notif_outbox enable row level security;
+alter table im_notif_state enable row level security;
+drop policy if exists im_prefs_own on im_notif_prefs;
+create policy im_prefs_own on im_notif_prefs for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists im_rules_read on im_notif_rules;
+create policy im_rules_read on im_notif_rules for select using (auth.uid() is not null);
+drop policy if exists im_rules_admin on im_notif_rules;
+create policy im_rules_admin on im_notif_rules for all using (is_admin_user()) with check (is_admin_user());
+drop policy if exists im_outbox_own on im_notif_outbox;
+create policy im_outbox_own on im_notif_outbox for select using (recipient_id = auth.uid() or is_admin_user());
+-- im_notif_state: no policies (service role / definer functions only)
+
+-- Recipient resolver: role keyword → user ids for one issue.
+create or replace function im_resolve_recipients(p_issue im_issues, p_roles text[])
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select distinct u from (
+    select p_issue.owner_id u where 'owner' = any(p_roles)
+    union all select p_issue.follow_up_id where 'follow_up' = any(p_roles)
+    union all select p_issue.pursuer_id where 'pursuer' = any(p_roles)
+    union all select p_issue.approver_id where 'approver' = any(p_roles)
+    union all select m.user_id from im_project_members m where m.project_id = p_issue.project_id and m.role = 'admin' and 'admins' = any(p_roles)
+  ) x where u is not null;
+$$;
+
+-- Enqueue one notification per allowed channel, honouring prefs, muted projects, quiet hours and de-duplication.
+create or replace function im_enqueue(p_rule text, p_issue im_issues, p_task uuid, p_user uuid, p_title text, p_body text, p_dedupe text, p_level smallint default 0)
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  r im_notif_rules; pr im_notif_prefs; v_haspr boolean; ch text; v_ok boolean; n int := 0; v_at timestamptz := now(); v_hour int; v_quiet boolean := false; v_crit boolean;
+begin
+  select * into r from im_notif_rules where key = p_rule and is_active;
+  if not found then return 0; end if;
+  select * into pr from im_notif_prefs where user_id = p_user;
+  v_haspr := found;
+  if v_haspr and p_issue.project_id = any(pr.muted_projects) and p_level < 3 then return 0; end if;
+  v_crit := coalesce(p_issue.severity, p_issue.priority) = 'critical' or p_level >= 3;
+  v_hour := extract(hour from (now() at time zone 'Asia/Tehran'))::int;
+  if v_haspr and pr.quiet_start is not null and pr.quiet_end is not null and not v_crit then
+    v_quiet := case when pr.quiet_start <= pr.quiet_end then v_hour >= pr.quiet_start and v_hour < pr.quiet_end else v_hour >= pr.quiet_start or v_hour < pr.quiet_end end;
+    if v_quiet then v_at := date_trunc('hour', now()) + make_interval(hours => ((pr.quiet_end - v_hour + 24) % 24)); end if;
+  end if;
+  foreach ch in array r.channels loop
+    if ch = 'in_app' then v_ok := true;
+    elsif v_haspr then v_ok := (ch = 'email' and pr.email) or (ch = 'sms' and pr.sms) or (ch = 'push' and pr.push) or (ch = 'messenger' and pr.messenger);
+    else v_ok := (ch = 'email');
+    end if;
+    if not v_ok then continue; end if;
+    insert into im_notif_outbox (rule_key, issue_id, task_id, recipient_id, channel, title, body, level, severity, dedupe_key, scheduled_at, payload)
+    values (p_rule, p_issue.id, p_task, p_user, ch, p_title, p_body, p_level, coalesce(p_issue.severity, p_issue.priority), p_dedupe, case when ch = 'in_app' then now() else v_at end,
+            jsonb_build_object('code', p_issue.code, 'project_id', p_issue.project_id))
+    on conflict (dedupe_key, channel) do nothing;
+    if found then n := n + 1; end if;
+  end loop;
+  return n;
+end;
+$$;
+
+-- ---------------------------------------------------------------- generator
+-- Scans state conditions and audit events since the last run. Safe to run as often as every few minutes: dedupe keys make it idempotent.
+create or replace function im_generate_notifications()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  i im_issues; t im_issue_tasks; e record; u uuid; n int := 0; v_last bigint; v_max bigint; v_days int; v_lvl smallint; v_rule im_notif_rules; v_hours numeric;
+begin
+  -- 1) event-driven rules (assigned / approval_requested / extension_requested / reopened)
+  select coalesce((select value from im_notif_state where key = 'last_event'), 0) into v_last;
+  v_max := v_last;
+  for e in select * from im_issue_events where id > v_last order by id limit 500 loop
+    v_max := greatest(v_max, e.id);
+    select * into i from im_issues where id = e.issue_id;
+    if not found then continue; end if;
+    if e.kind = 'assignment_change' and e.new_value is not null and e.field in ('owner_id', 'follow_up_id', 'pursuer_id', 'approver_id') then
+      n := n + im_enqueue('assigned', i, null, e.new_value::uuid, 'ارجاع جدید: ' || i.code, i.title, 'assigned:' || e.id, 0);
+    elsif e.kind = 'stage_change' and e.new_value = 'resolution_review' then
+      for u in select * from im_resolve_recipients(i, '{approver}') loop n := n + im_enqueue('approval_requested', i, null, u, 'درخواست تأیید رفع: ' || i.code, i.title, 'approval:' || e.id, 0); end loop;
+    elsif e.kind = 'extension_requested' then
+      for u in select * from im_resolve_recipients(i, '{approver,admins}') loop n := n + im_enqueue('extension_requested', i, null, u, 'درخواست تمدید: ' || i.code, i.title || ' — ' || coalesce(e.reason, ''), 'ext:' || e.id, 0); end loop;
+    elsif e.kind = 'stage_change' and e.new_value = 'reopened' then
+      for u in select * from im_resolve_recipients(i, '{owner,follow_up,pursuer}') loop n := n + im_enqueue('reopened', i, null, u, 'بازگشایی: ' || i.code, i.title, 'reopen:' || e.id, 0); end loop;
+    end if;
+  end loop;
+  insert into im_notif_state (key, value) values ('last_event', v_max) on conflict (key) do update set value = excluded.value;
+
+  -- 2) state rules over active issues
+  for i in select * from im_issues where stage not in ('closed', 'cancelled', 'duplicate') loop
+    v_days := (current_date - coalesce(i.resolve_due_date, i.deadline_date));
+    -- due soon
+    select * into v_rule from im_notif_rules where key = 'due_soon' and is_active;
+    if found and v_days between -2 and 0 then
+      for u in select * from im_resolve_recipients(i, v_rule.recipients) loop n := n + im_enqueue('due_soon', i, null, u, 'نزدیک سررسید: ' || i.code, i.title, 'due_soon:' || i.id || ':' || coalesce(i.resolve_due_date, i.deadline_date)::text || ':' || u, 0); end loop;
+    end if;
+    -- overdue ladder (critical/high escalate faster)
+    if v_days > 0 then
+      v_lvl := case when v_days <= case when coalesce(i.severity, i.priority) in ('high', 'critical') then 0 else 2 end then 1
+                    when v_days <= case when coalesce(i.severity, i.priority) in ('high', 'critical') then 3 else 7 end then 2 else 3 end;
+      select * into v_rule from im_notif_rules where key = case when coalesce(i.severity, i.priority) in ('high', 'critical') then 'overdue_critical' else 'overdue' end and is_active;
+      if found then
+        for u in select * from im_resolve_recipients(i, v_rule.recipients || case when v_lvl >= 2 then v_rule.escalate_to else '{}'::text[] end) loop
+          n := n + im_enqueue(v_rule.key, i, null, u, 'تأخیر ' || v_days || ' روزه: ' || i.code, i.title, v_rule.key || ':' || i.id || ':L' || v_lvl || ':' || u, v_lvl);
+        end loop;
+      end if;
+    end if;
+    -- blocked
+    select * into v_rule from im_notif_rules where key = 'blocked_long' and is_active;
+    if found and i.blocked_since is not null and i.blocked_since < now() - make_interval(hours => v_rule.threshold_hours) then
+      for u in select * from im_resolve_recipients(i, v_rule.recipients) loop n := n + im_enqueue('blocked_long', i, null, u, 'انسداد طولانی: ' || i.code, i.title, 'blocked:' || i.id || ':' || to_char(i.blocked_since, 'YYYYMMDDHH24') || ':' || u, 1); end loop;
+    end if;
+    -- stale
+    select * into v_rule from im_notif_rules where key = 'stale' and is_active;
+    if found and i.updated_at < now() - make_interval(hours => v_rule.threshold_hours) then
+      for u in select * from im_resolve_recipients(i, v_rule.recipients) loop n := n + im_enqueue('stale', i, null, u, 'بی‌حرکت: ' || i.code, i.title, 'stale:' || i.id || ':' || to_char(date_trunc('week', now()), 'YYYYMMDD') || ':' || u, 0); end loop;
+    end if;
+    -- response SLA
+    select * into v_rule from im_notif_rules where key = 'response_sla' and is_active;
+    if found and i.stage = 'registered' then
+      select respond_hours into v_hours from im_sla_policies where severity = coalesce(i.severity, i.priority);
+      if v_hours is not null and i.created_at < now() - make_interval(hours => v_hours::int) then
+        for u in select * from im_resolve_recipients(i, v_rule.recipients || v_rule.escalate_to) loop n := n + im_enqueue('response_sla', i, null, u, 'نقض SLA پاسخ: ' || i.code, i.title, 'sla:' || i.id || ':' || u, 2); end loop;
+      end if;
+    end if;
+  end loop;
+
+  -- 3) tasks waiting for independent verification
+  select * into v_rule from im_notif_rules where key = 'verify_waiting' and is_active;
+  if found then
+    for t in select * from im_issue_tasks where status = 'pending_verification' and completion_claimed_at < now() - make_interval(hours => v_rule.threshold_hours) loop
+      select * into i from im_issues where id = t.issue_id;
+      if found then
+        u := coalesce(t.approver_id, i.approver_id);
+        if u is not null then n := n + im_enqueue('verify_waiting', i, t.id, u, 'اقدام منتظر تأیید: ' || i.code, t.title, 'verify:' || t.id || ':' || to_char(t.completion_claimed_at, 'YYYYMMDDHH24'), 1); end if;
+      end if;
+    end loop;
+  end if;
+  return jsonb_build_object('enqueued', n, 'last_event', v_max);
+end;
+$$;
+
+-- In-app read receipts and dispatcher result reporting
+create or replace function im_notif_mark_read(p_ids bigint[] default null)
+returns integer language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update im_notif_outbox set status = 'read', read_at = now()
+   where recipient_id = auth.uid() and channel = 'in_app' and status in ('queued', 'sent') and (p_ids is null or id = any(p_ids));
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on function im_notif_mark_read(bigint[]) to authenticated;
+revoke execute on function im_generate_notifications() from public, anon, authenticated;
+revoke execute on function im_enqueue(text, im_issues, uuid, uuid, text, text, text, smallint) from public, anon, authenticated;
+revoke execute on function im_resolve_recipients(im_issues, text[]) from public, anon, authenticated;
+
+-- Admin-callable wrapper (for the «اجرای اسکن اکنون» button); the scheduler calls im_generate_notifications() directly.
+create or replace function im_generate_notifications_now()
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin_user() then raise exception 'admin_only'; end if;
+  return im_generate_notifications();
+end;
+$$;
+grant execute on function im_generate_notifications_now() to authenticated;
+
+-- ---- 018_notifications_bell.sql ----
+-- Issue Management v2 — bell integration + scheduler.
+-- my_notifications() (live function used by the NotificationBell) additionally returns the engine's unread in-app rows
+-- (ids prefixed `nq-`). Full definition lives in supabase/schema.sql history; this block is the patched copy
+-- (additions: the «escalations / reminders» loop between the issues and risks loops).
+--   for r in select o.id, o.title, o.body, o.level, o.issue_id, o.created_at from im_notif_outbox o
+--     where o.recipient_id = auth.uid() and o.channel = 'in_app' and o.status in ('queued','sent') and o.issue_id is not null
+--       and o.created_at > now() - interval '14 days' order by o.level desc, o.created_at desc limit 40 loop
+--     v := v || jsonb_build_object('id','nq-'||r.id,'source','issues','module','issues','severity',case when r.level >= 2 then 'warn' else 'action' end,
+--                                  'title',r.title,'body',r.body,'recordId',r.issue_id,'at',r.created_at);
+--   end loop;
+
+create or replace function im_notif_mark_issue_read(p_issue uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update im_notif_outbox set status = 'read', read_at = now()
+   where recipient_id = auth.uid() and channel = 'in_app' and issue_id = p_issue and status in ('queued', 'sent');
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+grant execute on function im_notif_mark_issue_read(uuid) to authenticated;
+revoke execute on function im_notif_mark_issue_read(uuid) from public, anon;
+
+-- Scheduler (pg_cron): state/event scan every 15 minutes. External delivery needs the im-notify edge function to be
+-- invoked as well (admin button in Settings, or any external cron with header x-cron-secret = IM_CRON_SECRET).
+-- select cron.schedule('im-generate-notifications', '*/15 * * * *', $$select public.im_generate_notifications()$$);
+
+-- ---- 019_decisions.sql ----
+-- ============================================================================
+-- Issue Management v2 — Decision Management (phase 2). A decision is a first-class record: question, options with
+-- trade-offs, decider, needed-by date, outcome + rationale. Tasks blocked "waiting for a decision" point at it
+-- (im_issue_tasks.blocked_decision_id), so the cost of an undecided decision becomes measurable.
+-- ============================================================================
+create sequence if not exists im_decision_seq;
+
+create table if not exists im_decisions (
+  id uuid primary key default gen_random_uuid(),
+  seq_no bigint not null default nextval('im_decision_seq'),
+  code text generated always as ('DEC-' || lpad(seq_no::text, 5, '0')) stored,
+  project_id uuid not null references im_projects (id) on delete cascade,
+  issue_id uuid references im_issues (id) on delete set null,
+  title text not null check (length(trim(title)) > 2),
+  question text not null default '',
+  requested_by uuid references profiles (id) default auth.uid(),
+  decider_id uuid references profiles (id),
+  needed_by date,
+  status text not null default 'pending' check (status in ('draft', 'pending', 'decided', 'deferred', 'cancelled')),
+  chosen_option uuid,
+  rationale text not null default '',
+  decided_by uuid references profiles (id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_im_decisions_project on im_decisions (project_id, status);
+create index if not exists idx_im_decisions_issue on im_decisions (issue_id);
+
+create table if not exists im_decision_options (
+  id uuid primary key default gen_random_uuid(),
+  decision_id uuid not null references im_decisions (id) on delete cascade,
+  title text not null,
+  pros text not null default '',
+  cons text not null default '',
+  cost_impact numeric,
+  time_impact_days integer,
+  recommended boolean not null default false,
+  sort smallint not null default 0
+);
+alter table im_decisions drop constraint if exists im_decisions_chosen_fk;
+alter table im_decisions add constraint im_decisions_chosen_fk foreign key (chosen_option) references im_decision_options (id) on delete set null;
+-- close the loop declared in 012: tasks blocked on a decision reference it
+alter table im_issue_tasks drop constraint if exists im_issue_tasks_blocked_decision_fk;
+alter table im_issue_tasks add constraint im_issue_tasks_blocked_decision_fk foreign key (blocked_decision_id) references im_decisions (id) on delete set null;
+
+-- visibility follows the project (or the linked issue); only the decider or an admin may record the outcome
+create or replace function im_can_see_decision(p_project uuid, p_issue uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select im_is_project_member(p_project) or is_admin_user() or (p_issue is not null and im_can_see_issue(p_issue));
+$$;
+
+create or replace function im_decision_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_admin boolean := is_admin_user() or im_can_manage(new.project_id);
+begin
+  new.updated_at := now();
+  if tg_op = 'UPDATE' and new.status is distinct from old.status then
+    if new.status = 'decided' then
+      if not (v_admin or new.decider_id = auth.uid()) then raise exception 'only_decider_may_decide'; end if;
+      if new.chosen_option is null and length(trim(new.rationale)) < 3 then raise exception 'decision_needs_option_or_rationale'; end if;
+      new.decided_by := auth.uid();
+      new.decided_at := now();
+    elsif old.status = 'decided' and not v_admin then
+      raise exception 'decided_is_final_admin_only';
+    end if;
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'decided' and new.status = 'decided' and (new.chosen_option is distinct from old.chosen_option or new.rationale is distinct from old.rationale) and not v_admin then
+    raise exception 'decided_is_final_admin_only';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function im_decision_audit()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_code text;
+begin
+  if new.issue_id is null then return new; end if;
+  select code into v_code from im_issues where id = new.issue_id;
+  if tg_op = 'INSERT' then
+    perform im_log_event(new.issue_id, v_code, null, 'decision_created', 'decision', null, new.code || ' · ' || new.title, jsonb_build_object('decision_id', new.id));
+  elsif new.status is distinct from old.status then
+    perform set_config('im.reason', coalesce(nullif(new.rationale, ''), ''), true);
+    perform im_log_event(new.issue_id, v_code, null, 'decision_' || new.status, 'decision', old.status, new.status, jsonb_build_object('decision_id', new.id, 'code', new.code));
+  end if;
+  return new;
+end;
+$$;
+
+alter table im_decisions enable row level security;
+alter table im_decision_options enable row level security;
+drop policy if exists im_decisions_read on im_decisions;
+create policy im_decisions_read on im_decisions for select using (im_can_see_decision(project_id, issue_id));
+drop policy if exists im_decisions_write on im_decisions;
+create policy im_decisions_write on im_decisions for all using (im_is_project_member(project_id) or is_admin_user()) with check (im_is_project_member(project_id) or is_admin_user());
+drop policy if exists im_dec_options_read on im_decision_options;
+create policy im_dec_options_read on im_decision_options for select using (exists (select 1 from im_decisions d where d.id = decision_id and im_can_see_decision(d.project_id, d.issue_id)));
+drop policy if exists im_dec_options_write on im_decision_options;
+create policy im_dec_options_write on im_decision_options for all using (exists (select 1 from im_decisions d where d.id = decision_id and (im_is_project_member(d.project_id) or is_admin_user()) and d.status in ('draft', 'pending')))
+  with check (exists (select 1 from im_decisions d where d.id = decision_id and (im_is_project_member(d.project_id) or is_admin_user()) and d.status in ('draft', 'pending')));
+
+-- (triggers are created in separate statements on Supabase MCP to stay under the 60 s limit)
+-- create trigger trg_im_decision_guard before insert or update on im_decisions for each row execute function im_decision_guard();
+-- create trigger trg_im_decision_audit after insert or update on im_decisions for each row execute function im_decision_audit();
+
+-- notification rule for stale decisions (generator block is appended in 020_decision_notifications.sql)
+insert into im_notif_rules (key, name, description, kind, recipients, escalate_to, channels, threshold_hours, dedupe_hours, sort) values
+ ('decision_overdue', 'تصمیم معوق', 'تصمیمی که موعدش گذشته و هنوز اتخاذ نشده؛ تصمیم‌گیرنده و سپس مدیران مطلع می‌شوند', 'state', '{}', '{admins}', '{in_app,email}', 0, 24, 110)
+on conflict (key) do nothing;
+
+-- ---- 020_decision_notifications.sql ----
+-- Issue Management v2 — extends im_generate_notifications() with the «decision_overdue» rule (applied live as a patch of the
+-- function body; this file documents the appended block). Block, inserted before the final RETURN:
+--   for e in select dc.*, i2.id as iid from im_decisions dc left join im_issues i2 on i2.id = dc.issue_id
+--            where dc.status = 'pending' and dc.needed_by is not null and dc.needed_by < current_date loop
+--     (skips decisions without an issue) → decider gets level 1 (key decision:<id>:L1:<decider>);
+--     after 3 overdue days project admins get level 2 (key decision:<id>:L2:<admin>)
+--   end loop;
+-- Patch procedure (idempotent): pg_get_functiondef → replace the RETURN line → EXECUTE. See git history of this file for the exact DO block.
+
+-- ---- 021_knowledge.sql ----
+-- Issue Management v2 — knowledge base (phase 3): lessons learned captured from closed issues, published after review.
+create table if not exists im_lessons (
+  id uuid primary key default gen_random_uuid(),
+  source_issue_id uuid references im_issues (id) on delete set null,
+  project_id uuid references im_projects (id) on delete set null,
+  title text not null check (length(trim(title)) > 3),
+  context text not null default '',
+  root_cause text not null default '',
+  solution text not null default '',
+  prevention text not null default '',
+  category text references im_categories (key),
+  tags text[] not null default '{}',
+  status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+  created_by uuid references profiles (id) default auth.uid(),
+  approved_by uuid references profiles (id),
+  approved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_im_lessons_status on im_lessons (status, category);
+create unique index if not exists idx_im_lessons_source on im_lessons (source_issue_id) where source_issue_id is not null;
+
+alter table im_lessons enable row level security;
+drop policy if exists im_lessons_read on im_lessons;
+create policy im_lessons_read on im_lessons for select using (status = 'published' and auth.uid() is not null or created_by = auth.uid() or is_admin_user() or (project_id is not null and im_can_manage(project_id)));
+drop policy if exists im_lessons_insert on im_lessons;
+create policy im_lessons_insert on im_lessons for insert with check (created_by = auth.uid() and status = 'draft' and (project_id is null or im_is_project_member(project_id) or is_admin_user()));
+drop policy if exists im_lessons_update on im_lessons;
+create policy im_lessons_update on im_lessons for update using (is_admin_user() or (project_id is not null and im_can_manage(project_id)) or (created_by = auth.uid() and status = 'draft'))
+  with check (is_admin_user() or (project_id is not null and im_can_manage(project_id)) or (created_by = auth.uid() and status = 'draft'));
+drop policy if exists im_lessons_delete on im_lessons;
+create policy im_lessons_delete on im_lessons for delete using (is_admin_user() or (created_by = auth.uid() and status = 'draft'));
+
+-- publishing stamps the approver (and only managers can publish)
+create or replace function im_lesson_guard() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  if new.status = 'published' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
+    if not (is_admin_user() or (new.project_id is not null and im_can_manage(new.project_id))) then raise exception 'only_manager_may_publish'; end if;
+    new.approved_by := auth.uid(); new.approved_at := now();
+  end if;
+  return new;
+end; $$;
+-- create trigger trg_im_lesson_guard before insert or update on im_lessons for each row execute function im_lesson_guard();

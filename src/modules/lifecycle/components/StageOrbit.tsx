@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import type { GateStatus, ProjectGate, ProjectStage } from '../types'
+import { executiveSummary, type StageProgressInfo } from '../lib/gateProgress'
 import { faNum } from './ui'
+
+export interface ProjectIdentity { name: string; contractType: string; contractor: string; consultant: string }
 
 /**
  * Six visual node states for a stage on the ring — distinct from the module's usual 4-value
@@ -31,25 +34,10 @@ const PLANNED_COLOR = '#fb923c'
  */
 function orbitStatus(gateStatus: GateStatus | undefined, gate: ProjectGate | undefined, progress: number): OrbitStatus {
   if (gateStatus === 'blocked' || gateStatus === 'rejected') return 'blocked'
+  if (gateStatus === 'conditional') return 'conditional'
   if (gateStatus === 'approved') return gate?.overrideBy ? 'conditional' : 'completed'
   if (gateStatus === 'ready') return 'ready'
   return progress > 0 ? 'active' : 'upcoming'
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-/** Planned completion-by-today, linearly interpolated between the stage's own planned dates —
- * the closest equivalent this module has to the reference view's weighted-objectives planned
- * curve, since a stage here carries a single flat progress number rather than sub-item weights. */
-function plannedPct(stage: ProjectStage, today: string): number {
-  if (!stage.plannedStart || !stage.plannedFinish) return stage.status === 'completed' ? 100 : 0
-  const start = Date.parse(stage.plannedStart)
-  const finish = Date.parse(stage.plannedFinish)
-  const now = Date.parse(today)
-  if (finish <= start) return now >= finish ? 100 : 0
-  return Math.max(0, Math.min(100, ((now - start) / (finish - start)) * 100))
 }
 
 const VB = 760
@@ -72,15 +60,16 @@ function arcPath(a1: number, a2: number): string {
   return `M ${x1} ${y1} A ${NODE_ORBIT_R} ${NODE_ORBIT_R} 0 ${large} 1 ${x2} ${y2}`
 }
 
-export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSelectStage }: {
+export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSelectStage, progressInfo, identity }: {
   stages: ProjectStage[]
   gates: ProjectGate[]
   gateStatuses: Map<string, GateStatus>
   currentStageKey: string
   onSelectStage: (stageKey: string) => void
+  progressInfo: Map<string, StageProgressInfo>
+  identity?: ProjectIdentity
 }) {
   const [selected, setSelected] = useState<string | null>(null)
-  const today = todayIso()
   const ordered = useMemo(() => stages.slice().sort((a, b) => a.sequence - b.sequence), [stages])
   const gateByStage = useMemo(() => new Map(gates.map((g) => [g.stageKey, g])), [gates])
   const n = ordered.length
@@ -89,19 +78,22 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
     const angle = -90 + (360 / n) * i
     const rad = (angle * Math.PI) / 180
     const gate = gateByStage.get(stage.stageKey)
-    const status = orbitStatus(gateStatuses.get(stage.stageKey), gate, stage.progress)
+    const info = progressInfo.get(stage.stageKey)
+    const actual = info?.actual ?? stage.progress
+    const status = orbitStatus(gateStatuses.get(stage.stageKey), gate, actual)
     return {
-      stage, index: i, angle,
+      stage, index: i, angle, actual,
       nx: CX + NODE_ORBIT_R * Math.cos(rad), ny: CY + NODE_ORBIT_R * Math.sin(rad),
-      status, planned: plannedPct(stage, today),
+      status, planned: info?.planned ?? 0,
     }
-  }), [ordered, n, gateByStage, gateStatuses, today])
+  }), [ordered, n, gateByStage, gateStatuses, progressInfo])
 
   if (n === 0) return null
 
-  const overallActual = Math.round(ordered.reduce((s, x) => s + x.progress, 0) / n)
-  const overallPlanned = Math.round(nodes.reduce((s, x) => s + x.planned, 0) / n)
-  const variance = overallActual - overallPlanned
+  const summary = executiveSummary(stages, progressInfo, gateStatuses, currentStageKey)
+  const overallActual = summary.actual
+  const overallPlanned = summary.planned
+  const variance = summary.deviation
   const varianceLabel = variance < -5 ? 'عقب از برنامه' : variance > 2 ? 'جلوتر از برنامه' : 'مطابق برنامه'
   const varianceColor = variance < -5 ? '#f87171' : variance > 2 ? '#39ff8a' : '#93c5fd'
   const activeNode = nodes.find((x) => x.stage.stageKey === currentStageKey) ?? nodes.find((x) => x.status === 'active')
@@ -121,6 +113,28 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
       className="rounded-2xl p-4 md:p-6"
       style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%)', border: '1px solid rgba(255,255,255,.07)' }}
     >
+      {identity && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)' }}>
+          <span className="text-[13px] font-extrabold text-white">{identity.name}</span>
+          <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]" style={{ color: '#94a3b8' }}>
+            {identity.contractType && <span>نوع قرارداد: <b style={{ color: '#e2e8f0' }}>{identity.contractType}</b></span>}
+            {identity.contractor && <span>پیمانکار: <b style={{ color: '#e2e8f0' }}>{identity.contractor}</b></span>}
+            {identity.consultant && <span>مشاور: <b style={{ color: '#e2e8f0' }}>{identity.consultant}</b></span>}
+          </span>
+        </div>
+      )}
+
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6" data-testid="exec-strip">
+        <StripCell label="پیشرفت واقعی" value={`${faNum(summary.actual)}٪`} color={NEON_GREEN} />
+        <StripCell label="پیشرفت برنامه‌ای" value={`${faNum(summary.planned)}٪`} color={PLANNED_COLOR} />
+        <StripCell label="انحراف" value={`${variance >= 0 ? '+' : ''}${faNum(variance)}٪`} color={varianceColor} />
+        <StripCell label="فاز جاری" value={summary.phaseName} color="#e2e8f0" small />
+        <StripCell label="وضعیت گیت فاز" value={summary.gateStatusLabel} color="#93c5fd" small />
+        <StripCell label="معیار الزامی باقی‌مانده"
+          value={summary.remainingCriteria > 0 ? `${faNum(summary.remainingCriteria)} معیار` : 'هیچ'}
+          color={summary.remainingCriteria > 0 ? '#f87171' : '#39ff8a'} small />
+      </div>
+
       <div className="relative mx-auto" style={{ width: '100%', maxWidth: 600 }}>
         <svg viewBox={`0 0 ${VB} ${VB}`} className="h-auto w-full select-none" style={{ overflow: 'visible' }}>
           <defs>
@@ -164,7 +178,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
             filter: `drop-shadow(0 0 5px ${NEON_GREEN}) drop-shadow(0 0 12px ${NEON_GREEN}aa)`,
           })}
 
-          {nodes.map(({ stage, nx, ny, status, planned }) => {
+          {nodes.map(({ stage, nx, ny, status, planned, actual }) => {
             const meta = ORBIT_META[status]
             const isSelected = selected === stage.stageKey
             const plannedR = NODE_R + 11
@@ -172,7 +186,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
             const plannedLen = ringLen(plannedR)
             const actualLen = ringLen(actualR)
             const plannedDash = (plannedLen * Math.max(0, Math.min(100, planned))) / 100
-            const actualDash = (actualLen * Math.max(0, Math.min(100, stage.progress))) / 100
+            const actualDash = (actualLen * Math.max(0, Math.min(100, actual))) / 100
             return (
               <g key={stage.id} transform={`translate(${nx} ${ny})`} style={{ cursor: 'pointer' }}
                 onClick={() => { setSelected(stage.stageKey); onSelectStage(stage.stageKey) }}>
@@ -216,7 +230,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
         </div>
 
         <div className="pointer-events-none absolute inset-0">
-          {nodes.map(({ stage, nx, ny, angle, status, planned }) => {
+          {nodes.map(({ stage, nx, ny, angle, status, planned, actual }) => {
             const meta = ORBIT_META[status]
             const leftPct = (nx / VB) * 100
             const topPct = (ny / VB) * 100
@@ -239,7 +253,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
                       ب {faNum(Math.round(planned))}٪
                     </span>
                     <span className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-[8px] font-extrabold" style={{ background: `${NEON_GREEN}26`, color: NEON_GREEN }} title="پیشرفت واقعی">
-                      و {faNum(Math.round(stage.progress))}٪
+                      و {faNum(Math.round(actual))}٪
                     </span>
                   </div>
                 </div>
@@ -257,6 +271,15 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+function StripCell({ label, value, color, small }: { label: string; value: string; color: string; small?: boolean }) {
+  return (
+    <div className="rounded-xl px-2.5 py-2" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.07)' }}>
+      <p className="text-[9px] font-semibold" style={{ color: '#94a3b8' }}>{label}</p>
+      <p className={`${small ? 'text-[12px]' : 'text-lg'} mt-0.5 font-extrabold leading-tight`} style={{ color }}>{value}</p>
     </div>
   )
 }

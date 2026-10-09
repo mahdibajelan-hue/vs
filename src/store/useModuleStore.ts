@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ModuleKey = 'pipepulse' | 'risk' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq'
+export type ModuleKey = 'pipepulse' | 'risk' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq' | 'stagegate' | 'taskissue'
 
 interface ModuleState {
   /** null = show the hub (the 6-card launchpad, or Project Radar if `radarOpen`). Session-only

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   Activity, AlertOctagon, AlertTriangle, ArrowLeft, BarChart3, Bell, CalendarClock, ChevronLeft, Flag,
   Gauge, HeartPulse, ShieldAlert, ShieldCheck, Target, TrendingUp,
@@ -14,6 +15,7 @@ import {
 } from '../types'
 import { ProjectJourneyTimeline } from '../components/ProjectJourneyTimeline'
 import { StageOrbit } from '../components/StageOrbit'
+import { stageProgressMap } from '../lib/gateProgress'
 import { DriftTrendChart, HealthRadar, StageReadinessBars } from '../components/TowerCharts'
 import { GateLadder, HealthGauge, ReadinessWaffle } from '../components/TowerInstruments'
 import { TowerTile } from '../components/TowerTile'
@@ -46,7 +48,12 @@ export function ControlTowerPage({
   const loading = useLifecycleStore((s) => s.loadingProject)
   const selectProject = useLifecycleStore((s) => s.selectProject)
   const users = useMasterDataStore((s) => s.users)
+  const orgs = useMasterDataStore((s) => s.organizations)
   const analysis = useProjectAnalysis(bundle)
+  const progressInfo = useMemo(
+    () => stageProgressMap(bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, new Date().toISOString().slice(0, 10)),
+    [bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog],
+  )
 
   const currentStageKey = bundle.lifecycle?.currentStageKey ?? ''
   const stageLabel = STAGE_LABEL_FA[currentStageKey as StageKey] ?? currentStageKey ?? '—'
@@ -121,6 +128,12 @@ export function ControlTowerPage({
           gateStatuses={analysis.gateStatuses}
           currentStageKey={currentStageKey}
           onSelectStage={onOpenStage}
+          progressInfo={progressInfo}
+          identity={{
+            name: project.officialName, contractType: project.contractType,
+            contractor: orgs.find((o) => o.id === project.contractorOrgId)?.name ?? '',
+            consultant: orgs.find((o) => o.id === project.consultantOrgId)?.name ?? '',
+          }}
         />
       </div>
 

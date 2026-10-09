@@ -4,6 +4,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { Check, MessageSquare, Pencil, Plus, ShieldAlert, TriangleAlert, Trash2 } from 'lucide-react'
 import { Modal } from '../../../components/common/Modal'
 import { RiskFormModal } from './RiskFormModal'
+import { RiskToIssue } from './RiskToIssue'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -171,6 +172,8 @@ export function RiskDetailModal({ project, risk, onClose }: { project: RmProject
         </div>
 
         {risk.description && <p className="rounded-xl bg-white/[0.03] p-3 text-xs leading-6 text-secondary">{risk.description}</p>}
+
+        {canEdit && risk.status !== 'closed' && <RiskToIssue riskId={risk.id} />}
 
         {filledStrategyDetails.length > 0 && (
           <div className="rounded-xl border border-white/10 p-3">

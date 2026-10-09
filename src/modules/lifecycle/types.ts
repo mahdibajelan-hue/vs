@@ -1,3 +1,5 @@
+import type { GateEngine, GateItemKind, GateItemStatus, PhaseGroup } from './lib/gateModel'
+
 /** Project Lifecycle & Control Tower — domain types.
  *
  * The three-level hierarchy (Portfolio -> Program/«طرح» -> Project) is NOT redefined here: it
@@ -68,12 +70,13 @@ export const STAGE_STATUS_LABEL_FA: Record<StageStatus, string> = {
 
 /* --------------------------------------------------------------------- gate */
 
-export type GateStatus = 'not_started' | 'in_progress' | 'ready' | 'approved' | 'rejected' | 'blocked'
+export type GateStatus = 'not_started' | 'in_progress' | 'ready' | 'conditional' | 'approved' | 'rejected' | 'blocked'
 
 export const GATE_STATUS_LABEL_FA: Record<GateStatus, string> = {
   not_started: 'شروع‌نشده',
   in_progress: 'در حال بررسی',
-  ready: 'آماده تصویب',
+  ready: 'آماده بررسی',
+  conditional: 'تصویب مشروط',
   approved: 'تصویب‌شده',
   rejected: 'رد شده',
   blocked: 'مسدود',
@@ -93,17 +96,37 @@ export interface ProjectGate {
   overrideBy: string | null
   overrideReason: string
   overrideAt: string | null
+  phaseGroup: PhaseGroup
+  engine: GateEngine
+  icon: string
+  approvalDoc: string
+  ownerRole: string
+  conditionText: string
+  conditionOwnerId: string | null
+  conditionDeadline: string | null
 }
 
 /* ---------------------------------------------------------------- checklist */
 
-export type ChecklistStatus = 'not_started' | 'in_progress' | 'completed' | 'waived'
+export type ChecklistStatus = GateItemStatus
 
 export const CHECKLIST_STATUS_LABEL_FA: Record<ChecklistStatus, string> = {
   not_started: 'شروع‌نشده',
   in_progress: 'در حال انجام',
   completed: 'تکمیل‌شده',
+  pending: 'در انتظار',
+  submitted: 'ارسال‌شده برای تأیید',
+  verified: 'تأییدشده',
+  rejected: 'ردشده',
+  failed: 'ناموفق',
   waived: 'صرف‌نظر شده',
+}
+
+/** Statuses offered per item kind: criteria need an independent verifier. */
+export const STATUS_OPTIONS_BY_KIND: Record<GateItemKind, GateItemStatus[]> = {
+  objective: ['not_started', 'in_progress', 'completed', 'waived'],
+  output: ['not_started', 'in_progress', 'completed', 'waived'],
+  criterion: ['not_started', 'pending', 'submitted', 'verified', 'rejected', 'failed', 'waived'],
 }
 
 /** Pre-project categories from the spec; `general` covers every other stage's items. */
@@ -142,12 +165,16 @@ export interface ChecklistItem {
   comment: string
   guidance: string
   sequence: number
+  kind: GateItemKind
+  submittedBy: string | null
+  verifiedBy: string | null
+  verificationDate: string | null
 }
 
 /** An item is overdue when it has a due date in the past and is not finished — derived rather
  * than stored, so it can never go stale relative to today's date. */
 export function isChecklistOverdue(item: ChecklistItem, today = new Date().toISOString().slice(0, 10)): boolean {
-  if (item.status === 'completed' || item.status === 'waived') return false
+  if (item.status === 'completed' || item.status === 'verified' || item.status === 'waived') return false
   return !!item.dueDate && item.dueDate < today
 }
 
@@ -221,6 +248,11 @@ export interface Activity {
   dependsOnId: string | null
   status: StageStatus | 'on_hold'
   sequence: number
+  parentId: string | null
+  /** Weight among siblings (each sibling group sums to 100). */
+  weight: number
+  /** Hand-entered progress — meaningful on leaves only; parents are rolled up bottom-up. */
+  manualPct: number
 }
 
 export interface ProjectStage {
@@ -236,6 +268,7 @@ export interface ProjectStage {
   actualFinish: string | null
   forecastFinish: string | null
   progress: number
+  standardDays: number
 }
 
 /* ------------------------------------------------------------------- health */
@@ -372,6 +405,12 @@ export interface TemplateStage {
   typicalDurationMonths: number | null
   gateName: string
   gateReadinessThreshold: number
+  phaseGroup: PhaseGroup
+  engine: GateEngine
+  icon: string
+  approvalDoc: string
+  ownerRole: string
+  standardDays: number
 }
 
 export interface TemplateChecklistItem {
@@ -384,6 +423,7 @@ export interface TemplateChecklistItem {
   requiresApproval: boolean
   guidance: string
   sequence: number
+  kind: GateItemKind
 }
 
 /* -------------------------------------------------------------- audit trail */
@@ -400,4 +440,32 @@ export interface AuditEntry {
   reason: string
   changedBy: string | null
   changedAt: string
+}
+
+/* ------------------------------------------------------- decisions / progress */
+
+export interface GateDecision {
+  id: string
+  projectId: string
+  gateId: string
+  decision: 'pass' | 'conditional' | 'return' | 'cancel'
+  reason: string
+  conditionText: string
+  conditionOwnerId: string | null
+  conditionDeadline: string | null
+  decidedBy: string | null
+  decidedAt: string
+}
+
+export type ProgressSeries = 'overall' | 'engineering' | 'procurement' | 'construction'
+
+export interface ProgressLogEntry {
+  id: string
+  projectId: string
+  gateId: string
+  series: ProgressSeries
+  pct: number
+  note: string
+  recordedBy: string | null
+  recordedAt: string
 }

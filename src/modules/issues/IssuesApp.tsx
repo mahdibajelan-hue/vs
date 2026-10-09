@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, BarChart3, FolderKanban, Info, LayoutDashboard, Loader2, Network, Plus } from 'lucide-react'
+import { BarChart3, BookOpen, ClipboardList, FolderKanban, Gauge, Info, LayoutDashboard, ListChecks, Loader2, MoreHorizontal, Network, Plus, Scale, Settings2, Layers } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -10,25 +10,41 @@ import { useIssuesStore } from './store/useIssuesStore'
 import { useIssuesMembersStore } from './store/useIssuesMembersStore'
 import { DashboardPage } from './pages/DashboardPage'
 import { ProjectsPage } from './pages/ProjectsPage'
-import { IssuesPage } from './pages/IssuesPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { MyWorkPage } from './pages/MyWorkPage'
+import { KpiReportPage } from './pages/KpiReportPage'
+import { SettingsPage } from './pages/SettingsPage'
+import { DecisionsPage } from './pages/DecisionsPage'
+import { PortfolioInsightsPage } from './pages/PortfolioInsightsPage'
+import { KnowledgePage } from './pages/KnowledgePage'
+import { useDecisionStore } from './store/useDecisionStore'
+import { useIssueWorkStore } from './store/useIssueWorkStore'
+import { useIssueConfigStore } from './store/useIssueConfigStore'
+import type { IssueFilter } from './lib/imRegister'
 import { ReportPage } from './pages/ReportPage'
 import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 import { AboutPage } from './pages/AboutPage'
 import { NewIssueModal } from './components/NewIssueModal'
-import { IssueDetailModal } from './components/IssueDetailModal'
+import { IssueDrawer } from './components/IssueDrawer'
 import './issues.css'
 
-type Tab = 'dashboard' | 'projects' | 'issues' | 'report' | 'portfolio' | 'about'
+type Tab = 'dashboard' | 'mywork' | 'issues' | 'decisions' | 'knowledge' | 'projects' | 'kpi' | 'report' | 'portfolio' | 'insights' | 'settings' | 'about'
 
 // Per-project member management (پیگیری/تایید roles) lives inside هر پروژه (ProjectsPage ->
 // MembersModal) — a standalone cross-project "کاربران" tab here duplicated that and is gone;
 // cross-module user/access administration is the dedicated «مدیریت کاربران» hub module.
-const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
-  { id: 'issues', label: 'مشکلات', icon: AlertCircle },
+const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard; primary?: boolean }[] = [
+  { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard, primary: true },
+  { id: 'mywork', label: 'کارهای من', icon: ListChecks, primary: true },
+  { id: 'issues', label: 'مسائل', icon: ClipboardList, primary: true },
+  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, primary: true },
+  { id: 'decisions', label: 'تصمیم‌ها', icon: Scale },
+  { id: 'knowledge', label: 'دانش', icon: BookOpen },
+  { id: 'kpi', label: 'شاخص‌ها', icon: Gauge },
   { id: 'report', label: 'گزارش تاخیر', icon: BarChart3 },
   { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network },
+  { id: 'insights', label: 'هم‌افزایی پورتفولیو', icon: Layers },
+  { id: 'settings', label: 'تنظیمات و قوانین', icon: Settings2 },
   { id: 'about', label: 'درباره ما', icon: Info },
 ]
 
@@ -43,11 +59,26 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [newIssueProjectId, setNewIssueProjectId] = useState<string | null | 'pick'>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
+  const [drawerTab, setDrawerTab] = useState<'overview' | 'tasks' | 'extensions' | 'decisions'>('overview')
+  const [registerFilter, setRegisterFilter] = useState<Partial<IssueFilter> | undefined>(undefined)
+  const [registerKey, setRegisterKey] = useState(0)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const issuesCount = useIssuesStore((st) => st.issues.length)
+  const fetchWork = useIssueWorkStore((st) => st.fetchAll)
+  const cfgLoaded = useIssueConfigStore((st) => st.loaded)
+  const fetchCfg = useIssueConfigStore((st) => st.fetch)
+  const openIssue = (id: string, tab: 'overview' | 'tasks' | 'extensions' | 'decisions' = 'overview') => { setDrawerTab(tab); setSelectedIssueId(id) }
+  const goRegister = (f?: Partial<IssueFilter>) => { setRegisterFilter(f); setRegisterKey((k) => k + 1); setTab('issues') }
 
   useEffect(() => {
     fetchAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
+  // tasks/extensions follow the issue list (reloaded whenever the set of visible issues changes)
+  useEffect(() => { if (!loading) fetchWork() }, [loading, issuesCount, fetchWork])
+  const fetchDecisions = useDecisionStore((st) => st.fetchAll)
+  useEffect(() => { if (!loading) fetchDecisions() }, [loading, issuesCount, fetchDecisions])
 
   // Arrived here from Project Radar with a project already in context: open straight into that
   // project's issue list instead of the dashboard, and stay locked to it — hide every
@@ -73,7 +104,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const clearLink = useDeepLinkStore((s) => s.clear)
   useEffect(() => {
     if (!loading && pendingLink?.module === 'issues') {
-      setSelectedIssueId(pendingLink.recordId)
+      openIssue(pendingLink.recordId)
       clearLink()
     }
   }, [loading, pendingLink, clearLink])
@@ -135,43 +166,69 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
               <Loader2 size={24} className="animate-spin" style={{ color: 'var(--im-amber)' }} />
             </div>
           ) : tab === 'dashboard' ? (
-            <DashboardPage onSelectIssue={setSelectedIssueId} />
+            <DashboardPage onSelectIssue={openIssue} onOpenMyWork={() => setTab('mywork')} onOpenRegister={(f) => goRegister({ stage: 'active', ...f })} />
+          ) : tab === 'mywork' ? (
+            <MyWorkPage onOpen={openIssue} />
           ) : tab === 'projects' ? (
             <ProjectsPage
               activeProjectId={projectFilter}
               onOpenProject={setProjectFilter}
               onBack={() => setProjectFilter(null)}
-              onSelectIssue={setSelectedIssueId}
+              onSelectIssue={openIssue}
               onNewIssue={openNewIssue}
             />
           ) : tab === 'issues' ? (
-            <IssuesPage onSelectIssue={setSelectedIssueId} onNewIssue={() => openNewIssue()} />
+            <RegisterPage key={registerKey} onSelectIssue={openIssue} onNewIssue={() => openNewIssue()} initialFilter={registerFilter} />
+          ) : tab === 'decisions' ? (
+            <DecisionsPage onOpenIssue={(id) => openIssue(id, 'decisions')} />
+          ) : tab === 'knowledge' ? (
+            <KnowledgePage onOpenIssue={openIssue} />
+          ) : tab === 'insights' ? (
+            <PortfolioInsightsPage onSelectIssue={openIssue} />
+          ) : tab === 'kpi' ? (
+            <KpiReportPage onSelectIssue={openIssue} />
+          ) : tab === 'settings' ? (
+            <SettingsPage />
           ) : tab === 'report' ? (
-            <ReportPage onSelectIssue={setSelectedIssueId} />
+            <ReportPage onSelectIssue={openIssue} />
           ) : tab === 'portfolio' ? (
-            <PortfolioRollupPage onSelectIssue={setSelectedIssueId} />
+            <PortfolioRollupPage onSelectIssue={openIssue} />
           ) : (
             <AboutPage />
           )}
         </main>
 
         <div className="im-bottom-nav">
-          {NAV.map((n) => (
-            <button key={n.id} className={`im-bn-item ${tab === n.id ? 'active' : ''}`} onClick={() => setTab(n.id)}>
+          {NAV.filter((n) => n.primary).map((n) => (
+            <button key={n.id} className={`im-bn-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setMoreOpen(false); setTab(n.id) }}>
               <n.icon size={20} />
               <span>{n.label}</span>
             </button>
           ))}
+          <button className={`im-bn-item ${moreOpen || !NAV.find((n) => n.id === tab)?.primary ? 'active' : ''}`} onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}>
+            <MoreHorizontal size={20} />
+            <span>بیشتر</span>
+          </button>
         </div>
+        {moreOpen && (
+          <div className="im-more-sheet" role="menu">
+            {NAV.filter((n) => !n.primary).map((n) => (
+              <button key={n.id} role="menuitem" className={`im-nav-item ${tab === n.id ? 'active' : ''}`} onClick={() => { setTab(n.id); setMoreOpen(false) }}>
+                <n.icon size={18} />
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <button className="im-fab" onClick={() => openNewIssue()}>
           <Plus size={26} />
         </button>
       </div>
 
       {newIssueProjectId !== null && (
-        <NewIssueModal defaultProjectId={newIssueProjectId === 'pick' ? null : newIssueProjectId} onClose={() => setNewIssueProjectId(null)} />
+        <NewIssueModal defaultProjectId={newIssueProjectId === 'pick' ? null : newIssueProjectId} onClose={() => setNewIssueProjectId(null)} onCreated={(id) => openIssue(id)} />
       )}
-      {selectedIssueId && <IssueDetailModal issueId={selectedIssueId} onClose={() => setSelectedIssueId(null)} />}
+      {selectedIssueId && <IssueDrawer key={selectedIssueId + drawerTab} issueId={selectedIssueId} initialTab={drawerTab} onClose={() => setSelectedIssueId(null)} />}
     </div>
   )
 }

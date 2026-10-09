@@ -3,8 +3,9 @@ import type {
   GateStatus, HealthDimension, HealthScore, HealthStatus, HealthTrend, LifecycleAction,
   LifecycleTemplate, Milestone, MilestoneForecastPoint, MilestoneStatus, MilestoneType,
   ProjectGate, ProjectLifecycle, ProjectStage, StageStatus, TemplateChecklistItem, TemplateStage,
-  WarningSeverity,
+  GateDecision, ProgressLogEntry, ProgressSeries, WarningSeverity,
 } from '../types'
+import type { GateEngine, GateItemKind, PhaseGroup } from './gateModel'
 
 /* Row shapes mirror supabase/schema.sql section 21 one-for-one; each `*FromRow` is the single
  * place snake_case becomes camelCase for this module. */
@@ -46,6 +47,7 @@ export interface PlcStageRow {
   actual_finish: string | null
   forecast_finish: string | null
   progress: number
+  standard_days?: number
 }
 
 export function stageFromRow(r: PlcStageRow): ProjectStage {
@@ -62,6 +64,7 @@ export function stageFromRow(r: PlcStageRow): ProjectStage {
     actualFinish: r.actual_finish,
     forecastFinish: r.forecast_finish,
     progress: r.progress,
+    standardDays: r.standard_days ?? 0,
   }
 }
 
@@ -79,6 +82,14 @@ export interface PlcGateRow {
   override_by: string | null
   override_reason: string
   override_at: string | null
+  phase_group?: string
+  engine?: string
+  icon?: string
+  approval_doc?: string
+  owner_role?: string
+  condition_text?: string
+  condition_owner_id?: string | null
+  condition_deadline?: string | null
 }
 
 export function gateFromRow(r: PlcGateRow): ProjectGate {
@@ -96,6 +107,14 @@ export function gateFromRow(r: PlcGateRow): ProjectGate {
     overrideBy: r.override_by,
     overrideReason: r.override_reason ?? '',
     overrideAt: r.override_at,
+    phaseGroup: (r.phase_group ?? 'execution') as PhaseGroup,
+    engine: (r.engine ?? 'step') as GateEngine,
+    icon: r.icon ?? '',
+    approvalDoc: r.approval_doc ?? '',
+    ownerRole: r.owner_role ?? '',
+    conditionText: r.condition_text ?? '',
+    conditionOwnerId: r.condition_owner_id ?? null,
+    conditionDeadline: r.condition_deadline ?? null,
   }
 }
 
@@ -117,6 +136,10 @@ export interface PlcChecklistRow {
   comment: string
   guidance: string
   sequence: number
+  kind?: string
+  submitted_by?: string | null
+  verified_by?: string | null
+  verification_date?: string | null
 }
 
 export function checklistFromRow(r: PlcChecklistRow): ChecklistItem {
@@ -138,6 +161,10 @@ export function checklistFromRow(r: PlcChecklistRow): ChecklistItem {
     comment: r.comment ?? '',
     guidance: r.guidance ?? '',
     sequence: r.sequence,
+    kind: (r.kind ?? 'objective') as GateItemKind,
+    submittedBy: r.submitted_by ?? null,
+    verifiedBy: r.verified_by ?? null,
+    verificationDate: r.verification_date ?? null,
   }
 }
 
@@ -217,6 +244,9 @@ export interface PlcActivityRow {
   depends_on_id: string | null
   status: string
   sequence: number
+  parent_id?: string | null
+  weight?: number | string
+  manual_actual_pct?: number
 }
 
 export function activityFromRow(r: PlcActivityRow): Activity {
@@ -238,6 +268,9 @@ export function activityFromRow(r: PlcActivityRow): Activity {
     dependsOnId: r.depends_on_id,
     status: r.status as Activity['status'],
     sequence: r.sequence,
+    parentId: r.parent_id ?? null,
+    weight: Number(r.weight ?? 100),
+    manualPct: r.manual_actual_pct ?? 0,
   }
 }
 
@@ -363,6 +396,12 @@ export interface PlcTemplateStageRow {
   typical_duration_months: number | null
   gate_name: string
   gate_readiness_threshold: number
+  phase_group?: string
+  engine?: string
+  icon?: string
+  approval_doc?: string
+  owner_role?: string
+  standard_days?: number
 }
 
 export function templateStageFromRow(r: PlcTemplateStageRow): TemplateStage {
@@ -376,6 +415,12 @@ export function templateStageFromRow(r: PlcTemplateStageRow): TemplateStage {
     typicalDurationMonths: r.typical_duration_months,
     gateName: r.gate_name ?? '',
     gateReadinessThreshold: r.gate_readiness_threshold,
+    phaseGroup: (r.phase_group ?? 'execution') as PhaseGroup,
+    engine: (r.engine ?? 'step') as GateEngine,
+    icon: r.icon ?? '',
+    approvalDoc: r.approval_doc ?? '',
+    ownerRole: r.owner_role ?? '',
+    standardDays: r.standard_days ?? 0,
   }
 }
 
@@ -389,6 +434,7 @@ export interface PlcTemplateChecklistRow {
   requires_approval: boolean
   guidance: string
   sequence: number
+  kind?: string
 }
 
 export function templateChecklistFromRow(r: PlcTemplateChecklistRow): TemplateChecklistItem {
@@ -402,6 +448,7 @@ export function templateChecklistFromRow(r: PlcTemplateChecklistRow): TemplateCh
     requiresApproval: r.requires_approval,
     guidance: r.guidance ?? '',
     sequence: r.sequence,
+    kind: (r.kind ?? 'objective') as GateItemKind,
   }
 }
 
@@ -432,5 +479,29 @@ export function auditFromRow(r: PlcAuditRow): AuditEntry {
     reason: r.reason ?? '',
     changedBy: r.changed_by,
     changedAt: r.changed_at,
+  }
+}
+
+export interface PlcDecisionRow {
+  id: string; project_id: string; gate_id: string; decision: string; reason: string
+  condition_text: string; condition_owner_id: string | null; condition_deadline: string | null
+  decided_by: string | null; decided_at: string
+}
+export function decisionFromRow(r: PlcDecisionRow): GateDecision {
+  return {
+    id: r.id, projectId: r.project_id, gateId: r.gate_id, decision: r.decision as GateDecision['decision'],
+    reason: r.reason ?? '', conditionText: r.condition_text ?? '', conditionOwnerId: r.condition_owner_id,
+    conditionDeadline: r.condition_deadline, decidedBy: r.decided_by, decidedAt: r.decided_at,
+  }
+}
+
+export interface PlcProgressRow {
+  id: string; project_id: string; gate_id: string; series: string; pct: number
+  note: string; recorded_by: string | null; recorded_at: string
+}
+export function progressFromRow(r: PlcProgressRow): ProgressLogEntry {
+  return {
+    id: r.id, projectId: r.project_id, gateId: r.gate_id, series: r.series as ProgressSeries,
+    pct: r.pct, note: r.note ?? '', recordedBy: r.recorded_by, recordedAt: r.recorded_at,
   }
 }

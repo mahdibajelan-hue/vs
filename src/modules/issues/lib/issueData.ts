@@ -1,4 +1,4 @@
-import type { ImIssue, ImIssuePriority, ImIssueSource, ImIssueStatus, ImProject } from '../types'
+import type { ImIssue, ImIssuePriority, ImIssueSource, ImIssueStatus, ImProject, ImStage } from '../types'
 
 export interface ImProjectRow {
   id: string
@@ -6,10 +6,11 @@ export interface ImProjectRow {
   description: string
   created_by: string | null
   created_at: string
+  scope_level?: string | null
 }
 
 export function imProjectFromRow(r: ImProjectRow): ImProject {
-  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at }
+  return { id: r.id, name: r.name, description: r.description, createdBy: r.created_by, createdAt: r.created_at, scopeLevel: (r.scope_level as ImProject['scopeLevel']) ?? 'project' }
 }
 
 export interface ImIssueRow {
@@ -30,6 +31,32 @@ export interface ImIssueRow {
   updated_at: string
   source: string
   related_action_id: string | null
+  // v2 columns (select * returns them; optional so older fixtures still parse)
+  code?: string | null
+  stage?: string | null
+  severity?: string | null
+  urgency?: string | null
+  category?: string | null
+  discipline?: string | null
+  location?: string | null
+  identified_at?: string | null
+  owner_id?: string | null
+  follow_up_id?: string | null
+  resolve_due_date?: string | null
+  original_due_date?: string | null
+  extension_count?: number | null
+  root_cause_summary?: string | null
+  root_cause_confirmed?: boolean | null
+  acceptance_criteria?: string | null
+  resolution_summary?: string | null
+  reopen_count?: number | null
+  blocked_since?: string | null
+  blocked_kind?: string | null
+  external_system?: string | null
+  external_id?: string | null
+  sync_status?: string | null
+  corporate_issue_id?: string | null
+  tags?: string[] | null
 }
 
 export function imIssueFromRow(r: ImIssueRow): ImIssue {
@@ -51,6 +78,31 @@ export function imIssueFromRow(r: ImIssueRow): ImIssue {
     updatedAt: r.updated_at,
     source: (r.source as ImIssueSource) ?? 'manual',
     relatedActionId: r.related_action_id,
+    code: r.code ?? undefined,
+    stage: (r.stage as ImStage | null) ?? undefined,
+    severity: (r.severity as ImIssuePriority | null) ?? undefined,
+    urgency: (r.urgency as ImIssuePriority | null) ?? undefined,
+    category: r.category ?? null,
+    discipline: r.discipline ?? '',
+    location: r.location ?? '',
+    identifiedAt: r.identified_at ?? null,
+    ownerId: r.owner_id ?? null,
+    followUpId: r.follow_up_id ?? null,
+    resolveDueDate: r.resolve_due_date ?? null,
+    originalDueDate: r.original_due_date ?? null,
+    extensionCount: r.extension_count ?? 0,
+    rootCauseSummary: r.root_cause_summary ?? '',
+    rootCauseConfirmed: r.root_cause_confirmed ?? false,
+    acceptanceCriteria: r.acceptance_criteria ?? '',
+    resolutionSummary: r.resolution_summary ?? '',
+    reopenCount: r.reopen_count ?? 0,
+    blockedSince: r.blocked_since ?? null,
+    blockedKind: r.blocked_kind ?? null,
+    externalSystem: r.external_system ?? null,
+    externalId: r.external_id ?? null,
+    syncStatus: r.sync_status ?? 'none',
+    corporateIssueId: r.corporate_issue_id ?? null,
+    tags: r.tags ?? [],
   }
 }
 
