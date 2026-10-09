@@ -9,10 +9,10 @@ interface OutRow { channel: string; status: string; c: number }
 
 const DEFAULT: Prefs = { in_app: true, email: true, sms: false, push: false, messenger: false, quiet_start: null, quiet_end: null, muted_projects: [], contact: {} }
 const CH_FA: Record<string, string> = { in_app: 'درون‌برنامه', email: 'ایمیل', sms: 'پیامک', push: 'اعلان فوری (Push)', messenger: 'پیام‌رسان' }
-const ROLE_FA: Record<string, string> = { owner: 'مالک', follow_up: 'پیگیری‌کننده', pursuer: 'مسئول انجام', approver: 'مسئول تأیید', admins: 'مدیران پروژه' }
+const ROLE_FA: Record<string, string> = { monitor: 'مسئول پایش', response_owner: 'مسئول اقدامات', action_owner: 'مسئول اقدام', project_manager: 'مدیر پروژه', risk_manager: 'مدیر ریسک', management: 'مدیریت ارشد', owner: 'مالک', follow_up: 'پیگیری‌کننده', pursuer: 'مسئول انجام', approver: 'مسئول تأیید', admins: 'مدیران پروژه' }
 const ST_FA: Record<string, string> = { queued: 'در صف', sent: 'ارسال‌شده', read: 'خوانده‌شده', skipped: 'ردشده (کانال غیرفعال/بدون مخاطب)', failed: 'ناموفق' }
 
-export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
+export function NotificationSettings({ isAdmin, scope = 'issues', hideRules = false }: { isAdmin: boolean; scope?: 'issues' | 'risk'; hideRules?: boolean }) {
   const me = useAuthStore((s) => s.profile?.id)
   const projects = useIssuesStore((s) => s.projects)
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT)
@@ -25,11 +25,12 @@ export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
 
   const load = async () => {
     if (!me) return
-    const [p, r] = await Promise.all([supabase.from('im_notif_prefs').select('*').eq('user_id', me).maybeSingle(), supabase.from('im_notif_rules').select('*').order('sort')])
+    const [p, r] = await Promise.all([supabase.from('im_notif_prefs').select('*').eq('user_id', me).maybeSingle(), supabase.from('im_notif_rules').select('*').eq('scope', scope).order('sort')])
     if (p.data) setPrefs({ ...DEFAULT, ...(p.data as Partial<Prefs>) })
     setRules((r.data ?? []) as Rule[])
     if (isAdmin) {
-      const o = await supabase.from('im_notif_outbox').select('channel,status').order('id', { ascending: false }).limit(2000)
+      const oq = supabase.from('im_notif_outbox').select('channel,status').order('id', { ascending: false }).limit(2000)
+      const o = await (scope === 'risk' ? oq.not('risk_id', 'is', null) : oq.is('risk_id', null))
       const m = new Map<string, number>()
       for (const x of (o.data ?? []) as { channel: string; status: string }[]) m.set(x.channel + '|' + x.status, (m.get(x.channel + '|' + x.status) ?? 0) + 1)
       setOutbox([...m.entries()].map(([k, c]) => ({ channel: k.split('|')[0], status: k.split('|')[1], c })))
@@ -58,8 +59,8 @@ export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
     setBusy(true)
     const r = await supabase.functions.invoke('im-notify', { body: { action: 'dispatch' } })
     if (r.error) {
-      const g = await supabase.rpc('im_generate_notifications_now')
-      flash(g.error ? 'اجرا ناموفق بود' : `اسکن انجام شد (${(g.data as { enqueued: number }).enqueued} اعلان جدید؛ ارسال بیرونی انجام نشد)`)
+      const g = await supabase.rpc(scope === 'risk' ? 'rm_generate_notifications_now' : 'im_generate_notifications_now')
+      flash(g.error ? 'اجرا ناموفق بود' : `اسکن انجام شد (${(g.data as { enqueued?: number; queued?: number }).enqueued ?? (g.data as { queued?: number }).queued ?? 0} اعلان جدید؛ ارسال بیرونی انجام نشد)`)
     } else {
       const d = r.data as { generated?: { enqueued: number }; delivered: { sent: number; skipped: number; retry: number; failed: number } }
       flash(`اعلان جدید ${d.generated?.enqueued ?? 0} · ارسال ${d.delivered.sent} · ردشده ${d.delivered.skipped} · تلاش مجدد ${d.delivered.retry} · ناموفق ${d.delivered.failed}`)
@@ -87,7 +88,7 @@ export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
           <div className="im-field"><label>تا</label><select value={prefs.quiet_end ?? ''} onChange={(e) => save({ ...prefs, quiet_end: e.target.value === '' ? null : Number(e.target.value) })}><option value="">— ندارد —</option>{hourOpts.map((h) => <option key={h} value={h}>{h}:00</option>)}</select></div>
         </div>
         <div className="im-helper">در ساعت سکوت، اعلان‌های بیرونی تا پایان سکوت نگه داشته می‌شوند؛ اعلان‌های بحرانی و تشدید سطح ۳ استثنا هستند. اعلان‌های درون‌برنامه همیشه نمایش داده می‌شوند.</div>
-        {projects.length > 0 && (
+        {scope === 'issues' && projects.length > 0 && (
           <div style={{ marginTop: 10 }}>
             <div className="im-helper" style={{ marginBottom: 4 }}>بی‌صدا کردن پروژه‌ها (تشدیدهای سطح ۳ همچنان می‌رسند):</div>
             <div className="im-actions">{projects.map((p) => <label key={p.id} className="im-chip" style={{ cursor: 'pointer' }}><input type="checkbox" checked={prefs.muted_projects.includes(p.id)} onChange={(e) => save({ ...prefs, muted_projects: e.target.checked ? [...prefs.muted_projects, p.id] : prefs.muted_projects.filter((x) => x !== p.id) })} /> {p.name}</label>)}</div>
@@ -95,7 +96,7 @@ export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      <div className="im-card">
+      {!hideRules && <div className="im-card">
         <div className="im-section-title">قاعده‌های اعلان و تشدید</div>
         <div className="im-table-wrap" style={{ border: 'none' }}><table className="im-table"><thead><tr><th>قاعده</th><th>گیرندگان</th><th>تشدید به</th><th>کانال‌ها</th><th>فعال</th></tr></thead>
           <tbody>{rules.map((r) => (
@@ -105,7 +106,7 @@ export function NotificationSettings({ isAdmin }: { isAdmin: boolean }) {
               <td><input type="checkbox" disabled={!isAdmin} checked={r.is_active} onChange={() => toggleRule(r)} aria-label={`فعال بودن ${r.name}`} /></td></tr>
           ))}</tbody></table></div>
         <div className="im-helper" style={{ marginTop: 8 }}>تکرار پیام‌ها با کلید یکتا (قاعده + مسئله + گیرنده + سطح تشدید) مهار می‌شود: هر سطح تشدید فقط یک‌بار ارسال می‌شود.</div>
-      </div>
+      </div>}
 
       {isAdmin && (
         <div className="im-card">

@@ -53,3 +53,31 @@ export function redact(text: string, max = 4000): string {
     .replace(/\b\d{16}\b/g, '[card]')
     .slice(0, max)
 }
+
+// ---- Risk Management tasks (risk_extract · risk_ask · risk_summarize). Same rules: clamp, never act, always a proposal.
+export const RISK_CATEGORIES = ['engineering', 'procurement', 'contractor', 'schedule', 'cost', 'land', 'permits', 'construction', 'quality', 'hse', 'logistics', 'hr', 'stakeholders', 'commissioning', 'legal', 'other']
+const int15 = (v: unknown, d: number): number => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : d }
+const conf = (v: unknown, d = 0.5): number => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0, Math.round(n * 100) / 100)) : d }
+
+export interface RiskCandidateOut { title: string; risk_event: string; cause: string; consequence: string; category: string; probability: number; impact: number; confidence: number; reasons: string[] }
+export function sanitizeRiskCandidates(o: Record<string, unknown>): RiskCandidateOut[] {
+  const list = Array.isArray(o.candidates) ? o.candidates : []
+  return list.map((c) => {
+    const r = (c ?? {}) as Record<string, unknown>
+    return {
+      title: str(r.title, 140), risk_event: str(r.risk_event, 400), cause: str(r.cause, 300), consequence: str(r.consequence, 300), category: oneOf(r.category, RISK_CATEGORIES) ?? 'other',
+      probability: int15(r.probability, 3), impact: int15(r.impact, 3), confidence: conf(r.confidence), reasons: (Array.isArray(r.reasons) ? r.reasons : []).map((t) => str(t, 200)).filter(Boolean).slice(0, 4),
+    }
+  }).filter((c) => c.title.length >= 4).slice(0, 25)
+}
+
+/** The answer may cite only risk codes that were really supplied; anything else is dropped. */
+export function sanitizeRiskAnswer(o: Record<string, unknown>, knownCodes: Set<string>): { answer: string; codes: string[]; confidence: number; limitations: string[] } {
+  const codes = (Array.isArray(o.codes) ? o.codes : []).map((c) => str(c, 20)).filter((c) => knownCodes.has(c)).slice(0, 40)
+  return { answer: str(o.answer, 1200), codes, confidence: conf(o.confidence), limitations: (Array.isArray(o.limitations) ? o.limitations : []).map((t) => str(t, 200)).filter(Boolean).slice(0, 5) }
+}
+
+export function sanitizeRiskSummary(o: Record<string, unknown>): { summary: string; attention: string[]; limitations: string[] } {
+  const arr = (v: unknown, n: number) => (Array.isArray(v) ? v : []).map((t) => str(t, 220)).filter(Boolean).slice(0, n)
+  return { summary: str(o.summary, 1200), attention: arr(o.attention, 5), limitations: arr(o.limitations, 5) }
+}

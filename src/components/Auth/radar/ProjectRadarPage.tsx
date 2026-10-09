@@ -153,7 +153,6 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
     { id: 'missions', moduleKey: 'missions', title: MISSIONS_MODULE.labelEn, icon: MapPinned, accent: MISSIONS_MODULE.accent },
     { id: 'landacq', moduleKey: 'landacq', title: 'Land Acquisition & ROW', icon: Sprout, accent: LANDACQ_MODULE.accent },
-    { id: 'risk', moduleKey: 'risk', title: 'Risk Management', icon: ShieldAlert, accent: '#e74c3c', badge: data.kpi.activeRisks },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
     { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },
     { id: 'change', moduleKey: null, title: 'Change Management', icon: RefreshCw, accent: '#f59e0b', badge: data.kpi.pendingChanges, onClick: () => setChangeMgmtOpen(true) },

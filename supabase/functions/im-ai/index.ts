@@ -9,10 +9,10 @@
 //  * every answer is clamped to known enums (validate.ts) and returned as a PROPOSAL; the client must show it to a person for approval;
 //  * no provider configured, or any failure → { available:false } and the client uses its built-in rule engine.
 //
-// Tasks: ping · suggest · summarize · extract · nl_query
+// Tasks: ping · suggest · summarize · extract · nl_query · risk_extract · risk_ask · risk_summarize
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { CATEGORIES, SEVERITIES, redact, sanitizeCandidates, sanitizeFilter, sanitizeSuggestion, sanitizeSummary } from './validate.ts'
+import { CATEGORIES, RISK_CATEGORIES, SEVERITIES, redact, sanitizeCandidates, sanitizeFilter, sanitizeRiskAnswer, sanitizeRiskCandidates, sanitizeRiskSummary, sanitizeSuggestion, sanitizeSummary } from './validate.ts'
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } })
@@ -63,6 +63,9 @@ const SYS = {
   summarize: `${BASE} Given an issue record, its open tasks and recent events return JSON {"summary": "3-4 sentence executive status", "next_actions": ["up to 3"], "risks": ["up to 3"]}. State facts from the data only.`,
   extract: `${BASE} Given free text (meeting minutes / visit notes) extract distinct problems that need follow-up. JSON {"candidates":[{"title":"short","description":"quote or paraphrase","category":...,"severity":...}]}. Skip attendance lists, greetings and already-solved items.`,
   nl_query: `${BASE} Convert the user's question into a filter over an issue register. JSON {"q": free-text keywords or omitted, "stage": one of active|all|registered|validated|analysis|action_plan|in_progress|resolution_review|effectiveness_check|closed|returned|reopened|cancelled|duplicate, "severity":..., "category":..., "overdueOnly": bool, "blockedOnly": bool, "explanation": ["how you read the question"]}. Omit fields you are not sure about. Never output SQL.`,
+  risk_extract: `You assist risk managers of EPC (oil, gas, pipeline) projects. Write Persian. Use ONLY the supplied text; never invent facts, names, numbers or dates. Output is a PROPOSAL reviewed by a human. Categories: ${RISK_CATEGORIES.join(', ')}. From meeting minutes / visit reports extract distinct POTENTIAL risks (things that may happen and threaten objectives; not facts already happened, attendance, greetings). JSON {"candidates":[{"title":"short","risk_event":"what may happen","cause":"why (only if stated)","consequence":"what follows (only if stated)","category":one category,"probability":1-5,"impact":1-5,"confidence":0-1,"reasons":["quote the words that justify it"]}]}. Probability/impact are rough guesses from wording; say so in reasons.`,
+  risk_ask: `You answer questions about a project risk register for authorised users. Write Persian. You get {question, risks:[{code,title,category,level,score,status,flags}]}. Answer ONLY from this data; cite risk codes in "codes" (only codes present in the data); if the data cannot answer, say so. JSON {"answer":"concise answer","codes":["R-001"],"confidence":0-1,"limitations":["what the data cannot tell"]}. Never invent codes, owners or numbers.`,
+  risk_summarize: `You write a short factual status summary of project risks for a project/portfolio manager. Write Persian. Input is aggregated counts and top items. JSON {"summary":"3-5 sentences, facts from the input only","attention":["up to 5 items needing attention"],"limitations":["data limits: stale or missing assessments, small sample"]}. No predictions without data.`,
 }
 
 Deno.serve(async (req) => {
@@ -82,6 +85,12 @@ Deno.serve(async (req) => {
     if (body.task === 'summarize') return json({ available: true, provider: provider.id, result: sanitizeSummary(await provider.generateJson(SYS.summarize, text)) })
     if (body.task === 'extract') return json({ available: true, provider: provider.id, result: sanitizeCandidates(await provider.generateJson(SYS.extract, text)) })
     if (body.task === 'nl_query') return json({ available: true, provider: provider.id, result: sanitizeFilter(await provider.generateJson(SYS.nl_query, text)) })
+    if (body.task === 'risk_extract') return json({ available: true, provider: provider.id, result: sanitizeRiskCandidates(await provider.generateJson(SYS.risk_extract, text)) })
+    if (body.task === 'risk_ask') {
+      const known = new Set(((body.payload as { risks?: { code?: string }[] } | undefined)?.risks ?? []).map((r) => String(r.code ?? '')))
+      return json({ available: true, provider: provider.id, result: sanitizeRiskAnswer(await provider.generateJson(SYS.risk_ask, redact(JSON.stringify(body.payload ?? {}), 24000)), known) })
+    }
+    if (body.task === 'risk_summarize') return json({ available: true, provider: provider.id, result: sanitizeRiskSummary(await provider.generateJson(SYS.risk_summarize, text)) })
     return json({ error: 'unknown_task' }, 400)
   } catch (e) {
     console.error('im-ai', e)

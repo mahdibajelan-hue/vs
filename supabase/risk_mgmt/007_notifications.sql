@@ -204,3 +204,16 @@ revoke execute on function rm_notif_mark_risk_read(uuid) from public, anon;
 --     v := v || jsonb_build_object('id','rq-'||r.id,'source','risk','module','risk','severity',case when r.level >= 2 then 'warn' else 'action' end,'title',r.title,'body',r.body,'recordId',r.risk_id,'at',r.created_at);
 --   end loop;
 -- Scheduling: select cron.schedule('rm-generate-notifications', '*/15 * * * *', $$select public.rm_generate_notifications()$$);   (the im-notify edge function also calls it)
+
+-- Admin button «اسکن اکنون» (Settings → Alerts) when the edge dispatcher is unavailable.
+create or replace function rm_generate_notifications_now() returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin_user() then raise exception 'admin_only'; end if;
+  return rm_generate_notifications();
+end $$;
+grant execute on function rm_generate_notifications_now() to authenticated;
+revoke execute on function rm_generate_notifications_now() from public, anon;
+
+-- changes to risk alert rules are audited like policy/category/KRI changes
+drop trigger if exists trg_rm_audit_rules on im_notif_rules;
+create trigger trg_rm_audit_rules after update on im_notif_rules for each row when (old.scope = 'risk') execute function rm_config_audit_trg();
