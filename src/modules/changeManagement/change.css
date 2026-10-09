@@ -1,0 +1,52 @@
+/* ==========================================================================
+   Change Management — same design system as «مدیریت موانع و اقدامات» (issues.css, im-*). Only the amber accent, the approval track and
+   the basis/percentage panels are specific to this module.
+   ========================================================================== */
+.cm-root { --im-accent: #f59e0b; --im-navy-a: #3a2504; --im-navy-b: #8a5a00; }
+:root[data-theme='light'] .cm-root { --im-accent: #b45309; }
+
+/* approval track: steps as nodes on a rail (horizontal, wraps to a vertical list on phones) */
+.cm-track { display: flex; gap: 0; align-items: stretch; overflow-x: auto; padding: 6px 2px 12px; scrollbar-width: thin; }
+.cm-node { --c: var(--im-muted); position: relative; flex: 1 0 150px; min-width: 150px; padding: 0 6px; text-align: center; }
+.cm-node::before { content: ''; position: absolute; top: 19px; inset-inline: 0; height: 3px; background: color-mix(in srgb, var(--im-muted) 32%, transparent); z-index: 0; }
+.cm-node:first-child::before { inset-inline-start: 50%; } .cm-node:last-child::before { inset-inline-end: 50%; }
+.cm-node.done::before { background: var(--c); }
+.cm-dot { position: relative; z-index: 1; width: 40px; height: 40px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--c); box-shadow: 0 6px 16px -8px var(--c); }
+.cm-node.waiting .cm-dot { background: var(--im-panel-2); color: var(--im-muted); border: 2px dashed color-mix(in srgb, var(--im-muted) 55%, transparent); box-shadow: none; }
+.cm-node.active .cm-dot { animation: cm-pulse 2.2s ease-in-out infinite; }
+@keyframes cm-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 50% { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .cm-node.active .cm-dot { animation: none; } }
+.cm-node .t { font-size: 12.5px; font-weight: 800; line-height: 1.5; } .cm-node .r { font-size: 11px; color: var(--im-muted); line-height: 1.5; } .cm-node .m { font-size: 10.5px; color: var(--im-muted-2); margin-top: 2px; }
+.cm-node .k { display: inline-block; font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 20px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); margin-bottom: 3px; }
+@media (max-width: 640px) {
+  .cm-track { flex-direction: column; overflow: visible; }
+  .cm-node { flex: none; min-width: 0; display: grid; grid-template-columns: 40px 1fr; gap: 0 10px; text-align: start; padding: 0 0 14px; }
+  .cm-node::before { top: 40px; bottom: 0; height: auto; width: 3px; inset-inline: auto; inset-inline-start: 18px; }
+  .cm-node:first-child::before, .cm-node:last-child::before { inset-inline-start: 18px; inset-inline-end: auto; } .cm-node:last-child::before { display: none; }
+  .cm-dot { margin: 0; grid-row: span 4; }
+}
+
+/* basis & percentage panel */
+.cm-basis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.cm-basis > div { background: var(--im-panel-2); border: 1px solid var(--im-line); border-radius: 12px; padding: 9px 11px; }
+.cm-basis .l { font-size: 11px; color: var(--im-muted); } .cm-basis .v { font-size: 17px; font-weight: 900; line-height: 1.5; } .cm-basis .h { font-size: 10.5px; color: var(--im-muted-2); }
+.cm-basis .hot .v { color: var(--im-coral); }
+.cm-pctbar { position: relative; height: 12px; border-radius: 99px; background: var(--im-panel-3); overflow: hidden; }
+.cm-pctbar i { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 99px; }
+.cm-pctbar b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--im-text); opacity: 0.55; }
+.cm-warn { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--im-coral) 45%, transparent); background: color-mix(in srgb, var(--im-coral) 10%, transparent); font-size: 12.5px; line-height: 1.8; }
+.cm-note { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--im-accent) 38%, transparent); background: color-mix(in srgb, var(--im-accent) 9%, transparent); font-size: 12.5px; line-height: 1.8; }
+.cm-chip { --c: var(--im-muted); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); white-space: nowrap; }
+.cm-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.cm-type-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.cm-type-cards button { text-align: start; padding: 10px 12px; border-radius: 14px; border: 1.5px solid var(--im-line-2); background: var(--im-panel); font-size: 12.5px; font-weight: 700; transition: border-color .15s, background-color .15s, transform 160ms var(--im-ease); }
+.cm-type-cards button:active { transform: scale(0.97); } .cm-type-cards button.on { border-color: var(--im-accent); background: color-mix(in srgb, var(--im-accent) 12%, var(--im-panel)); }
+.cm-steps { display: flex; gap: 6px; margin-bottom: 12px; } .cm-steps span { flex: 1; text-align: center; font-size: 11.5px; font-weight: 700; padding: 6px 4px; border-radius: 10px; background: var(--im-panel-2); color: var(--im-muted); }
+.cm-steps span.on { background: color-mix(in srgb, var(--im-accent) 18%, transparent); color: var(--im-accent); }
+.cm-rule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.cm-route-card { background: var(--im-panel); border: 1px solid var(--im-line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--im-shadow); }
+.cm-route-card ol { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; } .cm-route-card li { display: flex; gap: 7px; align-items: center; }
+.cm-route-card li .n { width: 18px; height: 18px; border-radius: 50%; background: var(--im-panel-3); display: grid; place-items: center; font-size: 10px; font-weight: 800; flex: none; }
+.cm-mono { font-variant-numeric: tabular-nums; }
+@media print { .cm-root .im-head, .cm-root .im-fab, .cm-root .im-nav { display: none !important; } .cm-root { height: auto; overflow: visible; } }
+.cm-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } @media (max-width: 900px) { .cm-cols { grid-template-columns: 1fr; } }

@@ -9,6 +9,7 @@ import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import App from './App'
 import { RiskApp } from './modules/risk/RiskApp'
+import { ChangeApp } from './modules/changeManagement/ChangeApp'
 import { IssuesApp } from './modules/issues/IssuesApp'
 import { AdminApp } from './pages/AdminApp'
 import { ReportingApp } from './modules/reporting/ReportingApp'
@@ -129,6 +130,8 @@ export function RootApp() {
     <App />
   ) : activeModule === 'risk' ? (
     <RiskApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'change' ? (
+    <ChangeApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'issues' ? (
     <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'reporting' ? (

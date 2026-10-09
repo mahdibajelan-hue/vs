@@ -1,5 +1,6 @@
 export type ModuleKeyRef =
   | 'risk'
+  | 'change'
   | 'issues'
   | 'pipepulse'
   | 'reporting'

@@ -1,336 +1,140 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
-import { friendlyErrorMessage } from '../../../lib/friendlyError'
-import { useSystemStore } from '../../../store/useSystemStore'
-import {
-  changeRequestFromRow, changeRequestToDraftEditRow, changeRequestToInsertRow, changeRequestToUpdateRow,
-  documentFromRow, historyFromRow, stageReviewFromRow,
-} from '../lib/changeData'
-import { seedDefaultImplementationActions } from '../lib/changeCalc'
-import {
-  NEXT_STATUS_AFTER_STAGE, PREV_STATUS_BEFORE_STAGE, REVIEW_STAGE_LABEL_FA, STAGE_DECISION_LABEL_FA, STAGE_FOR_REVIEW_STATUS,
-} from '../types'
-import type {
-  AffectedDocument, ChangeDocument, ChangePriority, ChangeReasonCategory, ChangeRequest, ChangeStatus,
-  ChangeTypeTag, CloseoutDocumentType, DocumentCategory, IdentifiedChangeRisk, ImpactLevel,
-  ImplementationAction, ProjectPhase, RequesterOrganization, ReviewStage, ScopeChangeType,
-  StageReview, StageReviewDecision, StageReviewDetails,
-} from '../types'
+import { useAuthStore } from '../../../store/useAuthStore'
+import type { AuthorityLimit, ChangeException, ChangeHistory, ChangeLink, ChangeRequest, ChangeStep, Route, RouteStep, Rule, RuleAudit, RuleSet, ValidationIssue } from '../types'
+import { auditFromRow, contractFromRow, exceptionFromRow, historyFromRow, limitFromRow, linkFromRow, projectFromRow, requestFromRow, requestToRow, routeFromRow, routeStepFromRow, ruleFromRow, ruleSetFromRow, ruleToRow, stepFromRow, type ContractInfo, type ProjectInfo } from '../lib/changeData'
+import type { EngineRuleSet } from '../lib/changeRules'
+import { friendly } from '../lib/changeFlow'
 
-function reportError(action: string, error: { message: string } | null): boolean {
-  if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
-  return true
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export interface Result<T = unknown> { ok: boolean; error?: string; id?: string; data?: T }
+export interface Person { userId: string; name: string; position: string; organization: string }
+
+async function fetchAll(table: string, build?: (q: any) => any, page = 1000): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += page) {
+    let q = supabase.from(table).select('*')
+    if (build) q = build(q)
+    const { data, error } = await q.range(from, from + page - 1)
+    if (error) throw error
+    out.push(...(data ?? []))
+    if (!data || data.length < page) break
+  }
+  return out
+}
+const me = () => useAuthStore.getState().profile?.id ?? null
+const fail = (e: any): Result => ({ ok: false, error: friendly(e) })
+
+export interface RuleBundle { sets: RuleSet[]; routes: Route[]; steps: RouteStep[]; rules: Rule[]; limits: AuthorityLimit[] }
+
+interface State {
+  loaded: boolean; loading: boolean; error: string | null
+  projects: ProjectInfo[]; contracts: ContractInfo[]; orgs: Map<string, string>; programs: Map<string, string>; people: Person[]
+  requests: ChangeRequest[]; steps: ChangeStep[]; links: ChangeLink[]; myRoles: Record<string, string[]>
+  activeRules: EngineRuleSet | null; scopeProjectId: string
+  setScope: (id: string) => void
+  fetchAll: () => Promise<void>
+  loadDetail: (id: string) => Promise<{ history: ChangeHistory[]; exceptions: ChangeException[] }>
+  createDraft: (d: Partial<ChangeRequest>) => Promise<Result>
+  updateDraft: (id: string, d: Partial<ChangeRequest>) => Promise<Result>
+  deleteDraft: (id: string) => Promise<Result>
+  rpc: (name: string, args: Record<string, unknown>, refreshId?: string) => Promise<Result<any>>
+  refreshRequest: (id: string) => Promise<void>
+  fetchActiveRules: () => Promise<void>
+  loadRuleBundle: () => Promise<RuleBundle>
+  loadAudit: () => Promise<RuleAudit[]>
+  saveRule: (id: string | null, d: Partial<Rule>) => Promise<Result>
+  deleteRow: (table: 'cm_rules' | 'cm_routes' | 'cm_route_steps' | 'cm_authority_limits' | 'cm_rule_sets', id: string) => Promise<Result>
+  insertRow: (table: 'cm_routes' | 'cm_route_steps' | 'cm_authority_limits' | 'cm_rule_sets', row: Record<string, unknown>) => Promise<Result>
+  updateRow: (table: 'cm_routes' | 'cm_route_steps' | 'cm_authority_limits' | 'cm_rule_sets', id: string, row: Record<string, unknown>) => Promise<Result>
+  validateSet: (id: string) => Promise<ValidationIssue[]>
 }
 
-async function logHistory(changeRequestId: string, userId: string | null, roleLabel: string, action: string, comment = '') {
-  await supabase.from('chg_history').insert({
-    change_request_id: changeRequestId, user_id: userId, role_label: roleLabel, action, comment,
-  })
-}
+export const useChangeStore = create<State>()((set, get) => ({
+  loaded: false, loading: false, error: null, projects: [], contracts: [], orgs: new Map(), programs: new Map(), people: [], requests: [], steps: [], links: [], myRoles: {}, activeRules: null, scopeProjectId: 'all',
+  setScope: (id) => set({ scopeProjectId: id }),
 
-/** Resets a stage's own review row back to 'pending' whenever the request lands on it (forward
- * or sent back one stage) — otherwise a reviewer who already decided once in an earlier round
- * would see their old decision and never get an actionable card again. */
-async function resetStageReview(changeRequestId: string, stage: ReviewStage) {
-  await supabase.from('chg_stage_reviews').upsert({
-    change_request_id: changeRequestId, stage, decision: 'pending', comment: '', decided_by: null, decided_at: null,
-  }, { onConflict: 'change_request_id,stage' })
-}
-
-const TERMINAL_STAGE_DECISIONS = new Set<StageReviewDecision>([
-  'approved', 'approved_with_conditions', 'approved_with_cost_revision', 'approved_with_time_revision',
-])
-
-interface ChangeState {
-  currentProjectId: string | null
-  requests: ChangeRequest[]
-  loadingList: boolean
-
-  currentRequestId: string | null
-  reviews: StageReview[]
-  documents: ChangeDocument[]
-  history: ChangeHistoryEntryLocal[]
-  loadingBundle: boolean
-  saving: boolean
-
-  allReviews: StageReview[]
-  loadingReports: boolean
-
-  fetchForProject: (masterProjectId: string) => Promise<void>
-  fetchBundle: (changeRequestId: string) => Promise<void>
-  fetchAllReviews: (masterProjectId: string) => Promise<void>
-
-  createDraft: (masterProjectId: string, data: {
-    title: string; description: string; reasonForChange: string; priority: ChangePriority
-    currency: string; originalContractAmount: number; proposedChangeAmount: number
-    originalDurationDays: number; proposedScheduleImpactDays: number
-    newRisksCount: number; scopeImpactLevel: ImpactLevel
-    projectCode?: string; contractName?: string; contractNumber?: string; contractDate?: string
-    projectPhase?: ProjectPhase | null; requesterName?: string; requesterOrganization?: RequesterOrganization | null
-    changeTypes?: ChangeTypeTag[]; currentSituationDescription?: string
-    changeReasonCategories?: ChangeReasonCategory[]; changeReasonOther?: string
-    affectedDocuments?: AffectedDocument[]; scopeChangeType?: ScopeChangeType | null; scopeEffectDescription?: string
-  }, userId: string | null) => Promise<string | null>
-
-  updateDraft: (request: ChangeRequest, data: {
-    title: string; description: string; reasonForChange: string; priority: ChangePriority
-    proposedChangeAmount: number; originalDurationDays: number; proposedScheduleImpactDays: number
-    newRisksCount: number; scopeImpactLevel: ImpactLevel
-    projectCode: string; contractName: string; contractNumber: string; contractDate: string
-    projectPhase: ProjectPhase | null; requesterName: string; requesterOrganization: RequesterOrganization | null
-    changeTypes: ChangeTypeTag[]; currentSituationDescription: string
-    changeReasonCategories: ChangeReasonCategory[]; changeReasonOther: string
-    affectedDocuments: AffectedDocument[]; scopeChangeType: ScopeChangeType | null; scopeEffectDescription: string
-  }, userId: string | null) => Promise<void>
-
-  deleteChangeRequest: (request: ChangeRequest) => Promise<void>
-
-  submitDraft: (request: ChangeRequest, userId: string | null) => Promise<void>
-
-  saveStageReview: (
-    request: ChangeRequest, stage: ReviewStage, decision: StageReviewDecision, comment: string,
-    details: StageReviewDetails, userId: string | null, roleLabel: string,
-  ) => Promise<void>
-
-  addDocument: (changeRequestId: string, data: { category: DocumentCategory; documentNumber: string; revision: string; fileName: string; fileUrl: string }, userId: string | null) => Promise<void>
-
-  updateRiskRegister: (
-    request: ChangeRequest, risks: IdentifiedChangeRisk[], requiresNewRiskRegisterEntry: boolean, createsNewIssue: boolean, userId: string | null,
-  ) => Promise<void>
-
-  startImplementation: (request: ChangeRequest, userId: string | null) => Promise<void>
-  updateImplementationActions: (request: ChangeRequest, actions: ImplementationAction[]) => Promise<void>
-  completeImplementation: (request: ChangeRequest, userId: string | null) => Promise<void>
-
-  finalizeCloseout: (request: ChangeRequest, data: {
-    implementedAsApproved: boolean; actualCostAmount: number | null; actualDelayDays: number | null
-    documentsUpdated: boolean; updatedDocumentTypes: CloseoutDocumentType[]
-    lessonLearnedRecorded: boolean; lessonLearnedNumber: string
-  }, userId: string | null) => Promise<void>
-}
-
-interface ChangeHistoryEntryLocal {
-  id: string
-  changeRequestId: string
-  userId: string | null
-  roleLabel: string
-  action: string
-  comment: string
-  createdAt: string
-}
-
-export const useChangeStore = create<ChangeState>()((set, get) => ({
-  currentProjectId: null,
-  requests: [],
-  loadingList: false,
-
-  currentRequestId: null,
-  reviews: [],
-  documents: [],
-  history: [],
-  loadingBundle: false,
-  saving: false,
-
-  allReviews: [],
-  loadingReports: false,
-
-  fetchForProject: async (masterProjectId) => {
-    set({ currentProjectId: masterProjectId, loadingList: true })
-    const { data, error } = await supabase
-      .from('chg_change_requests').select('*').eq('master_project_id', masterProjectId).order('created_at', { ascending: false })
-    if (reportError('بارگذاری درخواست‌های تغییر', error)) {
-      set({ loadingList: false })
-      return
-    }
-    if (get().currentProjectId !== masterProjectId) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    set({ requests: ((data ?? []) as any[]).map(changeRequestFromRow), loadingList: false })
+  fetchAll: async () => {
+    set({ loading: true, error: null })
+    try {
+      const [projects, contracts, orgs, programs, reqs, steps, links, roles, people] = await Promise.all([
+        fetchAll('master_projects', (q) => q.order('official_name')), fetchAll('fin_contracts'), fetchAll('organizations'), fetchAll('programs'),
+        fetchAll('chg_change_requests', (q) => q.order('created_at', { ascending: false })), fetchAll('cm_request_steps', (q) => q.order('seq')), fetchAll('cm_links'),
+        supabase.from('rasta_project_role_assignments').select('project_id, rasta_project_roles(name)').eq('user_id', me() ?? '00000000-0000-0000-0000-000000000000'),
+        supabase.rpc('im_people', { p_project: null }),
+      ])
+      const myRoles: Record<string, string[]> = {}
+      for (const r of (roles.data ?? []) as any[]) { const n = r.rasta_project_roles?.name; if (n) myRoles[r.project_id] = [...(myRoles[r.project_id] ?? []), n] }
+      set({
+        projects: projects.map(projectFromRow), contracts: contracts.map(contractFromRow), orgs: new Map(orgs.map((o: any) => [o.id, o.short_name || o.name])), programs: new Map(programs.map((p: any) => [p.id, p.name])),
+        requests: reqs.map(requestFromRow), steps: steps.map(stepFromRow), links: links.map(linkFromRow), myRoles,
+        people: ((people.data ?? []) as any[]).map((p) => ({ userId: p.id, name: p.full_name || p.email, position: p.position_title ?? '', organization: p.organization ?? '' })), loaded: true, loading: false,
+      })
+      await get().fetchActiveRules()
+    } catch (e: any) { set({ loading: false, loaded: true, error: friendly(e) }) }
   },
 
-  fetchBundle: async (changeRequestId) => {
-    set({ currentRequestId: changeRequestId, loadingBundle: true })
-    const [rv, dc, hs] = await Promise.all([
-      supabase.from('chg_stage_reviews').select('*').eq('change_request_id', changeRequestId),
-      supabase.from('chg_documents').select('*').eq('change_request_id', changeRequestId).order('uploaded_at', { ascending: false }),
-      supabase.from('chg_history').select('*').eq('change_request_id', changeRequestId).order('created_at', { ascending: true }),
-    ])
-    if (get().currentRequestId !== changeRequestId) return
-    set({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      reviews: ((rv.data ?? []) as any[]).map(stageReviewFromRow),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      documents: ((dc.data ?? []) as any[]).map(documentFromRow),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      history: ((hs.data ?? []) as any[]).map(historyFromRow),
-      loadingBundle: false,
-    })
+  fetchActiveRules: async () => {
+    const { data: s } = await supabase.from('cm_rule_sets').select('*').eq('status', 'active').maybeSingle()
+    if (!s) { set({ activeRules: null }); return }
+    const [routes, rules] = await Promise.all([supabase.from('cm_routes').select('*').eq('rule_set_id', s.id), supabase.from('cm_rules').select('*').eq('rule_set_id', s.id)])
+    const ids = ((routes.data ?? []) as any[]).map((r) => r.id)
+    const steps = ids.length ? await supabase.from('cm_route_steps').select('*').in('route_id', ids) : { data: [] as any[] }
+    set({ activeRules: { set: { id: s.id, version: s.version, name: s.name }, routes: ((routes.data ?? []) as any[]).map(routeFromRow), steps: ((steps.data ?? []) as any[]).map(routeStepFromRow), rules: ((rules.data ?? []) as any[]).map(ruleFromRow) } })
   },
 
-  fetchAllReviews: async (masterProjectId) => {
-    set({ loadingReports: true })
-    const { data, error } = await supabase
-      .from('chg_stage_reviews')
-      .select('*, chg_change_requests!inner(master_project_id)')
-      .eq('chg_change_requests.master_project_id', masterProjectId)
-    set({ loadingReports: false })
-    if (reportError('بارگذاری گزارش‌های تغییر', error)) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    set({ allReviews: ((data ?? []) as any[]).map(stageReviewFromRow) })
+  loadDetail: async (id) => {
+    const [h, x] = await Promise.all([supabase.from('chg_history').select('*').eq('change_request_id', id).order('created_at', { ascending: true }), supabase.from('cm_exceptions').select('*').eq('request_id', id).order('requested_at', { ascending: false })])
+    return { history: ((h.data ?? []) as any[]).map(historyFromRow), exceptions: ((x.data ?? []) as any[]).map(exceptionFromRow) }
   },
 
-  createDraft: async (masterProjectId, data, userId) => {
-    set({ saving: true })
-    const row = changeRequestToInsertRow(masterProjectId, { ...data, status: 'draft' })
-    const { data: inserted, error } = await supabase.from('chg_change_requests').insert(row).select('id, cr_number').single()
-    set({ saving: false })
-    if (reportError('ایجاد درخواست تغییر', error) || !inserted) return null
-    await logHistory(inserted.id, userId, 'پیمانکار', `پیش‌نویس درخواست تغییر ${inserted.cr_number} ایجاد شد`)
-    await get().fetchForProject(masterProjectId)
-    return inserted.id as string
+  refreshRequest: async (id) => {
+    const [r, s, l] = await Promise.all([supabase.from('chg_change_requests').select('*').eq('id', id).maybeSingle(), supabase.from('cm_request_steps').select('*').eq('request_id', id).order('seq'), supabase.from('cm_links').select('*').eq('request_id', id)])
+    set((st) => ({
+      requests: r.data ? (st.requests.some((x) => x.id === id) ? st.requests.map((x) => (x.id === id ? requestFromRow(r.data) : x)) : [requestFromRow(r.data), ...st.requests]) : st.requests.filter((x) => x.id !== id),
+      steps: [...st.steps.filter((x) => x.requestId !== id), ...((s.data ?? []) as any[]).map(stepFromRow)], links: [...st.links.filter((x) => x.requestId !== id), ...((l.data ?? []) as any[]).map(linkFromRow)],
+    }))
   },
 
-  updateDraft: async (request, data, userId) => {
-    set({ saving: true })
-    const row = changeRequestToDraftEditRow(data)
-    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('ویرایش درخواست تغییر', error)) return
-    await logHistory(request.id, userId, 'پیمانکار', `پیش‌نویس درخواست تغییر ${request.crNumber} ویرایش شد`)
-    await get().fetchForProject(request.masterProjectId)
-    await get().fetchBundle(request.id)
+  createDraft: async (d) => {
+    const { data, error } = await supabase.from('chg_change_requests').insert({ ...requestToRow(d), created_by: me() }).select().single()
+    if (error) return fail(error)
+    await get().refreshRequest(data.id)
+    return { ok: true, id: data.id }
+  },
+  updateDraft: async (id, d) => {
+    const { error } = await supabase.from('chg_change_requests').update(requestToRow(d)).eq('id', id)
+    if (error) return fail(error)
+    await get().refreshRequest(id)
+    return { ok: true, id }
+  },
+  deleteDraft: async (id) => {
+    const { error } = await supabase.from('chg_change_requests').delete().eq('id', id)
+    if (error) return fail(error)
+    set((st) => ({ requests: st.requests.filter((x) => x.id !== id) }))
+    return { ok: true }
   },
 
-  deleteChangeRequest: async (request) => {
-    set({ saving: true })
-    const { error } = await supabase.from('chg_change_requests').delete().eq('id', request.id)
-    set({ saving: false })
-    if (reportError('حذف درخواست تغییر', error)) return
-    await get().fetchForProject(request.masterProjectId)
+  /** Every workflow transition is a server function; the client never writes status/route fields. */
+  rpc: async (name, args, refreshId) => {
+    const { data, error } = await supabase.rpc(name, args)
+    if (error) return fail(error)
+    if (refreshId) await get().refreshRequest(refreshId)
+    return { ok: true, data }
   },
 
-  submitDraft: async (request, userId) => {
-    set({ saving: true })
-    const { error } = await supabase.from('chg_change_requests').update({
-      status: 'engineering_review', submitted_by: userId, submitted_at: new Date().toISOString(),
-    }).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('ثبت درخواست تغییر', error)) return
-    await resetStageReview(request.id, 'engineering')
-    await logHistory(request.id, userId, 'پیمانکار', `درخواست تغییر ${request.crNumber} ثبت و برای بررسی مهندسی ارسال شد`)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  loadRuleBundle: async () => {
+    const [sets, routes, steps, rules, limits] = await Promise.all([fetchAll('cm_rule_sets', (q) => q.order('version', { ascending: false })), fetchAll('cm_routes'), fetchAll('cm_route_steps', (q) => q.order('seq')), fetchAll('cm_rules', (q) => q.order('code')), fetchAll('cm_authority_limits')])
+    return { sets: sets.map(ruleSetFromRow), routes: routes.map(routeFromRow), steps: steps.map(routeStepFromRow), rules: rules.map(ruleFromRow), limits: limits.map(limitFromRow) }
   },
-
-  saveStageReview: async (request, stage, decision, comment, details, userId, roleLabel) => {
-    set({ saving: true })
-    const now = new Date().toISOString()
-    const { error } = await supabase.from('chg_stage_reviews').upsert({
-      change_request_id: request.id,
-      stage,
-      decision,
-      comment,
-      details,
-      decided_by: userId,
-      decided_at: now,
-    }, { onConflict: 'change_request_id,stage' })
-    if (reportError('ثبت تصمیم بررسی', error)) {
-      set({ saving: false })
-      return
-    }
-
-    let nextStatus: ChangeStatus = request.status
-    const patch: Record<string, unknown> = {}
-    if (decision === 'rejected') {
-      nextStatus = 'rejected'
-    } else if (decision === 'request_revision' || decision === 'returned') {
-      // Sends the request back one stage — to the previous reviewer, or to the contractor's
-      // draft for Engineering (the first stage) — not all the way to draft from every stage.
-      nextStatus = PREV_STATUS_BEFORE_STAGE[stage]
-    } else if (TERMINAL_STAGE_DECISIONS.has(decision)) {
-      nextStatus = NEXT_STATUS_AFTER_STAGE[stage]
-      if (stage === 'ccb') {
-        patch.approved_change_amount = details.finalApprovedAmount ?? request.proposedChangeAmount
-        patch.approved_schedule_impact_days = details.finalApprovedScheduleImpactDays ?? request.proposedScheduleImpactDays
-      }
-    }
-    patch.status = nextStatus
-
-    const { error: statusError } = await supabase.from('chg_change_requests').update(patch).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('به‌روزرسانی وضعیت درخواست', statusError)) return
-
-    // Whichever review stage the request now lands on (forward or sent back) must show an
-    // actionable card, not a decision left over from an earlier round.
-    const landingStage = STAGE_FOR_REVIEW_STATUS[nextStatus]
-    if (landingStage && landingStage !== stage) await resetStageReview(request.id, landingStage)
-
-    const actionLabel = `${REVIEW_STAGE_LABEL_FA[stage]} — تصمیم: ${STAGE_DECISION_LABEL_FA[decision]}`
-    await logHistory(request.id, userId, roleLabel, actionLabel, comment)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
+  loadAudit: async () => { const { data } = await supabase.from('cm_rule_audit').select('*').order('at', { ascending: false }).limit(200); return ((data ?? []) as any[]).map(auditFromRow) },
+  saveRule: async (id, d) => {
+    const row = ruleToRow(d)
+    const { data, error } = id ? await supabase.from('cm_rules').update(row).eq('id', id).select().single() : await supabase.from('cm_rules').insert(row).select().single()
+    return error ? fail(error) : { ok: true, id: data.id }
   },
-
-  addDocument: async (changeRequestId, data, userId) => {
-    set({ saving: true })
-    const { error } = await supabase.from('chg_documents').insert({
-      change_request_id: changeRequestId,
-      category: data.category,
-      document_number: data.documentNumber,
-      revision: data.revision,
-      file_name: data.fileName,
-      file_url: data.fileUrl,
-      uploaded_by: userId,
-    })
-    set({ saving: false })
-    if (reportError('افزودن مستند', error)) return
-    await get().fetchBundle(changeRequestId)
-  },
-
-  updateRiskRegister: async (request, risks, requiresNewRiskRegisterEntry, createsNewIssue, userId) => {
-    set({ saving: true })
-    const row = changeRequestToUpdateRow({ identifiedRisks: risks, requiresNewRiskRegisterEntry, createsNewIssue })
-    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('ثبت ریسک‌های تغییر', error)) return
-    await logHistory(request.id, userId, 'کنترل تغییرات', `فهرست ریسک‌های تغییر ${request.crNumber} به‌روزرسانی شد`)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
-  },
-
-  startImplementation: async (request, userId) => {
-    set({ saving: true })
-    const actions = request.implementationActions.length > 0 ? request.implementationActions : seedDefaultImplementationActions()
-    const row = changeRequestToUpdateRow({ implementationActions: actions })
-    const { error } = await supabase.from('chg_change_requests').update({ ...row, status: 'implementation' }).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('شروع اجرای تغییر', error)) return
-    await logHistory(request.id, userId, 'مجری', `اجرای تغییر ${request.crNumber} آغاز شد`)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
-  },
-
-  updateImplementationActions: async (request, actions) => {
-    set({ saving: true })
-    const row = changeRequestToUpdateRow({ implementationActions: actions })
-    const { error } = await supabase.from('chg_change_requests').update(row).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('به‌روزرسانی برنامه اجرا', error)) return
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
-  },
-
-  completeImplementation: async (request, userId) => {
-    set({ saving: true })
-    const { error } = await supabase.from('chg_change_requests').update({ status: 'verification' }).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('ثبت تکمیل اجرا', error)) return
-    await logHistory(request.id, userId, 'مجری', `اجرای تغییر ${request.crNumber} تکمیل و برای تأیید نهایی ارسال شد`)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
-  },
-
-  finalizeCloseout: async (request, data, userId) => {
-    set({ saving: true })
-    const row = changeRequestToUpdateRow(data)
-    const { error } = await supabase.from('chg_change_requests').update({ ...row, status: 'closed' }).eq('id', request.id)
-    set({ saving: false })
-    if (reportError('بستن تغییر', error)) return
-    await logHistory(request.id, userId, 'مدیر پروژه', `پرونده تغییر ${request.crNumber} بسته شد`)
-    await Promise.all([get().fetchForProject(request.masterProjectId), get().fetchBundle(request.id)])
-  },
+  deleteRow: async (table, id) => { const { error } = await supabase.from(table).delete().eq('id', id); return error ? fail(error) : { ok: true } },
+  insertRow: async (table, row) => { const { data, error } = await supabase.from(table).insert(row).select().single(); return error ? fail(error) : { ok: true, id: data.id } },
+  updateRow: async (table, id, row) => { const { error } = await supabase.from(table).update(row).eq('id', id); return error ? fail(error) : { ok: true, id } },
+  validateSet: async (id) => { const { data } = await supabase.rpc('cm_validate_rule_set', { p_set: id }); return (data ?? []) as ValidationIssue[] },
 }))
