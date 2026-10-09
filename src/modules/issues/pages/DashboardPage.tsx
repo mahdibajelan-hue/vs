@@ -13,6 +13,7 @@ import { IssueCard } from '../components/IssueCard'
 import { Kpi, Segmented } from '../components/ui'
 import { useUserDirectory } from '../lib/useUsers'
 import { useIssuesMembersStore } from '../store/useIssuesMembersStore'
+import { forecastDelays } from '../lib/imForecast'
 
 type Lens = 'exec' | 'follow' | 'me'
 const fmt = (v: number | null, unit = '') => (v === null ? '—' : `${v.toLocaleString('en-US')}${unit}`)
@@ -45,6 +46,8 @@ export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: {
   const unassigned = active.filter((i) => !i.pursuerId || !i.approverId)
   const stale = active.filter((i) => dayDiff(i.updatedAt.slice(0, 10), today) >= 7)
   const pendingExt = exts.filter((e) => e.status === 'pending')
+  const fc = useMemo(() => forecastDelays(issues, today, new Set(tasks.filter((t) => t.status === 'blocked').map((t) => t.issueId))), [issues, tasks, today])
+  const atRisk = fc.forecasts.filter((f) => f.riskScore >= 40).slice(0, 6)
   const maxAging = Math.max(1, ...aging.map((a) => a.count))
   const def = (k: string) => KPI_DEFS.find((d) => d.key === k)?.formulaFa
   const sla = cfgSla
@@ -111,6 +114,16 @@ export function DashboardPage({ onSelectIssue, onOpenRegister, onOpenMyWork }: {
               </table>
               {perProject.length === 0 && <div className="im-empty" style={{ padding: 20 }}>مسئلهٔ فعالی وجود ندارد.</div>}
             </div>
+          </div>
+
+          <div className="im-card" style={{ marginBottom: 14 }}>
+            <div className="im-section-title">پیش‌بینی ریسک تأخیر <span className="im-helper">{fc.confident ? 'بر اساس سابقهٔ مسائل بسته‌شده' : 'سابقهٔ بسته‌شده‌ها کم است؛ اعتماد پایین'}</span></div>
+            {atRisk.length === 0 ? <div className="im-helper">مسئلهٔ پرریسکی شناسایی نشد.</div> : atRisk.map((f) => { const i = issues.find((x) => x.id === f.issueId); return i ? (
+              <button key={f.issueId} className="im-check" style={{ width: '100%', textAlign: 'right', cursor: 'pointer', color: 'var(--im-text)', justifyContent: 'space-between', marginBottom: 6 }} onClick={() => onSelectIssue(i.id)}>
+                <span><b>{i.title}</b><div className="im-helper">{f.reasons.join(' · ')}</div></span>
+                <span className="im-chip" style={{ color: f.riskScore >= 70 ? 'var(--im-coral)' : 'var(--im-amber)' }}>ریسک {f.riskScore}</span>
+              </button>) : null })}
+            <div className="im-helper" style={{ marginTop: 6 }}>امتیاز = سررسید/زمان مورد انتظار + مسدودی + تمدید مکرر + بی‌حرکتی؛ وزن‌ها شفاف و قابل‌بازبینی‌اند.</div>
           </div>
 
           <div className="im-card">

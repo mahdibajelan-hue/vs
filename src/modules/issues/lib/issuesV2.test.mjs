@@ -189,3 +189,52 @@ import * as pf from './imPortfolio.ts'
   assert.equal(pf.wouldCreateCycle(L, 'a', 'a'), true)
   console.log('decisions + portfolio libs ok')
 }
+
+// ── AI-fallback rules + forecast
+import * as ai from './imAi.ts'
+import * as fc from './imForecast.ts'
+{
+  const g = ai.guessCategory('تأخیر در تأیید نقشه‌های سازه و مغایرت با وضعیت اجرا')
+  assert.equal(g.category, 'engineering'); assert.ok(g.matched.includes('نقشه'))
+  assert.equal(ai.guessCategory('توضیح بی‌ربط'), null)
+  assert.equal(ai.guessSeverity('نشتی خط لوله و خطر جانی برای کارگران').severity, 'critical')
+  assert.equal(ai.guessSeverity('تاخیر در تحویل پمپ').severity, 'high')
+  assert.equal(ai.guessSeverity('پیشنهاد بهبود چیدمان').severity, 'low')
+  assert.equal(ai.guessSeverity('گزارش وضعیت').severity, 'medium')
+  const s = ai.suggestFromText('تأخیر در تحویل پمپ‌های اصلی')
+  assert.equal(s.category, 'procurement'); assert.ok(s.reasons.length >= 2); assert.equal(s.source, 'rules')
+  const ctx = { projects: [{ id: 'p1', name: 'خط لوله ۳۶ اینچ' }], users: [{ userId: 'u9', name: 'رضا روحی' }], meId: 'me' }
+  const q1 = ai.parseNlQuery('مسائل بحرانی تأخیردار پروژه خط لوله ۳۶ اینچ', ctx)
+  assert.equal(q1.filter.severity, 'critical'); assert.equal(q1.filter.overdueOnly, true); assert.equal(q1.filter.projectId, 'p1'); assert.ok(q1.explanation.length >= 3)
+  assert.equal(ai.parseNlQuery('کارهای مسدود رضا روحی', ctx).filter.userId, 'u9')
+  assert.equal(ai.parseNlQuery('مسائل من', ctx).filter.userId, 'me')
+  assert.equal(ai.parseNlQuery('چیز عجیب', ctx).filter.q, 'چیز عجیب')
+  const cands = ai.extractCandidates('جلسه هماهنگی\n- تاخیر در تایید نقشه‌های سازه بلوک B مانع شروع بتن‌ریزی است.\n- حاضرین: آقای الف\n۲) نیاز به پیگیری مجوز آب منطقه‌ای برای برداشت')
+  assert.equal(cands.length, 2); assert.equal(cands[0].category, 'engineering'); assert.equal(cands[1].category, 'permits')
+  const sm = ai.summarizeIssue(issue({ title: 'ت', extensionCount: 2, rootCauseSummary: 'ضعف پایش', rootCauseConfirmed: false }), { openTasks: 3, blockedTasks: 1, pendingExt: 1, today: '2026-04-01', daysOverdue: 4, stageLabel: 'در حال رفع' })
+  assert.ok(sm.includes('4 روز از سررسید') && sm.includes('2 بار تمدید') && sm.includes('تأییدنشده'))
+
+  const hist = Array.from({ length: 10 }, (_, k) => issue({ id: 'h' + k, category: 'procurement', stage: 'closed', status: 'approved', createdAt: '2026-01-01T00:00:00Z', closedAt: '2026-01-' + String(11 + k).padStart(2, '0') }))
+  const base = fc.resolutionBaselines(hist)
+  assert.equal(base.byCategory.get('procurement'), 14.5); assert.equal(base.overall, 14.5)
+  const act = [issue({ id: 'r1', category: 'procurement', createdAt: '2026-03-20T00:00:00Z', deadlineDate: '2026-04-03', updatedAt: '2026-03-31T00:00:00Z' }), issue({ id: 'r2', category: 'procurement', createdAt: '2026-03-30T00:00:00Z', deadlineDate: '2026-04-30', updatedAt: '2026-03-31T00:00:00Z' }), issue({ id: 'r3', category: 'procurement', createdAt: '2026-03-01T00:00:00Z', deadlineDate: '2026-03-20', updatedAt: '2026-03-02T00:00:00Z', extensionCount: 2 })]
+  const f = fc.forecastDelays([...hist, ...act], '2026-04-01')
+  assert.equal(f.confident, true)
+  assert.equal(f.forecasts[0].issueId, 'r3'); assert.ok(f.forecasts[0].riskScore >= 60 + 15 + 10)
+  assert.ok(f.forecasts.find((x) => x.issueId === 'r1').riskScore > f.forecasts.find((x) => x.issueId === 'r2').riskScore)
+  assert.equal(fc.forecastDelays(act, '2026-04-01').confident, false) // thin history is flagged
+  console.log('ai rules + forecast ok')
+}
+
+import * as kb from './imKnowledge.ts'
+{
+  const L = (o) => ({ id: 'l' + Math.random(), sourceIssueId: null, projectId: null, title: '', context: '', rootCause: '', solution: '', prevention: '', category: null, tags: [], status: 'published', createdBy: null, createdAt: '', ...o })
+  const lessons = [L({ id: 'a', title: 'تأخیر در تحویل پمپ‌ها', rootCause: 'ضعف پایش تأمین‌کننده', category: 'procurement' }), L({ id: 'b', title: 'مغایرت نقشه سازه', category: 'engineering' }), L({ id: 'c', title: 'تأخیر در تحویل پمپ‌ها (پیش‌نویس)', status: 'draft' })]
+  const r = kb.relevantLessons({ title: 'تاخیر تحویل پمپ های اصلی', category: 'procurement' }, lessons)
+  assert.deepEqual(r.map((x) => x.lesson.id), ['a']) // drafts never surface; unrelated lessons filtered
+  assert.deepEqual(kb.relevantLessons({ title: 'موضوع کاملا متفاوت' }, lessons), [])
+  const d = kb.lessonDraftFromIssue(issue({ id: 'z', title: 'ت', description: 'شرح', rootCauseSummary: 'ریشه', resolutionSummary: 'راه‌حل', category: 'hse' }))
+  assert.equal(d.status, 'draft'); assert.equal(d.rootCause, 'ریشه'); assert.equal(d.category, 'hse')
+  assert.deepEqual(kb.lessonReady({ title: 'عنوان خوب', rootCause: '', solution: 'x' }), ['علت ریشه‌ای'])
+  console.log('knowledge lib ok')
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bookmark, Download, LayoutList, Columns3, GanttChart, Plus, Search, Upload } from 'lucide-react'
+import { Bookmark, Download, LayoutList, Columns3, GanttChart, Plus, Search, Sparkles, Upload } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
@@ -11,6 +11,7 @@ import { IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, dayDif
 import { EMPTY_FILTER, KANBAN_STAGES, applyFilter, groupByStage, parseImport, sortIssues, toCsv, type IssueFilter, type SortKey } from '../lib/imRegister'
 import { todayIso } from '../lib/issueRing'
 import { useUserDirectory } from '../lib/useUsers'
+import { askRegister, extractIssues } from '../lib/imAiClient'
 import { IssueCode, Segmented, SeverityChip, SlaBadge, StageChip } from '../components/ui'
 
 type View = 'table' | 'kanban' | 'timeline'
@@ -28,6 +29,9 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'due', dir: 1 })
   const [saved, setSaved] = useState<Saved[]>([])
   const [importOpen, setImportOpen] = useState(false)
+  const [ask, setAsk] = useState('')
+  const [askWhy, setAskWhy] = useState<{ why: string[]; src: 'ai' | 'rules' } | null>(null)
+  const [asking, setAsking] = useState(false)
   const today = todayIso()
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? '—'
 
@@ -58,6 +62,14 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
     URL.revokeObjectURL(url)
   }
 
+  const runAsk = async () => {
+    if (!ask.trim()) return
+    setAsking(true)
+    const res = await askRegister(ask, { projects, users: users.all, meId: me })
+    setF({ ...EMPTY_FILTER, ...(lockedProjectId ? { projectId: lockedProjectId } : {}), ...res.filter } as IssueFilter)
+    setAskWhy({ why: res.explanation, src: res.source })
+    setAsking(false)
+  }
   const activeCount = (Object.keys(EMPTY_FILTER) as (keyof IssueFilter)[]).filter((k) => f[k] !== EMPTY_FILTER[k]).length
 
   return (
@@ -72,6 +84,14 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
         </div>
       </div>
 
+      <div className="im-actions" style={{ marginBottom: 10 }}>
+        <div style={{ position: 'relative', flex: '1 1 320px' }}>
+          <Sparkles size={14} style={{ position: 'absolute', right: 11, top: 12, color: 'var(--im-amber)' }} />
+          <input style={{ paddingRight: 32 }} value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && runAsk()} placeholder="بپرسید: مسائل بحرانی تأخیردار پروژه خط لوله…" aria-label="پرسش به زبان طبیعی" />
+        </div>
+        <button className="im-btn im-btn-ghost im-btn-sm" disabled={asking || !ask.trim()} onClick={runAsk}>{asking ? '…' : 'اعمال روی فیلترها'}</button>
+        {askWhy && <span className="im-helper">{askWhy.src === 'ai' ? 'تفسیر هوش مصنوعی' : 'تفسیر سامانه'}: {askWhy.why.join(' · ')} — فیلترها را می‌توانید ویرایش کنید</span>}
+      </div>
       <div className="im-filters" role="search">
         <div style={{ position: 'relative', flex: '2 1 200px' }}>
           <Search size={14} style={{ position: 'absolute', right: 11, top: 11, color: 'var(--im-muted)' }} />
@@ -183,6 +203,7 @@ function Timeline({ list, onSelect, today }: { list: ImIssue[]; onSelect: (id: s
 }
 
 function ImportModal({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<'csv' | 'text'>('csv')
   const projects = useIssuesStore((s) => s.projects)
   const fetchAll = useIssuesStore((s) => s.fetchAll)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
@@ -206,6 +227,8 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     <div className="im-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="im-modal" style={{ maxWidth: 640 }}>
         <div className="im-modal-head"><div className="im-modal-title">ورود انبوه از فایل CSV</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
+        <div style={{ marginBottom: 10 }}><Segmented value={mode} onChange={setMode} options={[{ id: 'csv', label: 'فایل CSV' }, { id: 'text', label: 'استخراج از متن (صورت‌جلسه/گزارش بازدید)' }]} /></div>
+        {mode === 'text' ? <TextExtract projectId={projectId} setProjectId={setProjectId} projects={projects} onDone={onClose} /> : <>
         <div className="im-helper" style={{ marginBottom: 10 }}>ستون‌های پشتیبانی‌شده: عنوان (الزامی)، شرح، شدت، دسته، محل، رشته، مهلت (روز)، شناسه منبع. مقدارهای فارسی و انگلیسی پذیرفته می‌شود.</div>
         <div className="im-field"><label>پروژه مقصد</label><select value={projectId} onChange={(e) => setProjectId(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
         <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" onChange={async (e) => { const fl = e.target.files?.[0]; if (fl) setText(await fl.text()) }} />
@@ -218,7 +241,43 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         )}
         {result && <div className="im-notice ok" style={{ marginBottom: 10 }}>{result}</div>}
         <button className="im-btn im-btn-primary" disabled={busy || !preview?.rows.length || !projectId} onClick={run}>{busy ? 'در حال ثبت…' : `ثبت ${preview?.rows.length ?? 0} مسئله`}</button>
+        </>}
       </div>
+    </div>
+  )
+}
+
+function TextExtract({ projectId, setProjectId, projects, onDone }: { projectId: string; setProjectId: (v: string) => void; projects: { id: string; name: string }[]; onDone: () => void }) {
+  const fetchAll = useIssuesStore((s) => s.fetchAll)
+  const [text, setText] = useState('')
+  const [items, setItems] = useState<{ title: string; description: string; category: string | null; severity: string; on: boolean }[]>([])
+  const [src, setSrc] = useState<'ai' | 'rules' | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const analyze = async () => { setBusy(true); const r = await extractIssues(text); setItems(r.items.map((c) => ({ ...c, on: true }))); setSrc(r.source); setBusy(false) }
+  const create = async () => {
+    const rows = items.filter((i) => i.on).map((i) => ({ title: i.title, description: i.description, category: i.category ?? '', severity: i.severity, priority: i.severity, source: 'meeting' }))
+    setBusy(true)
+    const { data, error } = await supabase.rpc('im_bulk_create', { p_project: projectId, p_rows: rows })
+    setBusy(false)
+    if (error) return setMsg('خطا: ' + error.message)
+    setMsg(`${(data as { created: number }).created} مسئله ثبت شد`)
+    await fetchAll()
+    setTimeout(onDone, 900)
+  }
+  return (
+    <div>
+      <div className="im-field"><label>پروژه مقصد</label><select value={projectId} onChange={(e) => setProjectId(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+      <div className="im-field"><label>متن صورت‌جلسه یا گزارش بازدید</label><textarea style={{ minHeight: 120 }} value={text} onChange={(e) => setText(e.target.value)} /></div>
+      <div className="im-actions" style={{ marginBottom: 10 }}><button className="im-btn im-btn-ghost im-btn-sm" disabled={busy || text.trim().length < 20} onClick={analyze}><Sparkles size={13} /> {busy ? 'در حال تحلیل…' : 'استخراج موارد'}</button>{src && <span className="im-helper">{src === 'ai' ? 'استخراج هوش مصنوعی' : 'استخراج قاعده‌محور'} — موارد را بررسی و ویرایش کنید؛ چیزی خودکار ثبت نمی‌شود</span>}</div>
+      {items.map((it, k) => (
+        <div key={k} className="im-task" style={{ marginBottom: 8 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', margin: 0 }}><input type="checkbox" checked={it.on} onChange={(e) => setItems(items.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)))} /><input value={it.title} onChange={(e) => setItems(items.map((x, j) => (j === k ? { ...x, title: e.target.value } : x)))} /></label>
+          <div className="im-helper">{it.category ? IM_CATEGORY_FA[it.category] : 'بدون دسته'} · شدت {IM_PRIORITY_LABEL_FA[it.severity as keyof typeof IM_PRIORITY_LABEL_FA] ?? it.severity}</div>
+        </div>
+      ))}
+      {msg && <div className="im-notice ok" style={{ marginBottom: 8 }}>{msg}</div>}
+      {items.length > 0 && <button className="im-btn im-btn-primary" disabled={busy || !items.some((i) => i.on) || !projectId} onClick={create}>ثبت {items.filter((i) => i.on).length} مسئلهٔ تأییدشده</button>}
     </div>
   )
 }

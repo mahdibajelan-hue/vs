@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, FolderKanban, Gauge, Info, LayoutDashboard, ListChecks, Loader2, MoreHorizontal, Network, Plus, Scale, Settings2, Layers } from 'lucide-react'
+import { BarChart3, BookOpen, ClipboardList, FolderKanban, Gauge, Info, LayoutDashboard, ListChecks, Loader2, MoreHorizontal, Network, Plus, Scale, Settings2, Layers } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -16,6 +16,7 @@ import { KpiReportPage } from './pages/KpiReportPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { DecisionsPage } from './pages/DecisionsPage'
 import { PortfolioInsightsPage } from './pages/PortfolioInsightsPage'
+import { KnowledgePage } from './pages/KnowledgePage'
 import { useDecisionStore } from './store/useDecisionStore'
 import { useIssueWorkStore } from './store/useIssueWorkStore'
 import { useIssueConfigStore } from './store/useIssueConfigStore'
@@ -27,7 +28,7 @@ import { NewIssueModal } from './components/NewIssueModal'
 import { IssueDrawer } from './components/IssueDrawer'
 import './issues.css'
 
-type Tab = 'dashboard' | 'mywork' | 'issues' | 'decisions' | 'projects' | 'kpi' | 'report' | 'portfolio' | 'insights' | 'settings' | 'about'
+type Tab = 'dashboard' | 'mywork' | 'issues' | 'decisions' | 'knowledge' | 'projects' | 'kpi' | 'report' | 'portfolio' | 'insights' | 'settings' | 'about'
 
 // Per-project member management (پیگیری/تایید roles) lives inside هر پروژه (ProjectsPage ->
 // MembersModal) — a standalone cross-project "کاربران" tab here duplicated that and is gone;
@@ -38,6 +39,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard; primary?: boo
   { id: 'issues', label: 'مسائل', icon: ClipboardList, primary: true },
   { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, primary: true },
   { id: 'decisions', label: 'تصمیم‌ها', icon: Scale },
+  { id: 'knowledge', label: 'دانش', icon: BookOpen },
   { id: 'kpi', label: 'شاخص‌ها', icon: Gauge },
   { id: 'report', label: 'گزارش تاخیر', icon: BarChart3 },
   { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network },
@@ -179,6 +181,8 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             <RegisterPage key={registerKey} onSelectIssue={openIssue} onNewIssue={() => openNewIssue()} initialFilter={registerFilter} />
           ) : tab === 'decisions' ? (
             <DecisionsPage onOpenIssue={(id) => openIssue(id, 'decisions')} />
+          ) : tab === 'knowledge' ? (
+            <KnowledgePage onOpenIssue={openIssue} />
           ) : tab === 'insights' ? (
             <PortfolioInsightsPage onSelectIssue={openIssue} />
           ) : tab === 'kpi' ? (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Lightbulb } from 'lucide-react'
+import { Lightbulb, Sparkles } from 'lucide-react'
 import { useIssuesStore } from '../store/useIssuesStore'
 import { useIssueWorkStore } from '../store/useIssueWorkStore'
 import { useIssueConfigStore } from '../store/useIssueConfigStore'
@@ -9,6 +9,9 @@ import { IM_PRIORITIES, IM_PRIORITY_LABEL_FA, type ImIssue, type ImIssuePriority
 import { findSimilarIssues } from '../lib/imText'
 import { costLevel, derivePriority, suggestSeverity, timeLevel, type ImpactLevel } from '../lib/imScoring'
 import { DEFAULT_SLA } from '../lib/imSla'
+import { suggestIssue } from '../lib/imAiClient'
+import { relevantLessons } from '../lib/imKnowledge'
+import { useKnowledgeStore } from '../store/useKnowledgeStore'
 
 const LV = [[0, 'ندارد'], [1, 'کم'], [2, 'متوسط'], [3, 'زیاد']] as const
 
@@ -42,6 +45,12 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [touchedSeverity, setTouchedSeverity] = useState(false)
+  const lessons = useKnowledgeStore((s) => s.lessons)
+  const lessonsLoaded = useKnowledgeStore((s) => s.loaded)
+  const fetchLessons = useKnowledgeStore((s) => s.fetchAll)
+  const [prop, setProp] = useState<Awaited<ReturnType<typeof suggestIssue>> | null>(null)
+  const [propBusy, setPropBusy] = useState(false)
+  useEffect(() => { if (!lessonsLoaded) fetchLessons() }, [lessonsLoaded, fetchLessons])
 
   useEffect(() => { if (!cfg.loaded) cfg.fetch() }, [cfg])
   useEffect(() => { if (projectId && !(projectId in membersByProject)) fetchMembers(projectId) }, [projectId, membersByProject, fetchMembers])
@@ -61,6 +70,15 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
 
   const similar = useMemo(() => (title.trim().length < 6 ? [] : findSimilarIssues({ title, description, projectId, category: category || null, location }, issues as ImIssue[], { limit: 3 })), [title, description, projectId, category, location, issues])
 
+  const related = useMemo(() => (title.trim().length < 6 ? [] : relevantLessons({ title, description, category: category || null }, lessons)), [title, description, category, lessons])
+  const askAssistant = async () => { setPropBusy(true); setProp(await suggestIssue(title, description)); setPropBusy(false) }
+  const applyProposal = () => {
+    if (!prop) return
+    if (prop.category) onCategory(prop.category)
+    setSeverity(prop.severity); setTouchedSeverity(true)
+    if (prop.acceptance && !criteria.trim()) setCriteria(prop.acceptance)
+    setProp(null)
+  }
   const applyTemplate = (key: string) => {
     setTemplateKey(key)
     const t = cfg.templates.find((x) => x.key === key)
@@ -129,6 +147,23 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
               </div>
             )}
 
+            <div className="im-actions" style={{ marginBottom: 10 }}>
+              <button className="im-btn im-btn-ghost im-btn-sm" disabled={propBusy || title.trim().length < 5} onClick={askAssistant}><Sparkles size={13} /> {propBusy ? 'در حال تحلیل…' : 'پیشنهاد دسته و شدت'}</button>
+              <span className="im-helper">پیشنهاد فقط پس از تأیید شما اعمال می‌شود</span>
+            </div>
+            {prop && (
+              <div className="im-notice" style={{ marginBottom: 12 }}>
+                <b>پیشنهاد {prop.source === 'ai' ? 'هوش مصنوعی' : 'سامانه (قاعده‌محور)'}:</b> دسته «{prop.category ? cfg.categories.find((c) => c.key === prop.category)?.labelFa ?? prop.category : 'نامشخص'}» · شدت «{IM_PRIORITY_LABEL_FA[prop.severity]}»
+                {prop.reasons.map((r) => <div key={r} className="im-helper">• {r}</div>)}
+                {prop.acceptance && <div className="im-helper">معیار پذیرش پیشنهادی: {prop.acceptance}</div>}
+                <div className="im-actions" style={{ marginTop: 6 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={applyProposal}>اعمال پیشنهاد</button><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setProp(null)}>نادیده گرفتن</button></div>
+              </div>
+            )}
+            {related.length > 0 && (
+              <div className="im-notice ok" style={{ marginBottom: 12 }}><b>درس‌آموخته مرتبط:</b>
+                {related.map((r) => <div key={r.lesson.id} style={{ marginTop: 4 }}>{r.lesson.title}<div className="im-helper">علت: {r.lesson.rootCause || '—'} · راه‌حل: {r.lesson.solution || '—'}</div></div>)}
+              </div>
+            )}
             <div className="im-field"><label>شرح</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="شرح وضعیت، سابقه و پیامد در صورت رفع‌نشدن" /></div>
             <div className="im-row">
               <div className="im-field"><label>دسته *</label><select value={category} onChange={(e) => onCategory(e.target.value)}><option value="">— انتخاب کنید —</option>{cfg.categories.filter((c) => c.active).map((c) => <option key={c.key} value={c.key}>{c.labelFa}</option>)}</select></div>

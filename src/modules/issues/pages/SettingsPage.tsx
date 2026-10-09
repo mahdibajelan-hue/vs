@@ -8,6 +8,7 @@ import { IM_STAGE_LABEL_FA } from '../lib/imModel'
 import { validateWorkflow } from '../lib/imWorkflow'
 import { NotificationSettings } from '../components/NotificationSettings'
 import { Segmented } from '../components/ui'
+import { aiStatus } from '../lib/imAiClient'
 
 /** Read-mostly configuration. Admin-only edits (SLA, category rules) are written straight to the config tables; the workflow graph is shown with a live validity check. */
 export function SettingsPage() {
@@ -18,6 +19,8 @@ export function SettingsPage() {
   const isAdmin = projects.some((p) => (members[p.id] ?? []).some((m) => m.userId === me && m.role === 'admin'))
   const [msg, setMsg] = useState('')
   const [section, setSection] = useState<'rules' | 'notify'>('rules')
+  const [ai, setAi] = useState<{ available: boolean; provider: string | null } | null>(null)
+  useEffect(() => { aiStatus(true).then(setAi) }, [])
   useEffect(() => { if (!cfg.loaded) cfg.fetch() }, [cfg])
   const errors = useMemo(() => validateWorkflow(cfg.stages.map((s) => ({ key: s.key, terminal: s.isTerminal, start: s.key === 'registered' })), cfg.transitions), [cfg.stages, cfg.transitions])
   const flash = (ok: boolean) => { setMsg(ok ? 'ذخیره شد' : 'ذخیره نشد — دسترسی مدیر لازم است'); setTimeout(() => setMsg(''), 2500) }
@@ -26,6 +29,9 @@ export function SettingsPage() {
     <div>
       <div className="im-topbar"><div><div className="im-page-title">تنظیمات و قوانین</div><div className="im-page-sub">{isAdmin ? 'شما مدیر هستید؛ تغییرات بلافاصله اعمال می‌شود' : 'فقط مشاهده — ویرایش با مدیر پروژه'}</div></div>{msg && <span className="im-chip">{msg}</span>}</div>
       <div style={{ marginBottom: 14 }}><Segmented value={section} onChange={setSection} options={[{ id: 'rules', label: 'قوانین و SLA' }, { id: 'notify', label: 'اعلان‌ها و تشدید' }]} /></div>
+      <div className="im-notice" style={{ marginBottom: 14, ...(ai?.available ? {} : {}) }}>
+        <b>هوش مصنوعی:</b> {ai === null ? 'در حال بررسی…' : ai.available ? `فعال (${ai.provider}) — خروجی‌ها فقط پیشنهاد هستند و بدون تأیید شما اعمال نمی‌شوند.` : 'پیکربندی نشده — دستیار با قواعد داخلی (قاعده‌محور و قابل‌توضیح) کار می‌کند. برای فعال‌سازی، کلید ارائه‌دهنده (GEMINI_API_KEY یا آدرس/کلید سرویس سازگار با OpenAI) را در تنظیمات توابع Supabase ثبت کنید.'}
+      </div>
       {section === 'notify' ? <NotificationSettings isAdmin={isAdmin} /> : <>
 
       <div className="im-card" style={{ marginBottom: 14 }}>

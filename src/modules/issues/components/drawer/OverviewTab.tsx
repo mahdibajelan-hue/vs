@@ -6,6 +6,12 @@ import { IM_PRIORITIES, IM_PRIORITY_LABEL_FA, type ImIssue, type ImIssuePriority
 import { IM_BLOCK_KIND_FA, IM_CATEGORY_FA, IM_SOURCE_FA, IM_STAGE_LABEL_FA, IM_STAGE_ORDER, effectiveDue, stageOf } from '../../lib/imModel'
 import { allowedNext, closeBlockers } from '../../lib/imWorkflow'
 import { findSimilarIssues } from '../../lib/imText'
+import { lessonDraftFromIssue } from '../../lib/imKnowledge'
+import { summarizeIssue } from '../../lib/imAi'
+import { summarizeWithAi } from '../../lib/imAiClient'
+import { useKnowledgeStore } from '../../store/useKnowledgeStore'
+import { dayDiff } from '../../lib/imModel'
+import { todayIso } from '../../lib/issueRing'
 import { wouldCreateCycle } from '../../lib/imPortfolio'
 import { useIssuesStore } from '../../store/useIssuesStore'
 import { useIssueWorkStore } from '../../store/useIssueWorkStore'
@@ -22,6 +28,11 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
   const allIssues = useIssuesStore((s) => s.issues)
   const allProjects = useIssuesStore((s) => s.projects)
   const stage = stageOf(issue)
+  const saveLesson = useKnowledgeStore((s) => s.saveDraft)
+  const lessons = useKnowledgeStore((s) => s.lessons)
+  const extsAll = useIssueWorkStore((s) => s.extensions)
+  const [summary, setSummary] = useState<{ text: string; src: 'ai' | 'rules'; actions: string[] } | null>(null)
+  const [lessonMsg, setLessonMsg] = useState('')
   const [pending, setPending] = useState<ImStage | null>(null)
   const [reason, setReason] = useState('')
   const [resolution, setResolution] = useState(issue.resolutionSummary ?? '')
@@ -122,6 +133,31 @@ export function OverviewTab({ issue, tasks, attachments, roles }: { issue: ImIss
           <div className="im-kv"><span>مسئلهٔ مادر (سطح شرکت)</span><span>{parent ? <span><span className="im-code">{parent.code}</span> {parent.title}</span> : '—'}{isStaff && parentCandidates.length > 0 && <select style={{ width: 'auto', marginRight: 8, padding: 5 }} value={issue.corporateIssueId ?? ''} onChange={(e) => patchIssue(issue.id, { corporate_issue_id: e.target.value || null }, 'پیوند به مسئلهٔ مادر')} aria-label="مسئلهٔ مادر"><option value="">— بدون مادر —</option>{parentCandidates.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.title}</option>)}</select>}</span></div>
           {children.length > 0 && <div className="im-kv"><span>مسائل فرزند</span><span>{children.length} مسئله در {new Set(children.map((c) => c.projectId)).size} پروژه</span></div>}
           {isStaff && <div style={{ marginTop: 10 }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setEditing(true)}><Pencil size={13} /> ویرایش مشخصات</button></div>}
+        </div>
+      )}
+
+      <div className="im-card">
+        <div className="im-section-title">خلاصهٔ وضعیت <button className="im-btn im-btn-ghost im-btn-sm" onClick={async () => {
+          const today = todayIso()
+          const open = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+          const local = summarizeIssue(issue, { openTasks: open.length, blockedTasks: open.filter((t) => t.status === 'blocked').length, pendingExt: extsAll.filter((e) => e.issueId === issue.id && e.status === 'pending').length, today, daysOverdue: Math.max(0, dayDiff(effectiveDue(issue), today)), stageLabel: IM_STAGE_LABEL_FA[stage] })
+          setSummary({ text: local, src: 'rules', actions: [] })
+          const ai = await summarizeWithAi({ title: issue.title, stage, due: effectiveDue(issue), extensions: issue.extensionCount, rootCause: issue.rootCauseSummary, openTasks: open.map((t) => ({ title: t.title, status: t.status, due: t.dueDate })) })
+          if (ai?.summary) setSummary({ text: ai.summary, src: 'ai', actions: ai.next_actions })
+        }}>تولید خلاصه</button></div>
+        {summary ? (
+          <div style={{ fontSize: 13, lineHeight: 1.9 }}>{summary.text}
+            {summary.actions.length > 0 && <ul style={{ margin: '6px 18px 0', listStyle: 'disc' }}>{summary.actions.map((a) => <li key={a}>{a}</li>)}</ul>}
+            <div className="im-helper">{summary.src === 'ai' ? 'پیشنهاد هوش مصنوعی — پیش از استفاده بررسی شود.' : 'خلاصهٔ قاعده‌محور از داده‌های ثبت‌شده (بدون مدل زبانی).'}</div></div>
+        ) : <div className="im-helper">با یک کلیک، وضعیت فعلی، تأخیر، تمدیدها و اقدام‌های باز در چند جمله خلاصه می‌شود.</div>}
+      </div>
+
+      {stage === 'closed' && (
+        <div className="im-card">
+          <div className="im-section-title">درس‌آموخته</div>
+          {lessons.some((l) => l.sourceIssueId === issue.id) ? <div className="im-notice ok">برای این مسئله درس‌آموخته ثبت شده است (بخش «دانش»).</div> : (
+            <div className="im-actions"><button className="im-btn im-btn-ghost im-btn-sm" onClick={async () => { const r = await saveLesson(lessonDraftFromIssue(issue)); setLessonMsg(r.ok ? 'پیش‌نویس ساخته شد؛ در بخش «دانش» تکمیل و منتشر کنید.' : r.error ?? '') }}>ساخت پیش‌نویس درس‌آموخته</button>{lessonMsg && <span className="im-helper">{lessonMsg}</span>}</div>
+          )}
         </div>
       )}
 
