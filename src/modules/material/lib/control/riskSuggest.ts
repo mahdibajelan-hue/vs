@@ -1,6 +1,7 @@
 import type { Material, MtlGroup, MtlSettings } from '../../types'
 import type { Detected } from './discrepancies'
 import type { Position } from './model'
+import { faNum } from './fmt'
 import type { Priority } from './priority'
 
 export interface RaiseSuggestion {
@@ -14,7 +15,7 @@ export interface RaiseSuggestion {
 }
 
 const day = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
-const lines = (ms: Material[]) => ms.slice(0, 12).map((m) => `• ${m.materialCode || m.lineNo || ''} ${m.description}${m.usageLocation ? ` — ${m.usageLocation}` : ''}`).join('\n') + (ms.length > 12 ? `\n… و ${ms.length - 12} قلم دیگر` : '')
+const lines = (ms: Material[]) => ms.slice(0, 12).map((m) => `• ${m.materialCode || m.lineNo || ''} ${m.description}${m.usageLocation ? ` — ${m.usageLocation}` : ''}`).join('\n') + (ms.length > 12 ? `\n… و ${faNum(ms.length - 12, 0)} قلم دیگر` : '')
 
 /**
  * Turns what the model sees into proposed risks (something that may happen) and issues (something that already happened). Items with the same cause are put together,
@@ -30,7 +31,7 @@ export function suggestRaises(a: { materials: Material[]; positions: Map<string,
   const longLead = a.materials.filter((m) => { const p = a.positions.get(m.id); return p && p.requiredQty > 0 && p.ordered === 0 && (m.leadTimeDays ?? 0) >= a.settings.longLeadDays })
   const byGroup = new Map<string, Material[]>()
   for (const m of longLead) { const k = m.groupId ?? '—'; byGroup.set(k, [...(byGroup.get(k) ?? []), m]) }
-  for (const [g, ms] of byGroup) out.push({ key: `risk:longlead:${g}`, target: 'risk', title: `ریسک تأخیر تأمین اقلام با زمان تأمین طولانی — ${grpTitle.get(g) ?? 'بدون گروه'}`, description: `زمان تأمین این اقلام بیش از ${a.settings.longLeadDays} روز است و هنوز سفارش ندارند:\n${lines(ms)}`, severity: ms.some((m) => m.criticality === 'A') ? 'high' : 'medium', sources: ms.map((m) => ({ type: 'material' as const, id: m.id })), extra: { category: 'proc_longlead', days_to_impact: Math.min(...ms.map((m) => (m.needDate ? day(m.needDate, a.today) : 999))) } })
+  for (const [g, ms] of byGroup) out.push({ key: `risk:longlead:${g}`, target: 'risk', title: `ریسک تأخیر تأمین اقلام با زمان تأمین طولانی — ${grpTitle.get(g) ?? 'بدون گروه'}`, description: `زمان تأمین این اقلام بیش از ${faNum(a.settings.longLeadDays, 0)} روز است و هنوز سفارش ندارند:\n${lines(ms)}`, severity: ms.some((m) => m.criticality === 'A') ? 'high' : 'medium', sources: ms.map((m) => ({ type: 'material' as const, id: m.id })), extra: { category: 'proc_longlead', days_to_impact: Math.min(...ms.map((m) => (m.needDate ? day(m.needDate, a.today) : 999))) } })
 
   // risks: anticipated delay, mismatch between contract and design, items outside the contract
   const delay = bucket('delay_risk')

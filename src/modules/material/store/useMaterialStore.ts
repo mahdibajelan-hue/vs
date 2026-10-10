@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
+  InspectionStatus,
   Allocation,
   Manufacturing,
   Material,
@@ -117,7 +118,7 @@ interface MaterialState {
 
   createWarehouseReceipt: (masterProjectId: string, data: Partial<WarehouseReceipt>) => Promise<string | null>
   deleteWarehouseReceipt: (id: string) => Promise<void>
-  addWarehouseLine: (receiptId: string, materialId: string, quantityReceived: number, condition: WarehouseLineCondition) => Promise<void>
+  addWarehouseLine: (receiptId: string, materialId: string, quantityReceived: number, condition: WarehouseLineCondition, inspectionStatus?: InspectionStatus) => Promise<void>
   deleteWarehouseLine: (id: string) => Promise<void>
 
   createAllocation: (masterProjectId: string, data: Partial<Allocation>) => Promise<void>
@@ -364,8 +365,8 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
     if (reportError('حذف رسید انبار', error)) return
     set((s) => ({ warehouseReceipts: s.warehouseReceipts.filter((r) => r.id !== id) }))
   },
-  addWarehouseLine: async (receiptId, materialId, quantityReceived, condition) => {
-    const { error } = await supabase.from('mtl_warehouse_lines').insert(warehouseLineToRow(receiptId, materialId, quantityReceived, condition))
+  addWarehouseLine: async (receiptId, materialId, quantityReceived, condition, inspectionStatus = 'pending') => {
+    const { error } = await supabase.from('mtl_warehouse_lines').insert(warehouseLineToRow(receiptId, materialId, quantityReceived, condition, inspectionStatus))
     if (reportError('افزودن قلم رسید انبار', error)) return
     await get().fetchAll()
   },

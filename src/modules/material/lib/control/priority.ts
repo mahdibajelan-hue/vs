@@ -1,5 +1,6 @@
 import type { Criticality, Material, MtlSettings } from '../../types'
 import type { Position } from './model'
+import { faNum } from './fmt'
 
 const CRIT: Record<Criticality, number> = { A: 1, B: 0.6, C: 0.3 }
 const day = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
@@ -37,9 +38,9 @@ export function prioritize(a: { materials: Material[]; positions: Map<string, Po
     const score = Math.round(((w.criticality * parts.criticality + w.urgency * parts.urgency + w.gap * parts.gap + w.risk * parts.risk) / wsum) * 100)
     const reasons: string[] = []
     if (m.criticality === 'A') reasons.push('کالای بحرانی (A)')
-    if (slackDays != null && p.siteGap > 0) reasons.push(slackDays <= 0 ? `تاریخ نیاز ${Math.abs(slackDays)} روز از زمان لازم تأمین جلوتر است` : `${slackDays} روز فرصت مانده`)
+    if (slackDays != null && p.siteGap > 0) reasons.push(slackDays <= 0 ? `تاریخ نیاز ${faNum(Math.abs(slackDays), 0)} روز از زمان لازم تأمین جلوتر است` : `${faNum(slackDays, 0)} روز فرصت مانده`)
     if (p.uncoveredGap > 0) reasons.push('بخشی از نیاز هنوز سفارش یا تأمین نشده')
-    if (links > 0) reasons.push(`${links} ریسک یا مسئلهٔ مرتبط`)
+    if (links > 0) reasons.push(`${faNum(links, 0)} ریسک یا مسئلهٔ مرتبط`)
     out.push({ materialId: m.id, score, parts, daysToNeed, slackDays, stopRisk: p.siteGap > 0 && slackDays != null && slackDays <= 0, reasons })
   }
   return out.sort((x, y) => y.score - x.score)

@@ -1,5 +1,6 @@
 import type { DiscrepancyKind, Material, MtlSettings, PoLine, PurchaseOrder } from '../../types'
 import type { Position } from './model'
+import { faDate, faNum } from './fmt'
 
 export interface Detected {
   fingerprint: string
@@ -64,7 +65,7 @@ export function detectDiscrepancies(a: { materials: Material[]; positions: Map<s
     const eta = expectedArrival(m, a.poLines, a.purchaseOrders, p.received, p.ordered)
     if (m.needDate && eta && day(addDays(eta, a.settings.delayBufferDays), m.needDate) > 0 && p.onHand < needed) {
       const late = day(addDays(eta, a.settings.delayBufferDays), m.needDate)
-      push('delay_risk', p.uncoveredGap || null, `تحویل برنامه‌ای ${eta} است و با حاشیهٔ ${a.settings.delayBufferDays} روز، ${late} روز دیرتر از تاریخ نیاز (${m.needDate}) می‌رسد.`, 'احتمال توقف جبهه اجرایی در محل مصرف', m.needDate)
+      push('delay_risk', p.uncoveredGap || null, `تحویل برنامه‌ای ${faDate(eta)} است و با حاشیهٔ ${faNum(a.settings.delayBufferDays, 0)} روز، ${faNum(late, 0)} روز دیرتر از تاریخ نیاز (${faDate(m.needDate)}) می‌رسد.`, 'احتمال توقف جبهه اجرایی در محل مصرف', m.needDate)
     }
     if (p.accepted > 0 && p.allocated === 0 && p.onHand > 0) push('unallocated', p.onHand, 'کالا تحویل و پذیرفته شده ولی برای محل مصرف مشخصی تخصیص نیافته است.', 'موجودی بدون مصرف‌کننده؛ خطر ماندن در انبار')
   }
