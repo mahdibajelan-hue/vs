@@ -14,21 +14,20 @@ import { useFinanceControlStore } from './store/useFinanceControlStore'
 export const FINANCE_ACCENT = '#059669'
 
 const L = <T extends Record<string, unknown>>(f: () => Promise<T>, k: keyof T) => lazy(() => f().then((m) => ({ default: m[k] as React.ComponentType<{ masterProjectId: string }> })))
-const ContractsPage = L(() => import('./pages/ContractsPage'), 'ContractsPage')
 const ChangesBridgePage = L(() => import('./pages/control/ChangesBridgePage'), 'ChangesBridgePage')
-const GuaranteesPage = L(() => import('./pages/GuaranteesPage'), 'GuaranteesPage')
 const ObligationsPage = L(() => import('./pages/control/ObligationsPage'), 'ObligationsPage')
-const ClaimsPage = L(() => import('./pages/ClaimsPage'), 'ClaimsPage')
-const RetentionPage = L(() => import('./pages/RetentionPage'), 'RetentionPage')
 const PipelinePage = L(() => import('./pages/control/PipelinePage'), 'PipelinePage')
-const PaymentCertificatesPage = L(() => import('./pages/PaymentCertificatesPage'), 'PaymentCertificatesPage')
-const PaymentsRecordPage = L(() => import('./pages/PaymentsRecordPage'), 'PaymentsRecordPage')
 const BudgetPage = L(() => import('./pages/BudgetPage'), 'BudgetPage')
 const CostManagementPage = L(() => import('./pages/CostManagementPage'), 'CostManagementPage')
 const LandBridgePage = L(() => import('./pages/control/LandBridgePage'), 'LandBridgePage')
 const ExceptionsPage = L(() => import('./pages/control/ExceptionsPage'), 'ExceptionsPage')
-const FinancialReportsPage = L(() => import('./pages/FinancialReportsPage'), 'FinancialReportsPage')
+const ReportsCenter = L(() => import('./pages/v3/ReportsCenter'), 'ReportsCenter')
 const ControlSettingsPage = lazy(() => import('./pages/control/ControlSettingsPage').then((m) => ({ default: m.ControlSettingsPage as React.ComponentType<{ masterProjectId: string | null }> })))
+const ContractsManage = L(() => import('./pages/v3/ContractsManage'), 'ContractsManage')
+const GuaranteesManage = L(() => import('./pages/v3/RegistersManage'), 'GuaranteesManage')
+const ClaimsManage = L(() => import('./pages/v3/RegistersManage'), 'ClaimsManage')
+const RetentionManage = L(() => import('./pages/v3/RegistersManage'), 'RetentionManage')
+const BillingManage = lazy(() => import('./pages/v3/BillingManage').then((m) => ({ default: m.BillingManage })))
 const DashboardPage = lazy(() => import('./pages/v2/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const ContractsRegister = lazy(() => import('./pages/v2/ContractsPage').then((m) => ({ default: m.ContractsRegister })))
 const BudgetPlanPage = L(() => import('./pages/v2/BudgetPage'), 'BudgetPlanPage')
@@ -83,12 +82,12 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     if (cur.project && !pid) return <div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div>
     const p = pid as string
     switch (tab) {
-      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesPage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsPage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionPage masterProjectId={p} /></> : sub === 'manage' ? <ContractsPage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
-      case 'billing': return sub === 'certificates' ? <PaymentCertificatesPage masterProjectId={p} /> : sub === 'payments' ? <PaymentsRecordPage masterProjectId={p} /> : <PipelinePage masterProjectId={p} />
+      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesManage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsManage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionManage masterProjectId={p} /></> : sub === 'manage' ? <ContractsManage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
+      case 'billing': return sub === 'certificates' ? <BillingManage masterProjectId={p} view="certificates" /> : sub === 'payments' ? <BillingManage masterProjectId={p} view="payments" /> : <PipelinePage masterProjectId={p} />
       case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : sub === 'annual' ? <BudgetPage masterProjectId={p} /> : <BudgetPlanPage masterProjectId={p} />
       case 'cash': return sub === 'portfolio' ? <CashFlowForecastPage /> : <CashPage masterProjectId={p} />
       case 'attention': return <ExceptionsPage masterProjectId={p} />
-      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <FinancialReportsPage masterProjectId={pid} /> : <div className="im-card im-empty">یک پروژه را انتخاب کنید.</div>
+      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <ReportsCenter masterProjectId={pid} /> : <div className="im-card im-empty">یک پروژه را انتخاب کنید.</div>
       default: return null
     }
   }
