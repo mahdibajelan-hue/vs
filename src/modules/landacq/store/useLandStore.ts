@@ -7,7 +7,7 @@ import type { ActivityInput, DocInput, LandRepo, OwnerInput, ParcelDraft, Parcel
 import { canEditData } from '../lib/approval'
 import { buildDemo } from '../repo/demoSeed'
 import { addDays, todayIso } from '../lib/dates'
-import { isStarted, makeStages, orderOf, setStepDayOverrides } from '../lib/workflow'
+import { isStarted, makeStages, orderOf, setStageWeightOverrides, setStepDayOverrides } from '../lib/workflow'
 import { applyPlan, buildSchedule, candidatesOf, startOf } from '../lib/autoplan'
 import { nextDeadline } from '../lib/legal'
 import { crossingState } from '../lib/facilities'
@@ -369,7 +369,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     planParcel: async (parcelId, start, estDays) => {
       const p = get().data?.parcels.find((x) => x.id === parcelId)
       if (!p || !allowed(parcelId)) return
-      setStepDayOverrides(get().data?.route?.settings.stepDays)
+      setStepDayOverrides(get().data?.route?.settings.stepDays); setStageWeightOverrides(get().data?.route?.settings.stageWeights)
       const patch: Partial<ParcelFields> = { planStart: start }
       if (estDays !== undefined) patch.estDurationDays = estDays
       const base: Parcel = { ...p, ...patch } as Parcel
@@ -387,7 +387,7 @@ export const useLandStore = create<LandState>()((set, get) => {
       const st = get()
       const data = st.data
       if (!data?.route) return 0
-      setStepDayOverrides(data.route.settings.stepDays)
+      setStepDayOverrides(data.route.settings.stepDays); setStageWeightOverrides(data.route.settings.stageWeights)
       const settings = { ...DEFAULT_SETTINGS, ...data.route.settings }
       const routeParcels = data.parcels.filter((p) => p.kind !== 'station')
       const rows = analyze(routeParcels, data.activities, st.today, settings).filter((a) => !a.released && !(params.onlyNew && a.parcel.planStart))
@@ -427,7 +427,7 @@ export const useLandStore = create<LandState>()((set, get) => {
       // a generated plan follows reality: when a step really ends, the dates of the remaining steps move with it
       const after = get().data?.parcels.find((x) => x.id === parcelId)
       if (after?.planStart && next.status === 'done') {
-        setStepDayOverrides(get().data?.route?.settings.stepDays)
+        setStepDayOverrides(get().data?.route?.settings.stepDays); setStageWeightOverrides(get().data?.route?.settings.stageWeights)
         const stages = applyPlan(after, after.planStart, get().today)
         const changed = stages.filter((s, i) => s.plannedDate !== after.stages[i].plannedDate)
         if (changed.length) {
@@ -598,7 +598,7 @@ export function useLandAnalysis(): LandAnalysis & { settings: typeof DEFAULT_SET
   const today = useLandStore((s) => s.today)
   return useMemo(() => {
     const settings = { ...DEFAULT_SETTINGS, ...(data?.route?.settings ?? {}) }
-    setStepDayOverrides(settings.stepDays)
+    setStepDayOverrides(settings.stepDays); setStageWeightOverrides(settings.stageWeights)
     const all = analyze(data?.parcels ?? [], data?.activities ?? [], today, settings)
     const rows = all.filter((r) => r.parcel.kind !== 'station')
     const stations = all.filter((r) => r.parcel.kind === 'station')

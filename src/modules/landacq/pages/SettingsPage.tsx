@@ -7,6 +7,7 @@ import { LEGAL_REFERENCE } from '../lib/legal'
 import { ConfirmDialog, Field } from '../components/ui'
 import { SettingsSection } from '../components/SettingsSection'
 import { StepDaysEditor } from '../components/StepDaysEditor'
+import { StageWeightsEditor } from '../components/StageWeightsEditor'
 import { ParcelBuilder } from '../components/ParcelBuilder'
 import { RolesCard } from '../components/RolesCard'
 import { RouteImport } from '../components/RouteImport'
@@ -69,6 +70,10 @@ export function SettingsPage() {
 
         <SettingsSection icon={<Timer size={18} />} color="#a78bfa" title="مدت مراحل تحصیل (روز)" hint="مدت هر مرحله برای هر مسیر؛ در همهٔ برآوردها و برنامه‌ریزی به‌کار می‌رود" className="lg:col-span-2" defaultOpen={false} badge={customised ? <span className="la-badge" style={{ '--c': '#a78bfa' } as React.CSSProperties}><i /> {faNum(customised)} تغییر</span> : undefined}>
           <StepDaysEditor />
+        </SettingsSection>
+
+        <SettingsSection icon={<Scale size={18} />} color="#34d399" title="وزن مراحل در پیشرفت" hint="سهم هر مرحله در درصد پیشرفت قطعه؛ مجموع لازم نیست ۱۰۰ باشد، نسبت‌ها حساب می‌شود" className="lg:col-span-2" defaultOpen={false} badge={Object.keys(base.settings.stageWeights ?? {}).length ? <span className="la-badge" style={{ '--c': '#34d399' } as React.CSSProperties}><i /> {faNum(Object.keys(base.settings.stageWeights ?? {}).length)} تغییر</span> : undefined}>
+          <StageWeightsEditor />
         </SettingsSection>
 
         <div className="lg:col-span-2"><RolesCard /></div>

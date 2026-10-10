@@ -32,6 +32,13 @@ export const STAGE_WEIGHT: Partial<Record<StageKey, number>> = {
   art9_necessity: 5, art9_minutes: 5, art9_possession: 10,
 }
 
+/** Weights the project set in «تنظیمات»; anything not set keeps the default above. */
+let weightOverrides: Partial<Record<StageKey, number>> = {}
+export const setStageWeightOverrides = (o: Partial<Record<StageKey, number>> | null | undefined): void => {
+  weightOverrides = o ?? {}
+}
+export const weightOf = (k: StageKey): number => weightOverrides[k] ?? STAGE_WEIGHT[k] ?? 0
+
 /** Every step key the module knows (a parcel always carries all of them; the route decides which are in play). */
 export const ALL_STAGE_KEYS: StageKey[] = [...REGULAR_ORDER, 'title_deed', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment']
 /** Kept for the regular 13-step route. */
@@ -91,7 +98,7 @@ export function isStarted(p: Pick<Parcel, 'stages' | 'acquisitionRoute'>): boole
 /** 0..1 — weighted share of finished steps (a step in progress counts half). Weights come from STAGE_WEIGHT for every route. */
 export function stageProgress(p: Pick<Parcel, 'stages' | 'acquisitionRoute'> & { stationType?: StationType | '' }): number {
   const keys = orderOf(p)
-  const w = (k: StageKey) => STAGE_WEIGHT[k] ?? 0
+  const w = weightOf
   const total = keys.reduce((n, k) => n + w(k), 0)
   if (total === 0) return 0
   let got = 0

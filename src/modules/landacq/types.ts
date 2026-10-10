@@ -294,6 +294,8 @@ export interface LandSettings {
   /** The legal unit's proposed release plan, as last presented (see the «برنامه آزادسازی» tab). */
   /** Days per step set by the project, per acquisition route (empty = typical values). */
   stepDays?: Partial<Record<AcqRoute, Partial<Record<StageKey, number>>>>
+  /** Step weights set by the project (points; progress is normalised by the steps that apply). Empty = default weights. */
+  stageWeights?: Partial<Record<StageKey, number>>
   /** The variables last used to generate the release plan. */
   planParams?: PlanParams
   planProposal?: { at: string; by: string; note: string; urgent: number; total: number } | null
