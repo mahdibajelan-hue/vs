@@ -142,9 +142,9 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
       const [key, status, planned, actual] = row
       return { key, status, responsible: key === 'art9_necessity' ? 'وزیر / بالاترین مقام دستگاه' : key === 'art9_minutes' ? 'حقوقی با نمایندهٔ دادستانی' : key === 'art9_possession' ? 'مدیر اجرایی طرح' : 'مدیر امور مالی', plannedDate: planned == null ? null : addDays(today, planned), actualDate: actual == null ? null : addDays(today, actual), note: '' }
     })
-  a9a.stages = art9Stages([['art9_necessity', 'done', -91, -90], ['art9_minutes', 'done', -82, -81], ['art9_possession', 'done', -76, -75], ['art9_payment', 'in_progress', 14, null]])
-  a9b.stages = art9Stages([['art9_necessity', 'done', -141, -140], ['art9_minutes', 'done', -133, -132], ['art9_possession', 'done', -126, -125], ['art9_payment', 'in_progress', -35, null]])
-  a9c.stages = art9Stages([['art9_necessity', 'done', -7, -6], ['art9_minutes', 'in_progress', 3, null], ['art9_possession', 'not_started', 8, null], ['art9_payment', 'not_started', null, null]])
+  a9a.stages = art9Stages([['art9_necessity', 'done', -91, -90], ['art9_minutes', 'done', -82, -81], ['art9_possession', 'done', -76, -75], ['payment', 'in_progress', 14, null]])
+  a9b.stages = art9Stages([['art9_necessity', 'done', -141, -140], ['art9_minutes', 'done', -133, -132], ['art9_possession', 'done', -126, -125], ['payment', 'in_progress', -35, null]])
+  a9c.stages = art9Stages([['art9_necessity', 'done', -7, -6], ['art9_minutes', 'in_progress', 3, null], ['art9_possession', 'not_started', 8, null], ['payment', 'not_started', null, null]])
   a9a.owners = [{ name: 'حسین ناصری', contact: '09121234567', sharePct: 60, agreement: 'agreed', estAmount: 1_800_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: '' }, { name: 'اکرم ناصری', contact: '', sharePct: 40, agreement: 'negotiating', estAmount: 1_200_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: '' }]
   a9b.owners = [{ name: 'جواد منصوری', contact: '09130001122', sharePct: 100, agreement: 'refused', estAmount: 6_400_000_000, finalAmount: null, payment: 'unpaid', released: false, notes: 'درخواست توقف عملیات به دادگاه داده است' }]
 

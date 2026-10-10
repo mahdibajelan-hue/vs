@@ -28,8 +28,8 @@ export function ActionsPage() {
   const overdue = actions.filter((a) => a.kind === 'overdue_stage')
   const ready = rows
     .map((r) => ({ r, rep: problemsOf(r, today) }))
-    .filter((x) => (x.rep.issue && !x.r.parcel.issueId) || (x.rep.risk && !x.r.parcel.riskId))
-    .sort((a, b) => SEVERITY_RANK[b.rep.issue?.severity ?? 'medium'] - SEVERITY_RANK[a.rep.issue?.severity ?? 'medium'])
+    .filter((x) => x.rep.issue || x.rep.risk || x.r.parcel.issueId || x.r.parcel.riskId)
+    .sort((a, b) => Number(!!a.r.parcel.issueId || !!a.r.parcel.riskId) - Number(!!b.r.parcel.issueId || !!b.r.parcel.riskId) || SEVERITY_RANK[b.rep.issue?.severity ?? 'medium'] - SEVERITY_RANK[a.rep.issue?.severity ?? 'medium'])
   const sendAll = async (what: 'issue' | 'risk') => {
     setBulk(true)
     for (const x of ready) {
@@ -60,7 +60,7 @@ export function ActionsPage() {
         {ready.length === 0 ? <EmptyState icon={<TriangleAlert size={20} />} title="موردی برای ثبت نیست" text="هر قطعه‌ای که مشکل جدی پیدا کند اینجا با توضیح آماده می‌آید." /> : (
           <ul className="m-0 list-none p-0">
             {ready.slice(0, 15).map(({ r, rep }) => (
-              <li key={r.parcel.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--la-line)' }}>
+              <li key={r.parcel.id} className={`la-reg flex items-center gap-3 px-4 py-3 ${r.parcel.issueId ? 'la-reg-issue' : ''} ${r.parcel.riskId ? 'la-reg-risk' : ''}`} style={{ borderBottom: '1px solid var(--la-line)' }} title={[r.parcel.issueId && 'به‌عنوان مسئله ثبت شده', r.parcel.riskId && 'به‌عنوان ریسک ثبت شده'].filter(Boolean).join(' · ') || undefined}>
                 <button className="min-w-0 flex-1 text-right" onClick={() => select(r.parcel.id)} style={{ background: 'none', border: 0, color: 'inherit', fontFamily: 'inherit', cursor: 'pointer' }}>
                   <span className="la-km block text-[12.5px] font-bold">{fmtKmRange(r.parcel.kmStart, r.parcel.kmEnd)} <span className="la-eyebrow">{r.parcel.code} · اهمیت {SEVERITY_LABEL[rep.issue?.severity ?? 'medium']}</span></span>
                   <span className="la-eyebrow block truncate leading-6">{rep.reasons.slice(0, 2).map((x) => x.text).join(' · ')}</span>
@@ -125,7 +125,7 @@ function ActionCard({ r, color, onOpen, onTransfer }: { r: Analysis; color: stri
   const cur = currentStage(p)
   const e = r.early
   return (
-    <article className="la-card p-4" style={{ borderInlineStart: `3px solid ${color}` }}>
+    <article className={`la-card la-reg p-4 ${p.issueId ? 'la-reg-issue' : ''} ${p.riskId ? 'la-reg-risk' : ''}`} style={{ borderInlineStart: `3px solid ${color}` }}>
       <div className="flex items-start justify-between gap-2">
         <button className="min-w-0 text-right" onClick={onOpen}>
           <b className="la-km block text-[13.5px]">{fmtKmRange(p.kmStart, p.kmEnd)}</b>

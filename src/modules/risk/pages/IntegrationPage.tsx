@@ -16,7 +16,7 @@ import { useCategoryLabel } from '../components/rk'
 import type { PageProps } from '../RiskApp'
 
 interface IssueRow { id: string; code: string; title: string; stage: string | null; status: string; category: string | null; project_id: string; source: string | null; source_ref_id: string | null }
-const IM_TO_RM: Record<string, string> = { engineering: 'engineering', procurement: 'procurement', contractor: 'contractor', contract_commercial: 'legal', land_right_of_way: 'land', permits: 'permits', hse: 'hse', quality: 'quality', finance: 'cost', interface: 'stakeholders', document_approval: 'engineering', other: 'other' }
+const IM_TO_RM: Record<string, string> = { engineering: 'engineering', procurement: 'procurement', contractor: 'contractor', contract_commercial: 'legal', land_right_of_way: 'land', land_acquisition: 'land', permits: 'permits', hse: 'hse', quality: 'quality', finance: 'cost', interface: 'stakeholders', document_approval: 'engineering', other: 'other' }
 
 /** Where risks come from and where they go: Issue Management (both ways), mission/visit reports, external systems. */
 export function IntegrationPage({ onOpenRisk }: PageProps) {

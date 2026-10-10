@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useLandStore } from '../store/useLandStore'
 import type { AcqRoute, StageKey } from '../types'
-import { ART9_ORDER, REGULAR_ORDER, STAGE_DAYS } from '../lib/workflow'
+import { ART9_ORDER, ART9_PRE, REGULAR_ORDER, STAGE_DAYS } from '../lib/workflow'
 import { ROUTE_LABEL, STAGE_LABEL } from '../lib/labels'
 import { faNum } from '../lib/fa'
 
@@ -41,7 +41,8 @@ export function StepDaysEditor() {
             <thead><tr style={{ color: 'var(--la-muted)' }}><th className="px-1.5 py-1.5 text-right font-semibold">مرحلهٔ تحصیل عادی / اختلاف</th><th className="px-1.5 text-center font-semibold">{ROUTE_LABEL.normal.split(' (')[0]}</th><th className="px-1.5 text-center font-semibold">اختلاف</th></tr></thead>
             <tbody>
               {REGULAR_ORDER.map((k) => <tr key={k} style={{ borderTop: '1px solid var(--la-line)' }}><td className="px-1.5 py-1 leading-5">{STAGE_LABEL[k]}</td>{cell('normal', k)}{cell('dispute', k)}</tr>)}
-              <tr style={{ borderTop: '2px solid var(--la-line-2)' }}><td className="px-1.5 py-1.5 font-bold">جمع (روز)</td><td className="la-num text-center font-bold">{faNum(sum('normal', REGULAR_ORDER))}</td><td className="la-num text-center font-bold">{faNum(sum('dispute', REGULAR_ORDER))}</td></tr>
+              <tr style={{ borderTop: '1px solid var(--la-line)' }}><td className="px-1.5 py-1 leading-5">{STAGE_LABEL.title_deed}</td>{cell('normal', 'title_deed')}{cell('dispute', 'title_deed')}</tr>
+              <tr style={{ borderTop: '2px solid var(--la-line-2)' }}><td className="px-1.5 py-1.5 font-bold">جمع ۱۳ مرحله (روز؛ سند فقط برای ایستگاه)</td><td className="la-num text-center font-bold">{faNum(sum('normal', REGULAR_ORDER))}</td><td className="la-num text-center font-bold">{faNum(sum('dispute', REGULAR_ORDER))}</td></tr>
             </tbody>
           </table>
         </div>
@@ -50,10 +51,11 @@ export function StepDaysEditor() {
             <thead><tr style={{ color: 'var(--la-muted)' }}><th className="px-1.5 py-1.5 text-right font-semibold">مراحل ماده ۹</th><th className="px-1.5 text-center font-semibold">روز</th></tr></thead>
             <tbody>
               {ART9_ORDER.map((k) => <tr key={k} style={{ borderTop: '1px solid var(--la-line)' }}><td className="px-1.5 py-1 leading-5">{STAGE_LABEL[k]}</td>{cell('art9', k)}</tr>)}
-              <tr style={{ borderTop: '2px solid var(--la-line-2)' }}><td className="px-1.5 py-1.5 font-bold">تا تصرف (مقدمات + امضا + جاری‌سازی)</td><td className="la-num text-center font-bold">{faNum(sum('art9', ART9_ORDER.slice(0, 3)))}</td></tr>
+              <tr style={{ borderTop: '2px solid var(--la-line-2)' }}><td className="px-1.5 py-1.5 font-bold">تا تصرف (مقدمات + امضا + جاری‌سازی)</td><td className="la-num text-center font-bold">{faNum(sum('art9', ART9_PRE))}</td></tr>
+              <tr><td className="px-1.5 py-1.5 font-bold">جمع ۱۳ مرحلهٔ پس از تصرف (باید در ۳ ماه قانونی تمام شود)</td><td className="la-num text-center font-bold">{faNum(sum('art9', REGULAR_ORDER))}</td></tr>
             </tbody>
           </table>
-          <p className="la-eyebrow mt-2 leading-6">مهلت پرداخت ۳ ماه ماده ۹ قانونی است؛ اگر لازم نیست تغییرش ندهید.</p>
+          <p className="la-eyebrow mt-2 leading-6">پس از تصرف، کار اجرایی متوقف نمی‌شود؛ ۱۳ مرحله باید در مهلت قانونی ۳ ماه برای پرداخت به مالکین تمام شود (مجموع روزها را زیر ۹۰ نگه دارید).</p>
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">

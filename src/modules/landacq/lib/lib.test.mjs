@@ -133,7 +133,7 @@ assert.equal(c1.due, '2026-06-22'); assert.equal(c1.status, 'due_soon'); assert.
 assert.equal(legalClocks(bs9, '2026-06-23').find((c) => c.key === 'art9_payment').status, 'overdue')
 assert.equal(legalClocks(bs9, '2026-04-01').find((c) => c.key === 'art9_payment').status, 'running')
 assert.equal(nextDeadline(bs9, '2026-06-10').date, '2026-06-22')
-const paid = { ...bs9, stages: bs9.stages.map((s) => (s.key === 'art9_payment' ? done('art9_payment', '2026-05-01') : s)) }
+const paid = { ...bs9, stages: bs9.stages.map((s) => (s.key === 'payment' ? done('payment', '2026-05-01') : s)) }
 assert.equal(legalClocks(paid, '2026-07-30').find((c) => c.key === 'art9_payment').status, 'done'); assert.equal(nextDeadline(paid, '2026-07-30'), null)
 // possession without necessity/minutes is a compliance alarm
 const bad = mkp({}); bad.stages = bad.stages.map((s) => (s.key === 'art9_possession' ? done('art9_possession', '2026-03-21') : s))
@@ -263,11 +263,12 @@ console.log('landacq/import+problems: all assertions passed')
   assert.ok(applyPlan(q, '2026-01-01').find((s) => s.key === 'identification').actualDate === '2026-01-20')
   // never plan into the past when told so
   assert.equal(planDates(mk(), '2025-01-01', '2026-01-15').get('identification'), addDays('2026-01-15', stepDays(mk()).identification))
-  // Article 9: possession is the release; the 3-month payment window stays fixed
+  // Article 9: possession is the release; the 13 steps follow inside the legal 3 months; stations get a title-deed step on top
   const a9 = mk({ acquisitionRoute: 'art9' }); const da = planDates(a9, '2026-02-01')
-  assert.deepEqual([...da.keys()], ART9_ORDER); assert.equal(diffDays(da.get('art9_payment'), da.get('art9_possession')), 90)
+  assert.deepEqual([...da.keys()], ART9_ORDER); assert.ok(diffDays(da.get('payment'), da.get('art9_possession')) <= 90, 'the 13 steps fit the 3-month window')
   assert.equal(plannedFinishOf({ ...a9, stages: applyPlan(a9, '2026-02-01') }), da.get('art9_possession'))
-  assert.equal(stepDays(mk({ acquisitionRoute: 'art9', estDurationDays: 30 })).art9_payment, 90)
+  assert.equal(stepDays(mk({ acquisitionRoute: 'art9', estDurationDays: 30 })).payment, 12)
+  assert.ok(stepDays(mk({ acquisitionRoute: 'normal', stationType: 'line_valve' })).title_deed > 0)
   // modes and summary
   // capacity planner: N files at a monthly rate, in order of need
   const C = (id, needBy, extra = {}) => ({ id, route: 'normal', complexity: 2, needBy, crit: 10, kmStart: Number(id.slice(1)), ...extra })
@@ -315,3 +316,7 @@ console.log('landacq/import+problems: all assertions passed')
   assert.equal(parseKmlRoute('<kml></kml>').points.length, 0)
   console.log('landacq/kml: all assertions passed')
 }
+
+import { orderOf as _o, stageProgress as _sp, STAGE_WEIGHT as _w } from './workflow.ts'
+assert.equal(_o({ acquisitionRoute: 'normal', stationType: 'line_valve' }).at(-1), 'title_deed'); assert.equal(_o({ acquisitionRoute: 'normal', stationType: '' }).length, 13); assert.equal(_o({ acquisitionRoute: 'art9' }).length, 16)
+assert.equal(Object.entries(_w).filter(([k]) => _o({ acquisitionRoute: 'normal', stationType: '' }).includes(k)).reduce((n, [, v]) => n + v, 0), 100)

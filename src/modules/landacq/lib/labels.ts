@@ -49,6 +49,7 @@ export const STAGE_LABEL: Record<StageKey, string> = {
   docs_handover: 'تحویل مدارک به کارفرما جهت صدور چک',
   payment: 'دریافت چک و پرداخت به مالکین',
   undertaking: 'اخذ اقرارنامه',
+  title_deed: 'صدور سند مالکیت (ایستگاه)',
   art9_necessity: 'تشخیص و تأیید ضرورت و فوریت (امضای وزیر)',
   art9_minutes: 'صورت‌جلسه آزادسازی با نماینده دادستانی',
   art9_possession: 'تصرف فوری و شروع عملیات اجرایی',

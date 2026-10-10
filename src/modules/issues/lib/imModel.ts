@@ -47,7 +47,7 @@ export const IM_BLOCK_KIND_FA: Record<string, string> = {
 
 export const IM_CATEGORY_FA: Record<string, string> = {
   engineering: 'مهندسی', document_approval: 'تأیید مدارک', procurement: 'تدارکات', contractor: 'پیمانکار',
-  contract_commercial: 'قرارداد و بازرگانی', land_right_of_way: 'اراضی و حریم', permits: 'مجوزها', hse: 'ایمنی و محیط‌زیست',
+  contract_commercial: 'قرارداد و بازرگانی', land_acquisition: 'تحصیل اراضی و آزادسازی مسیر', land_right_of_way: 'اراضی و حریم', permits: 'مجوزها', hse: 'ایمنی و محیط‌زیست',
   quality: 'کیفیت', finance: 'مالی', interface: 'تداخل و رابط', other: 'سایر',
 }
 

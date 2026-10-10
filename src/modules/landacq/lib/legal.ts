@@ -59,7 +59,7 @@ const DEFS: Def[] = [
     rule: 'دستگاه اجرایی مکلف است حداکثر تا سه ماه از تاریخ تصرف، قیمت عادلهٔ مصوب این قانون را پرداخت یا تودیع کند.',
     consequence: 'پس از مهلت، مالک می‌تواند از دادگاه توقف عملیات اجرایی را تا زمان پرداخت بخواهد؛ دادگاه خارج از نوبت رسیدگی می‌کند.',
     start: (p) => (stageOf(p, 'art9_possession')?.status === 'done' ? stageOf(p, 'art9_possession')?.actualDate ?? stageOf(p, 'art9_possession')?.plannedDate ?? null : null),
-    done: (p) => (stageOf(p, 'art9_payment')?.status === 'done' ? stageOf(p, 'art9_payment')?.actualDate ?? '0000-00-00' : null),
+    done: (p) => (stageOf(p, 'payment')?.status === 'done' ? stageOf(p, 'payment')?.actualDate ?? '0000-00-00' : null),
     due: months(3),
   },
 ]
@@ -80,7 +80,7 @@ function build(def: Def, p: Parcel, today: string): LegalClock | null {
 export function stayActive(p: Pick<Parcel, 'legal' | 'stages' | 'acquisitionRoute'>): boolean {
   const l = p.legal ?? {}
   if (!l.stayOrderDate || l.stayLiftedDate) return false
-  return !(p.acquisitionRoute === 'art9' && stageOf(p, 'art9_payment')?.status === 'done')
+  return !(p.acquisitionRoute === 'art9' && stageOf(p, 'payment')?.status === 'done')
 }
 
 /** Every legal clock that has started for this parcel (finished ones included), most urgent first. */
@@ -89,7 +89,7 @@ export function legalClocks(p: Parcel, today: string): LegalClock[] {
   const out = DEFS.filter((d) => d.routes === route).map((d) => build(d, p, today)).filter((c): c is LegalClock => !!c)
   if (p.acquisitionRoute === 'art9') {
     const l = p.legal ?? {}
-    const paid = stageOf(p, 'art9_payment')?.status === 'done'
+    const paid = stageOf(p, 'payment')?.status === 'done'
     if (stayActive(p)) {
       out.push({ key: 'art9_stay', article: 'ماده ۹، تبصره', title: 'عملیات اجرایی به دستور دادگاه متوقف است', rule: 'مالک با مراجعه به دادگاه، توقف عملیات اجرایی را تا زمان پرداخت بها خواسته و دادگاه خارج از نوبت رسیدگی کرده است.', start: l.stayOrderDate ?? null, due: today, done: null, status: 'overdue', daysLeft: 0, severity: 'critical', consequence: 'با پرداخت یا تودیع قیمت تعیین‌شده، دستور توقف بلافاصله رفع می‌شود؛ پرداخت را فوراً انجام دهید.' })
     } else if (l.stayFiledDate && !l.stayOrderDate && !l.stayLiftedDate && !paid) {

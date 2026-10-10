@@ -20448,3 +20448,14 @@ begin
   values (new.master_project_id, new.id, auth.uid(), 'parcel_created', jsonb_build_object('code', new.code, 'km_start', new.km_start, 'km_end', new.km_end));
   return null;
 end $$;
+
+-- ============================================================================
+-- 82. Land acquisition follow-ups: stations get a 14th step (title_deed); Article 9 parcels run the 13 steps after possession (their old art9_payment
+--     row was copied into `payment`); transfers to Risk/Issue use valid categories ('land' / 'land_acquisition'); new Issue category.
+-- ============================================================================
+insert into im_categories (key, label_fa, sort, require_evidence, require_root_cause, acceptance_hint, is_active) values ('land_acquisition', 'تحصیل اراضی و آزادسازی مسیر', 55, false, false, 'قطعه/مسیر آزاد و تحویل‌شدنی برای عملیات اجرایی', true) on conflict (key) do nothing;
+alter table la_stages drop constraint if exists la_stages_key_check;
+alter table la_stages add constraint la_stages_key_check check (stage_key in ('identification', 'survey', 'quantity_list', 'case_file', 'cadastre', 'inquiries', 'experts_intro', 'expert_visit', 'expert_report', 'employer_approval', 'docs_handover', 'payment', 'undertaking', 'title_deed', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment'));
+insert into la_stages (parcel_id, stage_key) select id, 'title_deed' from la_parcels where coalesce(station_type, '') <> '' on conflict do nothing;
+-- la_parcel_after_insert additionally inserts 'title_deed' when station_type is set; la_transfer / la_transfer_crossing insert rm_risks.category = 'land'
+-- (the old value 'external' no longer exists in rm_categories, which caused the foreign-key error) and im_issues.category = 'land_acquisition'.

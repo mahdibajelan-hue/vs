@@ -1,8 +1,5 @@
-import type { AcqRoute, Parcel, Stage, StageKey } from '../types'
+import type { AcqRoute, Parcel, Stage, StageKey, StationType } from '../types'
 import { diffDays } from './dates'
-
-/** The 4 steps of the Article 9 route (immediate possession before the final transaction). */
-export const ART9_ORDER: StageKey[] = ['art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment']
 
 export const REGULAR_ORDER: StageKey[] = [
   'identification',
@@ -20,26 +17,39 @@ export const REGULAR_ORDER: StageKey[] = [
   'undertaking',
 ]
 
+/** Article 9: the land is free as soon as possession is taken (3 steps); the 13 regular steps then follow to pay the owners within the legal 3 months. Work on site does not wait for them. */
+export const ART9_ORDER: StageKey[] = ['art9_necessity', 'art9_minutes', 'art9_possession', ...REGULAR_ORDER]
+/** The steps before release under Article 9. */
+export const ART9_PRE: StageKey[] = ART9_ORDER.slice(0, 3)
+
 /** Share of each step in the overall progress of a regular/dispute parcel (percent, sums to 100). Approximate, taken from the project's step-weight table;
- *  the last steps (handover, payment, undertaking) carry a small weight of their own instead of 0. Article 9 steps are weighted equally. */
+ *  the last steps (handover, payment, undertaking) carry a small weight of their own instead of 0. Progress is normalised by the weights of the steps that apply to the parcel (Article 9: 20 points before release + the 13 steps; stations: +5 for the title deed). */
 export const STAGE_WEIGHT: Partial<Record<StageKey, number>> = {
   identification: 12, survey: 12, quantity_list: 6, case_file: 12, cadastre: 9, inquiries: 12, experts_intro: 6, expert_visit: 7, expert_report: 7, employer_approval: 4, docs_handover: 3, payment: 7, undertaking: 3,
+  // stations only: the title deed is one more step on top of the 13 (progress is normalised by the weights of the steps that apply)
+  title_deed: 5,
+  // Article 9 pre-release steps, added to the 13
+  art9_necessity: 5, art9_minutes: 5, art9_possession: 10,
 }
 
 /** Every step key the module knows (a parcel always carries all of them; the route decides which are in play). */
-export const ALL_STAGE_KEYS: StageKey[] = [...REGULAR_ORDER, ...ART9_ORDER]
+export const ALL_STAGE_KEYS: StageKey[] = [...REGULAR_ORDER, 'title_deed', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment']
 /** Kept for the regular 13-step route. */
 export const STAGE_ORDER = REGULAR_ORDER
 /** The steps that apply to this parcel's route, in order. */
-export const orderOf = (p: Pick<Parcel, 'acquisitionRoute'>): StageKey[] => (p.acquisitionRoute === 'art9' ? ART9_ORDER : REGULAR_ORDER)
+export const orderOf = (p: { acquisitionRoute: AcqRoute; stationType?: StationType | '' }): StageKey[] => {
+  const base = p.acquisitionRoute === 'art9' ? ART9_ORDER : REGULAR_ORDER
+  return p.stationType ? [...base, 'title_deed'] : base // stations also need the title deed issued
+}
 
 /** Typical days per step for each of the three routes: regular acquisition, Article 9 immediate possession, and the dispute route (which stretches everything). */
 const NO_ART9 = { art9_necessity: 0, art9_minutes: 0, art9_possession: 0, art9_payment: 0 }
 export const STAGE_DAYS: Record<AcqRoute, Record<StageKey, number>> = {
-  normal: { identification: 7, survey: 14, quantity_list: 10, case_file: 14, cadastre: 14, inquiries: 21, experts_intro: 7, expert_visit: 14, expert_report: 21, employer_approval: 7, docs_handover: 7, payment: 21, undertaking: 5, ...NO_ART9 },
-  dispute: { identification: 10, survey: 25, quantity_list: 18, case_file: 25, cadastre: 25, inquiries: 40, experts_intro: 14, expert_visit: 25, expert_report: 40, employer_approval: 12, docs_handover: 12, payment: 40, undertaking: 10, ...NO_ART9 },
+  normal: { identification: 7, survey: 14, quantity_list: 10, case_file: 14, cadastre: 14, inquiries: 21, experts_intro: 7, expert_visit: 14, expert_report: 21, employer_approval: 7, docs_handover: 7, payment: 21, undertaking: 5, title_deed: 30, ...NO_ART9 },
+  dispute: { identification: 10, survey: 25, quantity_list: 18, case_file: 25, cadastre: 25, inquiries: 40, experts_intro: 14, expert_visit: 25, expert_report: 40, employer_approval: 12, docs_handover: 12, payment: 40, undertaking: 10, title_deed: 45, ...NO_ART9 },
   // necessity + signature (5), minutes with the prosecutor's representative (3), possession (2); payment is the 3-month legal window
-  art9: { identification: 0, survey: 0, quantity_list: 0, case_file: 0, cadastre: 0, inquiries: 0, experts_intro: 0, expert_visit: 0, expert_report: 0, employer_approval: 0, docs_handover: 0, payment: 0, undertaking: 0, art9_necessity: 5, art9_minutes: 3, art9_possession: 2, art9_payment: 90 },
+  // necessity + signature (5), minutes with the prosecutor's representative (3), possession (2); then the 13 steps compressed into the 3-month legal window for paying the owners (~82 days)
+  art9: { identification: 3, survey: 7, quantity_list: 5, case_file: 7, cadastre: 7, inquiries: 10, experts_intro: 3, expert_visit: 7, expert_report: 10, employer_approval: 4, docs_handover: 4, payment: 12, undertaking: 3, title_deed: 20, art9_necessity: 5, art9_minutes: 3, art9_possession: 2, art9_payment: 0 },
 }
 
 /** Durations the project has set in «تنظیمات» (days per step, per route); anything not set uses the typical values above. */
@@ -78,10 +88,10 @@ export function isStarted(p: Pick<Parcel, 'stages' | 'acquisitionRoute'>): boole
   return p.stages.filter((s) => keys.includes(s.key)).some((s) => s.status === 'in_progress' || s.status === 'done' || s.status === 'blocked')
 }
 
-/** 0..1 — weighted share of finished steps (a step in progress counts half). Regular/dispute routes use STAGE_WEIGHT; Article 9 weights steps equally. */
-export function stageProgress(p: Pick<Parcel, 'stages' | 'acquisitionRoute'>): number {
+/** 0..1 — weighted share of finished steps (a step in progress counts half). Weights come from STAGE_WEIGHT for every route. */
+export function stageProgress(p: Pick<Parcel, 'stages' | 'acquisitionRoute'> & { stationType?: StationType | '' }): number {
   const keys = orderOf(p)
-  const w = (k: StageKey) => (p.acquisitionRoute === 'art9' ? 1 : STAGE_WEIGHT[k] ?? 0)
+  const w = (k: StageKey) => STAGE_WEIGHT[k] ?? 0
   const total = keys.reduce((n, k) => n + w(k), 0)
   if (total === 0) return 0
   let got = 0
@@ -108,7 +118,7 @@ export function remainingDays(p: Pick<Parcel, 'stages' | 'acquisitionRoute' | 'c
   if (isReleased(p)) return 0
   const route = daysFor(p.acquisitionRoute)
   // Article 9: "remaining" is only the time to take possession (necessity, minutes, possession), not the 3-month payment window.
-  const keys = p.acquisitionRoute === 'art9' ? ART9_ORDER.slice(0, 3) : REGULAR_ORDER.slice(0, -1) // the undertaking follows the release
+  const keys = p.acquisitionRoute === 'art9' ? ART9_PRE : REGULAR_ORDER.slice(0, -1) // the undertaking follows the release
   const baseTotal = keys.reduce((n, k) => n + route[k], 0)
   let baseLeft = 0
   for (const k of keys) {

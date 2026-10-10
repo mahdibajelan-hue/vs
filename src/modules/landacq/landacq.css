@@ -233,3 +233,10 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-rep-table tbody tr[data-hot] td:first-child { box-shadow: inset -3px 0 0 #ef4444; }
 .la-rep-table tbody tr[data-hot] td { background: color-mix(in srgb, #ef4444 6%, transparent); }
 .la-rep-table tbody tr:hover td { background: var(--la-accent-soft); }
+
+/* a parcel already sent on: a thin line across it for the issue (amber), a second line in another colour for the risk (rose); the text fades a little */
+.la-reg { position: relative; }
+.la-reg-issue::before, .la-reg-risk::after { content: ''; position: absolute; inset-inline: 10px; height: 1.5px; border-radius: 2px; pointer-events: none; z-index: 2; }
+.la-reg-issue::before { top: 40%; background: #f59e0b; }
+.la-reg-risk::after { top: 58%; background: #e11d48; }
+.la-reg-issue > *, .la-reg-risk > * { opacity: 0.62; }

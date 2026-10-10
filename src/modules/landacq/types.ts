@@ -22,6 +22,7 @@ export type StageKey =
   | 'docs_handover'
   | 'payment'
   | 'undertaking'
+  | 'title_deed'
   | 'art9_necessity'
   | 'art9_minutes'
   | 'art9_possession'

@@ -1,14 +1,14 @@
-import type { AcqRoute, LandSettings, Parcel, PlanParams, Stage, StageKey } from '../types'
+import type { AcqRoute, LandSettings, Parcel, PlanParams, Stage, StageKey, StationType } from '../types'
 import type { Analysis } from './kpis'
 import { addDays, diffDays } from './dates'
-import { ART9_ORDER, complexityFactor, daysFor, isStarted, orderOf, stageOf } from './workflow'
+import { ART9_PRE, complexityFactor, daysFor, isStarted, orderOf, stageOf } from './workflow'
 
 /** Days each step of this parcel's route is given: the typical durations, scaled by complexity or by a hand-set total. */
-export function stepDays(p: Pick<Parcel, 'acquisitionRoute' | 'complexity' | 'estDurationDays'>): Record<StageKey, number> {
+export function stepDays(p: Pick<Parcel, 'acquisitionRoute' | 'complexity' | 'estDurationDays'> & { stationType?: StationType | '' }): Record<StageKey, number> {
   const base = daysFor(p.acquisitionRoute)
   const keys = orderOf(p)
   // Article 9: the hand-set duration is the time to take possession; the 3-month payment window is fixed by law
-  const scaled = p.acquisitionRoute === 'art9' ? ART9_ORDER.slice(0, 3) : keys
+  const scaled = p.acquisitionRoute === 'art9' ? ART9_PRE : keys
   const sum = scaled.reduce((n, k) => n + base[k], 0)
   const f = p.estDurationDays && p.estDurationDays > 0 && sum > 0 ? p.estDurationDays / sum : complexityFactor(p.complexity)
   const out = { ...base } as Record<StageKey, number>
@@ -119,7 +119,7 @@ const REGULAR = orderOf({ acquisitionRoute: 'normal' })
  */
 export function buildSchedule(params: PlanParams, cands: PlanCandidate[]): SchedulePlan {
   const normalAvg = cands.filter((c) => c.route !== 'art9').reduce((n, c) => n + sumDays(c.route, REGULAR) * complexityFactor(c.complexity), 0) / Math.max(1, cands.filter((c) => c.route !== 'art9').length) || sumDays('normal', REGULAR)
-  const art9Typ = sumDays('art9', ART9_ORDER.slice(0, 3))
+  const art9Typ = sumDays('art9', ART9_PRE)
   const avgDays = params.avgDays && params.avgDays > 0 ? params.avgDays : Math.round(normalAvg)
   const art9Days = params.art9Days && params.art9Days > 0 ? params.art9Days : art9Typ
   const ratio = sumDays('dispute', REGULAR) / Math.max(1, sumDays('normal', REGULAR))
