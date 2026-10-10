@@ -1,4 +1,7 @@
 import type {
+  Criticality,
+  DetailStatus,
+  InspectionStatus,
   Allocation,
   AllocationStatus,
   CommodityType,
@@ -84,6 +87,26 @@ interface MaterialRow {
   notes: string
   created_at: string
   updated_at: string
+  group_id: string | null
+  contract_qty: number | null
+  detail_qty: number | null
+  detail_status: string
+  pipeline_no: string
+  isometric_no: string
+  front: string
+  usage_location: string
+  need_date: string | null
+  criticality: string
+  lead_time_days: number | null
+  price_basis: string
+  price_date: string | null
+  fx_rate: number
+  spec_ref: string
+  detail_spec: string | null
+  detail_unit: string | null
+  detail_code: string | null
+  detail_location: string | null
+  is_demo: boolean
 }
 
 export function materialFromRow(r: MaterialRow): Material {
@@ -115,6 +138,26 @@ export function materialFromRow(r: MaterialRow): Material {
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    groupId: r.group_id ?? null,
+    contractQty: r.contract_qty == null ? null : Number(r.contract_qty),
+    detailQty: r.detail_qty == null ? null : Number(r.detail_qty),
+    detailStatus: (r.detail_status ?? 'none') as DetailStatus,
+    pipelineNo: r.pipeline_no ?? '',
+    isometricNo: r.isometric_no ?? '',
+    front: r.front ?? '',
+    usageLocation: r.usage_location ?? '',
+    needDate: r.need_date ?? null,
+    criticality: (r.criticality ?? 'B') as Criticality,
+    leadTimeDays: r.lead_time_days == null ? null : Number(r.lead_time_days),
+    priceBasis: r.price_basis ?? '',
+    priceDate: r.price_date ?? null,
+    fxRate: Number(r.fx_rate ?? 1) || 1,
+    specRef: r.spec_ref ?? '',
+    detailSpec: r.detail_spec ?? null,
+    detailUnit: r.detail_unit ?? null,
+    detailCode: r.detail_code ?? null,
+    detailLocation: r.detail_location ?? null,
+    isDemo: !!r.is_demo,
   }
 }
 
@@ -143,6 +186,25 @@ export function materialToRow(masterProjectId: string | null, m: Partial<Materia
   if (m.currency !== undefined) row.currency = m.currency
   if (m.isConstructionBlocking !== undefined) row.is_construction_blocking = m.isConstructionBlocking
   if (m.notes !== undefined) row.notes = m.notes
+  if (m.groupId !== undefined) row.group_id = m.groupId || null
+  if (m.contractQty !== undefined) row.contract_qty = m.contractQty
+  if (m.detailQty !== undefined) row.detail_qty = m.detailQty
+  if (m.detailStatus !== undefined) row.detail_status = m.detailStatus
+  if (m.pipelineNo !== undefined) row.pipeline_no = m.pipelineNo
+  if (m.isometricNo !== undefined) row.isometric_no = m.isometricNo
+  if (m.front !== undefined) row.front = m.front
+  if (m.usageLocation !== undefined) row.usage_location = m.usageLocation
+  if (m.needDate !== undefined) row.need_date = m.needDate || null
+  if (m.criticality !== undefined) row.criticality = m.criticality
+  if (m.leadTimeDays !== undefined) row.lead_time_days = m.leadTimeDays
+  if (m.priceBasis !== undefined) row.price_basis = m.priceBasis
+  if (m.priceDate !== undefined) row.price_date = m.priceDate || null
+  if (m.fxRate !== undefined) row.fx_rate = m.fxRate
+  if (m.specRef !== undefined) row.spec_ref = m.specRef
+  if (m.detailSpec !== undefined) row.detail_spec = m.detailSpec
+  if (m.detailUnit !== undefined) row.detail_unit = m.detailUnit
+  if (m.detailCode !== undefined) row.detail_code = m.detailCode
+  if (m.detailLocation !== undefined) row.detail_location = m.detailLocation
   return row
 }
 
@@ -463,14 +525,15 @@ interface WarehouseLineRow {
   material_id: string
   quantity_received: number
   condition: string
+  inspection_status?: string
 }
 
 export function warehouseLineFromRow(r: WarehouseLineRow): WarehouseLine {
-  return { id: r.id, receiptId: r.receipt_id, materialId: r.material_id, quantityReceived: Number(r.quantity_received), condition: r.condition as WarehouseLineCondition }
+  return { id: r.id, receiptId: r.receipt_id, materialId: r.material_id, quantityReceived: Number(r.quantity_received), condition: r.condition as WarehouseLineCondition, inspectionStatus: (r.inspection_status ?? 'accepted') as InspectionStatus }
 }
 
-export function warehouseLineToRow(receiptId: string, materialId: string, quantityReceived: number, condition: WarehouseLineCondition) {
-  return { receipt_id: receiptId, material_id: materialId, quantity_received: quantityReceived, condition }
+export function warehouseLineToRow(receiptId: string, materialId: string, quantityReceived: number, condition: WarehouseLineCondition, inspectionStatus: InspectionStatus = 'pending') {
+  return { receipt_id: receiptId, material_id: materialId, quantity_received: quantityReceived, condition, inspection_status: inspectionStatus }
 }
 
 interface AllocationRow {
@@ -486,6 +549,8 @@ interface AllocationRow {
   notes: string
   created_at: string
   updated_at: string
+  front?: string
+  facility?: string
 }
 
 export function allocationFromRow(r: AllocationRow): Allocation {
@@ -502,6 +567,8 @@ export function allocationFromRow(r: AllocationRow): Allocation {
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    front: r.front ?? '',
+    facility: r.facility ?? '',
   }
 }
 
@@ -516,5 +583,7 @@ export function allocationToRow(masterProjectId: string | null, a: Partial<Alloc
   if (a.allocationDate !== undefined) row.allocation_date = a.allocationDate
   if (a.status !== undefined) row.status = a.status
   if (a.notes !== undefined) row.notes = a.notes
+  if (a.front !== undefined) row.front = a.front
+  if (a.facility !== undefined) row.facility = a.facility
   return row
 }

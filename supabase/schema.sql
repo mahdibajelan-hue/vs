@@ -20470,3 +20470,13 @@ $f$;
 -- §84 Finance & Contract Control: see supabase/finance/001_finance_control.sql (applied live)
 -- §85 Finance phase 2: see supabase/finance/002_cashflow_clearances_insights.sql (applied live)
 -- §86 Finance phase 3: supabase/finance/003_project_level_plans.sql (applied live)
+
+-- ============================================================================
+-- 87. Material control (کنترل و پایش متریال) — extends §20; migrations in supabase/material/ (001-005), applied live.
+--     MTO contract vs detail design on the material row (contract_qty / detail_qty, base quantity mto_quantity follows the contract),
+--     packages -> items -> weighted stages (mtl_packages / mtl_package_items / mtl_item_stages, weights copied from mtl_patterns),
+--     approved baselines (mtl_baselines), requested changes (mtl_changes), stock ledger (mtl_txns), consumption norms (mtl_norms),
+--     discrepancies (mtl_discrepancies, upserted by fingerprint), project roles + permission matrix (mtl_project_roles, mtl_allows),
+--     links to the real risk / issue records (mtl_links, mtl_raise), audit (mtl_audit). All decisions go through security-definer RPCs.
+--     Existing rows in §20 were produced by the demo generator and are flagged is_demo.
+-- ============================================================================
