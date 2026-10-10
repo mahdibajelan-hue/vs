@@ -32,7 +32,7 @@ export function CashflowCurvesPage({ masterProjectId }: { masterProjectId: strin
   const fund: Fund = funds.find((f) => `${f.fund}|${f.currency}` === fundKey) ?? funds[0]
   const curves = useMemo(() => buildCurves({ contracts, amendments, certificates: certs, payments, plans, manualForecasts: forecasts, fund, todayIso: today }), [contracts, amendments, certs, payments, plans, forecasts, fund, today])
   const nowIdx = isoMonthIdx(today) ?? 0
-  const data = curves.months.map((m) => ({ name: `${JALALI_MONTHS[m.jm - 1]} ${String(m.jy).slice(2)}`, idx: m.idx, 'پایه': m.cumBaseline, 'پیشنهاد پیمانکار': m.cumContractor, 'واقعی': m.cumActual, 'پیش‌بینی': m.cumForecast }))
+  const data = curves.months.map((m) => ({ name: `${JALALI_MONTHS[m.jm - 1]} ${(m.jy % 100).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}`, idx: m.idx, 'پایه': m.cumBaseline, 'پیشنهاد پیمانکار': m.cumContractor, 'واقعی': m.cumActual, 'پیش‌بینی': m.cumForecast }))
   const cid = contractId || contracts[0]?.id || ''
   const cName = fund.currency
   const editMonths = Array.from({ length: 12 }, (_, k) => idxToYM(nowIdx - 2 + k))

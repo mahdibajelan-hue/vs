@@ -37,7 +37,7 @@ export function ExecutiveExportButton({
         onClick={handleExport}
         disabled={exporting}
         className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
-        style={{ background: '#c9a654' }}
+        style={{ background: '#059669' }}
       >
         <Download size={13} /> {exporting ? 'در حال ساخت PDF...' : 'گزارش اجرایی (مدیرعامل)'}
       </button>

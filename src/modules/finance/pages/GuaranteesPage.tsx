@@ -46,14 +46,14 @@ export function GuaranteesPage({ masterProjectId }: { masterProjectId: string })
           <h1 className="fin-text mt-1 text-lg font-extrabold">{project.officialName}</h1>
         </div>
         {contracts.length > 0 && (
-          <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#c9a654' }}>
+          <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: '#059669' }}>
             <Plus size={13} /> ضمانت‌نامه جدید
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <MetricCard icon={ShieldCheck} label="مجموع ضمانت‌نامه‌های معتبر" value={fmtCurrency(activeGuaranteesTotal(list), currency)} color="#c9a654" />
+        <MetricCard icon={ShieldCheck} label="مجموع ضمانت‌نامه‌های معتبر" value={fmtCurrency(activeGuaranteesTotal(list), currency)} color="#059669" />
         <MetricCard icon={AlertTriangle} label="نزدیک به انقضا (۶۰ روز آینده)" value={soonExpiring.length.toLocaleString('fa-IR')} color={soonExpiring.length > 0 ? '#b5573a' : '#3e7c74'} />
         <MetricCard icon={ShieldCheck} label="تعداد کل ضمانت‌نامه‌ها" value={list.length.toLocaleString('fa-IR')} color="#5c7290" />
       </div>
@@ -190,7 +190,7 @@ function GuaranteeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="fin-card w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="fin-text flex items-center gap-2 text-sm font-extrabold">
-          <ShieldCheck size={15} style={{ color: '#c9a654' }} /> {title}
+          <ShieldCheck size={15} style={{ color: '#059669' }} /> {title}
         </h3>
         <label className="block">
           <span className="fin-text-secondary mb-1 block text-xs">قرارداد</span>
@@ -246,7 +246,7 @@ function GuaranteeModal({
           <button onClick={onClose} className="fin-text-secondary rounded-lg px-4 py-2 text-sm hover:opacity-70">
             انصراف
           </button>
-          <button onClick={submit} disabled={saving || !contractId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#c9a654' }}>
+          <button onClick={submit} disabled={saving || !contractId} className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40" style={{ background: '#059669' }}>
             {saving ? 'در حال ذخیره...' : 'ذخیره'}
           </button>
         </div>

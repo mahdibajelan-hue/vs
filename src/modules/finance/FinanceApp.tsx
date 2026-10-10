@@ -1,429 +1,150 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  AlertTriangle,
-  Banknote,
-  Bell,
-  Briefcase,
-  Building2,
-  Calculator,
-  Calendar,
-  ClipboardList,
-  FileText,
-  FileWarning,
-  FolderKanban,
-  Info,
-  Landmark,
-  LayoutDashboard,
-  LineChart,
-  Loader2,
-  Menu,
-  Receipt,
-  Sprout,
-  Gauge,
-  TrendingUp,
-  Workflow,
-  FileCheck,
-  GitPullRequestArrow,
-  Settings,
-  ShieldCheck,
-  Wallet,
-  X,
-} from 'lucide-react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Banknote, FileText, Gauge, Home, LineChart, Loader2, Receipt, Settings2, ShieldAlert, Wallet } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
-import { useAuthStore } from '../../store/useAuthStore'
-import { useAppTheme } from '../../components/common/useAppTheme'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
-import { useFinanceStore } from './store/useFinanceStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
-import { buildFinanceNotifications, type FinNotification } from './lib/financeNotifications'
-import { todayJalali, JALALI_MONTHS } from '../../lib/jalali'
+import '../issues/issues.css'
 import './finance-dashboard.css'
-import { BudgetPage } from './pages/BudgetPage'
-import { ContractsPage } from './pages/ContractsPage'
-import { PaymentCertificatesPage } from './pages/PaymentCertificatesPage'
-import { CostManagementPage } from './pages/CostManagementPage'
-import { FinancialReportsPage } from './pages/FinancialReportsPage'
-import { FinancialDashboardPage } from './pages/FinancialDashboardPage'
-import { CashFlowForecastPage } from './pages/CashFlowForecastPage'
-import { PortfoliosBrowsePage } from './pages/PortfoliosBrowsePage'
-import { ProgramsBrowsePage } from './pages/ProgramsBrowsePage'
-import { ProjectsBrowsePage } from './pages/ProjectsBrowsePage'
-import { PaymentsRecordPage } from './pages/PaymentsRecordPage'
-import { GuaranteesPage } from './pages/GuaranteesPage'
-import { ClaimsPage } from './pages/ClaimsPage'
-import { RetentionPage } from './pages/RetentionPage'
-import { LandBridgePage } from './pages/control/LandBridgePage'
-import { ChangesBridgePage } from './pages/control/ChangesBridgePage'
-import { ExceptionsPage } from './pages/control/ExceptionsPage'
-import { CashflowCurvesPage } from './pages/control/CashflowCurvesPage'
-import { PipelinePage } from './pages/control/PipelinePage'
-import { ObligationsPage } from './pages/control/ObligationsPage'
-import { MgmtDashboardPage } from './pages/control/MgmtDashboardPage'
-import { ControlSettingsPage } from './pages/control/ControlSettingsPage'
+import { useFinanceStore } from './store/useFinanceStore'
 import { useFinanceControlStore } from './store/useFinanceControlStore'
+import { HubPage } from './pages/HubPage'
 
-/** Signature brass/ledger accent — see finance-dashboard.css for the full "EPC ledger control tower" token system. */
-export const FINANCE_ACCENT = '#c9a654'
+/** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
+export const FINANCE_ACCENT = '#059669'
 
-type Tab =
-  | 'dashboard'
-  | 'mgmt'
-  | 'curves'
-  | 'pipeline'
-  | 'obligations'
-  | 'portfolios'
-  | 'programs'
-  | 'projects'
-  | 'contracts'
-  | 'certificates'
-  | 'payments'
-  | 'budget'
-  | 'cost'
-  | 'cashflow'
-  | 'guarantees'
-  | 'claims'
-  | 'retention'
-  | 'land'
-  | 'changes'
-  | 'exceptions'
-  | 'reports'
-  | 'settings'
+const L = <T extends Record<string, unknown>>(f: () => Promise<T>, k: keyof T) => lazy(() => f().then((m) => ({ default: m[k] as React.ComponentType<{ masterProjectId: string }> })))
+const ContractsPage = L(() => import('./pages/ContractsPage'), 'ContractsPage')
+const ChangesBridgePage = L(() => import('./pages/control/ChangesBridgePage'), 'ChangesBridgePage')
+const GuaranteesPage = L(() => import('./pages/GuaranteesPage'), 'GuaranteesPage')
+const ObligationsPage = L(() => import('./pages/control/ObligationsPage'), 'ObligationsPage')
+const ClaimsPage = L(() => import('./pages/ClaimsPage'), 'ClaimsPage')
+const RetentionPage = L(() => import('./pages/RetentionPage'), 'RetentionPage')
+const PipelinePage = L(() => import('./pages/control/PipelinePage'), 'PipelinePage')
+const PaymentCertificatesPage = L(() => import('./pages/PaymentCertificatesPage'), 'PaymentCertificatesPage')
+const PaymentsRecordPage = L(() => import('./pages/PaymentsRecordPage'), 'PaymentsRecordPage')
+const BudgetPage = L(() => import('./pages/BudgetPage'), 'BudgetPage')
+const CostManagementPage = L(() => import('./pages/CostManagementPage'), 'CostManagementPage')
+const LandBridgePage = L(() => import('./pages/control/LandBridgePage'), 'LandBridgePage')
+const CashflowCurvesPage = L(() => import('./pages/control/CashflowCurvesPage'), 'CashflowCurvesPage')
+const ExceptionsPage = L(() => import('./pages/control/ExceptionsPage'), 'ExceptionsPage')
+const FinancialReportsPage = L(() => import('./pages/FinancialReportsPage'), 'FinancialReportsPage')
+const ControlSettingsPage = lazy(() => import('./pages/control/ControlSettingsPage').then((m) => ({ default: m.ControlSettingsPage as React.ComponentType<{ masterProjectId: string | null }> })))
+const MgmtDashboardPage = lazy(() => import('./pages/control/MgmtDashboardPage').then((m) => ({ default: m.MgmtDashboardPage })))
+const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage').then((m) => ({ default: m.FinancialDashboardPage })))
+const CashFlowForecastPage = lazy(() => import('./pages/CashFlowForecastPage').then((m) => ({ default: m.CashFlowForecastPage })))
 
-const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
-  { id: 'mgmt', label: 'داشبورد مدیریتی', icon: Gauge },
-  { id: 'portfolios', label: 'پرتفولیو', icon: Building2 },
-  { id: 'programs', label: 'طرح‌ها', icon: Briefcase },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
-  { id: 'contracts', label: 'قراردادها', icon: FileText },
-  { id: 'certificates', label: 'صورت‌وضعیت‌ها', icon: Receipt },
-  { id: 'payments', label: 'پرداخت‌ها', icon: Wallet },
-  { id: 'budget', label: 'بودجه', icon: Banknote },
-  { id: 'cost', label: 'مدیریت هزینه', icon: Calculator },
-  { id: 'cashflow', label: 'جریان نقدینگی', icon: LineChart },
-  { id: 'curves', label: 'منحنی‌های نقدی', icon: TrendingUp },
-  { id: 'pipeline', label: 'گردش صورت‌وضعیت', icon: Workflow },
-  { id: 'obligations', label: 'پیش‌پرداخت و مفاصاحساب', icon: FileCheck },
-  { id: 'guarantees', label: 'ضمانت‌نامه‌ها', icon: ShieldCheck },
-  { id: 'claims', label: 'کلایم پیمانکار', icon: FileWarning },
-  { id: 'retention', label: 'حسن انجام کار', icon: Landmark },
-  { id: 'land', label: 'تملک اراضی', icon: Sprout },
-  { id: 'changes', label: 'تغییرات قرارداد', icon: GitPullRequestArrow },
-  { id: 'exceptions', label: 'استثناها و اقدام', icon: AlertTriangle },
-  { id: 'reports', label: 'گزارش‌ها', icon: ClipboardList },
-  { id: 'settings', label: 'تنظیمات', icon: Settings },
+export type FinTab = 'home' | 'dashboard' | 'contracts' | 'billing' | 'budget' | 'cash' | 'attention' | 'admin'
+type Sub = { id: string; label: string }
+const NAV: { id: FinTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; project?: boolean }[] = [
+  { id: 'home', label: 'خانه', icon: Home, color: '#10b981' },
+  { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1', subs: [{ id: 'mgmt', label: 'مدیریتی' }, { id: 'portfolio', label: 'سبد پروژه‌ها' }] },
+  { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'قراردادها' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه' }, { id: 'obligations', label: 'پیش‌پرداخت و مفاصاحساب' }, { id: 'claims', label: 'ادعاها' }, { id: 'retention', label: 'حسن انجام کار' }] },
+  { id: 'billing', label: 'صورت‌وضعیت و پرداخت', icon: Receipt, color: '#0ea5e9', project: true, subs: [{ id: 'pipeline', label: 'گردش' }, { id: 'certificates', label: 'صورت‌وضعیت‌ها' }, { id: 'payments', label: 'پرداخت‌ها' }] },
+  { id: 'budget', label: 'بودجه و هزینه', icon: Wallet, color: '#f59e0b', project: true, subs: [{ id: 'budget', label: 'بودجه و ردیف‌ها' }, { id: 'cost', label: 'هزینه و پیش‌بینی' }, { id: 'land', label: 'تملک اراضی' }] },
+  { id: 'cash', label: 'جریان نقدی', icon: LineChart, color: '#14b8a6', project: true, subs: [{ id: 'curves', label: 'منحنی‌ها' }, { id: 'monthly', label: 'برنامهٔ ریالی ماهانه (سبد)' }] },
+  { id: 'attention', label: 'موارد نیازمند تصمیم', icon: ShieldAlert, color: '#ef4444', project: true },
+  { id: 'admin', label: 'گزارش و تنظیمات', icon: Settings2, color: '#94a3b8', subs: [{ id: 'reports', label: 'گزارش‌ها' }, { id: 'settings', label: 'تنظیمات و سابقه' }] },
 ]
 
-/** Tabs that operate on a single selected project and need the project dropdown in the topbar. */
-const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention', 'land', 'changes', 'exceptions', 'curves', 'pipeline', 'obligations'])
-
-const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
-  dashboard: { title: 'داشبورد مدیریت مالی', subtitle: 'نمای کلی سبد پروژه‌ها' },
-  mgmt: { title: 'داشبورد مدیریتی', subtitle: 'نمای متناسب با نقش: مدیرعامل، مجری، مدیر پروژه، مالی و قراردادی' },
-  curves: { title: 'منحنی‌های جریان نقدی', subtitle: 'پایه، واقعی، پیش‌بینی و پیشنهاد پیمانکار؛ ریالی و ارزی جدا' },
-  pipeline: { title: 'گردش صورت‌وضعیت‌ها', subtitle: 'مرحله و زمان سپری‌شده' },
-  obligations: { title: 'پیش‌پرداخت و مفاصاحساب', subtitle: 'استهلاک پیش‌پرداخت، تأمین اجتماعی، بیمه و مالیات' },
-  portfolios: { title: 'پرتفولیوها', subtitle: 'فهرست و وضعیت مالی پرتفولیوها' },
-  programs: { title: 'طرح‌ها', subtitle: 'فهرست و وضعیت مالی طرح‌ها' },
-  projects: { title: 'پروژه‌ها', subtitle: 'فهرست و وضعیت مالی پروژه‌ها' },
-  contracts: { title: 'قراردادها و تعهدات مالی', subtitle: 'مدیریت قراردادها و ضمانت‌نامه‌های هر پروژه' },
-  certificates: { title: 'صورت‌وضعیت‌های پرداخت', subtitle: 'کارکرد و تعدیل' },
-  payments: { title: 'سوابق پرداخت', subtitle: 'ثبت و پیگیری پرداخت‌های انجام‌شده' },
-  budget: { title: 'بودجه', subtitle: 'بودجه کل و سالانه پروژه' },
-  cost: { title: 'مدیریت هزینه', subtitle: 'هزینه واقعی، متعهدشده و پیش‌بینی' },
-  cashflow: { title: 'جریان نقدینگی و پیش‌بینی', subtitle: 'برنامه، واقعی و پیش‌بینی نقدینگی' },
-  guarantees: { title: 'ضمانت‌نامه‌ها', subtitle: 'فهرست و پیگیری ضمانت‌نامه‌های دریافتی' },
-  claims: { title: 'کلایم پیمانکار', subtitle: 'ثبت و پیگیری ادعاهای پیمانکار' },
-  retention: { title: 'حسن انجام کار', subtitle: 'بدهی و برنامه آزادسازی حسن انجام کار' },
-  land: { title: 'تملک اراضی', subtitle: 'بودجه، پرداخت و تعهد تملک — همگام با ماژول تحصیل اراضی' },
-  changes: { title: 'تغییرات قرارداد', subtitle: 'اثر تغییرات تصویب‌شده و سناریوی تغییرات در جریان' },
-  exceptions: { title: 'استثناها و اقدام', subtitle: 'موارد نیازمند تصمیم و ثبت مسئله یا ریسک' },
-  reports: { title: 'گزارش‌های مالی', subtitle: 'گزارش تفکیکی صورت‌وضعیت‌ها' },
-  settings: { title: 'تنظیمات', subtitle: '' },
-}
-
-
-/**
- * Financial Management — owner-side budget/contract/payment control. Deliberately not
- * accounting: no general ledger, no P&L, no contractor internal cost (see schema.sql section 19).
- */
+/** کنترل قراردادها و مالی — same shell as the risk and issue modules (im-*), eight sections, each with its own few sub-views. */
 export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const projects = useMasterDataStore((s) => s.projects)
-  const masterDataLoaded = useMasterDataStore((s) => s.loaded)
-  const masterDataLoading = useMasterDataStore((s) => s.loading)
+  const mdLoaded = useMasterDataStore((s) => s.loaded)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const financeLoaded = useFinanceStore((s) => s.loaded)
   const fetchFinance = useFinanceStore((s) => s.fetchAll)
-  const fetchControl = useFinanceControlStore((s) => s.fetchAll)
   const controlLoaded = useFinanceControlStore((s) => s.loaded)
-  const contracts = useFinanceStore((s) => s.contracts)
-  const certificates = useFinanceStore((s) => s.certificates)
-  const guarantees = useFinanceStore((s) => s.guarantees)
-  const claims = useFinanceStore((s) => s.claims)
-  const retentionReleases = useFinanceStore((s) => s.retentionReleases)
-  const profile = useAuthStore((s) => s.profile)
-
-  const [projectId, setProjectId] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const finLight = !useAppTheme().dark
-
-  // Arrived here from Project Radar with a project already in context (Finance uses
-  // masterProjectId directly, no mapping table needed) — stay locked to it: hide the
-  // portfolio/program/project browse tabs and the cross-project dashboard, landing straight on
-  // this project's contracts instead.
+  const fetchControl = useFinanceControlStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
+  const [tab, setTab] = useState<FinTab>('home')
+  const [subs, setSubs] = useState<Partial<Record<FinTab, string>>>({})
+  const [projectId, setProjectId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!masterDataLoaded) fetchMasterData()
+    if (!mdLoaded) fetchMasterData()
     if (!financeLoaded) fetchFinance()
     if (!controlLoaded) void fetchControl()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
   useEffect(() => {
-    if (projects.length === 0 || projectId) return
-    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
-      setProjectId(contextProjectId)
-    } else {
-      setProjectId(projects[0].id)
-    }
+    if (!projects.length || projectId) return
+    setProjectId(contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id)
   }, [projects, projectId, contextProjectId])
+  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab, subs])
 
-  const visibleNav = NAV
+  const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
+  const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
+  const go = (t: FinTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
+  const loading = !financeLoaded || !mdLoaded
 
-  const jy = todayJalali().jy
-  const notifications = useMemo(
-    () => buildFinanceNotifications(contracts, certificates, guarantees, claims, retentionReleases),
-    [contracts, certificates, guarantees, claims, retentionReleases],
-  )
-
-  const openNotification = (n: FinNotification) => {
-    setTab(n.tab)
-    if (n.masterProjectId) setProjectId(n.masterProjectId)
-    setNotifOpen(false)
+  const body = (pid: string | null) => {
+    if (cur.project && !pid) return <div className="im-page"><div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div></div>
+    const p = pid as string
+    switch (tab) {
+      case 'home': return <HubPage onGo={go} />
+      case 'dashboard': return sub === 'portfolio' ? <FinancialDashboardPage /> : <MgmtDashboardPage />
+      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <GuaranteesPage masterProjectId={p} /> : sub === 'obligations' ? <ObligationsPage masterProjectId={p} /> : sub === 'claims' ? <ClaimsPage masterProjectId={p} /> : sub === 'retention' ? <RetentionPage masterProjectId={p} /> : <ContractsPage masterProjectId={p} />
+      case 'billing': return sub === 'certificates' ? <PaymentCertificatesPage masterProjectId={p} /> : sub === 'payments' ? <PaymentsRecordPage masterProjectId={p} /> : <PipelinePage masterProjectId={p} />
+      case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : <BudgetPage masterProjectId={p} />
+      case 'cash': return sub === 'monthly' ? <CashFlowForecastPage /> : <CashflowCurvesPage masterProjectId={p} />
+      case 'attention': return <ExceptionsPage masterProjectId={p} />
+      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <FinancialReportsPage masterProjectId={pid} /> : <div className="im-page"><div className="im-card im-empty">یک پروژه را انتخاب کنید.</div></div>
+    }
   }
-
-  if ((masterDataLoading && !masterDataLoaded) || (!financeLoaded && !masterDataLoaded)) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}>
-        <Loader2 size={24} className="animate-spin" style={{ color: FINANCE_ACCENT }} />
-      </div>
-    )
-  }
-
-  const meta = PAGE_META[tab]
 
   return (
-    <div className={`fin-shell flex h-screen w-screen overflow-hidden ${finLight ? 'fin-light' : ''}`}>
-      {mobileNavOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileNavOpen(false)} />}
-
-      <aside
-        className={`fixed inset-y-0 z-50 flex w-64 shrink-0 flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}
-        style={{ background: 'var(--fin-sidebar-bg)', borderInlineStart: '1px solid var(--fin-sidebar-border)' }}
-      >
-        <div className="flex items-center gap-3 px-4 py-5">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-            style={{ border: `1.5px solid ${FINANCE_ACCENT}`, boxShadow: `inset 0 0 0 3px ${FINANCE_ACCENT}22` }}
-          >
-            <Banknote size={16} style={{ color: FINANCE_ACCENT }} />
-          </div>
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-extrabold text-white">مدیریت مالی پروژه</p>
-            <p className="truncate text-[9.5px] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--fin-nav-text-muted)', fontFamily: 'var(--font-mono)' }} dir="ltr">
-              RASTA · Ledger
-            </p>
-          </div>
-          <button onClick={() => setMobileNavOpen(false)} className="mr-auto text-white lg:hidden">
-            <X size={18} />
-          </button>
-        </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-          {visibleNav.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => {
-                setTab(id)
-                setMobileNavOpen(false)
-              }}
-              className={`fin-nav-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[12.5px] font-medium ${tab === id ? 'is-active' : ''}`}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="border-t px-4 py-3.5" style={{ borderColor: 'var(--fin-sidebar-border)' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-white">{profile?.fullName?.slice(0, 1) ?? '?'}</div>
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-[11.5px] font-bold text-white">{profile?.fullName || 'کاربر'}</p>
-              <p className="truncate text-[10px]" style={{ color: 'var(--fin-nav-text-muted)' }}>
-                {profile?.positionTitle || '—'}
-              </p>
+    <div className="im-root fn-root" dir="rtl">
+      <header className="im-head no-print">
+        <div className="im-head-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <span className="im-logo" aria-hidden style={{ background: 'linear-gradient(135deg, #10b981, #047857 70%, #0f766e)', boxShadow: '0 10px 22px -10px #059669, inset 0 1px 0 rgba(255,255,255,.35)' }}><Banknote size={22} /></span>
+            <div style={{ minWidth: 0, lineHeight: 1.3 }}>
+              <h1 className="im-head-title">کنترل قراردادها و مالی</h1>
+              <p className="im-head-eyebrow">Contract &amp; Portfolio Finance Control</p>
             </div>
           </div>
-          <div className="mt-3">
+          <div className="im-actions" style={{ minWidth: 0 }}>
+            {projects.length > 0 && tab !== 'home' && (cur.project || (tab === 'admin' && sub === 'reports')) && (
+              <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}
+              </select>
+            )}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-      </aside>
+        <nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل قراردادها و مالی">
+          {NAV.map((n) => (
+            <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
+              <n.icon size={15} aria-hidden />{n.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="no-print flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3" style={{ background: 'var(--fin-topbar-bg)', backdropFilter: 'blur(10px)' }}>
-          <div className="min-w-0">
-            <p className="truncate text-[10.5px] font-semibold tracking-[0.02em]" style={{ color: 'var(--fin-nav-text-muted)' }}>
-              {meta.subtitle}
-            </p>
-            <h1 className="truncate text-lg font-bold text-white" style={{ fontFamily: "'Noto Naskh Arabic', var(--font-sans)" }}>
-              {meta.title}
-            </h1>
+      <StorageErrorBanner />
+
+      <main className="im-main" id="im-main">
+        {loading ? (
+          <div className="im-page" style={{ display: 'grid', gap: 12 }}>
+            <div className="im-skeleton" style={{ height: 150, borderRadius: 22 }} />
+            <div className="im-tiles">{Array.from({ length: 6 }, (_, k) => <div key={k} className="im-skeleton" style={{ height: 96, borderRadius: 18 }} />)}</div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}><Loader2 size={20} className="animate-spin" style={{ color: 'var(--im-accent)' }} aria-label="در حال بارگذاری" /></div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {PROJECT_SCOPED_TABS.has(tab) && (
-              <select
-                value={projectId ?? ''}
-                onChange={(e) => setProjectId(e.target.value || null)}
-                className="fin-input w-40"
-                style={{ background: 'rgba(201,166,84,0.08)', color: '#fff', borderColor: 'rgba(201,166,84,0.22)' }}
-              >
-                <option value="">پروژه‌ای انتخاب کنید</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id} style={{ color: '#1b2333' }}>
-                    {p.officialName}
-                  </option>
-                ))}
-              </select>
+        ) : (
+          <div className="im-page" key={`${tab}:${sub}`}>
+            {cur.subs && (
+              <div className="no-print" style={{ marginBottom: 14, overflowX: 'auto' }}>
+                <div className="im-seg" role="tablist" aria-label="نماها">
+                  {cur.subs.map((s) => <button key={s.id} role="tab" aria-selected={sub === s.id} className={sub === s.id ? 'on' : ''} onClick={() => setSubs((x) => ({ ...x, [tab]: s.id }))}>{s.label}</button>)}
+                </div>
+              </div>
             )}
-            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] sm:flex" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}>
-              <Calendar size={12} /> سال مالی {jy.toLocaleString('fa-IR')}
-            </span>
-            <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] md:flex" style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text-muted)' }}>
-              <Calendar size={12} /> آخرین به‌روزرسانی: {jy.toLocaleString('fa-IR')}/{String(todayJalali().jm).padStart(2, '0')}/{String(todayJalali().jd).padStart(2, '0')} (
-              {JALALI_MONTHS[todayJalali().jm - 1]})
-            </span>
-            <div className="relative">
-              <button
-                onClick={() => setNotifOpen((v) => !v)}
-                className="relative flex h-8 w-8 items-center justify-center rounded-lg"
-                style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
-                title="اعلان‌ها"
-              >
-                <Bell size={14} />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: '#b5573a' }}>
-                    {notifications.length.toLocaleString('fa-IR')}
-                  </span>
-                )}
-              </button>
-              {notifOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                  <div className="fin-card absolute left-0 top-full z-50 mt-2 w-80 max-w-[85vw] overflow-hidden p-0 sm:w-96">
-                    <div className="fin-eyebrow m-0 px-4 pt-3">
-                      <Bell size={12} /> اعلان‌ها ({notifications.length.toLocaleString('fa-IR')})
-                    </div>
-                    <div className="max-h-80 overflow-y-auto px-2 pb-2">
-                      {notifications.length === 0 ? (
-                        <p className="fin-text-muted px-2 py-6 text-center text-[11px]">اعلان فعالی وجود ندارد.</p>
-                      ) : (
-                        notifications.map((n) => {
-                          const Icon = n.severity === 'bad' ? AlertTriangle : n.severity === 'warn' ? AlertTriangle : Info
-                          const tone = n.severity === 'bad' ? 'var(--fin-bad)' : n.severity === 'warn' ? 'var(--fin-warn)' : 'var(--fin-info)'
-                          return (
-                            <button key={n.id} onClick={() => openNotification(n)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2.5 text-right hover:opacity-80">
-                              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: `${tone}1a` }}>
-                                <Icon size={12} style={{ color: tone }} />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="fin-text block text-[11.5px] leading-5">{n.text}</span>
-                                <span className="num mt-0.5 block text-[10px] font-bold" style={{ color: tone }}>
-                                  {n.daysLabel}
-                                </span>
-                              </span>
-                            </button>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <button
-              onClick={() => setTab('settings')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: 'rgba(201,166,84,0.08)', color: 'var(--fin-nav-text)' }}
-              title="تنظیمات"
-            >
-              <Settings size={14} />
-            </button>
-            <button onClick={() => setMobileNavOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-white lg:hidden" style={{ background: 'rgba(201,166,84,0.08)' }}>
-              <Menu size={16} />
-            </button>
+            <Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}>{body(projectId)}</Suspense>
           </div>
-        </header>
-
-        <StorageErrorBanner />
-
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
-          {tab === 'cashflow' ? (
-            <CashFlowForecastPage />
-          ) : tab === 'dashboard' ? (
-            <FinancialDashboardPage />
-          ) : tab === 'portfolios' ? (
-            <PortfoliosBrowsePage />
-          ) : tab === 'programs' ? (
-            <ProgramsBrowsePage />
-          ) : tab === 'projects' ? (
-            <ProjectsBrowsePage />
-          ) : tab === 'mgmt' ? (
-            <MgmtDashboardPage />
-          ) : tab === 'settings' ? (
-            <ControlSettingsPage masterProjectId={projectId} />
-          ) : !projectId ? (
-            <div className="fin-card flex h-40 items-center justify-center text-sm fin-text-muted">
-              {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}
-            </div>
-          ) : tab === 'budget' ? (
-            <BudgetPage masterProjectId={projectId} />
-          ) : tab === 'contracts' ? (
-            <ContractsPage masterProjectId={projectId} />
-          ) : tab === 'certificates' ? (
-            <PaymentCertificatesPage masterProjectId={projectId} />
-          ) : tab === 'payments' ? (
-            <PaymentsRecordPage masterProjectId={projectId} />
-          ) : tab === 'guarantees' ? (
-            <GuaranteesPage masterProjectId={projectId} />
-          ) : tab === 'claims' ? (
-            <ClaimsPage masterProjectId={projectId} />
-          ) : tab === 'retention' ? (
-            <RetentionPage masterProjectId={projectId} />
-          ) : tab === 'curves' ? (
-            <CashflowCurvesPage masterProjectId={projectId} />
-          ) : tab === 'pipeline' ? (
-            <PipelinePage masterProjectId={projectId} />
-          ) : tab === 'obligations' ? (
-            <ObligationsPage masterProjectId={projectId} />
-          ) : tab === 'land' ? (
-            <LandBridgePage masterProjectId={projectId} />
-          ) : tab === 'changes' ? (
-            <ChangesBridgePage masterProjectId={projectId} />
-          ) : tab === 'exceptions' ? (
-            <ExceptionsPage masterProjectId={projectId} />
-          ) : tab === 'cost' ? (
-            <CostManagementPage masterProjectId={projectId} />
-          ) : (
-            <FinancialReportsPage masterProjectId={projectId} />
-          )}
-        </div>
-      </div>
+        )}
+      </main>
     </div>
   )
 }

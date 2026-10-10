@@ -9,7 +9,7 @@ export function FinanceControlCard({ onSelect, locked }: { onSelect: () => void;
       englishTag="Contract & Portfolio Finance Control"
       description="شناسنامه و الحاقیه‌های قرارداد، صورت‌وضعیت و پرداخت، بودجه و جریان نقدی، هزینهٔ نهایی پیش‌بینی‌شده، تملک اراضی و اثر تغییرات مصوب در سطح پروژه و سبد."
       icon={Landmark}
-      accent="#c9a654"
+      accent="#10b981"
       locked={locked}
       onSelect={onSelect}
     />

@@ -12,13 +12,13 @@
   /* Ink surfaces (dark) */
   --fin-bg: #0b1220;
   --fin-sidebar-bg: #0a0f1c;
-  --fin-sidebar-border: rgba(201, 166, 84, 0.14);
+  --fin-sidebar-border: rgba(5,150,105, 0.14);
   --fin-topbar-bg: rgba(11, 18, 32, 0.78);
   --fin-card-bg: #131c2e;
-  --fin-card-border: rgba(201, 166, 84, 0.14);
+  --fin-card-border: rgba(5,150,105, 0.14);
   --fin-card-shadow: 0 14px 32px rgba(2, 5, 12, 0.5);
-  --fin-divider: rgba(201, 166, 84, 0.14);
-  --fin-grid-line: rgba(201, 166, 84, 0.055);
+  --fin-divider: rgba(5,150,105, 0.14);
+  --fin-grid-line: rgba(5,150,105, 0.055);
 
   /* Ink + paper text */
   --fin-text: #ece7d9;
@@ -26,13 +26,13 @@
   --fin-text-muted: #6f6c60;
   --fin-nav-text: #c9c4b3;
   --fin-nav-text-muted: #726f62;
-  --fin-nav-active-bg: rgba(201, 166, 84, 0.14);
+  --fin-nav-active-bg: rgba(5,150,105, 0.14);
   --fin-nav-active-text: #f3ecd8;
 
   /* Signature accent (brand + primary action) */
-  --fin-brass: #c9a654;
+  --fin-brass: #059669;
   --fin-brass-deep: #9c7c33;
-  --fin-on-brass: #16110a;
+  --fin-on-brass: #ffffff;
 
   /* Semantic ledger tones */
   --fin-good: #4c8f83;
@@ -45,7 +45,7 @@
   background-image:
     linear-gradient(var(--fin-grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--fin-grid-line) 1px, transparent 1px),
-    radial-gradient(ellipse 900px 500px at 85% -10%, rgba(201, 166, 84, 0.07), transparent 60%);
+    radial-gradient(ellipse 900px 500px at 85% -10%, rgba(5,150,105, 0.07), transparent 60%);
   background-size: 56px 56px, 56px 56px, 100% 100%;
   color: var(--fin-nav-text);
 }
@@ -122,7 +122,7 @@
 }
 .fin-input:focus {
   border-color: var(--fin-brass);
-  box-shadow: 0 0 0 3px rgba(201, 166, 84, 0.18);
+  box-shadow: 0 0 0 3px rgba(5,150,105, 0.18);
 }
 .fin-input option {
   color: #1b2333;
@@ -136,7 +136,7 @@
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .fin-nav-item:hover {
-  background: rgba(201, 166, 84, 0.06);
+  background: rgba(5,150,105, 0.06);
   color: var(--fin-nav-text);
 }
 .fin-nav-item.is-active {
@@ -203,3 +203,45 @@
   .fin-shell aside, .fin-shell .no-print { display: none !important; }
   .fin-shell { height: auto !important; overflow: visible !important; background: #fff !important; color: #111 !important; }
 }
+
+/* =====================================================================================================
+   «کنترل قراردادها و مالی» on the shared PM design system (issues.css, im-*): the module's older fin-*
+   pages keep working, but their tokens now resolve to the same panels, lines, radii and status colours
+   as «مدیریت ریسک» and «مدیریت موانع»; only the emerald accent and the banner art are specific here.
+   ===================================================================================================== */
+.fn-root {
+  --im-accent: #10b981; --im-navy-a: #022c22; --im-navy-b: #0b6b4f;
+  --fin-card-bg: var(--im-panel); --fin-card-border: var(--im-line); --fin-card-shadow: var(--im-shadow); --fin-divider: var(--im-line);
+  --fin-text: var(--im-text); --fin-text-secondary: var(--im-muted-2); --fin-text-muted: var(--im-muted);
+  --fin-brass: var(--im-accent); --fin-brass-deep: var(--im-accent); --fin-on-brass: #fff;
+  --fin-good: var(--im-mint); --fin-warn: var(--im-amber); --fin-bad: var(--im-coral); --fin-info: var(--im-sky); --fin-tertiary: var(--im-violet);
+}
+:root[data-theme='light'] .fn-root { --im-accent: #047857; --im-navy-a: #064e3b; --im-navy-b: #0f766e; }
+.fn-root .im-banner-art .b1 { background: #10b981; }
+.fn-root .im-banner-art .b2 { background: #fbbf24; }
+.fn-root .im-banner-art .b3 { background: #38bdf8; }
+.fn-root .im-btn-primary { background: linear-gradient(135deg, #10b981, #047857); box-shadow: 0 8px 18px -8px #047857; }
+.fn-root .num { font-family: inherit; font-variant-numeric: tabular-nums; }
+.fn-root .fin-card { border-radius: var(--im-radius); animation: im-rise 300ms var(--im-ease) backwards; }
+.fn-root .fin-eyebrow { border-bottom-color: var(--im-line); }
+.fn-root .fin-stamp { transform: none; box-shadow: none; border-width: 1px; border-radius: 99px; background: color-mix(in srgb, var(--stamp-tone) 13%, transparent); font-weight: 700; letter-spacing: 0; }
+.fn-root .fin-metric-card:hover { transform: translateY(-2px); }
+
+/* inputs: im-root styles every input (full width, 12px radius); keep the explicit Tailwind widths the pages use */
+.fn-root .fin-input { width: 100%; border-radius: 12px; padding: 9px 12px; font-size: 13px; background: var(--im-panel-2); border: 1px solid var(--im-line-2); color: var(--im-text); }
+.fn-root .fin-input:focus { border-color: var(--im-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--im-accent) 22%, transparent); }
+.fn-root .fin-input.w-20 { width: 5rem; } .fn-root .fin-input.w-28 { width: 7rem; } .fn-root .fin-input.w-40 { width: 10rem; } .fn-root .fin-input.w-48 { width: 12rem; } .fn-root .fin-input.w-52 { width: 13rem; } .fn-root .fin-input.w-56 { width: 14rem; }
+.fn-root .fin-input.flex-1 { width: auto; flex: 1 1 0; min-width: 0; }
+/* labels used as flex/inline rows must stay rows */
+.fn-root label.flex, .fn-root label.inline-flex { display: flex; margin-bottom: 0; align-items: center; }
+.fn-root label.inline-flex { display: inline-flex; }
+.fn-root label.block { margin-bottom: 0; }
+.fn-root button.border { border: 1px solid var(--im-line-2); }
+.fn-root button:active { transform: scale(0.98); }
+.fn-root button { transition: transform 160ms var(--im-ease), background-color .15s, border-color .15s, opacity .15s; }
+.fn-root table { border-collapse: collapse; }
+.fn-root details > summary { cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .fn-root .fin-card { animation: none; } }
+.fn-root table th, .fn-root table td { padding-inline: 8px; }
+.fn-root table th:first-child, .fn-root table td:first-child { padding-inline-start: 0; }
+.fn-root table th:last-child, .fn-root table td:last-child { padding-inline-end: 0; }

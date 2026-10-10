@@ -161,7 +161,7 @@ export function FinancialDashboardPage() {
               key={id}
               onClick={() => setLevel(id)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
-              style={level === id ? { background: '#c9a654', color: '#fff' } : { color: 'var(--fin-text-secondary)' }}
+              style={level === id ? { background: '#059669', color: '#fff' } : { color: 'var(--fin-text-secondary)' }}
             >
               <Icon size={13} />
               {label}
@@ -271,7 +271,7 @@ function PortfolioDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <Building2 size={14} style={{ color: '#c9a654' }} />
+        <Building2 size={14} style={{ color: '#059669' }} />
         <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} className="fin-input w-56">
           <option value="">همه پرتفولیوها ({portfolios.length})</option>
           {portfolios.map((p) => (
@@ -347,7 +347,7 @@ function ProgramDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <Briefcase size={14} style={{ color: '#c9a654' }} />
+        <Briefcase size={14} style={{ color: '#059669' }} />
         <select value={programId} onChange={(e) => setProgramId(e.target.value)} className="fin-input w-56">
           <option value="">همه طرح‌ها ({programs.length})</option>
           {programs.map((p) => (
@@ -423,7 +423,7 @@ function ProjectDashboard({
   return (
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center gap-3 p-4">
-        <FolderKanban size={14} style={{ color: '#c9a654' }} />
+        <FolderKanban size={14} style={{ color: '#059669' }} />
         <select value={activeId} onChange={(e) => setProjectId(e.target.value)} className="fin-input w-56">
           {projects.length === 0 && <option value="">پروژه‌ای ثبت نشده</option>}
           {projects.map((p) => (
@@ -459,7 +459,7 @@ function ProjectDashboard({
   )
 }
 
-const DONUT_PALETTE = ['#3e7c74', '#5c7290', '#8b6e9c', '#a65d82', '#b8863b', '#c9a654', '#b5573a']
+const DONUT_PALETTE = ['#3e7c74', '#5c7290', '#8b6e9c', '#a65d82', '#b8863b', '#059669', '#b5573a']
 
 /** Sum of the next 3 forward months' funding-requirement bucket — used to rank child entities by near-term cash need. */
 function next12MonthNeed(points: { month: string; forecast: number }[]): number {
@@ -603,7 +603,7 @@ function DashboardBody({
           <MiniStatCard icon={Clock} label="میانگین تاخیر پرداخت" value={summary.avgPaymentDelayDays != null ? `${summary.avgPaymentDelayDays.toLocaleString('fa-IR')} روز` : '—'} color="#b8863b" />
           <MiniStatCard icon={UserRound} label="بدهی کارفرما" value={fmtCurrency(summary.outstandingTotal, currency)} color="#b5573a" />
           <MiniStatCard icon={Scale} label="دریافت بیش از حد پیمانکار" value={fmtCurrency(summary.contractorOverpaymentTotal, currency)} color="#c4793a" />
-          <MiniStatCard icon={ShieldCheck} label="ضمانت‌نامه‌های فعال" value={activeGuaranteeCount.toLocaleString('fa-IR')} color="#c9a654" sub={fmtCurrency(summary.guaranteesTotal, currency)} />
+          <MiniStatCard icon={ShieldCheck} label="ضمانت‌نامه‌های فعال" value={activeGuaranteeCount.toLocaleString('fa-IR')} color="#059669" sub={fmtCurrency(summary.guaranteesTotal, currency)} />
         </div>
         <DonutPanel title="وضعیت هزینه (EAC)" icon={<Calculator size={13} />} data={eacDonut} unit={currency} formatTotal={(n) => fmtCurrency(n, currency)} />
       </div>
@@ -671,12 +671,12 @@ export function BulletComparison({
         {icon} {title}
       </p>
       <div className="relative mt-4 h-6 w-full rounded-lg" style={{ background: 'rgba(148,163,184,0.12)' }}>
-        <div className="absolute inset-y-0 rounded-lg" style={{ right: 0, width: `${valuePct}%`, background: over ? '#b5573a' : '#c9a654', opacity: 0.85 }} />
+        <div className="absolute inset-y-0 rounded-lg" style={{ right: 0, width: `${valuePct}%`, background: over ? '#b5573a' : '#059669', opacity: 0.85 }} />
         <div className="absolute inset-y-[-4px] w-[2.5px] rounded-full bg-white" style={{ right: `${targetPct}%` }} title={targetLabel} />
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full" style={{ background: over ? '#b5573a' : '#c9a654' }} /> {valueLabel}: <span className="num font-bold">{fmtCurrency(value, currency)}</span>
+          <span className="h-2 w-2 rounded-full" style={{ background: over ? '#b5573a' : '#059669' }} /> {valueLabel}: <span className="num font-bold">{fmtCurrency(value, currency)}</span>
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2 w-0.5 bg-white" /> {targetLabel}: <span className="num font-bold">{fmtCurrency(target, currency)}</span>

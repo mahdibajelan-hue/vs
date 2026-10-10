@@ -31,7 +31,7 @@ export function CostProgressCheckCard({ project, financialPercent }: { project: 
   return (
     <div className="fin-card p-4">
       <p className="fin-text mb-3 flex items-center gap-1.5 text-sm font-bold">
-        <Gauge size={14} style={{ color: '#c9a654' }} /> تطبیق پیشرفت فیزیکی و مالی (EVM ساده)
+        <Gauge size={14} style={{ color: '#059669' }} /> تطبیق پیشرفت فیزیکی و مالی (EVM ساده)
       </p>
       {loading ? (
         <p className="text-xs fin-text-muted">در حال دریافت پیشرفت فیزیکی از ماژول پایپ‌پالس...</p>
