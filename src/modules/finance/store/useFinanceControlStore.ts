@@ -105,7 +105,7 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
       linkTargets: targets,
       changes: ok<Row>(changes).map((r): FinChangeRequest => ({ id: r.id, masterProjectId: r.master_project_id, contractId: r.contract_id, crNumber: r.cr_number ?? '', title: r.title ?? '', status: r.status, currency: r.currency ?? '', proposedAmount: Number(r.proposed_change_amount ?? 0), approvedAmount: r.approved_change_amount == null ? null : Number(r.approved_change_amount), proposedDays: Number(r.proposed_schedule_impact_days ?? 0), approvedDays: r.approved_schedule_impact_days == null ? null : Number(r.approved_schedule_impact_days), approvedAt: r.approved_at ?? null })),
       syncLog: ok<Row>(log).map((r): FinSyncEntry => ({ id: r.id, at: r.at, source: r.source, outcome: r.outcome, detail: r.detail ?? '', masterProjectId: r.master_project_id })),
-      plans: ok<Row>(plans).map((r): CashPlan => ({ contractId: r.contract_id, kind: r.kind, fund: r.fund, currency: r.currency, jalaliYear: r.jalali_year, jalaliMonth: r.jalali_month, amount: Number(r.amount) })),
+      plans: ok<Row>(plans).map((r): CashPlan => ({ projectId: r.master_project_id, contractId: r.contract_id ?? null, kind: r.kind, fund: r.fund, currency: r.currency, jalaliYear: r.jalali_year, jalaliMonth: r.jalali_month, amount: Number(r.amount) })),
       clearances: ok<Row>(clearances).map((r): Clearance => ({ contractId: r.contract_id, kind: r.kind, status: r.status, number: r.number ?? '', issueDate: r.issue_date, expiryDate: r.expiry_date, note: r.note ?? '' })),
       reviews: new Map(ok<Row>(reviews).map((r) => [r.insight_key as string, r.decision as 'accepted' | 'dismissed'])),
       land: new Map(landEntries.filter((e): e is readonly [string, LandSummary] => !!e)),
@@ -129,7 +129,7 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
   },
 
   savePlan: async (p) => {
-    const { error } = await supabase.rpc('fin_save_cashflow_plan', { p_contract: p.contractId, p_kind: p.kind, p_fund: p.fund, p_currency: p.currency, p_year: p.jalaliYear, p_month: p.jalaliMonth, p_amount: p.amount })
+    const { error } = await supabase.rpc('fin_save_cashflow_plan2', { p_project: p.projectId, p_contract: p.contractId, p_kind: p.kind, p_fund: p.fund, p_currency: p.currency, p_year: p.jalaliYear, p_month: p.jalaliMonth, p_amount: p.amount })
     if (report('ثبت برنامهٔ جریان نقدی', error)) return false
     await get().fetchAll()
     return true

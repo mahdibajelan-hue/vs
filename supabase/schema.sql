@@ -20469,3 +20469,4 @@ $f$;
 
 -- §84 Finance & Contract Control: see supabase/finance/001_finance_control.sql (applied live)
 -- §85 Finance phase 2: see supabase/finance/002_cashflow_clearances_insights.sql (applied live)
+-- §86 Finance phase 3: supabase/finance/003_project_level_plans.sql (applied live)

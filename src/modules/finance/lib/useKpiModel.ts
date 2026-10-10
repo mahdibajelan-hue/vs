@@ -35,7 +35,7 @@ export function useKpiModel() {
       const kpi = projectKpis({
         contracts, amendments: fin.amendments, certificates: fin.certificates.filter((c) => ids.has(c.contractId)), payments: fin.payments, guarantees: fin.guarantees.filter((g) => ids.has(g.contractId)), claims: fin.claims.filter((c) => ids.has(c.contractId)),
         clearances: ctl.clearances.filter((c) => ids.has(c.contractId)), bac, annual: currentJalaliYearBudget(p.id, fin.annualBudgets), linesTotal: ctl.budgetLines.filter((l) => l.masterProjectId === p.id && l.isActive).reduce((n, l) => n + l.approvedAmount, 0), land,
-        changes: ctl.changes.filter((c) => c.masterProjectId === p.id).map((c) => ({ id: c.id, contractId: c.contractId, status: c.status, proposedAmount: c.proposedAmount })), plans: ctl.plans.filter((x) => ids.has(x.contractId)), manualForecasts: fin.cashflowForecasts.filter((f) => ids.has(f.contractId)),
+        changes: ctl.changes.filter((c) => c.masterProjectId === p.id).map((c) => ({ id: c.id, contractId: c.contractId, status: c.status, proposedAmount: c.proposedAmount })), plans: ctl.plans.filter((x) => x.projectId === p.id), manualForecasts: fin.cashflowForecasts.filter((f) => ids.has(f.contractId)),
         physical: physical.get(p.id) ?? null, thresholds, today,
       })
       const ex = exceptionsAll.filter((e) => e.masterProjectId === p.id)

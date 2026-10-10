@@ -1,11 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Briefcase, Coins, FileText, Gauge, Landmark } from 'lucide-react'
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar } from 'recharts'
 import type { LucideIcon } from 'lucide-react'
 import { useKpiModel, type ProjectRow } from '../../lib/useKpiModel'
 import { toneOf, type KpiDef, type ProjectKpi, type Role, type Tone } from '../../lib/financeKpis'
 import { Chip, DataTable, KpiCard, Section, StackBar, fmtBn, fmtPct, splitMoney, type Col } from '../../components/fn'
 import { exportFinanceReportToExcel } from '../../lib/financeExport'
 import type { FinTab } from '../../FinanceApp'
+import { useFinanceStore } from '../../store/useFinanceStore'
+import { useFinanceControlStore } from '../../store/useFinanceControlStore'
+import { buildCurves, isoMonthIdx } from '../../lib/financeCurves'
+import { certificateOutstanding } from '../../lib/financeCalc'
+import { contractFile, daysBetween } from '../../lib/financeControl'
+import { ChartTip, Donut, HBars, PB, Ring, Tile, Waterfall, axisProps, gridProps } from '../../components/charts'
+import { JALALI_MONTHS } from '../../../../lib/jalali'
 
 const ROLES: { id: Role; label: string; icon: LucideIcon; blurb: string; portfolio: boolean }[] = [
   { id: 'ceo', label: 'مدیرعامل', icon: Briefcase, blurb: 'تصویر کلان سبد: بودجه، تعهد، هزینهٔ نهایی و پروژه‌هایی که تصمیم می‌خواهند', portfolio: true },
@@ -91,7 +99,31 @@ export function DashboardPage({ projectId, onProject, onGo }: { projectId: strin
   const ids = new Set(scope.map((r) => r.id))
   const exc = exceptions.filter((e) => ids.has(e.masterProjectId))
   const critical = scope.reduce((n, r) => n + r.critical, 0)
+  const fin = useFinanceStore()
+  const ctl = useFinanceControlStore()
+  const today = new Date().toISOString().slice(0, 10)
+  const nowIdx = isoMonthIdx(today) ?? 0
+  const vis = useMemo(() => {
+    const contracts = fin.contracts.filter((c) => ids.has(c.masterProjectId) && c.status !== 'draft' && c.status !== 'replaced')
+    const cids = new Set(contracts.map((c) => c.id))
+    const certs = fin.certificates.filter((c) => cids.has(c.contractId))
+    const curves = buildCurves({ contracts, amendments: fin.amendments, certificates: certs, payments: fin.payments, plans: ctl.plans.filter((p) => ids.has(p.projectId)), manualForecasts: fin.cashflowForecasts.filter((f) => cids.has(f.contractId)), fund: { fund: 'rial', currency: 'ریال' }, todayIso: today })
+    const act = curves.months.filter((m) => !m.isFuture).slice(-12)
+    const fut = curves.months.filter((m) => m.idx > nowIdx && m.idx <= nowIdx + 6)
+    const aging = [0, 0, 0, 0]
+    for (const c of certs) { if (c.status !== 'certified' && c.status !== 'partially_paid') continue; const since = c.approvedDate ?? c.certifiedDate; if (!since) continue; const d = daysBetween(today, since); aging[d <= 30 ? 0 : d <= 60 ? 1 : d <= 90 ? 2 : 3] += certificateOutstanding(c) }
+    const growth = contracts.filter((c) => c.status === 'active').map((c) => ({ name: (c.contractNumber || c.title).slice(0, 14), value: contractFile(c, fin.amendments).increasePct })).sort((a, b) => b.value - a.value).slice(0, 8)
+    const guars = fin.guarantees.filter((g) => cids.has(g.contractId) && g.status === 'active' && g.expiryDate).map((g) => ({ name: g.number.slice(0, 14), value: daysBetween(g.expiryDate!, today) })).sort((a, b) => a.value - b.value).slice(0, 6)
+    const statusCount = ['active', 'completed', 'suspended', 'terminated'].map((s) => ({ s, n: contracts.filter((c) => c.status === s).length }))
+    return { curves, act, fut, aging, growth, guars, statusCount }
+  }, [fin.contracts, fin.certificates, fin.amendments, fin.payments, fin.cashflowForecasts, fin.guarantees, ctl.plans, ids, today, nowIdx])
+  const sparks: Record<string, number[]> = { paid: vis.act.map((m) => (m.cumActual ?? 0) / 1e9), cash3: vis.fut.map((m) => m.forecast / 1e9) }
   const defs = kpisFor(role, k, scope, thresholds, critical)
+  const bn = (v: number) => (v / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 0 })
+  const scenarioDelta = Math.max(0, k.scenarioEac - k.eac)
+  const certifiedUnpaid = Math.max(0, k.certified - k.paid)
+  const monthName = (jy: number, jm: number) => `${JALALI_MONTHS[jm - 1]} ${(jy % 100).toLocaleString('fa-IR', { minimumIntegerDigits: 2 })}`
+  const flow = vis.curves.months.filter((m) => m.idx >= nowIdx - 8 && m.idx <= nowIdx + 6).map((m) => ({ name: monthName(m.jy, m.jm), 'مبنا': m.cumBaseline / 1e9, 'واقعی': m.cumActual == null ? null : m.cumActual / 1e9, 'پیش‌بینی': m.cumForecast == null ? null : m.cumForecast / 1e9, 'پرداخت ماهانه': m.isFuture ? null : m.actual / 1e9 }))
 
   const cols: Col<ProjectRow>[] = [
     { key: 'p', label: 'پروژه', render: (r) => <span className="strong">{r.name}</span>, sort: (r) => r.name },
@@ -115,7 +147,38 @@ export function DashboardPage({ projectId, onProject, onGo }: { projectId: strin
 
       {scope.length === 0 ? <div className="im-card im-empty">هنوز قرارداد، بودجه یا پرداختی ثبت نشده است. از بخش «قراردادها» و «بودجه و هزینه» شروع کنید.</div> : (
         <>
-          <div className="fn-kpis">{defs.map((d, i) => <KpiCard key={d.key} i={i} label={d.label} value={d.value} unit={d.unit} sub={d.sub} tone={d.tone} hint={d.hint} onClick={d.go ? () => onGo(d.go!.tab as FinTab, d.go!.sub) : undefined} />)}</div>
+          <div className="fn-kpis">{defs.map((d, i) => <KpiCard key={d.key} i={i} label={d.label} value={d.value} unit={d.unit} sub={d.sub} tone={d.tone} hint={d.hint} spark={sparks[d.key]} sparkColor={d.key === 'paid' ? PB.teal : PB.violet} onClick={d.go ? () => onGo(d.go!.tab as FinTab, d.go!.sub) : undefined} />)}</div>
+
+
+          <div className="fn-tiles">
+            {role !== 'contracts' && <Tile title="از بودجه تا مانده" hint="میلیارد ریال" span={role === 'pm' ? undefined : undefined}>
+              <Waterfall fmt={bn} steps={[{ label: 'بودجه', value: k.bac, kind: 'total', color: PB.blue }, { label: 'قراردادها', value: -k.committedContracts, kind: 'delta' }, { label: 'تملک', value: -k.landExposure, kind: 'delta', color: PB.violet }, { label: 'تغییرات در جریان', value: -scenarioDelta, kind: 'delta', color: PB.yellow }, { label: 'مانده', value: k.bac - k.eac - scenarioDelta, kind: 'total', color: PB.teal }]} />
+            </Tile>}
+            {role !== 'contracts' && <Tile title="ترکیب بودجه" hint="پرداخت، تأیید، تعهد و آزاد">
+              <Donut fmt={(v) => `${bn(v)} م`} center={{ v: fmtPct(k.committedPct, 0), l: 'تعهد‌شده' }} data={[{ name: 'پرداخت‌شده', value: Math.min(k.paid, k.committed), color: PB.teal }, { name: 'تأییدشده، پرداخت‌نشده', value: certifiedUnpaid, color: PB.yellow }, { name: 'تعهد، هنوز تأییدنشده', value: Math.max(0, k.committed - Math.max(k.certified, k.paid)), color: PB.blue }, { name: 'آزاد', value: Math.max(0, k.bac - k.committed), color: 'var(--im-panel-3)' }]} />
+            </Tile>}
+            {role === 'pm' ? (
+              <Tile title="پیشرفت و مصرف"><div className="fn-rings"><Ring pct={k.physical} color={PB.blue} label="فیزیکی" /><Ring pct={k.financialPct} color={PB.teal} label="مالی" /><Ring pct={k.committedPct} color={k.committedPct != null && k.committedPct > 100 ? PB.coral : PB.yellow} label="تعهد بودجه" /></div></Tile>
+            ) : role === 'finance' ? (
+              <Tile title="سنی‌بندی بدهی تأییدشده" hint="روز از تأیید؛ میلیارد ریال"><HBars fmt={bn} data={[{ name: '۰–۳۰ روز', value: vis.aging[0], color: PB.teal }, { name: '۳۱–۶۰ روز', value: vis.aging[1], color: PB.yellow }, { name: '۶۱–۹۰ روز', value: vis.aging[2], color: PB.orange }, { name: 'بیش از ۹۰', value: vis.aging[3], color: PB.coral }]} /></Tile>
+            ) : role === 'contracts' ? (
+              <Tile title="رشد مبلغ قراردادها" hint="٪ نسبت به مبلغ اولیه"><HBars fmt={(v) => `${v.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪`} data={vis.growth.length ? vis.growth : [{ name: '—', value: 0 }]} /></Tile>
+            ) : (
+              <Tile title="انحراف پروژه‌ها از بودجه" hint="میلیارد ریال؛ منفی = کسری"><HBars fmt={bn} data={scope.map((r) => ({ name: r.name.slice(0, 16), value: r.kpi.bac ? r.kpi.vac : 0, color: r.kpi.vac < 0 ? PB.coral : PB.teal }))} /></Tile>
+            )}
+            {role === 'contracts' && <Tile title="ضمانت‌نامه‌ها: روز تا انقضا" hint="کمترین مانده اول"><HBars fmt={(v) => `${v.toLocaleString('fa-IR')} روز`} data={vis.guars.length ? vis.guars.map((g) => ({ ...g, color: g.value < 0 ? PB.coral : g.value < 60 ? PB.yellow : PB.teal })) : [{ name: '—', value: 0 }]} /></Tile>}
+            {role === 'contracts' && <Tile title="وضعیت قراردادها"><Donut fmt={(v) => v.toLocaleString('fa-IR')} center={{ v: vis.statusCount.reduce((n, x) => n + x.n, 0).toLocaleString('fa-IR'), l: 'قرارداد' }} data={[{ name: 'فعال', value: vis.statusCount[0].n, color: PB.teal }, { name: 'تکمیل‌شده', value: vis.statusCount[1].n, color: PB.blue }, { name: 'متوقف', value: vis.statusCount[2].n, color: PB.yellow }, { name: 'فسخ‌شده', value: vis.statusCount[3].n, color: PB.coral }]} /></Tile>}
+            <Tile title="پرداخت تجمعی: مبنا، واقعی، پیش‌بینی" hint="میلیارد ریال" span={role === 'contracts' ? 3 : 3}>
+              {flow.length < 2 ? <p className="im-helper">هنوز داده‌ی نقدی نیست.</p> : (
+                <div dir="ltr" style={{ height: 250 }}><ResponsiveContainer width="100%" height="100%"><ComposedChart data={flow} margin={{ left: 4, right: 8, top: 6 }}>
+                  <defs><linearGradient id="dB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={PB.blue} stopOpacity={0.32} /><stop offset="100%" stopColor={PB.blue} stopOpacity={0} /></linearGradient></defs>
+                  <CartesianGrid {...gridProps} /><XAxis dataKey="name" {...axisProps} /><YAxis {...axisProps} width={44} tickFormatter={(v: number) => v.toLocaleString('fa-IR')} /><Tooltip content={<ChartTip unit="میلیارد" />} />
+                  <Area dataKey="مبنا" stroke={PB.blue} strokeWidth={2.2} fill="url(#dB)" dot={false} /><Bar dataKey="پرداخت ماهانه" fill={PB.teal} fillOpacity={0.55} radius={[4, 4, 0, 0]} barSize={12} />
+                  <Line dataKey="واقعی" stroke={PB.teal} strokeWidth={3} dot={false} connectNulls={false} /><Line dataKey="پیش‌بینی" stroke={PB.violet} strokeWidth={2.6} strokeDasharray="7 5" dot={false} connectNulls={false} />
+                </ComposedChart></ResponsiveContainer></div>
+              )}
+            </Tile>
+          </div>
 
           {(def.portfolio) && (
             <Section title="وضعیت پروژه‌ها" hint="مبالغ به میلیارد ریال؛ روی ستون‌ها بزنید تا مرتب شود، روی ردیف بزنید تا پروژه باز شود" action={<button className="im-btn im-btn-ghost im-btn-sm" onClick={exportIt}>خروجی Excel</button>} flush>

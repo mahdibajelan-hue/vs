@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDownAZ, ArrowUpAZ, Info } from 'lucide-react'
 import type { Tone } from '../lib/financeKpis'
 import { formatJalali } from '../../../lib/jalali'
+import { Spark } from './charts'
 
 /** Rial amount in billions with a fixed number of decimals — for tables whose header states «میلیارد ریال». */
 export const fmtBn = (n: number, d = 1): string => (n / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: d, minimumFractionDigits: n !== 0 && Math.abs(n) < 1e10 ? d : 0 })
@@ -28,15 +29,16 @@ export function NumInput({ value, onCommit, label, className = 'fn-cell-input', 
   return <input key={shown} className={className} inputMode="decimal" dir="ltr" defaultValue={shown} aria-label={label} onBlur={(e) => { const n = parseNum(e.target.value); if (n !== value) onCommit(n); else e.target.value = shown }} />
 }
 
-export function KpiCard({ label, value, unit, sub, tone = 'neutral', hint, onClick, i = 0 }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; tone?: Tone; hint?: string; onClick?: () => void; i?: number }) {
+export function KpiCard({ label, value, unit, sub, tone = 'neutral', hint, onClick, i = 0, spark, sparkColor }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; tone?: Tone; hint?: string; onClick?: () => void; i?: number; spark?: number[]; sparkColor?: string }) {
   const body = (
     <>
       <span className="l">{label}{hint && <span className="fn-hint" title={hint} aria-label={hint}><Info size={12} /></span>}</span>
       <span className="v">{value}{unit && <span className="u"> {unit}</span>}</span>
       {sub != null && <span className="s">{sub}</span>}
+      {spark && spark.length > 1 && <Spark data={spark} color={sparkColor} />}
     </>
   )
-  const cls = `fn-kpi t-${tone}`
+  const cls = `fn-kpi t-${tone}${spark && spark.length > 1 ? ' has-spark' : ''}`
   const st = { ['--i' as string]: i }
   return onClick ? <button type="button" className={`${cls} click`} style={st} onClick={onClick}>{body}</button> : <div className={cls} style={st}>{body}</div>
 }
