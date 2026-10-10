@@ -5,6 +5,7 @@ import { useFinanceStore } from '../store/useFinanceStore'
 import { computeProjectFinancialSummary, currentContractValue } from '../lib/financeCalc'
 import { fmtCurrency } from '../components/FinanceKpiTile'
 import { MetricCard } from '../components/FinanceDashboardUI'
+import { ForecastCard } from '../components/ForecastCard'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { BulletComparison } from './FinancialDashboardPage'
 import { BreakdownDonut, type ChartDatum } from '../../masterdata/components/RollupCharts'
@@ -72,6 +73,7 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           هزینه پروژه صرفا محدود به پیمانکار EPC نیست — قراردادهای مشاور نظارت، مدیریت طرح (MC)، بازرسی شخص ثالث (TPI) و سایر قراردادهای مرتبط نیز در همه اعداد این صفحه لحاظ شده‌اند.
         </p>
       </div>
+      <ForecastCard masterProjectId={masterProjectId} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         <MetricCard

@@ -290,6 +290,8 @@ export interface LandSettings {
   horizonDays: number
   /** The land-acquisition budget of the project (rial), asked for at the start of the project. */
   budgetAmount?: number | null
+  /** The approved land budget comes from Finance's budget lines (set on load, never saved). */
+  budgetFromFinance?: boolean
   budgetNote?: string
   /** The legal unit's proposed release plan, as last presented (see the «برنامه آزادسازی» tab). */
   /** Days per step set by the project, per acquisition route (empty = typical values). */

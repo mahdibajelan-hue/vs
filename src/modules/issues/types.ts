@@ -61,7 +61,7 @@ export const IM_STATUS_COLOR: Record<ImIssueStatus, string> = {
   rejected: 'var(--im-coral)',
 }
 
-export type ImIssueSource = 'manual' | 'lifecycle_action' | 'mission_debrief' | 'land_acquisition' | 'risk' | 'correspondence' | 'meeting' | 'report' | 'import' | 'api'
+export type ImIssueSource = 'manual' | 'lifecycle_action' | 'mission_debrief' | 'land_acquisition' | 'finance' | 'risk' | 'correspondence' | 'meeting' | 'report' | 'import' | 'api'
 
 export interface ImIssue {
   id: string

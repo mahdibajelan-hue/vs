@@ -18,6 +18,8 @@ import {
   Loader2,
   Menu,
   Receipt,
+  Sprout,
+  GitPullRequestArrow,
   Settings,
   ShieldCheck,
   Wallet,
@@ -47,6 +49,11 @@ import { PaymentsRecordPage } from './pages/PaymentsRecordPage'
 import { GuaranteesPage } from './pages/GuaranteesPage'
 import { ClaimsPage } from './pages/ClaimsPage'
 import { RetentionPage } from './pages/RetentionPage'
+import { LandBridgePage } from './pages/control/LandBridgePage'
+import { ChangesBridgePage } from './pages/control/ChangesBridgePage'
+import { ExceptionsPage } from './pages/control/ExceptionsPage'
+import { ControlSettingsPage } from './pages/control/ControlSettingsPage'
+import { useFinanceControlStore } from './store/useFinanceControlStore'
 
 /** Signature brass/ledger accent — see finance-dashboard.css for the full "EPC ledger control tower" token system. */
 export const FINANCE_ACCENT = '#c9a654'
@@ -65,6 +72,9 @@ type Tab =
   | 'guarantees'
   | 'claims'
   | 'retention'
+  | 'land'
+  | 'changes'
+  | 'exceptions'
   | 'reports'
   | 'settings'
 
@@ -82,12 +92,15 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'guarantees', label: 'ضمانت‌نامه‌ها', icon: ShieldCheck },
   { id: 'claims', label: 'کلایم پیمانکار', icon: FileWarning },
   { id: 'retention', label: 'حسن انجام کار', icon: Landmark },
+  { id: 'land', label: 'تملک اراضی', icon: Sprout },
+  { id: 'changes', label: 'تغییرات قرارداد', icon: GitPullRequestArrow },
+  { id: 'exceptions', label: 'استثناها و اقدام', icon: AlertTriangle },
   { id: 'reports', label: 'گزارش‌ها', icon: ClipboardList },
   { id: 'settings', label: 'تنظیمات', icon: Settings },
 ]
 
 /** Tabs that operate on a single selected project and need the project dropdown in the topbar. */
-const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention'])
+const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention', 'land', 'changes', 'exceptions'])
 
 const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'داشبورد مدیریت مالی', subtitle: 'نمای کلی سبد پروژه‌ها' },
@@ -103,6 +116,9 @@ const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   guarantees: { title: 'ضمانت‌نامه‌ها', subtitle: 'فهرست و پیگیری ضمانت‌نامه‌های دریافتی' },
   claims: { title: 'کلایم پیمانکار', subtitle: 'ثبت و پیگیری ادعاهای پیمانکار' },
   retention: { title: 'حسن انجام کار', subtitle: 'بدهی و برنامه آزادسازی حسن انجام کار' },
+  land: { title: 'تملک اراضی', subtitle: 'بودجه، پرداخت و تعهد تملک — همگام با ماژول تحصیل اراضی' },
+  changes: { title: 'تغییرات قرارداد', subtitle: 'اثر تغییرات تصویب‌شده و سناریوی تغییرات در جریان' },
+  exceptions: { title: 'استثناها و اقدام', subtitle: 'موارد نیازمند تصمیم و ثبت مسئله یا ریسک' },
   reports: { title: 'گزارش‌های مالی', subtitle: 'گزارش تفکیکی صورت‌وضعیت‌ها' },
   settings: { title: 'تنظیمات', subtitle: '' },
 }
@@ -119,6 +135,8 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const financeLoaded = useFinanceStore((s) => s.loaded)
   const fetchFinance = useFinanceStore((s) => s.fetchAll)
+  const fetchControl = useFinanceControlStore((s) => s.fetchAll)
+  const controlLoaded = useFinanceControlStore((s) => s.loaded)
   const contracts = useFinanceStore((s) => s.contracts)
   const certificates = useFinanceStore((s) => s.certificates)
   const guarantees = useFinanceStore((s) => s.guarantees)
@@ -137,11 +155,11 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   // portfolio/program/project browse tabs and the cross-project dashboard, landing straight on
   // this project's contracts instead.
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [lockedToProject, setLockedToProject] = useState(false)
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     if (!financeLoaded) fetchFinance()
+    if (!controlLoaded) void fetchControl()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -149,14 +167,12 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     if (projects.length === 0 || projectId) return
     if (contextProjectId && projects.some((p) => p.id === contextProjectId)) {
       setProjectId(contextProjectId)
-      setLockedToProject(true)
-      setTab('contracts')
     } else {
       setProjectId(projects[0].id)
     }
   }, [projects, projectId, contextProjectId])
 
-  const visibleNav = lockedToProject ? NAV.filter((n) => PROJECT_SCOPED_TABS.has(n.id)) : NAV
+  const visibleNav = NAV
 
   const jy = todayJalali().jy
   const notifications = useMemo(
@@ -250,7 +266,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {PROJECT_SCOPED_TABS.has(tab) && !lockedToProject && (
+            {PROJECT_SCOPED_TABS.has(tab) && (
               <select
                 value={projectId ?? ''}
                 onChange={(e) => setProjectId(e.target.value || null)}
@@ -348,7 +364,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
           ) : tab === 'projects' ? (
             <ProjectsBrowsePage />
           ) : tab === 'settings' ? (
-            <div className="fin-card p-8 text-center text-sm fin-text-muted">تنظیمات این ماژول به‌زودی اضافه می‌شود.</div>
+            <ControlSettingsPage masterProjectId={projectId} />
           ) : !projectId ? (
             <div className="fin-card flex h-40 items-center justify-center text-sm fin-text-muted">
               {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}
@@ -367,6 +383,12 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
             <ClaimsPage masterProjectId={projectId} />
           ) : tab === 'retention' ? (
             <RetentionPage masterProjectId={projectId} />
+          ) : tab === 'land' ? (
+            <LandBridgePage masterProjectId={projectId} />
+          ) : tab === 'changes' ? (
+            <ChangesBridgePage masterProjectId={projectId} />
+          ) : tab === 'exceptions' ? (
+            <ExceptionsPage masterProjectId={projectId} />
           ) : tab === 'cost' ? (
             <CostManagementPage masterProjectId={projectId} />
           ) : (

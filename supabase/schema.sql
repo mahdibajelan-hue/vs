@@ -20466,3 +20466,5 @@ create or replace function public.la_can_edit(p_master_project_id uuid) returns 
      and (is_admin_user() or la_my_role(p_master_project_id) = 'executive' or rasta_has_permission(auth.uid(), 'landacq', 'edit') or rasta_has_permission(auth.uid(), 'landacq', 'create'));
 $f$;
 -- la_review: v_all := is_admin_user() or role = 'executive' replaces the per-action admin check (see live definition)
+
+-- §84 Finance & Contract Control: see supabase/finance/001_finance_control.sql (applied live)

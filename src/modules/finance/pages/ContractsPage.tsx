@@ -6,6 +6,8 @@ import { computeContractorScorecard, currentContractValue, expiringGuarantees } 
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { StampBadge, hexToStampTone } from '../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../FinanceApp'
+import { useFinanceControlStore } from '../store/useFinanceControlStore'
+import { contractFile } from '../lib/financeControl'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { JALALI_MONTHS, todayJalali } from '../../../lib/jalali'
 import {
@@ -28,7 +30,7 @@ import {
   type FinGuaranteeType,
 } from '../types'
 
-const STATUS_TONE: Record<FinContractStatus, string> = { draft: '#7c8794', active: '#3e7c74', completed: '#5c7290', terminated: '#b5573a' }
+const STATUS_TONE: Record<FinContractStatus, string> = { draft: '#7c8794', active: '#3e7c74', completed: '#5c7290', terminated: '#b5573a', suspended: '#c28a2b', replaced: '#8a6fb0' }
 
 export function ContractsPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
@@ -174,6 +176,18 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                       {c.contractNumber}
                     </p>
                     <p className="mt-1 text-xs fin-text-secondary">پیمانکار/طرف قرارداد: {orgName(c.contractorOrgId)}</p>
+                    {(() => {
+                      const f = contractFile(c, amendments)
+                      if (f.amendmentCount === 0 && !c.statusNote && !c.supersedesContractId) return null
+                      const prev = c.supersedesContractId ? contracts.find((x) => x.id === c.supersedesContractId) : null
+                      return (
+                        <p className="mt-1 text-[11px] leading-5 fin-text-muted">
+                          {f.amendmentCount > 0 && <>مبلغ اولیه {fmtCurrency(f.original, c.currency)} · افزایش تجمعی {f.increasePct.toLocaleString('fa-IR')}٪{f.daysExtension ? ` · تمدید ${f.daysExtension.toLocaleString('fa-IR')} روز` : ''}{f.currentEnd && f.daysExtension ? ` · پایان اصلاح‌شده ${fmtDate(f.currentEnd)}` : ''}</>}
+                          {prev && <> · جایگزین قرارداد {prev.contractNumber || prev.title}</>}
+                          {c.statusNote && <> · {c.statusNote}</>}
+                        </p>
+                      )
+                    })()}
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setEditing(c)} className="text-xs fin-text-secondary hover:underline">
@@ -212,16 +226,20 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
                       {contractAmendments.length === 0 && <p className="text-xs fin-text-muted">الحاقیه‌ای ثبت نشده است.</p>}
                       <div className="space-y-1.5">
                         {contractAmendments.map((a) => (
-                          <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)' }}>
+                          <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-1.5" style={{ borderColor: 'var(--fin-divider)', opacity: a.voidedAt ? 0.55 : 1 }}>
                             <span className="num text-[11px] fin-text-muted">{fmtDate(a.amendmentDate)}</span>
-                            <span className="min-w-0 flex-1 truncate text-xs">{a.reason || a.amendmentNumber || '—'}</span>
+                            <span className="min-w-0 flex-1 truncate text-xs" style={{ textDecoration: a.voidedAt ? 'line-through' : undefined }}>{a.reason || a.amendmentNumber || '—'}</span>
+                            {a.cmRequestId && <StampBadge label={a.voidedAt ? 'تغییر باطل‌شده' : 'از مدیریت تغییرات'} tone={a.voidedAt ? 'neutral' : 'info'} />}
+                            {a.daysDelta !== 0 && <span className="num shrink-0 text-[11px] fin-text-secondary">{a.daysDelta > 0 ? '+' : ''}{a.daysDelta.toLocaleString('fa-IR')} روز</span>}
                             <span className="num shrink-0 text-xs font-bold" style={{ color: a.amount >= 0 ? '#3e7c74' : '#b5573a' }}>
                               {a.amount >= 0 ? '+' : ''}
                               {fmtCurrency(a.amount, c.currency)}
                             </span>
-                            <button onClick={() => deleteAmendment(a.id)} className="shrink-0 fin-text-muted hover:text-red-400">
-                              <Trash2 size={12} />
-                            </button>
+                            {a.cmRequestId ? null : (
+                              <button onClick={() => deleteAmendment(a.id)} className="shrink-0 fin-text-muted hover:text-red-400">
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -305,6 +323,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
       {showNew && (
         <ContractModal
           title="قرارداد جدید"
+          projectId={masterProjectId}
           organizations={organizations}
           onClose={() => setShowNew(false)}
           onSave={async (data) => {
@@ -316,6 +335,7 @@ export function ContractsPage({ masterProjectId }: { masterProjectId: string }) 
       {editing && (
         <ContractModal
           title="ویرایش قرارداد"
+          projectId={masterProjectId}
           organizations={organizations}
           initial={editing}
           onClose={() => setEditing(null)}
@@ -383,12 +403,14 @@ function MiniField({ label, value, highlight }: { label: string; value: string; 
 
 function ContractModal({
   title,
+  projectId,
   organizations,
   initial,
   onClose,
   onSave,
 }: {
   title: string
+  projectId: string
   organizations: { id: string; name: string }[]
   initial?: FinContract
   onClose: () => void
@@ -409,6 +431,13 @@ function ContractModal({
   const [startDate, setStartDate] = useState(initial?.startDate ?? '')
   const [plannedCompletionDate, setPlannedCompletionDate] = useState(initial?.plannedCompletionDate ?? '')
   const [status, setStatus] = useState<FinContractStatus>(initial?.status ?? 'active')
+  const [contractType, setContractType] = useState(initial?.contractType ?? '')
+  const [budgetLineId, setBudgetLineId] = useState(initial?.budgetLineId ?? '')
+  const [supersedes, setSupersedes] = useState(initial?.supersedesContractId ?? '')
+  const [statusNote, setStatusNote] = useState(initial?.statusNote ?? '')
+  const typeItems = useFinanceControlStore((s) => s.configItems).filter((i) => i.kind === 'contract_type' && (i.active || i.key === initial?.contractType))
+  const lines = useFinanceControlStore((s) => s.budgetLines).filter((l) => l.masterProjectId === projectId && l.isActive && l.kind !== 'land')
+  const earlier = useFinanceStore((s) => s.contracts).filter((c) => c.masterProjectId === projectId && c.id !== initial?.id)
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
@@ -427,6 +456,10 @@ function ContractModal({
       startDate: startDate || null,
       plannedCompletionDate: plannedCompletionDate || null,
       status,
+      contractType,
+      budgetLineId: budgetLineId || null,
+      supersedesContractId: supersedes || null,
+      statusNote,
     })
     setSaving(false)
   }
@@ -464,6 +497,31 @@ function ContractModal({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">دستهٔ قرارداد (قابل تنظیم)</span>
+            <select value={contractType} onChange={(e) => setContractType(e.target.value)} className="fin-input">
+              <option value="">—</option>
+              {typeItems.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">ردیف بودجه</span>
+            <select value={budgetLineId} onChange={(e) => setBudgetLineId(e.target.value)} className="fin-input">
+              <option value="">— بدون ردیف —</option>
+              {lines.map((l) => <option key={l.id} value={l.id}>{l.code} · {l.title}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">جایگزین قرارداد قبلی</span>
+            <select value={supersedes} onChange={(e) => setSupersedes(e.target.value)} className="fin-input">
+              <option value="">—</option>
+              {earlier.map((c) => <option key={c.id} value={c.id}>{c.contractNumber || c.title}</option>)}
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-xs fin-text-secondary">یادداشت وضعیت (دلیل توقف، فسخ یا جایگزینی)</span>
+            <input value={statusNote} onChange={(e) => setStatusNote(e.target.value)} className="fin-input" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs fin-text-secondary">وضعیت</span>

@@ -44,15 +44,17 @@ export interface FinAnnualBudget {
   updatedAt: string
 }
 
-export type FinContractStatus = 'draft' | 'active' | 'completed' | 'terminated'
+export type FinContractStatus = 'draft' | 'active' | 'suspended' | 'completed' | 'terminated' | 'replaced'
 
-export const FIN_CONTRACT_STATUSES: FinContractStatus[] = ['draft', 'active', 'completed', 'terminated']
+export const FIN_CONTRACT_STATUSES: FinContractStatus[] = ['draft', 'active', 'suspended', 'completed', 'terminated', 'replaced']
 
 export const FIN_CONTRACT_STATUS_LABEL_FA: Record<FinContractStatus, string> = {
   draft: 'پیش‌نویس',
   active: 'فعال',
   completed: 'تکمیل‌شده',
   terminated: 'فسخ‌شده',
+  suspended: 'متوقف‌شده',
+  replaced: 'جایگزین‌شده',
 }
 
 export type FinContractRole = 'main_epc' | 'supervision_consultant' | 'mc' | 'tpi' | 'other'
@@ -91,6 +93,12 @@ export interface FinContract {
   startDate: string | null
   plannedCompletionDate: string | null
   status: FinContractStatus
+  /** Key of a `contract_type` config item (engineering, supervision, EPC, equipment supply, …). */
+  contractType: string
+  /** The earlier contract this one replaces (kept as history, never deleted). */
+  supersedesContractId: string | null
+  budgetLineId: string | null
+  statusNote: string
   createdAt: string
   updatedAt: string
 }
@@ -102,6 +110,12 @@ export interface FinContractAmendment {
   amendmentDate: string
   amount: number
   reason: string
+  /** Time extension (days) carried by this amendment. */
+  daysDelta: number
+  /** Set when the amendment came from an approved change request (the single source of that increase). */
+  cmRequestId: string | null
+  voidedAt: string | null
+  voidReason: string
   createdBy: string | null
   createdAt: string
 }

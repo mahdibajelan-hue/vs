@@ -44,6 +44,9 @@ const plotRow = (parcelId: string, p: PlotInput): Row => ({ ...(p.id ? { id: p.i
 const crossingFromRow = (r: Row): Crossing => ({ id: r.id, masterProjectId: r.master_project_id, code: r.code ?? '', crossingType: r.crossing_type, name: r.name ?? '', km: Number(r.km), custodian: r.custodian ?? '', permitStatus: r.permit_status, permitRequestedDate: r.permit_requested_date, permitIssuedDate: r.permit_issued_date, permitNumber: r.permit_number ?? '', undertakingRequired: r.undertaking_required !== false, undertakingStatus: r.undertaking_status, undertakingDate: r.undertaking_date, undertakingNote: r.undertaking_note ?? '', feeRequired: !!r.fee_required, feeAmount: Number(r.fee_amount ?? 0), feePaidAmount: Number(r.fee_paid_amount ?? 0), feePaidDate: r.fee_paid_date, legalNotes: r.legal_notes ?? '', conditions: r.conditions ?? '', responsible: r.responsible ?? '', riskId: r.risk_id, issueId: r.issue_id, nextDeadline: r.next_deadline, nextDeadlineLabel: r.next_deadline_label ?? '', isDemo: !!r.is_demo })
 const crossingRow = (masterProjectId: string, c: CrossingInput): Row => ({ ...(c.id ? { id: c.id } : {}), master_project_id: masterProjectId, code: c.code, crossing_type: c.crossingType, name: c.name, km: c.km, custodian: c.custodian, permit_status: c.permitStatus, permit_requested_date: c.permitRequestedDate, permit_issued_date: c.permitIssuedDate, permit_number: c.permitNumber, undertaking_required: c.undertakingRequired, undertaking_status: c.undertakingStatus, undertaking_date: c.undertakingDate, undertaking_note: c.undertakingNote, fee_required: c.feeRequired, fee_amount: c.feeAmount, fee_paid_amount: c.feePaidAmount, fee_paid_date: c.feePaidDate, legal_notes: c.legalNotes, conditions: c.conditions, responsible: c.responsible, next_deadline: c.nextDeadline, next_deadline_label: c.nextDeadlineLabel, is_demo: c.isDemo })
 const priceExceptionOf = (v: unknown): Parcel['priceException'] => (v && typeof v === 'object' && (v as Row).status ? ({ status: (v as Row).status, price: Number((v as Row).price), reason: (v as Row).reason ?? '', requestedBy: (v as Row).requestedBy ?? '', requestedAt: (v as Row).requestedAt ?? '', decidedBy: (v as Row).decidedBy, decidedAt: (v as Row).decidedAt, decisionNote: (v as Row).decisionNote } as Parcel['priceException']) : null)
+/** When Finance has approved a land budget, that figure replaces the one kept here (read-only in the land module). */
+const withFinanceBudget = (r: RouteInfo, lines: Row[]): RouteInfo =>
+  lines.length ? { ...r, settings: { ...r.settings, budgetAmount: lines.reduce((n, l) => n + Number(l.approved_amount), 0), budgetNote: `مرجع: مدیریت مالی — ${lines.map((l) => l.title).join('، ')}`, budgetFromFinance: true } } : r
 const paymentFromRow = (r: Row): Payment => ({ id: r.id, masterProjectId: r.master_project_id, parcelId: r.parcel_id, category: r.category, payee: r.payee ?? '', amount: Number(r.amount), paidDate: r.paid_date, ref: r.ref ?? '', note: r.note ?? '', isDemo: !!r.is_demo })
 const paymentRow = (masterProjectId: string, x: PaymentInput, parcelId: string | null): Row => ({ ...(x.id ? { id: x.id } : {}), master_project_id: masterProjectId, parcel_id: parcelId, category: x.category, payee: x.payee, amount: x.amount, paid_date: x.paidDate, ref: x.ref, note: x.note, is_demo: x.isDemo })
 const activityFromRow = (r: Row): Activity => ({ id: r.id, masterProjectId: r.master_project_id, key: r.key, name: r.name, kmStart: Number(r.km_start), kmEnd: Number(r.km_end), startDate: r.start_date, endDate: r.end_date, sequence: r.sequence ?? 0, isDemo: !!r.is_demo })
@@ -77,7 +80,7 @@ export function createSupabaseRepo(): LandRepo {
     },
 
     async load(masterProjectId): Promise<LandProjectData> {
-      const [route, parcels, activities, events, linked, approvals, roles, myRole, crossings, payments] = await Promise.all([
+      const [route, parcels, activities, events, linked, approvals, roles, myRole, crossings, payments, finLines] = await Promise.all([
         supabase.from('la_routes').select('*').eq('master_project_id', masterProjectId).maybeSingle(),
         supabase.from('la_parcels').select('*').eq('master_project_id', masterProjectId).order('km_start'),
         supabase.from('la_activities').select('*').eq('master_project_id', masterProjectId).order('sequence'),
@@ -87,7 +90,9 @@ export function createSupabaseRepo(): LandRepo {
         supabase.from('la_roles').select('user_id, role').eq('master_project_id', masterProjectId),
         supabase.rpc('la_my_role', { p_master_project_id: masterProjectId }),
         supabase.from('la_crossings').select('*').eq('master_project_id', masterProjectId).order('km'),
-        supabase.from('la_payments').select('*').eq('master_project_id', masterProjectId).order('paid_date'),
+        supabase.from('la_payments').select('*').eq('master_project_id', masterProjectId).eq('status', 'posted').order('paid_date'),
+        // the approved land budget is owned by Finance (budget lines of kind 'land'); the land module only shows it
+        supabase.from('fin_budget_lines').select('approved_amount, title').eq('master_project_id', masterProjectId).eq('kind', 'land').eq('is_active', true),
       ])
       chk(route); chk(parcels); chk(activities); chk(events)
       const ids = ((parcels.data ?? []) as Row[]).map((p) => p.id)
@@ -102,7 +107,7 @@ export function createSupabaseRepo(): LandRepo {
       chk(stages); chk(owners); chk(docs); chk(plots)
       const by = (rows: Row[] | null, id: string) => (rows ?? []).filter((r) => r.parcel_id === id)
       return {
-        route: route.data ? routeFromRow(route.data as Row) : null,
+        route: route.data ? withFinanceBudget(routeFromRow(route.data as Row), finLines.error ? [] : ((finLines.data ?? []) as Row[])) : null,
         parcels: ((parcels.data ?? []) as Row[]).map((p) => parcelFromRow(p, by(stages.data as Row[], p.id), by(owners.data as Row[], p.id), by(docs.data as Row[], p.id), by(plots.data as Row[], p.id))),
         activities: ((activities.data ?? []) as Row[]).map(activityFromRow),
         events: ((events.data ?? []) as Row[]).map((e): LandEvent => ({ id: e.id, at: e.at, parcelId: e.parcel_id, actorId: e.actor_id, kind: e.kind, detail: e.detail ?? {} })),
@@ -116,7 +121,8 @@ export function createSupabaseRepo(): LandRepo {
     },
 
     async saveRoute(route) {
-      chk(await supabase.from('la_routes').upsert({ master_project_id: route.masterProjectId, name: route.name, total_km: route.totalKm, start_km: route.startKm, geometry: route.geometry, geometry_source: route.geometrySource, settings: route.settings, is_demo: route.isDemo }, { onConflict: 'master_project_id' }))
+      const { budgetFromFinance: _bf, ...settings } = route.settings
+      chk(await supabase.from('la_routes').upsert({ master_project_id: route.masterProjectId, name: route.name, total_km: route.totalKm, start_km: route.startKm, geometry: route.geometry, geometry_source: route.geometrySource, settings, is_demo: route.isDemo }, { onConflict: 'master_project_id' }))
     },
 
     async addParcels(masterProjectId, drafts: ParcelDraft[]) {
@@ -167,7 +173,8 @@ export function createSupabaseRepo(): LandRepo {
       return paymentFromRow(data as Row)
     },
     async deletePayment(id) {
-      chk(await supabase.from('la_payments').delete().eq('id', id))
+      // never a hard delete: the payment is voided (kept with its reason and audit trail) and drops out of both modules' sums
+      chk(await supabase.rpc('fin_void_land_payment', { p_id: id, p_reason: 'ابطال از ماژول تحصیل اراضی' }))
     },
     async saveCrossing(masterProjectId, c) {
       const { data, error } = await supabase.from('la_crossings').upsert({ ...crossingRow(masterProjectId, c), updated_at: new Date().toISOString() }).select('*').single()

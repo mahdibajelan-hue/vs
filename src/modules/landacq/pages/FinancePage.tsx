@@ -46,10 +46,11 @@ export function FinancePage() {
     <div className="mx-auto flex max-w-[1320px] flex-col gap-4">
       {/* ------------------------------------------------------------ budget */}
       <Card help="budget" title="بودجهٔ تحصیل اراضی پروژه" hint="در ابتدای پروژه بودجهٔ مصوب تحصیل اراضی را ثبت کنید؛ مصرف آن همواره با پرداخت‌ها سنجیده می‌شود." action={sum.budget == null ? <span className="la-badge" style={{ '--c': '#f59e0b' } as React.CSSProperties}><i /> بودجه ثبت نشده</span> : undefined}>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_1fr_auto] sm:items-end">
+        {settings.budgetFromFinance && <p className="la-hint m-0 mb-3">بودجهٔ مصوب را «مدیریت مالی» نگه می‌دارد (ردیف بودجهٔ تملک اراضی) و اینجا فقط نمایش داده می‌شود؛ برای تغییر، از ماژول کنترل قراردادها و مالی اقدام کنید. پرداخت‌های ثبت‌شده اینجا خودکار در همان ماژول دیده می‌شوند.</p>}
+        <div className={`grid gap-3 sm:grid-cols-[minmax(0,260px)_1fr_auto] sm:items-end ${settings.budgetFromFinance ? 'pointer-events-none opacity-60' : ''}`} aria-disabled={settings.budgetFromFinance || undefined}>
           <div><span className="la-label">بودجهٔ مصوب (ریال)</span><MoneyInput value={budgetValue} onChange={setDraftBudget} ariaLabel="بودجهٔ مصوب" /></div>
           <label className="block"><span className="la-label">توضیح (منبع تأمین، شمارهٔ ابلاغ …)</span><input className="la-input" value={budgetNote ?? settings.budgetNote ?? ''} onChange={(e) => setBudgetNote(e.target.value)} /></label>
-          <button className="la-btn la-btn-primary" disabled={draftBudget === undefined && budgetNote === undefined} onClick={async () => { await saveBudget(budgetValue ?? null, budgetNote ?? settings.budgetNote ?? ''); setDraftBudget(undefined); setBudgetNote(undefined) }}>ذخیرهٔ بودجه</button>
+          <button className="la-btn la-btn-primary" disabled={!!settings.budgetFromFinance || (draftBudget === undefined && budgetNote === undefined)} onClick={async () => { await saveBudget(budgetValue ?? null, budgetNote ?? settings.budgetNote ?? ''); setDraftBudget(undefined); setBudgetNote(undefined) }}>ذخیرهٔ بودجه</button>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Kpi label="بودجهٔ مصوب" value={<span className="text-[20px]">{sum.budget ? fmtMoney(sum.budget) : '—'}</span>} />

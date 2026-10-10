@@ -5,6 +5,7 @@ import { useFinanceStore } from '../store/useFinanceStore'
 import { computeAnnualBudgetRows, computeProjectFinancialSummary } from '../lib/financeCalc'
 import { fmtCurrency, fmtDate } from '../components/FinanceKpiTile'
 import { MetricCard } from '../components/FinanceDashboardUI'
+import { BudgetLinesCard } from '../components/BudgetLinesCard'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { todayJalali } from '../../../lib/jalali'
@@ -62,6 +63,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
         <p className="text-xs fin-text-muted">بودجه پروژه</p>
         <h1 className="mt-1 text-lg font-extrabold">{project.officialName}</h1>
       </div>
+      <BudgetLinesCard masterProjectId={masterProjectId} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         <MetricCard

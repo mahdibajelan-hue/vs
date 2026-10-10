@@ -24,7 +24,7 @@ export function currentBudget(budget: FinBudget | null, changes: FinBudgetChange
 /** Current Contract Value = (Contract Value + FX rial-equivalent) + every amendment against that contract. */
 export function currentContractValue(contract: FinContract, amendments: FinContractAmendment[]): number {
   const base = contract.contractValue + contract.fx.fcRialEquivalent
-  return base + amendments.filter((a) => a.contractId === contract.id).reduce((sum, a) => sum + a.amount, 0)
+  return base + amendments.filter((a) => a.contractId === contract.id && !a.voidedAt).reduce((sum, a) => sum + a.amount, 0)
 }
 
 /** Paid Amount including its FX rial-equivalent. */

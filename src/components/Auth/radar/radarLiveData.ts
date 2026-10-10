@@ -245,7 +245,7 @@ async function fetchContractSummary(masterProjectId: string): Promise<ContractSu
   const releases = ((releaseRows ?? []) as any[]).map(finRetentionReleaseFromRow) as FinRetentionRelease[]
 
   const contractValueTotal = currentContractValue(contract, amendments)
-  const approvedChangesTotal = amendments.reduce((sum, a) => sum + a.amount, 0)
+  const approvedChangesTotal = amendments.filter((a) => !a.voidedAt).reduce((sum, a) => sum + a.amount, 0)
   const paidTotal = certificates.reduce((sum, c) => sum + certificatePaidTotal(c), 0)
   const claimsTotal = claimsExposureTotal(claims)
   const retentionTotal = retentionLiability(certificates, releases)

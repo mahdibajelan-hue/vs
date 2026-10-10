@@ -14,6 +14,7 @@ import { StageGateCard } from './cards/StageGateCard'
 import { TaskIssueCard } from './cards/TaskIssueCard'
 import { RiskManagementCard } from './cards/RiskManagementCard'
 import { ChangeManagementCard } from './cards/ChangeManagementCard'
+import { FinanceControlCard } from './cards/FinanceControlCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => ReactElement
 
@@ -36,11 +37,12 @@ const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent }[] = [
   { key: 'taskissue', Card: TaskIssueCard },
   { key: 'risk', Card: RiskManagementCard },
   { key: 'change', Card: ChangeManagementCard },
+  { key: 'finance', Card: FinanceControlCard },
   // User management is deliberately always the LAST tile.
   { key: 'admin', Card: UserManagementCard },
 ]
 /** Grid areas are handed out by position among the modules the user can see, so there are never holes and the last module stays last. */
-const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h', 'area-i', 'area-j', 'area-k']
+const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h', 'area-i', 'area-j', 'area-k', 'area-l']
 
 /** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
  * page-level width/padding and no hint line, just the icon grid. */

@@ -151,6 +151,10 @@ interface FinContractRow {
   start_date: string | null
   planned_completion_date: string | null
   status: string
+  contract_type?: string
+  supersedes_contract_id?: string | null
+  budget_line_id?: string | null
+  status_note?: string
   created_at: string
   updated_at: string
 }
@@ -172,6 +176,10 @@ export function finContractFromRow(r: FinContractRow): FinContract {
     startDate: r.start_date,
     plannedCompletionDate: r.planned_completion_date,
     status: r.status as FinContractStatus,
+    contractType: r.contract_type ?? '',
+    supersedesContractId: r.supersedes_contract_id ?? null,
+    budgetLineId: r.budget_line_id ?? null,
+    statusNote: r.status_note ?? '',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -196,6 +204,10 @@ export function finContractToRow(masterProjectId: string | null, c: Partial<FinC
   if (c.startDate !== undefined) row.start_date = c.startDate || null
   if (c.plannedCompletionDate !== undefined) row.planned_completion_date = c.plannedCompletionDate || null
   if (c.status !== undefined) row.status = c.status
+  if (c.contractType !== undefined) row.contract_type = c.contractType
+  if (c.supersedesContractId !== undefined) row.supersedes_contract_id = c.supersedesContractId || null
+  if (c.budgetLineId !== undefined) row.budget_line_id = c.budgetLineId || null
+  if (c.statusNote !== undefined) row.status_note = c.statusNote
   return row
 }
 
@@ -206,6 +218,10 @@ interface FinContractAmendmentRow {
   amendment_date: string
   amount: number
   reason: string
+  days_delta?: number
+  cm_request_id?: string | null
+  voided_at?: string | null
+  void_reason?: string
   created_by: string | null
   created_at: string
 }
@@ -218,6 +234,10 @@ export function finContractAmendmentFromRow(r: FinContractAmendmentRow): FinCont
     amendmentDate: r.amendment_date,
     amount: Number(r.amount),
     reason: r.reason,
+    daysDelta: Number(r.days_delta ?? 0),
+    cmRequestId: r.cm_request_id ?? null,
+    voidedAt: r.voided_at ?? null,
+    voidReason: r.void_reason ?? '',
     createdBy: r.created_by,
     createdAt: r.created_at,
   }
@@ -229,6 +249,7 @@ export function finContractAmendmentToRow(contractId: string, a: Partial<FinCont
   if (a.amendmentDate !== undefined) row.amendment_date = a.amendmentDate
   if (a.amount !== undefined) row.amount = a.amount
   if (a.reason !== undefined) row.reason = a.reason
+  if (a.daysDelta !== undefined) row.days_delta = a.daysDelta
   return row
 }
 

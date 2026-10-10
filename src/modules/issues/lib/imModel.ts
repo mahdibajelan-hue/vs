@@ -52,7 +52,7 @@ export const IM_CATEGORY_FA: Record<string, string> = {
 }
 
 export const IM_SOURCE_FA: Record<string, string> = {
-  manual: 'ثبت دستی', lifecycle_action: 'اقدام چرخه عمر', mission_debrief: 'گزارش بازدید/مأموریت', land_acquisition: 'تملک اراضی',
+  manual: 'ثبت دستی', lifecycle_action: 'اقدام چرخه عمر', mission_debrief: 'گزارش بازدید/مأموریت', land_acquisition: 'تملک اراضی', finance: 'کنترل قراردادها و مالی',
   risk: 'ریسک محقق‌شده', correspondence: 'مکاتبات', meeting: 'جلسه', report: 'گزارش', import: 'ورود انبوه', api: 'سامانهٔ خارجی',
 }
 
