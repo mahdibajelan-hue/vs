@@ -25,7 +25,7 @@ export function CrossingDrawer({ crossing, onClose }: { crossing: Crossing | nul
   const [f, setF] = useState<CrossingInput>(() => (crossing ? { ...crossing } : blankCrossing(startKm)))
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
-  const canEdit = isAdmin || role === 'contractor' || !role
+  const canEdit = isAdmin || role === 'executive' || role === 'contractor' || !role
   const live: Crossing = { ...(crossing ?? ({} as Crossing)), ...f, id: crossing?.id ?? '', masterProjectId: crossing?.masterProjectId ?? '', riskId: crossing?.riskId ?? null, issueId: crossing?.issueId ?? null }
   const st = useMemo(() => crossingState(live, activities ?? [], today), [live, activities, today]) // eslint-disable-line react-hooks/exhaustive-deps
   const drafts = useMemo(() => crossingDrafts(live, st, today), [live, st, today]) // eslint-disable-line react-hooks/exhaustive-deps

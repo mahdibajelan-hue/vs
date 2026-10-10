@@ -20459,3 +20459,10 @@ alter table la_stages add constraint la_stages_key_check check (stage_key in ('i
 insert into la_stages (parcel_id, stage_key) select id, 'title_deed' from la_parcels where coalesce(station_type, '') <> '' on conflict do nothing;
 -- la_parcel_after_insert additionally inserts 'title_deed' when station_type is set; la_transfer / la_transfer_crossing insert rm_risks.category = 'land'
 -- (the old value 'external' no longer exists in rm_categories, which caused the foreign-key error) and im_issues.category = 'land_acquisition'.
+
+-- §83 Land: the project executive (مجری طرح) may take every review action and write land data
+create or replace function public.la_can_edit(p_master_project_id uuid) returns boolean language sql stable security definer set search_path to 'public' as $f$
+  select la_can_view(p_master_project_id)
+     and (is_admin_user() or la_my_role(p_master_project_id) = 'executive' or rasta_has_permission(auth.uid(), 'landacq', 'edit') or rasta_has_permission(auth.uid(), 'landacq', 'create'));
+$f$;
+-- la_review: v_all := is_admin_user() or role = 'executive' replaces the per-action admin check (see live definition)

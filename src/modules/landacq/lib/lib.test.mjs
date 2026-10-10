@@ -320,3 +320,18 @@ console.log('landacq/import+problems: all assertions passed')
 import { orderOf as _o, stageProgress as _sp, STAGE_WEIGHT as _w } from './workflow.ts'
 assert.equal(_o({ acquisitionRoute: 'normal', stationType: 'line_valve' }).at(-1), 'title_deed'); assert.equal(_o({ acquisitionRoute: 'normal', stationType: '' }).length, 13); assert.equal(_o({ acquisitionRoute: 'art9' }).length, 16)
 assert.equal(Object.entries(_w).filter(([k]) => _o({ acquisitionRoute: 'normal', stationType: '' }).includes(k)).reduce((n, [, v]) => n + v, 0), 100)
+
+// ---- my tasks: each role sees its own queue, the executive everyone's ----
+{
+  const { tasksFor, OWNER_LABEL } = await import('./myTasks.ts')
+  const { allowedActions } = await import('./approval.ts')
+  const t = (id, owner) => ({ id, owner, level: 'warn', title: id, detail: '' })
+  const all = [t('a', 'contractor'), t('b', 'consultant'), t('c', 'employer_legal'), t('d', 'project_manager')]
+  assert.deepEqual(tasksFor(all, 'consultant', false).map((x) => x.id), ['b'])
+  assert.equal(tasksFor(all, 'executive', false).length, 4)
+  assert.equal(tasksFor(all, null, true).length, 4)
+  assert.ok(OWNER_LABEL.contractor)
+  for (const [st, act] of [['draft', 'submit'], ['submitted', 'approve'], ['consultant_approved', 'attest'], ['legal_attested', 'final']]) assert.ok(allowedActions(st, 'executive', false).includes(act), `executive ${act}`)
+  assert.ok(!allowedActions('submitted', 'contractor', false).includes('approve'))
+}
+console.log('my tasks ok')

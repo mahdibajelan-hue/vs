@@ -15,7 +15,7 @@ import { benchmarkFor, priceAllowed } from '../lib/pricing'
 import { analyze, buildActions, computeKpis, criticalConstraints, lengthByStatus, type Analysis } from '../lib/kpis'
 
 export type ColorMode = 'status' | 'criticality' | 'ownership' | 'stage'
-export type TabKey = 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'plan' | 'schedule' | 'fronts' | 'reports' | 'finance' | 'actions' | 'settings'
+export type TabKey = 'mytasks' | 'tower' | 'map' | 'parcels' | 'stations' | 'crossings' | 'plan' | 'schedule' | 'fronts' | 'reports' | 'finance' | 'actions' | 'settings'
 
 interface LandState {
   repo: LandRepo | null
@@ -134,7 +134,7 @@ export const useLandStore = create<LandState>()((set, get) => {
     const st = get()
     const role = st.data?.myRole ?? null
     const isAdmin = !!useAuthStore.getState().profile?.isAdmin
-    const ok = isAdmin || role === 'contractor' || !role
+    const ok = isAdmin || role === 'executive' || role === 'contractor' || !role
     if (!ok) set({ error: 'ورود و ویرایش اطلاعات عبورها فقط برای پیمانکار ممکن است؛ نقش شما بررسی و تأیید است.' })
     return ok
   }

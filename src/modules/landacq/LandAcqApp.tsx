@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { BellRing, ClipboardList, Coins, Factory, FileBarChart, GitCompareArrows, Route as RouteIcon, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
+import { useEffect, useMemo } from 'react'
+import { BellRing, ClipboardList, Coins, ClipboardCheck, Factory, FileBarChart, GitCompareArrows, Route as RouteIcon, LayoutDashboard, Loader2, Map as MapIcon, Rows3, Settings, Spline, Sprout } from 'lucide-react'
 import './landacq.css'
 import { ModuleHeaderActions, StorageErrorBanner } from './platform'
 import { useLandStore, useLandAnalysis, type TabKey } from './store/useLandStore'
@@ -10,6 +10,9 @@ import { TowerPage } from './pages/TowerPage'
 import { MapPage } from './pages/MapPage'
 import { ParcelsPage } from './pages/ParcelsPage'
 import { SchedulePage } from './pages/SchedulePage'
+import { MyTasksPage } from './pages/MyTasksPage'
+import { buildTasks, tasksFor } from './lib/myTasks'
+import { useAuthStore } from './platform'
 import { ActionsPage } from './pages/ActionsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StationsPage } from './pages/StationsPage'
@@ -36,6 +39,7 @@ const PHASES = [
   { n: 4, label: 'بهینه‌سازی جبهه‌ها', color: '#34d399', first: 'fronts' },
 ] as const
 const TABS: { key: TabKey; label: string; icon: typeof Rows3; phase?: 1 | 2 | 3 | 4; color: string }[] = [
+  { key: 'mytasks', label: 'کارهای من', icon: ClipboardCheck, color: '#22d3ee' },
   { key: 'tower', label: 'برج کنترل', icon: LayoutDashboard, phase: 1, color: '#38bdf8' },
   { key: 'map', label: 'نقشه', icon: MapIcon, phase: 1, color: '#38bdf8' },
   { key: 'parcels', label: 'قطعه‌ها', icon: Rows3, phase: 1, color: '#38bdf8' },
@@ -64,7 +68,9 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
   const selectedId = useLandStore((s) => s.selectedId)
   const select = useLandStore((s) => s.selectParcel)
   const data = useLandStore((s) => s.data)
-  const { byId, kpis, crossings } = useLandAnalysis()
+  const { byId, kpis, crossings, today } = useLandAnalysis()
+  const isAdmin = !!useAuthStore((s) => s.profile?.isAdmin)
+  const myCount = useMemo(() => tasksFor(buildTasks([...byId.values()], crossings, today), data?.myRole ?? null, isAdmin).length, [byId, crossings, today, data?.myRole, isAdmin])
   const selected = selectedId ? byId.get(selectedId) : undefined
 
   useEffect(() => {
@@ -75,7 +81,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
     document.querySelector('.la-head .la-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' })
   }, [tab])
 
-  const badge = (k: TabKey) => (k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : k === 'finance' ? (data?.parcels.filter((p) => p.priceException?.status === 'requested').length ?? 0) + (data?.route && !data.route.settings.budgetAmount ? 1 : 0) : 0)
+  const badge = (k: TabKey) => (k === 'mytasks' ? myCount : k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : k === 'finance' ? (data?.parcels.filter((p) => p.priceException?.status === 'requested').length ?? 0) + (data?.route && !data.route.settings.budgetAmount ? 1 : 0) : 0)
 
   return (
     <div className="la-root flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
@@ -134,6 +140,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
           <div className="la-card mx-auto mt-8 max-w-md p-8 text-center text-[13px]" style={{ color: 'var(--la-ink-2)' }}>پروژه‌ای برای شما تعریف نشده است. ابتدا در «اطلاعات پایه» یک پروژه بسازید یا دسترسی بگیرید.</div>
         ) : (
           <div key={tab} className="la-rise">
+            {tab === 'mytasks' && <MyTasksPage />}
             {tab === 'tower' && <TowerPage />}
             {tab === 'map' && <MapPage />}
             {tab === 'parcels' && <ParcelsPage />}

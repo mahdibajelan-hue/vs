@@ -32,13 +32,14 @@ export const ACTION_LABEL: Record<string, string> = { submit: 'ارسال برا
 
 /** Mirrors la_review() on the server: which actions may this role take on a parcel in this status. */
 export function allowedActions(status: ApprovalStatus, role: LandRole | null, isAdmin: boolean): ReviewAction[] {
-  const is = (...r: LandRole[]) => isAdmin || (!!role && r.includes(role))
+  // the project executive (مجری طرح) may take every action
+  const is = (...r: LandRole[]) => isAdmin || role === 'executive' || (!!role && r.includes(role))
   const out: ReviewAction[] = []
   if (status === 'draft' && is('contractor')) out.push('submit')
   if (status === 'submitted' && is('consultant')) out.push('approve', 'return')
   if (status === 'consultant_approved' && is('employer_legal')) out.push('attest', 'return')
-  if (status === 'legal_attested' && is('project_manager', 'executive')) out.push('final', 'return')
-  if (status === 'approved' && is('project_manager', 'executive')) out.push('reopen')
+  if (status === 'legal_attested' && is('project_manager')) out.push('final', 'return')
+  if (status === 'approved' && is('project_manager')) out.push('reopen')
   return out
 }
 export const NEXT_STATUS: Record<ReviewAction, ApprovalStatus | 'draft'> = { submit: 'submitted', approve: 'consultant_approved', attest: 'legal_attested', final: 'approved', return: 'draft', reopen: 'draft' }
@@ -48,7 +49,7 @@ export const NEXT_STATUS: Record<ReviewAction, ApprovalStatus | 'draft'> = { sub
  * keep the older permission-based behaviour (`canEditByPermission`), so existing projects are not locked out.
  */
 export function canEditData(p: Pick<Parcel, 'approvalStatus'>, role: LandRole | null, isAdmin: boolean, canEditByPermission: boolean): boolean {
-  if (isAdmin) return true
+  if (isAdmin || role === 'executive') return true
   if (role === 'contractor') return p.approvalStatus === 'draft'
   if (role) return false
   return canEditByPermission
