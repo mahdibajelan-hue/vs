@@ -43,11 +43,10 @@ const Consumption = L(() => import('./pages/control/ConsumptionPage'), 'Consumpt
 const Balance = L(() => import('./pages/control/BalancePage'), 'BalancePage')
 const Reports = L(() => import('./pages/control/ReportsPage'), 'ReportsPage')
 const Settings = L(() => import('./pages/control/SettingsPage'), 'SettingsPage')
-type LegacyP = { masterProjectId: string }
-const Orders = lazy(() => import('./pages/ProcurementPage').then((m) => ({ default: m.ProcurementPage as React.ComponentType<LegacyP> })))
-const Factory = lazy(() => import('./pages/ManufacturingPage').then((m) => ({ default: m.ManufacturingPage as React.ComponentType<LegacyP> })))
-const Shipping = lazy(() => import('./pages/LogisticsPage').then((m) => ({ default: m.LogisticsPage as React.ComponentType<LegacyP> })))
-const Allocation = lazy(() => import('./pages/AllocationPage').then((m) => ({ default: m.AllocationPage as React.ComponentType<LegacyP> })))
+const Orders = L(() => import('./pages/control/SupplyChainPages'), 'OrdersPage')
+const Factory = L(() => import('./pages/control/SupplyChainPages'), 'FactoryPage')
+const Shipping = L(() => import('./pages/control/SupplyChainPages'), 'ShippingPage')
+const Allocation = L(() => import('./pages/control/SupplyChainPages'), 'AllocationsPage')
 
 /** «کنترل و پایش متریال» — same shell and design system as the other project-management modules; eleven sections, each with its few sub-views. */
 export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -90,9 +89,9 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
       case 'bank': return <Bank {...p} />
       case 'mto': return <Mto {...p} />
       case 'discrepancy': return <Discrepancy {...p} />
-      case 'packages': return sub === 'orders' ? <Orders masterProjectId={pid} /> : sub === 'factory' ? <Factory masterProjectId={pid} /> : sub === 'shipping' ? <Shipping masterProjectId={pid} /> : <Packages {...p} />
+      case 'packages': return sub === 'orders' ? <Orders {...p} /> : sub === 'factory' ? <Factory {...p} /> : sub === 'shipping' ? <Shipping {...p} /> : <Packages {...p} />
       case 'progress': return <Progress {...p} />
-      case 'stock': return sub === 'allocation' ? <Allocation masterProjectId={pid} /> : <Stock {...p} />
+      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : <Stock {...p} />
       case 'consumption': return <Consumption {...p} />
       case 'balance': return <Balance {...p} />
       case 'reports': return <Reports {...p} />

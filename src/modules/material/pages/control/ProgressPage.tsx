@@ -6,6 +6,7 @@ import { ChartTip, PB, Tile, axisProps, gridProps } from '../../../finance/compo
 import { Chip, DataTable, KpiCard, Section, fmtD, type Col } from '../../../finance/components/fn'
 import { ProgressBar, bn, fa, pct } from '../../components/control/common'
 import { StageModal } from '../../components/control/StageModal'
+import { FormModal } from '../../../finance/components/FormModal'
 import { STAGE_STATUS_LABEL_FA, type ItemStage } from '../../types'
 import type { ProgressGroupRow } from '../../lib/control/progress'
 
@@ -17,6 +18,7 @@ export function ProgressPage({ projectId, sub }: { projectId: string; sub: strin
   const cs = useMaterialControlStore()
   const [by, setBy] = useState<'package' | 'station' | 'group'>('package')
   const [pick, setPick] = useState<ItemStage | null>(null)
+  const [base, setBase] = useState(false)
   const byMat = useMemo(() => new Map(m.materials.map((x) => [x.id, x])), [m.materials])
   const itemOf = useMemo(() => new Map(m.items.map((i) => [i.id, i])), [m.items])
   const defOf = useMemo(() => new Map(cs.stageDefs.map((d) => [d.key, d])), [cs.stageDefs])
@@ -91,6 +93,15 @@ export function ProgressPage({ projectId, sub }: { projectId: string; sub: strin
         { key: 'd', label: 'انحراف', num: true, render: (r) => <span style={{ color: r.deviation < -0.05 ? 'var(--im-coral)' : undefined }}>{r.deviation >= 0 ? '+' : ''}{fa(r.deviation * 100, 1)}٪</span>, sort: (r) => r.deviation },
         { key: 'e', label: 'ارزش کسب‌شده (میلیارد)', num: true, render: (r) => bn(r.value * r.actual, 2), sort: (r) => r.value * r.actual, foot: <b>{bn(tbl.reduce((a, r) => a + r.value * r.actual, 0), 2)}</b> },
       ]} />
+      <Section title="مبنای قیمت و وزن" hint="پس از تصویب، مقدار، قیمت و وزن مراحل همهٔ قلم‌های بسته‌ها به‌صورت یک نسخه ثبت می‌شود تا تغییر بعدی قیمت یا مقدار، گزارش‌های تاریخی را مخدوش نکند." flush action={cs.can(projectId, 'approve_baseline') && <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setBase(true)}>تصویب مبنای جدید</button>}>
+        <DataTable rows={[...cs.baselines.filter((b) => b.masterProjectId === projectId)].reverse()} rowKey={(b) => b.id} empty="هنوز مبنایی تصویب نشده است؛ ارزش و وزن‌ها تا آن زمان زنده محاسبه می‌شوند." cols={[
+          { key: 'v', label: 'نسخه', render: (b) => <b>{fa(b.version)}</b> }, { key: 'd', label: 'تاریخ مبنا', render: (b) => fmtD(b.baseDate) }, { key: 'm', label: 'روش قیمت‌گذاری', render: (b) => b.priceMethod || '—' }, { key: 'c', label: 'ارز / ضریب', render: (b) => `${b.currency} · ${fa(b.fxRate, 4)}` },
+          { key: 't', label: 'ارزش کل (میلیارد)', num: true, render: (b) => bn(b.totalValue) }, { key: 'u', label: 'تصویب', render: (b) => <>{b.approvedBy ? cs.people.get(b.approvedBy) ?? 'کاربر' : '—'}<span className="sub">{fmtD(b.approvedAt)}{b.note ? ` · ${b.note}` : ''}</span></> }]} />
+      </Section>
+      {base && <FormModal title="تصویب مبنای قیمت و وزن" subtitle={`ارزش فعلی بسته‌ها ${bn(p.value)} میلیارد ریال؛ نسخهٔ جدید همین مقادیر را ثبت می‌کند.`} submitLabel="تصویب" onClose={() => setBase(false)}
+        fields={[{ key: 'method', label: 'روش قیمت‌گذاری مبنا', kind: 'text', required: true, span: 2, hint: 'مثلاً فهرست بهای پیمان، قیمت سفارش‌های صادرشده' }, { key: 'currency', label: 'ارز', kind: 'text', required: true }, { key: 'fx', label: 'ضریب تبدیل به ریال', kind: 'num' }, { key: 'date', label: 'تاریخ مبنا', kind: 'date', required: true }, { key: 'note', label: 'توضیح', kind: 'text', span: 2 }]}
+        initial={{ method: cs.baselines.filter((b) => b.masterProjectId === projectId).at(-1)?.priceMethod ?? '', currency: 'IRR', fx: 1, date: new Date().toISOString().slice(0, 10), note: '' }}
+        onSubmit={async (v) => { await cs.approveBaseline(projectId, { note: String(v.note ?? ''), method: String(v.method), currency: String(v.currency || 'IRR'), fx: Number(v.fx) || 1, baseDate: String(v.date) }) }} />}
       <p className="im-helper" style={{ margin: 0 }}>پیشرفت وزنی با «پیشرفت فیزیکی تحویل» یکی نیست: رسیدن کالا به کارگاه فقط مرحلهٔ ورود را کامل می‌کند، نه همهٔ مراحل را. مقدار تحویل‌شده در «موجودی و انبار» دیده می‌شود.</p>
     </div>
   )

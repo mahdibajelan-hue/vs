@@ -121,3 +121,8 @@ assert.equal(matchKey(ex[0]), 'p-1|st1|l-1')
 const parsed = parseMtoRows([{ 'کد کالا': 'V-1', 'تعداد': '۱٬۲۰۰', 'ایستگاه': 'ST1', 'محل مصرف': 'L-1', 'ناشناس': 'x' }])
 assert.equal(parsed[0].materialCode, 'V-1'); assert.equal(parsed[0].qty, 1200); assert.equal(parsed[0].facility, 'ST1')
 console.log('material control ok')
+import { dataGaps } from './quality.ts'
+assert.deepEqual(dataGaps(mat({ groupId: null, unitPrice: 0, needDate: null, facility: '', pipelineNo: '' })), ['گروه کالا', 'قیمت واحد', 'ایستگاه', 'محل مصرف', 'تاریخ نیاز'])
+assert.deepEqual(dataGaps(mat()), [])
+assert.ok(dataGaps(mat({ contractQty: null, detailQty: null })).includes('مقدار'))
+console.log('quality ok')

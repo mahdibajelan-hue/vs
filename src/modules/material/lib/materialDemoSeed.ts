@@ -107,9 +107,12 @@ export async function seedMaterialDemoData(onProgress?: DemoSeedProgress): Promi
     .from('master_projects')
     .select('id, official_name, currency, contractor_org_id, planned_start_date, planned_finish_date, status')
   if (projErr) throw new Error(projErr.message)
-  const projectRows = (projects ?? []) as MasterProjectRow[]
+  // a project that already holds real (non-demo) material data is never touched: the generator only refreshes projects whose material data is demo-only
+  const { data: realRows } = await supabase.from('mtl_materials').select('master_project_id').eq('is_demo', false)
+  const realProjects = new Set((realRows ?? []).map((r) => r.master_project_id as string))
+  const projectRows = ((projects ?? []) as MasterProjectRow[]).filter((p) => !realProjects.has(p.id))
   if (projectRows.length === 0) {
-    throw new Error('هیچ پروژه پایه‌ای یافت نشد — ابتدا از صفحه «داده‌های نمایشی» در بخش داده پایه، مجموعه داده اصلی را تولید کنید.')
+    throw new Error('هیچ پروژه‌ای برای تولید داده نمایشی متریال نیست (پروژه‌ای که داده واقعی متریال دارد دست‌نخورده می‌ماند).')
   }
   const projectIds = projectRows.map((p) => p.id)
 
@@ -189,6 +192,8 @@ export async function seedMaterialDemoData(onProgress?: DemoSeedProgress): Promi
         pid_revision: pick(['Rev.1', 'Rev.2']),
         tag_number: def.tagged ? `${def.type === 'valve' ? 'V' : def.type === 'instrument' ? 'PT' : 'EQ'}-${ri(1000, 9999)}` : '',
         mto_quantity: mtoQuantity,
+        contract_qty: mtoQuantity,
+        is_demo: true,
         unit_weight_kg: unitWeightKg,
         unit_price: unitPrice,
         currency,
@@ -236,6 +241,7 @@ export async function seedMaterialDemoData(onProgress?: DemoSeedProgress): Promi
         currency,
         status: project.status === 'completed' ? 'completed' : 'active',
         notes: '',
+        is_demo: true,
       })
       .select('id')
       .single()
@@ -359,8 +365,11 @@ export async function seedMaterialDemoData(onProgress?: DemoSeedProgress): Promi
             })
             .filter((r): r is NonNullable<typeof r> => r !== null)
           if (allocationRows.length > 0) {
-            const { error: allocErr } = await supabase.from('mtl_allocations').insert(allocationRows)
+            const { data: insertedAllocs, error: allocErr } = await supabase.from('mtl_allocations').insert(allocationRows).select('id, master_project_id, material_id, quantity_consumed, allocation_date')
             if (allocErr) throw new Error(allocErr.message)
+            // use is recorded in the stock ledger (flagged as demo), not as a running total on the allocation
+            const issues = (insertedAllocs ?? []).filter((a) => Number(a.quantity_consumed) > 0).map((a) => ({ master_project_id: a.master_project_id, material_id: a.material_id, kind: 'issue', qty: a.quantity_consumed, txn_date: a.allocation_date, allocation_id: a.id, doc_ref: 'demo', status: 'posted', is_demo: true, notes: 'داده آزمایشی' }))
+            if (issues.length) await supabase.from('mtl_txns').insert(issues)
             allocationCount += allocationRows.length
           }
         }

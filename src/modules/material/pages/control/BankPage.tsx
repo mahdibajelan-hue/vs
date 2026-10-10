@@ -4,6 +4,7 @@ import { Download, FileUp, Plus, Search } from 'lucide-react'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel } from '../../lib/control/useMaterialModel'
 import { writeXlsx } from '../../lib/control/xlsx'
+import { dataGaps } from '../../lib/control/quality'
 import { Chip, DataTable, KpiCard, type Col } from '../../../finance/components/fn'
 import { DemoBadge, bn, fa } from '../../components/control/common'
 import { ItemDrawer } from '../../components/control/ItemDrawer'
@@ -11,8 +12,8 @@ import { MaterialForm } from '../../components/control/MaterialForm'
 import { MtoImport } from '../../components/control/MtoImport'
 import type { Material } from '../../types'
 
-type Flt = 'all' | 'noOrder' | 'under' | 'short' | 'disc' | 'excess' | 'outside' | 'done'
-const FLT: [Flt, string][] = [['all', 'همه'], ['noOrder', 'بدون سفارش'], ['under', 'سفارش ناقص'], ['short', 'کسری'], ['disc', 'دارای مغایرت'], ['excess', 'مازاد'], ['outside', 'خارج از پیمان'], ['done', 'تحویل کامل']]
+type Flt = 'all' | 'noOrder' | 'under' | 'short' | 'disc' | 'excess' | 'outside' | 'done' | 'gaps'
+const FLT: [Flt, string][] = [['all', 'همه'], ['noOrder', 'بدون سفارش'], ['under', 'سفارش ناقص'], ['short', 'کسری'], ['disc', 'دارای مغایرت'], ['excess', 'مازاد'], ['outside', 'خارج از پیمان'], ['done', 'تحویل کامل'], ['gaps', 'داده ناقص']]
 
 /** The material bank: every item with its place of use, the contract and design quantities, and where its supply stands. Click a row for the full file of the item. */
 export function BankPage({ projectId }: { projectId: string }) {
@@ -30,13 +31,13 @@ export function BankPage({ projectId }: { projectId: string }) {
   const stationsList = useMemo(() => [...new Set(m.materials.map((x) => x.facility).filter(Boolean))].sort(), [m.materials])
   const flags = (x: Material) => {
     const p = m.positions.get(x.id)!
-    return { noOrder: p.requiredQty > 0 && p.ordered === 0, under: p.ordered > 0 && p.ordered < p.requiredQty, short: p.uncoveredGap > 0, disc: (discByMat.get(x.id) ?? 0) > 0, excess: p.excess > 0, outside: !(x.contractQty && x.contractQty > 0) && !!x.detailQty, done: p.requiredQty > 0 && p.received >= p.requiredQty }
+    return { noOrder: p.requiredQty > 0 && p.ordered === 0, under: p.ordered > 0 && p.ordered < p.requiredQty, short: p.uncoveredGap > 0, disc: (discByMat.get(x.id) ?? 0) > 0, excess: p.excess > 0, outside: !(x.contractQty && x.contractQty > 0) && !!x.detailQty, done: p.requiredQty > 0 && p.received >= p.requiredQty, gaps: dataGaps(x).length > 0 }
   }
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase()
     return m.materials.filter((x) => (!station || x.facility === station) && (!group || x.groupId === group) && (!t || [x.materialCode, x.description, x.tagNumber, x.pipelineNo, x.isometricNo, x.pidNumber, x.usageLocation, x.spec].join(' ').toLowerCase().includes(t)) && (flt === 'all' || flags(x)[flt]))
   }, [m.materials, m.positions, q, station, group, flt, discByMat]) // eslint-disable-line react-hooks/exhaustive-deps
-  const counts = useMemo(() => { const c: Record<Flt, number> = { all: m.materials.length, noOrder: 0, under: 0, short: 0, disc: 0, excess: 0, outside: 0, done: 0 }; for (const x of m.materials) { const f = flags(x); for (const k of Object.keys(f) as (keyof typeof f)[]) if (f[k]) c[k]++ } return c }, [m.materials, m.positions, discByMat]) // eslint-disable-line react-hooks/exhaustive-deps
+  const counts = useMemo(() => { const c: Record<Flt, number> = { all: m.materials.length, noOrder: 0, under: 0, short: 0, disc: 0, excess: 0, outside: 0, done: 0, gaps: 0 }; for (const x of m.materials) { const f = flags(x); for (const k of Object.keys(f) as (keyof typeof f)[]) if (f[k]) c[k]++ } return c }, [m.materials, m.positions, discByMat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cols: Col<Material>[] = [
     { key: 'n', label: 'قلم', render: (x) => <><span className="strong">{x.description || x.materialCode} {x.isDemo && <DemoBadge />}</span><span className="sub fn-code">{x.materialCode}{x.groupId ? ` · ${m.groupById.get(x.groupId)?.title ?? ''}` : ''}</span></>, sort: (x) => x.description },
@@ -49,7 +50,7 @@ export function BankPage({ projectId }: { projectId: string }) {
     { key: 'h', label: 'موجودی', num: true, render: (x) => fa(m.positions.get(x.id)!.onHand, 1), sort: (x) => m.positions.get(x.id)!.onHand },
     { key: 'g', label: 'کسری', num: true, render: (x) => { const g = m.positions.get(x.id)!.uncoveredGap; return g > 0 ? <b style={{ color: 'var(--im-coral)' }}>{fa(g, 1)}</b> : <span style={{ opacity: .4 }}>—</span> }, sort: (x) => m.positions.get(x.id)!.uncoveredGap },
     { key: 'v', label: 'ارزش (میلیارد)', num: true, render: (x) => bn(m.positions.get(x.id)!.baseValue), sort: (x) => m.positions.get(x.id)!.baseValue },
-    { key: 's', label: 'وضعیت', render: (x) => { const f = flags(x); return <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{f.outside && <Chip tone="warn">خارج از پیمان</Chip>}{f.noOrder && <Chip tone="bad">بدون سفارش</Chip>}{f.under && <Chip tone="warn">ناقص</Chip>}{f.disc && !f.outside && <Chip tone="warn">مغایرت</Chip>}{f.done && <Chip tone="good">تحویل کامل</Chip>}</span> } },
+    { key: 's', label: 'وضعیت', render: (x) => { const f = flags(x); return <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{f.outside && <Chip tone="warn">خارج از پیمان</Chip>}{f.noOrder && <Chip tone="bad">بدون سفارش</Chip>}{f.under && <Chip tone="warn">ناقص</Chip>}{f.disc && !f.outside && <Chip tone="warn">مغایرت</Chip>}{f.done && <Chip tone="good">تحویل کامل</Chip>}{f.gaps && <span title={dataGaps(x).join('، ')}><Chip>ناقص: {dataGaps(x)[0]}{dataGaps(x).length > 1 ? ` +${fa(dataGaps(x).length - 1)}` : ''}</Chip></span>}</span> } },
   ]
   const totalValue = m.materials.reduce((a, x) => a + (m.positions.get(x.id)?.baseValue ?? 0), 0)
   const exportRows = () => writeXlsx(rows.map((x) => { const p = m.positions.get(x.id)!; return { 'کد': x.materialCode, 'شرح': x.description, 'گروه': m.groupById.get(x.groupId ?? '')?.title ?? '', 'مشخصات': x.spec, 'سایز': x.size, 'واحد': x.unit, 'ایستگاه': x.facility, 'بخش': x.area, 'خط': x.pipelineNo, 'ایزو': x.isometricNo, 'نقشه': x.pidNumber, 'تگ': x.tagNumber, 'جبهه': x.front, 'مقدار پیمان': p.contractQty, 'مقدار طراحی': p.detailQty ?? '', 'سفارش': p.ordered, 'تحویل': p.received, 'پذیرفته': p.accepted, 'مصرف': p.netConsumed, 'موجودی': p.onHand, 'کسری': p.uncoveredGap, 'قیمت واحد': x.unitPrice, 'ارزش': Math.round(p.baseValue), 'تاریخ نیاز': x.needDate ?? '' } }), 'بانک-متریال.xlsx', 'بانک متریال')

@@ -218,6 +218,7 @@ interface ProcurementRequestRow {
   notes: string
   created_at: string
   updated_at: string
+  package_id?: string | null
 }
 
 export function procurementRequestFromRow(r: ProcurementRequestRow): ProcurementRequest {
@@ -231,6 +232,7 @@ export function procurementRequestFromRow(r: ProcurementRequestRow): Procurement
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    packageId: r.package_id ?? null,
   }
 }
 
@@ -242,6 +244,7 @@ export function procurementRequestToRow(masterProjectId: string | null, r: Parti
   if (r.status !== undefined) row.status = r.status
   if (r.supplierOrgId !== undefined) row.supplier_org_id = r.supplierOrgId || null
   if (r.notes !== undefined) row.notes = r.notes
+  if (r.packageId !== undefined) row.package_id = r.packageId || null
   return row
 }
 
@@ -272,6 +275,8 @@ interface PurchaseOrderRow {
   notes: string
   created_at: string
   updated_at: string
+  package_id?: string | null
+  is_demo?: boolean
 }
 
 export function purchaseOrderFromRow(r: PurchaseOrderRow): PurchaseOrder {
@@ -287,6 +292,8 @@ export function purchaseOrderFromRow(r: PurchaseOrderRow): PurchaseOrder {
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    packageId: r.package_id ?? null,
+    isDemo: !!r.is_demo,
   }
 }
 
@@ -300,6 +307,7 @@ export function purchaseOrderToRow(masterProjectId: string | null, p: Partial<Pu
   if (p.currency !== undefined) row.currency = p.currency
   if (p.status !== undefined) row.status = p.status
   if (p.notes !== undefined) row.notes = p.notes
+  if (p.packageId !== undefined) row.package_id = p.packageId || null
   return row
 }
 

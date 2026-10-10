@@ -127,6 +127,7 @@ export interface ProcurementRequest {
   notes: string
   createdAt: string
   updatedAt: string
+  packageId: string | null
 }
 
 export interface ProcurementLine {
@@ -168,6 +169,8 @@ export interface PurchaseOrder {
   notes: string
   createdAt: string
   updatedAt: string
+  packageId: string | null
+  isDemo: boolean
 }
 
 export interface PoLine {
