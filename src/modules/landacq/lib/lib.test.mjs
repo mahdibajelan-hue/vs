@@ -24,9 +24,9 @@ assert.equal(fmtKm(42.3), '42+300'); assert.equal(fmtKm(0.05), '0+050'); assert.
 
 // ---- workflow ------------------------------------------------------------------------------------------------
 let p = mk()
-assert.equal(STAGE_ORDER.length, 10); assert.equal(currentStage(p).key, 'identification'); assert.equal(isStarted(p), false); assert.equal(stageProgress(p), 0)
-setStage(p, 'identification', 'done'); setStage(p, 'ownership_status', 'in_progress')
-assert.equal(currentStage(p).key, 'ownership_status'); assert.equal(isStarted(p), true); assert.equal(stageProgress(p), 0.15)
+assert.equal(STAGE_ORDER.length, 13); assert.equal(currentStage(p).key, 'identification'); assert.equal(isStarted(p), false); assert.equal(stageProgress(p), 0)
+setStage(p, 'identification', 'done'); setStage(p, 'survey', 'in_progress')
+assert.equal(currentStage(p).key, 'survey'); assert.equal(isStarted(p), true); assert.equal(stageProgress(p), 0.18)
 assert.equal(isReleased(release(mk())), true)
 const full = totalExpectedDays(mk({ complexity: 3 }))
 assert.ok(full > totalExpectedDays(mk({ acquisitionRoute: 'art9', complexity: 3 })), 'art9 is shorter')
@@ -38,7 +38,7 @@ assert.ok(remainingDays(setStage(mk({ estDurationDays: 120 }), 'identification',
 assert.equal(stageDelay({ key: 'payment', status: 'in_progress', plannedDate: '2026-01-05', actualDate: null, responsible: '', note: '' }, TODAY), 10)
 assert.equal(stageDelay({ key: 'payment', status: 'done', plannedDate: '2026-01-05', actualDate: '2026-01-08', responsible: '', note: '' }, TODAY), 3)
 assert.equal(stageDelay({ key: 'payment', status: 'done', plannedDate: '2026-01-05', actualDate: '2026-01-02', responsible: '', note: '' }, TODAY), 0)
-assert.equal(overdueStages(setStage(mk(), 'valuation', 'not_started', { plannedDate: '2026-01-01' }), TODAY).length, 1)
+assert.equal(overdueStages(setStage(mk(), 'expert_report', 'not_started', { plannedDate: '2026-01-01' }), TODAY).length, 1)
 
 // ---- scoring --------------------------------------------------------------------------------------------------
 assert.equal(levelOf(24), 'low'); assert.equal(levelOf(25), 'medium'); assert.equal(levelOf(50), 'high'); assert.equal(levelOf(75), 'critical')
@@ -47,7 +47,7 @@ assert.equal(c.level, 'low'); assert.equal(c.score, 0)
 c = criticality(mk({ ownershipClass: 'unknown', ownerCountEst: 12, disputeProbability: 80, complexity: 5, flags: { past_dispute: true, critical_for_execution: true, has_facilities: true } }))
 assert.equal(c.level, 'critical'); assert.ok(c.factors[0].points >= c.factors[1].points, 'sorted by points'); assert.ok(c.score <= 100)
 const base = criticality(mk({ ownershipClass: 'unknown', ownerCountEst: 6, disputeProbability: 60 })).score
-const advanced = criticality(setStage(setStage(mk({ ownershipClass: 'unknown', ownerCountEst: 6, disputeProbability: 60 }), 'identification', 'done'), 'ownership_status', 'done')).score
+const advanced = criticality(setStage(setStage(mk({ ownershipClass: 'unknown', ownerCountEst: 6, disputeProbability: 60 }), 'identification', 'done'), 'survey', 'done')).score
 assert.ok(advanced < base, 'progress lowers criticality')
 assert.deepEqual([criticality(release(mk({ ownershipClass: 'unknown' ,flags: { past_dispute: true } }))).score, criticality(release(mk())).resolved], [0, true])
 assert.equal(criticality(mk({ owners: [{ }, { }, { }, { }, { }] , ownerCountEst: 1 })).factors.find((f) => f.key === 'owners').points, 12, 'owner rows count too')
@@ -93,7 +93,7 @@ const parcels = [
   release(mk({ id: 'r', kmStart: 0, kmEnd: 10 })),
   setStage(mk({ id: 'a', kmStart: 10, kmEnd: 20 }), 'identification', 'in_progress'),
   mk({ id: 'c', kmStart: 78, kmEnd: 80, ownershipClass: 'unknown', ownerCountEst: 9, disputeProbability: 70, complexity: 5, estDurationDays: 120, flags: { critical_for_execution: true } }),
-  setStage(mk({ id: 'o', kmStart: 40, kmEnd: 41 }), 'valuation', 'not_started', { plannedDate: '2026-01-02' }),
+  setStage(mk({ id: 'o', kmStart: 40, kmEnd: 41 }), 'expert_report', 'not_started', { plannedDate: '2026-01-02' }),
 ]
 const rows = analyze(parcels, [act({ startDate: '2026-02-01', endDate: '2026-06-01' })], TODAY, { bufferDays: 15, horizonDays: 90 })
 assert.deepEqual(rows.map((r) => r.parcel.id), ['r', 'a', 'o', 'c'], 'sorted by km')
@@ -252,14 +252,14 @@ console.log('landacq/import+problems: all assertions passed')
   // each step ends its duration after the previous one, in order
   let cur = '2026-01-01'
   for (const k of STAGE_ORDER) { cur = addDays(cur, d[k]); assert.equal(dates.get(k), cur, k) }
-  assert.equal(plannedFinishOf({ ...p, stages: applyPlan(p, '2026-01-01') }), dates.get('ready_for_construction'))
+  assert.equal(plannedFinishOf({ ...p, stages: applyPlan(p, '2026-01-01') }), dates.get('payment'))
   // a hand-set total duration scales the steps
   const sum = (x) => STAGE_ORDER.reduce((n, k) => n + stepDays(x)[k], 0)
   assert.ok(Math.abs(sum(mk({ estDurationDays: 200 })) - 200) <= STAGE_ORDER.length, String(sum(mk({ estDurationDays: 200 }))))
   // finished steps keep their dates and move the cursor to the day they really ended
   const q = mk({ complexity: 2 }); setStage(q, 'identification', 'done', { plannedDate: '2026-01-08', actualDate: '2026-01-20' })
   const dq = planDates(q, '2026-01-01')
-  assert.equal(dq.get('identification'), '2026-01-08'); assert.equal(dq.get('ownership_status'), addDays('2026-01-20', stepDays(q).ownership_status))
+  assert.equal(dq.get('identification'), '2026-01-08'); assert.equal(dq.get('survey'), addDays('2026-01-20', stepDays(q).survey))
   assert.ok(applyPlan(q, '2026-01-01').find((s) => s.key === 'identification').actualDate === '2026-01-20')
   // never plan into the past when told so
   assert.equal(planDates(mk(), '2025-01-01', '2026-01-15').get('identification'), addDays('2026-01-15', stepDays(mk()).identification))

@@ -45,7 +45,7 @@ export function applyPlan(p: Parcel, start: string, notBefore?: string): Stage[]
 }
 
 /** The step whose planned date is the day the land is free: the last regular step, or possession under Article 9. */
-export const releaseKey = (p: Pick<Parcel, 'acquisitionRoute'>): StageKey => (p.acquisitionRoute === 'art9' ? 'art9_possession' : 'ready_for_construction')
+export const releaseKey = (p: Pick<Parcel, 'acquisitionRoute'>): StageKey => (p.acquisitionRoute === 'art9' ? 'art9_possession' : 'payment')
 
 export const plannedFinishOf = (p: Pick<Parcel, 'stages' | 'acquisitionRoute'>): string | null => {
   const s = stageOf(p, releaseKey(p))

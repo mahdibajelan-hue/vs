@@ -61,9 +61,11 @@ const LENGTHS = [2.4, 1.8, 3.1, 2.0, 1.5, 2.8, 2.2, 1.6, 3.4, 2.6]
 
 function stagesFor(done: number, working: boolean, route: AcqRoute, complexity: number, today: string, r: () => number): Stage[] {
   const days = STAGE_DAYS[route]
+  const N = STAGE_ORDER.length
+  done = Math.round(done * N / 10) // zones are described on a ten-step scale
   const f = 0.8 + 0.1 * complexity
   const dur = (i: number) => Math.round(days[STAGE_ORDER[i]] * f)
-  const anchor = Math.min(done, 9)
+  const anchor = Math.min(done, N - 1)
   const planned: string[] = []
   planned[anchor] = addDays(today, Math.floor(r() * 30) - 8)
   for (let i = anchor - 1; i >= 0; i--) planned[i] = addDays(planned[i + 1], -dur(i))
@@ -72,7 +74,7 @@ function stagesFor(done: number, working: boolean, route: AcqRoute, complexity: 
   const regular = STAGE_ORDER.map((key, i) => {
     const status = i < done ? 'done' : i === done && working ? 'in_progress' : 'not_started'
     const slip = Math.floor(r() * 10) - 4
-    return { key, status, responsible: i < 5 ? 'کارشناس تحصیل اراضی' : 'مدیر امور مالی و حقوقی', plannedDate: started ? planned[i] : null, actualDate: status === 'done' ? addDays(planned[i], Math.max(0, slip)) : null, note: '' } as Stage
+    return { key, status, responsible: i < 7 ? 'کارشناس تحصیل اراضی' : 'مدیر امور مالی و حقوقی', plannedDate: started ? planned[i] : null, actualDate: status === 'done' ? addDays(planned[i], Math.max(0, slip)) : null, note: '' } as Stage
   })
   return [...regular, ...makeStages().filter((s) => !STAGE_ORDER.includes(s.key))]
 }
@@ -243,7 +245,7 @@ export function buildDemo(masterProjectId: string, today: string): DemoBundle {
   }
   // where each parcel stands in the contractor -> consultant -> legal -> project manager chain
   parcels.forEach((p, i) => {
-    p.approvalStatus = p === crit1 ? 'submitted' : p === a9b ? 'consultant_approved' : p === a9a ? 'legal_attested' : (p.stages ?? []).some((s) => s.key === 'release' && s.status === 'done') ? 'approved' : i % 7 === 3 ? 'submitted' : 'draft'
+    p.approvalStatus = p === crit1 ? 'submitted' : p === a9b ? 'consultant_approved' : p === a9a ? 'legal_attested' : (p.stages ?? []).some((s) => s.key === 'payment' && s.status === 'done') ? 'approved' : i % 7 === 3 ? 'submitted' : 'draft'
   })
 
   // crossings of existing facilities (permit, undertaking, fee)

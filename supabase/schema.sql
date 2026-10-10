@@ -20429,3 +20429,22 @@ alter table im_issue_links add constraint im_issue_links_target_type_check check
 insert into rasta_modules (key, label_fa, is_active) values ('change', 'مدیریت تغییرات پروژه', true) on conflict (key) do nothing;
 -- NOTE: the live database also kept three empty helper functions cm_t1/cm_t2/cm_t3 created while diagnosing a tool timeout; they are harmless and can be dropped.
 
+
+-- ============================================================================
+-- 81. Land acquisition: 13-step regular route (replaces the 10 old steps). Existing rows were remapped:
+--     ownership_status→survey, owner_identification→quantity_list, preliminary_assessment→case_file (+cadastre, inquiries copies),
+--     expert_referral→experts_intro (+expert_visit copy), valuation→expert_report, financial_settlement→employer_approval (+docs_handover copy),
+--     release→undertaking, ready_for_construction removed; identification and payment keep their keys.
+-- ============================================================================
+alter table la_stages drop constraint if exists la_stages_key_check;
+alter table la_stages add constraint la_stages_key_check check (stage_key in ('identification', 'survey', 'quantity_list', 'case_file', 'cadastre', 'inquiries', 'experts_intro', 'expert_visit', 'expert_report', 'employer_approval', 'docs_handover', 'payment', 'undertaking', 'art9_necessity', 'art9_minutes', 'art9_possession', 'art9_payment'));
+create or replace function la_parcel_after_insert()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into la_stages (parcel_id, stage_key)
+  select new.id, s from unnest(array['identification', 'survey', 'quantity_list', 'case_file', 'cadastre', 'inquiries', 'experts_intro', 'expert_visit', 'expert_report', 'employer_approval', 'docs_handover', 'payment', 'undertaking']) as s
+  on conflict do nothing;
+  insert into la_events (master_project_id, parcel_id, actor_id, kind, detail)
+  values (new.master_project_id, new.id, auth.uid(), 'parcel_created', jsonb_build_object('code', new.code, 'km_start', new.km_start, 'km_end', new.km_end));
+  return null;
+end $$;
