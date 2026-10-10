@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Banknote, FileText, Gauge, Home, LineChart, Loader2, Receipt, Settings2, ShieldAlert, Wallet } from 'lucide-react'
+import { Banknote, FileText, Gauge, LineChart, Loader2, Receipt, Settings2, ShieldAlert, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -9,7 +9,6 @@ import '../issues/issues.css'
 import './finance-dashboard.css'
 import { useFinanceStore } from './store/useFinanceStore'
 import { useFinanceControlStore } from './store/useFinanceControlStore'
-import { HubPage } from './pages/HubPage'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
 export const FINANCE_ACCENT = '#059669'
@@ -27,24 +26,24 @@ const PaymentsRecordPage = L(() => import('./pages/PaymentsRecordPage'), 'Paymen
 const BudgetPage = L(() => import('./pages/BudgetPage'), 'BudgetPage')
 const CostManagementPage = L(() => import('./pages/CostManagementPage'), 'CostManagementPage')
 const LandBridgePage = L(() => import('./pages/control/LandBridgePage'), 'LandBridgePage')
-const CashflowCurvesPage = L(() => import('./pages/control/CashflowCurvesPage'), 'CashflowCurvesPage')
 const ExceptionsPage = L(() => import('./pages/control/ExceptionsPage'), 'ExceptionsPage')
 const FinancialReportsPage = L(() => import('./pages/FinancialReportsPage'), 'FinancialReportsPage')
 const ControlSettingsPage = lazy(() => import('./pages/control/ControlSettingsPage').then((m) => ({ default: m.ControlSettingsPage as React.ComponentType<{ masterProjectId: string | null }> })))
-const MgmtDashboardPage = lazy(() => import('./pages/control/MgmtDashboardPage').then((m) => ({ default: m.MgmtDashboardPage })))
-const FinancialDashboardPage = lazy(() => import('./pages/FinancialDashboardPage').then((m) => ({ default: m.FinancialDashboardPage })))
+const DashboardPage = lazy(() => import('./pages/v2/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+const ContractsRegister = lazy(() => import('./pages/v2/ContractsPage').then((m) => ({ default: m.ContractsRegister })))
+const BudgetPlanPage = L(() => import('./pages/v2/BudgetPage'), 'BudgetPlanPage')
+const CashPage = L(() => import('./pages/v2/CashPage'), 'CashPage')
 const CashFlowForecastPage = lazy(() => import('./pages/CashFlowForecastPage').then((m) => ({ default: m.CashFlowForecastPage })))
 
-export type FinTab = 'home' | 'dashboard' | 'contracts' | 'billing' | 'budget' | 'cash' | 'attention' | 'admin'
+export type FinTab = 'dashboard' | 'contracts' | 'billing' | 'budget' | 'cash' | 'attention' | 'admin'
 type Sub = { id: string; label: string }
 const NAV: { id: FinTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; project?: boolean }[] = [
-  { id: 'home', label: 'خانه', icon: Home, color: '#10b981' },
-  { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1', subs: [{ id: 'mgmt', label: 'مدیریتی' }, { id: 'portfolio', label: 'سبد پروژه‌ها' }] },
-  { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'قراردادها' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه' }, { id: 'obligations', label: 'پیش‌پرداخت و مفاصاحساب' }, { id: 'claims', label: 'ادعاها' }, { id: 'retention', label: 'حسن انجام کار' }] },
-  { id: 'billing', label: 'صورت‌وضعیت و پرداخت', icon: Receipt, color: '#0ea5e9', project: true, subs: [{ id: 'pipeline', label: 'گردش' }, { id: 'certificates', label: 'صورت‌وضعیت‌ها' }, { id: 'payments', label: 'پرداخت‌ها' }] },
-  { id: 'budget', label: 'بودجه و هزینه', icon: Wallet, color: '#f59e0b', project: true, subs: [{ id: 'budget', label: 'بودجه و ردیف‌ها' }, { id: 'cost', label: 'هزینه و پیش‌بینی' }, { id: 'land', label: 'تملک اراضی' }] },
-  { id: 'cash', label: 'جریان نقدی', icon: LineChart, color: '#14b8a6', project: true, subs: [{ id: 'curves', label: 'منحنی‌ها' }, { id: 'monthly', label: 'برنامهٔ ریالی ماهانه (سبد)' }] },
-  { id: 'attention', label: 'موارد نیازمند تصمیم', icon: ShieldAlert, color: '#ef4444', project: true },
+  { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1' },
+  { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'فهرست و پرونده' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه و مفاصاحساب' }, { id: 'claims', label: 'ادعا و حسن انجام کار' }, { id: 'manage', label: 'ثبت و ویرایش' }] },
+  { id: 'budget', label: 'بودجه و هزینه', icon: Wallet, color: '#f59e0b', project: true, subs: [{ id: 'plan', label: 'ردیف‌ها و مصرف' }, { id: 'cost', label: 'هزینهٔ نهایی' }, { id: 'land', label: 'تملک اراضی' }, { id: 'annual', label: 'بودجهٔ کل و سالانه' }] },
+  { id: 'cash', label: 'نقدینگی', icon: LineChart, color: '#14b8a6', project: true, subs: [{ id: 'project', label: 'پروژه: کارفرما و پیمانکار' }, { id: 'portfolio', label: 'سبد پروژه‌ها' }] },
+  { id: 'billing', label: 'صورت‌وضعیت و پرداخت', icon: Receipt, color: '#0ea5e9', project: true, subs: [{ id: 'pipeline', label: 'گردش' }, { id: 'certificates', label: 'ثبت صورت‌وضعیت' }, { id: 'payments', label: 'ثبت پرداخت' }] },
+  { id: 'attention', label: 'نیازمند تصمیم', icon: ShieldAlert, color: '#ef4444', project: true },
   { id: 'admin', label: 'گزارش و تنظیمات', icon: Settings2, color: '#94a3b8', subs: [{ id: 'reports', label: 'گزارش‌ها' }, { id: 'settings', label: 'تنظیمات و سابقه' }] },
 ]
 
@@ -58,7 +57,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const controlLoaded = useFinanceControlStore((s) => s.loaded)
   const fetchControl = useFinanceControlStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<FinTab>('home')
+  const [tab, setTab] = useState<FinTab>('dashboard')
   const [subs, setSubs] = useState<Partial<Record<FinTab, string>>>({})
   const [projectId, setProjectId] = useState<string | null>(null)
 
@@ -80,17 +79,17 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const loading = !financeLoaded || !mdLoaded
 
   const body = (pid: string | null) => {
-    if (cur.project && !pid) return <div className="im-page"><div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div></div>
+    if (tab === 'dashboard') return <DashboardPage projectId={pid} onProject={setProjectId} onGo={go} />
+    if (cur.project && !pid) return <div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div>
     const p = pid as string
     switch (tab) {
-      case 'home': return <HubPage onGo={go} />
-      case 'dashboard': return sub === 'portfolio' ? <FinancialDashboardPage /> : <MgmtDashboardPage />
-      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <GuaranteesPage masterProjectId={p} /> : sub === 'obligations' ? <ObligationsPage masterProjectId={p} /> : sub === 'claims' ? <ClaimsPage masterProjectId={p} /> : sub === 'retention' ? <RetentionPage masterProjectId={p} /> : <ContractsPage masterProjectId={p} />
+      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesPage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsPage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionPage masterProjectId={p} /></> : sub === 'manage' ? <ContractsPage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
       case 'billing': return sub === 'certificates' ? <PaymentCertificatesPage masterProjectId={p} /> : sub === 'payments' ? <PaymentsRecordPage masterProjectId={p} /> : <PipelinePage masterProjectId={p} />
-      case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : <BudgetPage masterProjectId={p} />
-      case 'cash': return sub === 'monthly' ? <CashFlowForecastPage /> : <CashflowCurvesPage masterProjectId={p} />
+      case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : sub === 'annual' ? <BudgetPage masterProjectId={p} /> : <BudgetPlanPage masterProjectId={p} />
+      case 'cash': return sub === 'portfolio' ? <CashFlowForecastPage /> : <CashPage masterProjectId={p} />
       case 'attention': return <ExceptionsPage masterProjectId={p} />
-      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <FinancialReportsPage masterProjectId={pid} /> : <div className="im-page"><div className="im-card im-empty">یک پروژه را انتخاب کنید.</div></div>
+      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <FinancialReportsPage masterProjectId={pid} /> : <div className="im-card im-empty">یک پروژه را انتخاب کنید.</div>
+      default: return null
     }
   }
 
@@ -106,7 +105,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
             </div>
           </div>
           <div className="im-actions" style={{ minWidth: 0 }}>
-            {projects.length > 0 && tab !== 'home' && (cur.project || (tab === 'admin' && sub === 'reports')) && (
+            {projects.length > 0 && (cur.project || tab === 'dashboard' || (tab === 'admin' && sub === 'reports')) && (
               <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}
               </select>

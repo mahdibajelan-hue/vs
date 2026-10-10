@@ -72,7 +72,7 @@ export function fmtCurrency(n: number, currency = ''): string {
 /** Every date in this module is displayed as Jalali (شمسی) — this is the one place that formatting happens. */
 export function fmtDate(iso: string | null): string {
   if (!iso) return '—'
-  return formatJalali(iso) || '—'
+  return (formatJalali(iso) || '—').replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 }
 
 /** Chart month-axis label in Jalali — input is a "YYYY-MM" Gregorian month key (see financeCalc's CashFlowPoint.month). */
