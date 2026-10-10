@@ -151,6 +151,7 @@ interface FinContractRow {
   start_date: string | null
   planned_completion_date: string | null
   status: string
+  rate_date?: string | null
   contract_type?: string
   supersedes_contract_id?: string | null
   budget_line_id?: string | null
@@ -169,7 +170,7 @@ export function finContractFromRow(r: FinContractRow): FinContract {
     contractorOrgId: r.contractor_org_id,
     contractValue: Number(r.contract_value),
     currency: r.currency,
-    fx: fxFromRow(r.contract_value_fc, r.fc_currency, r.exchange_rate, r.contract_value_fc_rial_equivalent),
+    fx: { ...fxFromRow(r.contract_value_fc, r.fc_currency, r.exchange_rate, r.contract_value_fc_rial_equivalent), rateDate: r.rate_date ?? null },
     advancePaymentPercent: Number(r.advance_payment_percent),
     retentionPercent: Number(r.retention_percent),
     performanceGuaranteePercent: Number(r.performance_guarantee_percent),
@@ -198,6 +199,7 @@ export function finContractToRow(masterProjectId: string | null, c: Partial<FinC
   if (c.fx?.fcAmount !== undefined) row.contract_value_fc = c.fx.fcAmount
   if (c.fx?.fcCurrency !== undefined) row.fc_currency = c.fx.fcCurrency
   if (c.fx?.exchangeRate !== undefined) row.exchange_rate = c.fx.exchangeRate
+  if (c.fx?.rateDate !== undefined) row.rate_date = c.fx.rateDate || null
   if (c.advancePaymentPercent !== undefined) row.advance_payment_percent = c.advancePaymentPercent
   if (c.retentionPercent !== undefined) row.retention_percent = c.retentionPercent
   if (c.performanceGuaranteePercent !== undefined) row.performance_guarantee_percent = c.performanceGuaranteePercent

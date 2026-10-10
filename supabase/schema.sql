@@ -20468,3 +20468,4 @@ $f$;
 -- la_review: v_all := is_admin_user() or role = 'executive' replaces the per-action admin check (see live definition)
 
 -- §84 Finance & Contract Control: see supabase/finance/001_finance_control.sql (applied live)
+-- §85 Finance phase 2: see supabase/finance/002_cashflow_clearances_insights.sql (applied live)

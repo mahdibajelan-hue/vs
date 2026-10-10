@@ -6,6 +6,8 @@ export interface FxAmount {
   exchangeRate: number
   /** Generated column: fcAmount * exchangeRate. Never hand-entered. */
   fcRialEquivalent: number
+  /** Date the exchange rate applies to (so a rial equivalent can always be traced to a dated rate). */
+  rateDate?: string | null
 }
 
 export interface FinBudget {

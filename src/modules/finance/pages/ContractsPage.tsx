@@ -425,6 +425,7 @@ function ContractModal({
   const [fcAmount, setFcAmount] = useState(initial?.fx.fcAmount != null ? String(initial.fx.fcAmount) : '0')
   const [fcCurrency, setFcCurrency] = useState(initial?.fx.fcCurrency ?? 'EUR')
   const [exchangeRate, setExchangeRate] = useState(initial?.fx.exchangeRate != null ? String(initial.fx.exchangeRate) : '0')
+  const [rateDate, setRateDate] = useState(initial?.fx.rateDate ?? '')
   const [advancePaymentPercent, setAdvancePaymentPercent] = useState(initial?.advancePaymentPercent != null ? String(initial.advancePaymentPercent) : '0')
   const [retentionPercent, setRetentionPercent] = useState(initial?.retentionPercent != null ? String(initial.retentionPercent) : '0')
   const [performanceGuaranteePercent, setPerformanceGuaranteePercent] = useState(initial?.performanceGuaranteePercent != null ? String(initial.performanceGuaranteePercent) : '0')
@@ -449,7 +450,7 @@ function ContractModal({
       contractorOrgId: contractorOrgId || null,
       contractValue: contractValue === '' ? 0 : Number(contractValue),
       currency,
-      fx: { fcAmount: Number(fcAmount) || 0, fcCurrency, exchangeRate: Number(exchangeRate) || 0, fcRialEquivalent: 0 },
+      fx: { fcAmount: Number(fcAmount) || 0, fcCurrency, exchangeRate: Number(exchangeRate) || 0, fcRialEquivalent: 0, rateDate: rateDate || null },
       advancePaymentPercent: Number(advancePaymentPercent) || 0,
       retentionPercent: Number(retentionPercent) || 0,
       performanceGuaranteePercent: Number(performanceGuaranteePercent) || 0,
@@ -550,6 +551,10 @@ function ContractModal({
           <label className="block">
             <span className="mb-1 block text-xs fin-text-secondary">نرخ تبدیل ارز</span>
             <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} className="fin-input num" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs fin-text-secondary">تاریخ نرخ تبدیل</span>
+            <JalaliDateInput value={rateDate} onChange={setRateDate} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs fin-text-secondary">پیش‌پرداخت (٪)</span>

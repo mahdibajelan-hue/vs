@@ -197,3 +197,9 @@
   font-weight: 700;
   font-feature-settings: 'tnum' 1;
 }
+
+/* Periodic management report: print only the page itself */
+@media print {
+  .fin-shell aside, .fin-shell .no-print { display: none !important; }
+  .fin-shell { height: auto !important; overflow: visible !important; background: #fff !important; color: #111 !important; }
+}

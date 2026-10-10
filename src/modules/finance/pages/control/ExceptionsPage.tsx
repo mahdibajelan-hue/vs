@@ -8,6 +8,9 @@ import { useFinanceControlStore, type FinLink } from '../../store/useFinanceCont
 import { findExceptions, landBridge, type FinException } from '../../lib/financeControl'
 import { useThresholds } from '../../lib/useThresholds'
 import { currentBudget, currentContractValue } from '../../lib/financeCalc'
+import { buildInsights } from '../../lib/financeInsights'
+import { exportFinanceReportToExcel } from '../../lib/financeExport'
+import { Download } from 'lucide-react'
 import { StampBadge } from '../../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../../FinanceApp'
 
@@ -35,6 +38,9 @@ export function ExceptionsPage({ masterProjectId }: { masterProjectId: string })
   const requestLink = useDeepLinkStore((s) => s.request)
   const { thresholds, version } = useThresholds()
   const [busy, setBusy] = useState<string | null>(null)
+  const clearances = useFinanceControlStore((s) => s.clearances)
+  const reviews = useFinanceControlStore((s) => s.reviews)
+  const reviewInsight = useFinanceControlStore((s) => s.reviewInsight)
 
   const items = useMemo(() => {
     const pc = contracts.filter((c) => c.masterProjectId === masterProjectId)
@@ -47,6 +53,17 @@ export function ExceptionsPage({ masterProjectId }: { masterProjectId: string })
       budgetByProject: new Map([[masterProjectId, { budget, commitment }]]), land: landSum ? new Map([[masterProjectId, landBridge(landSum, thresholds)]]) : undefined })
   }, [contracts, amendments, certificates, guarantees, claims, budgets, budgetChanges, land, masterProjectId, thresholds])
 
+  const insights = useMemo(() => {
+    const pc = contracts.filter((c) => c.masterProjectId === masterProjectId)
+    return buildInsights({ contracts: pc, amendments, certificates, clearances, today: new Date().toISOString().slice(0, 10) }).filter((i) => !reviews.has(i.key))
+  }, [contracts, amendments, certificates, clearances, reviews, masterProjectId])
+  const acceptInsight = async (i: (typeof insights)[number]) => {
+    setBusy(i.key)
+    const ok = await raise({ sourceType: i.sourceType, sourceId: i.sourceId, projectId: masterProjectId, target: 'issue', title: i.title, description: `${i.detail}\n\nپیشنهاد: ${i.suggestion}`, severity: i.severity })
+    if (ok) await reviewInsight(i.key, masterProjectId, 'accepted')
+    setBusy(null)
+  }
+
   const linkOf = (e: FinException, kind: 'issue' | 'risk'): FinLink | undefined => links.find((l) => l.masterProjectId === masterProjectId && l.sourceType === e.sourceType && l.sourceId === e.sourceId && l.targetType === kind)
   const go = (l: FinLink) => { requestLink({ module: l.targetType === 'issue' ? 'issues' : 'risk', recordId: l.targetId, masterProjectId }); enterModule(l.targetType === 'issue' ? 'issues' : 'risk') }
   const doRaise = async (e: FinException, target: 'issue' | 'risk') => { setBusy(`${e.key}:${target}`); await raise({ sourceType: e.sourceType, sourceId: e.sourceId, projectId: masterProjectId, target, title: e.title, description: `${e.title}\n\n${e.detail}`, severity: e.severity }); setBusy(null) }
@@ -56,7 +73,8 @@ export function ExceptionsPage({ masterProjectId }: { masterProjectId: string })
     <div className="space-y-4">
       <div className="fin-card flex flex-wrap items-center justify-between gap-3 p-4">
         <div><p className="fin-text-muted text-xs">موارد نیازمند تصمیم مدیریتی</p><h1 className="fin-text mt-1 text-lg font-extrabold">{project.officialName}</h1></div>
-        <p className="text-[11px] fin-text-muted">آستانه‌ها: {version ? `نسخهٔ ${version.toLocaleString('fa-IR')}` : 'پیش‌فرض'} (تنظیمات)</p>
+        <div className="flex items-center gap-3"><button onClick={() => void exportFinanceReportToExcel(items.map((e) => ({ 'شدت': e.severity, 'عنوان': e.title, 'توضیح': e.detail })), `استثناها-${project?.officialName ?? ''}.xlsx`)} className="flex items-center gap-1 text-[11px] fin-text-muted"><Download size={11} /> Excel</button>
+        <p className="text-[11px] fin-text-muted">آستانه‌ها: {version ? `نسخهٔ ${version.toLocaleString('fa-IR')}` : 'پیش‌فرض'} (تنظیمات)</p></div>
       </div>
       {items.length === 0 ? (
         <div className="fin-card flex items-center justify-center gap-2 p-8 text-sm fin-text-muted"><ListChecks size={16} /> مورد استثنایی دیده نشد.</div>
@@ -81,6 +99,20 @@ export function ExceptionsPage({ masterProjectId }: { masterProjectId: string })
           </div>
         )
       })}
+      {insights.length > 0 && (
+        <div className="fin-card space-y-2 p-4">
+          <p className="text-sm font-extrabold">یافته‌های تحلیلی — نیازمند بررسی و تأیید شما</p>
+          <p className="text-[11px] fin-text-muted">این موارد با قواعد مغایرت‌یابی از دادهٔ ثبت‌شده پیدا شده‌اند و هیچ‌چیز خودکار تغییر نمی‌کند. تأیید یعنی ثبت مسئله؛ رد یعنی بی‌اهمیت (دوباره نمایش داده نمی‌شود).</p>
+          {insights.map((i) => (
+            <div key={i.key} className="flex flex-wrap items-center gap-3 border-t pt-2" style={{ borderColor: 'var(--fin-divider)' }}>
+              <div className="min-w-0 flex-1"><p className="text-[13px] font-bold leading-6">{i.title}</p><p className="text-[11.5px] fin-text-secondary">{i.detail} · پیشنهاد: {i.suggestion}</p></div>
+              <StampBadge label={SEV_FA[i.severity]} tone={SEV_TONE[i.severity]} />
+              <button disabled={busy === i.key} onClick={() => acceptInsight(i)} className="rounded-lg border px-2.5 py-1.5 text-[11px] font-bold" style={{ borderColor: 'var(--fin-divider)' }}>تأیید و ثبت مسئله</button>
+              <button onClick={() => void reviewInsight(i.key, masterProjectId, 'dismissed')} className="rounded-lg px-2.5 py-1.5 text-[11px] fin-text-muted">رد</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Sprout } from 'lucide-react'
+import { Download, ExternalLink, Sprout } from 'lucide-react'
+import { exportFinanceReportToExcel } from '../../lib/financeExport'
 import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
 import { useModuleStore } from '../../../../store/useModuleStore'
 import { useFinanceControlStore, type LandLedgerRow } from '../../store/useFinanceControlStore'
@@ -91,6 +92,7 @@ export function LandBridgePage({ masterProjectId }: { masterProjectId: string })
 
       <div className="fin-card overflow-x-auto p-4">
         <div className="mb-2 flex items-center justify-between"><p className="text-xs font-bold fin-text-secondary">پرداخت‌های تملک (فقط‌خواندنی؛ ثبت و ابطال در ماژول تحصیل اراضی)</p>
+          <button onClick={() => void exportFinanceReportToExcel(rows.map((r) => ({ 'تاریخ': r.paidDate, 'دریافت‌کننده': r.payee, 'نوع': CAT_FA[r.category] ?? r.category, 'شناسه مرجع': r.ref || r.id, 'مبلغ': r.amount, 'وضعیت': r.status === 'voided' ? `باطل: ${r.voidReason}` : 'ثبت‌شده' })), `تملک-اراضی-${project.officialName}.xlsx`)} className="flex items-center gap-1 text-[11px] fin-text-muted"><Download size={11} /> Excel</button>
           <label className="flex items-center gap-1.5 text-[11px] fin-text-muted"><input type="checkbox" checked={showVoided} onChange={(e) => setShowVoided(e.target.checked)} /> نمایش باطل‌شده‌ها</label></div>
         {rows.length === 0 ? <p className="py-6 text-center text-xs fin-text-muted">پرداختی ثبت نشده است.</p> : (
           <table className="w-full text-xs">

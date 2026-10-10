@@ -19,6 +19,10 @@ import {
   Menu,
   Receipt,
   Sprout,
+  Gauge,
+  TrendingUp,
+  Workflow,
+  FileCheck,
   GitPullRequestArrow,
   Settings,
   ShieldCheck,
@@ -52,6 +56,10 @@ import { RetentionPage } from './pages/RetentionPage'
 import { LandBridgePage } from './pages/control/LandBridgePage'
 import { ChangesBridgePage } from './pages/control/ChangesBridgePage'
 import { ExceptionsPage } from './pages/control/ExceptionsPage'
+import { CashflowCurvesPage } from './pages/control/CashflowCurvesPage'
+import { PipelinePage } from './pages/control/PipelinePage'
+import { ObligationsPage } from './pages/control/ObligationsPage'
+import { MgmtDashboardPage } from './pages/control/MgmtDashboardPage'
 import { ControlSettingsPage } from './pages/control/ControlSettingsPage'
 import { useFinanceControlStore } from './store/useFinanceControlStore'
 
@@ -60,6 +68,10 @@ export const FINANCE_ACCENT = '#c9a654'
 
 type Tab =
   | 'dashboard'
+  | 'mgmt'
+  | 'curves'
+  | 'pipeline'
+  | 'obligations'
   | 'portfolios'
   | 'programs'
   | 'projects'
@@ -80,6 +92,7 @@ type Tab =
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
+  { id: 'mgmt', label: 'داشبورد مدیریتی', icon: Gauge },
   { id: 'portfolios', label: 'پرتفولیو', icon: Building2 },
   { id: 'programs', label: 'طرح‌ها', icon: Briefcase },
   { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban },
@@ -89,6 +102,9 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'budget', label: 'بودجه', icon: Banknote },
   { id: 'cost', label: 'مدیریت هزینه', icon: Calculator },
   { id: 'cashflow', label: 'جریان نقدینگی', icon: LineChart },
+  { id: 'curves', label: 'منحنی‌های نقدی', icon: TrendingUp },
+  { id: 'pipeline', label: 'گردش صورت‌وضعیت', icon: Workflow },
+  { id: 'obligations', label: 'پیش‌پرداخت و مفاصاحساب', icon: FileCheck },
   { id: 'guarantees', label: 'ضمانت‌نامه‌ها', icon: ShieldCheck },
   { id: 'claims', label: 'کلایم پیمانکار', icon: FileWarning },
   { id: 'retention', label: 'حسن انجام کار', icon: Landmark },
@@ -100,10 +116,14 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
 ]
 
 /** Tabs that operate on a single selected project and need the project dropdown in the topbar. */
-const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention', 'land', 'changes', 'exceptions'])
+const PROJECT_SCOPED_TABS = new Set<Tab>(['contracts', 'certificates', 'payments', 'budget', 'cost', 'reports', 'guarantees', 'claims', 'retention', 'land', 'changes', 'exceptions', 'curves', 'pipeline', 'obligations'])
 
 const PAGE_META: Record<Tab, { title: string; subtitle: string }> = {
   dashboard: { title: 'داشبورد مدیریت مالی', subtitle: 'نمای کلی سبد پروژه‌ها' },
+  mgmt: { title: 'داشبورد مدیریتی', subtitle: 'نمای متناسب با نقش: مدیرعامل، مجری، مدیر پروژه، مالی و قراردادی' },
+  curves: { title: 'منحنی‌های جریان نقدی', subtitle: 'پایه، واقعی، پیش‌بینی و پیشنهاد پیمانکار؛ ریالی و ارزی جدا' },
+  pipeline: { title: 'گردش صورت‌وضعیت‌ها', subtitle: 'مرحله و زمان سپری‌شده' },
+  obligations: { title: 'پیش‌پرداخت و مفاصاحساب', subtitle: 'استهلاک پیش‌پرداخت، تأمین اجتماعی، بیمه و مالیات' },
   portfolios: { title: 'پرتفولیوها', subtitle: 'فهرست و وضعیت مالی پرتفولیوها' },
   programs: { title: 'طرح‌ها', subtitle: 'فهرست و وضعیت مالی طرح‌ها' },
   projects: { title: 'پروژه‌ها', subtitle: 'فهرست و وضعیت مالی پروژه‌ها' },
@@ -363,6 +383,8 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
             <ProgramsBrowsePage />
           ) : tab === 'projects' ? (
             <ProjectsBrowsePage />
+          ) : tab === 'mgmt' ? (
+            <MgmtDashboardPage />
           ) : tab === 'settings' ? (
             <ControlSettingsPage masterProjectId={projectId} />
           ) : !projectId ? (
@@ -383,6 +405,12 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
             <ClaimsPage masterProjectId={projectId} />
           ) : tab === 'retention' ? (
             <RetentionPage masterProjectId={projectId} />
+          ) : tab === 'curves' ? (
+            <CashflowCurvesPage masterProjectId={projectId} />
+          ) : tab === 'pipeline' ? (
+            <PipelinePage masterProjectId={projectId} />
+          ) : tab === 'obligations' ? (
+            <ObligationsPage masterProjectId={projectId} />
           ) : tab === 'land' ? (
             <LandBridgePage masterProjectId={projectId} />
           ) : tab === 'changes' ? (
