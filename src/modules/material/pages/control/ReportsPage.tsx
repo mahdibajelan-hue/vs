@@ -187,6 +187,9 @@ export function ReportsPage({ projectId }: { projectId: string }) {
         {CATALOG.map((g) => <div key={g.group}><h4>{g.group}</h4>{g.items.map(([id, label]) => <button key={id} className={id === rid ? 'on' : ''} onClick={() => setRid(id)}><b>{label}</b></button>)}</div>)}
       </nav>
       <div className="fn-rep-body">
+        <select className="mt-rep-select no-print" value={rid} onChange={(e) => setRid(e.target.value as RId)} aria-label="انتخاب گزارش">
+          {CATALOG.map((g) => <optgroup key={g.group} label={g.group}>{g.items.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</optgroup>)}
+        </select>
         <div className="fn-toolbar no-print">
           <div hidden={rid.startsWith('pack_')} style={{ minWidth: 0 }}><h2 className="fn-rep-title">{meta[1]}</h2><p className="im-helper" style={{ margin: 0 }}>{project?.officialName}{station ? ` · ${station}` : ''}</p></div>
           <select value={station} onChange={(e) => setStation(e.target.value)} aria-label="ایستگاه" style={{ maxWidth: 220, marginInlineStart: 'auto' }}><option value="">همهٔ ایستگاه‌ها</option>{stations.map((s) => <option key={s}>{s}</option>)}</select>

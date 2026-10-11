@@ -120,3 +120,7 @@
 }
 .mt-print-head { display: none; }
 @media print { .mt-print-head { display: flex !important; justify-content: space-between; border-bottom: 3px solid #b45309; padding-bottom: 8px; margin-bottom: 10px; } .mt-print-head h2 { margin: 0; font-size: 17px; } .mt-print-head p { margin: 2px 0 0; font-size: 11.5px; color: #4b5563; } }
+
+/* reports: on narrow screens the side list becomes a single select */
+.mt-rep-select { display: none; width: 100%; margin-bottom: 10px; font-weight: 700; }
+@media (max-width: 1000px) { .mt-root .fn-rep-nav { display: none; } .mt-rep-select { display: block; } }
