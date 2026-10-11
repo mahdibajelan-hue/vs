@@ -7,6 +7,7 @@ import { detectDiscrepancies, expectedArrival, type Detected } from './discrepan
 import { frontsAtRisk, prioritize, type FrontRisk, type Priority } from './priority'
 import { itemProgress, progressBy, progressCurve, rollup, type ProgressGroupRow, type Rollup } from './progress'
 import { suggestRaises, type RaiseSuggestion } from './riskSuggest'
+import { leadTimeExposure, needAging, orderDeadlines, stationGroupHeat, supplyFunnel, type AgingBucket, type FunnelStage, type Heat, type LeadRow, type OrderDeadline } from './insights'
 import type { ItemStage, Material, MtlDiscrepancy, MtlGroup, MtlLink, MtlPackage, PackageItem } from '../../types'
 
 const OPEN_ISSUE = new Set(['open', 'in_progress', 'pending_approval'])
@@ -35,6 +36,11 @@ export interface MaterialModel {
   discrepancies: MtlDiscrepancy[]
   linksByMaterial: Map<string, MtlLink[]>
   openLinkCount: Map<string, number>
+  funnel: FunnelStage[]
+  aging: AgingBucket[]
+  deadlines: OrderDeadline[]
+  heat: Heat
+  leadExposure: LeadRow[]
   today: string
   hasDemo: boolean
 }
@@ -80,6 +86,7 @@ export function useMaterialModel(projectId: string | null): MaterialModel {
       suggestions: suggestRaises({ materials, positions, groups: cs.groups, detected, priorities, settings: cs.settings, today }), groups: cs.groups, groupById: new Map(cs.groups.map((g) => [g.id, g])),
       packages, items, stages, progress: rollup(progressRows), byPackage: progressBy({ ...base, by: 'package' }), byStation: progressBy({ ...base, by: 'station' }), byGroup: progressBy({ ...base, by: 'group' }), curve,
       discrepancies: cs.discrepancies.filter((d) => d.masterProjectId === projectId), linksByMaterial, openLinkCount, today,
+      funnel: supplyFunnel(materials, positions), aging: needAging(materials, positions, today), deadlines: orderDeadlines(materials, positions, today, cs.settings.delayBufferDays), heat: stationGroupHeat(materials, positions, cs.groups), leadExposure: leadTimeExposure(materials, positions, today),
       hasDemo: materials.some((m) => m.isDemo),
     }
   }, [ms.materials, ms.purchaseOrders, ms.poLines, ms.manufacturing, ms.shipmentLines, ms.warehouseLines, ms.warehouseReceipts, ms.allocations, cs.txns, cs.packages, cs.items, cs.stages, cs.groups, cs.settings, cs.links, cs.linkTargets, cs.discrepancies, projectId, projects])

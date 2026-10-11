@@ -7,6 +7,7 @@ import { useMaterialModel, isOpenTarget } from '../../lib/control/useMaterialMod
 import { ChartTip, Donut, HBars, PB, Tile, axisProps, gridProps } from '../../../finance/components/charts'
 import { Chip, DataTable, KpiCard, Section, fmtD } from '../../../finance/components/fn'
 import { DemoBadge, bn, fa, openRecord, pct } from '../../components/control/common'
+import { AgingChart, Bullets, DeadlineChart, FunnelChart, HeatMap } from '../../components/control/InsightCharts'
 import type { MatTab } from '../../MaterialApp'
 
 const sevTone = (s: number) => (s >= 70 ? 'bad' : s >= 40 ? 'warn' : 'neutral') as 'bad' | 'warn' | 'neutral'
@@ -97,8 +98,8 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; onGo: (t
           </div>
 
           <div className="mt-two">
-            <Tile title="پیشرفت وزنی به‌تفکیک ایستگاه" hint="خط عمودی: برنامه‌ای · میله: واقعی">
-              {m.byStation.length === 0 ? <p className="im-helper" style={{ margin: '20px 0' }}>هنوز قلمی در بستهٔ خرید نیست.</p> : <HBars fmt={(x) => `${fa(x)}٪`} data={m.byStation.slice(0, 8).map((r, i) => ({ name: r.label, value: Math.round(r.actual * 100), color: [PB.teal, PB.blue, PB.yellow, PB.violet, PB.orange, PB.sky, PB.green, PB.slate][i % 8] }))} />}
+            <Tile title="پیشرفت وزنی به‌تفکیک ایستگاه" hint="نوار پررنگ: واقعی · سایه و خط: برنامه‌ای · قرمز: عقب‌تر از برنامه">
+              <Bullets rows={m.byStation.slice(0, 8).map((r) => ({ label: r.label, actual: r.actual, planned: r.planned }))} />
             </Tile>
             <Tile title="جبهه‌های در خطر توقف" hint="کسری که با توجه به زمان باقی‌مانده تأمین نمی‌شود">
               {m.fronts.length === 0 ? <p className="im-helper" style={{ margin: '20px 0' }}>جبههٔ در خطر توقف شناسایی نشد.</p> : (
@@ -111,6 +112,24 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; onGo: (t
                   ))}
                 </div>
               )}
+            </Tile>
+          </div>
+
+          <div className="mt-two">
+            <Tile title="قیف تأمین: از نیاز تا مصرف" hint="ارزش بخشی از نیاز که به هر گام رسیده است؛ عدد قرمز افت نسبت به گام قبل">
+              <FunnelChart stages={m.funnel} />
+            </Tile>
+            <Tile title="کسری بر حسب فوریت نیاز" hint="ارزش کسری سایت بر اساس فاصلهٔ تاریخ نیاز تا امروز (میلیارد ریال)">
+              <AgingChart buckets={m.aging} />
+            </Tile>
+          </div>
+
+          <div className="mt-two">
+            <Tile title="نقشهٔ حرارتی پوشش: ایستگاه × گروه کالا" hint="درصد ارزش نیاز که فیزیکی رسیده است">
+              <HeatMap heat={m.heat} />
+            </Tile>
+            <Tile title="مهلت سفارش‌گذاری" hint="آخرین تاریخ سفارش برای رسیدن به موقع (تاریخ نیاز − زمان تأمین − حاشیهٔ تأخیر)">
+              <DeadlineChart rows={m.deadlines} />
             </Tile>
           </div>
 

@@ -10,11 +10,13 @@ import { itemProgress } from '../../lib/control/progress'
 import { writeXlsx } from '../../lib/control/xlsx'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../../finance/components/fn'
 import { ProgressBar, bn, fa, pct } from '../../components/control/common'
+import { ReportPack, PACKS, type PackId } from './ReportPacks'
 import { ItemDrawer } from '../../components/control/ItemDrawer'
 import { CHANGE_FIELD_LABEL_FA, DISCREPANCY_KIND_LABEL_FA, DISCREPANCY_STATUS_LABEL_FA, INSPECTION_STATUS_LABEL_FA, STAGE_STATUS_LABEL_FA, type Material } from '../../types'
 
-type RId = 'overview' | 'station' | 'mto' | 'outside' | 'noorder' | 'shortage' | 'packages' | 'progress' | 'inbound' | 'receiving' | 'consumables' | 'norms' | 'balance' | 'surplus' | 'contractor' | 'history'
+type RId = `pack_${PackId}` | 'overview' | 'station' | 'mto' | 'outside' | 'noorder' | 'shortage' | 'packages' | 'progress' | 'inbound' | 'receiving' | 'consumables' | 'norms' | 'balance' | 'surplus' | 'contractor' | 'history'
 const CATALOG: { group: string; items: [RId, string][] }[] = [
+  { group: 'بسته‌های چاپی نقش‌محور', items: PACKS.map((k): [RId, string] => [`pack_${k.id}`, k.title]) },
   { group: 'وضعیت و MTO', items: [['overview', 'داشبورد جامع ایستگاه‌ها'], ['station', 'فهرست متریال هر ایستگاه'], ['mto', 'مقایسهٔ MTO پیمان و طراحی'], ['outside', 'خارج از پیمان و اختلاف مقدار'], ['noorder', 'بدون سفارش یا سفارش ناقص'], ['shortage', 'کسری فوری و آتی به‌تفکیک جبهه']] },
   { group: 'تأمین', items: [['packages', 'بسته‌های خرید و مراحل'], ['progress', 'پیشرفت وزنی و ارزش تأمین‌شده'], ['inbound', 'اقلام در راه و تأخیرها'], ['contractor', 'عملکرد پیمانکار و اقدام مشاور/کارفرما']] },
   { group: 'انبار و مصرف', items: [['receiving', 'ورود، پذیرش و مردودی'], ['consumables', 'مصرف الکترود، پوشش و فیلم'], ['norms', 'مصرف واقعی در برابر مبنا'], ['balance', 'بالانس نهایی مقداری و ارزشی'], ['surplus', 'مازاد، قابل‌انتقال و راکد']] },
@@ -40,7 +42,7 @@ export function ReportsPage({ projectId }: { projectId: string }) {
   const cs = useMaterialControlStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
-  const [rid, setRid] = useState<RId>('overview')
+  const [rid, setRid] = useState<RId>('pack_pm')
   const [station, setStation] = useState('')
   const [open, setOpen] = useState<string | null>(null)
   const stations = useMemo(() => [...new Set(m.materials.map((x) => x.facility).filter(Boolean))].sort(), [m.materials])
@@ -54,6 +56,7 @@ export function ReportsPage({ projectId }: { projectId: string }) {
   const open0 = (x: Material) => setOpen(x.id)
 
   const body = (): ReactNode => {
+    if (rid.startsWith('pack_')) return <ReportPack id={rid.slice(5) as PackId} projectId={projectId} />
     switch (rid) {
       case 'overview': {
         const rows = stations.length ? stations : ['']
@@ -185,10 +188,15 @@ export function ReportsPage({ projectId }: { projectId: string }) {
       </nav>
       <div className="fn-rep-body">
         <div className="fn-toolbar no-print">
-          <div style={{ minWidth: 0 }}><h2 className="fn-rep-title">{meta[1]}</h2><p className="im-helper" style={{ margin: 0 }}>{project?.officialName}{station ? ` · ${station}` : ''}</p></div>
+          <div hidden={rid.startsWith('pack_')} style={{ minWidth: 0 }}><h2 className="fn-rep-title">{meta[1]}</h2><p className="im-helper" style={{ margin: 0 }}>{project?.officialName}{station ? ` · ${station}` : ''}</p></div>
           <select value={station} onChange={(e) => setStation(e.target.value)} aria-label="ایستگاه" style={{ maxWidth: 220, marginInlineStart: 'auto' }}><option value="">همهٔ ایستگاه‌ها</option>{stations.map((s) => <option key={s}>{s}</option>)}</select>
         </div>
-        {body()}
+        {rid.startsWith('pack_') ? body() : (
+          <div className="mt-printable">
+            <div className="mt-print-head"><div><h2>{meta[1]}</h2><p>{project?.officialName}{station ? ` · ${station}` : ''}</p></div><p>{fmtD(m.today)}</p></div>
+            {body()}
+          </div>
+        )}
       </div>
       {open && <ItemDrawer model={m} materialId={open} onClose={() => setOpen(null)} />}
       {void (null as unknown as MaterialModel)}
