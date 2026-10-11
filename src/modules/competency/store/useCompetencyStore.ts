@@ -483,6 +483,8 @@ interface CompetencyState {
   /** comp_reopen_self_service — gives the form back to the candidate (status pending). */
   reopenSelfService: (id: string) => Promise<void>
   regenerateResultsShareLink: (id: string) => Promise<void>
+  /** Renews (days > 0) or closes (days = 0) the public result link; regenerate also issues a new token. */
+  setResultsLink: (id: string, days: number, regenerate?: boolean) => Promise<void>
 
   fetchPanelists: (assessmentId: string) => Promise<void>
   addPanelist: (assessmentId: string, userId: string, isLead: boolean) => Promise<void>
@@ -830,6 +832,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
       selfServiceToken: crypto.randomUUID(),
       selfServiceStatus: 'not_sent',
       resultsShareToken: crypto.randomUUID(),
+      resultsShareExpiresAt: null,
       reviewedBy: null,
       reviewedAt: null,
       reopenedAt: null,
@@ -1056,10 +1059,14 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   },
 
   regenerateResultsShareLink: async (id) => {
-    const token = crypto.randomUUID()
-    const { error } = await supabase.from('comp_assessments').update({ results_share_token: token }).eq('id', id)
-    if (reportError('صدور لینک عمومی جدید', error)) return
-    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, resultsShareToken: token } : a)) })
+    await get().setResultsLink(id, 30, true)
+  },
+
+  setResultsLink: async (id, days, regenerate = false) => {
+    const { data, error } = await supabase.rpc('comp_set_results_link', { p_assessment: id, p_days: days, p_regenerate: regenerate })
+    if (reportError('تنظیم لینک عمومی نتایج', error)) return
+    const { data: row } = await supabase.from('comp_assessments').select('results_share_token').eq('id', id).single()
+    set({ assessments: get().assessments.map((a) => (a.id === id ? { ...a, resultsShareToken: (row as { results_share_token: string } | null)?.results_share_token ?? a.resultsShareToken, resultsShareExpiresAt: data as string } : a)) })
   },
 
   fetchPanelists: async (assessmentId) => {

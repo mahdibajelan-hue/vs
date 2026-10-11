@@ -110,7 +110,6 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
     talent: () => setView({ name: 'talent' }),
-    personalityReports: () => setView({ name: 'personalityReports' }),
     ...(isQuestionBankViewer ? { questionBank: () => setView({ name: 'questionBank' }) } : {}),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
   }

@@ -58,7 +58,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // ordering. "بانک سؤالات" now covers both the technical and the personality question banks as tabs on
 // one page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
 const CANDIDATE_SECTIONS: CompetencySection[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
-const MODULE_SECTIONS: CompetencySection[] = ['dashboard', 'talent', 'questionBank', 'reports', 'personalityReports', 'settings']
+const MODULE_SECTIONS: CompetencySection[] = ['dashboard', 'talent', 'questionBank', 'reports', 'settings']
 /** accent per module tab, same idea as the other modules' coloured nav */
 const TAB_COLOR: Partial<Record<CompetencySection, string>> = { dashboard: '#a855f7', talent: '#14b8a6', questionBank: '#6366f1', reports: '#0ea5e9', personalityReports: '#ec4899', settings: '#64748b' }
 

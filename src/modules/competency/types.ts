@@ -682,6 +682,8 @@ export interface CompetencyAssessment {
   selfServiceStatus: SelfServiceStatus
   /** Separate, unguessable token for the public "view results online" link — see comp_public_results_get in schema.sql. Never the same token as selfServiceToken. */
   resultsShareToken: string
+  /** The public result link stops working after this moment (null = never; old rows). */
+  resultsShareExpiresAt: string | null
   reviewedBy: string | null
   reviewedAt: string | null
   /** Last time a module admin reopened this assessment (schema.sql Section 54, N-10/N-12). */

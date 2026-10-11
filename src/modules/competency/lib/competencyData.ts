@@ -91,6 +91,7 @@ export interface CompAssessmentRow {
   self_service_token: string
   self_service_status: string
   results_share_token: string
+  results_share_expires_at: string | null
   reviewed_by: string | null
   reviewed_at: string | null
   reopened_at?: string | null
@@ -155,6 +156,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     selfServiceToken: r.self_service_token,
     selfServiceStatus: r.self_service_status as SelfServiceStatus,
     resultsShareToken: r.results_share_token,
+    resultsShareExpiresAt: r.results_share_expires_at ?? null,
     reviewedBy: r.reviewed_by,
     reviewedAt: r.reviewed_at,
     reopenedAt: r.reopened_at ?? null,

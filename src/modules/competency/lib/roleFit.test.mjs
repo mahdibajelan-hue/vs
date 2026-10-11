@@ -7,12 +7,15 @@ const lv = (id, a) => ({ competencyId: id, actualLevel: a })
 
 // ── fit: attainment is capped at 100 %, unknown competencies are excluded from fit and lower coverage
 let f = roleFit('pm', [lv('a', 4), lv('b', 2), lv('c', null)], [req('a', 3), req('b', 4, true, 2), req('c', 3)])
-assert.equal(f.fit, Math.round(((1 * 1) + (2 * 0.5)) / 3 * 100)); assert.equal(f.coverage, 3 / 4); assert.deepEqual(f.unknown, ['c'])
+assert.equal(f.evidencedFit, Math.round(((1 * 1) + (2 * 0.5)) / 3 * 100)); assert.equal(f.fit, Math.round(f.evidencedFit * (0.5 + 0.5 * 0.75)), 'a quarter of the requirement has no evidence, so the fit is reduced'); assert.equal(f.coverage, 3 / 4); assert.deepEqual(f.unknown, ['c'])
 assert.equal(f.criticalGaps.length, 1); assert.equal(f.gaps[0].competencyId, 'b'); assert.equal(f.monthsToReady, Math.round(2 * 4 * 1.25))
 assert.equal(f.strengths.length, 1)
 // ── readiness bands
-assert.equal(readinessOf(95, 0, 0.9), 'ready'); assert.equal(readinessOf(95, 1, 0.9), 'near', 'a critical gap blocks "ready"'); assert.equal(readinessOf(95, 0, 0.4), 'near', 'thin evidence blocks "ready"')
+assert.equal(readinessOf(95, 0, 0.9), 'ready'); assert.equal(readinessOf(95, 1, 0.9), 'near', 'a critical gap blocks "ready"'); assert.equal(readinessOf(95, 0, 0.6), 'near', 'thin evidence blocks "ready"')
 assert.equal(readinessOf(60, 3, 1), 'developing'); assert.equal(readinessOf(30, 0, 1), 'far'); assert.equal(readinessOf(90, 0, 0.1), 'unknown'); assert.equal(readinessOf(null, 0, 1), 'unknown')
+// ── Soroush case: top level on what was measured, nothing on three of seven competencies → well below 100
+const part = roleFit('x', [lv('a', 5), lv('b', 5), lv('c', 5), lv('d', 5)], [req('a', 3), req('b', 3), req('c', 3), req('d', 3), req('e', 3), req('f', 3), req('g', 3)])
+assert.equal(part.evidencedFit, 100); assert.ok(part.fit < 80 && part.fit > 60); assert.notEqual(part.readiness, 'ready')
 // ── ranking: a critical gap costs 15 points
 const levels = [lv('a', 5), lv('b', 3), lv('c', 5)]
 const roles = new Map([['x', [req('a', 5), req('b', 5, true), req('c', 5)]], ['y', [req('a', 4), req('b', 3), req('c', 4)]]])

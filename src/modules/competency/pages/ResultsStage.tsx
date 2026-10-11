@@ -151,6 +151,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
   const setStatus = useCompetencyStore((s) => s.setStatus)
   const setApproved = useCompetencyStore((s) => s.setApproved)
   const regenerateResultsShareLink = useCompetencyStore((s) => s.regenerateResultsShareLink)
+  const setResultsLink = useCompetencyStore((s) => s.setResultsLink)
   const reopenAssessment = useCompetencyStore((s) => s.reopenAssessment)
   const requestReopen = useCompetencyStore((s) => s.requestReopen)
   const moduleAdmins = useCompetencyStore((s) => s.moduleAdmins)
@@ -500,6 +501,20 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               <RefreshCw size={12} /> لینک جدید
             </button>
           </div>
+          {(() => {
+            const until = assessment.resultsShareExpiresAt
+            const expired = until != null && Date.parse(until) <= Date.now()
+            const left = until ? Math.ceil((Date.parse(until) - Date.now()) / 86400000) : null
+            return (
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="fx-muted" style={expired ? { color: '#f87171', fontWeight: 700 } : undefined}>
+                  {until == null ? 'بدون انقضا (لینک قدیمی؛ برای ایمنی تمدید کنید)' : expired ? 'لینک منقضی شده است' : `تا ${formatJalali(until)} معتبر است (${(left ?? 0).toLocaleString('fa-IR')} روز مانده)`}
+                </span>
+                <button type="button" onClick={() => setResultsLink(assessment.id, 30)} className={btnGhost}>تمدید ۳۰ روز</button>
+                <button type="button" onClick={() => setResultsLink(assessment.id, 0)} className={btnGhost}>بستن لینک</button>
+              </div>
+            )
+          })()}
         </div>
 
         {/* The full report («گزارش کامل») — off-screen, cloned by print and rasterized by the PDF export. */}

@@ -13,8 +13,10 @@ export type Readiness = 'ready' | 'near' | 'developing' | 'far' | 'unknown'
 export interface FitGap { competencyId: string; required: number; actual: number; gap: number; isCritical: boolean; weight: number }
 export interface RoleFit {
   roleId: string
-  /** weighted attainment 0–100 over the competencies that have evidence */
+  /** weighted attainment 0–100 over the competencies that have evidence, reduced for the part of the requirement with no evidence at all */
   fit: number | null
+  /** the same attainment before the evidence-coverage reduction */
+  evidencedFit: number | null
   /** share of requirement weight that has evidence 0–1 */
   coverage: number
   criticalGaps: FitGap[]
@@ -31,7 +33,7 @@ const DEFAULTS = { monthsPerLevel: 4, criticalMultiplier: 1.25 }
 
 export function readinessOf(fit: number | null, criticalGaps: number, coverage: number): Readiness {
   if (fit == null || coverage < 0.3) return 'unknown'
-  if (fit >= 90 && criticalGaps === 0 && coverage >= 0.6) return 'ready'
+  if (fit >= 85 && criticalGaps === 0 && coverage >= 0.8) return 'ready'
   if (fit >= 75 && criticalGaps <= 1) return 'near'
   if (fit >= 55) return 'developing'
   return 'far'
@@ -51,11 +53,13 @@ export function roleFit(roleId: string, levels: LevelRow[], requirements: Requir
     if (a < r.requiredLevel) { const gap = r.requiredLevel - a; gaps.push({ competencyId: r.competencyId, required: r.requiredLevel, actual: a, gap, isCritical: r.isCritical, weight: w }); months += gap * o.monthsPerLevel * (r.isCritical ? o.criticalMultiplier : 1) }
     else if (a > r.requiredLevel) strengths.push({ competencyId: r.competencyId, required: r.requiredLevel, actual: a })
   }
-  const fit = den > 0 ? Math.round((num / den) * 100) : null
+  const evidencedFit = den > 0 ? Math.round((num / den) * 100) : null
   const coverage = totalW > 0 ? den / totalW : 0
+  // Missing evidence is not a gap, but it is not a pass either: a profile that rests on half the requirement cannot score 100.
+  const fit = evidencedFit == null ? null : Math.round(evidencedFit * (0.5 + 0.5 * coverage))
   const criticalGaps = gaps.filter((g) => g.isCritical)
   gaps.sort((a, b) => Number(b.isCritical) - Number(a.isCritical) || b.gap * b.weight - a.gap * a.weight)
-  return { roleId, fit, coverage, criticalGaps, gaps, unknown, strengths, readiness: readinessOf(fit, criticalGaps.length, coverage), monthsToReady: fit == null ? null : Math.round(months) }
+  return { roleId, fit, evidencedFit, coverage, criticalGaps, gaps, unknown, strengths, readiness: readinessOf(fit, criticalGaps.length, coverage), monthsToReady: fit == null ? null : Math.round(months) }
 }
 
 /** Every role ranked best-fit first; a critical gap weighs as much as 15 fit points when ordering, so a polished profile with a hole in a critical competency does not outrank a slightly lower but sound one. */

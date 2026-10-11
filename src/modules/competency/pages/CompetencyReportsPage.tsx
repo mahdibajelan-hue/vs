@@ -7,6 +7,7 @@ import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, reso
 import { formatJalali } from '../../../lib/jalali'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
+import { fairnessReports } from '../lib/fairness'
 import type { JobRole } from '../types'
 
 interface CompetencyReportsPageProps {
@@ -98,8 +99,34 @@ export function CompetencyReportsPage({ onExitToHub, nav }: CompetencyReportsPag
     </button>
   )
 
+  const fairness = useMemo(() => fairnessReports(assessments.map((a) => ({ age: a.candidateAge, hasDisability: a.hasDisability, approved: a.isApproved, completed: a.status === 'completed' }))), [assessments])
+
   return (
     <CompetencySidebarShell active="reports" nav={nav} title="گزارش متقاضیان بر حسب شغل" onExitToHub={onExitToHub} headerRight={headerRight}>
+      <div className="glass-panel rounded-2xl p-4 no-print">
+        <p className="mb-1 text-sm font-bold">پایش انصاف (قاعدهٔ چهارپنجم)</p>
+        <p className="mb-3 text-[11px] leading-6 text-muted">نرخ تأیید هر گروه نسبت به بهترین گروه؛ نسبت کمتر از ۸۰٪ نشانهٔ لزوم بازبینی ابزار است، نه اثبات تبعیض. گروه‌های کمتر از ۵ نفر فقط نمایش داده می‌شوند.</p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {fairness.map((f) => (
+            <div key={f.dimension} className="rounded-xl border border-white/10 p-3">
+              <p className="mb-2 text-[12px] font-bold">{f.dimension}</p>
+              {f.groups.length === 0 ? <p className="text-[11px] text-muted">هنوز ارزیابی تکمیل‌شده‌ای نیست.</p> : (
+                <table className="w-full text-[11px]"><tbody>
+                  {f.groups.map((g) => (
+                    <tr key={g.key} className="border-t border-white/5">
+                      <td className="py-1">{g.label}</td><td className="num py-1 text-center">{g.n.toLocaleString('fa-IR')} نفر</td>
+                      <td className="num py-1 text-center">{g.rate == null ? '—' : `${Math.round(g.rate * 100).toLocaleString('fa-IR')}٪ تأیید`}</td>
+                      <td className="num py-1 text-left" style={{ color: g.flag ? '#f87171' : g.small ? undefined : '#34d399', fontWeight: 700 }}>{g.small ? 'گروه کوچک' : g.ratio == null ? '—' : `نسبت ${g.ratio.toFixed(2).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])}`}</td>
+                    </tr>
+                  ))}
+                </tbody></table>
+              )}
+              <p className="mt-2 text-[10.5px] leading-5 text-muted">{f.note}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="glass-panel rounded-2xl p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <p className="flex items-center gap-1.5 text-xs font-bold">

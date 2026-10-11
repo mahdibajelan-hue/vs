@@ -1,3 +1,4 @@
+import { McqItemAnalysisCard } from '../components/McqItemAnalysisCard'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { BookOpenCheck, CheckCircle2, ChevronDown, ClipboardEdit, Eye, History, Layers, ListTree, PenSquare, Pencil, Plus, ShieldCheck, Star, Trash2, UserPlus, X } from 'lucide-react'
 import { useCompetencyStore, type AssessmentBlueprintInput, type CompetencyCatalogInput, type JobCompetencyRequirementInput, type JobRoleCatalogInput } from '../store/useCompetencyStore'
@@ -369,6 +370,8 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
           })}
         </div>
       </div>
+
+      <McqItemAnalysisCard />
 
       <JobCompetencyModelSection
         jobRoleConfigs={jobRoleConfigs}

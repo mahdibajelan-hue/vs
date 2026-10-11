@@ -3,7 +3,8 @@
 -- single item; a forced-choice answer gave the chosen dimension 1.0 and the rejected one nothing; response
 -- validity was reported but never touched the scores; extreme responding was never flagged.
 -- Changes (patched into personality_score_assessment_core):
---   1. forced choice is ipsative: chosen option → 1, rejected option → 0
+--   1. forced choice: chosen option → 0.75, rejected option → 0.35 (a pure 1/0 made every dimension that only appears as the less
+--      attractive pole of a pair — initiative, adaptability, problem ownership — come out low for everyone)
 --   2. social-desirability flag from 70 (was 80), new EXTREME_RESPONDING flag from 65 % of answers at the scale ends
 --   3. scores are calibrated: 50 + (raw − 50) × reliability × validity.  raw_score keeps the uncorrected 0–1 mean.
 --      reliability by item count: 1 → .55, 2 → .75, 3 → .90, 4 → .95, ≥5 → 1
@@ -16,7 +17,7 @@ declare
 begin
   if position('calibrated' in v_src) > 0 then raise notice 'already calibrated'; return; end if;
   v_new := replace(v_src, 'case when q.question_type = ''FORCED_CHOICE'' then 1.0 else (opt->>''score'')::numeric / 5.0 end as v',
-                          'case when q.question_type = ''FORCED_CHOICE'' then (case when (r.response_value->>''selected_option'') = (opt->>''key'') then 1.0 else 0.0 end) else (opt->>''score'')::numeric / 5.0 end as v');
+                          'case when q.question_type = ''FORCED_CHOICE'' then (case when (r.response_value->>''selected_option'') = (opt->>''key'') then 0.75 else 0.35 end) else (opt->>''score'')::numeric / 5.0 end as v');
   v_new := replace(v_new, 'and (r.response_value->>''selected_option'') = (opt->>''key'')',
                           'and (r.response_value ? ''selected_option'') and (q.question_type = ''FORCED_CHOICE'' or (r.response_value->>''selected_option'') = (opt->>''key''))');
   v_new := replace(v_new, 'v_sd >= 80 then ''SOCIAL_DESIRABILITY'' end', 'v_sd >= 70 then ''SOCIAL_DESIRABILITY'' end, case when v_extreme is not null and v_extreme >= 0.65 then ''EXTREME_RESPONDING'' end');
