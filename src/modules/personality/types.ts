@@ -375,7 +375,7 @@ export interface PersonalityDimensionScore {
 
 export type PersonalityValidityScale = 'SOCIAL_DESIRABILITY'
 
-export type PersonalityValidityReviewReason = 'STRAIGHT_LINING' | 'MISSING_RESPONSES' | 'RANDOM_PATTERN' | 'CONTRADICTIONS' | 'SOCIAL_DESIRABILITY'
+export type PersonalityValidityReviewReason = 'STRAIGHT_LINING' | 'MISSING_RESPONSES' | 'RANDOM_PATTERN' | 'CONTRADICTIONS' | 'SOCIAL_DESIRABILITY' | 'EXTREME_RESPONDING'
 
 /** How each validity index was computed (personality_validity_results.details). */
 export interface PersonalityValidityDetails {
@@ -385,6 +385,9 @@ export interface PersonalityValidityDetails {
   timedAnswerCount?: number
   fastAnswerCount?: number
   reviewReasons?: PersonalityValidityReviewReason[]
+  /** Multiplier applied to the scores' distance from the midpoint (1 = no correction). */
+  validityFactor?: number
+  calibrated?: boolean
 }
 
 export interface PersonalityValidityResult {

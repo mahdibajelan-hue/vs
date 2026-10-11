@@ -8,6 +8,7 @@ import { tone } from '../../competency/lib/tone'
 import { printReportNode } from '../../competency/lib/reportExport'
 import { PersonalityPrintReport } from './PersonalityPrintReport'
 import { RoleAlignmentCard, ThresholdBar } from './RoleAlignmentCard'
+import { BehaviorOverview } from './BehaviorRadar'
 import { RingChart } from '../../competency/components/DonutChart'
 import { buildFingerprintSnapshot, scoreBandFa, type FingerprintDimensionRow, type FingerprintTraitRow } from '../lib/fingerprintModel'
 import { overallVerdict } from '../lib/roleAlignment'
@@ -213,30 +214,22 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
       {snapshot.dimensions.length > 0 && (
         <>
           <SectionHeading icon={Gauge} color="#0ea5e9" en="Professional Behavioral Dimensions" fa="ابعاد رفتاری حرفه‌ای" subtitle="گروه‌بندی بر اساس خانواده رفتاری؛ خط تیره = حداقل الزام شغل" />
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {families.map((fk) => {
-              const rows = snapshot.dimensions.filter((d) => d.familyKey === fk)
-              const head = rows[0]
-              return (
-                <div key={fk} className="fx-card overflow-hidden p-4" style={tone(head.tone)}>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-extrabold">
-                      <span className="fx-tone-text" dir="ltr">
-                        {head.familyLabelEn}
-                      </span>{' '}
-                      <span className="fx-text-2">({head.familyLabelFa})</span>
-                    </p>
-                    <span className="fx-tone-bg fx-tone-text num rounded-full px-2 py-0.5 text-[10.5px] font-bold">{rows.length.toLocaleString('fa-IR')} بعد</span>
+          <BehaviorOverview rows={snapshot.dimensions} alignment={snapshot.alignment} hasJobProfile={snapshot.hasJobProfile} validityFactor={validityResult?.details?.validityFactor ?? null} />
+          <details className="fx-card group p-4">
+            <summary className="cursor-pointer text-[12.5px] font-bold">جزئیات هر بُعد (امتیاز تعدیل‌شده، خام و تعداد گویه)</summary>
+            <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {families.map((fk) => {
+                const rows = snapshot.dimensions.filter((d) => d.familyKey === fk)
+                const head = rows[0]
+                return (
+                  <div key={fk} className="fx-sub overflow-hidden p-3" style={tone(head.tone)}>
+                    <p className="mb-2 text-[12px] font-extrabold"><span className="fx-tone-text" dir="ltr">{head.familyLabelEn}</span> <span className="fx-text-2">({head.familyLabelFa})</span></p>
+                    <div className="space-y-3">{rows.map((d) => <DimensionRow key={d.id} dim={d} />)}</div>
                   </div>
-                  <div className="space-y-3">
-                    {rows.map((d) => (
-                      <DimensionRow key={d.id} dim={d} />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          </details>
         </>
       )}
 
@@ -389,7 +382,11 @@ function DimensionRow({ dim: d }: { dim: FingerprintDimensionRow }) {
         </span>
       </div>
       <ThresholdBar value={d.score} color={color} min={d.minThreshold} preferredMin={d.preferredMin} preferredMax={d.preferredMax} height={9} />
-      {d.minThreshold != null && <p className="fx-muted num mt-0.5 text-[10px]">حداقل الزام شغل: {d.minThreshold.toLocaleString('fa-IR')}</p>}
+      <p className="fx-muted num mt-0.5 flex flex-wrap gap-x-3 text-[10px]">
+        {d.minThreshold != null && <span>حداقل الزام شغل: {d.minThreshold.toLocaleString('fa-IR')}</span>}
+        {d.rawPercent != null && d.score != null && Math.round(d.rawPercent) !== Math.round(d.score) && <span>خام: {Math.round(d.rawPercent).toLocaleString('fa-IR')}</span>}
+        <span>{d.coverageCount.toLocaleString('fa-IR')} گویه{d.confidence === 'LOW' ? ' — اطمینان پایین' : ''}</span>
+      </p>
     </div>
   )
 }
@@ -400,6 +397,7 @@ const REVIEW_REASON_LABEL_FA: Record<string, string> = {
   RANDOM_PATTERN: 'الگوی پاسخ تصادفی/شتاب‌زده',
   CONTRADICTIONS: 'پاسخ‌های متناقض',
   SOCIAL_DESIRABILITY: 'تمایل بالا به ارائه‌ی تصویر مطلوب',
+  EXTREME_RESPONDING: 'پاسخ‌های حدی زیاد (انتهای مقیاس)',
 }
 
 const pct = (v: number) => `${Math.round(v * 100).toLocaleString('fa-IR')}٪`
@@ -425,10 +423,11 @@ function ValidityBanner({ result }: { result: PersonalityValidityResult }) {
       warn: reasons.includes('SOCIAL_DESIRABILITY'),
       hint: d.socialDesirabilityItemCount != null ? `${d.socialDesirabilityItemCount.toLocaleString('fa-IR')} گویه‌ی مقیاس اعتبار` : undefined,
     })
-  if (result.extremeResponseRate != null) chips.push({ label: 'پاسخ‌های حدی', value: pct(result.extremeResponseRate), warn: result.extremeResponseRate >= 0.8 })
+  if (result.extremeResponseRate != null) chips.push({ label: 'پاسخ‌های حدی', value: pct(result.extremeResponseRate), warn: result.extremeResponseRate >= 0.65 })
   if (d.timedAnswerCount != null && d.timedAnswerCount > 0)
     chips.push({ label: 'پاسخ‌های زیر یک ثانیه', value: `${(d.fastAnswerCount ?? 0).toLocaleString('fa-IR')} از ${d.timedAnswerCount.toLocaleString('fa-IR')}`, warn: result.randomPatternFlag })
   if (result.completionSeconds != null) chips.push({ label: 'مدت پاسخ‌گویی', value: `${Math.max(1, Math.round(result.completionSeconds / 60)).toLocaleString('fa-IR')} دقیقه`, warn: false })
+  if (d.validityFactor != null && d.validityFactor < 1) chips.push({ label: 'ضریب تعدیل امتیازها', value: pct(d.validityFactor), warn: d.validityFactor < 0.9, hint: 'امتیازها به‌دلیل نشانه‌های اعتبار پاسخ به میانه نزدیک شده‌اند؛ مقدار خام در جزئیات هر بُعد است' })
   if (result.missingResponseCount > 0) chips.push({ label: 'بی‌پاسخ', value: result.missingResponseCount.toLocaleString('fa-IR'), warn: true })
 
   return (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDot, Eye, Lightbulb, Loader2, Lock, MessagesSquare, RotateCcw, Save, ShieldAlert, Users } from 'lucide-react'
+import { estimateMinutes, planInterview, COMFORTABLE_SESSION_MINUTES } from '../lib/interviewPlan'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
@@ -90,7 +91,7 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
 
   const personalityAssessment = useMemo(() => personalityAssessments.find((a) => a.assessmentId === assessment.id), [personalityAssessments, assessment.id])
 
-  const items = useMemo<InterviewItem[]>(() => {
+  const allItems = useMemo<InterviewItem[]>(() => {
     const competencyById = new Map(competencies.map((c) => [c.id, c]))
     const followUps = aiAnalysis?.analysis.follow_up_questions ?? []
     const watchpoints = personalityAssessment?.computedWatchpoints ?? []
@@ -118,6 +119,25 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
           a.competency.labelFa.localeCompare(b.competency.labelFa, 'fa'),
       )
   }, [competencies, requirements, evidenceSources, assessment.jobRole, aiAnalysis, personalityAssessment])
+
+  // Lean session: when technical questions are asked too, the interview keeps the critical competencies and those
+  // the technical questions do not already cover (see lib/interviewPlan.ts). Switch off to rate every competency.
+  const bankPublic = useCompetencyStore((s) => s.questionBankPublic)
+  const [lean, setLean] = useState(true)
+  const plan = useMemo(() => {
+    const picked = bankPublic.filter((q) => assessment.selectedQuestionIds.includes(q.id))
+    const cats = new Set(picked.map((q) => q.category as string))
+    const cs = allItems.map((i) => ({ id: i.competency.id, isCritical: i.requirement.isCritical, weight: i.requirement.weight, techCategories: evidenceSources.filter((x) => x.competencyId === i.competency.id && x.sourceType === 'TECHNICAL_CATEGORY').map((x) => x.sourceRef) }))
+    return { plan: planInterview(cs, cats, { needsTechnical: assessment.needsTechnicalAssessment && picked.length > 0 }), picked }
+  }, [allItems, bankPublic, evidenceSources, assessment.selectedQuestionIds, assessment.needsTechnicalAssessment])
+  const savedIds = useMemo(() => new Set(allRatings.filter((r) => r.assessmentId === assessment.id).map((r) => r.competencyId)), [allRatings, assessment.id])
+  const hidden = plan.plan.covered.length + plan.plan.deferred.length
+  const leanActive = lean && hidden > 0
+  const items = useMemo(() => (leanActive ? allItems.filter((i) => plan.plan.primary.includes(i.competency.id) || savedIds.has(i.competency.id)) : allItems), [leanActive, allItems, plan, savedIds])
+  const minutes = useMemo(() => {
+    const tech = plan.picked.map((q) => ({ difficulty: q.difficulty as string, category: q.category as string }))
+    return { all: estimateMinutes(tech, allItems.length), lean: estimateMinutes(tech, plan.plan.primary.length) }
+  }, [plan, allItems.length])
 
   const ratings = useMemo(() => allRatings.filter((r) => r.assessmentId === assessment.id), [allRatings, assessment.id])
   const myRatings = useMemo(() => ratings.filter((r) => r.raterId === myId), [ratings, myId])
@@ -238,6 +258,30 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
   return (
     <div className="fx fx-remap space-y-4 pb-2">
       {/* Hero */}
+      {(allItems.length > 0 || plan.picked.length > 0) && (
+        <div className="fx-card fx-accent-bar space-y-2 p-4" style={tone(minutes.all.total > COMFORTABLE_SESSION_MINUTES ? '#f59e0b' : '#10b981')}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12.5px] font-bold">
+              زمان تقریبی جلسهٔ حضوری: <span className="num fx-tone-text">{(leanActive ? minutes.lean : minutes.all).total.toLocaleString('fa-IR')}</span> دقیقه
+              <span className="fx-muted font-normal"> ({plan.picked.length.toLocaleString('fa-IR')} سؤال فنی ≈ {(leanActive ? minutes.lean : minutes.all).tech.toLocaleString('fa-IR')} + {items.length.toLocaleString('fa-IR')} شایستگی مصاحبه ≈ {(leanActive ? minutes.lean : minutes.all).interview.toLocaleString('fa-IR')} + مقدمه و جمع‌بندی)</span>
+            </p>
+            {hidden > 0 && (
+              <label className="flex cursor-pointer items-center gap-2 text-[11.5px] font-bold">
+                <input type="checkbox" checked={lean} onChange={(e) => setLean(e.target.checked)} /> مصاحبهٔ فشرده
+              </label>
+            )}
+          </div>
+          {hidden > 0 && (
+            <p className="fx-text-2 text-[11.5px] leading-6">
+              {leanActive
+                ? `${plan.plan.covered.length.toLocaleString('fa-IR')} شایستگی را سؤال‌های فنی همین ارزیابی پوشش می‌دهند${plan.plan.deferred.length ? ` و ${plan.plan.deferred.length.toLocaleString('fa-IR')} مورد کم‌اولویت به‌دلیل سقف ${'۸'} شایستگی کنار گذاشته شد` : ''}؛ مصاحبه فقط روی شایستگی‌های حیاتی و پوشش‌داده‌نشده متمرکز است (بدون فشرده‌سازی: ${minutes.all.total.toLocaleString('fa-IR')} دقیقه).`
+                : `همهٔ ${allItems.length.toLocaleString('fa-IR')} شایستگی نمایش داده می‌شود؛ زمان جلسه ممکن است بیش از حد تحمل پنل باشد.`}
+            </p>
+          )}
+          {minutes.all.total > COMFORTABLE_SESSION_MINUTES && !leanActive && <p className="text-[11.5px] font-bold" style={tone('#f59e0b')}><span className="fx-tone-text">این جلسه از ۹۰ دقیقه بیشتر است؛ تعداد سؤال‌های فنی را در طراحی آزمون کم کنید یا مصاحبه را فشرده نگه دارید.</span></p>}
+        </div>
+      )}
+
       <div className="fx-card fx-tone-wash overflow-hidden p-5" style={tone('#0ea5e9')}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex min-w-0 flex-1 items-start gap-3">

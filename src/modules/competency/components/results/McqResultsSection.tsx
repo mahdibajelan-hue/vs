@@ -4,7 +4,8 @@ import { tierColor } from '../../lib/competencyModel'
 import { fa } from '../../lib/resultsModel'
 import { tone } from '../../lib/tone'
 import { QUESTION_TYPE_LABEL_FA, type QuestionType } from '../../types'
-import { fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
+import { mcqInsight } from '../../lib/mcqInsights'
+import { fetchMcqCohort, fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
 import { RingChart, DonutChart, type DonutSlice } from '../DonutChart'
 import { EmptyNote } from './ResultsSections'
 
@@ -36,6 +37,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
   const [test, setTest] = useState<McqTestDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
+  const [cohort, setCohort] = useState<number[]>([])
 
   useEffect(() => {
     let active = true
@@ -44,6 +46,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
       if (active) {
         setTest(data)
         setLoading(false)
+        if (data) void fetchMcqCohort('', assessmentId).then((c) => active && setCohort(c))
       }
     })
     return () => {
@@ -65,6 +68,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
   const total = test.totalQuestions ?? test.questionCount
   const unanswered = total - test.answeredCount
   const overallColor = tierColor(test.scorePercent)
+  const insight = mcqInsight({ total, answered: test.answeredCount, correct: test.correctCount ?? 0, timeSpentSeconds: test.timeSpentSeconds, difficulty: test.difficultyScores.map((d) => ({ difficulty: d.difficulty, total: d.total, correct: d.correct })) }, { scores: cohort })
 
   const categorySlices: DonutSlice[] = test.categoryScores.map((c) => ({
     key: c.category,
@@ -100,6 +104,18 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
           <StatTile label="بدون پاسخ" value={fa(unanswered)} tone={unanswered > 0 ? '#f59e0b' : undefined} />
           <StatTile label="زمان صرف‌شده" value={formatDuration(test.timeSpentSeconds)} icon={Clock} />
         </div>
+      </div>
+
+      <div className="fx-card space-y-2.5 p-4">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-bold"><Gauge size={14} style={{ color: '#0ea5e9' }} /> خواندن نمره: وزن دشواری، حدس و جایگاه در گروه</p>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <StatTile label="نمرهٔ وزنی دشواری" value={`${fa(insight.weighted)}٪`} />
+          <StatTile label="پس از تصحیح حدس" value={`${fa(insight.guessCorrected)}٪`} />
+          <StatTile label="جایگاه در گروه" value={insight.percentile == null ? '—' : `صدک ${fa(insight.percentile)}`} />
+          <StatTile label="میانگین زمان هر سؤال" value={insight.secondsPerQuestion == null ? '—' : `${fa(insight.secondsPerQuestion)} ثانیه`} />
+        </div>
+        <p className="fx-muted text-[11px]">گروه مقایسه: {fa(insight.cohortSize)} آزمون ثبت‌شده{insight.cohortMean != null ? ` با میانگین ${fa(insight.cohortMean)}٪` : ''} · سهم سؤال‌های دشوار این آزمون {fa(insight.hardShare * 100)}٪</p>
+        {insight.advice.map((t) => <p key={t} className="fx-text-2 text-[11.5px] leading-6">• {t}</p>)}
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

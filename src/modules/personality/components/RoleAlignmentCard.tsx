@@ -63,12 +63,15 @@ export function RoleAlignmentCard({ jobRole, hasProfile, alignment }: { jobRole:
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-        {alignment.rows.map((row) => (
-          <AlignmentRow key={row.requirementId} row={row} labelEn={dimensions.find((d) => d.id === row.dimensionId)?.labelEn} />
-        ))}
-      </div>
-      <p className="fx-muted mt-3 text-[10.5px]">خط تیره: حداقل الزام شغل؛ ناحیه روشن: بازه ترجیحی؛ ★ الزام حیاتی.</p>
+      <details>
+        <summary className="cursor-pointer text-[12px] font-bold">جزئیات هر الزام شغل ({alignment.rows.length.toLocaleString('fa-IR')})</summary>
+        <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {alignment.rows.map((row) => (
+            <AlignmentRow key={row.requirementId} row={row} labelEn={dimensions.find((d) => d.id === row.dimensionId)?.labelEn} />
+          ))}
+        </div>
+        <p className="fx-muted mt-3 text-[10.5px]">خط تیره: حداقل الزام شغل؛ ناحیه روشن: بازه ترجیحی؛ ★ الزام حیاتی.</p>
+      </details>
     </div>
   )
 }

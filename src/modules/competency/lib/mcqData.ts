@@ -260,3 +260,11 @@ export function formatDuration(seconds: number | null | undefined): string {
   const s = Math.round(seconds % 60)
   return `${m.toLocaleString('fa-IR')}:${s.toString().padStart(2, '0').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])}`
 }
+
+/** Scores of the other scored tests (RLS decides which the viewer sees) — the comparison group for a candidate's own result. Same job role when it has enough tests, otherwise everyone. */
+export async function fetchMcqCohort(jobRole: string, exceptAssessmentId: string): Promise<number[]> {
+  const { data } = await supabase.from('comp_mcq_tests').select('assessment_id, job_role, score_percent').eq('status', 'SCORED')
+  const rows = ((data ?? []) as { assessment_id: string; job_role: string; score_percent: number | null }[]).filter((r) => r.assessment_id !== exceptAssessmentId && r.score_percent != null)
+  const same = rows.filter((r) => r.job_role === jobRole)
+  return (same.length >= 5 ? same : rows).map((r) => Number(r.score_percent))
+}

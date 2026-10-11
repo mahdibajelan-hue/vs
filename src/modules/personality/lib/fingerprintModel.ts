@@ -40,6 +40,8 @@ export interface FingerprintDimensionRow {
   status: RoleAlignmentStatus | null
   coverageCount: number
   confidence: PersonalityDimensionScore['confidence']
+  /** The uncorrected 0–100 mean of the answers, before reliability and validity calibration. */
+  rawPercent: number | null
 }
 
 export interface FingerprintSnapshot {
@@ -108,6 +110,7 @@ export function buildFingerprintSnapshot(input: {
         status: s.dimensionId ? (statusByDimension.get(s.dimensionId) ?? null) : null,
         coverageCount: s.coverageCount,
         confidence: s.confidence,
+        rawPercent: s.rawScore != null ? s.rawScore * 100 : null,
       }
     })
     .sort((a, b) => a.familyKey.localeCompare(b.familyKey) || Number(b.isCritical) - Number(a.isCritical) || (b.score ?? -1) - (a.score ?? -1))
