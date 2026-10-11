@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, Bell, CheckCircle2,
-  ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Package, Radar as RadarIcon, RefreshCw, Route,
+  ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Radar as RadarIcon, RefreshCw, Route,
   ShieldAlert, ShieldCheck, Sparkles, X,
   MapPinned, Sprout,
 } from 'lucide-react'
@@ -153,7 +153,6 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     { id: 'landacq', moduleKey: 'landacq', title: 'Land Acquisition & ROW', icon: Sprout, accent: LANDACQ_MODULE.accent },
     { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
     { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },
-    { id: 'material', moduleKey: 'material', title: 'Material Control', icon: Package, accent: '#f59e0b' },
     { id: 'pipepulse', moduleKey: 'pipepulse', title: 'PipePulse', icon: Sparkles, accent: '#0ea5e9' },
     { id: 'twin', moduleKey: 'pipelinedigitaltwin', title: 'Digital Twin', icon: Route, accent: '#38bdf8' },
     { id: 'docs', moduleKey: null, title: 'Document Center', icon: FileText, accent: '#64748b' },
