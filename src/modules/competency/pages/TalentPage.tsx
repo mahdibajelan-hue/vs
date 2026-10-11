@@ -6,6 +6,9 @@ import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { meetsCompetencyFilters, rankRoles, READINESS_META, roleFit, type LevelRow, type Readiness, type Requirement, type RoleFit } from '../lib/roleFit'
 import { fa } from '../lib/resultsModel'
+import { formatJalali } from '../../../lib/jalali'
+import { disciplineState } from '../lib/discipline'
+import { useInServiceStore } from '../store/useInServiceStore'
 import type { CompetencyAssessment } from '../types'
 
 const fitColor = (fit: number | null) => (fit == null ? '#94a3b8' : fit >= 85 ? '#34d399' : fit >= 70 ? '#38bdf8' : fit >= 55 ? '#fbbf24' : '#f87171')
@@ -40,7 +43,11 @@ export function TalentPage({ onOpen, onExitToHub, nav }: { onOpen: (id: string, 
   const [filters, setFilters] = useState<{ competencyId: string; minLevel: number }[]>([])
   const [draft, setDraft] = useState({ competencyId: '', minLevel: 3 })
   const [open, setOpen] = useState<string | null>(null)
-  useEffect(() => { void fetchScores() }, [fetchScores])
+  const decisions = useInServiceStore((s) => s.decisions)
+  const cycles = useInServiceStore((s) => s.cycles)
+  const fetchInService = useInServiceStore((s) => s.fetchAll)
+  useEffect(() => { void fetchScores(); void fetchInService() }, [fetchScores, fetchInService])
+  const today = new Date().toISOString().slice(0, 10)
 
   const reqByRole = useMemo(() => { const m = new Map<string, Requirement[]>(); for (const r of requirements) m.set(r.jobRole, [...(m.get(r.jobRole) ?? []), r]); return m }, [requirements])
   const compName = useMemo(() => new Map(competencies.map((c) => [c.id, c.labelFa])), [competencies])
@@ -51,13 +58,15 @@ export function TalentPage({ onOpen, onExitToHub, nav }: { onOpen: (id: string, 
       const levels = byA.get(a.id)!
       const ranking = rankRoles(levels, reqByRole)
       const chosen: RoleFit | undefined = role === 'best' ? ranking[0] : roleFit(role, levels, reqByRole.get(role) ?? [])
-      return { a, levels, ranking, chosen }
+      const disc = disciplineState(decisions.filter((d) => d.assessmentId === a.id), today)
+      const lastCycle = cycles.filter((c) => c.assessmentId === a.id && c.status === 'closed' && c.finalScore != null).sort((x, y) => (x.periodEnd < y.periodEnd ? 1 : -1))[0]
+      return { a, levels, ranking, chosen, disc, lastEval: lastCycle?.finalScore ?? null }
     })
-  }, [assessments, scores, reqByRole, role, showDemo])
+  }, [assessments, scores, reqByRole, role, showDemo, decisions, cycles, today])
   const q = query.trim().toLowerCase()
   const shown = rows.filter((r) => (!q || `${r.a.candidateName} ${r.a.candidatePosition} ${r.a.currentEmployer}`.toLowerCase().includes(q)) && (r.chosen?.fit ?? 0) >= minFit && (ready === 'all' || r.chosen?.readiness === ready) && (!openOnly || r.a.workStatus === 'open_to_work') && meetsCompetencyFilters(r.levels, filters))
-    .sort((x, y) => ((y.chosen?.fit ?? -1) - 15 * (y.chosen?.criticalGaps.length ?? 0)) - ((x.chosen?.fit ?? -1) - 15 * (x.chosen?.criticalGaps.length ?? 0)))
-  const readyCount = rows.filter((r) => r.chosen?.readiness === 'ready').length
+    .sort((x, y) => Number(y.disc.eligible) - Number(x.disc.eligible) || ((y.chosen?.fit ?? -1) - 15 * (y.chosen?.criticalGaps.length ?? 0)) - ((x.chosen?.fit ?? -1) - 15 * (x.chosen?.criticalGaps.length ?? 0)))
+  const readyCount = rows.filter((r) => r.chosen?.readiness === 'ready' && r.disc.eligible).length
   const openCount = rows.filter((r) => r.a.workStatus === 'open_to_work').length
   const fits = rows.map((r) => r.chosen?.fit).filter((x): x is number => x != null)
   const avgFit = fits.length ? Math.round(fits.reduce((p, c) => p + c, 0) / fits.length) : null
@@ -119,7 +128,7 @@ export function TalentPage({ onOpen, onExitToHub, nav }: { onOpen: (id: string, 
                 <div className="comp-talent-main">
                   <b>{r.a.candidateName || 'بدون نام'}</b>
                   <span className="sub">{r.a.candidatePosition || '—'}{r.a.yearsExperienceTotal != null ? ` · ${fa(r.a.yearsExperienceTotal)} سال سابقه` : ''}</span>
-                  <span className="comp-talent-tags"><WorkStatusChip status={r.a.workStatus} projectName={r.a.workProjectName} /></span>
+                  <span className="comp-talent-tags"><WorkStatusChip status={r.a.workStatus} projectName={r.a.workProjectName} />{!r.disc.eligible && <span className="comp-warn">{r.disc.label}{r.disc.suspendedUntil ? ` تا ${formatJalali(r.disc.suspendedUntil)}` : ''}</span>}{r.disc.eligible && r.disc.deducted > 0 && <span className="sub">{r.disc.label} ({fa(r.disc.conductScore)}/۱۰۰)</span>}{r.lastEval != null && <span className="sub">ارزیابی حین کار: {fa(r.lastEval)}</span>}</span>
                 </div>
                 <div className="comp-talent-fit">
                   <FitRing fit={c?.fit ?? null} />

@@ -590,7 +590,15 @@ export interface EducationEntry {
   field: string
   institution: string
   year: string
+  /** Optional authenticity check: the verification code printed on the certificate (inquiry at the official site) … */
+  verificationCode?: string
+  /** … and the administrative officer's confirmation that the code was checked and matches. Cleared when the code changes. */
+  verified?: boolean
+  verifiedByName?: string
+  verifiedAt?: string
 }
+
+export const EDUCATION_VERIFY_URL = 'https://codesehat.ir/inqury-authenticity-report'
 
 export interface EmploymentEntry {
   id: string

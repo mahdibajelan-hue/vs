@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, ArrowLeft, CheckCircle2, CircleDot, Eye, Lightbulb, Loader2, Lock, MessagesSquare, RotateCcw, Save, ShieldAlert, Users } from 'lucide-react'
-import { estimateMinutes, planInterview, COMFORTABLE_SESSION_MINUTES } from '../lib/interviewPlan'
+import { deriveRatings, estimateMinutes, planInterview, COMFORTABLE_SESSION_MINUTES } from '../lib/interviewPlan'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
@@ -202,6 +202,26 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
     setDrafts((prev) => ({ ...prev, [competencyId]: { ...valueOf(competencyId), ...prev[competencyId], ...patch } }))
   }
 
+  // «از پاسخ سؤال‌ها»: the rater's technical scores become a draft interview rating for the competencies those questions evidence.
+  const allPanelistScores = useCompetencyStore((s) => s.panelistScores)
+  const derived = useMemo(() => {
+    const sheet = allPanelistScores.find((p) => p.assessmentId === assessment.id && p.panelistId === myId)
+    const scores: Record<string, number> = {}
+    for (const [k, v] of Object.entries(sheet?.answers ?? {})) if (typeof v?.score === 'number') scores[k] = v.score
+    const cs = allItems.map((i) => ({ id: i.competency.id, techCategories: evidenceSources.filter((x) => x.competencyId === i.competency.id && x.sourceType === 'TECHNICAL_CATEGORY').map((x) => x.sourceRef) }))
+    return deriveRatings(cs, plan.picked.map((q) => ({ id: q.id, category: q.category as string })), scores)
+  }, [allPanelistScores, assessment.id, myId, allItems, evidenceSources, plan.picked])
+  const derivable = [...derived].filter(([id]) => valueOf(id).rating == null)
+  const fillFromTechnical = () => {
+    if (readOnly) return
+    setSavedAt(null)
+    setDrafts((prev) => {
+      const next = { ...prev }
+      for (const [id, d] of derivable) next[id] = { rating: d.rating, notes: `مشتق از نمرهٔ ${d.questions.toLocaleString('fa-IR')} سؤال فنی همین ارزیابی` }
+      return next
+    })
+  }
+
   const handleSaveAll = async () => {
     if (readOnly || saveable.length === 0) return
     setSaving(true)
@@ -277,6 +297,12 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
                 ? `${plan.plan.covered.length.toLocaleString('fa-IR')} شایستگی را سؤال‌های فنی همین ارزیابی پوشش می‌دهند${plan.plan.deferred.length ? ` و ${plan.plan.deferred.length.toLocaleString('fa-IR')} مورد کم‌اولویت به‌دلیل سقف ${'۸'} شایستگی کنار گذاشته شد` : ''}؛ مصاحبه فقط روی شایستگی‌های حیاتی و پوشش‌داده‌نشده متمرکز است (بدون فشرده‌سازی: ${minutes.all.total.toLocaleString('fa-IR')} دقیقه).`
                 : `همهٔ ${allItems.length.toLocaleString('fa-IR')} شایستگی نمایش داده می‌شود؛ زمان جلسه ممکن است بیش از حد تحمل پنل باشد.`}
             </p>
+          )}
+          {derivable.length > 0 && !readOnly && (
+            <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
+              <span className="fx-text-2">{derivable.length.toLocaleString('fa-IR')} شایستگی را می‌توان از نمرهٔ سؤال‌های فنی شما پر کرد (بدون پرسش دوباره؛ قابل‌ویرایش).</span>
+              <button type="button" onClick={fillFromTechnical} className="flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-[11.5px] font-bold text-white hover:bg-sky-500">پر کردن از پاسخ سؤال‌های فنی</button>
+            </div>
           )}
           {minutes.all.total > COMFORTABLE_SESSION_MINUTES && !leanActive && <p className="text-[11.5px] font-bold" style={tone('#f59e0b')}><span className="fx-tone-text">این جلسه از ۹۰ دقیقه بیشتر است؛ تعداد سؤال‌های فنی را در طراحی آزمون کم کنید یا مصاحبه را فشرده نگه دارید.</span></p>}
         </div>

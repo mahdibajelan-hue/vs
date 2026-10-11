@@ -7,6 +7,9 @@ import { CompetencyDashboardPage } from './pages/CompetencyDashboardPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { QuestionBankPage } from './pages/QuestionBankPage'
 import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
+import { InServicePage } from './pages/InServicePage'
+import { DisciplinePage } from './pages/DisciplinePage'
+import { useInServiceStore } from './store/useInServiceStore'
 import { TalentPage } from './pages/TalentPage'
 import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
 import { PersonalityReportsPage } from '../personality/pages/PersonalityReportsPage'
@@ -27,6 +30,9 @@ type View =
   | { name: 'questionBank'; tab?: 'technical' | 'personality' }
   | { name: 'reports' }
   | { name: 'talent' }
+  | { name: 'myTasks' }
+  | { name: 'inservice' }
+  | { name: 'discipline' }
   | { name: 'settings' }
   // The personality module's own admin pages (reports/settings), reachable from this module's
   // sidebar/question bank now that the standalone Personality module has been merged in — see the
@@ -110,9 +116,24 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
     talent: () => setView({ name: 'talent' }),
+    myTasks: () => setView({ name: 'myTasks' }),
+    inservice: () => setView({ name: 'inservice' }),
+    ...(isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id) ? { discipline: () => setView({ name: 'discipline' }) } : {}),
     ...(isQuestionBankViewer ? { questionBank: () => setView({ name: 'questionBank' }) } : {}),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
   }
+
+  const inCycles = useInServiceStore((s) => s.cycles)
+  const inRaters = useInServiceStore((s) => s.raters)
+  const inDecisions = useInServiceStore((s) => s.decisions)
+  const fetchInService = useInServiceStore((s) => s.fetchAll)
+  const assessmentsAll = useCompetencyStore((s) => s.assessments)
+  useEffect(() => { void fetchInService() }, [fetchInService])
+  const nameOfA = (id: string) => assessmentsAll.find((a) => a.id === id)?.candidateName ?? '—'
+  const myExtraTasks = [
+    ...inRaters.filter((r) => r.userId === myProfile?.id && !r.submittedAt).flatMap((r) => { const c = inCycles.find((x) => x.id === r.cycleId && x.status === 'open'); return c ? [{ id: `ev-${c.id}`, group: 'ارزیابی حین کار (فصلی)', title: nameOfA(c.assessmentId), subtitle: c.periodLabel, action: 'ثبت نمره‌ها', onOpen: () => setView({ name: 'inservice' }) }] : [] }),
+    ...(isModuleAdmin ? inDecisions.filter((d) => d.status === 'proposed' && d.proposedBy !== myProfile?.id).map((d) => ({ id: `dc-${d.id}`, group: 'تصمیمات انضباطی در انتظار تصویب', title: nameOfA(d.assessmentId), subtitle: d.reason.slice(0, 60), action: 'تصمیم‌گیری', onOpen: () => setView({ name: 'discipline' }) })) : []),
+  ]
 
   if (loading) {
     return (
@@ -168,6 +189,13 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
         initialTab={view.tab}
       />
     )
+  }
+
+  if (view.name === 'inservice') return <InServicePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  if (view.name === 'discipline') return <DisciplinePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+
+  if (view.name === 'myTasks') {
+    return <CompetencyDashboardPage mode="tasks" extraTasks={myExtraTasks} onOpen={(id) => setView({ name: 'assessment', id })} onNew={() => setView({ name: 'new' })} onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
   }
 
   if (view.name === 'talent') {

@@ -1,4 +1,4 @@
-import { Award, Building2, GraduationCap, ShieldCheck } from 'lucide-react'
+import { Award, BadgeCheck, Building2, GraduationCap, ShieldCheck } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { formatDurationFa, monthsBetween } from '../lib/profileCalc'
 import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
@@ -16,6 +16,11 @@ export function EducationCards({ value }: { value: EducationEntry[] }) {
           <span className="font-bold">{e.degree || '—'}</span>
           {e.field && <span className="text-secondary">— {e.field}</span>}
           {e.institution && <span className="text-muted">({e.institution})</span>}
+          {e.verified && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300" title={e.verifiedByName ? `تأیید ${e.verifiedByName}` : undefined}>
+              <BadgeCheck size={10} /> اصالت تأییدشده
+            </span>
+          )}
           {e.year && (
             <span className="num mr-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[9.5px] text-muted">
               {e.year}

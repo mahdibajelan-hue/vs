@@ -30,3 +30,19 @@ export function estimateMinutes(tech: { difficulty: string; category: string }[]
   const i = interviewCompetencies * INTERVIEW_MINUTES_PER_COMPETENCY
   return { tech: t, interview: i, total: t + i + (t + i > 0 ? SESSION_OVERHEAD_MINUTES : 0) }
 }
+
+/**
+ * Interview ratings derived from the technical questions: for a competency whose evidence includes technical categories,
+ * the rater's own average score (0–5) on that session's questions in those categories becomes a 1–5 competency rating.
+ * It is a starting point the rater can overwrite, so nothing is rated twice and nothing already entered is lost.
+ */
+export function deriveRatings(competencies: { id: string; techCategories: string[] }[], questions: { id: string; category: string }[], scores: Record<string, number>): Map<string, { rating: number; questions: number }> {
+  const out = new Map<string, { rating: number; questions: number }>()
+  for (const c of competencies) {
+    if (!c.techCategories.length) continue
+    const xs = questions.filter((q) => c.techCategories.includes(q.category) && typeof scores[q.id] === 'number').map((q) => scores[q.id])
+    if (!xs.length) continue
+    out.set(c.id, { rating: Math.min(5, Math.max(1, Math.round(xs.reduce((a, b) => a + b, 0) / xs.length))), questions: xs.length })
+  }
+  return out
+}

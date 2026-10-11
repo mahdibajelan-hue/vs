@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Award, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, Hourglass, Plus, Repeat, Search, Sprout, Trash2, TrendingUp, User, Users, X } from 'lucide-react'
+import { ChevronLeft, ClipboardList, Plus, Search, Trash2, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
-import { getCompDocSignedUrl } from '../lib/compStorage'
+import { DashboardOverview, MyTasksView, type MyTask } from '../components/DashboardOverview'
 import { ApprovalMedal } from '../components/ApprovalMedal'
-import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
+import { WorkStatusChip } from '../components/OpenToWorkRing'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { RingChart } from '../components/DonutChart'
-import { tone } from '../lib/tone'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { computeNextStep, type NextStep } from '../lib/nextStep'
 import { DemoBadge, DemoDataToggle } from '../components/DemoDataToggle'
 import { supabase } from '../../../lib/supabaseClient'
-import { formatJalali } from '../../../lib/jalali'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { fetchMcqTestStatuses, type McqTestStatus } from '../lib/mcqData'
@@ -24,6 +21,10 @@ interface CompetencyDashboardPageProps {
   onNew: () => void
   onExitToHub: () => void
   nav: Partial<Record<CompetencySection, () => void>>
+  /** 'tasks' renders the signed-in user's own work list («کارهای من») instead of the overview. */
+  mode?: 'dashboard' | 'tasks'
+  /** Work from other parts of the module that also waits for this user (quarterly evaluations, disciplinary approvals). */
+  extraTasks?: MyTask[]
 }
 
 type StatusFilter = 'all' | 'mine' | 'inProgress' | 'completed' | 'approved' | 'conditional'
@@ -67,7 +68,7 @@ function normalizeSearch(v: string): string {
 /** Landing page of the module — cross-role statistics (how many candidates, how many accepted, who
  * leads each specialty) plus the full candidate grid to open one. Replaces the old plain list page:
  * item 9 of the redesign asked for exactly this comparison view instead of a bare list. */
-export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: CompetencyDashboardPageProps) {
+export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav, mode = 'dashboard', extraTasks = [] }: CompetencyDashboardPageProps) {
   const allAssessments = useCompetencyStore((s) => s.assessments)
   // N-15: demo/test candidates stay out of every number on this page unless the viewer opts in.
   const showDemoData = useCompetencyStore((s) => s.showDemoData)
@@ -80,7 +81,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   const fetchQuestionBank = useCompetencyStore((s) => s.fetchQuestionBankPublic)
   const panelistScores = useCompetencyStore((s) => s.panelistScores)
   const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
-  const developmentPlans = useCompetencyStore((s) => s.developmentPlans)
   const fetchDevelopmentPlans = useCompetencyStore((s) => s.fetchDevelopmentPlans)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<JobRole | 'all'>('all')
@@ -160,19 +160,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     [assessments, jobRoleConfigs],
   )
 
-  // Rank of each candidate among peers of the same job role — feeds the dashboard card's floating
-  // rank badge. Ties share the same rank (dense-ish: count of strictly-better peers + 1).
-  const rankById = useMemo(() => {
-    const map = new Map<string, number>()
-    usedRoles.forEach((role) => {
-      const inRole = scored.filter((s) => s.assessment.jobRole === role && s.overall != null)
-      inRole.forEach((s) => {
-        const better = inRole.filter((o) => (o.overall as number) > (s.overall as number)).length
-        map.set(s.assessment.id, better + 1)
-      })
-    })
-    return map
-  }, [scored, usedRoles])
   const nextStepById = useMemo(() => {
     const myPanel = new Map<string, { isLead: boolean }>()
     const panelCount = new Map<string, number>()
@@ -224,12 +211,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   }, [assessments, roleFilter, statusFilter, workFilter, projectFilter, query, nextStepById, overallById])
   const filtersActive = roleFilter !== 'all' || statusFilter !== 'all' || workFilter !== 'all' || query.trim() !== ''
 
-  const totalInterviews = assessments.length
-  const acceptedCount = assessments.filter((a) => a.isApproved).length
-  const completedCount = assessments.filter((a) => a.status === 'completed').length
-  const acceptanceRate = totalInterviews > 0 ? Math.round((acceptedCount / totalInterviews) * 100) : null
 
-  const myActionItems = assessments.filter((a) => nextStepById.get(a.id)?.mine)
 
   // The self-service intake already encodes the workflow: the candidate finishes their profile and
   // uploads documents ("submitted"), then the evaluation officer checks them and presses the approve
@@ -260,88 +242,30 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
     </button>
   )
 
+  if (mode === 'tasks') {
+    const candidateTasks: MyTask[] = assessments.filter((a) => nextStepById.get(a.id)?.mine).map((a) => ({ id: a.id, group: 'ارزیابی متقاضیان', title: a.candidateName || 'بدون نام', subtitle: a.candidatePosition || '—', action: nextStepById.get(a.id)?.label ?? '', onOpen: () => onOpen(a.id) }))
+    return (
+      <CompetencySidebarShell active="myTasks" nav={nav} title="کارهای من" onExitToHub={onExitToHub}>
+        <MyTasksView tasks={[...candidateTasks, ...extraTasks]} />
+      </CompetencySidebarShell>
+    )
+  }
+
   return (
     <CompetencySidebarShell active="dashboard" nav={nav} title="داشبورد ارزیابی شایستگی" onExitToHub={onExitToHub} headerRight={headerRight}>
       {/* A single flex child so the shell's own `space-y-4` no longer stacks these sections — the
           tighter `gap-3` here is what keeps the whole page's vertical rhythm compact. */}
       <div className="fx fx-remap flex flex-col gap-3">
-        {/* Aggregate stats */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatTile icon={Users} label="کل مصاحبه‌ها" value={totalInterviews.toLocaleString('fa-IR')} color="#a855f7" />
-          <StatTile icon={CheckCircle2} label="پذیرفته‌شده" value={acceptedCount.toLocaleString('fa-IR')} color="#34d399" />
-          <StatTile icon={ClipboardList} label="ارزیابی تکمیل‌شده" value={completedCount.toLocaleString('fa-IR')} color="#38bdf8" />
-          <AcceptanceRateTile rate={acceptanceRate} />
-        </div>
-
-        {myActionItems.length > 0 && (
-          <section className="fx-card fx-accent-bar p-3" style={tone('#fb7185')}>
-            <p className="fx-tone-text mb-2 flex items-center gap-1.5 text-[11.5px] font-bold">
-              <AlertCircle size={13} /> نیازمند اقدام من ({myActionItems.length.toLocaleString('fa-IR')})
-            </p>
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {myActionItems.map((a) => (
-                <ActionCandidateRow
-                  key={a.id}
-                  assessment={a}
-                  overall={scored.find((s) => s.assessment.id === a.id)?.overall ?? null}
-                  rank={rankById.get(a.id)}
-                  nextStep={nextStepById.get(a.id)}
-                  hasPlan={developmentPlans.some((p) => p.assessmentId === a.id && p.status !== 'CANCELLED')}
-                  reassessmentRelated={!!a.previousAssessmentId || assessments.some((x) => x.previousAssessmentId === a.id)}
-                  onOpen={() => onOpen(a.id)}
-                  onDelete={() => setConfirmId(a.id)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {(readyForInterview.length > 0 || awaitingDocsReview.length > 0) && (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <QueueSection
-              title="آماده مصاحبه"
-              hint="پروفایل و مدارک تکمیل و توسط مسئول ارزیابی تأیید شده"
-              color="#34d399"
-              icon={ClipboardCheck}
-              items={readyForInterview}
-              empty="هنوز کسی تأیید مدارک نشده است."
-              trailing={(a) => (a.reviewedAt ? `تأیید ${formatJalali(a.reviewedAt.slice(0, 10))}` : 'تأییدشده')}
-              onOpen={onOpen}
-            />
-            <QueueSection
-              title="منتظر تأیید مدارک"
-              hint="پروفایل تکمیل و مدارک بارگذاری شده — منتظر بررسی مسئول ارزیابی"
-              color="#fbbf24"
-              icon={Hourglass}
-              items={awaitingDocsReview}
-              empty="موردی در انتظار بررسی نیست."
-              trailing={() => 'در انتظار بررسی'}
-              onOpen={onOpen}
-            />
-          </div>
-        )}
-
-        {topPerRole.length > 0 && (
-          <section className="fx-card p-3">
-            <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-bold">
-              <Award size={13} className="text-amber-300" /> متقاضیان برتر هر شغل
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {topPerRole.map(({ role, assessment: a, overall }) => (
-                <button key={role} onClick={() => onOpen(a.id)} className="fx-sub flex items-center gap-2 rounded-lg p-1.5 text-right transition-colors hover:bg-white/5">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
-                    <Award size={12} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] font-bold leading-tight">{a.candidateName}</p>
-                    <p className="fx-muted truncate text-[9px] leading-tight">{jobRoleLabel(jobRoleConfigs, role)}</p>
-                  </div>
-                  <span className="num shrink-0 text-xs font-extrabold text-amber-300">{overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+        <DashboardOverview
+          assessments={assessments}
+          scored={scored}
+          nextStepById={nextStepById}
+          readyForInterview={readyForInterview}
+          awaitingDocsReview={awaitingDocsReview}
+          topPerRole={topPerRole.map((t) => ({ role: t.role, roleLabel: jobRoleLabel(jobRoleConfigs, t.role), assessment: t.assessment, overall: t.overall }))}
+          onOpen={onOpen}
+          onMyTasks={nav.myTasks}
+        />
 
         {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per
             candidate) so this reads as a scannable roster for succession planning rather than a wall of
@@ -513,89 +437,6 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav }: Com
   )
 }
 
-/** A short, scrollable list of candidates sharing one intake state ("آماده مصاحبه" / "منتظر تأیید
- * مدارک"). Capped height so two of these side by side never push the page into a long scroll — a
- * long queue scrolls inside its own card instead. */
-function QueueSection({
-  title,
-  hint,
-  color,
-  icon: Icon,
-  items,
-  empty,
-  trailing,
-  onOpen,
-}: {
-  title: string
-  hint: string
-  color: string
-  icon: typeof Users
-  items: CompetencyAssessment[]
-  empty: string
-  trailing: (a: CompetencyAssessment) => string
-  onOpen: (id: string) => void
-}) {
-  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
-  return (
-    <section className="fx-card fx-accent-bar p-3" style={tone(color)}>
-      <p className="fx-tone-text flex items-center gap-1.5 text-[11.5px] font-bold">
-        <Icon size={13} /> {title} ({items.length.toLocaleString('fa-IR')})
-      </p>
-      <p className="fx-muted mb-2 text-[10px]">{hint}</p>
-      {items.length === 0 ? (
-        <p className="fx-muted py-2 text-center text-[10.5px]">{empty}</p>
-      ) : (
-        <div className="grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto pl-0.5">
-          {items.map((a) => (
-            <button key={a.id} onClick={() => onOpen(a.id)} className="fx-sub flex items-center gap-2 rounded-lg p-1.5 pr-2.5 text-right transition-colors hover:bg-white/5">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
-                  {a.isDemo && <DemoBadge />}
-                </div>
-                <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
-              </div>
-              <span className="fx-tone-bg fx-tone-text shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold">{trailing(a)}</span>
-              <ChevronLeft size={13} className="fx-muted shrink-0" />
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function StatTile({ icon: Icon, label, value, color }: { icon: typeof Users; label: string; value: string; color: string }) {
-  return (
-    <div className="fx-card p-2.5">
-      <div className="fx-text-2 mb-1 flex items-center gap-1.5 text-[10.5px]">
-        <Icon size={12} style={{ color }} /> {label}
-      </div>
-      <p className="num text-xl font-extrabold" style={{ color }}>
-        {value}
-      </p>
-    </div>
-  )
-}
-
-/** The acceptance-rate stat tile earns a small ring (rather than bare text) because, unlike the
- * other three tiles, it is itself already a percentage of a whole — the ring makes that relationship
- * visible at a glance instead of needing to be inferred from a lone number. */
-function AcceptanceRateTile({ rate }: { rate: number | null }) {
-  return (
-    <div className="fx-card flex items-center gap-2 p-2.5">
-      <RingChart value={rate} color="#fbbf24" size={38} strokeWidth={5} label="نرخ پذیرش">
-        <span className="num text-[9.5px] font-extrabold" style={{ color: '#fbbf24' }}>
-          {rate != null ? `٪${rate.toLocaleString('fa-IR')}` : '—'}
-        </span>
-      </RingChart>
-      <div className="fx-text-2 flex min-w-0 flex-1 items-center gap-1 text-[10.5px]">
-        <TrendingUp size={12} className="shrink-0" style={{ color: '#fbbf24' }} /> نرخ پذیرش
-      </div>
-    </div>
-  )
-}
-
 /** One scannable line per candidate for the "کل متقاضیان" talent pool — deliberately no photo (this
  * list can run to dozens of rows; a wall of avatars was the exact clutter the product owner asked to
  * remove) and no rank badge (that comparison lives in the leaderboard card above). The whole row is
@@ -658,99 +499,6 @@ function TalentPoolRow({
         className="shrink-0 rounded-lg p-1.5 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
       >
         <Trash2 size={12} />
-      </button>
-    </div>
-  )
-}
-
-/** The compact "needs my action" row: one line per candidate (avatar, name/role, a single next-step
- * chip, the score) instead of the previous vertical avatar card — the same information density as
- * `TalentPoolRow` but keeping the small avatar and a rank badge, since this list is usually short and
- * the person opening it is about to act on exactly one of these candidates. Plan/reassessment status,
- * previously two extra stacked badge rows, collapses to at most two tiny icons next to the name; the
- * interview date (not shown in the talent-pool row either) is dropped here on purpose. */
-function ActionCandidateRow({
-  assessment: a,
-  overall,
-  rank,
-  nextStep,
-  hasPlan,
-  reassessmentRelated,
-  onOpen,
-  onDelete,
-}: {
-  assessment: CompetencyAssessment
-  overall: number | null
-  rank?: number
-  nextStep?: NextStep
-  hasPlan: boolean
-  reassessmentRelated: boolean
-  onOpen: () => void
-  onDelete: () => void
-}) {
-  const jobRoleConfigs = useCompetencyStore((s) => s.jobRoleConfigs)
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    if (a.photoUrl) getCompDocSignedUrl(a.photoUrl).then((u) => active && setPhotoUrl(u))
-    return () => {
-      active = false
-    }
-  }, [a.photoUrl])
-
-  const tier = rowTier(overall)
-
-  return (
-    <div className="fx-sub group flex items-center gap-2 rounded-lg border-r-[3px] p-1.5 pr-2.5 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
-      <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-right">
-        <div className="relative shrink-0">
-          <div className="h-8 w-8">
-            <OpenToWorkRing active={a.workStatus === 'open_to_work'} size={32}>
-              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
-                {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <User size={12} />}
-              </div>
-            </OpenToWorkRing>
-          </div>
-          {a.isApproved && (
-            <span className="absolute -bottom-1 -left-1 scale-75">
-              <ApprovalMedal size="sm" level={approvalLevel(a.isApproved, overall)} />
-            </span>
-          )}
-          {rank != null && (
-            <span
-              className="num absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[7.5px] font-extrabold text-amber-950"
-              title={`رتبه ${rank} در میان متقاضیان این شغل`}
-            >
-              {rank.toLocaleString('fa-IR')}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <p className="truncate text-[11.5px] font-bold leading-tight">{a.candidateName}</p>
-            {hasPlan && <Sprout size={9} className="shrink-0 text-emerald-300" aria-label="برنامه توسعه فردی فعال" />}
-            {reassessmentRelated && <Repeat size={9} className="shrink-0 text-sky-300" aria-label="ارزیابی مجدد" />}
-            {a.isDemo && <DemoBadge />}
-          </div>
-          <p className="fx-muted truncate text-[9.5px] leading-tight">{jobRoleLabel(jobRoleConfigs, a.jobRole)}</p>
-        </div>
-        <span
-          className="shrink-0 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-200 ring-1 ring-rose-400/40"
-          title="این مرحله منتظر اقدام شماست"
-        >
-          {nextStep?.label ?? 'اقدام'}
-        </span>
-        <span className="num shrink-0 text-xs font-extrabold" style={{ color: tier }}>
-          {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
-        </span>
-      </button>
-      <button
-        onClick={onDelete}
-        title="حذف"
-        className="shrink-0 rounded-md p-1 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
-      >
-        <Trash2 size={11} />
       </button>
     </div>
   )

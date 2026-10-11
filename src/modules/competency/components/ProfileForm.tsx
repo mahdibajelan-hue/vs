@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { BadgeCheck, ExternalLink, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
-import type { CertificationEntry, EducationEntry, EmploymentEntry } from '../types'
+import { EDUCATION_VERIFY_URL, type CertificationEntry, type EducationEntry, type EmploymentEntry } from '../types'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
@@ -175,7 +176,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode, doc
         )}
       </section>
 
-      <EducationSection value={form.education} onChange={(v) => set('education', v)} documents={documents} />
+      <EducationSection value={form.education} onChange={(v) => set('education', v)} documents={documents} canVerify={!candidateMode} />
       <EmploymentSection value={form.employmentHistory} onChange={(v) => set('employmentHistory', v)} documents={documents} />
       <CertificationSection value={form.certifications} onChange={(v) => set('certifications', v)} documents={documents} />
 
@@ -255,7 +256,8 @@ function RowShell({ onRemove, children }: { onRemove: () => void | Promise<void>
   )
 }
 
-function EducationSection({ value, onChange, documents }: { value: EducationEntry[]; onChange: (v: EducationEntry[]) => void; documents?: ProfileDocuments }) {
+function EducationSection({ value, onChange, documents, canVerify }: { value: EducationEntry[]; onChange: (v: EducationEntry[]) => void; documents?: ProfileDocuments; canVerify?: boolean }) {
+  const myName = useAuthStore((s) => s.profile?.fullName) ?? 'مسئول اداری'
   const update = (id: string, patch: Partial<EducationEntry>) => onChange(value.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   return (
     <RepeatableSection
@@ -275,6 +277,40 @@ function EducationSection({ value, onChange, documents }: { value: EducationEntr
           <input value={e.institution} onChange={(ev) => update(e.id, { institution: ev.target.value })} className="input" placeholder="دانشگاه/موسسه" />
           <input value={e.year} onChange={(ev) => update(e.id, { year: ev.target.value })} className="input num" placeholder="سال اخذ مدرک" />
           {documents && <DocumentSlot docs={documents} category="EDUCATION" entryRef={e.id} />}
+          {/* Optional authenticity check: the candidate may enter the certificate's verification code; the administrative officer looks it up on the official site and ticks the box. */}
+          <div className="col-span-full flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 text-[11px]">
+            <input
+              value={e.verificationCode ?? ''}
+              onChange={(ev) => update(e.id, { verificationCode: ev.target.value, verified: false, verifiedByName: '', verifiedAt: '' })}
+              className="input num"
+              style={{ maxWidth: 220 }}
+              placeholder="کد صحت مدرک (اختیاری)"
+              dir="ltr"
+              aria-label="کد صحت مدرک"
+            />
+            <a href={EDUCATION_VERIFY_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-300 underline">
+              <ExternalLink size={12} /> استعلام کد صحت
+            </a>
+            {e.verified ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold text-emerald-300">
+                <BadgeCheck size={13} /> اصالت مدرک تأیید شد{e.verifiedByName ? ` — ${e.verifiedByName}` : ''}
+              </span>
+            ) : e.verificationCode ? (
+              <span className="text-muted">کد ثبت شده؛ منتظر تأیید مسئول اداری</span>
+            ) : (
+              <span className="text-muted">تأیید اصالت اختیاری است</span>
+            )}
+            {canVerify && e.verificationCode && (
+              <label className="mr-auto flex cursor-pointer items-center gap-1.5 font-bold">
+                <input
+                  type="checkbox"
+                  checked={!!e.verified}
+                  onChange={(ev) => update(e.id, { verified: ev.target.checked, verifiedByName: ev.target.checked ? myName : '', verifiedAt: ev.target.checked ? new Date().toISOString() : '' })}
+                />
+                تأیید اصالت توسط مسئول اداری
+              </label>
+            )}
+          </div>
         </RowShell>
       ))}
     </RepeatableSection>

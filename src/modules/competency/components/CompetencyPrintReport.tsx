@@ -605,7 +605,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, margin: '10px 0' }}>
           <MiniList
             title="تحصیلات"
-            items={a.education.map((e) => `${e.degree || '—'} ${e.field ? `— ${e.field}` : ''}${e.institution ? ` (${e.institution}${e.year ? `، ${e.year}` : ''})` : ''}`)}
+            items={a.education.map((e) => `${e.degree || '—'} ${e.field ? `— ${e.field}` : ''}${e.institution ? ` (${e.institution}${e.year ? `، ${e.year}` : ''})` : ''}${e.verified ? ' ✓ اصالت تأییدشده' : ''}`)}
           />
           <MiniList
             title="سوابق شغلی"
