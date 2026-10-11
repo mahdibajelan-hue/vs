@@ -1791,6 +1791,13 @@ select option {
   transition: transform 260ms ease;
 }
 .lp-tile:hover .lp-tile-chip { transform: scale(1.1) rotate(-4deg); }
+.lp-tile-badge {
+  position: absolute; top: 0.6rem; inset-inline-end: 0.6rem; z-index: 2;
+  min-width: 1.5rem; height: 1.5rem; padding: 0 0.45rem; border-radius: 99px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #ef4444; color: #fff; font-size: 11.5px; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--bg-app), 0 6px 14px -4px rgba(239, 68, 68, 0.7);
+}
 .lp-tile-no {
   font-family: ui-monospace, monospace;
   font-size: 10px;

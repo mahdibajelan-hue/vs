@@ -1,7 +1,7 @@
 import { ShieldAlert } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function RiskManagementCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function RiskManagementCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="10"
@@ -11,6 +11,7 @@ export function RiskManagementCard({ onSelect, locked }: { onSelect: () => void;
       icon={ShieldAlert}
       accent="#e11d48"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

@@ -1,7 +1,7 @@
 import { GitPullRequestArrow } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function ChangeManagementCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function ChangeManagementCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="11"
@@ -11,6 +11,7 @@ export function ChangeManagementCard({ onSelect, locked }: { onSelect: () => voi
       icon={GitPullRequestArrow}
       accent="#f59e0b"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

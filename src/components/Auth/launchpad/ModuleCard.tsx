@@ -17,6 +17,8 @@ export interface ModuleCardProps {
   visual?: ReactNode
   /** Not signed in yet: preview the module but block entry (dimmed, no hover, no click). */
   locked?: boolean
+  /** Number of things in this module waiting for the signed-in user — the same figure the bell adds up. */
+  badge?: number
   onSelect: () => void
 }
 
@@ -35,7 +37,7 @@ function trackSpotlight(e: MouseEvent<HTMLElement>) {
  * and Missions: 2×1, the rest: 1×1); on a phone everything collapses to a compact two-column grid
  * where only the Radar tile keeps its description.
  */
-export function ModuleCard({ title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, onSelect }: ModuleCardProps) {
+export function ModuleCard({ title, englishTag, description, icon: Icon, accent, hero, cta, visual, locked, badge, onSelect }: ModuleCardProps) {
   // Before sign-in: only the bare icon shows — the full tile appears once the user is authenticated.
   if (locked) {
     return (
@@ -57,6 +59,7 @@ export function ModuleCard({ title, englishTag, description, icon: Icon, accent,
       className={`lp-tile group ${hero ? 'is-hero' : ''}`}
       style={{ '--a': accent } as CSSProperties}
     >
+      {!!badge && <span className="lp-tile-badge" aria-label={`${badge.toLocaleString('fa-IR')} مورد نیازمند اقدام`}>{badge.toLocaleString('fa-IR')}</span>}
       <Icon className="lp-tile-mark" size={hero ? 150 : 92} strokeWidth={1.25} aria-hidden />
       <span className="lp-tile-head">
         {visual ?? (

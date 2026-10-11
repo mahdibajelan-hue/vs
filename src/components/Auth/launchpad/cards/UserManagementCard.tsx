@@ -1,7 +1,7 @@
 import { Users } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function UserManagementCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function UserManagementCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="08"
@@ -11,6 +11,7 @@ export function UserManagementCard({ onSelect, locked }: { onSelect: () => void;
       icon={Users}
       accent="#475569"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

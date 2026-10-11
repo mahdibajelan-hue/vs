@@ -1,7 +1,7 @@
 import { ListChecks } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function TaskIssueCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function TaskIssueCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="09"
@@ -11,6 +11,7 @@ export function TaskIssueCard({ onSelect, locked }: { onSelect: () => void; lock
       icon={ListChecks}
       accent="#d97706"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

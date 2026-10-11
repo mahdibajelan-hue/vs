@@ -2,7 +2,7 @@ import { Sprout } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 import { LANDACQ_MODULE } from '../../../../modules/landacq/integration/manifest'
 
-export function LandAcquisitionCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function LandAcquisitionCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="07"
@@ -12,6 +12,7 @@ export function LandAcquisitionCard({ onSelect, locked }: { onSelect: () => void
       icon={Sprout}
       accent={LANDACQ_MODULE.accent}
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

@@ -1,7 +1,7 @@
 import { Calculator } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function ProjectEstimationCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function ProjectEstimationCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="05"
@@ -11,6 +11,7 @@ export function ProjectEstimationCard({ onSelect, locked }: { onSelect: () => vo
       icon={Calculator}
       accent="#db2777"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

@@ -1,7 +1,7 @@
 import { PackageSearch } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function MaterialControlCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function MaterialControlCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="13"
@@ -11,6 +11,7 @@ export function MaterialControlCard({ onSelect, locked }: { onSelect: () => void
       icon={PackageSearch}
       accent="#f59e0b"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

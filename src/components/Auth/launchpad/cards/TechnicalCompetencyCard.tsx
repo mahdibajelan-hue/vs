@@ -1,7 +1,7 @@
 import { Award } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function TechnicalCompetencyCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function TechnicalCompetencyCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="04"
@@ -11,6 +11,7 @@ export function TechnicalCompetencyCard({ onSelect, locked }: { onSelect: () => 
       icon={Award}
       accent="#9333ea"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

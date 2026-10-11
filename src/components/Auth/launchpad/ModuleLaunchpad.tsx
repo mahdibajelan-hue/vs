@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ModuleKey } from '../../../store/useModuleStore'
+import { useNotificationStore } from '../../../store/useNotificationStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
 import { ProjectRadarCard } from './cards/ProjectRadarCard'
 import { PortfolioManagementCard } from './cards/PortfolioManagementCard'
@@ -17,7 +18,7 @@ import { ChangeManagementCard } from './cards/ChangeManagementCard'
 import { FinanceControlCard } from './cards/FinanceControlCard'
 import { MaterialControlCard } from './cards/MaterialControlCard'
 
-type CardComponent = (props: { onSelect: () => void; locked?: boolean }) => ReactElement
+type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
 
 /** Every launchpad entry point. Project Radar has no RBAC gate (it's always the entry point, not
  * one of the `hasModuleAccess`-checked ones), so it's kept out of the filtered list and placed
@@ -53,6 +54,9 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
   const visibleModules = REGULAR_MODULES.filter((m) => hasModuleAccess(accessibleModules, m.key))
   const locked = !isAuthed
+  // The bell's items, counted per module so every tile shows its own share of the bell's total. A module that is entered through another card (issues → «موانع و اقدامات») counts there.
+  const notifications = useNotificationStore((s) => s.items)
+  const countFor = (key: ModuleKey) => notifications.filter((n) => (n.module === 'issues' ? 'taskissue' : n.module) === key).length
 
   return (
     <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto w-full max-w-4xl py-2'}>
@@ -68,7 +72,7 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
         </div>
         {visibleModules.map(({ key, Card }, i) => (
           <div key={key} className={`hub-fade-in ${AREAS[i]}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
-            <Card onSelect={() => onSelect(key)} locked={locked} />
+            <Card onSelect={() => onSelect(key)} locked={locked} badge={countFor(key)} />
           </div>
         ))}
       </div>

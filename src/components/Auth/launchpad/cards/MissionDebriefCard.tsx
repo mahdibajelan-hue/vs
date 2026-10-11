@@ -2,7 +2,7 @@ import { MapPinned } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 import { MISSIONS_MODULE } from '../../../../modules/missions/integration/manifest'
 
-export function MissionDebriefCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function MissionDebriefCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="06"
@@ -12,6 +12,7 @@ export function MissionDebriefCard({ onSelect, locked }: { onSelect: () => void;
       icon={MapPinned}
       accent="#0891b2"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

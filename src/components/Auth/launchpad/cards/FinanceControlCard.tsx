@@ -1,7 +1,7 @@
 import { Landmark } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function FinanceControlCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function FinanceControlCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="12"
@@ -11,6 +11,7 @@ export function FinanceControlCard({ onSelect, locked }: { onSelect: () => void;
       icon={Landmark}
       accent="#10b981"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

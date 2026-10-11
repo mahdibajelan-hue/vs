@@ -2,7 +2,7 @@ import { Radar as RadarIcon } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 import { RadarMiniVisual } from '../RadarMiniVisual'
 
-export function ProjectRadarCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function ProjectRadarCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="01"
@@ -15,6 +15,7 @@ export function ProjectRadarCard({ onSelect, locked }: { onSelect: () => void; l
       cta="ENTER PROJECT RADAR →"
       visual={<RadarMiniVisual size={56} />}
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )

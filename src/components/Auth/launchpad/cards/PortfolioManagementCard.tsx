@@ -1,7 +1,7 @@
 import { Briefcase } from 'lucide-react'
 import { ModuleCard } from '../ModuleCard'
 
-export function PortfolioManagementCard({ onSelect, locked }: { onSelect: () => void; locked?: boolean }) {
+export function PortfolioManagementCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
   return (
     <ModuleCard
       number="02"
@@ -11,6 +11,7 @@ export function PortfolioManagementCard({ onSelect, locked }: { onSelect: () => 
       icon={Briefcase}
       accent="#4f46e5"
       locked={locked}
+      badge={badge}
       onSelect={onSelect}
     />
   )
