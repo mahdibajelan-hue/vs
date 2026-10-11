@@ -12,12 +12,14 @@ import {
   Hourglass,
   PieChart,
   Quote,
+  Scale,
   Sparkles,
   Target,
   Users,
 } from 'lucide-react'
 import { formatJalali } from '../../../../lib/jalali'
-import { tierColor } from '../../lib/competencyModel'
+import { COMPETENCY_QUESTIONS, tierColor } from '../../lib/competencyModel'
+import { AGREEMENT_META } from '../../lib/raterAgreement'
 import { EVIDENCE_METHOD_META, type EvidenceMethodKey } from '../../lib/competencyGap'
 import { fa, type InterviewSummaryRow, type ResultsModel } from '../../lib/resultsModel'
 import type { CompetencyAssessment } from '../../types'
@@ -326,6 +328,37 @@ export function EvidenceMixCard({ mix }: { mix: Record<EvidenceMethodKey, number
   )
 }
 
+/** Reliability of the panel average: how closely the raters agree, who scores systematically high or low, and which questions split them. */
+function AgreementCard({ model }: { model: ResultsModel }) {
+  const ag = model.agreement
+  const meta = AGREEMENT_META[ag.level]
+  const split = ag.questions.filter((q) => q.disagree).slice(0, 5)
+  const labelOf = (key: string) => model.roleQuestions.find((q) => q.id === key)?.questionText ?? COMPETENCY_QUESTIONS.find((q) => q.key === key)?.text ?? key
+  return (
+    <div className="fx-sub space-y-2 p-3" style={tone(meta.color)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[12px] font-bold"><Scale size={13} className="fx-tone-text" /> هم‌خوانی داوران (پایایی امتیاز)</p>
+        <span className="fx-tone-bg fx-tone-text rounded-full px-2 py-0.5 text-[10.5px] font-bold">{meta.label}{ag.level !== 'insufficient' ? ` · ${fa(Math.round(ag.withinOne * 100))}٪ سؤال‌ها در محدودهٔ یک نمره` : ''}</span>
+      </div>
+      {ag.advice.map((t) => <p key={t} className="text-[11px] leading-6 fx-text-2">• {t}</p>)}
+      {ag.raters.length >= 2 && ag.level !== 'insufficient' && (
+        <div className="flex flex-wrap gap-2">
+          {ag.raters.map((r) => (
+            <span key={r.raterId} className="rounded-lg border px-2 py-1 text-[10.5px]" style={{ borderColor: 'var(--fx-border)' }}>
+              {r.name}: میانگین <b className="num">{fa(r.mean, 1)}</b>{r.flag && <b className="mr-1" style={{ color: r.flag === 'lenient' ? '#f59e0b' : '#f87171' }}>{r.flag === 'lenient' ? ' (سخاوتمندتر)' : ' (سخت‌گیرتر)'}</b>}
+            </span>
+          ))}
+        </div>
+      )}
+      {split.length > 0 && (
+        <ul className="space-y-1 text-[11px]">
+          {split.map((q) => <li key={q.key} className="flex items-start justify-between gap-3"><span className="fx-text-2 leading-6">{labelOf(q.key)}</span><b className="num shrink-0" style={{ color: '#f87171' }}>اختلاف {fa(q.range)} نمره</b></li>)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function PanelBreakdown({ model }: { model: ResultsModel }) {
   if (model.panel.length === 0) return <EmptyNote>هنوز داوری برای این متقاضی ثبت نشده است.</EmptyNote>
   const comments = model.panel.filter((p) => p.strengths || p.developmentAreas)
@@ -389,6 +422,7 @@ export function PanelBreakdown({ model }: { model: ResultsModel }) {
           </tbody>
         </table>
       </div>
+      <AgreementCard model={model} />
       {comments.length > 0 && (
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {comments.map((p) => (

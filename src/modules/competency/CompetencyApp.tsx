@@ -7,6 +7,7 @@ import { CompetencyDashboardPage } from './pages/CompetencyDashboardPage'
 import { AssessmentWizardPage } from './pages/AssessmentWizardPage'
 import { QuestionBankPage } from './pages/QuestionBankPage'
 import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
+import { TalentPage } from './pages/TalentPage'
 import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
 import { PersonalityReportsPage } from '../personality/pages/PersonalityReportsPage'
 import { PersonalitySettingsPage } from '../personality/pages/PersonalitySettingsPage'
@@ -25,6 +26,7 @@ type View =
   // pages) land directly on the personality tab instead of always defaulting to the technical one.
   | { name: 'questionBank'; tab?: 'technical' | 'personality' }
   | { name: 'reports' }
+  | { name: 'talent' }
   | { name: 'settings' }
   // The personality module's own admin pages (reports/settings), reachable from this module's
   // sidebar/question bank now that the standalone Personality module has been merged in — see the
@@ -107,6 +109,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   // the personality page behind it does its own admin-vs-proposer gating via isPersonalityModuleAdmin.
   const moduleNav: Partial<Record<CompetencySection, () => void>> = {
     reports: () => setView({ name: 'reports' }),
+    talent: () => setView({ name: 'talent' }),
     personalityReports: () => setView({ name: 'personalityReports' }),
     ...(isQuestionBankViewer ? { questionBank: () => setView({ name: 'questionBank' }) } : {}),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
@@ -166,6 +169,10 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
         initialTab={view.tab}
       />
     )
+  }
+
+  if (view.name === 'talent') {
+    return <TalentPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} onOpen={(id, stage) => setView({ name: 'assessment', id, stage })} />
   }
 
   if (view.name === 'reports') {

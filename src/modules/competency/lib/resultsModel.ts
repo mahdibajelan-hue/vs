@@ -22,6 +22,7 @@ import {
   resolveOfficialQualificationScores,
   usesLegacyPmRubric,
 } from './roleCompetencyModel'
+import { raterAgreement, type AgreementResult } from './raterAgreement'
 import { computeResultStatus, interpretMaturity, type MaturityInterpretation, type ResultStatus, type RoleMaturityGuidanceRow } from './maturityGuidance'
 
 /**
@@ -76,6 +77,8 @@ export interface ResultsModel {
   capstone: { score: number | null; note: string }
   panel: PanelBreakdownRow[]
   panelAverage: number | null
+  /** Inter-rater agreement over the panelists who submitted their sheet. */
+  agreement: AgreementResult
   methods: AssessmentMethod[]
 }
 
@@ -162,6 +165,14 @@ export function buildResultsModel(input: {
     capstone,
     panel,
     panelAverage,
+    agreement: raterAgreement(
+      panel.filter((p) => p.submitted).map((p) => {
+        const sheet = myScores.find((x) => x.panelistId === p.userId)
+        const scores: Record<string, number> = {}
+        for (const [k, v] of Object.entries(sheet?.answers ?? {})) if (typeof v?.score === 'number') scores[k] = v.score
+        return { raterId: p.userId, name: p.name, scores }
+      }),
+    ),
     methods: assessmentMethods(assessment),
   }
 }

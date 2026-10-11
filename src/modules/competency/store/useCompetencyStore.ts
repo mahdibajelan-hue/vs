@@ -20,6 +20,7 @@ import type {
   CompCompetencyEvidenceSource,
   CompCompetencyEvidenceDetail,
   CompCompetencyProfile,
+  CompCompetencyScore,
   CompDevelopmentAction,
   CompDevelopmentActionSource,
   CompDevelopmentActionStatus,
@@ -616,6 +617,9 @@ interface CompetencyState {
   /** Competency Engine output per candidate (comp_competency_scores + comp_competency_evidence),
    * keyed by assessment id. Rows are only ever written server-side by comp_compute_competency_profile. */
   competencyProfileByAssessment: Record<string, CompCompetencyProfile>
+  /** Every stored competency score of every candidate (comp_competency_scores) — feeds the talent pool and role-fit views. */
+  allCompetencyScores: CompCompetencyScore[]
+  fetchAllCompetencyScores: () => Promise<void>
   fetchCompetencyProfile: (assessmentId: string) => Promise<void>
   /** Explicit recompute (the gap-analysis "recompute" button). */
   computeCompetencyProfile: (assessmentId: string) => Promise<void>
@@ -729,6 +733,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
   competencies: [],
   jobCompetencyRequirements: [],
   evidenceSources: [],
+  allCompetencyScores: [],
   competencyProfileByAssessment: {},
   assessmentTemplates: [],
   assessmentBlueprints: [],
@@ -1877,6 +1882,12 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     set({ evidenceSources: previous.filter((s) => s.id !== id) })
     const { error } = await supabase.from('comp_competency_evidence_sources').delete().eq('id', id)
     if (reportError('حذف منبع شواهد', error)) set({ evidenceSources: previous })
+  },
+
+  fetchAllCompetencyScores: async () => {
+    const { data, error } = await supabase.from('comp_competency_scores').select('*')
+    if (reportError('بارگذاری شایستگی‌های بانک استعداد', error)) return
+    set({ allCompetencyScores: ((data ?? []) as CompCompetencyScoreRow[]).map(compCompetencyScoreFromRow) })
   },
 
   fetchCompetencyProfile: async (assessmentId) => {
