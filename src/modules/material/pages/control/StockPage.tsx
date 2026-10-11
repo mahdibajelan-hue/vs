@@ -5,6 +5,7 @@ import { useMaterialStore } from '../../store/useMaterialStore'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel, type MaterialModel } from '../../lib/control/useMaterialModel'
 import { writeXlsx } from '../../lib/control/xlsx'
+import { stockByLocation } from '../../lib/control/locations'
 import { Chip, DataTable, KpiCard, Section, fmtD, type Col } from '../../../finance/components/fn'
 import { FormModal } from '../../../finance/components/FormModal'
 import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
@@ -20,6 +21,7 @@ const keyOf = (x: Material, d: Dim) => (d === 'item' ? x.id : d === 'facility' ?
 export function StockPage({ projectId, sub }: { projectId: string; sub: string }) {
   const m = useMaterialModel(projectId)
   const byId = useMemo(() => new Map(m.materials.map((x) => [x.id, x])), [m.materials])
+  if (sub === 'locations') return <Locations model={m} byId={byId} projectId={projectId} />
   if (sub === 'shortage') return <Shortage model={m} byId={byId} projectId={projectId} />
   if (sub === 'receiving') return <Receiving model={m} byId={byId} projectId={projectId} />
   if (sub === 'moves') return <Moves model={m} byId={byId} projectId={projectId} />
@@ -202,5 +204,25 @@ function TxnForm({ model: m, kind, projectId, orgs, onClose }: { model: Material
       initial={{ materialId: '', qty: 0, date: new Date().toISOString().slice(0, 10), sign: '-1', from: '', to: '', facility: '', front: '', op: '', activityQty: 0, activityUnit: '', contractor: '', doc: '', notes: '' }}
       preview={(v) => { const x = m.materials.find((y) => y.id === v.materialId); const p = x && m.positions.get(x.id); return p ? <span>موجودی قابل‌مصرف فعلی: <b>{fa(p.onHand, 2)} {x.unit}</b> · رزرو {fa(p.reserved, 2)} · آزاد {fa(p.available, 2)}</span> : null }}
       onSubmit={async (v) => { await cs.postTxn({ materialId: String(v.materialId), kind, qty: Number(v.qty) || 0, date: String(v.date), from: String(v.from ?? ''), to: String(v.to ?? ''), facility: String(v.facility ?? ''), front: String(v.front ?? ''), op: String(v.op ?? ''), activityQty: Number(v.activityQty) || null, activityUnit: String(v.activityUnit ?? ''), contractorId: (v.contractor as string) || null, doc: String(v.doc ?? ''), notes: String(v.notes ?? ''), sign: kind === 'adjust' ? (Number(v.sign) as 1 | -1) : undefined }); void projectId }} />
+  )
+}
+
+/** Stock per warehouse or yard: what each place holds, from accepted receipts, transfers and vouchers. */
+function Locations({ model: m, byId, projectId }: { model: MaterialModel; byId: Map<string, Material>; projectId: string }) {
+  const ms = useMaterialStore()
+  const rows = useMemo(() => stockByLocation({ receipts: ms.warehouseReceipts.filter((r) => r.masterProjectId === projectId), lines: m.data.warehouseLines, txns: m.data.txns }), [ms.warehouseReceipts, m.data.warehouseLines, m.data.txns, projectId])
+  const places = [...new Set(rows.map((r) => r.location))].sort()
+  const [loc, setLoc] = useState('')
+  const shown = rows.filter((r) => !loc || r.location === loc).sort((a, b) => a.location.localeCompare(b.location, 'fa'))
+  const valueOf = (l: string) => rows.filter((r) => r.location === l).reduce((a, r) => a + r.qty * (byId.get(r.materialId)?.unitPrice ?? 0) * (byId.get(r.materialId)?.fxRate ?? 1), 0)
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div className="fn-kpis">{places.slice(0, 4).map((p, i) => <KpiCard key={p} i={i} label={p} value={bn(valueOf(p))} unit="میلیارد ریال" sub={`${fa(rows.filter((r) => r.location === p).length)} قلم`} />)}</div>
+      <div className="mt-filters"><select value={loc} onChange={(e) => setLoc(e.target.value)} aria-label="انبار"><option value="">همهٔ انبارها</option>{places.map((p) => <option key={p}>{p}</option>)}</select></div>
+      <DataTable rows={shown} rowKey={(r) => `${r.location}|${r.materialId}`} empty="موجودی پذیرفته‌شده‌ای در انبارها نیست." cols={[
+        { key: 'l', label: 'انبار / محل', render: (r) => <span className="strong">{r.location}</span>, sort: (r) => r.location },
+        { key: 'm', label: 'قلم', render: (r) => byId.get(r.materialId)?.description ?? '—' }, { key: 'q', label: 'موجودی', num: true, render: (r) => <span style={{ color: r.qty < 0 ? 'var(--im-coral)' : undefined }}>{fa(r.qty, 2)} {byId.get(r.materialId)?.unit}</span>, sort: (r) => r.qty }]} />
+      <p className="im-helper" style={{ margin: 0 }}>حواله‌ای که مبدأ ندارد از انباری کم می‌شود که بیشترین موجودی همان قلم را دارد؛ مبدأ را در حواله بنویسید تا تراز هر انبار دقیق باشد.</p>
+    </div>
   )
 }

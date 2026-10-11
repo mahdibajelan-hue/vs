@@ -23,7 +23,7 @@ const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: 
   { id: 'discrepancy', label: 'تطبیق و مغایرت‌ها', icon: ShieldAlert, color: '#ef4444' },
   { id: 'packages', label: 'بسته‌های خرید', icon: ShoppingCart, color: '#0ea5e9', subs: [{ id: 'packages', label: 'بسته‌ها و مراحل' }, { id: 'orders', label: 'درخواست خرید و سفارش' }, { id: 'factory', label: 'ساخت و بازرسی' }, { id: 'shipping', label: 'حواله و حمل' }] },
   { id: 'progress', label: 'پیشرفت تأمین', icon: TrendingUp, color: '#14b8a6', subs: [{ id: 'overview', label: 'پیشرفت وزنی' }, { id: 'inbox', label: 'کارتابل تأیید' }, { id: 'late', label: 'مراحل عقب‌افتاده' }] },
-  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی' }, { id: 'shortage', label: 'کسری' }, { id: 'receiving', label: 'رسید و بازرسی ورودی' }, { id: 'moves', label: 'انتقال، مصرف و ضایعات' }, { id: 'allocation', label: 'تخصیص به جبهه' }] },
+  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری' }, { id: 'receiving', label: 'رسید و بازرسی ورودی' }, { id: 'moves', label: 'انتقال، مصرف و ضایعات' }, { id: 'allocation', label: 'تخصیص به جبهه' }] },
   { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف و انحراف' }, { id: 'norms', label: 'مبنای مصرف' }] },
   { id: 'balance', label: 'بالانس', icon: Scale, color: '#22c55e' },
   { id: 'reports', label: 'گزارش‌ها', icon: FileBarChart2, color: '#94a3b8' },

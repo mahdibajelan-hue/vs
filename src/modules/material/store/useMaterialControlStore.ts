@@ -92,6 +92,7 @@ interface State {
   linkExisting: (projectId: string, sources: { type: string; id: string }[], target: 'risk' | 'issue', targetId: string) => Promise<boolean>
   riskToIssue: (projectId: string, riskId: string, title: string, description: string, severity: string) => Promise<{ id: string; existing: boolean } | null>
   loadAudit: (projectId: string, limit?: number) => Promise<AuditRow[]>
+  purgeDemo: (projectId: string) => Promise<boolean>
 }
 
 const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
@@ -324,6 +325,27 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     await get().fetchAll()
     const d = data as { id: string; existing: boolean }
     return { id: d.id, existing: d.existing }
+  },
+
+  purgeDemo: async (projectId) => {
+    // only rows flagged as demo go; dependent rows (order lines, receipts of those items, packages' items, ledger) follow by cascade
+    const steps: [string, () => PromiseLike<{ error: { message: string } | null }>][] = [
+      ['حذف تراکنش‌های آزمایشی', () => supabase.from('mtl_txns').delete().eq('master_project_id', projectId).eq('is_demo', true)],
+      ['حذف سفارش‌های آزمایشی', () => supabase.from('mtl_purchase_orders').delete().eq('master_project_id', projectId).eq('is_demo', true)],
+      ['حذف اقلام آزمایشی', () => supabase.from('mtl_materials').delete().eq('master_project_id', projectId).eq('is_demo', true)],
+    ]
+    for (const [label, run] of steps) { const { error } = await run(); if (report(label, error)) return false }
+    // headers left without any line
+    const [{ data: rc }, { data: sh }, { data: rel }] = await Promise.all([
+      supabase.from('mtl_warehouse_receipts').select('id, mtl_warehouse_lines(id)').eq('master_project_id', projectId),
+      supabase.from('mtl_shipments').select('id, mtl_shipment_lines(id)').eq('master_project_id', projectId),
+      supabase.from('mtl_release_notes').select('id, mtl_release_lines(id)').eq('master_project_id', projectId),
+    ])
+    const empty = (rows: Row[] | null, k: string) => (rows ?? []).filter((r) => !(r[k] as unknown[])?.length).map((r) => r.id as string)
+    for (const [tbl, ids] of [['mtl_warehouse_receipts', empty(rc, 'mtl_warehouse_lines')], ['mtl_shipments', empty(sh, 'mtl_shipment_lines')], ['mtl_release_notes', empty(rel, 'mtl_release_lines')]] as [string, string[]][]) {
+      if (ids.length) { const { error } = await supabase.from(tbl).delete().in('id', ids); if (report('پاک‌سازی سرفصل‌های خالی', error)) return false }
+    }
+    await get().fetchAll(); return true
   },
 
   loadAudit: async (projectId, limit = 100) => {

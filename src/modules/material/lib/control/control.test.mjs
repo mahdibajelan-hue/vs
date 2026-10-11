@@ -126,3 +126,11 @@ assert.deepEqual(dataGaps(mat({ groupId: null, unitPrice: 0, needDate: null, fac
 assert.deepEqual(dataGaps(mat()), [])
 assert.ok(dataGaps(mat({ contractQty: null, detailQty: null })).includes('مقدار'))
 console.log('quality ok')
+import { stockByLocation } from './locations.ts'
+const rc = [{ id: 'r1', warehouseLocation: 'انبار A' }, { id: 'r2', warehouseLocation: 'انبار B' }]
+const ln = [{ receiptId: 'r1', materialId: 'm1', quantityReceived: 10, condition: 'ok', inspectionStatus: 'accepted' }, { receiptId: 'r2', materialId: 'm1', quantityReceived: 4, condition: 'ok', inspectionStatus: 'accepted' }, { receiptId: 'r1', materialId: 'm1', quantityReceived: 9, condition: 'ok', inspectionStatus: 'pending' }]
+const sl = stockByLocation({ receipts: rc, lines: ln, txns: [tx({ kind: 'transfer', qty: 3, fromLoc: 'انبار A', toLoc: 'انبار B' }), tx({ kind: 'issue', qty: 2, fromLoc: 'انبار B' }), tx({ kind: 'issue', qty: 1 }), tx({ kind: 'scrap', qty: 5, status: 'pending' })] })
+const at = (l) => sl.find((x) => x.location === l)?.qty
+assert.equal(at('انبار A'), 10 - 3 - 1, 'blank issue takes from the main place; pending ignored'); assert.equal(at('انبار B'), 4 + 3 - 2)
+assert.equal(sl.reduce((a, x) => a + x.qty, 0), pos(data({ warehouseLines: [wl({ quantityReceived: 14 })], txns: [tx({ qty: 3 })] })).onHand, 'location totals agree with the position model')
+console.log('locations ok')

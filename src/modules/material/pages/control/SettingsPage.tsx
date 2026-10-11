@@ -18,7 +18,7 @@ export function SettingsPage({ projectId, sub }: { projectId: string; sub: strin
   if (!can) return <div className="im-card im-empty" style={{ padding: 24 }}>تنظیمات فقط برای مدیر سامانه یا مدیر متریال پروژه در دسترس است.</div>
   if (sub === 'catalog') return <Catalog />
   if (sub === 'stages') return <Stages />
-  if (sub === 'rules') return <Rules />
+  if (sub === 'rules') return <Rules projectId={projectId} />
   if (sub === 'audit') return <Audit projectId={projectId} />
   return <Roles projectId={projectId} />
 }
@@ -108,8 +108,9 @@ function Stages() {
   )
 }
 
-function Rules() {
+function Rules({ projectId }: { projectId: string }) {
   const cs = useMaterialControlStore()
+  const [purged, setPurged] = useState(false)
   const s = cs.settings
   const [v, setV] = useState<MtlSettings>(s)
   const [saved, setSaved] = useState(false)
@@ -135,6 +136,10 @@ function Rules() {
         <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}><button className="im-btn im-btn-primary" onClick={async () => setSaved(await cs.saveSettings(v, 'ویرایش آستانه‌ها و وزن‌ها'))}>ذخیرهٔ نسخهٔ جدید</button>{saved && <span className="im-helper" style={{ margin: 0 }}>ذخیره شد (نسخهٔ {fa(cs.settingsVersion)})</span>}</div>
       </Section>
       <p className="im-helper" style={{ margin: 0 }}>نسخهٔ فعلی تنظیمات: {fa(cs.settingsVersion)}</p>
+      <Section title="داده‌های آزمایشی" hint="اقلام، سفارش‌ها و تراکنش‌هایی که با مولد داده آزمایشی ساخته شده‌اند (با برچسب «آزمایشی»). حذف فقط همین‌ها را برمی‌دارد و داده‌های واقعی دست نمی‌خورد.">
+        <button className="im-btn" onClick={async () => { if (window.confirm('همهٔ داده‌های آزمایشی متریال این پروژه حذف شود؟ این کار برگشت‌پذیر نیست.')) setPurged(await cs.purgeDemo(projectId)) }}>حذف داده‌های آزمایشی این پروژه</button>
+        {purged && <span className="im-helper" style={{ marginInlineStart: 10 }}>انجام شد.</span>}
+      </Section>
     </div>
   )
 }
