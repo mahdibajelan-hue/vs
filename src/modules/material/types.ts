@@ -375,8 +375,8 @@ export const DISCREPANCY_KIND_LABEL_FA: Record<DiscrepancyKind, string> = {
   not_in_contract: 'خارج از MTO پیمان', qty_diff: 'اختلاف مقدار پیمان و طراحی', no_order: 'فاقد سفارش خرید', under_ordered: 'سفارش کمتر از نیاز', delay_risk: 'احتمال تأخیر تأمین',
   unallocated: 'تأمین‌شده بدون تخصیص', spec_mismatch: 'مغایرت مشخصات فنی', unit_mismatch: 'مغایرت واحد', code_mismatch: 'مغایرت کد کالا', location_mismatch: 'مغایرت محل مصرف', manual: 'ثبت دستی',
 }
-export type DiscrepancyStatus = 'open' | 'in_review' | 'resolved' | 'accepted' | 'escalated' | 'cleared'
-export const DISCREPANCY_STATUS_LABEL_FA: Record<DiscrepancyStatus, string> = { open: 'باز', in_review: 'در بررسی', resolved: 'برطرف‌شده', accepted: 'پذیرفته‌شده', escalated: 'ارجاع‌شده', cleared: 'خودکار برطرف‌شده' }
+export type DiscrepancyStatus = 'open' | 'in_review' | 'resolved' | 'accepted' | 'rejected' | 'escalated' | 'cleared'
+export const DISCREPANCY_STATUS_LABEL_FA: Record<DiscrepancyStatus, string> = { open: 'باز', in_review: 'در بررسی', resolved: 'برطرف‌شده', accepted: 'پذیرفته‌شده', rejected: 'ردشده', escalated: 'ارجاع‌شده', cleared: 'خودکار برطرف‌شده' }
 export interface MtlDiscrepancy { id: string; masterProjectId: string; materialId: string | null; packageId: string | null; kind: DiscrepancyKind; source: 'auto' | 'manual'; fingerprint: string; diffQty: number | null; probableCause: string; usageLocation: string; impact: string; responsible: string | null; dueDate: string | null; status: DiscrepancyStatus; resolution: string; decidedBy: string | null; decidedAt: string | null; detectedAt: string }
 
 export interface MtlLink { id: string; masterProjectId: string; sourceType: 'material' | 'package' | 'discrepancy' | 'project' | 'risk'; sourceId: string | null; targetType: 'risk' | 'issue'; targetId: string; rel: 'raised' | 'attached' | 'realized'; label: string; createdAt: string }
