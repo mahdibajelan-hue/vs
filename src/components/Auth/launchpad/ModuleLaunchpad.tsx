@@ -17,6 +17,7 @@ import { RiskManagementCard } from './cards/RiskManagementCard'
 import { ChangeManagementCard } from './cards/ChangeManagementCard'
 import { FinanceControlCard } from './cards/FinanceControlCard'
 import { MaterialControlCard } from './cards/MaterialControlCard'
+import { ExecutionControlCard } from './cards/ExecutionControlCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
 
@@ -41,11 +42,12 @@ const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent }[] = [
   { key: 'change', Card: ChangeManagementCard },
   { key: 'finance', Card: FinanceControlCard },
   { key: 'material', Card: MaterialControlCard },
+  { key: 'execution', Card: ExecutionControlCard },
   // User management is deliberately always the LAST tile.
   { key: 'admin', Card: UserManagementCard },
 ]
 /** Grid areas are handed out by position among the modules the user can see, so there are never holes and the last module stays last. */
-const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h', 'area-i', 'area-j', 'area-k', 'area-l', 'area-m']
+const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h', 'area-i', 'area-j', 'area-k', 'area-l', 'area-m', 'area-n']
 
 /** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
  * page-level width/padding and no hint line, just the icon grid. */

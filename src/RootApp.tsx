@@ -16,6 +16,7 @@ import { ReportingApp } from './modules/reporting/ReportingApp'
 import { ExecutiveApp } from './modules/executive/ExecutiveApp'
 import { FinanceApp } from './modules/finance/FinanceApp'
 import { MaterialApp } from './modules/material/MaterialApp'
+import { ExecutionApp } from './modules/execution/ExecutionApp'
 import { CompetencyApp } from './modules/competency/CompetencyApp'
 import { EstimatorApp } from './modules/estimator/EstimatorApp'
 import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
@@ -142,6 +143,8 @@ export function RootApp() {
     <FinanceApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'material' ? (
     <MaterialApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'execution' ? (
+    <ExecutionApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'competency' ? (
     <CompetencyApp onExitToHub={exitToHub} />
   ) : activeModule === 'estimator' ? (
