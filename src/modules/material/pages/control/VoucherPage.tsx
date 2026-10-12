@@ -10,6 +10,7 @@ import { useMaterialModel, type MaterialModel } from '../../lib/control/useMater
 import { useLookupOptions } from '../../lib/control/lookups'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../../finance/components/fn'
 import { StockConcepts } from '../../components/control/StockConcepts'
+import { DecInput } from '../../components/control/DecInput'
 import { Term } from '../../components/control/Term'
 import { CommodityIcon } from '../../components/control/CommodityIcon'
 import { fa, qtyText } from '../../components/control/common'
@@ -165,7 +166,7 @@ function VoucherForm({ projectId, model: m, initialOp, onClose }: { projectId: s
             {op === 'consume' && <>
               {field('vf-work', 'نوع عملیات *', <><input id="vf-work" list="vf-work-l" value={workOp} onChange={(e) => setWorkOp(e.target.value)} placeholder="مثلاً جوشکاری سرجوش ۳۰ اینچ" /><datalist id="vf-work-l">{pastOps.map((x) => <option key={x} value={x} />)}</datalist></>)}
               {field('vf-ct', 'پیمانکار', sel('vf-ct', contractor, setContractor, orgs.map((o) => ({ value: o.id, label: o.name }))))}
-              {field('vf-aq', 'حجم کار انجام‌شده', <input id="vf-aq" dir="ltr" inputMode="decimal" value={actQty || ''} onChange={(e) => setActQty(Number(e.target.value.replace(/[٫]/g, '.')) || 0)} placeholder="مثلاً تعداد سرجوش یا طول" />)}
+              {field('vf-aq', 'حجم کار انجام‌شده', <DecInput id="vf-aq" value={actQty} onValue={setActQty} placeholder="مثلاً تعداد سرجوش یا طول (اعشار مجاز)" />)}
               {field('vf-au', 'واحد حجم کار', <input id="vf-au" value={actUnit} onChange={(e) => setActUnit(e.target.value)} placeholder="سرجوش، متر…" />)}
             </>}
             {op === 'adjust' && field('vf-sign', 'جهت تعدیل *', <select id="vf-sign" value={String(sign)} onChange={(e) => setSign(Number(e.target.value) === 1 ? 1 : -1)}><option value="-1">کاهش موجودی (دفتر بیشتر از شمارش)</option><option value="1">افزایش موجودی (شمارش بیشتر از دفتر)</option></select>)}
@@ -188,7 +189,7 @@ function VoucherForm({ projectId, model: m, initialOp, onClose }: { projectId: s
                 <tr key={l.materialId}>
                   <td><span className="strong mt-name"><CommodityIcon code={m.groupById.get(x.groupId ?? '')?.code} />{x.description || x.materialCode}</span><span className="sub fn-code">{x.itemUid} · ردیف {x.lineNo || '—'}</span></td>
                   <td className="num"><b style={{ color: out && s <= 0 ? 'var(--im-coral)' : undefined }}>{qtyText(s, x.unit, 1)}</b></td>
-                  <td className="num"><input dir="ltr" inputMode="decimal" className="fn-cell-input" value={l.qty || ''} onChange={(e) => setLines((a) => a.map((y, j) => (j === i ? { ...y, qty: Number(e.target.value.replace(/[٫]/g, '.')) || 0 } : y)))} aria-label={`مقدار ${x.description}`} /> {x.unit}{out && l.qty > s && <span className="sub" style={{ color: 'var(--im-amber)' }}>بیش از موجودی — اجرای جزئی</span>}</td>
+                  <td className="num"><DecInput className="fn-cell-input" value={l.qty} onValue={(n) => setLines((a) => a.map((y, j) => (j === i ? { ...y, qty: n } : y)))} label={`مقدار ${x.description}`} /> {x.unit}{out && l.qty > s && <span className="sub" style={{ color: 'var(--im-amber)' }}>بیش از موجودی — اجرای جزئی</span>}</td>
                   <td><button className="im-btn im-btn-sm" aria-label="حذف از فهرست" onClick={() => setLines((a) => a.filter((_, j) => j !== i))}><Trash2 size={13} /></button></td>
                 </tr>) })}</tbody></table>
           </div>
@@ -263,7 +264,7 @@ function VoucherSheet({ id, model: m, onClose }: { id: string; model: MaterialMo
               <tbody>{lines.map((l, i) => { const x = byId.get(l.materialId); return (
                 <tr key={l.id}><td>{fa(i + 1)}</td><td className="fn-code">{x?.itemUid}</td><td><b>{x?.description || x?.materialCode}</b><small>ردیف پیمان {x?.lineNo || '—'} · {x?.materialCode}</small></td><td>{[x?.spec, x?.size].filter(Boolean).join(' · ') || '—'}</td><td>{x?.unit}</td>
                   <td>{fa(r.status === 'awaiting_signatures' ? m.positions.get(l.materialId)?.onHand ?? 0 : l.stockAtRequest, 1)}</td><td>{fa(l.qtyRequested, 2)}</td>
-                  <td>{r.status === 'issued' ? <b>{fa(l.qtyIssued, 2)}</b> : isStore ? <input dir="ltr" inputMode="decimal" className="fn-cell-input no-print" value={qtyFor(l)} onChange={(e) => setIssue((s) => ({ ...s, [l.id]: Math.max(0, Number(e.target.value.replace(/[٫]/g, '.')) || 0) }))} aria-label={`مقدار اجرا ${x?.description}`} /> : '—'}</td></tr>) })}</tbody>
+                  <td>{r.status === 'issued' ? <b>{fa(l.qtyIssued, 2)}</b> : isStore ? <DecInput className="fn-cell-input no-print" value={qtyFor(l)} onValue={(n) => setIssue((s) => ({ ...s, [l.id]: Math.max(0, n) }))} label={`مقدار اجرا ${x?.description}`} /> : '—'}</td></tr>) })}</tbody>
             </table>
             {r.notes && <p className="mt-doc-note"><b>توضیح:</b> {r.notes}</p>}
             <div className="mt-sign-row">{SIGNER_ROLES.map((role) => { const s = signers.find((x) => x.role === role); return <SigBox key={role} role={role} s={s} name={who(s?.userId ?? null)} /> })}</div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DecInput } from '../../components/control/DecInput'
 import { Boxes, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAuthStore } from '../../../../store/useAuthStore'
 import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
@@ -172,7 +173,7 @@ function AddItems({ model, pkgId, initialGroup, onClose }: { model: ReturnType<t
                   {locked && !c && <button className="im-btn im-btn-sm" onClick={() => toggle(x.id, a, true)}>ثبت استثنا برای سفارش مجدد</button>}
                   {c && (
                     <div className="mt-pick-edit">
-                      <label>مقدار ({x.unit})<input dir="ltr" inputMode="decimal" value={c.qty || ''} onChange={(e) => patch(x.id, { qty: Number(e.target.value) || 0 })} /></label>
+                      <label>مقدار ({x.unit})<DecInput value={c.qty} onValue={(n) => patch(x.id, { qty: n })} /></label>
                       {(locked || c.qty > a.remaining + 1e-9 || a.state === 'shortage') && <label style={{ flex: 1 }}>{a.state === 'shortage' && c.qty <= a.remaining + 1e-9 ? 'علت (خودکار)' : 'علت استثنا *'}<input value={c.reason} onChange={(e) => patch(x.id, { reason: e.target.value })} placeholder="مثلاً: ضایعات حین نصب، رد بازرسی ورودی، تغییر طراحی با مجوز…" aria-invalid={needsReason({ x, a }) && !c.reason.trim() ? true : undefined} /></label>}
                     </div>
                   )}

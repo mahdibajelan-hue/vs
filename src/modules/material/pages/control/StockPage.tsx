@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DecInput } from '../../components/control/DecInput'
 import { Check, Download, Plus, X } from 'lucide-react'
 import { useMaterialStore } from '../../store/useMaterialStore'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
@@ -141,7 +142,7 @@ function ReceiptForm({ model: m, projectId, onClose }: { model: MaterialModel; p
         {lines.map((l, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 6 }}>
             <select value={l.id} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, id: e.target.value } : x)))} aria-label="قلم"><option value="">قلم…</option>{m.materials.map((x) => <option key={x.id} value={x.id}>{x.materialCode} · {x.description}</option>)}</select>
-            <input inputMode="decimal" dir="ltr" placeholder="مقدار" value={l.qty || ''} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) || 0 } : x)))} aria-label="مقدار" />
+            <DecInput placeholder="مقدار" value={l.qty} onValue={(n) => setLines(lines.map((x, j) => (j === i ? { ...x, qty: n } : x)))} label="مقدار" />
             <select value={l.cond} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, cond: e.target.value as 'ok' } : x)))} aria-label="وضعیت"><option value="ok">سالم</option><option value="damaged">آسیب‌دیده</option><option value="shortage">کسری هنگام رسید</option></select>
             <button className="im-btn im-btn-sm" aria-label="حذف ردیف" onClick={() => setLines(lines.filter((_, j) => j !== i))} disabled={lines.length === 1}>✕</button>
           </div>

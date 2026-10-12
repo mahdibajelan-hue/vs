@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DecInput } from '../../components/control/DecInput'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
 import { useMaterialStore } from '../../store/useMaterialStore'
@@ -100,7 +101,7 @@ function MrDetail({ id, c, onClose }: { id: string; c: Ctx; onClose: () => void 
   return (
     <Close title={`درخواست ${r.mrNumber}`} sub={PROCUREMENT_REQUEST_STATUS_LABEL_FA[r.status]} onClose={onClose}>
       <DataTable rows={lines} rowKey={(l) => l.id} empty="هنوز قلمی در درخواست نیست." cols={[{ key: 'm', label: 'قلم', render: (l) => <span className="strong">{c.byId.get(l.materialId)?.description ?? '—'}</span> }, { key: 'q', label: 'مقدار', num: true, render: (l) => `${fa(l.quantityRequested, 2)} ${c.byId.get(l.materialId)?.unit ?? ''}` }, { key: 'x', label: '', render: (l) => c.can ? <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => void ms.deleteProcurementLine(l.id)}><Trash2 size={13} /></button> : null }]} />
-      {c.can && <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 6, marginTop: 10 }}><select value={mat} onChange={(e) => setMat(e.target.value)} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select><input inputMode="decimal" dir="ltr" placeholder="مقدار" value={qty || ''} onChange={(e) => setQty(Number(e.target.value) || 0)} aria-label="مقدار" /><button className="im-btn im-btn-primary im-btn-sm" disabled={!mat || qty <= 0} onClick={async () => { await ms.addProcurementLine(id, mat, qty); setMat(''); setQty(0) }}><Plus size={13} /> افزودن</button></div>}
+      {c.can && <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 6, marginTop: 10 }}><select value={mat} onChange={(e) => setMat(e.target.value)} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select><DecInput placeholder="مقدار" value={qty} onValue={setQty} label="مقدار" /><button className="im-btn im-btn-primary im-btn-sm" disabled={!mat || qty <= 0} onClick={async () => { await ms.addProcurementLine(id, mat, qty); setMat(''); setQty(0) }}><Plus size={13} /> افزودن</button></div>}
     </Close>
   )
 }
@@ -126,8 +127,8 @@ function PoDetail({ id, c, byId, onClose }: { id: string; c: Ctx; byId: Map<stri
       {c.can && (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 6, marginTop: 10, alignItems: 'start' }}>
           <select value={f.mat} onChange={(e) => { const x = byId.get(e.target.value); const a = x ? orderAllowance(model.positions.get(x.id)!, 'order') : null; setF({ ...f, mat: e.target.value, price: x?.unitPrice ?? 0, qty: a?.remaining ?? 0, reason: a?.state === 'shortage' ? a.reasonAuto : '' }) }} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
-          <input inputMode="decimal" dir="ltr" placeholder="مقدار" value={f.qty || ''} onChange={(e) => setF({ ...f, qty: Number(e.target.value) || 0 })} aria-label="مقدار" />
-          <input inputMode="decimal" dir="ltr" placeholder="قیمت واحد" value={f.price || ''} onChange={(e) => setF({ ...f, price: Number(e.target.value) || 0 })} aria-label="قیمت واحد" />
+          <DecInput placeholder="مقدار" value={f.qty} onValue={(n) => setF({ ...f, qty: n })} label="مقدار" />
+          <DecInput placeholder="قیمت واحد" value={f.price} onValue={(n) => setF({ ...f, price: n })} label="قیمت واحد" />
           <JalaliDateInput value={f.date} onChange={(x) => setF({ ...f, date: x })} />
           <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.mat || f.qty <= 0 || (reasonNeeded && !f.reason.trim())} onClick={async () => { await ms.addPoLine(id, { materialId: f.mat, quantityOrdered: f.qty, unitPrice: f.price, plannedDeliveryDate: f.date || null, exceptionReason: f.reason.trim() }); setF({ mat: '', qty: 0, price: 0, date: '', reason: '' }) }}><Plus size={13} /> افزودن</button>
           {allow && <p className={`mt-allow ${allow.state}`} style={{ gridColumn: '1 / -1' }}>{allow.state === 'open' ? `باقی‌مانده برای سفارش: ${qtyText(allow.remaining, byId.get(f.mat)?.unit ?? '')}.` : allow.state === 'shortage' ? `این قلم قبلاً به‌اندازهٔ نیاز سفارش شده ولی کسری دارد (${qtyText(allow.remaining, byId.get(f.mat)?.unit ?? '')} بدون پوشش).` : 'این قلم قبلاً به‌اندازهٔ نیاز سفارش شده است؛ سفارش مجدد فقط با ثبت استثنا و علت ممکن است.'}{over && allow.state === 'open' ? ' مقدار واردشده از باقی‌مانده بیشتر است.' : ''}</p>}
@@ -202,7 +203,7 @@ export function ShippingPage({ projectId }: { projectId: string }) {
       {sh && (
         <Close wide title={`اقلام محمولهٔ ${sh.shipmentNumber}`} onClose={() => setOpen(null)}>
           <DataTable rows={ms.shipmentLines.filter((l) => l.shipmentId === sh.id)} rowKey={(l) => l.id} empty="هنوز قلمی در محموله نیست." cols={[{ key: 'm', label: 'قلم', render: (l) => <span className="strong">{byId.get(l.materialId)?.description ?? '—'}</span> }, { key: 'q', label: 'مقدار', num: true, render: (l) => `${fa(l.quantityShipped, 2)} ${byId.get(l.materialId)?.unit ?? ''}` }, { key: 'x', label: '', render: (l) => c.can ? <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => void ms.deleteShipmentLine(l.id)}><Trash2 size={13} /></button> : null }]} />
-          {c.can && <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 6, marginTop: 10 }}><select value={line.mat} onChange={(e) => setLine({ ...line, mat: e.target.value })} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select><input inputMode="decimal" dir="ltr" placeholder="مقدار" value={line.qty || ''} onChange={(e) => setLine({ ...line, qty: Number(e.target.value) || 0 })} aria-label="مقدار" /><button className="im-btn im-btn-primary im-btn-sm" disabled={!line.mat || line.qty <= 0} onClick={async () => { await ms.addShipmentLine(sh.id, line.mat, line.qty); setLine({ mat: '', qty: 0 }) }}><Plus size={13} /> افزودن</button></div>}
+          {c.can && <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 6, marginTop: 10 }}><select value={line.mat} onChange={(e) => setLine({ ...line, mat: e.target.value })} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select><DecInput placeholder="مقدار" value={line.qty} onValue={(n) => setLine({ ...line, qty: n })} label="مقدار" /><button className="im-btn im-btn-primary im-btn-sm" disabled={!line.mat || line.qty <= 0} onClick={async () => { await ms.addShipmentLine(sh.id, line.mat, line.qty); setLine({ mat: '', qty: 0 }) }}><Plus size={13} /> افزودن</button></div>}
         </Close>
       )}
     </div>
