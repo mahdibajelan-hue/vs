@@ -62,6 +62,7 @@ interface State {
   reopenReport: (id: string, reason: string) => Promise<boolean>
   syncGaps: (projectId: string, items: DetectedGap[]) => Promise<boolean>
   updateGap: (id: string, patch: { status?: GapStatus; responsible?: string | null; dueDate?: string | null; note?: string; generatedReportId?: string | null }) => Promise<boolean>
+  raise: (a: { projectId: string; reportId: string; stoppageId?: string | null; target: 'issue' | 'risk'; title: string; description: string; severity: string; station?: string }) => Promise<{ id: string; existing: boolean } | null>
   saveMap: (projectId: string, formKey: string, metricKey: string, groupValue: string, activityId: string | null) => Promise<boolean>
 }
 
@@ -311,6 +312,11 @@ export const useExecutionStore = create<State>((set, get) => ({
     const { error } = await supabase.from('ex_gap_items').update(row).eq('id', id)
     if (report('ثبت پیگیری کسری', error)) return false
     await get().fetchAll(); return true
+  },
+  raise: async (a) => {
+    const { data, error } = await supabase.rpc('ex_raise', { p_project: a.projectId, p_report: a.reportId, p_stoppage: a.stoppageId ?? null, p_target: a.target, p_title: a.title, p_description: a.description, p_severity: a.severity, p_extra: { station: a.station ?? '' } })
+    if (report(a.target === 'issue' ? 'ثبت مسئله' : 'ثبت ریسک', error)) return null
+    await get().fetchAll(); return data as { id: string; existing: boolean }
   },
   saveMap: async (projectId, formKey, metricKey, groupValue, activityId) => {
     const q = supabase.from('ex_form_activity_map')

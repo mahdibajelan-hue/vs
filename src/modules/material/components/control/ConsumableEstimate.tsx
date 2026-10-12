@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Download } from 'lucide-react'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel } from '../../lib/control/useMaterialModel'
 import { NEED_STATUS_LABEL_FA, WELD_BASIS_LABEL_FA, weldNeeds, type MaterialNeed, type WeldSet } from '../../lib/control/weldPlan'
 import { writeXlsx } from '../../lib/control/xlsx'
 import { Chip, DataTable, NumInput, Section, type Col } from '../../../finance/components/fn'
+import { useExecutionStore } from '../../../execution/store/useExecutionStore'
+import { cumulative } from '../../../execution/lib/progress'
 import { CommodityIcon } from './CommodityIcon'
 import { Term } from './Term'
 import { fa, qtyText } from './common'
@@ -19,6 +21,18 @@ export function ConsumableEstimate({ projectId }: { projectId: string }) {
   const m = useMaterialModel(projectId)
   const cs = useMaterialControlStore()
   const canEdit = cs.can(projectId, 'edit_items')
+  const exLoaded = useExecutionStore((x) => x.loaded)
+  const exActs = useExecutionStore((x) => x.activities)
+  const exReports = useExecutionStore((x) => x.reports)
+  const exLines = useExecutionStore((x) => x.lines)
+  useEffect(() => { if (!exLoaded) void useExecutionStore.getState().fetchAll() }, [exLoaded])
+  // work already done, from the approved daily reports of the execution module (activities flagged with a counter)
+  const executed = useMemo(() => {
+    const cum = cumulative(exReports.filter((r) => r.projectId === projectId), exLines, { mode: 'approved' })
+    const out: Record<string, number> = {}
+    for (const a of exActs) if (a.projectId === projectId && a.metric) out[a.metric] = (out[a.metric] ?? 0) + (cum.get(a.id) ?? 0)
+    return out
+  }, [exActs, exReports, exLines, projectId])
   const sets = useMemo(() => cs.weldSets.filter((s) => s.masterProjectId === projectId), [cs.weldSets, projectId])
   const lines = useMemo(() => { const ids = new Set(sets.map((s) => s.id)); return cs.weldLines.filter((l) => ids.has(l.setId)) }, [cs.weldLines, sets])
   const byId = useMemo(() => new Map(m.materials.map((x) => [x.id, x])), [m.materials])
@@ -30,6 +44,11 @@ export function ConsumableEstimate({ projectId }: { projectId: string }) {
     { key: 'j', label: 'تعداد کل سرجوش', num: true, render: (s) => (!usesJoint(s) ? <span style={{ opacity: .35 }}>—</span> : canEdit ? <NumInput value={s.jointCount} label={`تعداد سرجوش ${s.title}`} decimals={0} onCommit={(n) => void cs.saveWeldSet(projectId, { ...s, jointCount: n })} /> : fa(s.jointCount)) },
     { key: 'l', label: 'طول لوله و اتصالات (متر)', num: true, render: (s) => (!usesMeter(s) ? <span style={{ opacity: .35 }}>—</span> : canEdit ? <NumInput value={s.pipeLengthM} label={`طول ${s.title}`} decimals={2} onCommit={(n) => void cs.saveWeldSet(projectId, { ...s, pipeLengthM: n })} /> : fa(s.pipeLengthM, 2)) },
     { key: 'n', label: 'اقلام', num: true, render: (s) => fa(lines.filter((l) => l.setId === s.id).length) },
+    ...(Object.keys(executed).length && canEdit ? [{ key: 'x', label: 'از ماژول اجرا', render: (s: WeldSet) => (
+      <select aria-label="اعمال کارکرد اجراشده" value="" onChange={(e) => { const v = e.target.value; if (!v) return; const [metric, n] = v.split('|'); void cs.saveWeldSet(projectId, { ...s, ...(metric === 'pipe_m' ? { pipeLengthM: Number(n) } : { jointCount: Number(n) }) }) }}>
+        <option value="">اعمال…</option>
+        {[['weld_joint', 'سرجوش جوشکاری‌شده'], ['rt_joint', 'سرجوش رادیوگرافی‌شده'], ['coat_joint', 'سرجوش عایق‌شده'], ['pipe_m', 'طول لوله (متر)']].filter(([k]) => executed[k] != null).map(([k, l]) => <option key={k} value={`${k}|${executed[k]}`}>{l}: {fa(executed[k], 1)}</option>)}
+      </select>) } as Col<WeldSet>] : []),
   ]
   const needCols: Col<MaterialNeed>[] = [
     { key: 'm', label: 'کالا', render: (n) => { const x = byId.get(n.materialId); return <><span className="strong mt-name"><CommodityIcon code={m.groupById.get(x?.groupId ?? '')?.code} />{x?.description ?? '—'}</span><span className="sub fn-code">{x?.itemUid} · ردیف {x?.lineNo || '—'}</span></> }, sort: (n) => byId.get(n.materialId)?.description ?? '' },
@@ -43,6 +62,7 @@ export function ConsumableEstimate({ projectId }: { projectId: string }) {
   return (
     <Section title="برآورد اقلام مصرفی" hint="نیاز = مبنای مصرف هر جدول × حجم کار همین‌جا. حجم کار را بعداً می‌توان از ماژول اجرا (سرجوش جوشکاری، رادیوگرافی و عایق‌شده) گرفت."
       action={<button className="im-btn im-btn-sm no-print" onClick={() => void exportRows()} disabled={!needs.length}><Download size={13} /> اکسل</button>} flush>
+      {Object.keys(executed).length > 0 && <p className="im-helper" style={{ margin: '4px 16px 0' }}>کارکرد تأییدشدهٔ ماژول اجرا: {Object.entries(executed).map(([k, v]) => `${({ weld_joint: 'سرجوش جوشکاری‌شده', rt_joint: 'سرجوش رادیوگرافی‌شده', coat_joint: 'سرجوش عایق‌شده', pipe_m: 'طول لوله' } as Record<string, string>)[k] ?? k}: ${fa(v, 1)}`).join(' · ')} — در ستون «از ماژول اجرا» می‌توانید برای هر جدول به‌جای تایپ، همین مقدار را اعمال کنید.</p>}
       {sets.length === 0 ? <p className="im-helper" style={{ margin: 16 }}>هنوز جدول مبنایی تعریف نشده است. ابتدا در «مصرف ← <Term k="weld_table">جداول مبنای محاسبه اقلام مصرفی</Term>» مبنا را (به‌ازای هر سرجوش یا هر متر) تعریف کنید؛ سپس حجم کار را اینجا وارد کنید.</p> : <>
         <p className="im-helper" style={{ margin: '4px 16px 10px' }}>برای هر جدول، «تعداد کل سرجوش» و برای اقلام بر پایهٔ طول ({WELD_BASIS_LABEL_FA.meter}) «طول لوله و اتصالات» را وارد کنید؛ مصرف و کسری هر کالا خودکار حساب می‌شود.</p>
         <DataTable cols={setCols} rows={sets} rowKey={(s) => s.id} />

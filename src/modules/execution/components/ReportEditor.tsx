@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowRight, Copy, History, Plus, Printer, Send, Trash2, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useLookupOptions } from '../../material/lib/control/lookups'
+import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
 import { DecInput } from '../../material/components/control/DecInput'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { fmtD } from '../../finance/components/fn'
@@ -12,6 +13,7 @@ import { computeMetrics, cumulativeMetrics, inconsistenciesForReport, missingFor
 import { cumulative } from '../lib/progress'
 import type { Activity, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import { LINE_STATUS_LABEL_FA } from '../types'
+import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 
@@ -27,6 +29,8 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === m.projectId))
   const r = m.reports.find((x) => x.id === reportId)
   const form = r && r.formKey !== 'work' ? FORM_BY_KEY[r.formKey] ?? null : null
+  const mm = useMaterialModel(m.projectId)
+  const shortMats = useMemo(() => mm.materials.filter((x) => (mm.positions.get(x.id)?.siteGap ?? 0) > 0).sort((a, b) => (mm.positions.get(b.id)?.uncoveredGap ?? 0) - (mm.positions.get(a.id)?.uncoveredGap ?? 0)).slice(0, 80), [mm.materials, mm.positions])
   const frontOpts = useLookupOptions(m.projectId, 'front', r?.front)
   const stationOpts = useLookupOptions(m.projectId, 'facility', r?.station)
 
@@ -112,6 +116,13 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
 
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
   const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter((x) => x.activeQty || x.idleQty || x.hours), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
+  const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
+  const raise = async (s: { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }) => {
+    const mat = s.materialId ? mm.materials.find((x) => x.id === s.materialId) : undefined
+    const title = `توقف اجرا — ${STOPPAGE_CATEGORY_FA[s.category]}${mat ? `: ${mat.description || mat.materialCode}` : ''} (${r.reportNo})`
+    const res = await ex.raise({ projectId: m.projectId, reportId, stoppageId: s.key, target: 'issue', title, description: `${s.description || title}\nمدت توقف: ${s.hours} ساعت · جبهه: ${r.front || '—'} · تاریخ: ${r.reportDate}`, severity: s.hours >= 8 ? 'high' : 'medium', station: head.station })
+    if (res) window.alert(res.existing ? 'برای این توقف قبلاً مسئله ثبت شده است.' : 'مسئله در ماژول مدیریت مسائل ثبت شد.')
+  }
   const hist = m.history.filter((h) => h.reportId === reportId)
 
   const cell = (f: FieldDef, l: LRow) => {
@@ -240,8 +251,15 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
             <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '170px 90px 1fr auto', gap: 6, alignItems: 'center' }}>
               <select disabled={!editable} value={s.category} onChange={(e) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, category: e.target.value as StoppageCategory } : x))); setDirty(true) }}>{Object.entries(STOPPAGE_CATEGORY_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
               <DecInput value={s.hours} onValue={(n) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, hours: n } : x))); setDirty(true) }} label="ساعت توقف" placeholder="ساعت" />
-              <input disabled={!editable} placeholder={s.category === 'material' ? 'کمبود کدام کالا؟ (کالا و مقدار)' : 'شرح'} value={s.description} onChange={(e) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, description: e.target.value } : x))); setDirty(true) }} dir="auto" />
-              {editable && <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => { setStops((a) => a.filter((x) => x.key !== s.key)); setDirty(true) }}><Trash2 size={12} /></button>}
+              <span style={{ display: 'flex', gap: 4 }}>
+                {s.category === 'material' && <select disabled={!editable} value={s.materialId ?? ''} onChange={(e) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, materialId: e.target.value || null } : x))); setDirty(true) }} aria-label="کالای کمبود" style={{ maxWidth: 220 }}><option value="">کالا (از کمبودهای ماژول تأمین)…</option>{shortMats.map((x) => <option key={x.id} value={x.id}>{x.description || x.materialCode}</option>)}</select>}
+                <input disabled={!editable} placeholder="شرح" value={s.description} onChange={(e) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, description: e.target.value } : x))); setDirty(true) }} dir="auto" style={{ flex: 1 }} />
+              </span>
+              <span style={{ display: 'inline-flex', gap: 4 }}>
+                {saved.has(s.key) && ex.can(m.projectId, 'raise') && !(m.stoppages.find((x) => x.id === s.key)?.issueRef) && <button className="im-btn im-btn-sm" title="مسئلهٔ اجرایی در ماژول مدیریت مسائل ثبت می‌شود" onClick={() => void raise(s)}>ثبت مسئله</button>}
+                {m.stoppages.find((x) => x.id === s.key)?.issueRef && <Chip tone="good">مسئله ثبت شد</Chip>}
+                {editable && <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => { setStops((a) => a.filter((x) => x.key !== s.key)); setDirty(true) }}><Trash2 size={12} /></button>}
+              </span>
             </div>
           ))}
           {editable && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => { setStops((a) => [...a, { key: uid0(), category: 'material', hours: 0, description: '', materialId: null }]); setDirty(true) }}><Plus size={13} /> افزودن توقف یا مشکل</button>}

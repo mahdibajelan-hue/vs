@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, Printer } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
 import { useExecutionModel } from '../lib/useExecutionModel'
 import { activityRows, byDimension, dailyMatrix, resourceSummary, statusSummary, stoppageSummary, type Dim } from '../lib/periodReport'
 import { addDays, jalaliText, monthOf, periodsBetween, weekOf, type Period } from '../lib/periods'
@@ -17,6 +18,7 @@ const DIMS: [Dim, string][] = [['contractor', 'پیمانکار'], ['front', 'ج
 export function PeriodReportsPage({ projectId, sub }: { projectId: string; sub: string }) {
   const m = useExecutionModel(projectId)
   const orgs = useMasterDataStore((s) => s.organizations)
+  const mm = useMaterialModel(projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
   const [dim, setDim] = useState<Dim>('front')
   const dates = m.reports.filter((r) => r.formKey === 'work').map((r) => r.reportDate).sort()
@@ -92,6 +94,10 @@ export function PeriodReportsPage({ projectId, sub }: { projectId: string; sub: 
           <Section title="نیروی انسانی و ماشین‌آلات" hint="میانگین روزانه از گزارش‌های ثبت‌شده" flush><DataTable rows={resRows} rowKey={(x) => `${x.kind}${x.name}`} empty="منابعی ثبت نشده است." cols={[{ key: 'n', label: 'عنوان', render: (x) => <><span className="strong">{x.name}</span><span className="sub">{x.kind === 'man' ? 'نیرو' : 'ماشین'}</span></> }, { key: 'a', label: 'میانگین فعال', num: true, render: (x) => fa(x.avgActive, 1) }, { key: 'i', label: 'میانگین غیرفعال', num: true, render: (x) => fa(x.avgIdle, 1) }, { key: 'h', label: 'ساعت', num: true, render: (x) => fa(x.hours, 1) }]} /></Section>
           <Section title="توقف‌ها و عوامل کاهش کارکرد" flush><DataTable rows={stopRows} rowKey={(x) => x.category} empty="توقفی ثبت نشده است." cols={[{ key: 'c', label: 'عامل', render: (x) => STOPPAGE_CATEGORY_FA[x.category] }, { key: 'h', label: 'ساعت', num: true, render: (x) => fa(x.hours, 1), sort: (x) => x.hours }, { key: 'n', label: 'دفعات', num: true, render: (x) => fa(x.count) }]} /></Section>
         </div>
+        {(() => { const ids = new Set(reps.map((r) => r.id)); const rowsM = m.stoppages.filter((x) => ids.has(x.reportId) && x.materialId); return rowsM.length > 0 && (
+          <Section title="توقف‌های ناشی از کمبود کالا" hint="از گزارش‌های روزانه؛ وضعیت فعلی کالا از ماژول تأمین" flush>
+            <DataTable rows={rowsM} rowKey={(x) => x.id} cols={[{ key: 'm', label: 'کالا', render: (x) => <span className="strong">{mm.materials.find((y) => y.id === x.materialId)?.description ?? '—'}</span> }, { key: 'h', label: 'ساعت توقف', num: true, render: (x) => fa(x.hours, 1) }, { key: 'o', label: 'موجودی فعلی', num: true, render: (x) => fa(mm.positions.get(x.materialId!)?.onHand ?? 0, 1) }, { key: 'g', label: 'کسری بدون پوشش سفارش', num: true, render: (x) => { const g = mm.positions.get(x.materialId!)?.uncoveredGap ?? 0; return g > 0 ? <b style={{ color: 'var(--im-coral)' }}>{fa(g, 1)}</b> : <Chip tone="good">پوشش دارد</Chip> } }, { key: 'd', label: 'شرح', render: (x) => x.description || '—' }]} />
+          </Section>) })()}
         <Section title="وضعیت تأیید گزارش‌ها و ردیف‌ها" hint="گزارش‌های دوره به تفکیک تأییدشده، در انتظار، ردشده و اصلاح‌شده" flush>
           <div style={{ padding: '10px 14px', display: 'grid', gap: 8 }}>
             <div className="ex-chiprow">{Object.entries(st.reports).map(([k, v]) => <Chip key={k} tone={k === 'approved' ? 'good' : k === 'rejected' || k === 'returned' ? 'bad' : 'warn'}>{REPORT_STATUS_LABEL_FA[k as keyof typeof REPORT_STATUS_LABEL_FA]}: {fa(v)}</Chip>)}{Object.keys(st.reports).length === 0 && <span className="im-helper">—</span>}</div>
