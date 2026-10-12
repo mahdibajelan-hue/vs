@@ -6,7 +6,9 @@ import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel, type MaterialModel } from '../../lib/control/useMaterialModel'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../../finance/components/fn'
+import { useLookupOptions } from '../../lib/control/lookups'
 import { fa, qtyText } from '../../components/control/common'
+import { StockConcepts } from '../../components/control/StockConcepts'
 import { CommodityIcon } from '../../components/control/CommodityIcon'
 import { REQUISITION_STATUS_LABEL_FA, SIGNER_ROLES, SIGNER_ROLE_LABEL_FA, type Requisition, type RequisitionSigner, type SignerRole } from '../../types'
 
@@ -46,6 +48,7 @@ export function RequisitionPage({ projectId }: { projectId: string }) {
         <KpiCard i={2} label="خروج‌شده این ماه" value={fa(reqs.filter((r) => r.status === 'issued' && (r.issuedAt ?? '') >= monthStart).length)} tone="good" />
         <KpiCard i={3} label="ردشده" value={fa(reqs.filter((r) => r.status === 'rejected').length)} tone={reqs.some((r) => r.status === 'rejected') ? 'bad' : 'neutral'} />
       </div>
+      <StockConcepts />
       <div className="mt-filters no-print">
         <p className="im-helper" style={{ margin: 0 }}>دفتر فنی کالای موردنیاز محل مصرف را درخواست می‌کند؛ موجودی انبار کنار هر قلم دیده می‌شود. سرپرست کارگاه، سرپرست نظارت و انباردار به‌ترتیب امضا می‌کنند؛ با امضای انباردار کالا از انبار خارج و در حساب مصرف ثبت می‌شود.</p>
         {isMember && <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => setForm(true)}><Plus size={14} /> درخواست جدید</button>}
@@ -80,7 +83,7 @@ function RequisitionForm({ projectId, model: m, onClose }: { projectId: string; 
   const [busy, setBusy] = useState(false)
   const members = useMemo(() => cs.roles.filter((r) => r.projectId === projectId && r.active), [cs.roles, projectId])
   const candidates = (role: Exclude<SignerRole, 'requester'>) => { const ids = new Set(members.filter((r) => CANDIDATE_ROLES[role].includes(r.role)).map((r) => r.userId)); const all = ids.size ? [...ids] : [...new Set(members.map((r) => r.userId))]; return all.map((id) => ({ id, name: cs.people.get(id) ?? 'کاربر' })) }
-  const facilities = useMemo(() => [...new Set(m.materials.map((x) => x.facility).filter(Boolean))].sort(), [m.materials])
+  const facOpts = useLookupOptions(projectId, 'facility'), frontOpts = useLookupOptions(projectId, 'front')
   const options = m.materials.filter((x) => (!group || x.groupId === group) && !lines.some((l) => l.materialId === x.id))
   const byId = useMemo(() => new Map(m.materials.map((x) => [x.id, x])), [m.materials])
   const stock = (id: string) => m.positions.get(id)?.onHand ?? 0
@@ -92,8 +95,8 @@ function RequisitionForm({ projectId, model: m, onClose }: { projectId: string; 
         <div className="im-modal fn-form" style={{ maxWidth: 920 }} role="dialog" aria-modal="true" aria-label="درخواست خروج کالا">
           <div className="im-modal-head"><div><div className="im-modal-title">درخواست خروج کالا از انبار</div><p className="im-helper" style={{ margin: 0 }}>محل مصرف و اقلام را وارد کنید؛ موجودی انبار کنار هر قلم نمایش داده می‌شود. پس از ثبت، امضای شما درج می‌شود و نوبت به امضاکنندگان بعدی می‌رسد.</p></div><button className="im-modal-close" onClick={() => onClose()} aria-label="بستن">✕</button></div>
           <div className="fn-form-grid">
-            <div className="im-field"><label htmlFor="rq-fac">محل مصرف (ایستگاه / تأسیسات) *</label><input id="rq-fac" list="rq-fac-list" value={facility} onChange={(e) => setFacility(e.target.value)} /><datalist id="rq-fac-list">{facilities.map((f) => <option key={f} value={f} />)}</datalist></div>
-            <div className="im-field"><label htmlFor="rq-front">جبهه کاری / بخش</label><input id="rq-front" value={front} onChange={(e) => setFront(e.target.value)} /></div>
+            <div className="im-field"><label htmlFor="rq-fac">محل مصرف (ایستگاه / تأسیسات) *</label><select id="rq-fac" value={facility} onChange={(e) => setFacility(e.target.value)}><option value="">انتخاب کنید…</option>{facOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+            <div className="im-field"><label htmlFor="rq-front">جبهه کاری / بخش</label><select id="rq-front" value={front} onChange={(e) => setFront(e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
             <div className="im-field" style={{ gridColumn: '1 / -1' }}><label htmlFor="rq-purpose">هدف مصرف</label><input id="rq-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="مثلاً: نصب فلنج‌ها و گسکت‌های خط ورودی ایستگاه" /></div>
             <div className="im-field"><label>نیاز تا تاریخ</label><JalaliDateInput value={needed} onChange={setNeeded} /></div>
             <div className="im-field"><label htmlFor="rq-notes">توضیح</label><input id="rq-notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>

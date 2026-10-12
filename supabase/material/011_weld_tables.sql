@@ -1,0 +1,2 @@
+-- Material control: weld consumption tables. A set = one kind of weld joint (size, thickness, process) with its planned joint count; its lines say how much of each consumable goes into ONE joint.
+-- Total need of a material = Σ over sets of joint_count × qty_per_joint. Applied live (tables mtl_weld_sets, mtl_weld_lines; RLS: read all, write with edit_items).

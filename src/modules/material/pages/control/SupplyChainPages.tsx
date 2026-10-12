@@ -11,6 +11,7 @@ import { ModalPortal } from '../../../../components/common/ModalPortal'
 import { bn, fa, qtyText } from '../../components/control/common'
 import { RemoveRecord } from '../../components/control/RemoveRecord'
 import { orderAllowance } from '../../lib/control/allowance'
+import { useLookupOptions } from '../../lib/control/lookups'
 import {
   MANUFACTURING_STATUSES, MANUFACTURING_STATUS_LABEL_FA, PO_STATUSES, PO_STATUS_LABEL_FA, PROCUREMENT_REQUEST_STATUSES, PROCUREMENT_REQUEST_STATUS_LABEL_FA, SHIPMENT_STATUSES, SHIPMENT_STATUS_LABEL_FA,
   type Allocation, type ManufacturingStatus, type Material, type PoLine, type PoStatus, type ProcurementRequest, type ProcurementRequestStatus, type PurchaseOrder, type Shipment, type ShipmentStatus,
@@ -211,6 +212,7 @@ export function ShippingPage({ projectId }: { projectId: string }) {
 /** Allocation of accepted stock to a station or work front. Use is recorded as issue vouchers in the ledger («انتقال، مصرف و ضایعات»). */
 export function AllocationsPage({ projectId }: { projectId: string }) {
   const c = useCtx(projectId)
+  const facOpts = useLookupOptions(projectId, 'facility'), frontOpts = useLookupOptions(projectId, 'front')
   const { m, ms, byId } = c
   const [form, setForm] = useState<Allocation | 'new' | null>(null)
   const allocs = m.data.allocations
@@ -229,7 +231,7 @@ export function AllocationsPage({ projectId }: { projectId: string }) {
       <div className="mt-filters"><p className="im-helper" style={{ margin: 0 }}>تخصیص یعنی رزرو کالای پذیرفته‌شده برای یک ایستگاه یا جبهه؛ مصرف با حواله در دفتر تراکنش ثبت می‌شود.</p>{c.can && <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => setForm('new')}><Plus size={14} /> تخصیص جدید</button>}</div>
       <DataTable cols={cols} rows={allocs} rowKey={(a) => a.id} empty="تخصیصی ثبت نشده است." />
       {form && <FormModal title={form === 'new' ? 'تخصیص جدید' : 'ویرایش تخصیص'} submitLabel="ذخیره" onClose={() => setForm(null)}
-        fields={[{ key: 'm', label: 'قلم', kind: 'select', required: true, options: c.matOptions, span: 2, disabled: form !== 'new' }, { key: 'q', label: 'مقدار تخصیص', kind: 'num', required: true }, { key: 'd', label: 'تاریخ', kind: 'date', required: true }, { key: 'wc', label: 'کد برنامهٔ کاری', kind: 'text' }, { key: 'wn', label: 'نام برنامهٔ کاری', kind: 'text' }, { key: 'f', label: 'ایستگاه', kind: 'text' }, { key: 'fr', label: 'جبهه کاری', kind: 'text' }]}
+        fields={[{ key: 'm', label: 'قلم', kind: 'select', required: true, options: c.matOptions, span: 2, disabled: form !== 'new' }, { key: 'q', label: 'مقدار تخصیص', kind: 'num', required: true }, { key: 'd', label: 'تاریخ', kind: 'date', required: true }, { key: 'wc', label: 'کد برنامهٔ کاری', kind: 'text' }, { key: 'wn', label: 'نام برنامهٔ کاری', kind: 'text' }, { key: 'f', label: 'ایستگاه', kind: 'select', options: facOpts }, { key: 'fr', label: 'جبهه کاری', kind: 'select', options: frontOpts }]}
         initial={{ m: form === 'new' ? '' : form.materialId, q: form === 'new' ? 0 : form.quantityAllocated, d: form === 'new' ? new Date().toISOString().slice(0, 10) : form.allocationDate, wc: form === 'new' ? '' : form.workPackageCode, wn: form === 'new' ? '' : form.workPackageName, f: form === 'new' ? '' : form.facility, fr: form === 'new' ? '' : form.front }}
         preview={(v) => { const p = m.positions.get(String(v.m)); return p ? <span>موجودی آزاد (رزرونشده): <b>{fa(p.available, 2)} {p.unit}</b> · موجودی قابل‌مصرف {fa(p.onHand, 2)}</span> : null }}
         onSubmit={async (v) => { const d = { materialId: String(v.m), quantityAllocated: Number(v.q) || 0, allocationDate: String(v.d), workPackageCode: String(v.wc ?? ''), workPackageName: String(v.wn ?? ''), facility: String(v.f ?? ''), front: String(v.fr ?? ''), status: 'allocated' as const }; if (form === 'new') await ms.createAllocation(projectId, d); else await ms.updateAllocation(form.id, { quantityAllocated: d.quantityAllocated, allocationDate: d.allocationDate, workPackageCode: d.workPackageCode, workPackageName: d.workPackageName, facility: d.facility, front: d.front }) }} />}

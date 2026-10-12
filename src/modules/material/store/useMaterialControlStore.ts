@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import type { WeldLine, WeldSet } from '../lib/control/weldPlan'
 import { explainMaterialError } from '../lib/control/errors'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -7,7 +8,7 @@ import { useMaterialStore } from './useMaterialStore'
 import { roleAllows } from '../lib/control/perms'
 import {
   DEFAULT_MTL_SETTINGS, type AuditRow, type Baseline, type ItemStage, type MtlChange, type MtlDiscrepancy, type MtlGroup, type MtlLink, type MtlNorm, type MtlPackage, type MtlPattern, type MtlRole,
-  type MtlSettings, type MtlTxn, type MtlUnit, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind,
+  type MtlSettings, type MtlTxn, type MtlUnit, type MtlLookup, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind,
 } from '../types'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -39,6 +40,9 @@ interface State {
   links: MtlLink[]
   linkTargets: Map<string, LinkTarget>
   roles: ProjectRole[]
+  lookups: MtlLookup[]
+  weldSets: WeldSet[]
+  weldLines: WeldLine[]
   requisitions: Requisition[]
   reqLines: RequisitionLine[]
   reqSigners: RequisitionSigner[]
@@ -90,9 +94,18 @@ interface State {
   reqCreate: (a: { projectId: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; lines: { materialId: string; qty: number; notes?: string }[]; signers: { site_supervisor: string; supervision_supervisor: string; storekeeper: string } }) => Promise<string | null>
   reqSign: (id: string, decision: 'approve' | 'reject', note?: string, issue?: { lineId: string; qty: number }[]) => Promise<string | null>
   reqCancel: (id: string, reason: string) => Promise<boolean>
+  saveWeldSet: (projectId: string, s: Partial<WeldSet> & { title: string }) => Promise<string | null>
+  removeWeldSet: (id: string) => Promise<boolean>
+  duplicateWeldSet: (id: string, title: string) => Promise<boolean>
+  addWeldLine: (setId: string, materialId: string, qtyPerJoint: number) => Promise<boolean>
+  updateWeldLine: (id: string, qtyPerJoint: number) => Promise<boolean>
+  removeWeldLine: (id: string) => Promise<boolean>
+  addLookups: (projectId: string, kind: MtlLookup['kind'], labels: string[]) => Promise<boolean>
+  setLookupActive: (id: string, active: boolean) => Promise<boolean>
+  renameLookup: (projectId: string, kind: MtlLookup['kind'], oldLabel: string, newLabel: string) => Promise<number | null>
 }
 
-const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
+const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], lookups: [], weldSets: [], weldLines: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
 
 export const useMaterialControlStore = create<State>((set, get) => ({
   ...initial,
@@ -100,11 +113,11 @@ export const useMaterialControlStore = create<State>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true })
     const t = (name: string) => supabase.from(name).select('*')
-    const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs, reqs, reqLn, reqSg] = await Promise.all([
+    const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs, reqs, reqLn, reqSg, lks, wsets, wlines] = await Promise.all([
       t('mtl_groups').order('sort'), t('mtl_units'), t('mtl_stage_defs').order('sort'), t('mtl_patterns'), t('mtl_pattern_weights'), t('mtl_packages'), t('mtl_package_items'), t('mtl_item_stages'), t('mtl_baselines').order('version'),
       t('mtl_changes').order('requested_at', { ascending: false }), t('mtl_txns').order('txn_date', { ascending: false }), t('mtl_norms'), t('mtl_discrepancies'), t('mtl_links'), t('mtl_project_roles'),
       t('mtl_settings_versions').order('version'), supabase.from('profiles').select('id, full_name'),
-      t('mtl_requisitions').order('created_at', { ascending: false }), t('mtl_requisition_lines'), t('mtl_requisition_signers').order('sort'),
+      t('mtl_requisitions').order('created_at', { ascending: false }), t('mtl_requisition_lines'), t('mtl_requisition_signers').order('sort'), t('mtl_lookups').order('sort'), t('mtl_weld_sets').order('created_at'), t('mtl_weld_lines'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
@@ -140,6 +153,9 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       links: linkRows.map((r): MtlLink => ({ id: r.id, masterProjectId: r.master_project_id, sourceType: r.source_type, sourceId: r.source_id, targetType: r.target_type, targetId: r.target_id, rel: r.rel, label: r.label ?? '', createdAt: r.created_at })),
       linkTargets: targets,
       roles: ok<Row>(roles).map((r): ProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
+      weldSets: ok<Row>(wsets).map((r): WeldSet => ({ id: r.id, masterProjectId: r.master_project_id, title: r.title, jointSize: r.joint_size ?? '', thickness: r.thickness ?? '', process: r.process ?? '', jointCount: n(r.joint_count), notes: r.notes ?? '' })),
+      weldLines: ok<Row>(wlines).map((r): WeldLine => ({ id: r.id, setId: r.set_id, materialId: r.material_id, qtyPerJoint: n(r.qty_per_joint), notes: r.notes ?? '' })),
+      lookups: ok<Row>(lks).map((r): MtlLookup => ({ id: r.id, masterProjectId: r.master_project_id, kind: r.kind, label: r.label, active: !!r.active, sort: r.sort ?? 0 })),
       requisitions: ok<Row>(reqs).map((r): Requisition => ({ id: r.id, masterProjectId: r.master_project_id, number: r.number, requesterId: r.requester_id, requestDate: r.request_date, facility: r.facility ?? '', front: r.front ?? '', purpose: r.purpose ?? '', neededBy: r.needed_by, notes: r.notes ?? '', status: r.status, rejectReason: r.reject_reason ?? '', issuedAt: r.issued_at, createdAt: r.created_at })),
       reqLines: ok<Row>(reqLn).map((r): RequisitionLine => ({ id: r.id, requisitionId: r.requisition_id, materialId: r.material_id, qtyRequested: n(r.qty_requested), stockAtRequest: n(r.stock_at_request), qtyIssued: n(r.qty_issued), notes: r.notes ?? '' })),
       reqSigners: ok<Row>(reqSg).map((r): RequisitionSigner => ({ id: r.id, requisitionId: r.requisition_id, role: r.role, sort: r.sort, userId: r.user_id, decision: r.decision, signedAt: r.signed_at, note: r.note ?? '', signatureImage: r.signature_image })),
@@ -368,6 +384,58 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     const { error } = await supabase.rpc('mtl_req_cancel', { p_req: id, p_reason: reason })
     if (report('لغو درخواست', error)) return false
     await get().fetchAll(); return true
+  },
+
+  saveWeldSet: async (projectId, s) => {
+    const row = { title: s.title, joint_size: s.jointSize ?? '', thickness: s.thickness ?? '', process: s.process ?? '', joint_count: s.jointCount ?? 0, notes: s.notes ?? '' }
+    const res = s.id ? await supabase.from('mtl_weld_sets').update(row).eq('id', s.id).select('id').single() : await supabase.from('mtl_weld_sets').insert({ ...row, master_project_id: projectId }).select('id').single()
+    if (report('ذخیرهٔ جدول مصرف سرجوش', res.error)) return null
+    await get().fetchAll(); return (res.data as Row).id as string
+  },
+  removeWeldSet: async (id) => {
+    const { error } = await supabase.from('mtl_weld_sets').delete().eq('id', id)
+    if (report('حذف جدول مصرف سرجوش', error)) return false
+    await get().fetchAll(); return true
+  },
+  duplicateWeldSet: async (id, title) => {
+    const src = get().weldSets.find((x) => x.id === id); if (!src) return false
+    const { data, error } = await supabase.from('mtl_weld_sets').insert({ master_project_id: src.masterProjectId, title, joint_size: src.jointSize, thickness: src.thickness, process: src.process, joint_count: 0, notes: src.notes }).select('id').single()
+    if (report('کپی جدول مصرف سرجوش', error)) return false
+    const lines = get().weldLines.filter((l) => l.setId === id).map((l) => ({ set_id: (data as Row).id, material_id: l.materialId, qty_per_joint: l.qtyPerJoint, notes: l.notes }))
+    if (lines.length) { const r = await supabase.from('mtl_weld_lines').insert(lines); if (report('کپی ردیف‌های جدول', r.error)) return false }
+    await get().fetchAll(); return true
+  },
+  addWeldLine: async (setId, materialId, qtyPerJoint) => {
+    const { error } = await supabase.from('mtl_weld_lines').upsert({ set_id: setId, material_id: materialId, qty_per_joint: qtyPerJoint }, { onConflict: 'set_id,material_id' })
+    if (report('افزودن کالا به جدول سرجوش', error)) return false
+    await get().fetchAll(); return true
+  },
+  updateWeldLine: async (id, qtyPerJoint) => {
+    const { error } = await supabase.from('mtl_weld_lines').update({ qty_per_joint: qtyPerJoint }).eq('id', id)
+    if (report('ویرایش مقدار مصرف', error)) return false
+    await get().fetchAll(); return true
+  },
+  removeWeldLine: async (id) => {
+    const { error } = await supabase.from('mtl_weld_lines').delete().eq('id', id)
+    if (report('حذف ردیف جدول سرجوش', error)) return false
+    await get().fetchAll(); return true
+  },
+  addLookups: async (projectId, kind, labels) => {
+    const rows = [...new Set(labels.map((l) => l.trim()).filter(Boolean))].map((label) => ({ master_project_id: projectId, kind, label, active: true }))
+    if (!rows.length) return true
+    const { error } = await supabase.from('mtl_lookups').upsert(rows, { onConflict: 'master_project_id,kind,label' })
+    if (report('ذخیرهٔ فهرست', error)) return false
+    await get().fetchAll(); return true
+  },
+  setLookupActive: async (id, active) => {
+    const { error } = await supabase.from('mtl_lookups').update({ active }).eq('id', id)
+    if (report('تغییر وضعیت مورد فهرست', error)) return false
+    await get().fetchAll(); return true
+  },
+  renameLookup: async (projectId, kind, oldLabel, newLabel) => {
+    const { data, error } = await supabase.rpc('mtl_lookup_rename', { p_project: projectId, p_kind: kind, p_old: oldLabel, p_new: newLabel })
+    if (report('تغییر نام مورد فهرست', error)) return null
+    await Promise.all([get().fetchAll(), useMaterialStore.getState().fetchAll()]); return data as number
   },
 
   loadAudit: async (projectId, limit = 100) => {

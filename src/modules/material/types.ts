@@ -402,3 +402,10 @@ export const SIGNER_ROLE_LABEL_FA: Record<SignerRole, string> = { requester: 'د
 export interface Requisition { id: string; masterProjectId: string; number: string; requesterId: string | null; requestDate: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; status: RequisitionStatus; rejectReason: string; issuedAt: string | null; createdAt: string }
 export interface RequisitionLine { id: string; requisitionId: string; materialId: string; qtyRequested: number; stockAtRequest: number; qtyIssued: number; notes: string }
 export interface RequisitionSigner { id: string; requisitionId: string; role: SignerRole; sort: number; userId: string | null; decision: 'pending' | 'approved' | 'rejected'; signedAt: string | null; note: string; signatureImage: string | null }
+
+/** Lists the project defines once (Settings → فهرست‌های پایه); every form picks from them so one place is never spelled two ways. */
+export type LookupKind = 'facility' | 'area' | 'front' | 'usage' | 'warehouse' | 'pipeline'
+export const LOOKUP_KINDS: LookupKind[] = ['facility', 'area', 'front', 'usage', 'warehouse', 'pipeline']
+export const LOOKUP_LABEL_FA: Record<LookupKind, string> = { facility: 'ایستگاه / تأسیسات', area: 'بخش اجرایی', front: 'جبهه کاری', usage: 'محل مصرف', warehouse: 'انبار / محوطه', pipeline: 'شماره خط لوله' }
+export const LOOKUP_HINT_FA: Record<LookupKind, string> = { facility: 'مثلاً ایستگاه تقویت فشار ۱، ایستگاه تقویت فشار ۲', area: 'مثلاً عبور از جاده، عبور از رودخانه، خط اصلی', front: 'مثلاً جبهه شمال، جبهه مرکز', usage: 'جایی که کالا مصرف می‌شود: مثلاً مانیفولد ورودی، خط ۱۶ اینچ خروجی', warehouse: 'مثلاً انبار مرکزی، محوطهٔ لوله، انبار ایستگاه ۱', pipeline: 'مثلاً L-101' }
+export interface MtlLookup { id: string; masterProjectId: string; kind: LookupKind; label: string; active: boolean; sort: number }

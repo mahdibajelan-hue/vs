@@ -6,6 +6,7 @@ import { weightsSum } from '../../lib/control/progress'
 import { Chip, DataTable, Section, fmtD, type Col } from '../../../finance/components/fn'
 import { FormModal } from '../../../finance/components/FormModal'
 import { fa } from '../../components/control/common'
+import { LookupSettings } from '../../components/control/LookupSettings'
 import { CRITICALITY_LABEL_FA, MTL_ROLES, MTL_ROLE_LABEL_FA, type AuditRow, type Criticality, type MeasureKind, type MtlGroup, type MtlRole, type MtlSettings, type StageDef } from '../../types'
 
 const MEASURE: Record<MeasureKind, string> = { count: 'تعدادی', length: 'طولی', weight: 'وزنی', volume: 'حجمی', consumable: 'مصرفی' }
@@ -16,6 +17,7 @@ export function SettingsPage({ projectId, sub }: { projectId: string; sub: strin
   const cs = useMaterialControlStore()
   const can = cs.can(projectId, '*')
   if (!can) return <div className="im-card im-empty" style={{ padding: 24 }}>تنظیمات فقط برای مدیر سامانه یا مدیر متریال پروژه در دسترس است.</div>
+  if (sub === 'lists') return <LookupSettings projectId={projectId} />
   if (sub === 'catalog') return <Catalog />
   if (sub === 'stages') return <Stages />
   if (sub === 'rules') return <Rules projectId={projectId} />

@@ -6,7 +6,8 @@ import { parseMtoRows, planMtoImport, type MtoRowIn } from '../../lib/control/mt
 import { readXlsx, writeMtoTemplate } from '../../lib/control/xlsx'
 import { Chip, DataTable } from '../../../finance/components/fn'
 import { fa } from './common'
-import type { Material } from '../../types'
+import { missingValues } from '../../lib/control/lookups'
+import { LOOKUP_LABEL_FA, type Material } from '../../types'
 import { ModalPortal } from '../../../../components/common/ModalPortal'
 
 /** Bulk entry of an MTO from a standard sheet. The contract MTO adds lines and proposes changes for the lines whose quantity differs; the detail-design MTO attaches the design quantity (and the differences) and adds lines the contract does not have. */
@@ -20,9 +21,13 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState('')
+  const [addLists, setAddLists] = useState(true)
+  const lookups = useMaterialControlStore((s) => s.lookups)
+  const addLookups = useMaterialControlStore((s) => s.addLookups)
   const input = useRef<HTMLInputElement>(null)
   const plan = useMemo(() => (rows ? planMtoImport(materials, rows, mode) : null), [rows, materials, mode])
 
+  const newValues = useMemo(() => (rows ? ([['facility', rows.map((r) => r.facility)], ['area', rows.map((r) => r.area)], ['front', rows.map((r) => r.front)], ['usage', rows.map((r) => r.usageLocation)], ['pipeline', rows.map((r) => r.pipelineNo)]] as const).map(([k, v]) => [k, missingValues(lookups, projectId, k, v)] as const).filter(([, v]) => v.length) : []), [rows, lookups, projectId])
   const pick = async (f: File | undefined) => {
     if (!f) return
     setName(f.name); setDone('')
@@ -38,6 +43,7 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
         front: r.front ?? '', usageLocation: r.usageLocation ?? '', needDate: r.needDate || null, groupId: g?.id ?? null, criticality: g?.criticality ?? 'B', leadTimeDays: g?.leadTimeDays || null,
         ...(mode === 'contract' ? { contractQty: r.qty, detailStatus: 'none' as const } : { contractQty: null, detailQty: r.qty, detailStatus: 'draft' as const, mtoQuantity: r.qty }) }
     })
+    if (addLists) for (const [k, v] of newValues) await addLookups(projectId, k, [...v])
     if (news.length) await bulkCreate(projectId, news)
     let proposed = 0
     for (const c of plan.changed) if (await requestChange(c.material.id, 'contract_qty', String(c.to), `ورود گروهی MTO پیمان (${name})`, name)) proposed++
@@ -68,6 +74,7 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
               <Chip>{fa(plan.unchanged)} بدون تغییر</Chip>
               {plan.errors.length > 0 && <Chip tone="bad">{fa(plan.errors.length)} خطا</Chip>}
             </div>
+            {newValues.length > 0 && <div className="mt-warn" style={{ alignItems: 'center' }}><div style={{ flex: 1 }}><b>مقدارهای تازه که در فهرست‌های پایه نیستند</b><div className="im-helper" style={{ margin: 0 }}>{newValues.map(([k, v]) => `${LOOKUP_LABEL_FA[k]}: ${v.slice(0, 4).join('، ')}${v.length > 4 ? ` و ${fa(v.length - 4)} مورد دیگر` : ''}`).join(' · ')}</div></div><label style={{ margin: 0, display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={addLists} onChange={(e) => setAddLists(e.target.checked)} style={{ width: 'auto' }} /> افزودن به فهرست‌ها</label></div>}
             {plan.errors.length > 0 && <DataTable rows={plan.errors} rowKey={(e) => `${e.row}`} cols={[{ key: 'r', label: 'ردیف', render: (e) => fa(e.row) }, { key: 'm', label: 'خطا', render: (e) => e.message }]} />}
             {mode === 'detail' && plan.create.length > 0 && <p className="im-helper" style={{ margin: 0 }}>{fa(plan.create.length)} ردیف در MTO پیمان یافت نشد؛ پس از ثبت، به‌عنوان مغایرت «خارج از MTO پیمان» نمایش داده می‌شوند.</p>}
           </div>

@@ -1,6 +1,7 @@
 import { useMaterialStore } from '../../store/useMaterialStore'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { FormModal, type FieldDef, type GroupDef, type Vals } from '../../../finance/components/FormModal'
+import { lookupOptions } from '../../lib/control/lookups'
 import { COMMODITY_TYPES, COMMODITY_TYPE_LABEL_FA, CRITICALITY_LABEL_FA, type Criticality, type Material } from '../../types'
 
 const GROUPS: GroupDef[] = [{ id: 'where', title: 'محل مصرف و نقشه' }, { id: 'price', title: 'قیمت و مبنا' }, { id: 'more', title: 'سایر مشخصات', collapsed: true }]
@@ -13,6 +14,8 @@ export function MaterialForm({ projectId, material, onClose }: { projectId: stri
   const updateMaterial = useMaterialStore((s) => s.updateMaterial)
   const groups = useMaterialControlStore((s) => s.groups).filter((g) => g.active)
   const units = useMaterialControlStore((s) => s.units).filter((u) => u.active)
+  const lookups = useMaterialControlStore((s) => s.lookups)
+  const lk = (kind: Parameters<typeof lookupOptions>[2], cur?: string) => lookupOptions(lookups, projectId, kind, cur)
   const isNew = !material
   const fields: FieldDef[] = [
     { key: 'lineNo', label: 'شماره ردیف پیمان', kind: 'text', hint: 'شمارهٔ ردیف همین قلم در MTO / فهرست‌بهای پیمان؛ برای جست‌وجو و تطبیق با پیمان' },
@@ -23,9 +26,9 @@ export function MaterialForm({ projectId, material, onClose }: { projectId: stri
     { key: 'spec', label: 'مشخصات فنی', kind: 'text', span: 2 },
     { key: 'size', label: 'سایز', kind: 'text' }, { key: 'rating', label: 'کلاس / رتبه', kind: 'text' },
     ...(isNew ? [{ key: 'contractQty', label: 'مقدار MTO پیمان', kind: 'num' as const }, { key: 'detailQty', label: 'مقدار طراحی تفصیلی', kind: 'num' as const }] : []),
-    { key: 'facility', label: 'ایستگاه / تأسیسات', kind: 'text', group: 'where' }, { key: 'area', label: 'بخش اجرایی', kind: 'text', group: 'where' }, { key: 'front', label: 'جبهه کاری', kind: 'text', group: 'where' },
-    { key: 'pipelineNo', label: 'شماره خط لوله', kind: 'text', group: 'where' }, { key: 'isometricNo', label: 'ایزومتریک', kind: 'text', group: 'where' }, { key: 'pidNumber', label: 'نقشه P&ID', kind: 'text', group: 'where' },
-    { key: 'pidRevision', label: 'ویرایش نقشه', kind: 'text', group: 'where' }, { key: 'tagNumber', label: 'تگ تجهیز', kind: 'text', group: 'where' }, { key: 'usageLocation', label: 'محل مصرف (شرح)', kind: 'text', group: 'where' },
+    { key: 'facility', label: 'ایستگاه / تأسیسات', kind: 'select', options: lk('facility', material?.facility), group: 'where', hint: 'از «تنظیمات ← فهرست‌های پایه»' }, { key: 'area', label: 'بخش اجرایی', kind: 'select', options: lk('area', material?.area), group: 'where' }, { key: 'front', label: 'جبهه کاری', kind: 'select', options: lk('front', material?.front), group: 'where' },
+    { key: 'pipelineNo', label: 'شماره خط لوله', kind: 'select', options: lk('pipeline', material?.pipelineNo), group: 'where' }, { key: 'isometricNo', label: 'ایزومتریک', kind: 'text', group: 'where' }, { key: 'pidNumber', label: 'نقشه P&ID', kind: 'text', group: 'where' },
+    { key: 'pidRevision', label: 'ویرایش نقشه', kind: 'text', group: 'where' }, { key: 'tagNumber', label: 'تگ تجهیز', kind: 'text', group: 'where' }, { key: 'usageLocation', label: 'محل مصرف', kind: 'select', options: lk('usage', material?.usageLocation), group: 'where' },
     { key: 'needDate', label: 'تاریخ نیاز در کارگاه', kind: 'date', group: 'where' },
     ...(isNew ? [{ key: 'unitPrice', label: 'قیمت واحد (ریال)', kind: 'money' as const, group: 'price' }] : []),
     { key: 'currency', label: 'ارز قیمت', kind: 'text', group: 'price' }, { key: 'fxRate', label: 'ضریب تبدیل به ریال', kind: 'num', group: 'price' }, { key: 'priceBasis', label: 'روش قیمت‌گذاری مبنا', kind: 'text', group: 'price', hint: 'مثلاً فهرست بهای پیمان، پیشنهاد سازنده' }, { key: 'priceDate', label: 'تاریخ مبنای قیمت', kind: 'date', group: 'price' },

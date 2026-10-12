@@ -11,13 +11,14 @@ import './material-control.css'
 import { useMaterialStore } from './store/useMaterialStore'
 import { useMaterialControlStore } from './store/useMaterialControlStore'
 import { useMaterialModel } from './lib/control/useMaterialModel'
+import { Term } from './components/control/Term'
 import { useMyTasks } from './lib/control/useMyTasks'
 import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
 
 export const MATERIAL_ACCENT = '#f59e0b'
 
 export type MatTab = 'dashboard' | 'myTasks' | 'bank' | 'mto' | 'discrepancy' | 'packages' | 'progress' | 'stock' | 'consumption' | 'balance' | 'reports' | 'settings'
-type Sub = { id: string; label: string }
+type Sub = { id: string; label: string; term?: string }
 const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f59e0b' },
   { id: 'myTasks', label: 'کارهای من', icon: ListChecks, color: '#38bdf8' },
@@ -26,11 +27,11 @@ const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: 
   { id: 'discrepancy', label: 'تطبیق و مغایرت‌ها', icon: ShieldAlert, color: '#ef4444' },
   { id: 'packages', label: 'بسته‌های خرید', icon: ShoppingCart, color: '#0ea5e9', subs: [{ id: 'packages', label: 'بسته‌ها و مراحل' }, { id: 'orders', label: 'درخواست خرید و سفارش' }, { id: 'factory', label: 'ساخت و بازرسی' }, { id: 'shipping', label: 'حواله و حمل' }] },
   { id: 'progress', label: 'پیشرفت تأمین', icon: TrendingUp, color: '#14b8a6', subs: [{ id: 'overview', label: 'پیشرفت وزنی' }, { id: 'inbox', label: 'کارتابل تأیید' }, { id: 'late', label: 'مراحل عقب‌افتاده' }] },
-  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری' }, { id: 'receiving', label: 'رسید و بازرسی ورودی' }, { id: 'moves', label: 'انتقال، مصرف و ضایعات' }, { id: 'requisitions', label: 'درخواست و مجوز خروج' }, { id: 'allocation', label: 'تخصیص به جبهه' }] },
-  { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف و انحراف' }, { id: 'norms', label: 'مبنای مصرف' }] },
+  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی', term: 'stock_view' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری', term: 'shortage' }, { id: 'receiving', label: 'رسید و بازرسی ورودی', term: 'receipt' }, { id: 'moves', label: 'انتقال، برگشت، ضایعات و تعدیل', term: 'adjust' }, { id: 'requisitions', label: 'درخواست و مجوز خروج', term: 'requisition' }, { id: 'allocation', label: 'تخصیص (رزرو) به جبهه', term: 'allocation' }] },
+  { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف واقعی در برابر مبنا', term: 'deviation' }, { id: 'norms', label: 'مبنای مصرف', term: 'norm' }, { id: 'weld', label: 'جدول مصرف سرجوش', term: 'weld_table' }] },
   { id: 'balance', label: 'بالانس', icon: Scale, color: '#22c55e' },
   { id: 'reports', label: 'گزارش‌ها', icon: FileBarChart2, color: '#94a3b8' },
-  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'catalog', label: 'گروه‌ها و واحدها' }, { id: 'stages', label: 'مراحل و وزن‌ها' }, { id: 'rules', label: 'آستانه‌ها و اولویت' }, { id: 'audit', label: 'سابقه' }] },
+  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'lists', label: 'فهرست‌های پایه' }, { id: 'catalog', label: 'گروه‌ها و واحدها' }, { id: 'stages', label: 'مراحل و وزن‌ها' }, { id: 'rules', label: 'آستانه‌ها و اولویت' }, { id: 'audit', label: 'سابقه' }] },
 ]
 
 type P = { projectId: string; sub: string; onGo: (t: MatTab, s?: string) => void }
@@ -44,6 +45,7 @@ const Packages = L(() => import('./pages/control/PackagesPage'), 'PackagesPage')
 const Progress = L(() => import('./pages/control/ProgressPage'), 'ProgressPage')
 const Stock = L(() => import('./pages/control/StockPage'), 'StockPage')
 const Consumption = L(() => import('./pages/control/ConsumptionPage'), 'ConsumptionPage')
+const Weld = L(() => import('./pages/control/WeldTablesPage'), 'WeldTablesPage')
 const Balance = L(() => import('./pages/control/BalancePage'), 'BalancePage')
 const Reports = L(() => import('./pages/control/ReportsPage'), 'ReportsPage')
 const Settings = L(() => import('./pages/control/SettingsPage'), 'SettingsPage')
@@ -102,7 +104,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
       case 'packages': return sub === 'orders' ? <Orders {...p} /> : sub === 'factory' ? <Factory {...p} /> : sub === 'shipping' ? <Shipping {...p} /> : <Packages {...p} />
       case 'progress': return <Progress {...p} />
       case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : sub === 'requisitions' ? <Requisitions {...p} /> : <Stock {...p} />
-      case 'consumption': return <Consumption {...p} />
+      case 'consumption': return sub === 'weld' ? <Weld {...p} /> : <Consumption {...p} />
       case 'balance': return <Balance {...p} />
       case 'reports': return <Reports {...p} />
       case 'settings': return <Settings {...p} />
@@ -152,7 +154,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
             {cur.subs && (
               <div className="no-print" style={{ marginBottom: 14, overflowX: 'auto' }}>
                 <div className="im-seg" role="tablist" aria-label="نماها">
-                  {cur.subs.map((s) => <button key={s.id} role="tab" aria-selected={sub === s.id} className={sub === s.id ? 'on' : ''} onClick={() => setSubs((x) => ({ ...x, [tab]: s.id }))}>{s.label}</button>)}
+                  {cur.subs.map((s) => <button key={s.id} role="tab" aria-selected={sub === s.id} className={sub === s.id ? 'on' : ''} onClick={() => setSubs((x) => ({ ...x, [tab]: s.id }))}>{s.term ? <Term k={s.term}>{s.label}</Term> : s.label}</button>)}
                 </div>
               </div>
             )}

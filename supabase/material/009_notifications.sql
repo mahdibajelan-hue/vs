@@ -1,0 +1,2 @@
+-- Material control: the bell's items for this module (stage decisions, rejected/late stages of mine, requisitions to sign, discrepancies, changes, scrap/adjust approvals).
+-- Applied live; see the function body in the database (my_material_notifications()), same shape as my_land_notifications().
