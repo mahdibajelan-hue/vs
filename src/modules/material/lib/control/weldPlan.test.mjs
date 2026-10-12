@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { weldNeeds, setTotals } from './weldPlan.ts'
 
-const sets = [{ id: 's30', title: '۳۰ اینچ', jointCount: 1000 }, { id: 's16', title: '۱۶ اینچ', jointCount: 400 }]
+const sets = [{ id: 's30', title: '۳۰ اینچ', jointCount: 1000, pipeLengthM: 12000 }, { id: 's16', title: '۱۶ اینچ', jointCount: 400, pipeLengthM: 4800 }]
 const lines = [
   { id: 'a', setId: 's30', materialId: 'e6010', qtyPerJoint: 1 }, { id: 'b', setId: 's30', materialId: 'e7010-3', qtyPerJoint: 1 }, { id: 'c', setId: 's30', materialId: 'e7010-4', qtyPerJoint: 2 },
   { id: 'd', setId: 's16', materialId: 'e6010', qtyPerJoint: 0.4 },
@@ -18,4 +18,9 @@ assert.equal(weldNeeds(sets, lines.slice(0, 1), p2)[0].status, 'short')
 // ordered enough but not yet arrived
 const p3 = new Map([['e6010', { ordered: 1000, received: 0, onHand: 0, netConsumed: 0 }]])
 assert.equal(weldNeeds(sets, lines.slice(0, 1), p3)[0].status, 'inbound')
+// metre basis (coating) and decimal per-unit quantities
+const cl = [{ id: 'x', setId: 's30', materialId: 'coat', qtyPerJoint: 0.25, basis: 'meter' }, { id: 'y', setId: 's30', materialId: 'film', qtyPerJoint: 0.35, basis: 'joint' }]
+assert.deepEqual(setTotals(sets[0], cl).map((x) => x.total), [3000, 350])
+const nn = Object.fromEntries(weldNeeds(sets, cl, new Map()).map((x) => [x.materialId, x]))
+assert.equal(nn.coat.need, 3000); assert.equal(nn.coat.parts[0].basis, 'meter'); assert.equal(nn.film.need, 350)
 console.log('weldPlan ok')

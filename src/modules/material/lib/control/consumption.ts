@@ -1,3 +1,4 @@
+import { JALALI_MONTHS, toJalali } from '../../../../lib/jalali'
 import type { Material, MtlGroup, MtlNorm, MtlSettings, MtlTxn } from '../../types'
 
 export interface ConsumptionRow {
@@ -59,8 +60,21 @@ export function consumptionBy(txns: MtlTxn[], by: 'contractor' | 'facility' | 'f
   const m = new Map<string, number>()
   for (const t of txns) {
     if (t.status !== 'posted' || (t.kind !== 'issue' && t.kind !== 'return')) continue
-    const k = by === 'contractor' ? t.contractorOrgId ?? '—' : by === 'facility' ? t.facility || '—' : by === 'front' ? t.front || '—' : by === 'month' ? t.txnDate.slice(0, 7) : t.workOp || '—'
+    const k = by === 'contractor' ? t.contractorOrgId ?? '—' : by === 'facility' ? t.facility || '—' : by === 'front' ? t.front || '—' : by === 'month' ? jalaliMonthKey(t.txnDate) : t.workOp || '—'
     m.set(k, (m.get(k) ?? 0) + (t.kind === 'issue' ? t.qty : -t.qty))
   }
   return [...m.entries()].map(([key, qty]) => ({ key, qty })).sort((a, b) => b.qty - a.qty)
+}
+
+/** Gregorian ISO date → sortable Jalali month key `YYYY-MM` (e.g. 1405-07). */
+export function jalaliMonthKey(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return '—'
+  const j = toJalali(y, m, d)
+  return `${j.jy}-${String(j.jm).padStart(2, '0')}`
+}
+/** `1405-07` → «مهر ۱۴۰۵». */
+export function jalaliMonthLabel(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  return y && m ? `${JALALI_MONTHS[m - 1]} ${y.toLocaleString('fa-IR', { useGrouping: false })}` : '—'
 }

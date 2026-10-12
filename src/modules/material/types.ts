@@ -339,7 +339,7 @@ export interface Allocation {
 
 // ───────────────────────── material control (supabase/material)
 export type MeasureKind = 'count' | 'length' | 'weight' | 'volume' | 'consumable'
-export interface MtlGroup { id: string; code: string; title: string; measureKind: MeasureKind; defaultUnit: string | null; isConsumable: boolean; patternId: string | null; leadTimeDays: number; criticality: Criticality; sort: number; active: boolean }
+export interface MtlGroup { id: string; code: string; title: string; measureKind: MeasureKind; defaultUnit: string | null; isConsumable: boolean; /** allowed scrap, % of received; null = the project default */ scrapAllowPct: number | null; patternId: string | null; leadTimeDays: number; criticality: Criticality; sort: number; active: boolean }
 export interface MtlUnit { code: string; label: string; kind: string; baseCode: string | null; toBase: number; active: boolean }
 export type ReviewLevel = 'consultant' | 'employer' | 'both'
 export interface StageDef { key: string; title: string; sort: number; reviewLevel: ReviewLevel; needsEvidence: boolean; active: boolean }

@@ -1,22 +1,28 @@
 import type { Material } from '../../types'
 import type { Position } from './model'
 
-export interface WeldSet { id: string; masterProjectId: string; title: string; jointSize: string; thickness: string; process: string; jointCount: number; notes: string }
-export interface WeldLine { id: string; setId: string; materialId: string; qtyPerJoint: number; notes: string }
+export interface WeldSet { id: string; masterProjectId: string; title: string; jointSize: string; thickness: string; process: string; /** work quantities — entered in the balance (or later taken from execution), NOT in the basis table */ jointCount: number; pipeLengthM: number; notes: string }
+/** What the per-unit quantity is counted against: each joint (electrodes, film…) or each metre of pipe (coating, wrap…). */
+export type WeldBasis = 'joint' | 'meter'
+export const WELD_BASIS_LABEL_FA: Record<WeldBasis, string> = { joint: 'هر سرجوش', meter: 'هر متر طول' }
+export interface WeldLine { id: string; setId: string; materialId: string; qtyPerJoint: number; basis?: WeldBasis; notes: string }
+
+/** Number of basis units a set provides for a line: joints for a joint line, metres of pipe for a metre line. */
+export const unitsFor = (set: Pick<WeldSet, 'jointCount' | 'pipeLengthM'>, line: Pick<WeldLine, 'basis'>): number => ((line.basis ?? 'joint') === 'meter' ? set.pipeLengthM : set.jointCount)
 
 export interface SetLineTotal { line: WeldLine; total: number }
 export interface MaterialNeed {
   materialId: string; need: number
   /** per set: joints × per-joint quantity */
-  parts: { setId: string; title: string; joints: number; perJoint: number; qty: number }[]
+  parts: { setId: string; title: string; units: number; basis: WeldBasis; perUnit: number; qty: number }[]
   ordered: number; received: number; onHand: number; issued: number
   /** need not covered by any order / by what already arrived / what is still to be supplied after use */
   orderGap: number; supplyGap: number
   status: 'ok' | 'inbound' | 'short' | 'no_order'
 }
 
-/** What a set needs in total: every line's per-joint quantity times the set's joint count. */
-export const setTotals = (set: WeldSet, lines: WeldLine[]): SetLineTotal[] => lines.filter((l) => l.setId === set.id).map((line) => ({ line, total: line.qtyPerJoint * set.jointCount }))
+/** What a set needs in total: every line's per-unit quantity times the set's work quantity (joints or metres, by the line's basis). */
+export const setTotals = (set: WeldSet, lines: WeldLine[]): SetLineTotal[] => lines.filter((l) => l.setId === set.id).map((line) => ({ line, total: line.qtyPerJoint * unitsFor(set, line) }))
 
 /**
  * Project-wide requirement of every consumable from all weld sets, compared with the real supply:
@@ -28,8 +34,8 @@ export function weldNeeds(sets: WeldSet[], lines: WeldLine[], positions: Map<str
   for (const l of lines) {
     const s = title.get(l.setId); if (!s) continue
     const n = byMat.get(l.materialId) ?? { materialId: l.materialId, need: 0, parts: [], ordered: 0, received: 0, onHand: 0, issued: 0, orderGap: 0, supplyGap: 0, status: 'ok' as const }
-    const qty = l.qtyPerJoint * s.jointCount
-    n.need += qty; n.parts.push({ setId: s.id, title: s.title, joints: s.jointCount, perJoint: l.qtyPerJoint, qty })
+    const units = unitsFor(s, l), qty = l.qtyPerJoint * units
+    n.need += qty; n.parts.push({ setId: s.id, title: s.title, units, basis: l.basis ?? 'joint', perUnit: l.qtyPerJoint, qty })
     byMat.set(l.materialId, n)
   }
   for (const n of byMat.values()) {

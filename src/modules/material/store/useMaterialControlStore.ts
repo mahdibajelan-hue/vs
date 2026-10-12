@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
-import type { WeldLine, WeldSet } from '../lib/control/weldPlan'
+import type { WeldBasis, WeldLine, WeldSet } from '../lib/control/weldPlan'
 import { explainMaterialError } from '../lib/control/errors'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -53,6 +53,7 @@ interface State {
   can: (projectId: string, action: string) => boolean
   myRoles: (projectId: string) => MtlRole[]
   // configuration (configurators)
+  setGroupScrapAllow: (groupId: string, pct: number | null) => Promise<boolean>
   saveGroup: (g: Partial<MtlGroup> & { code: string; title: string }) => Promise<boolean>
   saveUnit: (u: MtlUnit) => Promise<boolean>
   saveStageDef: (s: StageDef) => Promise<boolean>
@@ -97,8 +98,8 @@ interface State {
   saveWeldSet: (projectId: string, s: Partial<WeldSet> & { title: string }) => Promise<string | null>
   removeWeldSet: (id: string) => Promise<boolean>
   duplicateWeldSet: (id: string, title: string) => Promise<boolean>
-  addWeldLine: (setId: string, materialId: string, qtyPerJoint: number) => Promise<boolean>
-  updateWeldLine: (id: string, qtyPerJoint: number) => Promise<boolean>
+  addWeldLine: (setId: string, materialId: string, qtyPerJoint: number, basis: WeldBasis) => Promise<boolean>
+  updateWeldLine: (id: string, patch: { qtyPerJoint?: number; basis?: WeldBasis }) => Promise<boolean>
   removeWeldLine: (id: string) => Promise<boolean>
   addLookups: (projectId: string, kind: MtlLookup['kind'], labels: string[]) => Promise<boolean>
   setLookupActive: (id: string, active: boolean) => Promise<boolean>
@@ -137,7 +138,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     const settings: MtlSettings = { ...DEFAULT_MTL_SETTINGS, ...(inForce?.values_json ?? {}), priority: { ...DEFAULT_MTL_SETTINGS.priority, ...(inForce?.values_json?.priority ?? {}) } }
     const n = (x: unknown) => Number(x)
     set({
-      groups: ok<Row>(groups).map((r): MtlGroup => ({ id: r.id, code: r.code, title: r.title, measureKind: r.measure_kind, defaultUnit: r.default_unit, isConsumable: !!r.is_consumable, patternId: r.pattern_id, leadTimeDays: r.lead_time_days, criticality: r.criticality, sort: r.sort, active: !!r.active })),
+      groups: ok<Row>(groups).map((r): MtlGroup => ({ id: r.id, code: r.code, title: r.title, measureKind: r.measure_kind, defaultUnit: r.default_unit, isConsumable: !!r.is_consumable, scrapAllowPct: r.scrap_allow_pct == null ? null : n(r.scrap_allow_pct), patternId: r.pattern_id, leadTimeDays: r.lead_time_days, criticality: r.criticality, sort: r.sort, active: !!r.active })),
       units: ok<Row>(units).map((r): MtlUnit => ({ code: r.code, label: r.label, kind: r.kind, baseCode: r.base_code, toBase: n(r.to_base), active: !!r.active })),
       stageDefs: ok<Row>(defs).map((r): StageDef => ({ key: r.key, title: r.title, sort: r.sort, reviewLevel: r.review_level, needsEvidence: !!r.needs_evidence, active: !!r.active })),
       patterns: ok<Row>(pats).map((r): MtlPattern => ({ id: r.id, code: r.code, title: r.title, notes: r.notes ?? '', isDefault: !!r.is_default, active: !!r.active })),
@@ -153,8 +154,8 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       links: linkRows.map((r): MtlLink => ({ id: r.id, masterProjectId: r.master_project_id, sourceType: r.source_type, sourceId: r.source_id, targetType: r.target_type, targetId: r.target_id, rel: r.rel, label: r.label ?? '', createdAt: r.created_at })),
       linkTargets: targets,
       roles: ok<Row>(roles).map((r): ProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
-      weldSets: ok<Row>(wsets).map((r): WeldSet => ({ id: r.id, masterProjectId: r.master_project_id, title: r.title, jointSize: r.joint_size ?? '', thickness: r.thickness ?? '', process: r.process ?? '', jointCount: n(r.joint_count), notes: r.notes ?? '' })),
-      weldLines: ok<Row>(wlines).map((r): WeldLine => ({ id: r.id, setId: r.set_id, materialId: r.material_id, qtyPerJoint: n(r.qty_per_joint), notes: r.notes ?? '' })),
+      weldSets: ok<Row>(wsets).map((r): WeldSet => ({ id: r.id, masterProjectId: r.master_project_id, title: r.title, jointSize: r.joint_size ?? '', thickness: r.thickness ?? '', process: r.process ?? '', jointCount: n(r.joint_count), pipeLengthM: n(r.pipe_length_m), notes: r.notes ?? '' })),
+      weldLines: ok<Row>(wlines).map((r): WeldLine => ({ id: r.id, setId: r.set_id, materialId: r.material_id, qtyPerJoint: n(r.qty_per_joint), basis: r.basis === 'meter' ? 'meter' : 'joint', notes: r.notes ?? '' })),
       lookups: ok<Row>(lks).map((r): MtlLookup => ({ id: r.id, masterProjectId: r.master_project_id, kind: r.kind, label: r.label, active: !!r.active, sort: r.sort ?? 0 })),
       requisitions: ok<Row>(reqs).map((r): Requisition => ({ id: r.id, masterProjectId: r.master_project_id, number: r.number, requesterId: r.requester_id, requestDate: r.request_date, operation: r.operation ?? 'issue', fromLoc: r.from_loc ?? '', toLoc: r.to_loc ?? '', workOp: r.work_op ?? '', activityQty: r.activity_qty == null ? null : n(r.activity_qty), activityUnit: r.activity_unit ?? '', contractorOrgId: r.contractor_org_id ?? null, adjustSign: (r.adjust_sign ?? 1) as 1 | -1, reason: r.reason ?? '', facility: r.facility ?? '', front: r.front ?? '', purpose: r.purpose ?? '', neededBy: r.needed_by, notes: r.notes ?? '', status: r.status, rejectReason: r.reject_reason ?? '', issuedAt: r.issued_at, createdAt: r.created_at })),
       reqLines: ok<Row>(reqLn).map((r): RequisitionLine => ({ id: r.id, requisitionId: r.requisition_id, materialId: r.material_id, qtyRequested: n(r.qty_requested), stockAtRequest: n(r.stock_at_request), qtyIssued: n(r.qty_issued), notes: r.notes ?? '' })),
@@ -174,6 +175,11 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     return roleAllows(get().myRoles(projectId), action, get().settings)
   },
 
+  setGroupScrapAllow: async (groupId, pct) => {
+    const { error } = await supabase.from('mtl_groups').update({ scrap_allow_pct: pct }).eq('id', groupId)
+    if (report('ذخیرهٔ مبنای ضایعات', error)) return false
+    await get().fetchAll(); return true
+  },
   saveGroup: async (g) => {
     const row = { code: g.code, title: g.title, measure_kind: g.measureKind ?? 'count', default_unit: g.defaultUnit ?? null, is_consumable: g.isConsumable ?? false, pattern_id: g.patternId ?? null, lead_time_days: g.leadTimeDays ?? 0, criticality: g.criticality ?? 'B', sort: g.sort ?? 0, active: g.active ?? true }
     const { error } = g.id ? await supabase.from('mtl_groups').update(row).eq('id', g.id) : await supabase.from('mtl_groups').insert(row)
@@ -387,7 +393,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
   },
 
   saveWeldSet: async (projectId, s) => {
-    const row = { title: s.title, joint_size: s.jointSize ?? '', thickness: s.thickness ?? '', process: s.process ?? '', joint_count: s.jointCount ?? 0, notes: s.notes ?? '' }
+    const row = { title: s.title, joint_size: s.jointSize ?? '', thickness: s.thickness ?? '', process: s.process ?? '', joint_count: s.jointCount ?? 0, pipe_length_m: s.pipeLengthM ?? 0, notes: s.notes ?? '' }
     const res = s.id ? await supabase.from('mtl_weld_sets').update(row).eq('id', s.id).select('id').single() : await supabase.from('mtl_weld_sets').insert({ ...row, master_project_id: projectId }).select('id').single()
     if (report('ذخیرهٔ جدول مصرف سرجوش', res.error)) return null
     await get().fetchAll(); return (res.data as Row).id as string
@@ -399,19 +405,19 @@ export const useMaterialControlStore = create<State>((set, get) => ({
   },
   duplicateWeldSet: async (id, title) => {
     const src = get().weldSets.find((x) => x.id === id); if (!src) return false
-    const { data, error } = await supabase.from('mtl_weld_sets').insert({ master_project_id: src.masterProjectId, title, joint_size: src.jointSize, thickness: src.thickness, process: src.process, joint_count: 0, notes: src.notes }).select('id').single()
+    const { data, error } = await supabase.from('mtl_weld_sets').insert({ master_project_id: src.masterProjectId, title, joint_size: src.jointSize, thickness: src.thickness, process: src.process, joint_count: 0, pipe_length_m: 0, notes: src.notes }).select('id').single()
     if (report('کپی جدول مصرف سرجوش', error)) return false
-    const lines = get().weldLines.filter((l) => l.setId === id).map((l) => ({ set_id: (data as Row).id, material_id: l.materialId, qty_per_joint: l.qtyPerJoint, notes: l.notes }))
+    const lines = get().weldLines.filter((l) => l.setId === id).map((l) => ({ set_id: (data as Row).id, material_id: l.materialId, qty_per_joint: l.qtyPerJoint, basis: l.basis ?? 'joint', notes: l.notes }))
     if (lines.length) { const r = await supabase.from('mtl_weld_lines').insert(lines); if (report('کپی ردیف‌های جدول', r.error)) return false }
     await get().fetchAll(); return true
   },
-  addWeldLine: async (setId, materialId, qtyPerJoint) => {
-    const { error } = await supabase.from('mtl_weld_lines').upsert({ set_id: setId, material_id: materialId, qty_per_joint: qtyPerJoint }, { onConflict: 'set_id,material_id' })
+  addWeldLine: async (setId, materialId, qtyPerJoint, basis) => {
+    const { error } = await supabase.from('mtl_weld_lines').upsert({ set_id: setId, material_id: materialId, qty_per_joint: qtyPerJoint, basis }, { onConflict: 'set_id,material_id' })
     if (report('افزودن کالا به جدول سرجوش', error)) return false
     await get().fetchAll(); return true
   },
-  updateWeldLine: async (id, qtyPerJoint) => {
-    const { error } = await supabase.from('mtl_weld_lines').update({ qty_per_joint: qtyPerJoint }).eq('id', id)
+  updateWeldLine: async (id, patch) => {
+    const { error } = await supabase.from('mtl_weld_lines').update({ ...(patch.qtyPerJoint != null ? { qty_per_joint: patch.qtyPerJoint } : {}), ...(patch.basis ? { basis: patch.basis } : {}) }).eq('id', id)
     if (report('ویرایش مقدار مصرف', error)) return false
     await get().fetchAll(); return true
   },

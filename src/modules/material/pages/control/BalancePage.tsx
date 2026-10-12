@@ -6,6 +6,7 @@ import { balanceBy, type BalanceRow } from '../../lib/control/balance'
 import { writeXlsx } from '../../lib/control/xlsx'
 import { Chip, DataTable, KpiCard, type Col } from '../../../finance/components/fn'
 import { bn, fa } from '../../components/control/common'
+import { ConsumableEstimate } from '../../components/control/ConsumableEstimate'
 import { ItemDrawer } from '../../components/control/ItemDrawer'
 
 const BY: ['item' | 'group' | 'station' | 'front' | 'project', string][] = [['project', 'کل پروژه'], ['group', 'گروه کالا'], ['station', 'ایستگاه'], ['front', 'جبهه کاری'], ['item', 'قلم']]
@@ -60,6 +61,7 @@ export function BalancePage({ projectId }: { projectId: string }) {
       </div>
       <DataTable cols={cols} rows={shown} rowKey={(r) => r.key} onRow={by === 'item' ? (r) => setOpen(r.key) : undefined} empty="داده‌ای برای بالانس نیست." />
       <p className="im-helper" style={{ margin: 0 }}>بالانس از تراکنش‌های ثبت‌شده و تأییدشده محاسبه می‌شود. در سطح گروه یا ایستگاه، اقلامی با واحد متفاوت جمع مقداری ندارند و فقط ارزش‌هایشان جمع می‌شود. تراز موجودی فیزیکی جدا از مقایسهٔ مصرف با طراحی است: مصرف را با «نهایی طراحی» و موجودی را با «پذیرفته منهای مصرف» بسنجید.</p>
+      <ConsumableEstimate projectId={projectId} />
       {open && <ItemDrawer model={m} materialId={open} onClose={() => setOpen(null)} />}
     </div>
   )

@@ -4,7 +4,7 @@ import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel, isOpenTarget, type MaterialModel } from '../../lib/control/useMaterialModel'
 import { balanceBy } from '../../lib/control/balance'
-import { consumptionReport } from '../../lib/control/consumption'
+import { weldNeeds } from '../../lib/control/weldPlan'
 import { expectedArrival } from '../../lib/control/discrepancies'
 import { itemProgress } from '../../lib/control/progress'
 import { writeXlsx } from '../../lib/control/xlsx'
@@ -20,7 +20,7 @@ const CATALOG: { group: string; items: [RId, string][] }[] = [
   { group: 'بسته‌های چاپی نقش‌محور', items: PACKS.map((k): [RId, string] => [`pack_${k.id}`, k.title]) },
   { group: 'وضعیت و MTO', items: [['readiness', 'کسری و آمادگی شروع جبهه کاری'], ['overview', 'داشبورد جامع ایستگاه‌ها'], ['station', 'فهرست متریال هر ایستگاه'], ['mto', 'مقایسهٔ MTO پیمان و طراحی'], ['outside', 'خارج از پیمان و اختلاف مقدار'], ['noorder', 'بدون سفارش یا سفارش ناقص'], ['shortage', 'کسری فوری و آتی به‌تفکیک جبهه']] },
   { group: 'تأمین', items: [['packages', 'بسته‌های خرید و مراحل'], ['progress', 'پیشرفت وزنی و ارزش تأمین‌شده'], ['inbound', 'اقلام در راه و تأخیرها'], ['contractor', 'عملکرد پیمانکار و اقدام مشاور/کارفرما']] },
-  { group: 'انبار و مصرف', items: [['receiving', 'ورود، پذیرش و مردودی'], ['consumables', 'مصرف الکترود، پوشش و فیلم'], ['norms', 'مصرف واقعی در برابر مبنا'], ['balance', 'بالانس نهایی مقداری و ارزشی'], ['surplus', 'مازاد، قابل‌انتقال و راکد']] },
+  { group: 'انبار و مصرف', items: [['receiving', 'ورود، پذیرش و مردودی'], ['consumables', 'مصرف الکترود، پوشش و فیلم'], ['norms', 'مصرف واقعی در برابر نیاز محاسبه‌شده'], ['balance', 'بالانس نهایی مقداری و ارزشی'], ['surplus', 'مازاد، قابل‌انتقال و راکد']] },
   { group: 'سوابق', items: [['history', 'تغییرات، تأییدها و مغایرت‌ها']] },
 ]
 const day = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
@@ -138,10 +138,12 @@ export function ReportsPage({ projectId }: { projectId: string }) {
           { key: 's', label: 'ضایعات', num: true, render: (x) => fa(P(x).scrapped, 1) }, { key: 'h', label: 'موجودی', num: true, render: (x) => fa(P(x).onHand, 1) }, { key: 'un', label: 'واحد', render: (x) => x.unit }]} empty="قلم مصرفی در گروه‌های مصرفی نیست." />
       }
       case 'norms': {
-        const rows = consumptionReport({ materials: mats, groups: cs.groups, norms: cs.norms.filter((n) => n.masterProjectId === projectId), txns: m.data.txns, settings: cs.settings }).filter((r) => r.expected != null)
-        return <Rep name="مصرف-در-برابر-مبنا" rows={rows} rowKey={(r) => r.key} xlsx={(r) => ({ 'قلم': m.materials.find((x) => x.id === r.materialId)?.description ?? '', 'عملیات': r.workOp, 'واقعی': r.actual, 'مبنا': r.expected ?? '', 'انحراف ٪': r.deviationPct == null ? '' : Math.round(r.deviationPct * 10) / 10 })} cols={[
-          { key: 'm', label: 'قلم', render: (r) => <span className="strong">{m.materials.find((x) => x.id === r.materialId)?.description}</span> }, { key: 'o', label: 'عملیات', render: (r) => r.workOp || '—' }, { key: 'a', label: 'واقعی', num: true, render: (r) => fa(r.actual, 2) }, { key: 'e', label: 'مبنا', num: true, render: (r) => fa(r.expected ?? 0, 2) },
-          { key: 'd', label: 'انحراف', num: true, render: (r) => <span style={{ color: r.over ? 'var(--im-coral)' : undefined }}>{r.deviationPct! > 0 ? '+' : ''}{fa(r.deviationPct ?? 0, 1)}٪</span>, sort: (r) => r.deviationPct ?? 0 }]} empty="مصرفی با مبنای تعریف‌شده ثبت نشده است." />
+        const sets = cs.weldSets.filter((x) => x.masterProjectId === projectId), ids = new Set(sets.map((x) => x.id))
+        const rows = weldNeeds(sets, cs.weldLines.filter((l) => ids.has(l.setId)), m.positions)
+        const tol = 1 + cs.settings.consumptionTolerancePct / 100
+        return <Rep name="مصرف-در-برابر-نیاز-محاسبه‌شده" rows={rows} rowKey={(r) => r.materialId} xlsx={(r) => ({ 'قلم': m.materials.find((x) => x.id === r.materialId)?.description ?? '', 'نیاز محاسبه‌شده': r.need, 'مصرف واقعی': r.issued })} cols={[
+          { key: 'm', label: 'قلم', render: (r) => <span className="strong">{m.materials.find((x) => x.id === r.materialId)?.description}</span> }, { key: 'e', label: 'نیاز محاسبه‌شده', num: true, render: (r) => fa(r.need, 1) }, { key: 'a', label: 'مصرف واقعی', num: true, render: (r) => fa(r.issued, 1) },
+          { key: 'd', label: 'نسبت', num: true, render: (r) => <span style={{ color: r.issued > r.need * tol ? 'var(--im-coral)' : undefined }}>{r.need > 0 ? `${fa((r.issued / r.need) * 100, 0)}٪` : '—'}</span>, sort: (r) => (r.need > 0 ? r.issued / r.need : 0) }]} empty="جدول مبنا و حجم کار در بالانس تعریف نشده است." />
       }
       case 'balance': {
         const rows = balanceBy({ materials: mats, positions: m.positions, groups: cs.groups, by: 'group' })
