@@ -29,7 +29,6 @@ export function StockPage({ projectId, sub }: { projectId: string; sub: string }
   if (sub === 'locations') return <Locations model={m} byId={byId} projectId={projectId} />
   if (sub === 'shortage') return <Shortage model={m} byId={byId} projectId={projectId} />
   if (sub === 'receiving') return <Receiving model={m} byId={byId} projectId={projectId} />
-  if (sub === 'moves') return <Moves model={m} byId={byId} projectId={projectId} />
   return <StockTable model={m} byId={byId} />
 }
 
@@ -162,64 +161,6 @@ function ReceiptForm({ model: m, projectId, onClose }: { model: MaterialModel; p
   )
 }
 
-function Moves({ model: m, byId, projectId }: { model: MaterialModel; byId: Map<string, Material>; projectId: string }) {
-  const cs = useMaterialControlStore()
-  const orgs = useMasterDataStore((s) => s.organizations)
-  const [form, setForm] = useState<TxnKind | null>(null)
-  const [decide, setDecide] = useState<{ t: MtlTxn; approve: boolean } | null>(null)
-  const txns = m.data.txns
-  const pending = txns.filter((t) => t.status === 'pending')
-  const canPost = cs.can(projectId, 'post_txn'), canApprove = cs.can(projectId, 'approve_txn')
-  const cols: Col<MtlTxn>[] = [
-    { key: 'd', label: 'تاریخ', render: (t) => fmtD(t.txnDate), sort: (t) => t.txnDate },
-    { key: 'k', label: 'نوع', render: (t) => <Term k={({ issue: 'issue_voucher', transfer: 'transfer', return: 'return', scrap: 'scrap', adjust: 'adjust' } as Record<string, string>)[t.kind] ?? 'transfer'}>{t.kind === 'issue' ? 'خروج برای مصرف (حواله)' : TXN_KIND_LABEL_FA[t.kind]}</Term> },
-    { key: 'm', label: 'قلم', render: (t) => <span className="strong">{byId.get(t.materialId)?.description ?? '—'}</span> },
-    { key: 'q', label: 'مقدار', num: true, render: (t) => `${t.kind === 'adjust' && t.adjustSign === -1 ? '−' : ''}${fa(t.qty, 2)} ${byId.get(t.materialId)?.unit ?? ''}` },
-    { key: 'w', label: 'مبدأ / مقصد / جبهه', render: (t) => [t.fromLoc && `از ${t.fromLoc}`, t.toLoc && `به ${t.toLoc}`, t.facility, t.front, t.workOp].filter(Boolean).join(' · ') || '—' },
-    { key: 'r', label: 'سند', render: (t) => t.docRef || '—' },
-    { key: 's', label: 'وضعیت', render: (t) => t.status === 'pending' && canApprove ? <span style={{ display: 'inline-flex', gap: 4 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={() => setDecide({ t, approve: true })}>تأیید</button><button className="im-btn im-btn-sm" onClick={() => setDecide({ t, approve: false })}>رد</button></span> : <Chip tone={t.status === 'posted' ? 'good' : t.status === 'pending' ? 'warn' : 'neutral'}>{t.status === 'posted' ? 'ثبت‌شده' : t.status === 'pending' ? 'در انتظار تأیید' : `باطل${t.voidReason ? `: ${t.voidReason}` : ''}`}</Chip> },
-  ]
-  const isAdmin = useAuthStore((s) => !!s.profile?.isAdmin)
-  // goods leave for use only through «درخواست و مجوز خروج»; the direct voucher stays for administrators as a documented exception
-  const kinds: TxnKind[] = isAdmin ? ['issue', 'transfer', 'return', 'scrap', 'adjust'] : ['transfer', 'return', 'scrap', 'adjust']
-  const allocs = m.data.allocations
-  return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <StockConcepts />
-      <div className="fn-kpis"><KpiCard i={0} label="حواله مصرف (از مجوزهای خروج)" value={fa(txns.filter((t) => t.kind === 'issue' && t.status === 'posted').length)} hint="خروج برای مصرف فقط از «درخواست و مجوز خروج» ثبت می‌شود" /><KpiCard i={1} label="ضایعات و تعدیل در انتظار تأیید" value={fa(pending.length)} tone={pending.length ? 'warn' : 'good'} /><KpiCard i={2} label="تخصیص‌ها" value={fa(allocs.length)} /></div>
-      {canPost && <div className="mt-filters no-print">{kinds.map((k) => <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><button className="im-btn im-btn-sm" onClick={() => setForm(k)}><Plus size={13} /> {k === 'issue' ? 'حواله مستقیم (استثنا)' : TXN_KIND_LABEL_FA[k]}</button><Term k={k === 'issue' ? 'issue_voucher' : k}>{''}</Term></span>)}</div>}
-      <DataTable cols={cols} rows={txns} rowKey={(t) => t.id} empty="تراکنشی ثبت نشده است." />
-      {form && <TxnForm model={m} kind={form} projectId={projectId} orgs={orgs.map((o) => ({ value: o.id, label: o.name }))} onClose={() => setForm(null)} />}
-      {decide && <FormModal title={decide.approve ? 'تأیید تراکنش' : 'رد تراکنش'} fields={[{ key: 'note', label: 'توضیح', kind: 'text', required: !decide.approve }]} initial={{ note: '' }} submitLabel={decide.approve ? 'تأیید' : 'رد'} onClose={() => setDecide(null)} onSubmit={async (v) => { await cs.decideTxn(decide.t.id, decide.approve, String(v.note ?? '')) }} />}
-    </div>
-  )
-}
-
-function TxnForm({ model: m, kind, projectId, orgs, onClose }: { model: MaterialModel; kind: TxnKind; projectId: string; orgs: { value: string; label: string }[]; onClose: () => void }) {
-  const cs = useMaterialControlStore()
-  const options = m.materials.map((x) => ({ value: x.id, label: `${x.materialCode} · ${x.description}` }))
-  const wh = useLookupOptions(projectId, 'warehouse'), fac = useLookupOptions(projectId, 'facility'), frn = useLookupOptions(projectId, 'front')
-  const consumable = (id: string) => !!cs.groups.find((g) => g.id === m.materials.find((x) => x.id === id)?.groupId)?.isConsumable
-  return (
-    <FormModal title={TXN_KIND_LABEL_FA[kind]} subtitle={kind === 'scrap' || kind === 'adjust' ? 'ضایعات و تعدیل پس از تأیید کنترل متریال یا مشاور در موجودی اعمال می‌شود.' : undefined} submitLabel="ثبت" onClose={onClose}
-      fields={[
-        { key: 'materialId', label: 'قلم', kind: 'select', required: true, options, span: 2 },
-        { key: 'qty', label: 'مقدار', kind: 'num', required: true }, { key: 'date', label: 'تاریخ', kind: 'date', required: true },
-        { key: 'sign', label: 'جهت تعدیل', kind: 'select', required: true, show: () => kind === 'adjust', options: [{ value: '1', label: 'افزایش موجودی' }, { value: '-1', label: 'کاهش موجودی' }] },
-        { key: 'from', label: 'از (انبار / محل)', kind: 'select', options: wh, show: () => kind === 'transfer' || kind === 'return' }, { key: 'to', label: 'به (انبار / محل)', kind: 'select', options: wh, show: () => kind === 'transfer' || kind === 'return' },
-        { key: 'facility', label: 'ایستگاه', kind: 'select', options: fac, show: () => kind === 'issue' || kind === 'return' }, { key: 'front', label: 'جبهه کاری', kind: 'select', options: frn, show: () => kind === 'issue' || kind === 'return' },
-        { key: 'op', label: 'نوع عملیات (مثلاً جوش خط، پوشش سرجوش)', kind: 'text', show: (v) => kind === 'issue' && consumable(String(v.materialId)) },
-        { key: 'activityQty', label: 'حجم فعالیت (مثلاً تعداد سرجوش یا طول)', kind: 'num', show: (v) => kind === 'issue' && consumable(String(v.materialId)) }, { key: 'activityUnit', label: 'واحد فعالیت', kind: 'text', show: (v) => kind === 'issue' && consumable(String(v.materialId)) },
-        { key: 'contractor', label: 'پیمانکار', kind: 'select', options: orgs, show: () => kind === 'issue' },
-        { key: 'doc', label: 'سند مرجع (شمارهٔ حواله)', kind: 'text' }, { key: 'notes', label: kind === 'scrap' ? 'علت ضایعات' : 'یادداشت', kind: 'text', required: kind === 'scrap' || kind === 'adjust', span: 2 },
-      ]}
-      initial={{ materialId: '', qty: 0, date: new Date().toISOString().slice(0, 10), sign: '-1', from: '', to: '', facility: '', front: '', op: '', activityQty: 0, activityUnit: '', contractor: '', doc: '', notes: '' }}
-      preview={(v) => { const x = m.materials.find((y) => y.id === v.materialId); const p = x && m.positions.get(x.id); return p ? <span>موجودی قابل‌مصرف فعلی: <b>{fa(p.onHand, 2)} {x.unit}</b> · رزرو {fa(p.reserved, 2)} · آزاد {fa(p.available, 2)}</span> : null }}
-      onSubmit={async (v) => { await cs.postTxn({ materialId: String(v.materialId), kind, qty: Number(v.qty) || 0, date: String(v.date), from: String(v.from ?? ''), to: String(v.to ?? ''), facility: String(v.facility ?? ''), front: String(v.front ?? ''), op: String(v.op ?? ''), activityQty: Number(v.activityQty) || null, activityUnit: String(v.activityUnit ?? ''), contractorId: (v.contractor as string) || null, doc: String(v.doc ?? ''), notes: String(v.notes ?? ''), sign: kind === 'adjust' ? (Number(v.sign) as 1 | -1) : undefined }); void projectId }} />
-  )
-}
-
-/** Stock per warehouse or yard: what each place holds, from accepted receipts, transfers and vouchers. */
 function Locations({ model: m, byId, projectId }: { model: MaterialModel; byId: Map<string, Material>; projectId: string }) {
   const ms = useMaterialStore()
   const rows = useMemo(() => stockByLocation({ receipts: ms.warehouseReceipts.filter((r) => r.masterProjectId === projectId), lines: m.data.warehouseLines, txns: m.data.txns }), [ms.warehouseReceipts, m.data.warehouseLines, m.data.txns, projectId])

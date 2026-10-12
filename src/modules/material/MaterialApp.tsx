@@ -27,7 +27,7 @@ const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: 
   { id: 'discrepancy', label: 'تطبیق و مغایرت‌ها', icon: ShieldAlert, color: '#ef4444' },
   { id: 'packages', label: 'بسته‌های خرید', icon: ShoppingCart, color: '#0ea5e9', subs: [{ id: 'packages', label: 'بسته‌ها و مراحل' }, { id: 'orders', label: 'درخواست خرید و سفارش' }, { id: 'factory', label: 'ساخت و بازرسی' }, { id: 'shipping', label: 'حواله و حمل' }] },
   { id: 'progress', label: 'پیشرفت تأمین', icon: TrendingUp, color: '#14b8a6', subs: [{ id: 'overview', label: 'پیشرفت وزنی' }, { id: 'inbox', label: 'کارتابل تأیید' }, { id: 'late', label: 'مراحل عقب‌افتاده' }] },
-  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی', term: 'stock_view' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری', term: 'shortage' }, { id: 'receiving', label: 'رسید و بازرسی ورودی', term: 'receipt' }, { id: 'moves', label: 'انتقال، برگشت، ضایعات و تعدیل', term: 'adjust' }, { id: 'requisitions', label: 'درخواست و مجوز خروج', term: 'requisition' }, { id: 'allocation', label: 'تخصیص (رزرو) به جبهه', term: 'allocation' }] },
+  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی', term: 'stock_view' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری', term: 'shortage' }, { id: 'receiving', label: 'رسید و بازرسی ورودی', term: 'receipt' }, { id: 'allocation', label: 'تخصیص (رزرو) به جبهه', term: 'allocation' }, { id: 'vouchers', label: 'حواله انبار', term: 'requisition' }] },
   { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف واقعی در برابر مبنا', term: 'deviation' }, { id: 'norms', label: 'مبنای مصرف', term: 'norm' }, { id: 'weld', label: 'جدول مصرف سرجوش', term: 'weld_table' }] },
   { id: 'balance', label: 'بالانس', icon: Scale, color: '#22c55e' },
   { id: 'reports', label: 'گزارش‌ها', icon: FileBarChart2, color: '#94a3b8' },
@@ -52,7 +52,7 @@ const Settings = L(() => import('./pages/control/SettingsPage'), 'SettingsPage')
 const Orders = L(() => import('./pages/control/SupplyChainPages'), 'OrdersPage')
 const Factory = L(() => import('./pages/control/SupplyChainPages'), 'FactoryPage')
 const Shipping = L(() => import('./pages/control/SupplyChainPages'), 'ShippingPage')
-const Requisitions = L(() => import('./pages/control/RequisitionPage'), 'RequisitionPage')
+const Requisitions = L(() => import('./pages/control/VoucherPage'), 'VoucherPage')
 const Allocation = L(() => import('./pages/control/SupplyChainPages'), 'AllocationsPage')
 
 /** «کنترل و پایش متریال» — same shell and design system as the other project-management modules; eleven sections, each with its few sub-views. */
@@ -103,7 +103,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
       case 'discrepancy': return <Discrepancy {...p} />
       case 'packages': return sub === 'orders' ? <Orders {...p} /> : sub === 'factory' ? <Factory {...p} /> : sub === 'shipping' ? <Shipping {...p} /> : <Packages {...p} />
       case 'progress': return <Progress {...p} />
-      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : sub === 'requisitions' ? <Requisitions {...p} /> : <Stock {...p} />
+      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : sub === 'vouchers' ? <Requisitions {...p} /> : <Stock {...p} />
       case 'consumption': return sub === 'weld' ? <Weld {...p} /> : <Consumption {...p} />
       case 'balance': return <Balance {...p} />
       case 'reports': return <Reports {...p} />

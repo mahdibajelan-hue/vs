@@ -60,14 +60,14 @@ export function buildMyTasks(a: TaskInput): MyTask[] {
     if (r.status !== 'awaiting_signatures') continue
     const sg = a.signers.filter((x) => x.requisitionId === r.id).sort((x, y) => x.sort - y.sort)
     const next = sg.find((x) => x.decision !== 'approved')
-    if (next && next.userId === a.uid && next.decision === 'pending') out.push({ id: `rq:${r.id}`, kind: 'sign', title: `مجوز خروج ${r.number} — ${r.facility || 'بدون محل'}`, sub: `نوبت امضای شما${r.neededBy ? ` · نیاز تا ${faDate(r.neededBy)}` : ''}`, go: { tab: 'stock', sub: 'requisitions' }, late: r.neededBy && r.neededBy < a.today ? day(a.today, r.neededBy) : 0, urgent: !!r.neededBy && r.neededBy <= a.today })
+    if (next && next.userId === a.uid && next.decision === 'pending') out.push({ id: `rq:${r.id}`, kind: 'sign', title: `مجوز خروج ${r.number} — ${r.facility || 'بدون محل'}`, sub: `نوبت امضای شما${r.neededBy ? ` · نیاز تا ${faDate(r.neededBy)}` : ''}`, go: { tab: 'stock', sub: 'vouchers' }, late: r.neededBy && r.neededBy < a.today ? day(a.today, r.neededBy) : 0, urgent: !!r.neededBy && r.neededBy <= a.today })
   }
   for (const d of a.discrepancies) if (d.responsible === a.uid && (d.status === 'open' || d.status === 'in_review')) {
     const late = d.dueDate && d.dueDate < a.today ? day(a.today, d.dueDate) : 0
     out.push({ id: `dc:${d.id}`, kind: 'discrepancy', title: a.discLabel(d), sub: `مسئول تعیین تکلیف${d.dueDate ? ` · مهلت ${faDate(d.dueDate)}` : ''}`, go: { tab: 'discrepancy' }, late, urgent: late > 0 })
   }
   if (a.can('review_change') || a.can('approve_change')) for (const c of a.changes) if (c.status === 'requested' && c.requestedBy !== a.uid) out.push({ id: `ch:${c.id}`, kind: 'change', title: a.changeLabel(c), sub: `درخواست تغییر در انتظار تصمیم${c.reason ? ` · ${c.reason}` : ''}`, go: { tab: 'mto', sub: 'changes' }, late: 0, urgent: false })
-  if (a.can('approve_txn')) for (const t of a.txns) if (t.status === 'pending' && t.createdBy !== a.uid) out.push({ id: `tx:${t.id}`, kind: 'txn', title: a.txnLabel(t), sub: 'ضایعات یا تعدیل در انتظار تأیید', go: { tab: 'stock', sub: 'moves' }, late: 0, urgent: false })
+  if (a.can('approve_txn')) for (const t of a.txns) if (t.status === 'pending' && t.createdBy !== a.uid) out.push({ id: `tx:${t.id}`, kind: 'txn', title: a.txnLabel(t), sub: 'ضایعات یا تعدیل در انتظار تأیید', go: { tab: 'stock', sub: 'vouchers' }, late: 0, urgent: false })
   for (const r of a.records) out.push({ id: `rc:${r.id}`, kind: 'record', title: r.title, sub: `${r.type === 'risk' ? 'ریسک' : 'مسئله'} مرتبط با متریال · شما مسئول آن هستید${r.due ? ` · مهلت ${faDate(r.due)}` : ''}`, go: { tab: 'dashboard', record: { type: r.type, id: r.id } }, late: r.due && r.due < a.today ? day(a.today, r.due) : 0, urgent: !!r.due && r.due < a.today })
   return out.sort((x, y) => Number(y.urgent) - Number(x.urgent) || y.late - x.late || x.title.localeCompare(y.title, 'fa'))
 }

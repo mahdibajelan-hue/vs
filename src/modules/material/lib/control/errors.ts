@@ -9,7 +9,7 @@ export const MATERIAL_ERROR_CODES: Record<string, string> = {
   not_pending: 'این مورد دیگر در انتظار تصمیم نیست', target_not_found: 'رکورد مقصد پیدا نشد', risk_not_linked: 'این ریسک از متریال ایجاد یا به آن وصل نشده است',
   stage_not_backed: 'این مرحله پشتوانهٔ ثبت‌شده ندارد: برای مراحل سفارش تا ارسال باید سفارش خرید و برای ورود به کارگاه باید رسید انبار ثبت شده باشد',
   double_order_blocked: 'این قلم قبلاً به‌اندازهٔ نیاز در بسته یا سفارش آمده است؛ برای سفارش مجدد «استثنا» را با ذکر علت ثبت کنید',
-  signers_required: 'سرپرست کارگاه، سرپرست نظارت و انباردار باید مشخص شوند', previous_signature_missing: 'امضای مرحلهٔ قبلی هنوز ثبت نشده است', invalid_kind: 'نوع رکورد نامعتبر است',
+  signers_required: 'سرپرست کارگاه، سرپرست نظارت و انباردار باید مشخص شوند', previous_signature_missing: 'امضای مرحلهٔ قبلی هنوز ثبت نشده است', invalid_kind: 'نوع رکورد نامعتبر است', transfer_places_required: 'مبدأ و مقصد (دو انبار متفاوت) را مشخص کنید', work_op_required: 'نوع عملیات (مثلاً جوشکاری) را بنویسید',
 }
 export function explainMaterialError(error: { message: string }): string {
   const m = error.message ?? ''

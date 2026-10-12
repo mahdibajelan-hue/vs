@@ -8,7 +8,7 @@ import { useMaterialStore } from './useMaterialStore'
 import { roleAllows } from '../lib/control/perms'
 import {
   DEFAULT_MTL_SETTINGS, type AuditRow, type Baseline, type ItemStage, type MtlChange, type MtlDiscrepancy, type MtlGroup, type MtlLink, type MtlNorm, type MtlPackage, type MtlPattern, type MtlRole,
-  type MtlSettings, type MtlTxn, type MtlUnit, type MtlLookup, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind,
+  type MtlSettings, type MtlTxn, type MtlUnit, type MtlLookup, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind, type VoucherOp,
 } from '../types'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -91,7 +91,7 @@ interface State {
   // audited removal (administrator; requests and orders also by package editors)
   adminRemove: (kind: 'package' | 'request' | 'po', id: string, reason: string) => Promise<boolean>
   // warehouse issue requisitions with sequential signatures
-  reqCreate: (a: { projectId: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; lines: { materialId: string; qty: number; notes?: string }[]; signers: { site_supervisor: string; supervision_supervisor: string; storekeeper: string } }) => Promise<string | null>
+  reqCreate: (a: { projectId: string; operation: VoucherOp; fromLoc: string; toLoc: string; workOp: string; activityQty: number | null; activityUnit: string; contractorId: string | null; adjustSign: 1 | -1; reason: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; lines: { materialId: string; qty: number; notes?: string }[]; signers: { site_supervisor: string; supervision_supervisor: string; storekeeper: string } }) => Promise<string | null>
   reqSign: (id: string, decision: 'approve' | 'reject', note?: string, issue?: { lineId: string; qty: number }[]) => Promise<string | null>
   reqCancel: (id: string, reason: string) => Promise<boolean>
   saveWeldSet: (projectId: string, s: Partial<WeldSet> & { title: string }) => Promise<string | null>
@@ -156,7 +156,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       weldSets: ok<Row>(wsets).map((r): WeldSet => ({ id: r.id, masterProjectId: r.master_project_id, title: r.title, jointSize: r.joint_size ?? '', thickness: r.thickness ?? '', process: r.process ?? '', jointCount: n(r.joint_count), notes: r.notes ?? '' })),
       weldLines: ok<Row>(wlines).map((r): WeldLine => ({ id: r.id, setId: r.set_id, materialId: r.material_id, qtyPerJoint: n(r.qty_per_joint), notes: r.notes ?? '' })),
       lookups: ok<Row>(lks).map((r): MtlLookup => ({ id: r.id, masterProjectId: r.master_project_id, kind: r.kind, label: r.label, active: !!r.active, sort: r.sort ?? 0 })),
-      requisitions: ok<Row>(reqs).map((r): Requisition => ({ id: r.id, masterProjectId: r.master_project_id, number: r.number, requesterId: r.requester_id, requestDate: r.request_date, facility: r.facility ?? '', front: r.front ?? '', purpose: r.purpose ?? '', neededBy: r.needed_by, notes: r.notes ?? '', status: r.status, rejectReason: r.reject_reason ?? '', issuedAt: r.issued_at, createdAt: r.created_at })),
+      requisitions: ok<Row>(reqs).map((r): Requisition => ({ id: r.id, masterProjectId: r.master_project_id, number: r.number, requesterId: r.requester_id, requestDate: r.request_date, operation: r.operation ?? 'issue', fromLoc: r.from_loc ?? '', toLoc: r.to_loc ?? '', workOp: r.work_op ?? '', activityQty: r.activity_qty == null ? null : n(r.activity_qty), activityUnit: r.activity_unit ?? '', contractorOrgId: r.contractor_org_id ?? null, adjustSign: (r.adjust_sign ?? 1) as 1 | -1, reason: r.reason ?? '', facility: r.facility ?? '', front: r.front ?? '', purpose: r.purpose ?? '', neededBy: r.needed_by, notes: r.notes ?? '', status: r.status, rejectReason: r.reject_reason ?? '', issuedAt: r.issued_at, createdAt: r.created_at })),
       reqLines: ok<Row>(reqLn).map((r): RequisitionLine => ({ id: r.id, requisitionId: r.requisition_id, materialId: r.material_id, qtyRequested: n(r.qty_requested), stockAtRequest: n(r.stock_at_request), qtyIssued: n(r.qty_issued), notes: r.notes ?? '' })),
       reqSigners: ok<Row>(reqSg).map((r): RequisitionSigner => ({ id: r.id, requisitionId: r.requisition_id, role: r.role, sort: r.sort, userId: r.user_id, decision: r.decision, signedAt: r.signed_at, note: r.note ?? '', signatureImage: r.signature_image })),
       settings, settingsVersion: inForce?.version ?? 0,
@@ -371,7 +371,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     await Promise.all([get().fetchAll(), useMaterialStore.getState().fetchAll()]); return true
   },
   reqCreate: async (a) => {
-    const { data, error } = await supabase.rpc('mtl_req_create', { p_project: a.projectId, p_facility: a.facility, p_front: a.front, p_purpose: a.purpose, p_needed: a.neededBy, p_notes: a.notes, p_lines: a.lines.map((l) => ({ material_id: l.materialId, qty: l.qty, notes: l.notes ?? '' })), p_signers: a.signers })
+    const { data, error } = await supabase.rpc('mtl_req_create', { p_project: a.projectId, p_operation: a.operation, p_from: a.fromLoc, p_to: a.toLoc, p_work_op: a.workOp, p_activity_qty: a.activityQty, p_activity_unit: a.activityUnit, p_contractor: a.contractorId, p_sign: a.adjustSign, p_reason: a.reason, p_facility: a.facility, p_front: a.front, p_purpose: a.purpose, p_needed: a.neededBy, p_notes: a.notes, p_lines: a.lines.map((l) => ({ material_id: l.materialId, qty: l.qty, notes: l.notes ?? '' })), p_signers: a.signers })
     if (report('ثبت درخواست خروج کالا', error)) return null
     await get().fetchAll(); return data as string
   },

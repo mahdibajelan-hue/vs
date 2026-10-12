@@ -252,3 +252,36 @@
 .mt-weld-head > div { flex: 1; min-width: 200px; } .mt-weld-head b { font-size: 14.5px; }
 .mt-weld-count { display: inline-grid; gap: 2px; justify-items: start; } .mt-weld-count small { color: var(--im-muted); font-size: 11px; }
 .mt-weld-add { display: grid; gap: 8px; padding-top: 4px; }
+
+/* warehouse voucher (حواله انبار): operation tiles + A4 document */
+.mt-ops { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.mt-op { display: grid; justify-items: center; gap: 5px; padding: 11px 6px; border: 1px solid var(--im-line); border-radius: 12px; background: var(--im-panel-2); color: var(--im-muted-2); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, transform .12s; }
+.mt-op b { font-size: 12px; font-weight: 700; }
+.mt-op:hover { border-color: var(--im-line-2); } .mt-op:active { transform: scale(.97); }
+.mt-op.on { border-color: var(--im-accent); background: color-mix(in srgb, var(--im-accent) 14%, var(--im-panel-2)); color: var(--im-text); }
+.mt-op-hint { margin: 8px 0 0; font-size: 12px; color: var(--im-muted); line-height: 1.8; }
+.mt-opi { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: color-mix(in srgb, var(--im-accent) 16%, transparent); color: var(--im-accent); flex: none; }
+@media (max-width: 720px) { .mt-ops { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.mt-doc { background: #fff; color: #111827; border: 1px solid #d1d5db; border-radius: 6px; padding: 22px 26px; display: grid; gap: 14px; font-size: 12.5px; line-height: 1.7; }
+.mt-doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 3px double #92400e; }
+.mt-doc-head h2 { margin: 0 0 2px; font-size: 20px; font-weight: 800; } .mt-doc-head p { margin: 0; font-size: 12px; color: #4b5563; }
+.mt-doc-head .meta { text-align: end; display: grid; gap: 2px; font-size: 11.5px; color: #4b5563; white-space: nowrap; } .mt-doc-head .meta b { color: #111827; font-size: 14px; }
+.mt-doc-info { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #9ca3af; }
+.mt-doc-info > div { padding: 6px 10px; border-inline-end: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; display: grid; gap: 1px; }
+.mt-doc-info small { color: #6b7280; font-size: 10.5px; } .mt-doc-info b { font-size: 12.5px; font-weight: 700; }
+.mt-doc-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mt-doc-tbl th, .mt-doc-tbl td { border: 1px solid #9ca3af; padding: 5px 8px; text-align: start; vertical-align: top; }
+.mt-doc-tbl th { background: #f3f4f6; font-weight: 800; font-size: 11.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.mt-doc-tbl td.num, .mt-doc-tbl th.num { text-align: center; font-variant-numeric: tabular-nums; }
+.mt-doc-note { margin: 0; padding: 8px 10px; border: 1px dashed #9ca3af; background: #fafafa; }
+.mt-doc-foot { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #d1d5db; font-size: 10.5px; color: #6b7280; }
+.mt-doc .mt-sig-box { background: #fff; border-color: #9ca3af; border-radius: 6px; color: #111827; }
+.mt-doc .mt-sig-box small, .mt-doc .mt-sig-box em, .mt-doc .mt-sig-box i { color: #4b5563; }
+@media (max-width: 720px) { .mt-doc { padding: 14px; } .mt-doc-info { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mt-doc-head { flex-direction: column; } }
+@media print { .mt-doc { border: 0; padding: 0; font-size: 11.5px; } .mt-doc-tbl tr { break-inside: avoid; } }
+.mt-doc-head small { display: block; font-size: 12px; color: #4b5563; margin-bottom: 2px; }
+.mt-doc-head dl { margin: 0; display: grid; gap: 3px; } .mt-doc-head dl > div { display: flex; gap: 10px; justify-content: space-between; align-items: baseline; min-width: 190px; }
+.mt-doc-head dt { font-size: 11px; color: #6b7280; } .mt-doc-head dd { margin: 0; font-size: 13px; font-weight: 700; color: #111827; }
+.mt-doc-tbl td small { display: block; margin-top: 1px; font-size: 10.5px; color: #6b7280; }
+.mt-doc-tbl td:nth-child(n+5), .mt-doc-tbl th:nth-child(n+5) { text-align: center; font-variant-numeric: tabular-nums; }

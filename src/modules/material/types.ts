@@ -395,11 +395,23 @@ export const DEFAULT_MTL_SETTINGS: MtlSettings = { longLeadDays: 90, delayBuffer
 
 /** Warehouse issue requisition: the technical office asks for goods for a place of use; four signatures in order (requester, site supervisor, supervision supervisor, storekeeper) release them. */
 export type RequisitionStatus = 'awaiting_signatures' | 'issued' | 'rejected' | 'cancelled'
-export const REQUISITION_STATUS_LABEL_FA: Record<RequisitionStatus, string> = { awaiting_signatures: 'در انتظار امضا', issued: 'کالا خارج شد', rejected: 'ردشده', cancelled: 'لغوشده' }
+export const REQUISITION_STATUS_LABEL_FA: Record<RequisitionStatus, string> = { awaiting_signatures: 'در انتظار امضا', issued: 'اجرا و ثبت شد', rejected: 'ردشده', cancelled: 'لغوشده' }
 export type SignerRole = 'requester' | 'site_supervisor' | 'supervision_supervisor' | 'storekeeper'
 export const SIGNER_ROLES: SignerRole[] = ['requester', 'site_supervisor', 'supervision_supervisor', 'storekeeper']
 export const SIGNER_ROLE_LABEL_FA: Record<SignerRole, string> = { requester: 'درخواست‌کننده', site_supervisor: 'سرپرست کارگاه', supervision_supervisor: 'سرپرست نظارت', storekeeper: 'انباردار' }
-export interface Requisition { id: string; masterProjectId: string; number: string; requesterId: string | null; requestDate: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; status: RequisitionStatus; rejectReason: string; issuedAt: string | null; createdAt: string }
+export type VoucherOp = 'issue' | 'consume' | 'transfer' | 'return' | 'scrap' | 'adjust'
+export const VOUCHER_OPS: VoucherOp[] = ['issue', 'consume', 'transfer', 'return', 'scrap', 'adjust']
+export const VOUCHER_OP_LABEL_FA: Record<VoucherOp, string> = { issue: 'خروج از انبار', consume: 'مصرف', transfer: 'انتقال', return: 'برگشت به انبار', scrap: 'ضایعات', adjust: 'تعدیل موجودی' }
+export const VOUCHER_OP_TITLE_FA: Record<VoucherOp, string> = { issue: 'حواله خروج از انبار', consume: 'حواله مصرف کالا', transfer: 'حواله انتقال بین انبارها', return: 'حواله برگشت به انبار', scrap: 'حواله ضایعات', adjust: 'حواله تعدیل موجودی' }
+export const VOUCHER_OP_HINT_FA: Record<VoucherOp, string> = {
+  issue: 'تحویل کالا به جبهه یا پیمانکار؛ موجودی انبار کم می‌شود.',
+  consume: 'کالایی که در کار مصرف شد (مثلاً الکترود برای جوشکاری)؛ نوع عملیات و حجم کار را بنویسید تا با جدول مبنا مقایسه شود.',
+  transfer: 'جابه‌جایی بین دو انبار یا محل؛ مجموع موجودی تغییر نمی‌کند.',
+  return: 'بازگشت کالای مصرف‌نشده به انبار؛ موجودی زیاد می‌شود.',
+  scrap: 'کالای تلف یا غیرقابل‌استفاده؛ علت لازم است و از موجودی کم می‌شود.',
+  adjust: 'اصلاح اختلاف شمارش فیزیکی با دفتر؛ جهت و علت (شمارهٔ برگ شمارش) لازم است.',
+}
+export interface Requisition { id: string; masterProjectId: string; number: string; requesterId: string | null; requestDate: string; operation: VoucherOp; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; status: RequisitionStatus; rejectReason: string; issuedAt: string | null; createdAt: string; fromLoc: string; toLoc: string; workOp: string; activityQty: number | null; activityUnit: string; contractorOrgId: string | null; adjustSign: 1 | -1; reason: string }
 export interface RequisitionLine { id: string; requisitionId: string; materialId: string; qtyRequested: number; stockAtRequest: number; qtyIssued: number; notes: string }
 export interface RequisitionSigner { id: string; requisitionId: string; role: SignerRole; sort: number; userId: string | null; decision: 'pending' | 'approved' | 'rejected'; signedAt: string | null; note: string; signatureImage: string | null }
 
