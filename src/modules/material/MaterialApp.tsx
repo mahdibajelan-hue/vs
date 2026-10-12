@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Scale, Gauge, GitCompareArrows, Loader2, Package, PackageCheck, Settings2, ShieldAlert, ShoppingCart, Warehouse, Flame, FileBarChart2, TrendingUp } from 'lucide-react'
+import { Compass, ListChecks, Scale, Gauge, GitCompareArrows, Loader2, Package, PackageCheck, Settings2, ShieldAlert, ShoppingCart, Warehouse, Flame, FileBarChart2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -11,19 +11,22 @@ import './material-control.css'
 import { useMaterialStore } from './store/useMaterialStore'
 import { useMaterialControlStore } from './store/useMaterialControlStore'
 import { useMaterialModel } from './lib/control/useMaterialModel'
+import { useMyTasks } from './lib/control/useMyTasks'
+import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
 
 export const MATERIAL_ACCENT = '#f59e0b'
 
-export type MatTab = 'dashboard' | 'bank' | 'mto' | 'discrepancy' | 'packages' | 'progress' | 'stock' | 'consumption' | 'balance' | 'reports' | 'settings'
+export type MatTab = 'dashboard' | 'myTasks' | 'bank' | 'mto' | 'discrepancy' | 'packages' | 'progress' | 'stock' | 'consumption' | 'balance' | 'reports' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f59e0b' },
+  { id: 'myTasks', label: 'کارهای من', icon: ListChecks, color: '#38bdf8' },
   { id: 'bank', label: 'بانک متریال', icon: Package, color: '#10b981' },
   { id: 'mto', label: 'کنترل MTO', icon: GitCompareArrows, color: '#6366f1', subs: [{ id: 'compare', label: 'پیمان در برابر طراحی' }, { id: 'changes', label: 'تغییرات مقدار و قیمت' }] },
   { id: 'discrepancy', label: 'تطبیق و مغایرت‌ها', icon: ShieldAlert, color: '#ef4444' },
   { id: 'packages', label: 'بسته‌های خرید', icon: ShoppingCart, color: '#0ea5e9', subs: [{ id: 'packages', label: 'بسته‌ها و مراحل' }, { id: 'orders', label: 'درخواست خرید و سفارش' }, { id: 'factory', label: 'ساخت و بازرسی' }, { id: 'shipping', label: 'حواله و حمل' }] },
   { id: 'progress', label: 'پیشرفت تأمین', icon: TrendingUp, color: '#14b8a6', subs: [{ id: 'overview', label: 'پیشرفت وزنی' }, { id: 'inbox', label: 'کارتابل تأیید' }, { id: 'late', label: 'مراحل عقب‌افتاده' }] },
-  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری' }, { id: 'receiving', label: 'رسید و بازرسی ورودی' }, { id: 'moves', label: 'انتقال، مصرف و ضایعات' }, { id: 'allocation', label: 'تخصیص به جبهه' }] },
+  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری' }, { id: 'receiving', label: 'رسید و بازرسی ورودی' }, { id: 'moves', label: 'انتقال، مصرف و ضایعات' }, { id: 'requisitions', label: 'درخواست و مجوز خروج' }, { id: 'allocation', label: 'تخصیص به جبهه' }] },
   { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف و انحراف' }, { id: 'norms', label: 'مبنای مصرف' }] },
   { id: 'balance', label: 'بالانس', icon: Scale, color: '#22c55e' },
   { id: 'reports', label: 'گزارش‌ها', icon: FileBarChart2, color: '#94a3b8' },
@@ -32,6 +35,7 @@ const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: 
 
 type P = { projectId: string; sub: string; onGo: (t: MatTab, s?: string) => void }
 const L = <T extends Record<string, unknown>>(f: () => Promise<T>, k: keyof T) => lazy(() => f().then((m) => ({ default: m[k] as React.ComponentType<P> })))
+const MyTasks = L(() => import('./pages/control/MyTasksPage'), 'MyTasksPage')
 const Dashboard = L(() => import('./pages/control/DashboardPage'), 'DashboardPage')
 const Bank = L(() => import('./pages/control/BankPage'), 'BankPage')
 const Mto = L(() => import('./pages/control/MtoPage'), 'MtoPage')
@@ -46,6 +50,7 @@ const Settings = L(() => import('./pages/control/SettingsPage'), 'SettingsPage')
 const Orders = L(() => import('./pages/control/SupplyChainPages'), 'OrdersPage')
 const Factory = L(() => import('./pages/control/SupplyChainPages'), 'FactoryPage')
 const Shipping = L(() => import('./pages/control/SupplyChainPages'), 'ShippingPage')
+const Requisitions = L(() => import('./pages/control/RequisitionPage'), 'RequisitionPage')
 const Allocation = L(() => import('./pages/control/SupplyChainPages'), 'AllocationsPage')
 
 /** «کنترل و پایش متریال» — same shell and design system as the other project-management modules; eleven sections, each with its few sub-views. */
@@ -62,6 +67,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
   const [subs, setSubs] = useState<Partial<Record<MatTab, string>>>({})
   const [projectId, setProjectId] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
+  const [guide, setGuide] = useState(false)
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -80,18 +86,22 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
   const go = (t: MatTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   const loading = !matLoaded || !mdLoaded || !csLoaded
   const model = useMaterialModel(projectId)
-  const badge = (id: MatTab): number => (id === 'discrepancy' ? model.discrepancies.filter((d) => d.status === 'open' || d.status === 'in_review').length : id === 'progress' ? model.stages.filter((s) => s.applicable && (s.status === 'submitted' || s.status === 'reviewed')).length : 0)
+  const myTasks = useMyTasks(model, projectId)
+  useEffect(() => { if (!loading && projectId && model.packages.length === 0 && model.materials.length === 0 && shouldAutoGuide(projectId)) setGuide(true) }, [loading, projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const goStr = (t: string, sub?: string) => go(t as MatTab, sub)
+  const badge = (id: MatTab): number => (id === 'myTasks' ? myTasks.length : id === 'discrepancy' ? model.discrepancies.filter((d) => d.status === 'open' || d.status === 'in_review').length : id === 'progress' ? model.stages.filter((s) => s.applicable && (s.status === 'submitted' || s.status === 'reviewed')).length : 0)
 
   const body = (pid: string) => {
     const p: P = { projectId: pid, sub, onGo: go }
     switch (tab) {
       case 'dashboard': return <Dashboard {...p} />
+      case 'myTasks': return <MyTasks {...p} />
       case 'bank': return <Bank {...p} />
       case 'mto': return <Mto {...p} />
       case 'discrepancy': return <Discrepancy {...p} />
       case 'packages': return sub === 'orders' ? <Orders {...p} /> : sub === 'factory' ? <Factory {...p} /> : sub === 'shipping' ? <Shipping {...p} /> : <Packages {...p} />
       case 'progress': return <Progress {...p} />
-      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : <Stock {...p} />
+      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : sub === 'requisitions' ? <Requisitions {...p} /> : <Stock {...p} />
       case 'consumption': return <Consumption {...p} />
       case 'balance': return <Balance {...p} />
       case 'reports': return <Reports {...p} />
@@ -113,6 +123,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
+            {projectId && <button className="im-btn im-btn-sm mt-guide-btn" onClick={() => setGuide(true)} aria-label="راهنمای گام‌به‌گام"><Compass size={14} /> <span>راهنمای مراحل</span></button>}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
@@ -145,10 +156,12 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
                 </div>
               </div>
             )}
+            <HelpBox tab={tab} sub={sub} onGo={goStr} />
             <Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}>{body(projectId)}</Suspense>
           </div>
         )}
       </main>
+      {guide && projectId && <GuideWizard model={model} projectId={projectId} onGo={goStr} onClose={() => setGuide(false)} />}
     </div>
   )
 }

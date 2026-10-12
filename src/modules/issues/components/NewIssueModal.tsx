@@ -15,6 +15,7 @@ import { useKnowledgeStore } from '../store/useKnowledgeStore'
 import { HelpButton } from './Help'
 import { JalaliDateField } from './JalaliDateField'
 import { todayIso } from '../lib/issueRing'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 const toEn = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
 const digits = (v: string) => Number(toEn(v).replace(/[^\d]/g, '')) || 0
@@ -143,6 +144,7 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
   )
 
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 680 }} role="dialog" aria-modal="true" aria-label="ثبت مسئلهٔ جدید">
         <div className="im-modal-head">
@@ -245,5 +247,6 @@ export function NewIssueModal({ defaultProjectId, onClose, onCreated }: { defaul
         )}
       </div>
     </div>
+    </ModalPortal>
   )
 }

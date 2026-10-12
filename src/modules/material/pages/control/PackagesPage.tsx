@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Boxes, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useAuthStore } from '../../../../store/useAuthStore'
 import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel } from '../../lib/control/useMaterialModel'
@@ -9,7 +10,11 @@ import { FormModal } from '../../../finance/components/FormModal'
 import { LinkedRecords, ProgressBar, RaiseButton, bn, fa, pct, qtyText } from '../../components/control/common'
 import { StageChain } from '../../components/control/StageChain'
 import { StageModal } from '../../components/control/StageModal'
-import { PACKAGE_STATUS_LABEL_FA, type ItemStage, type Material, type MtlPackage, type PackageStatus } from '../../types'
+import { CommodityIcon } from '../../components/control/CommodityIcon'
+import { RemoveRecord } from '../../components/control/RemoveRecord'
+import { orderAllowance, ALLOW_LABEL_FA, type Allowance } from '../../lib/control/allowance'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
+import { PACKAGE_STATUS_LABEL_FA, type ItemStage, type MtlPackage, type PackageStatus } from '../../types'
 
 /** Purchase packages: what is bought together, from whom, with the supply stages of every item and their progress. */
 export function PackagesPage({ projectId }: { projectId: string }) {
@@ -19,6 +24,8 @@ export function PackagesPage({ projectId }: { projectId: string }) {
   const [sel, setSel] = useState<string | null>(null)
   const [form, setForm] = useState<MtlPackage | 'new' | null>(null)
   const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const isAdmin = useAuthStore((st) => !!st.profile?.isAdmin)
   const [pick, setPick] = useState<{ stage: ItemStage; itemId: string } | null>(null)
   const canEdit = cs.can(projectId, 'edit_packages')
   const byId = useMemo(() => new Map(m.materials.map((x) => [x.id, x])), [m.materials])
@@ -39,6 +46,7 @@ export function PackagesPage({ projectId }: { projectId: string }) {
           <button className="im-btn im-btn-sm" onClick={() => setSel(null)}>→ همهٔ بسته‌ها</button>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>{pkg.code} · {pkg.title}</h2><Chip tone={pkg.status === 'active' ? 'good' : 'neutral'}>{PACKAGE_STATUS_LABEL_FA[pkg.status]}</Chip>
           <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+            {isAdmin && <button className="im-btn im-btn-sm im-btn-danger" onClick={() => setRemoving(true)}><Trash2 size={13} /> حذف بسته</button>}
             {canEdit && <><button className="im-btn im-btn-sm" onClick={() => setForm(pkg)}><Pencil size={13} /> ویرایش بسته</button><button className="im-btn im-btn-primary im-btn-sm" onClick={() => setAdding(true)}><Plus size={13} /> افزودن اقلام</button></>}
             <RaiseButton projectId={projectId} sources={[{ type: 'package', id: pkg.id }]} defaults={{ target: 'risk', title: `ریسک تأمین بستهٔ ${pkg.code}`, description: `${pkg.title}\nتأمین‌کننده: ${orgName(pkg.supplierOrgId)}\nپیشرفت وزنی ${pct(roll.actual)} در برابر برنامه ${pct(roll.planned)}`, severity: 'medium', extra: { category: 'proc_supplier', package: pkg.code } }} />
           </span>
@@ -56,7 +64,7 @@ export function PackagesPage({ projectId }: { projectId: string }) {
               {itemRows.map(({ i, mat, ip }) => (
                 <div key={i.id} className="im-card" style={{ padding: 12, display: 'grid', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ minWidth: 0 }}><b>{mat?.description ?? '—'}</b><div className="im-helper" style={{ margin: 0 }}><span className="fn-code">{mat?.materialCode}</span> · {[mat?.facility, mat?.pipelineNo || mat?.tagNumber].filter(Boolean).join(' · ')}</div></div>
+                    <div style={{ minWidth: 0, display: 'flex', gap: 9, alignItems: 'center' }}><CommodityIcon code={m.groupById.get(mat?.groupId ?? '')?.code} /><div style={{ minWidth: 0 }}><b>{mat?.description ?? '—'}</b> {i.exceptionReason && <span title={i.exceptionReason}><Chip tone="warn">استثنا</Chip></span>}<div className="im-helper" style={{ margin: 0 }}><span className="fn-code">{mat?.itemUid}</span> · ردیف {mat?.lineNo || '—'} · <span className="fn-code">{mat?.materialCode}</span> · {[mat?.facility, mat?.pipelineNo || mat?.tagNumber].filter(Boolean).join(' · ')}</div></div></div>
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
                       <span>مقدار {canEdit ? <NumInput value={i.qty} label="مقدار" onCommit={(n) => void cs.updatePackageItem(i.id, { qty: n })} className="fn-cell-input" /> : qtyText(i.qty, mat?.unit ?? '')} {mat?.unit}</span>
                       <span>قیمت {canEdit ? <NumInput value={i.unitPrice} label="قیمت واحد" onCommit={(n) => void cs.updatePackageItem(i.id, { unitPrice: n })} decimals={0} className="fn-cell-input" /> : fa(i.unitPrice)}</span>
@@ -72,8 +80,9 @@ export function PackagesPage({ projectId }: { projectId: string }) {
           )}
         </Section>
         <Section title="ریسک و مسئلهٔ این بسته"><LinkedRecords projectId={projectId} sourceType="package" sourceIds={[pkg.id]} /></Section>
-        {form && <PackageForm projectId={projectId} pkg={form === 'new' ? null : form} onClose={() => setForm(null)} onSaved={(id) => setSel(id)} />}
-        {adding && <AddItems model={m} pkgId={pkg.id} onClose={() => setAdding(false)} />}
+        {form && <PackageForm projectId={projectId} pkg={form === 'new' ? null : form} onClose={() => setForm(null)} onSaved={(id, isNew) => { setSel(id); if (isNew) setAdding(true) }} />}
+        {adding && <AddItems model={m} pkgId={pkg.id} initialGroup={pkg.groupId} onClose={() => setAdding(false)} />}
+        {removing && <RemoveRecord kind="package" id={pkg.id} label={`${pkg.code} · ${pkg.title}`} consequences={[`${fa(items.length)} قلم و مراحل تأمین آن‌ها حذف می‌شود`, 'درخواست خرید و سفارش‌های متصل می‌مانند ولی از بسته جدا می‌شوند', 'مدرک و تأییدهای مراحل از بین می‌رود؛ فقط در سابقهٔ تغییرات می‌ماند']} onClose={(done) => { setRemoving(false); if (done) setSel(null) }} />}
         {pick && pickItem && pickDef && <StageModal projectId={projectId} stage={pick.stage} def={pickDef} item={pickItem} material={byId.get(pickItem.materialId)} onClose={() => setPick(null)} />}
       </div>
     )
@@ -88,7 +97,7 @@ export function PackagesPage({ projectId }: { projectId: string }) {
             const n = m.items.filter((i) => i.packageId === p.id).length
             return (
               <button key={p.id} className="im-card" style={{ textAlign: 'start', padding: 14, display: 'grid', gap: 8, cursor: 'pointer' }} onClick={() => setSel(p.id)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{p.code}</b><Chip tone={p.status === 'active' ? 'good' : 'neutral'}>{PACKAGE_STATUS_LABEL_FA[p.status]}</Chip></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}><b style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}><CommodityIcon code={m.groupById.get(p.groupId ?? '')?.code} />{p.code}</b><Chip tone={p.status === 'active' ? 'good' : 'neutral'}>{PACKAGE_STATUS_LABEL_FA[p.status]}</Chip></div>
                 <div style={{ fontWeight: 700 }}>{p.title}</div>
                 <div className="im-helper" style={{ margin: 0 }}>{m.groupById.get(p.groupId ?? '')?.title ?? 'چند گروه'} · {orgName(p.supplierOrgId)} · {fa(n)} قلم</div>
                 <ProgressBar actual={r?.actual ?? 0} planned={r?.planned ?? 0} />
@@ -98,12 +107,12 @@ export function PackagesPage({ projectId }: { projectId: string }) {
           })}
         </div>
       )}
-      {form && <PackageForm projectId={projectId} pkg={form === 'new' ? null : form} onClose={() => setForm(null)} onSaved={(id) => setSel(id)} />}
+      {form && <PackageForm projectId={projectId} pkg={form === 'new' ? null : form} onClose={() => setForm(null)} onSaved={(id, isNew) => { setSel(id); if (isNew) setAdding(true) }} />}
     </div>
   )
 }
 
-function PackageForm({ projectId, pkg, onClose, onSaved }: { projectId: string; pkg: MtlPackage | null; onClose: () => void; onSaved: (id: string) => void }) {
+function PackageForm({ projectId, pkg, onClose, onSaved }: { projectId: string; pkg: MtlPackage | null; onClose: () => void; onSaved: (id: string, isNew: boolean) => void }) {
   const cs = useMaterialControlStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const org = orgs.map((o) => ({ value: o.id, label: o.name }))
@@ -118,35 +127,62 @@ function PackageForm({ projectId, pkg, onClose, onSaved }: { projectId: string; 
         { key: 'plannedStart', label: 'شروع برنامه‌ای', kind: 'date' }, { key: 'plannedEnd', label: 'پایان برنامه‌ای', kind: 'date' }, { key: 'notes', label: 'یادداشت', kind: 'text', span: 2 },
       ]}
       initial={{ code: pkg?.code ?? `PK-${String(cs.packages.filter((p) => p.masterProjectId === projectId).length + 1).padStart(2, '0')}`, title: pkg?.title ?? '', groupId: pkg?.groupId ?? '', patternId: pkg?.patternId ?? '', contractorOrgId: pkg?.contractorOrgId ?? '', supplierOrgId: pkg?.supplierOrgId ?? '', status: pkg?.status ?? 'active', plannedStart: pkg?.plannedStart ?? null, plannedEnd: pkg?.plannedEnd ?? null, notes: pkg?.notes ?? '' }}
-      onSubmit={async (v) => { const id = await cs.savePackage(projectId, { id: pkg?.id, code: String(v.code), title: String(v.title), groupId: (v.groupId as string) || null, patternId: (v.patternId as string) || null, contractorOrgId: (v.contractorOrgId as string) || null, supplierOrgId: (v.supplierOrgId as string) || null, status: v.status as PackageStatus, plannedStart: (v.plannedStart as string) || null, plannedEnd: (v.plannedEnd as string) || null, notes: String(v.notes ?? '') }); if (id) onSaved(id) }} />
+      onSubmit={async (v) => { const id = await cs.savePackage(projectId, { id: pkg?.id, code: String(v.code), title: String(v.title), groupId: (v.groupId as string) || null, patternId: (v.patternId as string) || null, contractorOrgId: (v.contractorOrgId as string) || null, supplierOrgId: (v.supplierOrgId as string) || null, status: v.status as PackageStatus, plannedStart: (v.plannedStart as string) || null, plannedEnd: (v.plannedEnd as string) || null, notes: String(v.notes ?? '') }); if (id) onSaved(id, !pkg) }} />
   )
 }
 
-function AddItems({ model, pkgId, onClose }: { model: ReturnType<typeof useMaterialModel>; pkgId: string; onClose: () => void }) {
+function AddItems({ model, pkgId, initialGroup, onClose }: { model: ReturnType<typeof useMaterialModel>; pkgId: string; initialGroup: string | null; onClose: () => void }) {
   const cs = useMaterialControlStore()
   const [q, setQ] = useState('')
-  const [chosen, setChosen] = useState<Set<string>>(new Set())
+  const [group, setGroup] = useState<string>(initialGroup ?? '')
+  const [chosen, setChosen] = useState<Map<string, { qty: number; reason: string; exception: boolean }>>(new Map())
   const inPkg = new Set(model.items.filter((i) => i.packageId === pkgId).map((i) => i.materialId))
-  const packaged = useMemo(() => { const s = new Map<string, number>(); for (const i of model.items) s.set(i.materialId, (s.get(i.materialId) ?? 0) + i.qty); return s }, [model.items])
-  const list = model.materials.filter((x) => !inPkg.has(x.id) && (!q.trim() || [x.materialCode, x.description, x.facility, x.tagNumber].join(' ').toLowerCase().includes(q.trim().toLowerCase())))
-  const left = (x: Material) => Math.max(0, (model.positions.get(x.id)?.requiredQty ?? 0) - (packaged.get(x.id) ?? 0))
-  const toggle = (id: string) => setChosen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const rows = useMemo(() => model.materials.filter((x) => !inPkg.has(x.id) && (!group || x.groupId === group) && (!q.trim() || [x.itemUid, x.lineNo, x.materialCode, x.description, x.facility, x.tagNumber, x.pipelineNo].join(' ').toLowerCase().includes(q.trim().toLowerCase())))
+    .map((x) => ({ x, a: orderAllowance(model.positions.get(x.id)!, 'package') })), [model.materials, model.positions, model.items, group, q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const groupCount = (id: string) => model.materials.filter((x) => x.groupId === id && !inPkg.has(x.id) && orderAllowance(model.positions.get(x.id)!, 'package').state !== 'locked').length
+  const toggle = (id: string, a: Allowance, exception = false) => setChosen((s) => { const n = new Map(s); if (n.has(id)) n.delete(id); else n.set(id, { qty: a.remaining, reason: a.state === 'shortage' ? a.reasonAuto : '', exception }); return n })
+  const patch = (id: string, v: Partial<{ qty: number; reason: string }>) => setChosen((s) => { const n = new Map(s); const c = n.get(id); if (c) n.set(id, { ...c, ...v }); return n })
+  const picked = rows.filter((r) => chosen.has(r.x.id))
+  const needsReason = (r: (typeof rows)[number]) => { const c = chosen.get(r.x.id)!; return r.a.state === 'locked' || c.qty > r.a.remaining + 1e-9 }
+  const bad = picked.some((r) => { const c = chosen.get(r.x.id)!; return !(c.qty > 0) || (needsReason(r) && !c.reason.trim()) })
+  const stateChip = (a: Allowance) => <Chip tone={a.state === 'open' ? 'good' : a.state === 'shortage' ? 'warn' : 'neutral'}>{ALLOW_LABEL_FA[a.state]}</Chip>
   return (
-    <div className="im-overlay">
-      <div className="im-modal fn-form" style={{ maxWidth: 760 }} role="dialog" aria-modal="true" aria-label="افزودن اقلام">
-        <div className="im-modal-head"><div><div className="im-modal-title">افزودن اقلام به بسته</div><p className="im-helper" style={{ margin: 0 }}>مقدار پیش‌فرض، آنچه از نیاز هنوز در هیچ بسته‌ای نیست؛ قیمت پیش‌فرض قیمت مبنای قلم است. بعد از افزودن در خود بسته قابل ویرایش است.</p></div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
-        <input type="search" placeholder="جست‌وجو…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 8 }} aria-label="جست‌وجو" />
-        <div style={{ maxHeight: 360, overflowY: 'auto', display: 'grid', gap: 4 }}>
-          {list.length === 0 ? <p className="im-helper">قلمی برای افزودن نیست.</p> : list.map((x) => (
-            <label key={x.id} className="mt-link-row" style={{ cursor: 'pointer' }}>
-              <input type="checkbox" checked={chosen.has(x.id)} onChange={() => toggle(x.id)} style={{ width: 'auto' }} />
-              <div style={{ flex: 1, minWidth: 0 }}><b>{x.description || x.materialCode}</b><div><small className="fn-code">{x.materialCode}</small> <small>{x.facility}</small></div></div>
-              <small>{qtyText(left(x), x.unit)} باقی‌مانده از نیاز</small>
-            </label>
-          ))}
+    <ModalPortal>
+      <div className="im-overlay">
+        <div className="im-modal fn-form" style={{ maxWidth: 920 }} role="dialog" aria-modal="true" aria-label="افزودن اقلام">
+          <div className="im-modal-head"><div><div className="im-modal-title">افزودن اقلام به بسته</div><p className="im-helper" style={{ margin: 0 }}>ابتدا گروه کالا را انتخاب کنید تا فقط اقلام همان گروه فهرست شود. مقدار پیش‌فرض، آنچه از نیاز هنوز در هیچ بسته یا سفارشی نیست. قلمی که قبلاً سفارش شده، قفل است؛ مگر کسری متریال داشته باشد یا برایش «استثنا» با ذکر علت ثبت شود.</p></div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
+          <div className="mt-grp-chips" role="tablist" aria-label="گروه کالا">
+            <button role="tab" aria-selected={!group} className={`mt-grp${!group ? ' on' : ''}`} onClick={() => setGroup('')}><Boxes size={15} /> همهٔ گروه‌ها</button>
+            {cs.groups.filter((g) => g.active).map((g) => <button key={g.id} role="tab" aria-selected={group === g.id} className={`mt-grp${group === g.id ? ' on' : ''}`} onClick={() => setGroup(g.id)}><CommodityIcon code={g.code} size={15} tinted={false} />{g.title}<em>{fa(groupCount(g.id))}</em></button>)}
+          </div>
+          <input type="search" placeholder="جست‌وجوی کد یکتا، ردیف پیمان، کد، شرح، تگ، خط…" value={q} onChange={(e) => setQ(e.target.value)} style={{ margin: '8px 0' }} aria-label="جست‌وجو" />
+          <div className="mt-pick-list">
+            {rows.length === 0 ? <p className="im-helper" style={{ margin: 12 }}>قلمی برای افزودن در این گروه نیست.</p> : rows.map(({ x, a }) => {
+              const c = chosen.get(x.id)
+              const locked = a.state === 'locked'
+              return (
+                <div key={x.id} className={`mt-pick${c ? ' on' : ''}${locked && !c ? ' locked' : ''}`}>
+                  <label className="mt-pick-main">
+                    <input type="checkbox" checked={!!c} disabled={locked && !c} onChange={() => toggle(x.id, a)} style={{ width: 'auto' }} aria-label={`انتخاب ${x.description}`} />
+                    <CommodityIcon code={model.groupById.get(x.groupId ?? '')?.code} size={15} />
+                    <span style={{ minWidth: 0, flex: 1 }}><b>{x.description || x.materialCode}</b><small className="fn-code">{x.itemUid} · ردیف {x.lineNo || '—'} · {x.materialCode}{x.facility ? ` · ${x.facility}` : ''}</small></span>
+                    {stateChip(a)}
+                    <small className="mt-pick-left">{locked ? 'نیاز کاملاً سفارش شده' : `${qtyText(a.remaining, x.unit)} ${a.state === 'shortage' ? 'کسری' : 'باقی‌مانده'}`}</small>
+                  </label>
+                  {locked && !c && <button className="im-btn im-btn-sm" onClick={() => toggle(x.id, a, true)}>ثبت استثنا برای سفارش مجدد</button>}
+                  {c && (
+                    <div className="mt-pick-edit">
+                      <label>مقدار ({x.unit})<input dir="ltr" inputMode="decimal" value={c.qty || ''} onChange={(e) => patch(x.id, { qty: Number(e.target.value) || 0 })} /></label>
+                      {(locked || c.qty > a.remaining + 1e-9 || a.state === 'shortage') && <label style={{ flex: 1 }}>{a.state === 'shortage' && c.qty <= a.remaining + 1e-9 ? 'علت (خودکار)' : 'علت استثنا *'}<input value={c.reason} onChange={(e) => patch(x.id, { reason: e.target.value })} placeholder="مثلاً: ضایعات حین نصب، رد بازرسی ورودی، تغییر طراحی با مجوز…" aria-invalid={needsReason({ x, a }) && !c.reason.trim() ? true : undefined} /></label>}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="fn-form-foot"><span className="im-helper" style={{ margin: 0, marginInlineEnd: 'auto' }}>{picked.length ? `${fa(picked.length)} قلم انتخاب شده` : 'قلمی انتخاب نشده'}</span><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button><button className="im-btn im-btn-primary" disabled={!picked.length || bad} onClick={async () => { const ok = await cs.addPackageItems(pkgId, picked.map(({ x }) => { const c = chosen.get(x.id)!; return { materialId: x.id, qty: c.qty, unitPrice: x.unitPrice, currency: x.currency, plannedDelivery: x.needDate, exceptionReason: c.reason.trim() } })); if (ok) onClose() }}>افزودن {picked.length ? fa(picked.length) : ''} قلم</button></div>
         </div>
-        <div className="fn-form-foot"><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button><button className="im-btn im-btn-primary" disabled={!chosen.size} onClick={async () => { const ok = await cs.addPackageItems(pkgId, model.materials.filter((x) => chosen.has(x.id)).map((x) => ({ materialId: x.id, qty: left(x) || (model.positions.get(x.id)?.requiredQty ?? 0), unitPrice: x.unitPrice, currency: x.currency, plannedDelivery: x.needDate }))); if (ok) onClose() }}>افزودن {chosen.size ? fa(chosen.size) : ''} قلم</button></div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

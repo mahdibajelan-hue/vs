@@ -76,11 +76,11 @@ export function useMaterialModel(projectId: string | null): MaterialModel {
     const openLinkCount = new Map([...linksByMaterial].map(([id, ls]) => [id, ls.filter((l) => isOpenTarget(cs.linkTargets.get(l.targetId))).length]))
     const arrival = new Map(materials.map((m) => { const p = positions.get(m.id)!; return [m.id, expectedArrival(m, poLines, pos, p.received, p.ordered)] as const }))
     const priorities = prioritize({ materials, positions, settings: cs.settings, today, arrival, openLinks: openLinkCount })
-    const progressRows = items.map((i) => itemProgress(i, stages, today, materials.find((m) => m.id === i.materialId)?.fxRate ?? 1))
+    const progressRows = items.map((i) => itemProgress(i, stages, today, materials.find((m) => m.id === i.materialId)?.fxRate ?? 1, positions.get(i.materialId)))
     const groupTitle = (id: string | null) => cs.groups.find((g) => g.id === id)?.title ?? 'بدون گروه'
-    const base = { items, stages, packages: packages, materials, asOf: today, groupTitle }
+    const base = { items, stages, packages: packages, materials, positions, asOf: today, groupTitle }
     const dates = [...stages.map((s) => s.plannedDate), ...stages.map((s) => s.approvedAt?.slice(0, 10) ?? null)].filter((d): d is string => !!d).sort()
-    const curve = dates.length ? progressCurve({ items, stages, materials, from: dates[0], to: dates.at(-1)! > today ? dates.at(-1)! : today, stepDays: 30 }) : []
+    const curve = dates.length ? progressCurve({ items, stages, materials, positions, from: dates[0], to: dates.at(-1)! > today ? dates.at(-1)! : today, stepDays: 30 }) : []
     return {
       projectId, materials, data, positions, detected, priorities, priorityById: new Map(priorities.map((p) => [p.materialId, p])), fronts: frontsAtRisk(materials, priorities),
       suggestions: suggestRaises({ materials, positions, groups: cs.groups, detected, priorities, settings: cs.settings, today }), groups: cs.groups, groupById: new Map(cs.groups.map((g) => [g.id, g])),

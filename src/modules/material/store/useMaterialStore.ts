@@ -1,6 +1,6 @@
+import { explainMaterialError } from '../lib/control/errors'
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
-import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
   InspectionStatus,
@@ -53,7 +53,7 @@ import {
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
-  useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
+  useSystemStore.getState().setStorageError(`خطا در ${action}: ${explainMaterialError(error)}`)
   return true
 }
 

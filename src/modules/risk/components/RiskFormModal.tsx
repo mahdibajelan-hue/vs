@@ -14,6 +14,7 @@ import {
   type RmImpactDim, type RmRisk,
 } from '../types'
 import { Field, PersonSelect, Scale, Section, ScoreBox, digitsOnly, nf } from './rk'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 type Errs = Partial<Record<'project' | 'title' | 'category' | 'probability' | 'impact' | 'identified' | 'general', string>>
 
@@ -96,6 +97,7 @@ export function RiskFormModal({ risk, defaultProjectId, onClose, onSaved }: { ri
   const errList = Object.entries(errs).filter(([, v]) => v).map(([, v]) => v as string)
 
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 820 }} role="dialog" aria-modal="true" aria-label={edit ? 'ویرایش ریسک' : 'ثبت ریسک جدید'}>
         <div className="im-modal-head">
@@ -230,6 +232,7 @@ export function RiskFormModal({ risk, defaultProjectId, onClose, onSaved }: { ri
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }
 

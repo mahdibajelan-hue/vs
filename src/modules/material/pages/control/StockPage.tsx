@@ -12,6 +12,7 @@ import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
 import { bn, fa } from '../../components/control/common'
 import { ItemDrawer } from '../../components/control/ItemDrawer'
 import { INSPECTION_STATUS_LABEL_FA, TXN_KIND_LABEL_FA, type Material, type MtlTxn, type TxnKind, type WarehouseLine } from '../../types'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
 
 type Dim = 'item' | 'facility' | 'pipeline' | 'area' | 'front'
 const DIMS: [Dim, string][] = [['item', 'قلم'], ['facility', 'ایستگاه'], ['pipeline', 'خط'], ['area', 'بخش اجرایی'], ['front', 'جبهه کاری']]
@@ -128,6 +129,7 @@ function ReceiptForm({ model: m, projectId, onClose }: { model: MaterialModel; p
   const [loc, setLoc] = useState('')
   const valid = lines.some((l) => l.id && l.qty > 0) && num.trim()
   return (
+    <ModalPortal>
     <div className="im-overlay"><div className="im-modal fn-form" style={{ maxWidth: 720 }} role="dialog" aria-modal="true" aria-label="ثبت رسید">
       <div className="im-modal-head"><div className="im-modal-title">ثبت رسید کالا</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
       <div className="fn-form-grid">
@@ -151,6 +153,7 @@ function ReceiptForm({ model: m, projectId, onClose }: { model: MaterialModel; p
         if (id) { for (const l of lines.filter((x) => x.id && x.qty > 0)) await ms.addWarehouseLine(id, l.id, l.qty, l.cond, 'pending'); onClose() }
       }}>ثبت رسید (در انتظار بازرسی)</button></div>
     </div></div>
+    </ModalPortal>
   )
 }
 

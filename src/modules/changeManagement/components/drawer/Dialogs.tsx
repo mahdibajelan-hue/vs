@@ -4,12 +4,14 @@ import { useChangeStore } from '../../store/useChangeStore'
 import { useChangeCtx } from '../../lib/useChangeData'
 import type { ChangeRequest, ChangeStep } from '../../types'
 import { Field, MoneyInput, nf, todayIso } from '../cm'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
 
 export function Dialog({ title, children, confirm, danger, onConfirm, onClose, wide }: { title: string; children: ReactNode; confirm: string; danger?: boolean; onConfirm: () => Promise<string | null>; onClose: () => void; wide?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const go = async () => { setBusy(true); setErr(''); const e = await onConfirm(); setBusy(false); if (e) setErr(e); else onClose() }
   return (
+    <ModalPortal>
     <div className="im-overlay" style={{ zIndex: 80 }}>
       <div className="im-modal" style={{ maxWidth: wide ? 640 : 480 }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="im-modal-head"><div className="im-modal-title">{title}</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -21,6 +23,7 @@ export function Dialog({ title, children, confirm, danger, onConfirm, onClose, w
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }
 

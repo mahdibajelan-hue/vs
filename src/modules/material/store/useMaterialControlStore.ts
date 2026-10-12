@@ -1,31 +1,19 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
-import { friendlyErrorMessage } from '../../../lib/friendlyError'
+import { explainMaterialError } from '../lib/control/errors'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
+import { useMaterialStore } from './useMaterialStore'
 import { roleAllows } from '../lib/control/perms'
 import {
   DEFAULT_MTL_SETTINGS, type AuditRow, type Baseline, type ItemStage, type MtlChange, type MtlDiscrepancy, type MtlGroup, type MtlLink, type MtlNorm, type MtlPackage, type MtlPattern, type MtlRole,
-  type MtlSettings, type MtlTxn, type MtlUnit, type PackageItem, type PatternWeight, type ProjectRole, type StageDef, type TxnKind,
+  type MtlSettings, type MtlTxn, type MtlUnit, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind,
 } from '../types'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 export interface LinkTarget { id: string; kind: 'risk' | 'issue'; code: string; title: string; status: string; ownerId: string | null; dueDate: string | null; realizedAt: string | null }
 
-const CODES: Record<string, string> = {
-  not_allowed: 'نقش شما اجازهٔ این کار را ندارد', separation_of_duties: 'ثبت‌کننده نمی‌تواند همان مورد را تأیید کند', reason_required: 'نوشتن علت لازم است', resolution_required: 'نوشتن نتیجهٔ تعیین تکلیف لازم است',
-  evidence_required: 'مدرک یا توضیح اثبات انجام کار لازم است', stage_locked: 'مرحلهٔ ارسال‌شده یا تأییدشده تغییر نمی‌کند', stage_not_applicable: 'این مرحله برای قلم غیرقابل‌اعمال است', already_submitted: 'مرحله در انتظار تأیید است',
-  nothing_new_to_submit: 'مقدار جدیدی برای ارسال نیست', qty_exceeds_item: 'مقدار انجام‌شده از مقدار قلم بیشتر است', not_awaiting_decision: 'این مرحله در انتظار تصمیم نیست', insufficient_stock: 'موجودی قابل‌مصرف کافی نیست',
-  qty_must_be_positive: 'مقدار باید بیشتر از صفر باشد', no_issue_mapping: 'این پروژه هنوز به ماژول مدیریت مسائل متصل نشده است', no_risk_mapping: 'این پروژه هنوز به ماژول مدیریت ریسک متصل نشده است', no_sources: 'حداقل یک قلم انتخاب کنید',
-  not_pending: 'این مورد دیگر در انتظار تصمیم نیست', target_not_found: 'رکورد مقصد پیدا نشد', risk_not_linked: 'این ریسک از متریال ایجاد یا به آن وصل نشده است',
-}
-function explain(error: { message: string }): string {
-  const m = error.message ?? ''
-  const hit = Object.keys(CODES).find((k) => m.includes(k))
-  if (hit) return CODES[hit]
-  if (m.includes('weights_must_sum_100')) return 'مجموع وزن مراحل فعال باید ۱۰۰ باشد'
-  return friendlyErrorMessage(error)
-}
+const explain = explainMaterialError
 function report(action: string, error: { message: string } | null): boolean {
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${explain(error)}`)
@@ -51,6 +39,9 @@ interface State {
   links: MtlLink[]
   linkTargets: Map<string, LinkTarget>
   roles: ProjectRole[]
+  requisitions: Requisition[]
+  reqLines: RequisitionLine[]
+  reqSigners: RequisitionSigner[]
   settings: MtlSettings
   settingsVersion: number
   people: Map<string, string>
@@ -67,7 +58,7 @@ interface State {
   // packages and stages
   savePackage: (projectId: string, p: Partial<MtlPackage> & { id?: string }) => Promise<string | null>
   deletePackage: (id: string) => Promise<boolean>
-  addPackageItems: (packageId: string, rows: { materialId: string; qty: number; unitPrice: number; currency: string; plannedDelivery?: string | null }[]) => Promise<boolean>
+  addPackageItems: (packageId: string, rows: { materialId: string; qty: number; unitPrice: number; currency: string; plannedDelivery?: string | null; exceptionReason?: string }[]) => Promise<boolean>
   updatePackageItem: (id: string, patch: Partial<PackageItem>) => Promise<boolean>
   removePackageItem: (id: string) => Promise<boolean>
   planStage: (id: string, patch: { plannedDate?: string | null; responsible?: string | null }) => Promise<boolean>
@@ -93,9 +84,15 @@ interface State {
   riskToIssue: (projectId: string, riskId: string, title: string, description: string, severity: string) => Promise<{ id: string; existing: boolean } | null>
   loadAudit: (projectId: string, limit?: number) => Promise<AuditRow[]>
   purgeDemo: (projectId: string) => Promise<boolean>
+  // audited removal (administrator; requests and orders also by package editors)
+  adminRemove: (kind: 'package' | 'request' | 'po', id: string, reason: string) => Promise<boolean>
+  // warehouse issue requisitions with sequential signatures
+  reqCreate: (a: { projectId: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; lines: { materialId: string; qty: number; notes?: string }[]; signers: { site_supervisor: string; supervision_supervisor: string; storekeeper: string } }) => Promise<string | null>
+  reqSign: (id: string, decision: 'approve' | 'reject', note?: string, issue?: { lineId: string; qty: number }[]) => Promise<string | null>
+  reqCancel: (id: string, reason: string) => Promise<boolean>
 }
 
-const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
+const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
 
 export const useMaterialControlStore = create<State>((set, get) => ({
   ...initial,
@@ -103,10 +100,11 @@ export const useMaterialControlStore = create<State>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true })
     const t = (name: string) => supabase.from(name).select('*')
-    const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs] = await Promise.all([
+    const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs, reqs, reqLn, reqSg] = await Promise.all([
       t('mtl_groups').order('sort'), t('mtl_units'), t('mtl_stage_defs').order('sort'), t('mtl_patterns'), t('mtl_pattern_weights'), t('mtl_packages'), t('mtl_package_items'), t('mtl_item_stages'), t('mtl_baselines').order('version'),
       t('mtl_changes').order('requested_at', { ascending: false }), t('mtl_txns').order('txn_date', { ascending: false }), t('mtl_norms'), t('mtl_discrepancies'), t('mtl_links'), t('mtl_project_roles'),
       t('mtl_settings_versions').order('version'), supabase.from('profiles').select('id, full_name'),
+      t('mtl_requisitions').order('created_at', { ascending: false }), t('mtl_requisition_lines'), t('mtl_requisition_signers').order('sort'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
@@ -132,7 +130,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       patterns: ok<Row>(pats).map((r): MtlPattern => ({ id: r.id, code: r.code, title: r.title, notes: r.notes ?? '', isDefault: !!r.is_default, active: !!r.active })),
       patternWeights: ok<Row>(pw).map((r): PatternWeight => ({ patternId: r.pattern_id, stageKey: r.stage_key, weight: n(r.weight) })),
       packages: ok<Row>(pkgs).map((r): MtlPackage => ({ id: r.id, masterProjectId: r.master_project_id, code: r.code, title: r.title, groupId: r.group_id, contractorOrgId: r.contractor_org_id, supplierOrgId: r.supplier_org_id, patternId: r.pattern_id, status: r.status, plannedStart: r.planned_start, plannedEnd: r.planned_end, notes: r.notes ?? '' })),
-      items: ok<Row>(items).map((r): PackageItem => ({ id: r.id, packageId: r.package_id, materialId: r.material_id, qty: n(r.qty), unitPrice: n(r.unit_price), currency: r.currency, supplierOrgId: r.supplier_org_id, plannedDelivery: r.planned_delivery, baselineVersion: r.baseline_version })),
+      items: ok<Row>(items).map((r): PackageItem => ({ id: r.id, packageId: r.package_id, materialId: r.material_id, qty: n(r.qty), unitPrice: n(r.unit_price), currency: r.currency, supplierOrgId: r.supplier_org_id, plannedDelivery: r.planned_delivery, baselineVersion: r.baseline_version, exceptionReason: r.exception_reason ?? '' })),
       stages: ok<Row>(stages).map((r): ItemStage => ({ id: r.id, itemId: r.item_id, stageKey: r.stage_key, applicable: !!r.applicable, naReason: r.na_reason ?? '', weight: n(r.weight), plannedDate: r.planned_date, actualDate: r.actual_date, responsible: r.responsible, status: r.status, doneQty: r.done_qty == null ? null : n(r.done_qty), approvedQty: n(r.approved_qty ?? 0), evidenceUrl: r.evidence_url ?? '', evidenceNote: r.evidence_note ?? '', submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, approvedBy: r.approved_by, approvedAt: r.approved_at, rejectReason: r.reject_reason ?? '' })),
       baselines: ok<Row>(bases).map((r): Baseline => ({ id: r.id, masterProjectId: r.master_project_id, version: r.version, note: r.note ?? '', priceMethod: r.price_method ?? '', currency: r.currency, fxRate: n(r.fx_rate), baseDate: r.base_date, totalValue: n(r.total_value), approvedAt: r.approved_at, approvedBy: r.approved_by })),
       changes: ok<Row>(chg).map((r): MtlChange => ({ id: r.id, masterProjectId: r.master_project_id, materialId: r.material_id, field: r.field, oldValue: r.old_value ?? '', newValue: r.new_value ?? '', reason: r.reason ?? '', docRef: r.doc_ref ?? '', status: r.status, requestedBy: r.requested_by, requestedAt: r.requested_at, decidedBy: r.decided_by, decidedAt: r.decided_at, decisionNote: r.decision_note ?? '' })),
@@ -142,6 +140,9 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       links: linkRows.map((r): MtlLink => ({ id: r.id, masterProjectId: r.master_project_id, sourceType: r.source_type, sourceId: r.source_id, targetType: r.target_type, targetId: r.target_id, rel: r.rel, label: r.label ?? '', createdAt: r.created_at })),
       linkTargets: targets,
       roles: ok<Row>(roles).map((r): ProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
+      requisitions: ok<Row>(reqs).map((r): Requisition => ({ id: r.id, masterProjectId: r.master_project_id, number: r.number, requesterId: r.requester_id, requestDate: r.request_date, facility: r.facility ?? '', front: r.front ?? '', purpose: r.purpose ?? '', neededBy: r.needed_by, notes: r.notes ?? '', status: r.status, rejectReason: r.reject_reason ?? '', issuedAt: r.issued_at, createdAt: r.created_at })),
+      reqLines: ok<Row>(reqLn).map((r): RequisitionLine => ({ id: r.id, requisitionId: r.requisition_id, materialId: r.material_id, qtyRequested: n(r.qty_requested), stockAtRequest: n(r.stock_at_request), qtyIssued: n(r.qty_issued), notes: r.notes ?? '' })),
+      reqSigners: ok<Row>(reqSg).map((r): RequisitionSigner => ({ id: r.id, requisitionId: r.requisition_id, role: r.role, sort: r.sort, userId: r.user_id, decision: r.decision, signedAt: r.signed_at, note: r.note ?? '', signatureImage: r.signature_image })),
       settings, settingsVersion: inForce?.version ?? 0,
       people: new Map(ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'])),
       loaded: true, loading: false,
@@ -201,7 +202,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     await get().fetchAll(); return true
   },
   addPackageItems: async (packageId, rows) => {
-    const { error } = await supabase.from('mtl_package_items').insert(rows.map((r) => ({ package_id: packageId, material_id: r.materialId, qty: r.qty, unit_price: r.unitPrice, currency: r.currency, planned_delivery: r.plannedDelivery ?? null })))
+    const { error } = await supabase.from('mtl_package_items').insert(rows.map((r) => ({ package_id: packageId, material_id: r.materialId, qty: r.qty, unit_price: r.unitPrice, currency: r.currency, planned_delivery: r.plannedDelivery ?? null, exception_reason: r.exceptionReason ?? '' })))
     if (report('افزودن قلم به بسته', error)) return false
     await get().fetchAll(); return true
   },
@@ -345,6 +346,27 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     for (const [tbl, ids] of [['mtl_warehouse_receipts', empty(rc, 'mtl_warehouse_lines')], ['mtl_shipments', empty(sh, 'mtl_shipment_lines')], ['mtl_release_notes', empty(rel, 'mtl_release_lines')]] as [string, string[]][]) {
       if (ids.length) { const { error } = await supabase.from(tbl).delete().in('id', ids); if (report('پاک‌سازی سرفصل‌های خالی', error)) return false }
     }
+    await get().fetchAll(); return true
+  },
+
+  adminRemove: async (kind, id, reason) => {
+    const { error } = await supabase.rpc('mtl_admin_remove', { p_kind: kind, p_id: id, p_reason: reason })
+    if (report(kind === 'package' ? 'حذف بستهٔ خرید' : kind === 'request' ? 'حذف درخواست خرید' : 'حذف سفارش خرید', error)) return false
+    await Promise.all([get().fetchAll(), useMaterialStore.getState().fetchAll()]); return true
+  },
+  reqCreate: async (a) => {
+    const { data, error } = await supabase.rpc('mtl_req_create', { p_project: a.projectId, p_facility: a.facility, p_front: a.front, p_purpose: a.purpose, p_needed: a.neededBy, p_notes: a.notes, p_lines: a.lines.map((l) => ({ material_id: l.materialId, qty: l.qty, notes: l.notes ?? '' })), p_signers: a.signers })
+    if (report('ثبت درخواست خروج کالا', error)) return null
+    await get().fetchAll(); return data as string
+  },
+  reqSign: async (id, decision, note = '', issue) => {
+    const { data, error } = await supabase.rpc('mtl_req_sign', { p_req: id, p_decision: decision, p_note: note, p_issue: issue ? issue.map((i) => ({ line_id: i.lineId, qty: i.qty })) : null })
+    if (report(decision === 'approve' ? 'ثبت امضا' : 'رد درخواست', error)) return null
+    await Promise.all([get().fetchAll(), useMaterialStore.getState().fetchAll()]); return data as string
+  },
+  reqCancel: async (id, reason) => {
+    const { error } = await supabase.rpc('mtl_req_cancel', { p_req: id, p_reason: reason })
+    if (report('لغو درخواست', error)) return false
     await get().fetchAll(); return true
   },
 

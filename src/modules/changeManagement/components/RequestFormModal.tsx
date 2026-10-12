@@ -8,6 +8,7 @@ import { Field, MoneyInput } from './cm'
 import { ResolutionPanel } from './RouteTrack'
 import { HelpButton } from '../../issues/components/Help'
 import { CM_HELP } from '../lib/help'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 type F = Pick<ChangeRequest, 'masterProjectId' | 'contractId' | 'changeType' | 'title' | 'description' | 'reason' | 'proposedCost' | 'proposedDays' | 'priority' | 'requesterName' | 'requesterOrganization' | 'projectPhase' | 'orgUnit' | 'currentSituation' | 'reasonCategories' | 'affectedDocuments' | 'scopeEffect' | 'originalContractAmount' | 'originalDurationDays'>
 const blank = (projectId: string): F => ({ masterProjectId: projectId, contractId: null, changeType: null, title: '', description: '', reason: '', proposedCost: 0, proposedDays: 0, priority: 'medium', requesterName: '', requesterOrganization: null, projectPhase: null, orgUnit: '', currentSituation: '', reasonCategories: [], affectedDocuments: [], scopeEffect: '', originalContractAmount: 0, originalDurationDays: 0 })
@@ -55,6 +56,7 @@ export function RequestFormModal({ request, defaultProjectId, defaultLinks, onCl
   }
 
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 780 }} role="dialog" aria-modal="true" aria-label="درخواست تغییر">
         <div className="im-modal-head">
@@ -138,5 +140,6 @@ export function RequestFormModal({ request, defaultProjectId, defaultLinks, onCl
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }

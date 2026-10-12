@@ -7,6 +7,7 @@ import { writeXlsx } from '../../lib/control/xlsx'
 import { dataGaps } from '../../lib/control/quality'
 import { Chip, DataTable, KpiCard, type Col } from '../../../finance/components/fn'
 import { DemoBadge, bn, fa } from '../../components/control/common'
+import { CommodityIcon } from '../../components/control/CommodityIcon'
 import { ItemDrawer } from '../../components/control/ItemDrawer'
 import { MaterialForm } from '../../components/control/MaterialForm'
 import { MtoImport } from '../../components/control/MtoImport'
@@ -35,12 +36,12 @@ export function BankPage({ projectId }: { projectId: string }) {
   }
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return m.materials.filter((x) => (!station || x.facility === station) && (!group || x.groupId === group) && (!t || [x.materialCode, x.description, x.tagNumber, x.pipelineNo, x.isometricNo, x.pidNumber, x.usageLocation, x.spec].join(' ').toLowerCase().includes(t)) && (flt === 'all' || flags(x)[flt]))
+    return m.materials.filter((x) => (!station || x.facility === station) && (!group || x.groupId === group) && (!t || [x.itemUid, x.lineNo, x.materialCode, x.description, x.tagNumber, x.pipelineNo, x.isometricNo, x.pidNumber, x.usageLocation, x.spec].join(' ').toLowerCase().includes(t)) && (flt === 'all' || flags(x)[flt]))
   }, [m.materials, m.positions, q, station, group, flt, discByMat]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => { const c: Record<Flt, number> = { all: m.materials.length, noOrder: 0, under: 0, short: 0, disc: 0, excess: 0, outside: 0, done: 0, gaps: 0 }; for (const x of m.materials) { const f = flags(x); for (const k of Object.keys(f) as (keyof typeof f)[]) if (f[k]) c[k]++ } return c }, [m.materials, m.positions, discByMat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cols: Col<Material>[] = [
-    { key: 'n', label: 'قلم', render: (x) => <><span className="strong">{x.description || x.materialCode} {x.isDemo && <DemoBadge />}</span><span className="sub fn-code">{x.materialCode}{x.groupId ? ` · ${m.groupById.get(x.groupId)?.title ?? ''}` : ''}</span></>, sort: (x) => x.description },
+    { key: 'n', label: 'قلم', render: (x) => <><span className="strong mt-name"><CommodityIcon code={m.groupById.get(x.groupId ?? '')?.code} />{x.description || x.materialCode} {x.isDemo && <DemoBadge />}</span><span className="sub fn-code">{x.itemUid} · ردیف {x.lineNo || '—'} · {x.materialCode}</span><span className="sub">{x.groupId ? m.groupById.get(x.groupId)?.title ?? '' : ''}</span></>, sort: (x) => x.description },
     { key: 'l', label: 'محل مصرف', render: (x) => <>{x.facility || '—'}<span className="sub">{[x.pipelineNo, x.tagNumber, x.front].filter(Boolean).join(' · ')}</span></> },
     { key: 'c', label: 'پیمان', num: true, render: (x) => <>{fa(m.positions.get(x.id)!.contractQty, 1)}<span className="sub">{x.unit}</span></>, sort: (x) => m.positions.get(x.id)!.contractQty },
     { key: 'd', label: 'طراحی', num: true, render: (x) => { const p = m.positions.get(x.id)!; return p.detailQty == null ? <span style={{ opacity: .4 }}>—</span> : <span style={{ color: p.diffQty ? 'var(--im-amber)' : undefined }}>{fa(p.detailQty, 1)}</span> } },
@@ -53,7 +54,7 @@ export function BankPage({ projectId }: { projectId: string }) {
     { key: 's', label: 'وضعیت', render: (x) => { const f = flags(x); return <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{f.outside && <Chip tone="warn">خارج از پیمان</Chip>}{f.noOrder && <Chip tone="bad">بدون سفارش</Chip>}{f.under && <Chip tone="warn">ناقص</Chip>}{f.disc && !f.outside && <Chip tone="warn">مغایرت</Chip>}{f.done && <Chip tone="good">تحویل کامل</Chip>}{f.gaps && <span title={dataGaps(x).join('، ')}><Chip>ناقص: {dataGaps(x)[0]}{dataGaps(x).length > 1 ? ` +${fa(dataGaps(x).length - 1)}` : ''}</Chip></span>}</span> } },
   ]
   const totalValue = m.materials.reduce((a, x) => a + (m.positions.get(x.id)?.baseValue ?? 0), 0)
-  const exportRows = () => writeXlsx(rows.map((x) => { const p = m.positions.get(x.id)!; return { 'کد': x.materialCode, 'شرح': x.description, 'گروه': m.groupById.get(x.groupId ?? '')?.title ?? '', 'مشخصات': x.spec, 'سایز': x.size, 'واحد': x.unit, 'ایستگاه': x.facility, 'بخش': x.area, 'خط': x.pipelineNo, 'ایزو': x.isometricNo, 'نقشه': x.pidNumber, 'تگ': x.tagNumber, 'جبهه': x.front, 'مقدار پیمان': p.contractQty, 'مقدار طراحی': p.detailQty ?? '', 'سفارش': p.ordered, 'تحویل': p.received, 'پذیرفته': p.accepted, 'مصرف': p.netConsumed, 'موجودی': p.onHand, 'کسری': p.uncoveredGap, 'قیمت واحد': x.unitPrice, 'ارزش': Math.round(p.baseValue), 'تاریخ نیاز': x.needDate ?? '' } }), 'بانک-متریال.xlsx', 'بانک متریال')
+  const exportRows = () => writeXlsx(rows.map((x) => { const p = m.positions.get(x.id)!; return { 'کد یکتا': x.itemUid, 'ردیف پیمان': x.lineNo, 'کد': x.materialCode, 'شرح': x.description, 'گروه': m.groupById.get(x.groupId ?? '')?.title ?? '', 'مشخصات': x.spec, 'سایز': x.size, 'واحد': x.unit, 'ایستگاه': x.facility, 'بخش': x.area, 'خط': x.pipelineNo, 'ایزو': x.isometricNo, 'نقشه': x.pidNumber, 'تگ': x.tagNumber, 'جبهه': x.front, 'مقدار پیمان': p.contractQty, 'مقدار طراحی': p.detailQty ?? '', 'سفارش': p.ordered, 'تحویل': p.received, 'پذیرفته': p.accepted, 'مصرف': p.netConsumed, 'موجودی': p.onHand, 'کسری': p.uncoveredGap, 'قیمت واحد': x.unitPrice, 'ارزش': Math.round(p.baseValue), 'تاریخ نیاز': x.needDate ?? '' } }), 'بانک-متریال.xlsx', 'بانک متریال')
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="fn-kpis">
@@ -63,7 +64,7 @@ export function BankPage({ projectId }: { projectId: string }) {
         <KpiCard i={3} label="با کسری پوشش‌داده‌نشده" value={fa(counts.short)} tone={counts.short ? 'bad' : 'good'} />
       </div>
       <div className="mt-filters no-print">
-        <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}><Search size={14} style={{ position: 'absolute', insetInlineStart: 10, opacity: .55 }} /><input type="search" placeholder="جست‌وجوی کد، شرح، تگ، خط، نقشه…" value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingInlineStart: 32, minWidth: 260 }} aria-label="جست‌وجو" /></label>
+        <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}><Search size={14} style={{ position: 'absolute', insetInlineStart: 10, opacity: .55 }} /><input type="search" placeholder="جست‌وجوی کد یکتا، ردیف پیمان، کد، شرح، تگ، خط…" value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingInlineStart: 32, minWidth: 260 }} aria-label="جست‌وجو" /></label>
         <select value={station} onChange={(e) => setStation(e.target.value)} aria-label="ایستگاه"><option value="">همهٔ ایستگاه‌ها</option>{stationsList.map((s) => <option key={s}>{s}</option>)}</select>
         <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="گروه کالا"><option value="">همهٔ گروه‌ها</option>{m.groups.filter((g) => g.active).map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}</select>
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>

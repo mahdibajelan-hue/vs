@@ -5,12 +5,16 @@ import { Chip, fmtD, parseNum, faDigits } from '../../../finance/components/fn'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { STAGE_STATUS_LABEL_FA, type ItemStage, type Material, type PackageItem, type StageDef } from '../../types'
 import { fa } from './common'
+import { useMaterialModel } from '../../lib/control/useMaterialModel'
+import { stageBackingLimit } from '../../lib/control/progress'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
 
 const TONE = { pending: 'neutral', submitted: 'warn', reviewed: 'warn', approved: 'good', rejected: 'bad' } as const
 
 /** One stage of one item: plan it, mark it not applicable (with a reason), submit evidence, then review / approve or reject. What a person can do here follows their role in the project. */
 export function StageModal({ projectId, stage, def, item, material, onClose }: { projectId: string; stage: ItemStage; def: StageDef; item: PackageItem; material?: Material; onClose: () => void }) {
   const cs = useMaterialControlStore()
+  const model = useMaterialModel(projectId)
   const people = cs.people
   const [planned, setPlanned] = useState(stage.plannedDate ?? '')
   const [resp, setResp] = useState(stage.responsible ?? '')
@@ -26,8 +30,12 @@ export function StageModal({ projectId, stage, def, item, material, onClose }: {
   const awaiting = stage.status === 'submitted' || stage.status === 'reviewed'
   const canSend = stage.applicable && (stage.status === 'pending' || stage.status === 'rejected' || (stage.status === 'approved' && stage.approvedQty < item.qty))
   const run = async (f: () => Promise<boolean>) => { setBusy(true); const ok = await f(); setBusy(false); if (ok) onClose() }
+  const limit = stageBackingLimit(stage.stageKey, model.positions.get(item.materialId))
+  const needsReceipt = stage.stageKey === 'site_receipt' || stage.stageKey === 'entry_inspection'
+  const unbacked = limit != null && (qty > limit + 1e-9 || limit <= 0)
   const who = (id: string | null) => (id ? people.get(id) ?? 'کاربر' : '—')
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal fn-form" style={{ maxWidth: 640 }} role="dialog" aria-modal="true" aria-label={def.title}>
         <div className="im-modal-head"><div><div className="im-modal-title">{def.title}</div><p className="im-helper" style={{ margin: 0 }}>{material?.description} · وزن این مرحله {fa(stage.weight, 1)}٪ · تأیید: {def.reviewLevel === 'employer' ? 'کارفرما' : def.reviewLevel === 'both' ? 'مشاور سپس کارفرما' : 'مشاور'}</p></div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -52,13 +60,19 @@ export function StageModal({ projectId, stage, def, item, material, onClose }: {
           </div>
         )}
 
+        {limit != null && (stage.status !== 'approved' || stage.approvedQty < item.qty) && (
+          <div className={`mt-allow ${unbacked ? 'locked' : ''}`} style={{ marginBottom: 10 }}>
+            {`${needsReceipt ? 'رسید انبار ثبت‌شده' : 'سفارش خرید ثبت‌شده'}: ${fa(limit, 2)} ${material?.unit ?? ''} از ${fa(item.qty, 2)} ${material?.unit ?? ''}.`}{unbacked ? (needsReceipt ? ' بدون رسید انبار، این مرحله پیشرفت نمی‌گیرد؛ ابتدا رسید را در «موجودی و انبار ← رسید و بازرسی ورودی» ثبت کنید.' : ' بدون سفارش خرید، این مرحله پیشرفت نمی‌گیرد؛ ابتدا سفارش را در «بسته‌های خرید ← درخواست خرید و سفارش» ثبت کنید.') : ''}
+          </div>
+        )}
+
         {canSubmit && canSend && (
           <div className="fn-form-grid" style={{ marginBottom: 10 }}>
             <div className="im-field"><label>تاریخ انجام</label><JalaliDateInput value={actual} onChange={setActual} /></div>
             <div className="im-field"><label>مقدار انجام‌شده ({material?.unit}){item.qty > 0 && ' — برای تحویل جزئی کمتر از کل'}</label><input dir="ltr" style={{ textAlign: 'right' }} defaultValue={faDigits(String(qty))} onBlur={(e) => setQty(parseNum(e.target.value))} /></div>
             <div className="im-field" style={{ gridColumn: '1 / -1' }}><label>مدرک اثبات انجام کار *</label><AttachmentField folder="material-stages" value={evidence} onChange={setEvidence} /></div>
             <div className="im-field" style={{ gridColumn: '1 / -1' }}><label>توضیح / شمارهٔ سند</label><input value={note} onChange={(e) => setNote(e.target.value)} /></div>
-            <div style={{ gridColumn: '1 / -1' }}><button className="im-btn im-btn-primary" disabled={busy || (!evidence && !note.trim())} onClick={() => void run(() => cs.stageSubmit(stage.id, { actual, doneQty: qty >= item.qty ? null : qty, evidence, note }))}>ارسال برای تأیید</button></div>
+            <div style={{ gridColumn: '1 / -1' }}><button className="im-btn im-btn-primary" disabled={busy || unbacked || (!evidence && !note.trim())} onClick={() => void run(() => cs.stageSubmit(stage.id, { actual, doneQty: qty >= item.qty ? null : qty, evidence, note }))}>ارسال برای تأیید</button></div>
           </div>
         )}
 
@@ -74,5 +88,6 @@ export function StageModal({ projectId, stage, def, item, material, onClose }: {
         {!canPlan && !canSubmit && !canDecide && <p className="im-helper">نقش شما در این پروژه فقط مشاهده است.</p>}
       </div>
     </div>
+    </ModalPortal>
   )
 }

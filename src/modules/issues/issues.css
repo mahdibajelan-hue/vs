@@ -252,7 +252,7 @@ button.im-stat-card:active, .im-kpi-grid > button:active .im-stat-card { transfo
 /* ---- drawer / modal ----------------------------------------------------------------------------- */
 .im-overlay { position: fixed; inset: 0; background: rgba(2, 8, 23, 0.62); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 100; animation: im-fade 0.15s; padding: 16px; }
 .im-modal { background: var(--im-bg-2); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; border-radius: 22px; padding: 22px; border: 1px solid var(--im-line-2); animation: im-rise 220ms var(--im-ease) both; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.7); }
-.im-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.im-modal-head { cursor: grab; touch-action: none; user-select: none; display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .im-modal-title { font-size: 16.5px; font-weight: 800; }
 .im-modal-close { width: 30px; height: 30px; border-radius: 10px; background: var(--im-panel-2); display: flex; align-items: center; justify-content: center; color: var(--im-muted-2); transition: transform 160ms var(--im-ease); }
 .im-modal-close:active { transform: scale(0.94); }
@@ -413,3 +413,9 @@ button.im-stat-card:active, .im-kpi-grid > button:active .im-stat-card { transfo
 /* Vertical scrollbars on the right edge (RTL pages put them on the left by default): the scroller is LTR, its content stays RTL. */
 .im-main, .im-modal, .im-drawer-body, .im-kcol { direction: ltr; }
 .im-main > *, .im-modal > *, .im-drawer-body > *, .im-kcol > * { direction: rtl; }
+
+/* dialogs are rendered through ModalPortal (end of <body>): the wrapper only carries the theme variables, the overlay sits above every host layer */
+.im-root.im-portal { display: contents; height: auto; background: none; overflow: visible; }
+.im-portal .im-overlay { z-index: 1000; }
+.im-modal.is-dragging { cursor: grabbing; transition: none; box-shadow: 0 40px 90px -24px rgba(0, 0, 0, 0.8); }
+.im-modal.is-dragging .im-modal-head { cursor: grabbing; }

@@ -5,7 +5,7 @@ const norm = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/\s+/g
 export const matchKey = (m: Pick<Material, 'materialCode' | 'facility' | 'usageLocation' | 'pipelineNo' | 'tagNumber'>): string => `${norm(m.materialCode)}|${norm(m.facility)}|${norm(m.usageLocation || m.pipelineNo || m.tagNumber)}`
 const looseKey = (m: Pick<Material, 'materialCode' | 'facility'>) => `${norm(m.materialCode)}|${norm(m.facility)}`
 
-export interface MtoRowIn { materialCode: string; description?: string; spec?: string; size?: string; unit?: string; qty: number; unitPrice?: number; facility?: string; area?: string; pipelineNo?: string; isometricNo?: string; pidNumber?: string; tagNumber?: string; front?: string; usageLocation?: string; needDate?: string | null; groupCode?: string }
+export interface MtoRowIn { lineNo?: string; materialCode: string; description?: string; spec?: string; size?: string; unit?: string; qty: number; unitPrice?: number; facility?: string; area?: string; pipelineNo?: string; isometricNo?: string; pidNumber?: string; tagNumber?: string; front?: string; usageLocation?: string; needDate?: string | null; groupCode?: string }
 export interface MtoPlan {
   create: MtoRowIn[]
   /** contract import: existing items whose quantity differs — never changed silently, they become change requests */
@@ -54,6 +54,7 @@ export function planMtoImport(existing: Material[], rows: MtoRowIn[], mode: 'con
 }
 
 const HEADERS: Record<keyof MtoRowIn, string[]> = {
+  lineNo: ['ردیف', 'شماره ردیف', 'ردیف پیمان', 'شماره ردیف پیمان', 'item no', 'item no.', 'row no', 'contract line'],
   materialCode: ['کد', 'کد کالا', 'code', 'material code', 'item code'], description: ['شرح', 'توضیح', 'description', 'desc'], spec: ['مشخصات', 'مشخصات فنی', 'spec', 'specification'], size: ['سایز', 'size'],
   unit: ['واحد', 'unit', 'uom'], qty: ['مقدار', 'تعداد', 'qty', 'quantity'], unitPrice: ['قیمت', 'قیمت واحد', 'price', 'unit price'], facility: ['ایستگاه', 'تاسیسات', 'تأسیسات', 'facility', 'station'],
   area: ['بخش', 'بخش اجرایی', 'area'], pipelineNo: ['خط', 'شماره خط', 'خط لوله', 'line', 'line no', 'pipeline'], isometricNo: ['ایزومتریک', 'ایزو', 'iso', 'isometric'], pidNumber: ['نقشه', 'p&id', 'pid', 'نقشه p&id'],
@@ -66,7 +67,7 @@ export function parseMtoRows(raw: Record<string, unknown>[]): MtoRowIn[] {
     const o: Record<string, unknown> = {}
     for (const [h, v] of Object.entries(row)) { const k = toKey(h); if (k) o[k] = v }
     const num = (x: unknown) => { const n = Number(String(x ?? '').replace(/[٬,\s]/g, '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))); return Number.isFinite(n) ? n : NaN }
-    return { materialCode: String(o.materialCode ?? '').trim(), description: String(o.description ?? ''), spec: String(o.spec ?? ''), size: String(o.size ?? ''), unit: String(o.unit ?? ''), qty: num(o.qty), unitPrice: o.unitPrice == null ? undefined : num(o.unitPrice),
+    return { lineNo: String(o.lineNo ?? '').trim(), materialCode: String(o.materialCode ?? '').trim(), description: String(o.description ?? ''), spec: String(o.spec ?? ''), size: String(o.size ?? ''), unit: String(o.unit ?? ''), qty: num(o.qty), unitPrice: o.unitPrice == null ? undefined : num(o.unitPrice),
       facility: String(o.facility ?? ''), area: String(o.area ?? ''), pipelineNo: String(o.pipelineNo ?? ''), isometricNo: String(o.isometricNo ?? ''), pidNumber: String(o.pidNumber ?? ''), tagNumber: String(o.tagNumber ?? ''), front: String(o.front ?? ''), usageLocation: String(o.usageLocation ?? ''),
       needDate: o.needDate ? String(o.needDate) : null, groupCode: String(o.groupCode ?? '') }
   })

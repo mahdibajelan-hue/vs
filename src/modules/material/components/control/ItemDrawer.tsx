@@ -50,7 +50,7 @@ export function ItemDrawer({ model, materialId, onClose }: { model: MaterialMode
         <header>
           <div style={{ minWidth: 0 }}>
             <h2>{m.description || m.materialCode} {m.isDemo && <DemoBadge />}</h2>
-            <p className="im-helper" style={{ margin: 0 }}><span className="fn-code">{m.materialCode}</span> · {group?.title ?? 'بدون گروه'} · {[m.facility, m.pipelineNo || m.tagNumber].filter(Boolean).join(' · ') || 'محل مصرف نامشخص'}</p>
+            <p className="im-helper" style={{ margin: 0 }}><span className="fn-code">{m.itemUid}</span> · {m.lineNo ? `ردیف پیمان ${m.lineNo} · ` : ''}<span className="fn-code">{m.materialCode}</span> · {group?.title ?? 'بدون گروه'} · {[m.facility, m.pipelineNo || m.tagNumber].filter(Boolean).join(' · ') || 'محل مصرف نامشخص'}</p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {cs.can(projectId, 'edit_items') && <button className="im-btn im-btn-sm" onClick={() => setEdit(true)}><Pencil size={13} /> ویرایش</button>}

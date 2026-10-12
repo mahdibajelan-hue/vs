@@ -416,3 +416,9 @@ div.fn-empty { text-align: center; color: var(--im-muted); padding: 40px 14px; b
 .fn-seg button.on { background: var(--im-panel); color: var(--im-text); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 @media (max-width: 1000px) { .fn-reports { grid-template-columns: minmax(0, 1fr); } .fn-rep-body { min-width: 0; } .fn-rep-nav { position: static; gap: 10px; } .fn-rep-nav > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .fn-rep-nav h4 { flex: 0 0 100%; margin: 0; } .fn-rep-nav button { width: auto; max-width: 100%; padding: 6px 12px; border-radius: 99px; border-color: var(--im-line); text-align: center; } .fn-rep-nav button b { font-size: 12px; font-weight: 600; white-space: normal; } .fn-grid-2 { grid-template-columns: 1fr; } }
 @media print { .fn-reports { display: block; } .fn-rep-nav { display: none; } }
+
+/* breathing room: every cell keeps 14px sideways (the generic .fn-root table rule above had squeezed it to 8px, and 0 at the row ends); the first and last cell of every row keep a clear margin from the frame (RTL: first = right edge) */
+.fn-root .fn-tbl th, .fn-root .fn-tbl td { padding-inline: 14px; }
+.fn-root .fn-tbl th:first-child, .fn-root .fn-tbl td:first-child, .fn-tbl th:first-child, .fn-tbl td:first-child { padding-inline-start: 22px; }
+.fn-root .fn-tbl th:last-child, .fn-root .fn-tbl td:last-child, .fn-tbl th:last-child, .fn-tbl td:last-child { padding-inline-end: 22px; }
+.fn-tbl td .fn-chip + .fn-chip, .fn-tbl td .mt-demo { margin-inline-start: 6px; }

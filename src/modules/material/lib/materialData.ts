@@ -64,6 +64,7 @@ interface MaterialRow {
   master_project_id: string
   mto_revision_id: string | null
   line_no: string
+  item_uid: string | null
   material_code: string
   description: string
   commodity_type: string
@@ -115,6 +116,7 @@ export function materialFromRow(r: MaterialRow): Material {
     masterProjectId: r.master_project_id,
     mtoRevisionId: r.mto_revision_id,
     lineNo: r.line_no,
+    itemUid: r.item_uid ?? '',
     materialCode: r.material_code,
     description: r.description,
     commodityType: r.commodity_type as CommodityType,
@@ -318,6 +320,7 @@ interface PoLineRow {
   quantity_ordered: number
   unit_price: number
   planned_delivery_date: string | null
+  exception_reason?: string | null
 }
 
 export function poLineFromRow(r: PoLineRow): PoLine {
@@ -328,6 +331,7 @@ export function poLineFromRow(r: PoLineRow): PoLine {
     quantityOrdered: Number(r.quantity_ordered),
     unitPrice: Number(r.unit_price),
     plannedDeliveryDate: r.planned_delivery_date,
+    exceptionReason: r.exception_reason ?? '',
   }
 }
 
@@ -337,6 +341,7 @@ export function poLineToRow(poId: string, l: Partial<PoLine>) {
   if (l.quantityOrdered !== undefined) row.quantity_ordered = l.quantityOrdered
   if (l.unitPrice !== undefined) row.unit_price = l.unitPrice
   if (l.plannedDeliveryDate !== undefined) row.planned_delivery_date = l.plannedDeliveryDate || null
+  if (l.exceptionReason !== undefined) row.exception_reason = l.exceptionReason
   return row
 }
 

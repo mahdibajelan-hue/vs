@@ -15,6 +15,7 @@ export function MaterialForm({ projectId, material, onClose }: { projectId: stri
   const units = useMaterialControlStore((s) => s.units).filter((u) => u.active)
   const isNew = !material
   const fields: FieldDef[] = [
+    { key: 'lineNo', label: 'شماره ردیف پیمان', kind: 'text', hint: 'شمارهٔ ردیف همین قلم در MTO / فهرست‌بهای پیمان؛ برای جست‌وجو و تطبیق با پیمان' },
     { key: 'materialCode', label: 'کد کالا', kind: 'text', required: true },
     { key: 'description', label: 'شرح', kind: 'text', required: true, span: 2 },
     { key: 'groupId', label: 'گروه کالا', kind: 'select', required: true, options: groups.map((g) => ({ value: g.id, label: g.title })) },
@@ -30,7 +31,7 @@ export function MaterialForm({ projectId, material, onClose }: { projectId: stri
     { key: 'currency', label: 'ارز قیمت', kind: 'text', group: 'price' }, { key: 'fxRate', label: 'ضریب تبدیل به ریال', kind: 'num', group: 'price' }, { key: 'priceBasis', label: 'روش قیمت‌گذاری مبنا', kind: 'text', group: 'price', hint: 'مثلاً فهرست بهای پیمان، پیشنهاد سازنده' }, { key: 'priceDate', label: 'تاریخ مبنای قیمت', kind: 'date', group: 'price' },
     { key: 'criticality', label: 'بحرانی‌بودن', kind: 'select', group: 'more', options: (['A', 'B', 'C'] as Criticality[]).map((c) => ({ value: c, label: CRITICALITY_LABEL_FA[c] })) },
     { key: 'leadTimeDays', label: 'زمان تأمین (روز)', kind: 'num', group: 'more' }, { key: 'commodityType', label: 'نوع کالا (قدیمی)', kind: 'select', group: 'more', options: COMMODITY_TYPES.map((c) => ({ value: c, label: COMMODITY_TYPE_LABEL_FA[c] })) },
-    { key: 'unitWeightKg', label: 'وزن واحد (کیلوگرم)', kind: 'num', group: 'more' }, { key: 'specRef', label: 'مرجع مشخصات / دیتاشیت', kind: 'text', group: 'more' }, { key: 'lineNo', label: 'ردیف در MTO', kind: 'text', group: 'more' }, { key: 'notes', label: 'یادداشت', kind: 'text', group: 'more', span: 2 },
+    { key: 'unitWeightKg', label: 'وزن واحد (کیلوگرم)', kind: 'num', group: 'more' }, { key: 'specRef', label: 'مرجع مشخصات / دیتاشیت', kind: 'text', group: 'more' }, { key: 'notes', label: 'یادداشت', kind: 'text', group: 'more', span: 2 },
   ]
   const m = material
   const initial: Vals = { materialCode: m?.materialCode ?? '', description: m?.description ?? '', groupId: m?.groupId ?? '', unit: m?.unit ?? 'EA', spec: m?.spec ?? '', size: m?.size ?? '', rating: m?.rating ?? '', contractQty: m?.contractQty ?? 0, detailQty: m?.detailQty ?? 0,
@@ -38,7 +39,7 @@ export function MaterialForm({ projectId, material, onClose }: { projectId: stri
     unitPrice: m?.unitPrice ?? 0, currency: m?.currency ?? 'IRR', fxRate: m?.fxRate ?? 1, priceBasis: m?.priceBasis ?? '', priceDate: m?.priceDate ?? null, criticality: m?.criticality ?? 'B', leadTimeDays: m?.leadTimeDays ?? 0,
     commodityType: m?.commodityType ?? 'other', unitWeightKg: m?.unitWeightKg ?? 0, specRef: m?.specRef ?? '', lineNo: m?.lineNo ?? '', notes: m?.notes ?? '' }
   return (
-    <FormModal title={m ? `ویرایش ${m.materialCode || m.description}` : 'قلم جدید'} subtitle={m ? 'مقدار و قیمت از «کنترل MTO ← درخواست تغییر» تغییر می‌کند.' : undefined} fields={fields} groups={GROUPS} initial={initial} submitLabel={m ? 'ذخیرهٔ تغییرات' : 'ثبت قلم'} onClose={onClose}
+    <FormModal title={m ? `ویرایش ${m.materialCode || m.description}` : 'قلم جدید'} subtitle={m ? `کد یکتا: ${m.itemUid} (ثابت و غیرقابل‌ویرایش) · مقدار و قیمت از «کنترل MTO ← درخواست تغییر» تغییر می‌کند.` : 'کد یکتای سامانه (MT-…) پس از ثبت به‌طور خودکار ساخته می‌شود.'} fields={fields} groups={GROUPS} initial={initial} submitLabel={m ? 'ذخیرهٔ تغییرات' : 'ثبت قلم'} onClose={onClose}
       onSubmit={async (v) => {
         const g = groups.find((x) => x.id === v.groupId)
         const data: Partial<Material> = { materialCode: String(v.materialCode), description: String(v.description), groupId: (v.groupId as string) || null, unit: String(v.unit), spec: String(v.spec ?? ''), size: String(v.size ?? ''), rating: String(v.rating ?? ''),

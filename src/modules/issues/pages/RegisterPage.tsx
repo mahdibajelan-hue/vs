@@ -14,6 +14,7 @@ import { useScoped } from '../lib/useScoped'
 import { issuesPrintHtml, openPrint } from '../lib/imPrint'
 import { askRegister, extractIssues } from '../lib/imAiClient'
 import { IssueCode, Segmented, SeverityChip, SlaBadge, StageChip } from '../components/ui'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 type View = 'table' | 'kanban' | 'timeline'
 interface Saved { id: string; name: string; filter: IssueFilter; isShared: boolean }
@@ -242,6 +243,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <ModalPortal>
     <div className="im-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="im-modal" style={{ maxWidth: 640 }}>
         <div className="im-modal-head"><div className="im-modal-title">ورود انبوه از فایل CSV</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -262,6 +264,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         </>}
       </div>
     </div>
+    </ModalPortal>
   )
 }
 

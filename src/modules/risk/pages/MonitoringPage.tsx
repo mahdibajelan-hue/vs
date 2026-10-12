@@ -15,6 +15,7 @@ import { KriCard, KriFormModal } from '../components/KriParts'
 import { ScoreTriple, useCategoryLabel } from '../components/rk'
 import { RM_CONTROL_EFFECT_LABEL_FA, RM_CONTROL_TYPE_LABEL_FA, type RmKri } from '../types'
 import type { PageProps } from '../RiskApp'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 type Sub = 'kri' | 'effect' | 'controls'
 const KRI_RANK = { critical: 0, warn: 1, normal: 2, no_data: 3 } as const
@@ -133,10 +134,12 @@ export function MonitoringPage({ onOpenRisk }: PageProps) {
       )}
 
       {pickProject && (
+        <ModalPortal>
         <div className="im-overlay"><div className="im-modal" style={{ maxWidth: 420 }} role="dialog" aria-modal="true" aria-label="انتخاب پروژه">
           <div className="im-modal-head"><div className="im-modal-title">شاخص برای کدام پروژه؟</div><button className="im-modal-close" onClick={() => setPickProject(false)} aria-label="بستن">✕</button></div>
           <div className="im-grid" style={{ gap: 6, maxHeight: 360, overflow: 'auto' }}>{d.allProjects.map((p) => <button key={p.id} className="im-task" style={{ textAlign: 'right' }} onClick={() => { setPickProject(false); setKriForm({ projectId: p.id }) }}>{p.shortCode ? p.shortCode + ' · ' : ''}{p.name}</button>)}</div>
         </div></div>
+        </ModalPortal>
       )}
       {kriForm && <KriFormModal projectId={kriForm.projectId} kri={kriForm.kri} onClose={() => setKriForm(null)} />}
     </div>

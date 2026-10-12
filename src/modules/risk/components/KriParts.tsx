@@ -9,6 +9,7 @@ import { todayIso } from '../lib/riskScore'
 import { RM_KRI_DOMAINS, RM_KRI_STATE_COLOR, RM_KRI_STATE_LABEL_FA, type RmKri } from '../types'
 import { Field, PersonSelect, Sparkline } from './rk'
 import { useRiskPeopleStore } from '../store/useRiskPeopleStore'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 /** One early-warning indicator: value, band (normal / warning / critical), trend, early-warning message and a one-line manual reading. */
 export function KriCard({ kri, canEdit, onEdit }: { kri: RmKri; canEdit: boolean; onEdit?: (k: RmKri) => void }) {
@@ -108,6 +109,7 @@ export function KriFormModal({ projectId, riskId, kri, onClose }: { projectId: s
     onClose()
   }
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 640 }} role="dialog" aria-modal="true" aria-label="شاخص هشدار">
         <div className="im-modal-head"><div className="im-modal-title">{kri ? 'ویرایش شاخص هشدار' : 'شاخص هشدار زودهنگام (KRI) جدید'}</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -136,5 +138,6 @@ export function KriFormModal({ projectId, riskId, kri, onClose }: { projectId: s
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }

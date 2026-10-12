@@ -7,17 +7,22 @@ import { useMaterialModel } from '../../lib/control/useMaterialModel'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../../finance/components/fn'
 import { FormModal } from '../../../finance/components/FormModal'
 import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
-import { bn, fa } from '../../components/control/common'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
+import { bn, fa, qtyText } from '../../components/control/common'
+import { RemoveRecord } from '../../components/control/RemoveRecord'
+import { orderAllowance } from '../../lib/control/allowance'
 import {
   MANUFACTURING_STATUSES, MANUFACTURING_STATUS_LABEL_FA, PO_STATUSES, PO_STATUS_LABEL_FA, PROCUREMENT_REQUEST_STATUSES, PROCUREMENT_REQUEST_STATUS_LABEL_FA, SHIPMENT_STATUSES, SHIPMENT_STATUS_LABEL_FA,
   type Allocation, type ManufacturingStatus, type Material, type PoLine, type PoStatus, type ProcurementRequest, type ProcurementRequestStatus, type PurchaseOrder, type Shipment, type ShipmentStatus,
 } from '../../types'
 
 const Close = ({ onClose, title, sub, children, wide }: { onClose: () => void; title: string; sub?: string; children: React.ReactNode; wide?: boolean }) => (
+  <ModalPortal>
   <div className="im-overlay"><div className="im-modal fn-form" style={{ maxWidth: wide ? 900 : 700 }} role="dialog" aria-modal="true" aria-label={title}>
     <div className="im-modal-head"><div><div className="im-modal-title">{title}</div>{sub && <p className="im-helper" style={{ margin: 0 }}>{sub}</p>}</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
     {children}
   </div></div>
+  </ModalPortal>
 )
 function useCtx(projectId: string) {
   const m = useMaterialModel(projectId)
@@ -39,6 +44,7 @@ export function OrdersPage({ projectId }: { projectId: string }) {
   const [mrForm, setMrForm] = useState<ProcurementRequest | 'new' | null>(null)
   const [poForm, setPoForm] = useState<PurchaseOrder | 'new' | null>(null)
   const [detail, setDetail] = useState<{ kind: 'mr' | 'po'; id: string } | null>(null)
+  const [rm, setRm] = useState<{ kind: 'request' | 'po'; id: string; label: string; conseq: string[] } | null>(null)
   const mrs = ms.procurementRequests.filter((r) => r.masterProjectId === projectId)
   const pos = m.data.purchaseOrders
   const poValue = (id: string) => ms.poLines.filter((l) => l.poId === id).reduce((a, l) => a + l.quantityOrdered * l.unitPrice, 0)
@@ -49,7 +55,7 @@ export function OrdersPage({ projectId }: { projectId: string }) {
     { key: 's', label: 'وضعیت', render: (r) => <Chip tone={r.status === 'awarded' ? 'good' : r.status === 'cancelled' ? 'neutral' : 'warn'}>{PROCUREMENT_REQUEST_STATUS_LABEL_FA[r.status]}</Chip> },
     { key: 'p', label: 'بسته', render: (r) => pkgName(r.packageId) }, { key: 'o', label: 'تأمین‌کننده', render: (r) => c.orgName(r.supplierOrgId) },
     { key: 'l', label: 'اقلام', num: true, render: (r) => fa(ms.procurementLines.filter((l) => l.requestId === r.id).length) },
-    { key: 'a', label: '', render: (r) => c.can ? <span className="fn-row-actions"><button aria-label="ویرایش" onClick={(e) => { e.stopPropagation(); setMrForm(r) }}><Pencil size={14} /></button><button className="danger" aria-label="حذف" onClick={(e) => { e.stopPropagation(); if (window.confirm('درخواست خرید حذف شود؟')) void ms.deleteProcurementRequest(r.id) }}><Trash2 size={14} /></button></span> : null },
+    { key: 'a', label: '', render: (r) => c.can ? <span className="fn-row-actions"><button aria-label="ویرایش" onClick={(e) => { e.stopPropagation(); setMrForm(r) }}><Pencil size={14} /></button><button className="danger" aria-label="حذف" onClick={(e) => { e.stopPropagation(); setRm({ kind: 'request', id: r.id, label: `${r.mrNumber} · ${PROCUREMENT_REQUEST_STATUS_LABEL_FA[r.status]}`, conseq: [`${fa(ms.procurementLines.filter((l) => l.requestId === r.id).length)} قلم درخواست حذف می‌شود`, 'سفارش‌های مرتبط می‌مانند ولی از این درخواست جدا می‌شوند'] }) }}><Trash2 size={14} /></button></span> : null },
   ]
   const poCols: Col<PurchaseOrder>[] = [
     { key: 'n', label: 'سفارش خرید', render: (r) => <><span className="strong">{r.poNumber} {r.isDemo && <span className="mt-demo">آزمایشی</span>}</span><span className="sub">{fmtD(r.poDate)}</span></> },
@@ -57,7 +63,7 @@ export function OrdersPage({ projectId }: { projectId: string }) {
     { key: 'p', label: 'بسته', render: (r) => pkgName(r.packageId) }, { key: 'o', label: 'تأمین‌کننده', render: (r) => c.orgName(r.supplierOrgId) },
     { key: 'l', label: 'اقلام', num: true, render: (r) => fa(ms.poLines.filter((l) => l.poId === r.id).length) },
     { key: 'v', label: 'ارزش (میلیارد)', num: true, render: (r) => bn(poValue(r.id)), sort: (r) => poValue(r.id) },
-    { key: 'a', label: '', render: (r) => c.can ? <span className="fn-row-actions"><button aria-label="ویرایش" onClick={(e) => { e.stopPropagation(); setPoForm(r) }}><Pencil size={14} /></button><button className="danger" aria-label="حذف" onClick={(e) => { e.stopPropagation(); if (window.confirm('سفارش با اقلامش حذف شود؟')) void ms.deletePurchaseOrder(r.id) }}><Trash2 size={14} /></button></span> : null },
+    { key: 'a', label: '', render: (r) => c.can ? <span className="fn-row-actions"><button aria-label="ویرایش" onClick={(e) => { e.stopPropagation(); setPoForm(r) }}><Pencil size={14} /></button><button className="danger" aria-label="حذف" onClick={(e) => { e.stopPropagation(); setRm({ kind: 'po', id: r.id, label: `${r.poNumber} · ${c.orgName(r.supplierOrgId)}`, conseq: [`${fa(ms.poLines.filter((l) => l.poId === r.id).length)} قلم سفارش و وضعیت ساخت و بازرسی آن‌ها حذف می‌شود`, 'پس از حذف، مقدار «سفارش‌شده» این اقلام کم می‌شود و مرحله‌های وابسته به سفارش دیگر پشتوانه ندارند', 'رسیدهای انبار و حمل‌های ثبت‌شده حذف نمی‌شوند'] }) }}><Trash2 size={14} /></button></span> : null },
   ]
   const org = (id: string | null) => id ?? ''
   return (
@@ -76,6 +82,7 @@ export function OrdersPage({ projectId }: { projectId: string }) {
         fields={[{ key: 'n', label: 'شمارهٔ سفارش', kind: 'text', required: true }, { key: 'd', label: 'تاریخ', kind: 'date', required: true }, { key: 's', label: 'وضعیت', kind: 'select', required: true, options: PO_STATUSES.map((s) => ({ value: s, label: PO_STATUS_LABEL_FA[s] })) }, { key: 'o', label: 'تأمین‌کننده / سازنده', kind: 'select', options: c.orgOptions }, { key: 'p', label: 'بستهٔ خرید', kind: 'select', options: c.pkgOptions }, { key: 'r', label: 'درخواست خرید مرتبط', kind: 'select', options: mrs.map((r) => ({ value: r.id, label: r.mrNumber })) }, { key: 'c', label: 'ارز', kind: 'text' }, { key: 'x', label: 'یادداشت', kind: 'text', span: 2 }]}
         initial={{ n: poForm === 'new' ? `PO-${String(pos.length + 1).padStart(3, '0')}` : poForm.poNumber, d: poForm === 'new' ? new Date().toISOString().slice(0, 10) : poForm.poDate, s: poForm === 'new' ? 'draft' : poForm.status, o: poForm === 'new' ? '' : org(poForm.supplierOrgId), p: poForm === 'new' ? '' : org(poForm.packageId), r: poForm === 'new' ? '' : org(poForm.requestId), c: poForm === 'new' ? 'IRR' : poForm.currency, x: poForm === 'new' ? '' : poForm.notes }}
         onSubmit={async (v) => { const d = { poNumber: String(v.n), poDate: String(v.d), status: v.s as PoStatus, supplierOrgId: (v.o as string) || null, packageId: (v.p as string) || null, requestId: (v.r as string) || null, currency: String(v.c || 'IRR'), notes: String(v.x ?? '') }; if (poForm === 'new') await ms.createPurchaseOrder(projectId, d); else await ms.updatePurchaseOrder(poForm.id, d) }} />}
+      {rm && <RemoveRecord kind={rm.kind} id={rm.id} label={rm.label} consequences={rm.conseq} onClose={() => setRm(null)} />}
       {detail?.kind === 'mr' && <MrDetail id={detail.id} c={c} onClose={() => setDetail(null)} />}
       {detail?.kind === 'po' && <PoDetail id={detail.id} c={c} byId={byId} onClose={() => setDetail(null)} />}
     </div>
@@ -101,7 +108,11 @@ function PoDetail({ id, c, byId, onClose }: { id: string; c: Ctx; byId: Map<stri
   const ms = useMaterialStore()
   const po = ms.purchaseOrders.find((x) => x.id === id)
   const lines = ms.poLines.filter((l) => l.poId === id)
-  const [f, setF] = useState<{ mat: string; qty: number; price: number; date: string }>({ mat: '', qty: 0, price: 0, date: '' })
+  const [f, setF] = useState<{ mat: string; qty: number; price: number; date: string; reason: string }>({ mat: '', qty: 0, price: 0, date: '', reason: '' })
+  const model = useMaterialModel(po?.masterProjectId ?? null)
+  const allow = f.mat ? orderAllowance(model.positions.get(f.mat)!, 'order') : null
+  const over = !!allow && f.qty > allow.remaining + 1e-9
+  const reasonNeeded = !!allow && (allow.state === 'locked' || over)
   if (!po) return null
   const mf = (l: PoLine) => ms.manufacturing.find((x) => x.poLineId === l.id)
   return (
@@ -112,12 +123,14 @@ function PoDetail({ id, c, byId, onClose }: { id: string; c: Ctx; byId: Map<stri
         { key: 'd', label: 'تحویل برنامه‌ای', render: (l) => fmtD(l.plannedDeliveryDate) }, { key: 's', label: 'ساخت', render: (l) => { const x = mf(l); return <Chip tone={x?.status === 'ready_for_shipment' || x?.status === 'fat_passed' ? 'good' : x?.status === 'fat_failed' ? 'bad' : 'neutral'}>{MANUFACTURING_STATUS_LABEL_FA[x?.status ?? 'not_started']}</Chip> } },
         { key: 'x', label: '', render: (l) => c.can ? <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => void ms.deletePoLine(l.id)}><Trash2 size={13} /></button> : null }]} />
       {c.can && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 6, marginTop: 10 }}>
-          <select value={f.mat} onChange={(e) => { const x = byId.get(e.target.value); setF({ ...f, mat: e.target.value, price: x?.unitPrice ?? 0 }) }} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 6, marginTop: 10, alignItems: 'start' }}>
+          <select value={f.mat} onChange={(e) => { const x = byId.get(e.target.value); const a = x ? orderAllowance(model.positions.get(x.id)!, 'order') : null; setF({ ...f, mat: e.target.value, price: x?.unitPrice ?? 0, qty: a?.remaining ?? 0, reason: a?.state === 'shortage' ? a.reasonAuto : '' }) }} aria-label="قلم"><option value="">قلم…</option>{c.matOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
           <input inputMode="decimal" dir="ltr" placeholder="مقدار" value={f.qty || ''} onChange={(e) => setF({ ...f, qty: Number(e.target.value) || 0 })} aria-label="مقدار" />
           <input inputMode="decimal" dir="ltr" placeholder="قیمت واحد" value={f.price || ''} onChange={(e) => setF({ ...f, price: Number(e.target.value) || 0 })} aria-label="قیمت واحد" />
           <JalaliDateInput value={f.date} onChange={(x) => setF({ ...f, date: x })} />
-          <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.mat || f.qty <= 0} onClick={async () => { await ms.addPoLine(id, { materialId: f.mat, quantityOrdered: f.qty, unitPrice: f.price, plannedDeliveryDate: f.date || null }); setF({ mat: '', qty: 0, price: 0, date: '' }) }}><Plus size={13} /> افزودن</button>
+          <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.mat || f.qty <= 0 || (reasonNeeded && !f.reason.trim())} onClick={async () => { await ms.addPoLine(id, { materialId: f.mat, quantityOrdered: f.qty, unitPrice: f.price, plannedDeliveryDate: f.date || null, exceptionReason: f.reason.trim() }); setF({ mat: '', qty: 0, price: 0, date: '', reason: '' }) }}><Plus size={13} /> افزودن</button>
+          {allow && <p className={`mt-allow ${allow.state}`} style={{ gridColumn: '1 / -1' }}>{allow.state === 'open' ? `باقی‌مانده برای سفارش: ${qtyText(allow.remaining, byId.get(f.mat)?.unit ?? '')}.` : allow.state === 'shortage' ? `این قلم قبلاً به‌اندازهٔ نیاز سفارش شده ولی کسری دارد (${qtyText(allow.remaining, byId.get(f.mat)?.unit ?? '')} بدون پوشش).` : 'این قلم قبلاً به‌اندازهٔ نیاز سفارش شده است؛ سفارش مجدد فقط با ثبت استثنا و علت ممکن است.'}{over && allow.state === 'open' ? ' مقدار واردشده از باقی‌مانده بیشتر است.' : ''}</p>}
+          {reasonNeeded && <div style={{ gridColumn: '1 / -1' }}><input value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="علت استثنا (لازم است) — مثلاً ضایعات، رد بازرسی ورودی، تغییر طراحی با مجوز" aria-label="علت استثنا" /></div>}
         </div>
       )}
     </Close>

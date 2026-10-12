@@ -41,6 +41,8 @@ export interface Material {
   masterProjectId: string
   mtoRevisionId: string | null
   lineNo: string
+  /** System-generated unique code (MT-000123); never changes, safe to search and quote. */
+  itemUid: string
   materialCode: string
   description: string
   commodityType: CommodityType
@@ -180,6 +182,7 @@ export interface PoLine {
   quantityOrdered: number
   unitPrice: number
   plannedDeliveryDate: string | null
+  exceptionReason: string
 }
 
 export type ManufacturingStatus = 'not_started' | 'in_progress' | 'fat_scheduled' | 'fat_passed' | 'fat_failed' | 'ready_for_shipment'
@@ -346,7 +349,7 @@ export interface PatternWeight { patternId: string; stageKey: string; weight: nu
 export type PackageStatus = 'draft' | 'active' | 'closed' | 'cancelled'
 export const PACKAGE_STATUS_LABEL_FA: Record<PackageStatus, string> = { draft: 'پیش‌نویس', active: 'فعال', closed: 'بسته‌شده', cancelled: 'لغوشده' }
 export interface MtlPackage { id: string; masterProjectId: string; code: string; title: string; groupId: string | null; contractorOrgId: string | null; supplierOrgId: string | null; patternId: string | null; status: PackageStatus; plannedStart: string | null; plannedEnd: string | null; notes: string }
-export interface PackageItem { id: string; packageId: string; materialId: string; qty: number; unitPrice: number; currency: string; supplierOrgId: string | null; plannedDelivery: string | null; baselineVersion: number }
+export interface PackageItem { id: string; packageId: string; materialId: string; qty: number; unitPrice: number; currency: string; supplierOrgId: string | null; plannedDelivery: string | null; baselineVersion: number; exceptionReason: string }
 
 export type StageStatus = 'pending' | 'submitted' | 'reviewed' | 'approved' | 'rejected'
 export const STAGE_STATUS_LABEL_FA: Record<StageStatus, string> = { pending: 'شروع‌نشده', submitted: 'ارسال‌شده', reviewed: 'بررسی‌شده', approved: 'تأییدشده', rejected: 'ردشده' }
@@ -389,3 +392,13 @@ export interface MtlSettings {
   rolePerms?: Partial<Record<MtlRole, string[]>>
 }
 export const DEFAULT_MTL_SETTINGS: MtlSettings = { longLeadDays: 90, delayBufferDays: 14, stagnantDays: 120, qtyTolerancePct: 0, scrapWarnPct: 3, consumptionTolerancePct: 10, priority: { criticality: 40, urgency: 30, gap: 20, risk: 10 } }
+
+/** Warehouse issue requisition: the technical office asks for goods for a place of use; four signatures in order (requester, site supervisor, supervision supervisor, storekeeper) release them. */
+export type RequisitionStatus = 'awaiting_signatures' | 'issued' | 'rejected' | 'cancelled'
+export const REQUISITION_STATUS_LABEL_FA: Record<RequisitionStatus, string> = { awaiting_signatures: 'در انتظار امضا', issued: 'کالا خارج شد', rejected: 'ردشده', cancelled: 'لغوشده' }
+export type SignerRole = 'requester' | 'site_supervisor' | 'supervision_supervisor' | 'storekeeper'
+export const SIGNER_ROLES: SignerRole[] = ['requester', 'site_supervisor', 'supervision_supervisor', 'storekeeper']
+export const SIGNER_ROLE_LABEL_FA: Record<SignerRole, string> = { requester: 'درخواست‌کننده', site_supervisor: 'سرپرست کارگاه', supervision_supervisor: 'سرپرست نظارت', storekeeper: 'انباردار' }
+export interface Requisition { id: string; masterProjectId: string; number: string; requesterId: string | null; requestDate: string; facility: string; front: string; purpose: string; neededBy: string | null; notes: string; status: RequisitionStatus; rejectReason: string; issuedAt: string | null; createdAt: string }
+export interface RequisitionLine { id: string; requisitionId: string; materialId: string; qtyRequested: number; stockAtRequest: number; qtyIssued: number; notes: string }
+export interface RequisitionSigner { id: string; requisitionId: string; role: SignerRole; sort: number; userId: string | null; decision: 'pending' | 'approved' | 'rejected'; signedAt: string | null; note: string; signatureImage: string | null }

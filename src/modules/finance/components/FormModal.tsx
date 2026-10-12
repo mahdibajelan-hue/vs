@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { AttachmentField } from './AttachmentField'
 import { faDigits, parseNum } from './fn'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 export type Vals = Record<string, string | number | null>
 export interface FieldDef {
@@ -77,6 +78,7 @@ export function FormModal({ title, subtitle, fields, groups = [], initial, submi
   }
   const main = fields.filter((f) => !f.group && visible(f))
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal fn-form" style={{ maxWidth: 760 }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="im-modal-head"><div><div className="im-modal-title">{title}</div>{subtitle && <p className="im-helper" style={{ margin: 0 }}>{subtitle}</p>}</div><button className="im-modal-close" onClick={close} aria-label="بستن">✕</button></div>
@@ -87,5 +89,6 @@ export function FormModal({ title, subtitle, fields, groups = [], initial, submi
         <div className="fn-form-foot"><button className="im-btn im-btn-ghost" onClick={close}>انصراف</button><button className="im-btn im-btn-primary" disabled={busy} onClick={submit}>{busy ? 'در حال ثبت…' : submitLabel}</button></div>
       </div>
     </div>
+    </ModalPortal>
   )
 }

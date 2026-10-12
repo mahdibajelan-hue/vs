@@ -15,5 +15,5 @@ export async function readXlsx(file: File): Promise<Record<string, unknown>[]> {
 
 /** An empty MTO sheet with the headers the importer understands. */
 export async function writeMtoTemplate(): Promise<void> {
-  await writeXlsx([{ 'کد کالا': '', 'شرح': '', 'گروه کالا': '', 'مشخصات فنی': '', 'سایز': '', 'واحد': 'EA', 'مقدار': '', 'قیمت واحد': '', 'ایستگاه': '', 'بخش اجرایی': '', 'شماره خط': '', 'ایزومتریک': '', 'نقشه': '', 'تگ': '', 'جبهه کاری': '', 'محل مصرف': '', 'تاریخ نیاز': '' }], 'MTO-template.xlsx', 'MTO')
+  await writeXlsx([{ 'شماره ردیف پیمان': '', 'کد کالا': '', 'شرح': '', 'گروه کالا': '', 'مشخصات فنی': '', 'سایز': '', 'واحد': 'EA', 'مقدار': '', 'قیمت واحد': '', 'ایستگاه': '', 'بخش اجرایی': '', 'شماره خط': '', 'ایزومتریک': '', 'نقشه': '', 'تگ': '', 'جبهه کاری': '', 'محل مصرف': '', 'تاریخ نیاز': '' }], 'MTO-template.xlsx', 'MTO')
 }

@@ -14,6 +14,7 @@ import { RISK_LEVEL_LABEL_FA } from '../lib/riskScore'
 import { ZONE_LABEL_FA, type RiskZone } from '../lib/riskPolicy'
 import { LevelChip, PersonSelect, ScoreTriple, StatusChip, useCategoryLabel } from '../components/rk'
 import type { PageProps } from '../RiskApp'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 
 interface Filter { q: string; project: string; status: string; level: string; zone: string; category: string; owner: string; source: string; attention: boolean; reviewOverdue: boolean; cell: { p: number; i: number } | null }
 const EMPTY: Filter = { q: '', project: 'all', status: 'active', level: 'all', zone: 'all', category: 'all', owner: 'all', source: 'all', attention: false, reviewOverdue: false, cell: null }
@@ -175,6 +176,7 @@ function ImportModal({ projectId, onClose, onDone, bulkAdd, categories }: { proj
     if (!r.failed.length) onDone()
   }
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal" style={{ maxWidth: 720 }} role="dialog" aria-modal="true" aria-label="ورود ریسک از فایل">
         <div className="im-modal-head"><div className="im-modal-title">ورود ریسک‌ها از فایل CSV</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -198,5 +200,6 @@ function ImportModal({ projectId, onClose, onDone, bulkAdd, categories }: { proj
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }

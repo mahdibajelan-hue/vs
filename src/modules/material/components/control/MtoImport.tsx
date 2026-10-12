@@ -7,6 +7,7 @@ import { readXlsx, writeMtoTemplate } from '../../lib/control/xlsx'
 import { Chip, DataTable } from '../../../finance/components/fn'
 import { fa } from './common'
 import type { Material } from '../../types'
+import { ModalPortal } from '../../../../components/common/ModalPortal'
 
 /** Bulk entry of an MTO from a standard sheet. The contract MTO adds lines and proposes changes for the lines whose quantity differs; the detail-design MTO attaches the design quantity (and the differences) and adds lines the contract does not have. */
 export function MtoImport({ projectId, mode, onClose }: { projectId: string; mode: 'contract' | 'detail'; onClose: () => void }) {
@@ -33,7 +34,7 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
     const groupOf = (code?: string) => groups.find((g) => g.code === code || g.title === code)
     const news: Partial<Material>[] = plan.create.map((r) => {
       const g = groupOf(r.groupCode)
-      return { materialCode: r.materialCode, description: r.description ?? '', spec: r.spec ?? '', size: r.size ?? '', unit: r.unit || g?.defaultUnit || 'EA', unitPrice: r.unitPrice ?? 0, facility: r.facility ?? '', area: r.area ?? '', pipelineNo: r.pipelineNo, isometricNo: r.isometricNo, pidNumber: r.pidNumber ?? '', tagNumber: r.tagNumber ?? '',
+      return { lineNo: r.lineNo || undefined, materialCode: r.materialCode, description: r.description ?? '', spec: r.spec ?? '', size: r.size ?? '', unit: r.unit || g?.defaultUnit || 'EA', unitPrice: r.unitPrice ?? 0, facility: r.facility ?? '', area: r.area ?? '', pipelineNo: r.pipelineNo, isometricNo: r.isometricNo, pidNumber: r.pidNumber ?? '', tagNumber: r.tagNumber ?? '',
         front: r.front ?? '', usageLocation: r.usageLocation ?? '', needDate: r.needDate || null, groupId: g?.id ?? null, criticality: g?.criticality ?? 'B', leadTimeDays: g?.leadTimeDays || null,
         ...(mode === 'contract' ? { contractQty: r.qty, detailStatus: 'none' as const } : { contractQty: null, detailQty: r.qty, detailStatus: 'draft' as const, mtoQuantity: r.qty }) }
     })
@@ -47,6 +48,7 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
   }
   const title = mode === 'contract' ? 'ورود گروهی MTO پیمان' : 'ورود گروهی MTO طراحی تفصیلی'
   return (
+    <ModalPortal>
     <div className="im-overlay">
       <div className="im-modal fn-form" style={{ maxWidth: 820 }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="im-modal-head"><div><div className="im-modal-title">{title}</div><p className="im-helper" style={{ margin: 0 }}>{mode === 'contract' ? 'ردیف‌های جدید ثبت می‌شوند؛ ردیفی که مقدارش با ثبت فعلی فرق دارد به‌صورت درخواست تغییر برای تأیید می‌آید و بی‌صدا عوض نمی‌شود.' : 'مقدار طراحی به ردیف هم‌کلید وصل می‌شود و اختلاف مشخصات، واحد، کد و محل مصرف ثبت می‌شود. ردیفی که در MTO پیمان نیست، به‌عنوان «خارج از MTO پیمان» شناسایی می‌شود و تصمیم دربارهٔ آن با کارفرما و مشاور است.'}</p></div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
@@ -73,5 +75,6 @@ export function MtoImport({ projectId, mode, onClose }: { projectId: string; mod
         <div className="fn-form-foot"><button className="im-btn im-btn-ghost" onClick={onClose}>بستن</button><button className="im-btn im-btn-primary" disabled={!plan || busy || (plan.create.length + plan.changed.length + plan.attach.length === 0)} onClick={() => void apply()}>{busy ? 'در حال ثبت…' : 'ثبت در سامانه'}</button></div>
       </div>
     </div>
+    </ModalPortal>
   )
 }
