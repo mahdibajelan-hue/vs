@@ -6,7 +6,7 @@ import type { PaperCtx } from './ReportPaper'
 import type { ReportLine } from '../types'
 
 /** Paper layouts of the technical forms that are drawn exactly like the contractor's printed sheets. */
-export const PAPER_FORMS = new Set(['backfill', 'sand', 'rock_shield', 'geotextile', 'bend', 'weld_repair', 'bond_test', 'string', 'rt_request', 'pipe_entry', 'lowering', 'tie_in'])
+export const PAPER_FORMS = new Set(['backfill', 'sand', 'rock_shield', 'geotextile', 'bend', 'weld_repair', 'bond_test', 'string', 'rt_request', 'pipe_entry', 'lowering', 'tie_in', 'pipe_permit'])
 
 const d = (l: ReportLine | undefined, k: string) => (!l || l.detail[k] == null ? '' : String(l.detail[k]))
 const jd = (iso: string) => fmtD(iso).replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/\//g, '.')
@@ -372,6 +372,31 @@ function TieIn({ c }: { c: PaperCtx }) {
   )
 }
 
+/* ---------- pipe factory release permit (مجوز خروج لوله از کارخانه) ---------- */
+function PipePermit({ c }: { c: PaperCtx }) {
+  const r = c.report, h = r.data, rows = pad(Math.max(6, c.lines.length), c.lines)
+  const v = (k: string) => String(h[k] ?? '')
+  const dt = (k: string) => (h[k] ? fmtD(String(h[k])) : '')
+  return (
+    <div className="mt-printable fp-wrap">
+      <div className="fp-page fp-pp" dir="rtl">
+        <div className="fp-pp-head">
+          <div className="fp-pp-t"><b>فرم مجوز خروج لوله‌های فولادی پوشش سه‌لایه پلی‌اتیلن</b><span>{v('supplier')}</span></div>
+          <div className="fp-pp-k"><div>سایز لوله : "{v('sizeIn')}</div><div>نام پروژه : {c.projectName}</div><div>شماره بارنامه : {v('billNo')}</div></div>
+        </div>
+        <div className="fp-pp-meta"><div><span>خریدار: {v('buyer') || c.orgName}</span><span>ضخامت: "{h.thkIn ? Number(h.thkIn).toFixed(3) : ''}</span></div><div><span>شماره سند : <b>{v('docNo')}</b></span><span>تاریخ سند : <b>{dt('docDate')}</b></span></div></div>
+        <table className="fp-tbl">
+          <thead><tr><th>ردیف</th><th>مشخصات کالا</th><th>شماره لوله</th><th>متراژ شاخه</th></tr></thead>
+          <tbody>{rows.map((l, i) => <tr key={i}><td>{i + 1}</td><td dir="ltr">{l ? d(l, 'goods') || 'PIPE COATED 30" 3 LAY PE' : ''}</td><td>{d(l, 'pipeNo')}</td><td>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? <>{d(l, 'checked') === 'yes' && <span className="fp-tick">✓ </span>}{Number(l.detail.lengthM).toFixed(2)}</> : ''}</td></tr>)}</tbody>
+        </table>
+        <p className="fp-pp-p">بدین‌وسیله تأیید می‌گردد لوله‌های مندرج در این برگ خروجی صحیح و سالم تحویل اینجانب {v('receiver')} گردید.</p>
+        <div className="fp-pp-box"><span>وسیله نقلیه شماره <b dir="ltr">{v('truck')}</b> به رانندگی <b>{v('driver')}</b> در تاریخ <b>{dt('exitDate')}</b> از شرکت حمل و نقل <b>{v('carrier')}</b></span><strong>مجاز است لوله‌های فوق را از کارخانه خارج نماید.</strong></div>
+        <div className="fp-pp-sign">{['انبار محصول', 'بازرسی درب خروج', 'واحد کنترل کیفیت', 'ثبت اسناد'].map((t) => <div key={t}><b>{t}</b></div>)}</div>
+      </div>
+    </div>
+  )
+}
+
 export function FormPaper({ c }: { c: PaperCtx }) {
   switch (c.form?.key) {
     case 'backfill': return <JointKm c={c} title="بکفیل" />
@@ -382,6 +407,7 @@ export function FormPaper({ c }: { c: PaperCtx }) {
     case 'pipe_entry': return <PipeEntry c={c} />
     case 'lowering': return <Lowering c={c} />
     case 'tie_in': return <TieIn c={c} />
+    case 'pipe_permit': return <PipePermit c={c} />
     case 'sand': return <JointKm c={c} title="خاک سرندی" />
     case 'bend': return <Bend c={c} />
     case 'weld_repair': return <WeldRepair c={c} />
