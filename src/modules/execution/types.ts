@@ -34,7 +34,8 @@ export interface ReportLine {
   id: string; reportId: string; lineNo: number; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string
   detail: Record<string, unknown>; status: LineStatus; approvedQty: number | null; reviewNote: string; sourceReportId: string | null
 }
-export interface ReportResource { id: string; reportId: string; kind: 'man' | 'equip'; name: string; activeQty: number; idleQty: number; hours: number; note: string }
+/** One manpower / machinery row of the daily report. Manpower: total, active, leave, stopped, native, non-native; machinery: total, active, inactive (idleQty), stopped, repair. */
+export interface ReportResource { id: string; reportId: string; kind: 'man' | 'equip'; section: string; name: string; totalQty: number; activeQty: number; idleQty: number; leaveQty: number; stoppedQty: number; nativeQty: number; nonnativeQty: number; repairQty: number; hours: number; note: string }
 export type StoppageCategory = 'material' | 'drawing' | 'land' | 'permit' | 'weather' | 'equipment' | 'manpower' | 'hse' | 'other'
 export interface Stoppage { id: string; reportId: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; issueRef: string | null }
 export interface ReportHistory { id: number; reportId: string; at: string; actor: string | null; action: string; note: string }

@@ -8,7 +8,8 @@ import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { fmtD } from '../../finance/components/fn'
 import { useExecutionStore, type LineInput } from '../store/useExecutionStore'
 import type { ExecutionModel } from '../lib/useExecutionModel'
-import { FORM_BY_KEY, EQUIP_PRESET, MAN_PRESET, STOPPAGE_CATEGORY_FA, type FieldDef } from '../lib/formCatalog'
+import { FORM_BY_KEY, STOPPAGE_CATEGORY_FA, type FieldDef } from '../lib/formCatalog'
+import { mergeCatalog, resUsed, toRow, type ResRow } from '../lib/resourceCatalog'
 import { computeMetrics, cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
 import { cumulative } from '../lib/progress'
 import type { Activity, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
@@ -16,6 +17,8 @@ import { LINE_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
+import { ResourcePanel } from './ResourcePanel'
+import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
 interface LRow { key: string; id?: string; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string; detail: Record<string, unknown>; status: ReportLine['status']; approvedQty: number | null; reviewNote: string; sourceReportId: string | null }
 const uid0 = () => Math.random().toString(36).slice(2, 9)
@@ -37,13 +40,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [head, setHead] = useState(() => ({ reportDate: r?.reportDate ?? m.today, front: r?.front ?? '', station: r?.station ?? '', shift: r?.shift ?? 'day', contractorOrgId: r?.contractorOrgId ?? '', notes: r?.notes ?? '' }))
   const [data, setData] = useState<Record<string, unknown>>(() => ({ ...(r?.data ?? {}) }))
   const [rows, setRows] = useState<LRow[]>(() => (m.linesByReport.get(reportId) ?? []).map((l) => ({ key: l.id, id: l.id, activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: { ...l.detail }, status: l.status, approvedQty: l.approvedQty, reviewNote: l.reviewNote, sourceReportId: l.sourceReportId })))
-  const [res, setRes] = useState<{ kind: 'man' | 'equip'; name: string; activeQty: number; idleQty: number; hours: number }[]>(() => {
-    const saved = m.resources.filter((x) => x.reportId === reportId)
-    const preset = [...MAN_PRESET.map((n) => ['man', n] as const), ...EQUIP_PRESET.map((n) => ['equip', n] as const)]
-    const merged = preset.map(([kind, name]) => { const s = saved.find((x) => x.kind === kind && x.name === name); return { kind, name, activeQty: s?.activeQty ?? 0, idleQty: s?.idleQty ?? 0, hours: s?.hours ?? 0 } })
-    for (const s of saved) if (!merged.some((x) => x.kind === s.kind && x.name === s.name)) merged.push({ kind: s.kind, name: s.name, activeQty: s.activeQty, idleQty: s.idleQty, hours: s.hours })
-    return merged
-  })
+  const [res, setRes] = useState<ResRow[]>(() => mergeCatalog(m.resources.filter((x) => x.reportId === reportId).map(toRow)))
   const [stops, setStops] = useState<{ key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId })))
   const [pick, setPick] = useState('')
   const [search, setSearch] = useState('')
@@ -52,12 +49,10 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [paper, setPaper] = useState(false)
   const [showHist, setShowHist] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [newName, setNewName] = useState('')
   if (!r) return null
 
   const canRecord = ex.can(m.projectId, 'record')
   const editable = canRecord && EDITABLE.has(r.status)
-  const touch = <T,>(f: (x: T) => void) => (x: T) => { f(x); setDirty(true) }
   const setH = (k: keyof typeof head, v: string) => { setHead((h) => ({ ...h, [k]: v })); setDirty(true) }
   const setD = (k: string, v: unknown) => { setData((d) => ({ ...d, [k]: v })); setDirty(true) }
   const patchRow = (key: string, p: Partial<LRow>) => { setRows((a) => a.map((x) => (x.key === key ? { ...x, ...p } : x))); setDirty(true) }
@@ -81,7 +76,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const before = useMemo(() => cumulative(m.reports, m.lines, { before: head.reportDate, excludeReportId: reportId, mode: 'registered' }), [m.reports, m.lines, head.reportDate, reportId])
   const upToday = useMemo(() => cumulative(m.reports, m.lines, { until: head.reportDate, excludeReportId: reportId, mode: 'registered' }), [m.reports, m.lines, head.reportDate, reportId])
   const asLines = (): ReportLine[] => rows.map((x, i) => ({ id: x.key, reportId, lineNo: i, activityId: x.activityId, qty: x.qty, kmFrom: x.kmFrom, kmTo: x.kmTo, location: x.location, note: x.note, detail: x.detail, status: x.status, approvedQty: x.approvedQty, reviewNote: x.reviewNote, sourceReportId: x.sourceReportId }))
-  const asRes = (): ReportResource[] => res.map((x, i) => ({ id: String(i), reportId, kind: x.kind, name: x.name, activeQty: x.activeQty, idleQty: x.idleQty, hours: x.hours, note: '' }))
+  const asRes = (): ReportResource[] => res.map((x, i) => ({ ...x, id: String(i), reportId }))
   const missing = missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes())
   const incons = form ? [] : inconsistenciesForReport(asLines(), m.actById)
   const overRows = useMemo(() => new Set(rows.filter((x) => { const a = x.activityId ? m.actById.get(x.activityId) : undefined; if (!a) return false; const base = m.baseOf(a, head.reportDate); return base > 0 && (upToday.get(a.id) ?? 0) + rows.filter((y) => y.activityId === a.id).reduce((s, y) => s + y.qty, 0) > base * (1 + m.settings.overBasePct / 100) + 1e-9 }).map((x) => x.key)), [rows, upToday, m, head.reportDate])
@@ -121,8 +116,15 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
     setRows((a) => [...a, ...add]); setDirty(true)
   }
 
+  // the most recent earlier daily report of the same front that carries a resource list — a starting point for today's list
+  const lastRes = useMemo(() => m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && (!head.front || x.front === head.front) && m.resources.some((y) => y.reportId === x.id)).sort((a, b) => (a.reportDate < b.reportDate ? 1 : -1))[0], [m.reports, m.resources, head.front, head.reportDate, reportId])
+  const copyLastResources = () => {
+    if (!lastRes) { window.alert('گزارش قبلی همین جبهه که فهرست نفرات و ماشین‌آلات داشته باشد پیدا نشد.'); return }
+    if (res.some(resUsed) && !window.confirm('مقدارهای فعلی نفرات و ماشین‌آلات با گزارش قبلی جایگزین شود؟')) return
+    setRes(mergeCatalog(m.resources.filter((y) => y.reportId === lastRes.id).map(toRow))); setDirty(true)
+  }
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
-  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter((x) => x.activeQty || x.idleQty || x.hours), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
+  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
   const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
   const raise = async (s: { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }) => {
     const mat = s.materialId ? mm.materials.find((x) => x.id === s.materialId) : undefined
@@ -178,7 +180,14 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
           <label>ایستگاه / محدوده<select disabled={!editable} value={head.station} onChange={(e) => setH('station', e.target.value)}><option value="">—</option>{stationOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>شیفت<select disabled={!editable} value={head.shift} onChange={(e) => setH('shift', e.target.value)}><option value="day">روز</option><option value="night">شب</option></select></label>
           <label>وضعیت آب‌وهوا *<select disabled={!editable} value={String(data.weather ?? '')} onChange={(e) => setD('weather', e.target.value)}><option value="">—</option>{WEATHER.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-          {!form && <label>ساعت کار مفید<DecInput value={Number(data.usefulHours) || 0} onValue={(n) => setD('usefulHours', n)} label="ساعت کار مفید" /></label>}
+          {!form && <>
+            <label>کمینهٔ دما (°C)<DecInput value={Number(data.tempMin) || 0} onValue={(n) => setD('tempMin', n)} label="کمینهٔ دما" /></label>
+            <label>بیشینهٔ دما (°C)<DecInput value={Number(data.tempMax) || 0} onValue={(n) => setD('tempMax', n)} label="بیشینهٔ دما" /></label>
+            <label>رطوبت (٪)<DecInput value={Number(data.humidity) || 0} onValue={(n) => setD('humidity', n)} label="رطوبت" /></label>
+            <label>وضعیت کارگاه<select disabled={!editable} value={String(data.siteStatus ?? '')} onChange={(e) => setD('siteStatus', e.target.value)}><option value="">—</option><option value="active">فعال</option><option value="partial">فعالیت محدود</option><option value="stopped">تعطیل</option></select></label>
+            <label>وضعیت زمین<select disabled={!editable} value={String(data.groundStatus ?? '')} onChange={(e) => setD('groundStatus', e.target.value)}><option value="">—</option><option value="dry">خشک</option><option value="mud">گل</option><option value="wet">خیس</option><option value="frozen">یخ‌زده</option><option value="snow">برفی</option></select></label>
+            <label>ساعت کار مفید<DecInput value={Number(data.usefulHours) || 0} onValue={(n) => setD('usefulHours', n)} label="ساعت کار مفید" /></label>
+          </>}
           {form && form.header.map(headField)}
           <label className="wide">توضیحات<input disabled={!editable} value={head.notes} onChange={(e) => setH('notes', e.target.value)} dir="auto" /></label>
         </div>
@@ -237,20 +246,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
         </div>
       )}
 
-      {(!form || form.resources) && (
-        <div className="im-card" style={{ padding: 14 }}>
-          <b>نفرات و ماشین‌آلات</b>
-          <div className="ex-res" style={{ marginTop: 8 }}>
-            {(['man', 'equip'] as const).map((k) => (
-              <table key={k}><thead><tr><th>{k === 'man' ? 'نیروی انسانی' : 'ماشین‌آلات'}</th><th>فعال</th><th>غیرفعال</th><th>ساعت</th></tr></thead>
-                <tbody>{res.map((x, i) => x.kind !== k ? null : (
-                  <tr key={x.name}><td>{x.name}</td>
-                    {(['activeQty', 'idleQty', 'hours'] as const).map((f) => <td key={f}>{editable ? <DecInput value={x[f]} onValue={touch((n: number) => setRes((a) => a.map((y, j) => (j === i ? { ...y, [f]: n } : y))))} label={`${x.name} ${f}`} /> : fa(x[f], 1)}</td>)}</tr>))}
-                  {editable && <tr><td colSpan={4}><span style={{ display: 'flex', gap: 4 }}><input placeholder={k === 'man' ? 'نقش دیگر…' : 'ماشین دیگر…'} value={newName} onChange={(e) => setNewName(e.target.value)} dir="auto" style={{ flex: 1 }} /><button className="im-btn im-btn-sm" disabled={!newName.trim()} onClick={() => { setRes((a) => [...a, { kind: k, name: newName.trim(), activeQty: 0, idleQty: 0, hours: 0 }]); setNewName(''); setDirty(true) }}>افزودن</button></span></td></tr>}</tbody></table>
-            ))}
-          </div>
-        </div>
-      )}
+      {(!form || form.resources) && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} onCopyLast={copyLastResources} lastLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} />}
 
       {!form && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 10 }}>
@@ -278,6 +274,14 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
           </div>
         </div>
       )}
+
+      {!form && (
+        <div className="im-card" style={{ padding: 14, display: 'grid', gap: 14 }}>
+          <NumberedLines title="شرح عملیات" hint="خلاصهٔ عملیات انجام‌شده امروز — هر مورد در یک ردیف." value={asList(data.ops)} max={12} editable={editable} onChange={(v) => setD('ops', v)} />
+          <NumberedLines title="موانع و مشکلات" hint="هر مانع یا مشکل اجرایی امروز در یک ردیف؛ برای توقف مشخص بالاتر «توقف‌ها» را هم ثبت کنید." value={asList(data.obstacles)} max={6} editable={editable} onChange={(v) => setD('obstacles', v)} />
+        </div>
+      )}
+      {!form && <NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} />}
 
       {(missing.length > 0 || incons.length > 0) && editable && (
         <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}>

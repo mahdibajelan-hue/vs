@@ -83,7 +83,7 @@ export function resourceSummary(c: PeriodCtx, p: Period): ResourceRow[] {
     const rep = ids.get(r.reportId); if (!rep) continue
     const k = `${r.kind}|${r.name}`
     const x = m.get(k) ?? { kind: r.kind, name: r.name, active: 0, idle: 0, hours: 0, days: new Set<string>() }
-    x.active += r.activeQty; x.idle += r.idleQty; x.hours += r.hours; x.days.add(rep.reportDate); m.set(k, x)
+    x.active += r.activeQty; x.idle += r.idleQty + r.leaveQty + r.stoppedQty + r.repairQty; x.hours += r.hours; x.days.add(rep.reportDate); m.set(k, x)
   }
   return [...m.values()].map((x) => ({ kind: x.kind, name: x.name, avgActive: x.days.size ? x.active / x.days.size : 0, avgIdle: x.days.size ? x.idle / x.days.size : 0, hours: x.hours, days: x.days.size }))
 }

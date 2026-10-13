@@ -48,7 +48,7 @@ export function missingForReport(report: Pick<Report, 'formKey' | 'front' | 'con
   if (!form) {
     if (!lines.length) miss.push('جدول کارکرد (حداقل یک ردیف)')
     lines.forEach((l, i) => { if (!l.activityId) miss.push(`ردیف ${i + 1}: فعالیت`); if (!(l.qty > 0)) miss.push(`ردیف ${i + 1}: مقدار کارکرد`) })
-    if (!resources.some((r) => r.kind === 'man' && (r.activeQty > 0 || r.idleQty > 0))) miss.push('نیروی انسانی')
+    if (!resources.some((r) => r.kind === 'man' && (r.totalQty > 0 || r.activeQty > 0 || r.idleQty > 0))) miss.push('نیروی انسانی')
     return miss
   }
   for (const h of form.header) if (h.req && !filled(report.data[h.key])) miss.push(h.label)

@@ -22,7 +22,7 @@ const nn = (x: unknown): number | null => (x == null || x === '' ? null : Number
 export type ItemInput = Pick<PriceItem, 'itemNo' | 'description' | 'unit' | 'unitPrice'> & Partial<Omit<PriceItem, 'id' | 'bookId'>>
 export interface ReportDraft { projectId: string; formKey: string; reportDate: string; front?: string; station?: string; shift?: string; contractorOrgId?: string | null; data?: Record<string, unknown>; notes?: string; status?: 'draft' | 'incomplete'; completionOf?: string | null; missing?: string[]; dueDate?: string | null }
 export interface LineInput { id?: string; activityId?: string | null; qty?: number; kmFrom?: number | null; kmTo?: number | null; location?: string; note?: string; detail?: Record<string, unknown>; sourceReportId?: string | null }
-export interface ResourceInput { kind: 'man' | 'equip'; name: string; activeQty: number; idleQty: number; hours: number; note?: string }
+export interface ResourceInput { kind: 'man' | 'equip'; section?: string; name: string; totalQty?: number; activeQty: number; idleQty: number; leaveQty?: number; stoppedQty?: number; nativeQty?: number; nonnativeQty?: number; repairQty?: number; hours: number; note?: string }
 export interface StoppageInput { category: Stoppage['category']; hours: number; description: string; materialId?: string | null }
 export interface ReviewDecision { lineId: string; decision: 'approved' | 'rejected' | 'returned'; qty?: number; note?: string }
 
@@ -101,7 +101,7 @@ export const useExecutionStore = create<State>((set, get) => ({
       blines: ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active })),
       reports: ok<Row>(reps).map(repRow),
       lines: ok<Row>(lns).map(lineRow),
-      resources: ok<Row>(res).map((r): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, name: r.name, activeQty: n(r.active_qty), idleQty: n(r.idle_qty), hours: n(r.hours), note: r.note ?? '' })),
+      resources: ok<Row>(res).map((r): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })),
       stoppages: ok<Row>(stp).map((r): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref })),
       history: ok<Row>(his).map((r): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })),
       maps: ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })),
@@ -295,7 +295,7 @@ export const useExecutionStore = create<State>((set, get) => ({
     if (body.resources) {
       const del = await supabase.from('ex_report_resources').delete().eq('report_id', reportId)
       if (report('ذخیرهٔ منابع', del.error)) return false
-      const rows = body.resources.filter((r) => r.activeQty || r.idleQty || r.hours).map((r) => ({ report_id: reportId, kind: r.kind, name: r.name, active_qty: r.activeQty, idle_qty: r.idleQty, hours: r.hours, note: r.note ?? '' }))
+      const rows = body.resources.filter((r) => r.totalQty || r.activeQty || r.idleQty || r.leaveQty || r.stoppedQty || r.repairQty || r.nativeQty || r.nonnativeQty || r.hours).map((r) => ({ report_id: reportId, kind: r.kind, section: r.section ?? '', name: r.name, total_qty: r.totalQty ?? 0, active_qty: r.activeQty, idle_qty: r.idleQty, leave_qty: r.leaveQty ?? 0, stopped_qty: r.stoppedQty ?? 0, native_qty: r.nativeQty ?? 0, nonnative_qty: r.nonnativeQty ?? 0, repair_qty: r.repairQty ?? 0, hours: r.hours, note: r.note ?? '' }))
       if (rows.length) { const { error } = await supabase.from('ex_report_resources').insert(rows); if (report('ذخیرهٔ منابع', error)) return false }
     }
     if (body.stoppages) {

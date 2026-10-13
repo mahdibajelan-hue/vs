@@ -59,7 +59,23 @@ begin
           case when st = 'returned' and n = 3 then 'مقدار با فرم فنی مطابقت ندارد' else '' end,
           case when st in ('approved','partially_approved','returned') then u_sup else null end, case when st in ('approved','partially_approved','returned') then d + time '20:00' else null end);
       end loop;
-      insert into ex_report_resources (report_id, kind, name, active_qty, idle_qty, hours) values (r, 'man', 'جوشکار', 10, 0, 8), (r, 'man', 'فیتر', 5, 0, 8), (r, 'man', 'کارگر ساده', 24, case when k = 6 then 3 else 0 end, 8), (r, 'equip', 'سایدبوم', 4, 0, 8), (r, 'equip', 'موتور جوش دیزل', 8, 0, 8), (r, 'equip', 'بیل مکانیکی', 2, case when k = 6 then 1 else 0 end, 8);
+      insert into ex_report_resources (report_id, kind, section, name, total_qty, active_qty, idle_qty, leave_qty, stopped_qty, native_qty, nonnative_qty, repair_qty, hours)
+      select r, x.kind, x.section, x.name, x.t,
+        case when x.kind = 'man' then x.t - lv - sp else x.t - lv - sp - rp end,
+        case when x.kind = 'equip' then lv else 0 end, case when x.kind = 'man' then lv else 0 end, sp,
+        case when x.kind = 'man' then ceil(x.t * 0.6) else 0 end, case when x.kind = 'man' then x.t - ceil(x.t * 0.6) else 0 end, rp, 8
+      from (select v.*, case when v.t >= 2 and (k + v.n) % 4 = 0 then 1 else 0 end lv, case when v.t >= 3 and (k + v.n) % 7 = 0 then 1 else 0 end sp, case when v.kind = 'equip' and v.t >= 2 and (k + v.n) % 5 = 0 then 1 else 0 end rp
+        from (values
+          ('man','ستادی و پشتیبانی (پیمانکار اجرایی)','رئیس کارگاه',1,1),('man','ستادی و پشتیبانی (پیمانکار اجرایی)','سرپرست اجرا',1,2),('man','ستادی و پشتیبانی (پیمانکار اجرایی)','کارشناس HSE',1,3),('man','ستادی و پشتیبانی (پیمانکار اجرایی)','انباردار و کمک',2,4),('man','ستادی و پشتیبانی (پیمانکار اجرایی)','نگهبان',10,5),
+          ('man','نقشه‌برداری','نقشه‌بردار',2,6),('man','نقشه‌برداری','کمک نقشه‌بردار',2,7),
+          ('man','بارگیری، حمل، دپو و ریسه لوله','راننده سایدبوم',3,8),('man','بارگیری، حمل، دپو و ریسه لوله','ریگر',2,9),('man','بارگیری، حمل، دپو و ریسه لوله','کارگر ریسه',4,10),
+          ('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','سرپرست جوشکاری',1,11),('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','جوشکار',10,12),('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','کمک جوشکار',10,13),('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','فیتر',3,14),('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','کارگر ساده',24,15),('man','جوشکاری و خمکاری – کانکشن – اتصال نهایی','QC',2,16),
+          ('man','رادیوگرافی','رادیوگرافر',2,17),('man','رادیوگرافی','کمک رادیوگرافر',2,18),
+          ('man','حفاری کانال','راننده بیل مکانیکی',3,19),('man','خاک سرندی، بکفیل و گرده‌ماهی','راننده لودر',2,20),
+          ('equip','ستادی و پشتیبانی','خودرو دو دیفرانسیل',11,21),('equip','ستادی و پشتیبانی','خودرو سواری و وانت',2,22),('equip','ستادی و پشتیبانی','آمبولانس',1,23),('equip','ستادی و پشتیبانی','کانکس ۶، ۱۲، ۷۲ متری',17,24),
+          ('equip','جوشکاری و خمکاری – کانکشن – اتصال نهایی','ساید بوم D8',2,25),('equip','جوشکاری و خمکاری – کانکشن – اتصال نهایی','ساید بوم بومار TD25',4,26),('equip','جوشکاری و خمکاری – کانکشن – اتصال نهایی','کف‌جوش پرکینز ۶ سیلندر',7,27),('equip','جوشکاری و خمکاری – کانکشن – اتصال نهایی','کپسول گاز',15,28),('equip','جوشکاری و خمکاری – کانکشن – اتصال نهایی','ژنراتور ۱۵۰',2,29),
+          ('equip','حفاری کانال','بیل مکانیکی',3,30),('equip','رادیوگرافی','چشمهٔ رادیوگرافی',2,31),('equip','تست هیدرواستاتیک','تست‌پمپ',2,32)
+        ) v(kind, section, name, t, n)) x;
       if k = 6 and fr = 'جبههٔ شمال' then insert into ex_report_stoppages (report_id, category, hours, description) values (r, 'material', 3.5, 'کمبود الکترود E7018 — توقف جوشکاری'); end if;
       if k = 9 and fr = 'جبههٔ مرکز' then insert into ex_report_stoppages (report_id, category, hours, description) values (r, 'weather', 5, 'بارش و یخ‌بندان'); end if;
       insert into ex_report_history (report_id, at, actor, action, note) values (r, d + time '17:00', u_con, 'submit', '');
@@ -73,5 +89,10 @@ begin
   for i in 1..6 loop insert into ex_report_lines (report_id, line_no, detail) values (r, i, jsonb_build_object('sec', '14', 'weldNo', 'W-' || (400 + i), 'pipeNo', 'P-' || (1100 + i), 'sizeIn', 56, 'thkIn', 0.625, 'stampRoot', 'A1', 'stampHot', 'A1', 'stampFill', 'B4', 'stampCap', 'B4', 'vt', case when i = 4 then 'rej' else 'acc' end)); end loop;
   insert into ex_reports (project_id, form_key, report_date, contractor_org_id, front, status, data, created_by) values (p, 'rt_report', current_date, org_c, 'جبههٔ شمال', 'draft', '{"weather":"sunny","source":"gamma","technique":"DWSI"}', u_con) returning id into r;
   for i in 1..4 loop insert into ex_report_lines (report_id, line_no, detail) values (r, i, jsonb_build_object('rtReqNo', 'RT-021', 'sec', '14', 'weldNo', 'W-' || (390 + i), 'odIn', 56, 'thkIn', 0.625, 'result', case when i = 2 then 'rep' else 'acc' end)); end loop;
+  update ex_reports set data = data || jsonb_build_object('tempMin', 2, 'tempMax', 11, 'humidity', 60, 'siteStatus', 'active', 'groundStatus', 'dry',
+    'ops', jsonb_build_array('ریسهٔ لولهٔ ۵۶ اینچ در محدودهٔ کیلومتر ۴۱ تا ۴۲ توسط دو دستگاه ساید بوم', 'جوشکاری و فیت‌آپ لولهٔ ۵۶ اینچ در جبهه', 'حفاری و اصلاح کانال با بیل مکانیکی'),
+    'obstacles', jsonb_build_array(), 'nextDay', jsonb_build_object('date', (report_date + 1)::text, 'hours', 10, 'condition', 'عملیات برنامه‌ریزی‌شده در صورت مساعد بودن شرایط جوی',
+      'rows', jsonb_build_array(jsonb_build_object('op','حمل و ریسه لوله','kmFrom',41,'kmTo',43,'unit','متر','qty',900,'crew','م. کارکن','note',''), jsonb_build_object('op','جوشکاری اتصال نهایی','kmFrom',41,'kmTo',42,'unit','سرجوش','qty',22,'crew','م. فخری','note',''))))
+  where project_id = p and form_key = 'work';
   raise notice 'execution demo seeded';
 end $$;

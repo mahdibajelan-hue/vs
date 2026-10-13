@@ -9,7 +9,7 @@ export interface FieldDef { key: string; label: string; en?: string; kind: Field
 /** A counter of the paper form: «تا امروز / امروز / جمع» computed from the lines. `groupBy` splits it (e.g. per wall thickness). */
 export interface MetricDef { key: string; label: string; unit: string; op: 'count' | 'sum'; fields?: string[]; groupBy?: string; where?: { field: string; eq: string } }
 export type FormGroup = 'pipeline' | 'weld' | 'rt' | 'coating' | 'ground' | 'qc'
-export type Signer = 'contractor' | 'supervision' | 'rt_contractor' | 'consultant'
+export type Signer = 'contractor' | 'supervision' | 'rt_contractor' | 'consultant' | 'site_head' | 'project_control' | 'employer'
 export interface FormDef {
   key: string; title: string; en: string; group: FormGroup; kind: 'daily' | 'record'; sheet: string
   header: FieldDef[]; columns: FieldDef[]; metrics: MetricDef[]; resources?: boolean; signers: Signer[]
@@ -20,7 +20,7 @@ export interface FormDef {
   hint?: string
 }
 
-export const SIGNER_LABEL_FA: Record<Signer, string> = { contractor: 'نماینده پیمانکار', supervision: 'نماینده دستگاه نظارت', rt_contractor: 'نماینده پیمانکار رادیوگرافی', consultant: 'مشاور' }
+export const SIGNER_LABEL_FA: Record<Signer, string> = { contractor: 'نماینده پیمانکار', supervision: 'نماینده دستگاه نظارت', rt_contractor: 'نماینده پیمانکار رادیوگرافی', consultant: 'مشاور', site_head: 'سرپرست کارگاه پیمانکار', project_control: 'کنترل پروژه پیمانکار', employer: 'نمایندهٔ کارفرما' }
 export const FORM_GROUP_LABEL_FA: Record<FormGroup, string> = { pipeline: 'عملیات خط لوله (ریسه، خمکاری، فیت‌آپ)', weld: 'جوشکاری و تعمیر', rt: 'رادیوگرافی', coating: 'پوشش و بازرسی', ground: 'عملیات خاکی و حفاظت', qc: 'سوابق صلاحیت و کیفیت' }
 
 const accRej: Opt[] = [{ value: 'acc', label: 'پذیرفته' }, { value: 'rej', label: 'مردود' }]
@@ -34,8 +34,6 @@ const stamps = [f('stampRoot', 'مهر جوشکار Root'), f('stampHot', 'Hot')
 const bendDeg = f('bendDeg', 'زاویه خم (Bend °)', 'num')
 const size = f('sizeIn', 'قطر (in)', 'num', { unit: 'in' })
 
-export const MAN_PRESET = ['جوشکار', 'کمک جوشکار', 'فیتر', 'کنترل کیفی', 'HSE', 'راننده سنگین', 'راننده سبک', 'کارگر ساده', 'نگهبان']
-export const EQUIP_PRESET = ['موتور جوش دیزل', 'رکتیفایر', 'ژنراتور', 'سایدبوم', 'تراکتور و کفی', 'بول ماشین', 'بیل مکانیکی', 'کلمپس خارجی', 'آمبولانس', 'سواری']
 
 export const FORMS: FormDef[] = [
   { key: 'pipe_entry', title: 'صورتجلسه ورود لوله به کارگاه', en: 'Pipe delivery record', group: 'pipeline', kind: 'daily', sheet: 'Pipe inter', signers: ['supervision', 'contractor'],

@@ -48,3 +48,14 @@
 .ex-chapter { display: flex; width: 100%; gap: 10px; align-items: baseline; padding: 9px 16px; border: 0; border-top: 1px solid var(--im-line); background: var(--im-panel-2); color: inherit; font: inherit; cursor: pointer; text-align: start; }
 .ex-chapter b { font-size: 12.5px; } .ex-chapter small { margin-inline-start: auto; color: var(--im-muted); font-size: 11px; }
 .ex-chapter:hover { background: var(--im-panel-3, rgba(148,163,184,.12)); }
+
+/* resource lists (manpower / machinery grouped by work section) */
+.ex-seg { display: inline-flex; border: 1px solid var(--im-line); border-radius: 8px; overflow: hidden; }
+.ex-seg button { background: transparent; border: 0; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; color: inherit; transition: background-color .15s ease; }
+.ex-seg button.on { background: var(--im-primary, #2563eb); color: #fff; }
+.ex-seg button:focus-visible, .ex-sec-btn:focus-visible { outline: 2px solid var(--im-primary, #2563eb); outline-offset: 1px; }
+.ex-resv td input { width: 100%; min-width: 54px; text-align: center; }
+.ex-resv tr.ex-sec { background: color-mix(in srgb, var(--im-primary, #2563eb) 7%, transparent); cursor: pointer; }
+.ex-sec-btn { background: none; border: 0; font: inherit; font-weight: 700; color: inherit; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 0; }
+.ex-resv tr.ex-total td { border-top: 2px solid var(--im-line); background: color-mix(in srgb, var(--im-primary, #2563eb) 4%, transparent); }
+.ex-resv tr.ex-row-bad { background: color-mix(in srgb, #dc2626 8%, transparent); }

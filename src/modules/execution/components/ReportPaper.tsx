@@ -5,6 +5,8 @@ import { FORM_BY_KEY, SIGNER_LABEL_FA, STOPPAGE_CATEGORY_FA, type FormDef } from
 import type { MetricRow } from '../lib/forms'
 import { REPORT_STATUS_LABEL_FA, type Activity, type Report, type ReportLine, type ReportResource, type Stoppage } from '../types'
 import { fa } from './common'
+import { EQUIP_COLS, MAN_COLS, resUsed, type ResField } from '../lib/resourceCatalog'
+import { asList, asNext } from './DayNotes'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -26,12 +28,13 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 export function ReportPaper({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
   const title = form ? form.title : 'گزارش کارکرد روزانه'
-  const signers = form ? form.signers : (['contractor', 'supervision'] as const)
+  const signers = form ? form.signers : (['project_control', 'site_head', 'supervision', 'employer'] as const)
   const who = (u: string | null) => (u ? c.people.get(u) ?? 'کاربر' : '')
   const when = (iso: string | null) => (iso ? `${fmtD(iso.slice(0, 10))} ${new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : '')
   const info: [string, string][] = [
     ['تاریخ گزارش', fmtD(r.reportDate)], ['پیمانکار', c.orgName || '—'], ['جبهه کاری', r.front || '—'], ['ایستگاه / محدوده', r.station || '—'],
     ['شیفت', r.shift === 'night' ? 'شب' : 'روز'], ['آب‌وهوا', WEATHER_FA[String(r.data.weather ?? '')] ?? '—'],
+    ...(!form ? ([['دمای کمینه / بیشینه', r.data.tempMin != null || r.data.tempMax != null ? `${fa(Number(r.data.tempMin) || 0)} / ${fa(Number(r.data.tempMax) || 0)} °C` : '—'], ['رطوبت', r.data.humidity ? `${fa(Number(r.data.humidity))}٪` : '—'], ['وضعیت کارگاه', ({ active: 'فعال', partial: 'فعالیت محدود', stopped: 'تعطیل' } as Record<string, string>)[String(r.data.siteStatus ?? '')] ?? '—'], ['وضعیت زمین', ({ dry: 'خشک', mud: 'گل', wet: 'خیس', frozen: 'یخ‌زده', snow: 'برفی' } as Record<string, string>)[String(r.data.groundStatus ?? '')] ?? '—'], ['ساعت کار مفید', r.data.usefulHours ? fa(Number(r.data.usefulHours), 1) : '—']] as [string, string][]) : []),
     ...(form ? form.header.filter((h) => r.data[h.key] != null && r.data[h.key] !== '').map((h) => [h.label, optLabel(form, h.key, r.data[h.key])] as [string, string]) : []),
   ]
   return (
@@ -63,18 +66,44 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
         </table>
       )}
 
-      {c.resources.length > 0 && (
+      {!form && (asList(r.data.ops).some((x) => x.trim()) || asList(r.data.obstacles).some((x) => x.trim())) && (
         <table>
-          <thead><tr><th>نفرات و ماشین‌آلات</th><th className="num">فعال</th><th className="num">غیرفعال</th><th className="num">ساعت کار</th></tr></thead>
-          <tbody>{c.resources.map((x) => <tr key={x.id}><td>{x.kind === 'man' ? 'نیرو' : 'ماشین'} — {x.name}</td><td className="num">{fa(x.activeQty)}</td><td className="num">{fa(x.idleQty)}</td><td className="num">{fa(x.hours, 1)}</td></tr>)}</tbody>
+          <thead><tr><th style={{ width: 36 }}>ردیف</th><th>شرح عملیات</th></tr></thead>
+          <tbody>{asList(r.data.ops).filter((x) => x.trim()).map((x, i) => <tr key={i}><td className="num">{fa(i + 1)}</td><td>{x}</td></tr>)}</tbody>
+          {asList(r.data.obstacles).some((x) => x.trim()) && <><thead><tr><th>ردیف</th><th>موانع و مشکلات</th></tr></thead><tbody>{asList(r.data.obstacles).filter((x) => x.trim()).map((x, i) => <tr key={i}><td className="num">{fa(i + 1)}</td><td>{x}</td></tr>)}</tbody></>}
         </table>
       )}
+      {(['man', 'equip'] as const).map((kind) => {
+        const list = c.resources.filter((x) => x.kind === kind && resUsed(x))
+        if (!list.length) return null
+        const cols: readonly (readonly [ResField, string])[] = kind === 'man' ? MAN_COLS : EQUIP_COLS
+        const sections = [...new Set(list.map((x) => x.section))]
+        const tot = (rows: typeof list, f: ResField) => rows.reduce((s, x) => s + x[f], 0)
+        return (
+          <table key={kind}>
+            <thead><tr><th>{kind === 'man' ? 'لیست نیروی انسانی — قسمت / شغل' : 'لیست ماشین‌آلات و تجهیزات — قسمت / تجهیز'}</th>{cols.map(([f, l]) => <th key={f} className="num">{l}</th>)}</tr></thead>
+            <tbody>
+              {sections.map((sec) => { const rows = list.filter((x) => x.section === sec); return [
+                <tr key={'s' + sec} style={{ background: '#f3f4f6' }}><td><b>{sec || '—'}</b></td>{cols.map(([f]) => <td key={f} className="num"><b>{fa(tot(rows, f))}</b></td>)}</tr>,
+                ...rows.map((x) => <tr key={x.id}><td style={{ paddingInlineStart: 16 }}>{x.name}</td>{cols.map(([f]) => <td key={f} className="num">{x[f] ? fa(x[f]) : '·'}</td>)}</tr>),
+              ] })}
+              <tr style={{ borderTop: '2px solid #111' }}><td><b>جمع کل</b></td>{cols.map(([f]) => <td key={f} className="num"><b>{fa(tot(list, f))}</b></td>)}</tr>
+            </tbody>
+          </table>
+        )
+      })}
       {c.stoppages.length > 0 && (
         <table>
           <thead><tr><th>عامل توقف / مشکل</th><th className="num">ساعت</th><th>شرح</th></tr></thead>
           <tbody>{c.stoppages.map((x) => <tr key={x.id}><td>{STOPPAGE_CATEGORY_FA[x.category]}</td><td className="num">{fa(x.hours, 1)}</td><td>{x.description}</td></tr>)}</tbody>
         </table>
       )}
+      {!form && (() => { const nd = asNext(r.data.nextDay); return nd.rows.length > 0 ? (
+        <table>
+          <thead><tr><th colSpan={7}>پیش‌بینی عملیات اجرایی روز آینده{nd.date ? ` — ${fmtD(nd.date)}` : ''}{nd.hours ? ` · جمع ساعت کار: ${fa(nd.hours, 1)}` : ''}{nd.condition ? ` · ${nd.condition}` : ''}</th></tr><tr><th>نوع عملیات</th><th>کیلومتر از</th><th>تا</th><th>واحد</th><th className="num">مقدار</th><th>نفر / اکیپ</th><th>ملاحظات</th></tr></thead>
+          <tbody>{nd.rows.map((x, i) => <tr key={i}><td>{x.op}</td><td className="num">{x.kmFrom ? fa(x.kmFrom, 3) : '—'}</td><td className="num">{x.kmTo ? fa(x.kmTo, 3) : '—'}</td><td>{x.unit}</td><td className="num">{fa(x.qty, 2)}</td><td>{x.crew}</td><td>{x.note}</td></tr>)}</tbody>
+        </table>
+      ) : null })()}
       {!!(r.notes || r.data.hse || r.data.problems) && <p style={{ margin: 0, padding: '6px 9px', border: '1px dashed #9ca3af' }}>{r.notes && <><b>توضیحات: </b>{r.notes} </>}{r.data.hse ? <><b>HSE: </b>{String(r.data.hse)} </> : null}{r.data.problems ? <><b>مشکلات اجرایی: </b>{String(r.data.problems)}</> : null}</p>}
       {r.reviewNote && <p style={{ margin: 0 }}><b>نظر دستگاه نظارت: </b>{r.reviewNote}</p>}
 
@@ -84,6 +113,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
             <small>{SIGNER_LABEL_FA[s]}</small>
             {s === 'contractor' ? <span>{who(r.submittedBy ?? r.createdBy)}<br /><small>{when(r.submittedAt)}</small></span>
               : s === 'supervision' ? <span>{r.reviewedAt && (r.status === 'approved' || r.status === 'partially_approved') ? <>{who(r.reviewedBy)}<br /><small>{when(r.reviewedAt)}</small></> : <small>— امضا و تأیید پس از بررسی —</small>}</span>
+              : s === 'project_control' || s === 'site_head' ? <span>{s === 'site_head' ? who(r.submittedBy ?? r.createdBy) : ''}</span>
               : <span />}
           </div>
         ))}
