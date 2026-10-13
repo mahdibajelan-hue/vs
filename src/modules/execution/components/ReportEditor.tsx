@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Copy, History, Plus, Printer, Send, Trash2, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useLookupOptions } from '../../material/lib/control/lookups'
@@ -18,6 +18,7 @@ import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ResourcePanel } from './ResourcePanel'
+import { WeatherCard } from './WeatherCard'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
 /** a stoppage row; the delay-register fields ride along so saving the report never drops an assessment or notice */
@@ -25,7 +26,7 @@ interface StopRow { key: string; category: StoppageCategory; hours: number; desc
 interface LRow { key: string; id?: string; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string; detail: Record<string, unknown>; status: ReportLine['status']; approvedQty: number | null; reviewNote: string; sourceReportId: string | null }
 const uid0 = () => Math.random().toString(36).slice(2, 9)
 const EDITABLE = new Set(['draft', 'returned', 'incomplete'])
-const WEATHER = [{ value: 'sunny', label: 'آفتابی' }, { value: 'cloudy', label: 'ابری' }, { value: 'rainy', label: 'بارانی' }, { value: 'snowy', label: 'برفی' }, { value: 'stormy', label: 'طوفانی (باد و خاک)' }]
+const WEATHER = [{ value: 'sunny', label: 'آفتابی' }, { value: 'partly', label: 'نیمه‌ابری' }, { value: 'cloudy', label: 'ابری' }, { value: 'rainy', label: 'بارانی' }, { value: 'snowy', label: 'برفی' }, { value: 'stormy', label: 'طوفانی (باد و خاک)' }]
 
 /** One report — the work report on the price-list rows, or any technical form of the catalog — with live cumulative figures, live completeness check, save / send / print. */
 export function ReportEditor({ reportId, model: m, onClose }: { reportId: string; model: ExecutionModel; onClose: () => void }) {
@@ -134,6 +135,13 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
     if (!add.length) { window.alert('همهٔ ردیف‌های گزارش قبلی از قبل در این گزارش هست.'); return }
     setRows((a) => [...a, ...add]); setDirty(true)
   }
+  const lastRows = useMemo(() => (lastRes ? mergeCatalog(m.resources.filter((y) => y.reportId === lastRes.id).map(toRow)) : null), [lastRes, m.resources])
+  // a new report starts from yesterday's roster — the person only records what changed
+  const [carried, setCarried] = useState(false)
+  useEffect(() => {
+    if (carried || !editable || !lastRows || r.formKey !== 'work' || res.some(resUsed)) return
+    setCarried(true); setRes(lastRows); setDirty(true)
+  }, [carried, editable, lastRows, res, r.formKey])
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
   const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
   const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
@@ -190,19 +198,13 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
           <label>جبهه کاری *<select disabled={!editable} value={head.front} onChange={(e) => setH('front', e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>ایستگاه / محدوده<select disabled={!editable} value={head.station} onChange={(e) => setH('station', e.target.value)}><option value="">—</option>{stationOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>شیفت<select disabled={!editable} value={head.shift} onChange={(e) => setH('shift', e.target.value)}><option value="day">روز</option><option value="night">شب</option></select></label>
-          <label>وضعیت آب‌وهوا *<select disabled={!editable} value={String(data.weather ?? '')} onChange={(e) => setD('weather', e.target.value)}><option value="">—</option>{WEATHER.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
-          {!form && <>
-            <label>کمینهٔ دما (°C)<DecInput value={Number(data.tempMin) || 0} onValue={(n) => setD('tempMin', n)} label="کمینهٔ دما" /></label>
-            <label>بیشینهٔ دما (°C)<DecInput value={Number(data.tempMax) || 0} onValue={(n) => setD('tempMax', n)} label="بیشینهٔ دما" /></label>
-            <label>رطوبت (٪)<DecInput value={Number(data.humidity) || 0} onValue={(n) => setD('humidity', n)} label="رطوبت" /></label>
-            <label>وضعیت کارگاه<select disabled={!editable} value={String(data.siteStatus ?? '')} onChange={(e) => setD('siteStatus', e.target.value)}><option value="">—</option><option value="active">فعال</option><option value="partial">فعالیت محدود</option><option value="stopped">تعطیل</option></select></label>
-            <label>وضعیت زمین<select disabled={!editable} value={String(data.groundStatus ?? '')} onChange={(e) => setD('groundStatus', e.target.value)}><option value="">—</option><option value="dry">خشک</option><option value="mud">گل</option><option value="wet">خیس</option><option value="frozen">یخ‌زده</option><option value="snow">برفی</option></select></label>
-            <label>ساعت کار مفید<DecInput value={Number(data.usefulHours) || 0} onValue={(n) => setD('usefulHours', n)} label="ساعت کار مفید" /></label>
-          </>}
+          {form && <label>وضعیت آب‌وهوا *<select disabled={!editable} value={String(data.weather ?? '')} onChange={(e) => setD('weather', e.target.value)}><option value="">—</option>{WEATHER.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>}
           {form && form.header.map(headField)}
           <label className="wide">توضیحات<input disabled={!editable} value={head.notes} onChange={(e) => setH('notes', e.target.value)} dir="auto" /></label>
         </div>
       </div>
+
+      {!form && <WeatherCard data={data} editable={editable} onChange={(k, v) => setD(k, v)} />}
 
       <div className="im-card" style={{ padding: 0 }}>
         <div className="mt-filters no-print" style={{ padding: '10px 14px' }}>
@@ -258,7 +260,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
         </div>
       )}
 
-      {(!form || form.resources) && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} onCopyLast={copyLastResources} lastLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} />}
+      {(!form || form.resources) && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
 
       {!form && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 10 }}>

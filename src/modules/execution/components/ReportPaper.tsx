@@ -17,7 +17,7 @@ export interface PaperCtx {
   metrics?: MetricRow[]
 }
 
-const WEATHER_FA: Record<string, string> = { sunny: 'آفتابی', cloudy: 'ابری', rainy: 'بارانی', snowy: 'برفی', stormy: 'طوفانی (باد و خاک)' }
+const WEATHER_FA: Record<string, string> = { sunny: 'آفتابی', partly: 'نیمه‌ابری', cloudy: 'ابری', rainy: 'بارانی', snowy: 'برفی', stormy: 'طوفانی (باد و خاک)' }
 const optLabel = (form: FormDef, key: string, v: unknown): string => {
   const f = [...form.header, ...form.columns].find((x) => x.key === key)
   const o = f?.options?.find((x) => x.value === String(v))
