@@ -45,12 +45,11 @@ export function LoginCard() {
 
   return (
     <div
-      className={`hub-fade-in glass-panel mx-auto mb-8 w-full max-w-sm rounded-2xl border p-6 transition-colors duration-300 ${
+      className={`hub-fade-in login-card mx-auto mb-6 w-full max-w-sm rounded-2xl border p-6 transition-colors duration-300 ${
         status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''
       }`}
       style={{
-        borderColor: status === 'idle' ? 'color-mix(in srgb, var(--radar-green) 45%, var(--border-soft))' : 'var(--border-soft)',
-        boxShadow: status === 'idle' ? '0 0 44px color-mix(in srgb, var(--radar-green) 16%, transparent)' : undefined,
+        
         animationDelay: '40ms',
       }}
     >
@@ -60,13 +59,13 @@ export function LoginCard() {
             <Check size={22} className="auth-success-check" />
           </div>
           <p className="text-sm font-bold text-green-300">ورود با موفقیت انجام شد</p>
-          <p className="text-xs text-secondary">در حال باز شدن ماژول‌ها...</p>
+          <p className="lc-label text-xs">در حال باز شدن ماژول‌ها...</p>
         </div>
       ) : (
         <>
           <div className="mb-4 flex items-center justify-center gap-1.5">
             <BadgeCheck size={14} style={{ color: 'var(--radar-green)' }} />
-            <p className="text-sm font-bold">ورود به سامانه</p>
+            <p className="lc-title text-sm font-bold">ورود به سامانه</p>
           </div>
           {authNotice && !error && (
             <p role="alert" className="mb-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs leading-6 text-amber-200">
@@ -75,7 +74,7 @@ export function LoginCard() {
           )}
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1 flex items-baseline gap-1.5 text-xs text-secondary">
+              <span className="mb-1 flex items-baseline gap-1.5 lc-label text-xs">
                 ایمیل <span className="eyebrow-en" dir="ltr">/ Email</span>
               </span>
               <div className="relative">
@@ -90,11 +89,11 @@ export function LoginCard() {
                   dir="ltr"
                   autoFocus
                 />
-                <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                <Mail size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 lc-icon" />
               </div>
             </label>
             <label className="block">
-              <span className="mb-1 flex items-baseline gap-1.5 text-xs text-secondary">
+              <span className="mb-1 flex items-baseline gap-1.5 lc-label text-xs">
                 رمز عبور <span className="eyebrow-en" dir="ltr">/ Password</span>
               </span>
               <div className="relative">
@@ -110,7 +109,7 @@ export function LoginCard() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 lc-icon hover:text-white"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}

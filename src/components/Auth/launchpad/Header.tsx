@@ -14,7 +14,7 @@ function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) 
     <button
       title={label}
       aria-label={label}
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-white/5 hover:text-current"
+      className="tb-btn"
     >
       <Icon size={16} />
     </button>
@@ -28,6 +28,8 @@ export function Header() {
   const currentUser = useAuthStore((s) => s.currentUser())
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileModal, setProfileModal] = useState(false)
+  // on phones the toolbar wraps, so the account menu is pinned under the button and spans the screen instead of overflowing it
+  const [menuTop, setMenuTop] = useState(0)
 
   return (
     <header
@@ -67,8 +69,8 @@ export function Header() {
 
           <div className="relative">
             <button
-              onClick={() => setProfileOpen((v) => !v)}
-              className="flex items-center gap-2 rounded-lg py-1 pr-1 pl-2 hover:bg-white/5 transition-colors"
+              onClick={(e) => { setMenuTop(e.currentTarget.getBoundingClientRect().bottom + 8); setProfileOpen((v) => !v) }}
+              className="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 py-1 pr-1 pl-2 transition-colors hover:bg-white/20"
             >
               {currentUser?.avatarUrl ? (
                 <img src={currentUser.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full bg-white object-cover" />
@@ -84,22 +86,21 @@ export function Header() {
               <>
                 <button className="fixed inset-0 z-30 cursor-default" aria-hidden="true" onClick={() => setProfileOpen(false)} />
                 <div
-                  className="hub-fade-in absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border p-3 text-right"
-                  style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', animationDuration: '0.18s' }}
+                  className="lp-menu hub-fade-in absolute left-0 top-full z-40 mt-2 w-60 rounded-xl border p-3 text-right"
+                  style={{ animationDuration: '0.18s', ['--lp-menu-top' as string]: `${menuTop}px` }}
                 >
                   <p className="truncate text-sm font-bold">{currentUser?.fullName || 'کاربر'}</p>
-                  <p className="truncate text-[11px] text-muted" dir="ltr">
+                  <p className="lp-menu-mail truncate text-[11px]" dir="ltr">
                     {currentUser?.email}
                   </p>
                   <button
                     onClick={() => { setProfileOpen(false); setProfileModal(true) }}
-                    className="mt-3 flex w-full items-center justify-center rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-white/5"
-                    style={{ borderColor: 'var(--border-soft)' }}
+                    className="lp-menu-item mt-3 flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-xs"
                   >
                     پروفایل و امضای من
                   </button>
-                  <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--border-soft)' }}>
-                    <SignOutButton className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-400/25 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10 transition-colors" />
+                  <div className="lp-menu-sep mt-3 border-t pt-3">
+                    <SignOutButton className="lp-menu-out flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors" />
                   </div>
                 </div>
               </>

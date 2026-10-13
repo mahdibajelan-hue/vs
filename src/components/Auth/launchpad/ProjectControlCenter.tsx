@@ -8,6 +8,7 @@ import { ModuleLaunchpad } from './ModuleLaunchpad'
 import { AboutNote } from './AboutNote'
 import { Footer } from './Footer'
 import { LoginCard } from './LoginCard'
+import { ProjectHeroArt } from './ProjectHeroArt'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
 
 /** FARIN wordmark + Persian name + tagline — the hero title that sits under the lamp. `children`
@@ -89,7 +90,7 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
                 <ModuleLaunchpad onSelect={handleSelect} />
               </div>
             ) : (
-              // Signed out, as in the reference layout: login + locked module icons on the right,
+              // Signed out: the login card with the project-controls emblem beneath it on one side,
               // wordmark + tagline + the faint About note (with the signature) on the left. On
               // mobile the name moves above the login card and the rest follows below.
               <div className="grid w-full grid-cols-1 items-start gap-x-10 gap-y-8 md:grid-cols-2">
@@ -97,7 +98,7 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
                   <BrandName className="hub-fade-in items-center text-center md:hidden" />
                   <div className="flex w-full flex-col items-center gap-2">
                     <LoginCard />
-                    <ModuleLaunchpad onSelect={handleSelect} embedded />
+                    <ProjectHeroArt />
                   </div>
                 </div>
                 <BrandTitle nameOnDesktopOnly>
