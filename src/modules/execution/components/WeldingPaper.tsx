@@ -19,6 +19,8 @@ export const thicknessSet = (raw: unknown): number[] => {
 /** The daily welding report laid out exactly like the paper form: titles, two-line welder-stamp rows (R / C), THK summary and signature boxes — 20 welds per page. */
 export function WeldingPaper({ c }: { c: PaperCtx }) {
   const r = c.report
+  const fit = c.form?.key === 'fitup' // the fit-up report is the same sheet without the welder stamps
+  const wk = fit ? 'jointNo' : 'weldNo'
   const thk = thicknessSet(r.data.thkSet)
   const colOf = (l: ReportLine) => thk.findIndex((t) => t > 0 && Math.abs(t - n(l.detail.thkIn)) < 0.0005)
   const lines = c.lines
@@ -45,7 +47,7 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
               <tbody>
                 <tr className="wd-logos"><td>{c.orgName}</td><td>{c.projectName}</td><td>Consultant</td></tr>
                 <tr><td colSpan={3} className="wd-fa">{c.projectName}</td></tr>
-                <tr><td colSpan={3} className="wd-title">DAILY WELDING REPORT</td></tr>
+                <tr><td colSpan={3} className="wd-title">{fit ? 'DAILY FIT UP REPORT' : 'DAILY WELDING REPORT'}</td></tr>
                 <tr><td colSpan={2} className="wd-spec">{String(r.data.pipeSpec ?? '')}</td><td className="wd-wps">WPS NO. :{String(r.data.wpsNo ?? '')}</td></tr>
                 <tr><td colSpan={3} className="wd-meta"><span><b>Report Number:</b> {r.reportNo}</span><span><b>Page:</b> {p + 1} <b>OF</b> {pages}</span><span><b>Date:</b> {jd(r.reportDate)}</span></td></tr>
               </tbody>
@@ -53,11 +55,11 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
             <table className="wd-tbl">
               <thead>
                 <tr>
-                  <th rowSpan={3}>ROW</th><th rowSpan={3}>Sec<br />No.</th><th rowSpan={3}>WELD No.</th><th rowSpan={3}>PIPE No.</th>
+                  <th rowSpan={3}>ROW</th><th rowSpan={3}>Sec<br />No.</th><th rowSpan={3}>{fit ? 'Joint No.' : 'WELD No.'}</th><th rowSpan={3}>PIPE No.</th>
                   <th colSpan={4}>Length &amp; Thickness(inch)</th><th rowSpan={3}>SIZE<br />(inch)</th><th rowSpan={3} className="wd-bend">BEND<br />(DEGREE)</th>
-                  <th colSpan={5}>WELDERS STAMP</th><th rowSpan={3}>VT<br />Result</th><th rowSpan={3} className="wd-remark">REMARK</th>
+                  {fit ? <th rowSpan={3}>RESULT</th> : <><th colSpan={5}>WELDERS STAMP</th><th rowSpan={3}>VT<br />Result</th></>}<th rowSpan={3} className="wd-remark">REMARK</th>
                 </tr>
-                <tr><th>(A)</th><th>(B)</th><th>(C)</th><th>(D)</th><th rowSpan={2}>R<br />C</th><th rowSpan={2}>Root</th><th rowSpan={2}>Hot</th><th rowSpan={2}>Fill</th><th rowSpan={2}>CAP</th></tr>
+                <tr><th>(A)</th><th>(B)</th><th>(C)</th><th>(D)</th>{!fit && <><th rowSpan={2}>R<br />C</th><th rowSpan={2}>Root</th><th rowSpan={2}>Hot</th><th rowSpan={2}>Fill</th><th rowSpan={2}>CAP</th></>}</tr>
                 <tr>{thk.map((t, i) => <th key={i}>{th(t)}</th>)}</tr>
               </thead>
               <tbody>
@@ -70,11 +72,11 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
                     return [
                       <td key="n" rowSpan={2} className="wd-wcell">{p * ROWS_PER_PAGE + i + 1}</td>,
                       <td key="s" rowSpan={2} className="wd-wcell">{l ? d(l, 'sec') : ''}</td>,
-                      <td key="w" rowSpan={2} className="wd-wcell wd-weld">{l ? d(l, 'weldNo') : ''}<svg className="wd-chev" viewBox="0 0 14 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,0 14,50 0,100" vectorEffect="non-scaling-stroke" /></svg></td>,
+                      <td key="w" rowSpan={2} className="wd-wcell wd-weld">{l ? d(l, wk) : ''}<svg className="wd-chev" viewBox="0 0 14 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,0 14,50 0,100" vectorEffect="non-scaling-stroke" /></svg></td>,
                     ]
                   }
-                  if (r === ROWS_PER_PAGE * 2) return <tr key={r}>{Array.from({ length: 14 }, (_, j) => <td key={j} />)}</tr>
-                  if (r % 2 === 1) return <tr key={r}>{left(lk)}<td className="wd-rc">C</td>{stamp(slice[k], 'C')}</tr>
+                  if (r === ROWS_PER_PAGE * 2) return <tr key={r}>{Array.from({ length: fit ? 9 : 14 }, (_, j) => <td key={j} />)}</tr>
+                  if (r % 2 === 1) return <tr key={r}>{left(lk)}{!fit && <><td className="wd-rc">C</td>{stamp(slice[k], 'C')}</>}</tr>
                   const l = L, ci = l ? colOf(l) : -1
                   return (
                     <tr key={r} className="wd-top">
@@ -82,8 +84,8 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
                       <td rowSpan={2} className="wd-pcell">{l ? d(l, 'pipeNo') : ''}</td>
                       {thk.map((_, j) => <td key={j} rowSpan={2}>{l && ci === j && d(l, 'lengthM') !== '' ? n(l.detail.lengthM).toFixed(2) : ''}</td>)}
                       <td rowSpan={2}>{l ? d(l, 'sizeIn') : ''}</td><td rowSpan={2}>{l ? d(l, 'bendDeg') : ''}</td>
-                      <td className="wd-rc">R</td>{stamp(l, '')}
-                      <td rowSpan={2} className="wd-vt">{l ? ({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, 'vt')] ?? d(l, 'vt') : ''}</td><td rowSpan={2} className="wd-remark">{l ? d(l, 'remark') : ''}</td>
+                      {!fit && <><td className="wd-rc">R</td>{stamp(l, '')}</>}
+                      <td rowSpan={2} className="wd-vt">{l ? ({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, fit ? 'result' : 'vt')] ?? d(l, fit ? 'result' : 'vt') : ''}</td><td rowSpan={2} className="wd-remark">{l ? d(l, 'remark') : ''}</td>
                     </tr>
                   )
                 })}

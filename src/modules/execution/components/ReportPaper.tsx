@@ -29,7 +29,7 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
-  if (form?.key === 'welding') return <WeldingPaper c={c} />
+  if (form?.key === 'welding' || form?.key === 'fitup') return <WeldingPaper c={c} />
   if (form && PAPER_FORMS.has(form.key)) return <FormPaper c={c} />
   const title = form ? form.title : 'گزارش کارکرد روزانه'
   const signers = form ? form.signers : (['project_control', 'site_head', 'supervision', 'employer'] as const)
