@@ -2007,7 +2007,7 @@ select option {
 /* ───── Project-controls emblem under the sign-in card ───── */
 .hero-art svg { filter: drop-shadow(0 6px 14px rgba(2, 8, 23, 0.25)); overflow: visible; }
 /* nothing moves until the emblem is on screen (.ha-play), then it plays slowly: bars one by one (~3 s), the curve over ~4.5 s */
-.hero-art .ha-bar { opacity: 0; transform-box: fill-box; transform-origin: right center; }
+.hero-art .ha-bar { opacity: 0; transform-box: fill-box; transform-origin: left center; }
 .hero-art .ha-curve { stroke-dasharray: 1; stroke-dashoffset: 1; }
 .hero-art .ha-pulse, .hero-art .ha-sweep { animation-play-state: paused; }
 .hero-art.ha-play .ha-bar { animation: ha-grow 1.5s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0ms); }
