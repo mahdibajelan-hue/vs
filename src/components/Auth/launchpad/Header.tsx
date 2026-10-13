@@ -1,25 +1,12 @@
 import { useState } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import { Search, UserCircle2 } from 'lucide-react'
+import { UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
 import { ThemeSwitch } from '../../common/ThemeSwitch'
-import { NotificationBell } from '../../common/NotificationBell'
 import { InboxButton } from '../../../modules/inbox/components/InboxButton'
+import { SearchButton } from '../../search/GlobalSearch'
 import { ProfileModal } from '../ProfileModal'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
-
-function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
-  return (
-    <button
-      title={label}
-      aria-label={label}
-      className="tb-btn"
-    >
-      <Icon size={16} />
-    </button>
-  )
-}
 
 /** Sign-in itself lives on the page as LoginCard, not here — the header just switches between a
  * quiet "signed out" state (brand only) and the full authed toolbar once isAuthed flips. */
@@ -62,9 +49,8 @@ export function Header() {
             SYSTEM ONLINE
           </span>
 
-          <IconButton icon={Search} label="جستجو" />
           <InboxButton />
-          <NotificationBell />
+          <SearchButton />
           <ThemeSwitch />
 
           <div className="relative">

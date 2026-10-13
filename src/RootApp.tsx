@@ -29,6 +29,7 @@ import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
 import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
 import { InboxOverlay } from './modules/inbox/components/InboxOverlay'
+import { GlobalSearch } from './components/search/GlobalSearch'
 
 // One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
 const landRepo = createLandRepo()
@@ -106,7 +107,7 @@ export function RootApp() {
     )
   }
 
-  if (!activeModule) return <><ModuleHub onEnterModule={enterModule} /><InboxOverlay /></>
+  if (!activeModule) return <><ModuleHub onEnterModule={enterModule} /><InboxOverlay /><GlobalSearch /></>
 
   // مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد.
   if (activeModule === 'admin' && profile && !profile.isAdmin) {
@@ -179,6 +180,7 @@ export function RootApp() {
     <>
       <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
       <InboxOverlay />
+      <GlobalSearch />
     </>
   )
 }

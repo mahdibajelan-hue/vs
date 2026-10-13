@@ -1,8 +1,9 @@
 import type { InboxGroup, InboxItem, InboxSource } from '../types'
 import { KIND_META } from '../types'
 
-export interface InboxFilter { q: string; source: InboxSource | 'all'; group: InboxGroup | 'all'; project: string; urgentOnly: boolean }
-export const EMPTY_FILTER: InboxFilter = { q: '', source: 'all', group: 'all', project: '', urgentOnly: false }
+export type DueBucket = 'overdue' | 'today' | 'soon' | 'week' | 'later' | 'none'
+export interface InboxFilter { q: string; source: InboxSource | 'all'; group: InboxGroup | 'all'; project: string; urgentOnly: boolean; bucket: DueBucket | 'all' }
+export const EMPTY_FILTER: InboxFilter = { q: '', source: 'all', group: 'all', project: '', urgentOnly: false, bucket: 'all' }
 
 const day = 86400000
 /** Ordering rule of the inbox: overdue / urgent first, then closest due date, then the longest-waiting. */
@@ -17,7 +18,7 @@ export function applyFilter(items: InboxItem[], f: InboxFilter, snoozed: Readonl
   const q = f.q.trim()
   return items
     .filter((i) => !snoozed.has(i.key))
-    .filter((i) => (f.source === 'all' || i.source === f.source) && (f.group === 'all' || KIND_META[i.kind].group === f.group) && (!f.project || i.projectName === f.project) && (!f.urgentOnly || i.urgent))
+    .filter((i) => (f.source === 'all' || i.source === f.source) && (f.group === 'all' || KIND_META[i.kind].group === f.group) && (!f.project || i.projectName === f.project) && (!f.urgentOnly || i.urgent) && (f.bucket === 'all' || bucketOf(i.due) === f.bucket))
     .filter((i) => !q || `${i.title} ${i.sub} ${i.projectName} ${KIND_META[i.kind].label}`.includes(q))
     .sort((a, b) => rank(a, b))
 }
@@ -34,4 +35,14 @@ export function dueIn(due: string | null, now = Date.now()): number | null {
   const d = Date.parse(due.slice(0, 10) + 'T00:00:00')
   const t = new Date(now); t.setHours(0, 0, 0, 0)
   return Math.round((d - t.getTime()) / day)
+}
+
+export function bucketOf(due: string | null, now = Date.now()): DueBucket {
+  const d = dueIn(due, now)
+  if (d == null) return 'none'
+  if (d < 0) return 'overdue'
+  if (d === 0) return 'today'
+  if (d <= 3) return 'soon'
+  if (d <= 7) return 'week'
+  return 'later'
 }

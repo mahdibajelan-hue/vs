@@ -18,6 +18,7 @@ import { ChangeManagementCard } from './cards/ChangeManagementCard'
 import { FinanceControlCard } from './cards/FinanceControlCard'
 import { MaterialControlCard } from './cards/MaterialControlCard'
 import { ExecutionControlCard } from './cards/ExecutionControlCard'
+import { InboxHubCard } from '../../../modules/inbox/components/InboxHubCard'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
 
@@ -66,6 +67,12 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
         <p className="lp-hint hub-fade-in mb-3 text-center text-xs font-medium text-secondary" style={{ animationDelay: '80ms' }}>
           {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
         </p>
+      )}
+
+      {!embedded && (
+        <div className="hub-fade-in mb-3" style={{ animationDelay: '100ms' }}>
+          <InboxHubCard locked={locked} />
+        </div>
       )}
 
       <div className={locked || embedded ? 'launchpad-module-grid' : 'launchpad-bento'}>
