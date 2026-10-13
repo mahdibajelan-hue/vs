@@ -42,10 +42,10 @@ export const useInboxStore = create<InboxState>()((set, get) => ({
   refresh: async () => {
     if (get().loading) return
     set({ loading: true })
-    const [main, delays] = await Promise.all([supabase.rpc('inbox_my_items'), supabase.rpc('inbox_my_delays')])
+    const [main, delays, fin] = await Promise.all([supabase.rpc('inbox_my_items'), supabase.rpc('inbox_my_delays'), supabase.rpc('inbox_my_finance')])
     if (main.error) { set({ loading: false, loadedOnce: true, error: friendlyErrorMessage(main.error) }); return }
-    // the delay register is an optional extra: if it fails the rest of the inbox still shows
-    const items = [...((main.data ?? []) as Row[]), ...(delays.error ? [] : ((delays.data ?? []) as Row[]))].map(fromRow)
+    // the delay register and the finance list are optional extras: if it fails the rest of the inbox still shows
+    const items = [...((main.data ?? []) as Row[]), ...(delays.error ? [] : ((delays.data ?? []) as Row[])), ...(fin.error ? [] : ((fin.data ?? []) as Row[]))].map(fromRow)
     set((s) => ({ items, loading: false, loadedOnce: true, error: null, selected: s.selected && items.some((i) => i.key === s.selected) ? s.selected : null }))
   },
   setOpen: (open, select, tab) => { set((s) => ({ open, selected: open && select !== undefined ? select : s.selected, tab: open && tab ? tab : s.tab })); if (open) void get().refresh() },

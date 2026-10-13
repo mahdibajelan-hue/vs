@@ -1,6 +1,6 @@
 import type { ModuleKey } from '../../store/useModuleStore'
 
-export type InboxSource = 'execution' | 'material' | 'issues' | 'risk' | 'change' | 'missions'
+export type InboxSource = 'execution' | 'material' | 'issues' | 'risk' | 'change' | 'missions' | 'finance'
 export type InboxKind =
   | 'review' | 'fix' | 'gap' | 'delay_assess' | 'delay_notice'
   | 'sign' | 'discrepancy' | 'change' | 'txn' | 'stage' | 'stage_fix'
@@ -8,6 +8,7 @@ export type InboxKind =
   | 'risk_action' | 'acceptance'
   | 'change_step'
   | 'mission_decide' | 'mission_mine'
+  | 'fin_certify' | 'fin_claim' | 'fin_retention' | 'fin_guarantee' | 'fin_pay'
 
 /** One thing that waits for the signed-in person, as computed by the database function inbox_my_items(). */
 export interface InboxItem {
@@ -27,8 +28,8 @@ export interface InboxItem {
 
 export type InboxGroup = 'decide' | 'do' | 'fix'
 export const GROUP_LABEL_FA: Record<InboxGroup, string> = { decide: 'تصمیم و تأیید', do: 'کار من', fix: 'اصلاح و پیگیری' }
-export const SOURCE_LABEL_FA: Record<InboxSource, string> = { execution: 'مدیریت اجرا', material: 'کنترل متریال', issues: 'موانع و اقدامات', risk: 'مدیریت ریسک', change: 'مدیریت تغییرات', missions: 'مأموریت‌ها' }
-export const SOURCE_MODULE: Record<InboxSource, ModuleKey> = { execution: 'execution', material: 'material', issues: 'issues', risk: 'risk', change: 'change', missions: 'missions' }
+export const SOURCE_LABEL_FA: Record<InboxSource, string> = { execution: 'مدیریت اجرا', material: 'کنترل متریال', issues: 'موانع و اقدامات', risk: 'مدیریت ریسک', change: 'مدیریت تغییرات', missions: 'مأموریت‌ها', finance: 'مالی و قرارداد' }
+export const SOURCE_MODULE: Record<InboxSource, ModuleKey> = { execution: 'execution', material: 'material', issues: 'issues', risk: 'risk', change: 'change', missions: 'missions', finance: 'finance' }
 
 export type ActionTone = 'good' | 'bad' | 'warn' | 'plain'
 export interface ActionInput { note: string; progress?: number; refNo?: string; refDate?: string }
@@ -64,6 +65,11 @@ export const KIND_META: Record<InboxKind, { label: string; group: InboxGroup }> 
   change_step: { label: 'تصمیم در درخواست تغییر', group: 'decide' },
   mission_decide: { label: 'تأیید مأموریت', group: 'decide' },
   mission_mine: { label: 'مأموریت من', group: 'fix' },
+  fin_certify: { label: 'تأیید کارکرد صورت‌وضعیت', group: 'decide' },
+  fin_claim: { label: 'تصمیم دربارهٔ کلایم', group: 'decide' },
+  fin_retention: { label: 'آزادسازی حسن انجام کار', group: 'do' },
+  fin_guarantee: { label: 'انقضای ضمانت‌نامه', group: 'do' },
+  fin_pay: { label: 'صورت‌وضعیت پرداخت‌نشده', group: 'do' },
 }
 
 export interface KindDef {

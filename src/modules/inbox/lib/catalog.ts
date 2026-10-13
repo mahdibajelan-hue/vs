@@ -19,6 +19,13 @@ const upd = async (table: string, id: string, patch: Record<string, unknown>) =>
 const uid = async () => (await supabase.auth.getUser()).data.user?.id ?? null
 const num = (v: unknown, d = 0) => (typeof v === 'number' ? v : Number(v) || d)
 
+const today = () => new Date().toISOString().slice(0, 10)
+/** Finance decisions keep the earlier notes and add the comment of the decision. */
+const decide = async (table: string, id: string, patch: Record<string, unknown>, note: string) => {
+  const cur = note ? (await supabase.from(table).select('notes').eq('id', id).maybeSingle()).data?.notes : ''
+  return upd(table, id, note ? { ...patch, notes: [cur, note].filter(Boolean).join('\n') } : patch)
+}
+
 const A = (key: string, label: string, tone: ActionDef['tone'], note: ActionDef['note'], run: ActionDef['run'], field?: ActionDef['field']): ActionDef => ({ key, label, tone, note, run, field })
 const yesNo = (fn: string, idArg: string, approveArg: string): ActionDef[] => [
   A('approve', 'تأیید', 'good', 'opt', (i, x) => rpc(fn, { [idArg]: i.refId, [approveArg]: true, p_note: x.note })),
@@ -93,6 +100,21 @@ export const KINDS: Record<InboxKind, KindDef> = {
       ...(req ? [A('reject', 'رد مأموریت', 'bad', 'req', (it, x) => rpc('ms_transition', { p_mission_id: it.refId, p_action: 'reject_request', p_comment: x.note, p_data: {} }))] : []),
     ]
   } },
+  fin_certify: { ...M.fin_certify, ask: 'صورت‌وضعیت ارسال‌شده منتظر تأیید کارکرد است. با تأیید، مبلغ قابل پرداخت به‌عنوان مبلغ تأییدشده ثبت می‌شود؛ اگر مبلغ دیگری مدنظر است در ماژول مالی ثبت کنید.', actions: (i) => [
+    A('certify', 'تأیید کارکرد', 'good', 'opt', async (it, x) => decide('fin_payment_certificates', it.refId, { certified_amount: num(it.extra.payable), certified_by: await uid(), certified_date: today(), status: 'certified' }, x.note)),
+    ...(i.extra.status === 'submitted' ? [A('review', 'شروع بررسی', 'plain', 'opt', (it, x) => decide('fin_payment_certificates', it.refId, { status: 'under_review' }, x.note))] : []),
+    A('reject', 'رد صورت‌وضعیت', 'bad', 'req', (it, x) => decide('fin_payment_certificates', it.refId, { status: 'rejected' }, x.note)),
+  ] },
+  fin_claim: { ...M.fin_claim, ask: 'کلایم پیمانکار منتظر تصمیم است. تأیید کامل مبلغ ادعا را می‌پذیرد؛ برای تأیید جزئی یا ارجاع به داوری، ماژول مالی را باز کنید.', actions: (i) => [
+    A('approve', 'تأیید کامل', 'good', 'opt', (it, x) => decide('fin_claims', it.refId, { status: 'approved', amount_approved: num(it.extra.claimed), resolution_date: today() }, x.note)),
+    ...(i.extra.status === 'submitted' ? [A('review', 'در دست بررسی', 'plain', 'opt', (it, x) => decide('fin_claims', it.refId, { status: 'under_review' }, x.note))] : []),
+    A('reject', 'رد کلایم', 'bad', 'req', (it, x) => decide('fin_claims', it.refId, { status: 'rejected', amount_approved: 0, resolution_date: today() }, x.note)),
+  ] },
+  fin_retention: { ...M.fin_retention, ask: 'زمان آزادسازی حسن انجام کار رسیده است. پس از آزادسازی، آن را ثبت کنید.', actions: () => [
+    A('released', 'آزاد شد', 'good', 'opt', (it, x) => decide('fin_retention_releases', it.refId, { status: 'released', actual_date: today(), actual_amount: num(it.extra.planned) }, x.note)),
+  ] },
+  fin_guarantee: { ...M.fin_guarantee, ask: 'ضمانت‌نامه به پایان اعتبار نزدیک است. تمدید یا آزادسازی آن را در ماژول مالی ثبت کنید.', actions: () => [] },
+  fin_pay: { ...M.fin_pay, ask: 'بیش از ۳۰ روز از تأیید این صورت‌وضعیت گذشته و پرداخت کامل نشده است. پرداخت را در ماژول مالی ثبت کنید.', actions: () => [] },
   mission_mine: { ...M.mission_mine, ask: 'مأموریت شما منتظر اقدام شماست؛ ادامهٔ کار در ماژول مأموریت‌ها است.', actions: () => [] },
 }
 
