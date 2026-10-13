@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { SignOutButton } from '../SignOutButton'
 import { ThemeSwitch } from '../../common/ThemeSwitch'
 import { NotificationBell } from '../../common/NotificationBell'
+import { InboxButton } from '../../../modules/inbox/components/InboxButton'
 import { ProfileModal } from '../ProfileModal'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 
@@ -60,6 +61,7 @@ export function Header() {
           </span>
 
           <IconButton icon={Search} label="جستجو" />
+          <InboxButton />
           <NotificationBell />
           <ThemeSwitch />
 

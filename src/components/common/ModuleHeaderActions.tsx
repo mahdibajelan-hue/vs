@@ -4,6 +4,7 @@ import { UserChip } from './UserChip'
 import { ThemeSwitch } from './ThemeSwitch'
 import { NotificationBell } from './NotificationBell'
 import { ToolbarButton } from './ToolbarButton'
+import { InboxButton } from '../../modules/inbox/components/InboxButton'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -22,6 +23,7 @@ export function ModuleHeaderActions({ onExitToHub, className = '' }: ModuleHeade
   return (
     <div className={`flex shrink-0 items-center gap-1.5 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
       <UserChip />
+      <InboxButton />
       <NotificationBell />
       <ThemeSwitch />
       <ToolbarButton label="صفحهٔ اول این ماژول" onClick={goModuleHome}>

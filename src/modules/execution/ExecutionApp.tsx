@@ -72,6 +72,9 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
   const go = (t: ExTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
+  // something outside the module (the inbox) asked to show a report: switch to the page that shows it
+  const focusTab = useExecutionStore((x) => (x.focusReportId ? x.focusTab : null))
+  useEffect(() => { if (focusTab) setTab(focusTab) }, [focusTab])
   const loading = !mdLoaded || !exLoaded
   const model = useExecutionModel(projectId)
   const badge = (id: ExTab): number => id === 'review' ? model.reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length : id === 'gaps' ? model.detected.filter((g) => g.kind !== 'form_missing').length : id === 'daily' ? model.reports.filter((r) => r.status === 'returned' || r.status === 'incomplete').length : 0

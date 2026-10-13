@@ -34,7 +34,9 @@ interface State {
   people: Map<string, string>
   /** a report another page wants opened (e.g. the completion form generated from a gap) */
   focusReportId: string | null
-  setFocus: (id: string | null) => void
+  /** which page should show the focused report (set when something outside the module — the inbox — opens it) */
+  focusTab: 'review' | 'daily' | 'gaps' | null
+  setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps') => void
   fetchAll: () => Promise<void>
   myRoles: (projectId: string) => ExRole[]
   can: (projectId: string, action: string) => boolean
@@ -69,7 +71,7 @@ interface State {
   saveMap: (projectId: string, formKey: string, metricKey: string, groupValue: string, activityId: string | null) => Promise<boolean>
 }
 
-const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null }
+const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
 const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '' })
@@ -78,7 +80,7 @@ const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, line
 export const useExecutionStore = create<State>((set, get) => ({
   ...initial,
 
-  setFocus: (id) => set({ focusReportId: id }),
+  setFocus: (id, tab) => set({ focusReportId: id, focusTab: id ? tab ?? null : null }),
   fetchAll: async () => {
     set({ loading: true })
     const t = (name: string) => supabase.from(name).select('*')

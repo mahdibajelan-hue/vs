@@ -28,6 +28,7 @@ import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSe
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
 import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
 import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
+import { InboxOverlay } from './modules/inbox/components/InboxOverlay'
 
 // One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
 const landRepo = createLandRepo()
@@ -105,7 +106,7 @@ export function RootApp() {
     )
   }
 
-  if (!activeModule) return <ModuleHub onEnterModule={enterModule} />
+  if (!activeModule) return <><ModuleHub onEnterModule={enterModule} /><InboxOverlay /></>
 
   // مدیریت کاربران هر سه ماژول را کنترل می‌کند، پس فقط ادمین سامانه اجازه ورود دارد.
   if (activeModule === 'admin' && profile && !profile.isAdmin) {
@@ -174,5 +175,10 @@ export function RootApp() {
   )
 
   // «صفحهٔ اول ماژول» bumps moduleResetKey, which remounts the active module at its first page.
-  return <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
+  return (
+    <>
+      <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
+      <InboxOverlay />
+    </>
+  )
 }
