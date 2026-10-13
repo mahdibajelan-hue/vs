@@ -8,6 +8,7 @@ import { fa } from './common'
 import { EQUIP_COLS, MAN_COLS, resUsed, type ResField } from '../lib/resourceCatalog'
 import { asList, asNext } from './DayNotes'
 import { WeldingPaper } from './WeldingPaper'
+import { FormPaper, PAPER_FORMS } from './FormPapers'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -29,6 +30,7 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 export function ReportPaper({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
   if (form?.key === 'welding') return <WeldingPaper c={c} />
+  if (form && PAPER_FORMS.has(form.key)) return <FormPaper c={c} />
   const title = form ? form.title : 'گزارش کارکرد روزانه'
   const signers = form ? form.signers : (['project_control', 'site_head', 'supervision', 'employer'] as const)
   const who = (u: string | null) => (u ? c.people.get(u) ?? 'کاربر' : '')
