@@ -143,3 +143,12 @@
 .wd-foot { color: #6b7280; text-align: center; }
 @media print { .wd-wrap { gap: 0; } .wd-page { border-width: 1.5px; } }
 .wd-tbl .wd-bend { font-size: 9px; width: 52px; }
+.wd-tbl tbody td { height: 16px; padding-block: 0; }
+
+.wd-tbl .wd-weld { position: relative; border-right: hidden; font-weight: 600; }
+.wd-tbl .wd-pcell { border-left: hidden; }
+.wd-tbl .wd-chev { position: absolute; top: -1px; bottom: -1px; right: -13px; width: 14px; height: calc(100% + 2px); overflow: visible; fill: none; stroke: #000; stroke-width: 1.2px; z-index: 2; }
+.wd-tbl .wd-edge:nth-child(3) { border-inline-end: 1px solid #000; }
+.wd-tbl .wd-chev { right: -23px; width: 24px; }
+.wd-tbl .wd-pcell { padding-left: 22px; }
+.wd-tbl thead tr:first-child th:nth-child(1) { width: 5%; } .wd-tbl thead tr:first-child th:nth-child(2) { width: 5%; } .wd-tbl thead tr:first-child th:nth-child(3) { width: 9%; } .wd-tbl thead tr:first-child th:nth-child(4) { width: 9%; }

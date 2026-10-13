@@ -61,19 +61,31 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
                 <tr>{thk.map((t, i) => <th key={i}>{th(t)}</th>)}</tr>
               </thead>
               <tbody>
-                {Array.from({ length: ROWS_PER_PAGE }, (_, i) => {
-                  const l = slice[i], no = p * ROWS_PER_PAGE + i + 1, ci = l ? colOf(l) : -1
-                  const stamp = (suffix: '' | 'C') => (['Root', 'Hot', 'Fill', 'Cap'] as const).map((k) => <td key={k}>{l ? d(l, `stamp${k}${suffix}`) : ''}</td>)
-                  return [
-                    <tr key={`a${i}`} className="wd-top">
-                      <td rowSpan={2}>{no}</td><td rowSpan={2}>{l ? d(l, 'sec') : ''}</td><td rowSpan={2}>{l ? d(l, 'weldNo') : ''}</td><td rowSpan={2}>{l ? d(l, 'pipeNo') : ''}</td>
+                {Array.from({ length: ROWS_PER_PAGE * 2 + 1 }, (_, r) => {
+                  const k = r >> 1, lk = (r - 1) >> 1
+                  const L = slice[k] // the pipe, lengths, stamps and VT of a weld sit half a row above its number (like the paper form)
+                  const stamp = (l: ReportLine | undefined, suffix: '' | 'C') => (['Root', 'Hot', 'Fill', 'Cap'] as const).map((x) => <td key={x}>{l ? d(l, `stamp${x}${suffix}`) : ''}</td>)
+                  const left = (i: number) => {
+                    const l = slice[i]
+                    return [
+                      <td key="n" rowSpan={2} className="wd-wcell">{p * ROWS_PER_PAGE + i + 1}</td>,
+                      <td key="s" rowSpan={2} className="wd-wcell">{l ? d(l, 'sec') : ''}</td>,
+                      <td key="w" rowSpan={2} className="wd-wcell wd-weld">{l ? d(l, 'weldNo') : ''}<svg className="wd-chev" viewBox="0 0 14 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,0 14,50 0,100" vectorEffect="non-scaling-stroke" /></svg></td>,
+                    ]
+                  }
+                  if (r === ROWS_PER_PAGE * 2) return <tr key={r}>{Array.from({ length: 14 }, (_, j) => <td key={j} />)}</tr>
+                  if (r % 2 === 1) return <tr key={r}>{left(lk)}<td className="wd-rc">C</td>{stamp(slice[k], 'C')}</tr>
+                  const l = L, ci = l ? colOf(l) : -1
+                  return (
+                    <tr key={r} className="wd-top">
+                      {r === 0 && [<td key="a" className="wd-edge" />, <td key="b" className="wd-edge" />, <td key="c" className="wd-edge" />]}
+                      <td rowSpan={2} className="wd-pcell">{l ? d(l, 'pipeNo') : ''}</td>
                       {thk.map((_, j) => <td key={j} rowSpan={2}>{l && ci === j && d(l, 'lengthM') !== '' ? n(l.detail.lengthM).toFixed(2) : ''}</td>)}
                       <td rowSpan={2}>{l ? d(l, 'sizeIn') : ''}</td><td rowSpan={2}>{l ? d(l, 'bendDeg') : ''}</td>
-                      <td className="wd-rc">R</td>{stamp('')}
+                      <td className="wd-rc">R</td>{stamp(l, '')}
                       <td rowSpan={2} className="wd-vt">{l ? ({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, 'vt')] ?? d(l, 'vt') : ''}</td><td rowSpan={2} className="wd-remark">{l ? d(l, 'remark') : ''}</td>
-                    </tr>,
-                    <tr key={`b${i}`}><td className="wd-rc">C</td>{stamp('C')}</tr>,
-                  ]
+                    </tr>
+                  )
                 })}
               </tbody>
             </table>
