@@ -72,6 +72,7 @@ function RulesView({ projectId }: { projectId: string }) {
           <label>ارسال گزارش با کارکرد بیش از مبنا<select disabled={!can} value={s.blockOverBase ? 'block' : 'allow'} onChange={(e) => save({ blockOverBase: e.target.value === 'block' })}><option value="block">مسدود شود (پیشنهادی)</option><option value="allow">فقط هشدار</option></select></label>
           <label>مهلت بررسی نظارت (روز)<NumInput value={s.reviewDays} label="مهلت بررسی" decimals={0} onCommit={(n) => can && save({ reviewDays: n })} /></label>
           <label>مهلت تکمیل کسری (روز)<NumInput value={s.gapDueDays} label="مهلت کسری" decimals={0} onCommit={(n) => can && save({ gapDueDays: n })} /></label>
+          <label>مهلت اخطار کتبی تأخیر (روز)<NumInput value={s.delayNoticeDays ?? 14} label="مهلت اخطار تأخیر" decimals={0} onCommit={(n) => can && save({ delayNoticeDays: n })} /></label>
         </div>
       </Section>
       <Section title="جبهه‌های موردانتظار گزارش روزانه" hint="برای هر روز کاری از این جبهه‌ها گزارش کارکرد انتظار می‌رود؛ نبودن آن «گزارش دریافت‌نشده» ثبت می‌شود. فهرست جبهه‌ها از «ماژول تأمین ← تنظیمات ← فهرست‌های پایه» می‌آید (مشترک، بدون تکرار).">

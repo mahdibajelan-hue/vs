@@ -23,9 +23,44 @@ export function ReviewPage({ projectId }: { projectId: string }) {
   useEffect(() => { if (focus) { setOpen(focus); useExecutionStore.getState().setFocus(null) } }, [focus])
   const [scope, setScope] = useState<'wait' | 'done'>('wait')
   const rows = useMemo(() => m.reports.filter((r) => (scope === 'wait' ? r.status === 'submitted' || r.status === 'partially_approved' : r.status === 'approved' || r.status === 'rejected' || r.status === 'returned')).sort((a, b) => (scope === 'wait' ? (a.submittedAt ?? '').localeCompare(b.submittedAt ?? '') : (b.reviewedAt ?? '').localeCompare(a.reviewedAt ?? ''))), [m.reports, scope])
+  // bulk approval: only daily work reports whose pending lines raise no doubt (cumulative stays within the contract quantity) are offered
+  const [sel, setSel] = useState<Set<string>>(() => new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const ex0 = useExecutionStore()
+  const clean = useMemo(() => {
+    const ok = new Set<string>()
+    for (const r of rows) {
+      if (r.formKey !== 'work') continue
+      const ls = (m.linesByReport.get(r.id) ?? []).filter((l) => l.status === 'pending')
+      if (!ls.length) continue
+      const before = cumulative(m.reports, m.lines, { before: r.reportDate, excludeReportId: r.id, mode: 'approved' })
+      const used = new Map<string, number>()
+      let fine = true
+      for (const l of ls) {
+        const a = l.activityId ? m.actById.get(l.activityId) : undefined
+        if (!a || !(l.qty > 0)) { fine = false; break }
+        const tot = (before.get(a.id) ?? 0) + (used.get(a.id) ?? 0) + l.qty; used.set(a.id, (used.get(a.id) ?? 0) + l.qty)
+        const base = m.baseOf(a, r.reportDate)
+        if (base > 0 && tot > base * (1 + m.settings.overBasePct / 100) + 1e-9) { fine = false; break }
+      }
+      if (fine) ok.add(r.id)
+    }
+    return ok
+  }, [rows, m])
+  const bulkApprove = async () => {
+    const ids = [...sel].filter((id) => clean.has(id))
+    if (!ids.length || !window.confirm(`${fa(ids.length)} گزارش بدون مغایرت به‌صورت کامل تأیید شود؟ (ردیف‌ها با مقدار ثبت‌شده تأیید می‌شوند)`)) return
+    setBulkBusy(true)
+    let done = 0
+    for (const id of ids) { if (await ex0.decideWhole(id, 'approved', '')) done += 1; else break }
+    setBulkBusy(false); setSel(new Set())
+    if (done < ids.length) window.alert(`${fa(done)} از ${fa(ids.length)} گزارش تأیید شد؛ در ادامه خطا رخ داد (پیام بالا).`)
+  }
   if (open) return <ReviewPanel reportId={open} model={m} onClose={() => setOpen(null)} />
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
+  const canBulk = scope === 'wait' && ex0.can(projectId, 'review')
   const cols: Col<Report>[] = [
+    ...(canBulk ? [{ key: 'sel', label: '', render: (r: Report) => (clean.has(r.id) ? <input type="checkbox" checked={sel.has(r.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} aria-label={`انتخاب ${r.reportNo}`} /> : <span className="sub" title="ردیفی از این گزارش نیازمند بررسی دقیق است">بررسی دقیق</span>) } as Col<Report>] : []),
     { key: 'n', label: 'شماره', render: (r) => <span className="strong fn-code">{r.reportNo}</span> },
     { key: 'f', label: 'فرم', render: (r) => (r.formKey === 'work' ? 'کارکرد روزانه' : FORM_BY_KEY[r.formKey]?.title ?? r.formKey) },
     { key: 'd', label: 'تاریخ گزارش', render: (r) => fmtD(r.reportDate), sort: (r) => r.reportDate },
@@ -47,6 +82,15 @@ export function ReviewPage({ projectId }: { projectId: string }) {
         <div className="mt-pills"><button className={`mt-pill${scope === 'wait' ? ' on' : ''}`} onClick={() => setScope('wait')}>در انتظار بررسی</button><button className={`mt-pill${scope === 'done' ? ' on' : ''}`} onClick={() => setScope('done')}>بررسی‌شده</button></div>
         <p className="im-helper" style={{ margin: 0, marginInlineStart: 'auto' }}>تأیید کارکرد روزانه به‌معنای تأیید نهایی کیفیت یا صورت‌وضعیت مالی نیست؛ مبنای گزارش‌های پیشرفت است.</p>
       </div>
+      {canBulk && clean.size > 0 && (
+        <div className="im-card no-print" style={{ padding: '8px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span><b>{fa(clean.size)}</b> گزارش بدون مغایرت (مقدار مثبت و در محدودهٔ مقدار پیمان) را می‌شود یکجا تأیید کرد؛ بقیه باید ردیف‌به‌ردیف بررسی شوند.</span>
+          <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6 }}>
+            <button className="im-btn im-btn-sm" onClick={() => setSel(sel.size === clean.size ? new Set() : new Set(clean))}>{sel.size === clean.size ? 'برداشتن انتخاب' : 'انتخاب همهٔ بدون مغایرت'}</button>
+            <button className="im-btn im-btn-primary im-btn-sm" disabled={bulkBusy || sel.size === 0} onClick={() => void bulkApprove()}><Check size={13} /> {bulkBusy ? 'در حال تأیید…' : `تأیید گروهی (${fa(sel.size)})`}</button>
+          </span>
+        </div>
+      )}
       {rows.length === 0 ? <Empty>{scope === 'wait' ? 'گزارشی در انتظار بررسی نیست.' : 'هنوز گزارشی بررسی نشده است.'}</Empty> : <DataTable cols={cols} rows={rows} rowKey={(r) => r.id} onRow={(r) => setOpen(r.id)} />}
     </div>
   )

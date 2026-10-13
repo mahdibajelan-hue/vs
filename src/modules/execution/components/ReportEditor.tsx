@@ -20,6 +20,8 @@ import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ResourcePanel } from './ResourcePanel'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
+/** a stoppage row; the delay-register fields ride along so saving the report never drops an assessment or notice */
+interface StopRow { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; responsibility?: Stoppage['responsibility']; critical?: boolean; noticeDate?: string | null; noticeRef?: string; assessNote?: string }
 interface LRow { key: string; id?: string; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string; detail: Record<string, unknown>; status: ReportLine['status']; approvedQty: number | null; reviewNote: string; sourceReportId: string | null }
 const uid0 = () => Math.random().toString(36).slice(2, 9)
 const EDITABLE = new Set(['draft', 'returned', 'incomplete'])
@@ -41,7 +43,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [data, setData] = useState<Record<string, unknown>>(() => ({ ...(r?.data ?? {}) }))
   const [rows, setRows] = useState<LRow[]>(() => (m.linesByReport.get(reportId) ?? []).map((l) => ({ key: l.id, id: l.id, activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: { ...l.detail }, status: l.status, approvedQty: l.approvedQty, reviewNote: l.reviewNote, sourceReportId: l.sourceReportId })))
   const [res, setRes] = useState<ResRow[]>(() => mergeCatalog(m.resources.filter((x) => x.reportId === reportId).map(toRow)))
-  const [stops, setStops] = useState<{ key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId })))
+  const [stops, setStops] = useState<StopRow[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId, responsibility: x.responsibility, critical: x.critical, noticeDate: x.noticeDate, noticeRef: x.noticeRef, assessNote: x.assessNote })))
   const [pick, setPick] = useState('')
   const [search, setSearch] = useState('')
   const [bookF, setBookF] = useState('')
@@ -87,7 +89,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
     setBusy(true)
     const okH = await ex.updateReport(reportId, { reportDate: head.reportDate, front: head.front, station: head.station, shift: head.shift, contractorOrgId: head.contractorOrgId || null, data, notes: head.notes })
     const lines: LineInput[] = rows.map((x) => ({ id: x.id, activityId: x.activityId, qty: x.qty, kmFrom: x.kmFrom, kmTo: x.kmTo, location: x.location, note: x.note, detail: x.detail, sourceReportId: x.sourceReportId }))
-    const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId })) })
+    const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, responsibility: s.responsibility, critical: s.critical, noticeDate: s.noticeDate, noticeRef: s.noticeRef, assessNote: s.assessNote })) })
     setBusy(false)
     if (okB) setDirty(false)
     return !!okB
@@ -123,10 +125,19 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
     if (res.some(resUsed) && !window.confirm('مقدارهای فعلی نفرات و ماشین‌آلات با گزارش قبلی جایگزین شود؟')) return
     setRes(mergeCatalog(m.resources.filter((y) => y.reportId === lastRes.id).map(toRow))); setDirty(true)
   }
+  // continue yesterday's work: the activities (and places) of the latest earlier report of the same front, with empty quantities
+  const copyLastRows = () => {
+    const prev = m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && (!head.front || x.front === head.front) && (m.linesByReport.get(x.id)?.length ?? 0) > 0).sort((a, b) => (a.reportDate < b.reportDate ? 1 : -1))[0]
+    if (!prev) { window.alert('گزارش قبلی همین جبهه با ردیف کارکرد پیدا نشد.'); return }
+    const have = new Set(rows.map((x) => `${x.activityId}|${x.location}`))
+    const add: LRow[] = (m.linesByReport.get(prev.id) ?? []).filter((l) => l.activityId && m.actById.get(l.activityId)?.active && !have.has(`${l.activityId}|${l.location}`)).map((l) => ({ key: uid0(), activityId: l.activityId, qty: 0, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: '', detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }))
+    if (!add.length) { window.alert('همهٔ ردیف‌های گزارش قبلی از قبل در این گزارش هست.'); return }
+    setRows((a) => [...a, ...add]); setDirty(true)
+  }
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
-  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
+  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
   const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
-  const raise = async (s: { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }) => {
+  const raise = async (s: StopRow) => {
     const mat = s.materialId ? mm.materials.find((x) => x.id === s.materialId) : undefined
     const title = `توقف اجرا — ${STOPPAGE_CATEGORY_FA[s.category]}${mat ? `: ${mat.description || mat.materialCode}` : ''} (${r.reportNo})`
     const res = await ex.raise({ projectId: m.projectId, reportId, stoppageId: s.key, target: 'issue', title, description: `${s.description || title}\nمدت توقف: ${s.hours} ساعت · جبهه: ${r.front || '—'} · تاریخ: ${r.reportDate}`, severity: s.hours >= 8 ? 'high' : 'medium', station: head.station })
@@ -203,6 +214,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
               {m.activities.some((a) => a.bookId) && <select value={bookF} onChange={(e) => setBookF(e.target.value)} aria-label="فهرست‌بها" style={{ maxWidth: 190 }}><option value="">همهٔ فهرست‌ها</option>{[...new Set(m.activities.map((a) => a.bookId).filter(Boolean))].map((id) => <option key={id} value={id!}>{ex.books.find((b) => b.id === id)?.title ?? 'فهرست'}</option>)}</select>}
               <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="فعالیت" style={{ minWidth: 260, maxWidth: 420 }}><option value="">فعالیت را انتخاب کنید ({fa(options.length)})…</option>{options.slice(0, 300).map((a) => <option key={a.id} value={a.id}>{a.rowNo ? `${a.rowNo}) ` : ''}{a.itemNo} — {a.title} ({a.unit})</option>)}</select>
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={addActivity}><Plus size={13} /> افزودن</button>
+              <button className="im-btn im-btn-sm" onClick={copyLastRows} title="ردیف‌ها و محل‌های آخرین گزارش همین جبهه را با مقدار خالی اضافه می‌کند — فقط مقدار امروز را بنویسید"><Copy size={13} /> ادامهٔ کار قبلی</button>
               <button className="im-btn im-btn-sm" onClick={prefill} title="مقدارهای فرم‌های فنی همین روز را که به فعالیت وصل شده‌اند وارد می‌کند"><Wand2 size={13} /> پیش‌پر از فرم‌های فنی</button>
             </span>
           )}

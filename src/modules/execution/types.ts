@@ -1,5 +1,5 @@
-export type ExRole = 'contractor' | 'supervision' | 'consultant' | 'employer' | 'manager'
-export const EX_ROLE_LABEL_FA: Record<ExRole, string> = { contractor: 'پیمانکار', supervision: 'دستگاه نظارت', consultant: 'مشاور', employer: 'کارفرما', manager: 'مدیر اجرا' }
+export type ExRole = 'contractor' | 'supervision' | 'consultant' | 'employer' | 'manager' | 'site_head' | 'planner' | 'claims' | 'payment'
+export const EX_ROLE_LABEL_FA: Record<ExRole, string> = { contractor: 'پیمانکار', supervision: 'دستگاه نظارت', consultant: 'مشاور', employer: 'کارفرما', manager: 'مدیر اجرا', site_head: 'سرپرست کارگاه', planner: 'مدیر برنامه‌ریزی', claims: 'تحلیلگر تأخیرات و کلیم', payment: 'کارشناس صورت‌وضعیت' }
 export interface ExProjectRole { id: string; projectId: string; userId: string; role: ExRole; organizationId: string | null; active: boolean }
 
 export type ActivityKind = 'standard' | 'starred' | 'special'
@@ -37,7 +37,11 @@ export interface ReportLine {
 /** One manpower / machinery row of the daily report. Manpower: total, active, leave, stopped, native, non-native; machinery: total, active, inactive (idleQty), stopped, repair. */
 export interface ReportResource { id: string; reportId: string; kind: 'man' | 'equip'; section: string; name: string; totalQty: number; activeQty: number; idleQty: number; leaveQty: number; stoppedQty: number; nativeQty: number; nonnativeQty: number; repairQty: number; hours: number; note: string }
 export type StoppageCategory = 'material' | 'drawing' | 'land' | 'permit' | 'weather' | 'equipment' | 'manpower' | 'hse' | 'other'
-export interface Stoppage { id: string; reportId: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; issueRef: string | null }
+export interface Stoppage {
+  id: string; reportId: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; issueRef: string | null
+  /** delay & claim register: who caused it, critical path, contractual notice, assessment note */
+  responsibility: '' | 'contractor' | 'employer' | 'force_majeure' | 'third_party' | 'shared'; critical: boolean; noticeDate: string | null; noticeRef: string; assessNote: string
+}
 export interface ReportHistory { id: number; reportId: string; at: string; actor: string | null; action: string; note: string }
 export interface FormMap { id: string; projectId: string; formKey: string; metricKey: string; groupValue: string; activityId: string }
 
@@ -56,6 +60,8 @@ export interface ExSettings {
   blockOverBase: boolean
   reviewDays: number
   gapDueDays: number
+  /** days after a stoppage within which the contractor must send the written delay notice (contract clause) */
+  delayNoticeDays: number
   /** fronts expected to send a daily work report every working day (labels from the shared front list) */
   expectedFronts: string[]
   projectStart: string
@@ -64,5 +70,5 @@ export interface ExSettings {
   groupWeights?: Record<string, number>
   rolePerms?: Partial<Record<ExRole, string[]>>
 }
-export const DEFAULT_EX_SETTINGS: ExSettings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, expectedFronts: [], projectStart: '', enabledForms: [] }
+export const DEFAULT_EX_SETTINGS: ExSettings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, delayNoticeDays: 14, expectedFronts: [], projectStart: '', enabledForms: [] }
 export const WEEKDAY_FA = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']

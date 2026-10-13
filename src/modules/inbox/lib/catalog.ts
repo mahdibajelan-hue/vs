@@ -37,6 +37,13 @@ export const KINDS: Record<InboxKind, KindDef> = {
     ...(i.extra.status === 'open' ? [A('progress', 'شروع پیگیری', 'plain', 'opt', (it, x) => upd('ex_gap_items', it.refId, { status: 'in_progress', note: x.note, updated_at: new Date().toISOString() }))] : []),
     A('close', 'رفع شد — بستن', 'good', 'opt', (it, x) => upd('ex_gap_items', it.refId, { status: 'closed', note: x.note, updated_at: new Date().toISOString() })),
   ] },
+  delay_assess: { ...M.delay_assess, ask: 'یک توقف ثبت‌شده در گزارش روزانه هنوز ارزیابی نشده است: مسئولیت آن با کیست؟ این ارزیابی پایهٔ ادعای زمان و هزینه است.', actions: () => [
+    A('employer', 'کارفرما', 'good', 'opt', (i, x) => rpc('ex_stoppage_assess', { p_id: i.refId, p_resp: 'employer', p_critical: false, p_note: x.note })),
+    A('contractor', 'پیمانکار', 'bad', 'opt', (i, x) => rpc('ex_stoppage_assess', { p_id: i.refId, p_resp: 'contractor', p_critical: false, p_note: x.note })),
+    A('force_majeure', 'فورس‌ماژور', 'warn', 'opt', (i, x) => rpc('ex_stoppage_assess', { p_id: i.refId, p_resp: 'force_majeure', p_critical: false, p_note: x.note })),
+    A('third_party', 'شخص ثالث', 'plain', 'opt', (i, x) => rpc('ex_stoppage_assess', { p_id: i.refId, p_resp: 'third_party', p_critical: false, p_note: x.note })),
+  ] },
+  delay_notice: { ...M.delay_notice, ask: 'برای این توقف هنوز اخطار کتبی تأخیر ثبت نشده است. پس از مهلت قراردادی، حق ادعای زمان ممکن است ساقط شود. تاریخ و شمارهٔ نامه را در «مدیریت اجرا ← تأخیرات و کلیم» ثبت کنید.', actions: () => [] },
   sign: { ...M.sign, ask: 'نوبت امضای شما در مجوز خروج کالا رسیده است.', actions: () => [
     A('approve', 'امضا و تأیید', 'good', 'opt', (i, x) => rpc('mtl_req_sign', { p_req: i.refId, p_decision: 'approve', p_note: x.note, p_issue: null })),
     A('reject', 'رد درخواست', 'bad', 'req', (i, x) => rpc('mtl_req_sign', { p_req: i.refId, p_decision: 'reject', p_note: x.note, p_issue: null })),

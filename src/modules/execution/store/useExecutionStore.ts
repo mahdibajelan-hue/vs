@@ -23,7 +23,7 @@ export type ItemInput = Pick<PriceItem, 'itemNo' | 'description' | 'unit' | 'uni
 export interface ReportDraft { projectId: string; formKey: string; reportDate: string; front?: string; station?: string; shift?: string; contractorOrgId?: string | null; data?: Record<string, unknown>; notes?: string; status?: 'draft' | 'incomplete'; completionOf?: string | null; missing?: string[]; dueDate?: string | null }
 export interface LineInput { id?: string; activityId?: string | null; qty?: number; kmFrom?: number | null; kmTo?: number | null; location?: string; note?: string; detail?: Record<string, unknown>; sourceReportId?: string | null }
 export interface ResourceInput { kind: 'man' | 'equip'; section?: string; name: string; totalQty?: number; activeQty: number; idleQty: number; leaveQty?: number; stoppedQty?: number; nativeQty?: number; nonnativeQty?: number; repairQty?: number; hours: number; note?: string }
-export interface StoppageInput { category: Stoppage['category']; hours: number; description: string; materialId?: string | null }
+export interface StoppageInput { category: Stoppage['category']; hours: number; description: string; materialId?: string | null; responsibility?: Stoppage['responsibility']; critical?: boolean; noticeDate?: string | null; noticeRef?: string; assessNote?: string }
 export interface ReviewDecision { lineId: string; decision: 'approved' | 'rejected' | 'returned'; qty?: number; note?: string }
 
 interface State {
@@ -35,8 +35,8 @@ interface State {
   /** a report another page wants opened (e.g. the completion form generated from a gap) */
   focusReportId: string | null
   /** which page should show the focused report (set when something outside the module — the inbox — opens it) */
-  focusTab: 'review' | 'daily' | 'gaps' | null
-  setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps') => void
+  focusTab: 'review' | 'daily' | 'gaps' | 'delays' | null
+  setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps' | 'delays') => void
   fetchAll: () => Promise<void>
   myRoles: (projectId: string) => ExRole[]
   can: (projectId: string, action: string) => boolean
@@ -67,11 +67,13 @@ interface State {
   reopenReport: (id: string, reason: string) => Promise<boolean>
   syncGaps: (projectId: string, items: DetectedGap[]) => Promise<boolean>
   updateGap: (id: string, patch: { status?: GapStatus; responsible?: string | null; dueDate?: string | null; note?: string; generatedReportId?: string | null }) => Promise<boolean>
+  assessStoppage: (id: string, resp: Exclude<Stoppage['responsibility'], ''>, critical: boolean, note: string) => Promise<boolean>
+  noticeStoppage: (id: string, date: string, ref: string) => Promise<boolean>
   raise: (a: { projectId: string; reportId: string; stoppageId?: string | null; target: 'issue' | 'risk'; title: string; description: string; severity: string; station?: string }) => Promise<{ id: string; existing: boolean } | null>
   saveMap: (projectId: string, formKey: string, metricKey: string, groupValue: string, activityId: string | null) => Promise<boolean>
 }
 
-const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | null }
+const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
 const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '' })
@@ -104,7 +106,7 @@ export const useExecutionStore = create<State>((set, get) => ({
       reports: ok<Row>(reps).map(repRow),
       lines: ok<Row>(lns).map(lineRow),
       resources: ok<Row>(res).map((r): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })),
-      stoppages: ok<Row>(stp).map((r): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref })),
+      stoppages: ok<Row>(stp).map((r): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref, responsibility: r.responsibility ?? '', critical: !!r.critical, noticeDate: r.notice_date ?? null, noticeRef: r.notice_ref ?? '', assessNote: r.assess_note ?? '' })),
       history: ok<Row>(his).map((r): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })),
       maps: ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })),
       gaps: ok<Row>(gaps).map((r): Gap => ({ id: r.id, projectId: r.project_id, fingerprint: r.fingerprint, kind: r.kind, formKey: r.form_key ?? '', periodKey: r.period_key ?? '', front: r.front ?? '', subject: r.subject ?? '', existing: r.existing ?? {}, missing: Array.isArray(r.missing) ? r.missing : [], responsible: r.responsible, dueDate: r.due_date, status: r.status, note: r.note ?? '', generatedReportId: r.generated_report_id })),
@@ -303,7 +305,7 @@ export const useExecutionStore = create<State>((set, get) => ({
     if (body.stoppages) {
       const del = await supabase.from('ex_report_stoppages').delete().eq('report_id', reportId)
       if (report('ذخیرهٔ توقف‌ها', del.error)) return false
-      const rows = body.stoppages.filter((s) => s.hours > 0 || s.description.trim()).map((s) => ({ report_id: reportId, category: s.category, hours: s.hours, description: s.description, material_id: s.materialId ?? null }))
+      const rows = body.stoppages.filter((s) => s.hours > 0 || s.description.trim()).map((s) => ({ report_id: reportId, category: s.category, hours: s.hours, description: s.description, material_id: s.materialId ?? null, responsibility: s.responsibility ?? '', critical: !!s.critical, notice_date: s.noticeDate ?? null, notice_ref: s.noticeRef ?? '', assess_note: s.assessNote ?? '' }))
       if (rows.length) { const { error } = await supabase.from('ex_report_stoppages').insert(rows); if (report('ذخیرهٔ توقف‌ها', error)) return false }
     }
     await get().fetchAll(); return true
@@ -344,6 +346,16 @@ export const useExecutionStore = create<State>((set, get) => ({
     if (p.generatedReportId !== undefined) row.generated_report_id = p.generatedReportId
     const { error } = await supabase.from('ex_gap_items').update(row).eq('id', id)
     if (report('ثبت پیگیری کسری', error)) return false
+    await get().fetchAll(); return true
+  },
+  assessStoppage: async (id, resp, critical, note) => {
+    const { error } = await supabase.rpc('ex_stoppage_assess', { p_id: id, p_resp: resp, p_critical: critical, p_note: note })
+    if (report('ثبت ارزیابی تأخیر', error)) return false
+    await get().fetchAll(); return true
+  },
+  noticeStoppage: async (id, date, ref) => {
+    const { error } = await supabase.rpc('ex_stoppage_notice', { p_id: id, p_date: date || null, p_ref: ref })
+    if (report('ثبت اخطار تأخیر', error)) return false
     await get().fetchAll(); return true
   },
   raise: async (a) => {

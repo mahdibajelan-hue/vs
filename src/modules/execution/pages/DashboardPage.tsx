@@ -9,6 +9,7 @@ import { Empty, ReportStatusChip, fa, pct } from '../components/common'
 import { fmtD } from '../../finance/components/fn'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { GAP_KIND_LABEL_FA } from '../types'
+import { buildStatement } from '../lib/statement'
 import type { ExTab } from '../ExecutionApp'
 
 export function DashboardPage({ projectId, onGo }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) {
@@ -21,6 +22,8 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
   const dev = m.planned.overall == null ? null : m.approved.overall - m.planned.overall
   const recent = useMemo(() => m.reports.slice().sort((a, b) => b.reportDate.localeCompare(a.reportDate) || b.createdAt.localeCompare(a.createdAt)).slice(0, 8), [m.reports])
   const mine = ex.myRoles(projectId)
+  // contract value of the work done: approved quantities × contract unit price, against the value of the contract quantities; waiting quantities shown apart
+  const money = useMemo(() => { const st = buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines }, { from: '0000-01-01', to: m.today }, (a, d) => m.baseOf(a, d), () => ''); const contract = m.activities.filter((a) => a.active && a.approval === 'approved').reduce((t, a) => t + m.baseOf(a, m.today) * a.unitPrice, 0); return { done: st.grand.cumAmt, pending: st.grand.pendingAmt, contract } }, [m])
   if (!m.activities.length && !m.reports.length) return (
     <Empty>
       <b style={{ display: 'block', marginBottom: 6 }}>شروع کار در «مدیریت اجرا»</b>
@@ -34,6 +37,8 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
         <KpiCard i={0} label="پیشرفت فیزیکی (تأییدشده)" value={pct(m.approved.overall)} tone="good" sub={m.planned.overall != null ? `برنامه ${pct(m.planned.overall)}` : undefined} />
         <KpiCard i={1} label="انحراف از برنامه" value={dev == null ? '—' : `${dev > 0 ? '+' : ''}${(dev * 100).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪`} tone={dev == null ? 'neutral' : dev < -0.05 ? 'bad' : dev < 0 ? 'warn' : 'good'} onClick={() => onGo('progress')} />
         <KpiCard i={2} label="در انتظار بررسی نظارت" value={fa(waiting.length)} tone={waiting.length ? 'warn' : 'good'} onClick={() => onGo('review')} />
+        <KpiCard i={4} label="ارزش کارکرد تأییدشده (ریال)" value={fa(Math.round(money.done))} tone="good" sub={money.contract > 0 ? `${pct(money.done / money.contract, 1)} از ارزش مقدارهای پیمان` : undefined} onClick={() => onGo('reports', 'statement')} />
+        <KpiCard i={5} label="کارکرد در انتظار تأیید (ریال)" value={fa(Math.round(money.pending))} tone={money.pending ? 'warn' : 'good'} sub="هنوز در صورت‌وضعیت حساب نمی‌شود" onClick={() => onGo('review')} />
         <KpiCard i={3} label="کسری گزارش‌ها" value={fa(gaps.length)} tone={gaps.length ? 'bad' : 'good'} sub="دریافت‌نشده، ناقص، ناسازگار" onClick={() => onGo('gaps')} />
       </div>
       <div className="mt-two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 12 }}>

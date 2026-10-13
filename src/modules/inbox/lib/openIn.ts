@@ -12,6 +12,7 @@ export function openInModule(item: InboxItem): void {
   if (item.source === 'execution') {
     if (item.kind === 'review') useExecutionStore.getState().setFocus(item.refId, 'review')
     else if (item.kind === 'fix') useExecutionStore.getState().setFocus(item.refId, 'daily')
+    else if (item.kind === 'delay_assess' || item.kind === 'delay_notice') useExecutionStore.getState().setFocus(item.refId, 'delays')
   } else if (item.source === 'issues') {
     const id = item.kind === 'extension' || item.kind === 'verify' || item.kind === 'task' ? idOf(e.issueId) : ''
     if (id) link({ module: 'issues', recordId: id, masterProjectId: item.projectId ?? undefined })

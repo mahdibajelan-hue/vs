@@ -23,7 +23,7 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
-  { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }] },
+  { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }] },
 ]
@@ -35,7 +35,7 @@ const Activities = L(() => import('./pages/ActivitiesPage'), 'ActivitiesPage')
 const Daily = L(() => import('./pages/DailyPage'), 'DailyPage')
 const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
-const Reports = L(() => import('./pages/PeriodReportsPage'), 'PeriodReportsPage')
+const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
 
@@ -74,7 +74,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const go = (t: ExTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   // something outside the module (the inbox) asked to show a report: switch to the page that shows it
   const focusTab = useExecutionStore((x) => (x.focusReportId ? x.focusTab : null))
-  useEffect(() => { if (focusTab) setTab(focusTab) }, [focusTab])
+  useEffect(() => { if (!focusTab) return; if (focusTab === 'delays') { setTab('reports'); setSubs((x) => ({ ...x, reports: 'delays' })); useExecutionStore.getState().setFocus(null) } else setTab(focusTab) }, [focusTab])
   const loading = !mdLoaded || !exLoaded
   const model = useExecutionModel(projectId)
   const badge = (id: ExTab): number => id === 'review' ? model.reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length : id === 'gaps' ? model.detected.filter((g) => g.kind !== 'form_missing').length : id === 'daily' ? model.reports.filter((r) => r.status === 'returned' || r.status === 'incomplete').length : 0
