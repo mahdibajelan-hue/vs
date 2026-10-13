@@ -122,3 +122,24 @@
 .rp-more { margin-top: 4px; } .rp-more summary { cursor: pointer; font-size: 12px; color: var(--im-primary, #38bdf8); padding: 4px 6px; }
 .rp-add { display: flex; gap: 4px; margin-top: 4px; } .rp-add input { flex: 1; } .rp-addbtn { justify-self: start; margin-top: 4px; }
 @media (max-width: 820px) { .rp-tiles { grid-template-columns: 1fr; } .rp-cols { display: none; } .rp-row { grid-template-columns: 1fr repeat(var(--n, 6), minmax(44px, 1fr)); } .rp-row > span:last-child { display: none; } }
+
+/* daily welding report — laid out like the paper form */
+.wd-wrap { display: grid; gap: 18px; background: #fff; color: #000; font-family: 'Times New Roman', 'Vazirmatn', serif; }
+.wd-page { border: 2px solid #000; background: #fff; break-after: page; }
+.wd-page table { width: 100%; border-collapse: collapse; }
+.wd-page th, .wd-page td { border: 1px solid #000; padding: 1px 4px; text-align: center; font-size: 11px; line-height: 1.25; font-weight: 400; }
+.wd-page th { font-weight: 700; background: #fff; }
+.wd-head td { font-size: 12px; padding: 3px 6px; }
+.wd-logos td { height: 56px; font-weight: 700; color: #374151; width: 33.3%; }
+.wd-fa { font-weight: 800; font-size: 13px !important; direction: rtl; }
+.wd-title { font-weight: 800; font-size: 14px !important; }
+.wd-spec { text-align: start !important; font-weight: 700; } .wd-wps { font-weight: 700; text-align: end !important; }
+.wd-meta { padding: 0 !important; } .wd-meta { display: table-cell; } .wd-meta span { display: inline-block; width: 33%; padding: 2px 8px; text-align: start; }
+.wd-tbl { table-layout: fixed; } .wd-tbl .wd-remark { width: 17%; } .wd-tbl .wd-vt { font-weight: 700; } .wd-tbl .wd-rc { font-weight: 700; width: 22px; }
+.wd-tbl tbody td { height: 15px; font-variant-numeric: tabular-nums; }
+.wd-tbl tr.wd-top td { border-top: 2px solid #000; }
+.wd-sum { display: grid; grid-template-columns: 1fr 1fr; } .wd-sum table th { background: #e5e7eb; } .wd-sum .wd-tot { font-weight: 700; background: #f3f4f6; }
+.wd-sign { display: grid; grid-template-columns: 1fr 1fr; } .wd-sign > div { border: 1px solid #000; min-height: 88px; display: grid; grid-template-rows: auto 1fr; } .wd-sign b { background: #e5e7eb; text-align: center; padding: 2px; border-bottom: 1px solid #000; } .wd-sign span { padding: 6px; }
+.wd-foot { color: #6b7280; text-align: center; }
+@media print { .wd-wrap { gap: 0; } .wd-page { border-width: 1.5px; } }
+.wd-tbl .wd-bend { font-size: 9px; width: 52px; }

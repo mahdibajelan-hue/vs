@@ -69,7 +69,7 @@ assert.ok(FORMS.length >= 20 && FORMS.every((f) => f.key && f.title && f.sheet))
 assert.ok(missingForReport({ formKey: 'work', front: '', contractorOrgId: null, data: {} }, [], null).includes('جبهه کاری'))
 const ok = missingForReport({ formKey: 'work', front: 'F1', contractorOrgId: 'c', data: { weather: 'sunny' } }, [{ activityId: 'a', qty: 5 }], null, [{ kind: 'man', activeQty: 4, idleQty: 0 }])
 assert.deepEqual(ok, [])
-assert.ok(missingForReport({ formKey: 'welding', front: 'F', contractorOrgId: 'c', data: { weather: 'x' } }, [{ detail: {} }], FORM_BY_KEY.welding).some((s) => s.includes('شماره سرجوش')))
+assert.ok(missingForReport({ formKey: 'welding', front: 'F', contractorOrgId: 'c', data: { weather: 'x' } }, [{ detail: {} }], FORM_BY_KEY.welding).some((s) => s.includes('WELD No.')))
 
 // ── completeness: missing day, incomplete report, over-base cumulative, unreviewed, open period
 const settings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, expectedFronts: ['F1'], projectStart: '2026-10-10', enabledForms: [] }
