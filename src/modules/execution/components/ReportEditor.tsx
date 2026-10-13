@@ -47,6 +47,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [stops, setStops] = useState<{ key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null }[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId })))
   const [pick, setPick] = useState('')
   const [search, setSearch] = useState('')
+  const [bookF, setBookF] = useState('')
   const [busy, setBusy] = useState(false)
   const [paper, setPaper] = useState(false)
   const [showHist, setShowHist] = useState(false)
@@ -64,8 +65,14 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const lockedLine = (l: LRow) => !editable || l.status === 'approved'
 
   const acts = useMemo(() => m.activities.filter((a) => a.approval === 'approved' && a.active), [m.activities])
-  const options = useMemo(() => acts.filter((a) => !search || `${a.itemNo} ${a.title}`.includes(search)).filter((a) => !rows.some((x) => x.activityId === a.id && x.location === '' && x.kmFrom == null)), [acts, search, rows])
-  const addActivity = () => { if (!pick) return; setRows((a) => [...a, { key: uid0(), activityId: pick, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setPick(''); setDirty(true) }
+  const options = useMemo(() => acts.filter((a) => (!bookF || a.bookId === bookF) && (!search || `${a.itemNo} ${a.rowNo} ${a.title} ${a.spec} ${a.chapter}`.includes(search))).filter((a) => !rows.some((x) => x.activityId === a.id && x.location === '' && x.kmFrom == null)), [acts, search, rows, bookF])
+  const addActivity = () => {
+    if (!pick) return
+    const blank = (activityId: string, note = ''): LRow => ({ key: uid0(), activityId, qty: 0, kmFrom: null, kmTo: null, location: '', note, detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null })
+    // a surcharge (اضافه‌بها) is executed together with the row it is added to: its lines are offered right away
+    const kids = acts.filter((x) => x.parentActivityId === pick && !rows.some((r) => r.activityId === x.id && r.location === ''))
+    setRows((a) => [...a, blank(pick), ...kids.map((k) => blank(k.id, 'اضافه‌بها — مقدار را وارد یا ردیف را حذف کنید'))]); setPick(''); setDirty(true)
+  }
   const addBlank = () => { setRows((a) => [...a, { key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setDirty(true) }
   const copyRow = (l: LRow) => { setRows((a) => { const i = a.findIndex((x) => x.key === l.key); const c: LRow = { ...l, key: uid0(), id: undefined, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null, detail: { ...l.detail } }; return [...a.slice(0, i + 1), c, ...a.slice(i + 1)] }); setDirty(true) }
   const delRow = (key: string) => { setRows((a) => a.filter((x) => x.key !== key)); setDirty(true) }
@@ -184,7 +191,8 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
           {editable && !form && (
             <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
               <input placeholder="جست‌وجوی ردیف یا شرح…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 170 }} aria-label="جست‌وجو" />
-              <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="فعالیت" style={{ minWidth: 260, maxWidth: 420 }}><option value="">فعالیت را انتخاب کنید ({fa(options.length)})…</option>{options.slice(0, 300).map((a) => <option key={a.id} value={a.id}>{a.itemNo} — {a.title} ({a.unit})</option>)}</select>
+              {m.activities.some((a) => a.bookId) && <select value={bookF} onChange={(e) => setBookF(e.target.value)} aria-label="فهرست‌بها" style={{ maxWidth: 190 }}><option value="">همهٔ فهرست‌ها</option>{[...new Set(m.activities.map((a) => a.bookId).filter(Boolean))].map((id) => <option key={id} value={id!}>{ex.books.find((b) => b.id === id)?.title ?? 'فهرست'}</option>)}</select>}
+              <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="فعالیت" style={{ minWidth: 260, maxWidth: 420 }}><option value="">فعالیت را انتخاب کنید ({fa(options.length)})…</option>{options.slice(0, 300).map((a) => <option key={a.id} value={a.id}>{a.rowNo ? `${a.rowNo}) ` : ''}{a.itemNo} — {a.title} ({a.unit})</option>)}</select>
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={addActivity}><Plus size={13} /> افزودن</button>
               <button className="im-btn im-btn-sm" onClick={prefill} title="مقدارهای فرم‌های فنی همین روز را که به فعالیت وصل شده‌اند وارد می‌کند"><Wand2 size={13} /> پیش‌پر از فرم‌های فنی</button>
             </span>
@@ -199,7 +207,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
                 return (
                   <tr key={l.key} className={lockedLine(l) ? 'locked' : undefined}>
                     <td>{fa(i + 1)}</td>
-                    <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}</td>
+                    <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.rowNo ? `ردیف ${a.rowNo} · ` : ''}{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}{a.parentActivityId ? ' · اضافه‌بها' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}</td>
                     <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" /><span style={{ display: 'flex', gap: 3 }}><DecInput className="" value={l.kmFrom ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmFrom: n || null })} label="کیلومتر از" placeholder="km از" /><DecInput className="" value={l.kmTo ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmTo: n || null })} label="کیلومتر تا" placeholder="km تا" /></span></div></td>
                     <td className="num" style={{ minWidth: 100 }}>{lockedLine(l) ? <b>{fa(l.qty, 3)}</b> : <DecInput value={l.qty} onValue={(n) => patchRow(l.key, { qty: n })} label="کارکرد امروز" />}{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}</td>
                     <td style={{ minWidth: 150 }}><div className="ex-cum"><span>تا روز قبل: <b>{fa(prev, 2)}</b></span><span>تجمعی جدید: <b>{fa(total, 2)}</b></span><span>باقی‌مانده: <b className={overRows.has(l.key) ? 'ex-bad' : undefined}>{base ? fa(base - total, 2) : '—'}</b> {a?.unit}</span>{overRows.has(l.key) && <span className="ex-bad">بیش از مقدار مبنا ({fa(base, 2)})</span>}</div></td>

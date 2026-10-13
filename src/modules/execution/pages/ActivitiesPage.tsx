@@ -7,6 +7,7 @@ import { weightSums } from '../lib/progress'
 import { Chip, DataTable, KpiCard, NumInput, Section, fmtD, parseNum, type Col } from '../../finance/components/fn'
 import { FormModal, type FieldDef, type Vals } from '../../finance/components/FormModal'
 import { ModalPortal } from '../../../components/common/ModalPortal'
+import { ContractImport } from '../components/ContractImport'
 import { Bar, Empty, fa } from '../components/common'
 import { ACTIVITY_APPROVAL_LABEL_FA, ACTIVITY_KIND_LABEL_FA, type Activity, type ActivityKind, type PriceBook, type PriceItem } from '../types'
 
@@ -41,10 +42,27 @@ function ActivitiesView({ projectId }: { projectId: string }) {
   const ex = useExecutionStore()
   const [form, setForm] = useState<{ a?: Activity; seed?: Partial<Activity> } | null>(null)
   const [picker, setPicker] = useState(false)
+  const [imp, setImp] = useState(false)
   const [q, setQ] = useState('')
+  const [bookF, setBookF] = useState('')
+  const [openCh, setOpenCh] = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
   const canEdit = ex.can(projectId, 'edit_activities'), canApprove = ex.can(projectId, 'approve_activity')
-  const rows = useMemo(() => m.activities.filter((a) => !q || `${a.itemNo} ${a.title}`.includes(q)), [m.activities, q])
+  const rows = useMemo(() => m.activities.filter((a) => (!bookF || (bookF === '-' ? !a.bookId : a.bookId === bookF)) && (!q || `${a.itemNo} ${a.rowNo} ${a.title} ${a.spec} ${a.remark}`.includes(q))), [m.activities, q, bookF])
+  const books = ex.books.filter((b) => b.projectId === projectId)
+  const bookName = (id: string | null) => (id ? books.find((b) => b.id === id)?.title ?? 'فهرست‌بها' : 'ردیف‌های دستی و خاص')
+  // book → chapter → rows, with contract values
+  const groups = useMemo(() => {
+    const out = new Map<string, { book: string; chapters: Map<string, { name: string; no: string; rows: Activity[]; value: number }>; value: number }>()
+    for (const a of rows) {
+      const bk = a.bookId ?? '-'; const g = out.get(bk) ?? { book: bookName(a.bookId), chapters: new Map(), value: 0 }
+      const ck = a.chapter || '—'; const c = g.chapters.get(ck) ?? { name: ck, no: a.chapterNo, rows: [], value: 0 }
+      c.rows.push(a); c.value += a.baseQty * a.unitPrice; g.value += a.baseQty * a.unitPrice; g.chapters.set(ck, c); out.set(bk, g)
+    }
+    return [...out.entries()]
+  }, [rows, books]) // eslint-disable-line react-hooks/exhaustive-deps
+  const searching = q.trim().length > 0 || rows.length <= 40
+  const contractValue = m.activities.reduce((s, a) => s + (a.active && a.approval === 'approved' ? a.baseQty * a.unitPrice : 0), 0)
   const sums = weightSums(m.activities)
   const pend = m.activities.filter((a) => a.approval === 'pending')
   const progress = new Map(m.approved.rows.map((r) => [r.activity.id, r]))
@@ -61,12 +79,14 @@ function ActivitiesView({ projectId }: { projectId: string }) {
     if (window.confirm(`${fa(rowsIn.length)} فعالیت به پروژه افزوده شود؟`)) await ex.importActivities(projectId, rowsIn)
   }
   const cols: Col<Activity>[] = [
-    { key: 'i', label: 'ردیف', render: (a) => <span className="strong fn-code">{a.itemNo}</span>, sort: (a) => a.itemNo },
-    { key: 't', label: 'شرح فعالیت', render: (a) => <><span className="strong">{a.title}</span><span className="sub">{[a.chapter, a.area, a.front, a.station, a.kmFrom != null ? `km ${a.kmFrom}–${a.kmTo ?? ''}` : ''].filter(Boolean).join(' · ')}</span></> },
+    { key: 'rn', label: 'ردیف', render: (a) => (a.rowNo ? <span className="fn-code">{a.rowNo}</span> : '—') },
+    { key: 'i', label: 'کد فهرست', render: (a) => <span className="strong fn-code">{a.itemNo}</span>, sort: (a) => a.itemNo },
+    { key: 't', label: 'شرح فعالیت', render: (a) => <><span className="strong">{a.title}</span><span className="sub">{[a.area, a.front, a.station, a.kmFrom != null ? `km ${a.kmFrom}–${a.kmTo ?? ''}` : '', a.remark].filter(Boolean).join(' · ')}</span>{a.parentActivityId && <Chip tone="warn">اضافه‌بها{a.surchargePct ? ` ${fa(a.surchargePct, 1)}٪` : ''} — به ردیف {m.actById.get(a.parentActivityId)?.rowNo || m.actById.get(a.parentActivityId)?.itemNo}</Chip>}</> },
     { key: 'u', label: 'واحد', render: (a) => a.unit },
     { key: 'k', label: 'نوع', render: (a) => (a.kind === 'standard' ? <Chip>ردیف</Chip> : <Chip tone="warn">{a.kind === 'starred' ? 'ستاره‌دار' : 'خاص'}</Chip>) },
     { key: 'b', label: 'مقدار مبنا', num: true, render: (a) => fa(a.baseQty, 2), sort: (a) => a.baseQty },
     { key: 'p', label: 'بهای واحد', num: true, render: (a) => fa(a.unitPrice) },
+    { key: 'v', label: 'ارزش پیمان (ریال)', num: true, render: (a) => fa(a.baseQty * a.unitPrice), sort: (a) => a.baseQty * a.unitPrice },
     { key: 'w', label: 'وزن ٪', num: true, render: (a) => (a.weight ? fa(a.weight, 2) : '—') },
     { key: 'g', label: 'پیشرفت', render: (a) => { const r = progress.get(a.id); return r ? <><Bar value={r.pct} /><span className="sub">{fa(r.pct * 100, 0)}٪ · {fa(r.cum, 1)} از {fa(r.base.baseQty, 1)}</span></> : <span className="sub">—</span> } },
     { key: 's', label: 'وضعیت', render: (a) => <><Chip tone={a.approval === 'approved' ? 'good' : a.approval === 'rejected' ? 'bad' : 'warn'}>{ACTIVITY_APPROVAL_LABEL_FA[a.approval]}</Chip>{!a.active && <Chip>غیرفعال</Chip>}{a.approvalNote && <span className="sub">{a.approvalNote}</span>}</> },
@@ -83,21 +103,31 @@ function ActivitiesView({ projectId }: { projectId: string }) {
         <KpiCard i={0} label="فعالیت‌های فعال" value={fa(m.activities.filter((a) => a.active && a.approval === 'approved').length)} />
         <KpiCard i={1} label="ستاره‌دار و خاص" value={fa(m.activities.filter((a) => a.kind !== 'standard').length)} sub={pend.length ? `${fa(pend.length)} در انتظار تأیید` : undefined} tone={pend.length ? 'warn' : 'neutral'} />
         <KpiCard i={2} label="مبنای وزن‌دهی" value={fa(sums.length)} sub={sums.every((s) => s.ok) ? 'همه ۱۰۰٪' : 'مجموع برخی ۱۰۰ نیست'} tone={sums.length && sums.every((s) => s.ok) ? 'good' : 'warn'} />
-        <KpiCard i={3} label="پیشرفت فیزیکی (تأییدشده)" value={`${fa(m.approved.overall * 100, 1)}٪`} />
+        <KpiCard i={3} label="ارزش قرارداد (ردیف‌های فعال)" value={`${(contractValue / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}`} unit="میلیارد ریال" sub={`پیشرفت تأییدشده ${fa(m.approved.overall * 100, 1)}٪`} />
       </div>
       <div className="mt-filters no-print">
-        <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Search size={14} /><input placeholder="جست‌وجوی ردیف یا شرح…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} aria-label="جست‌وجو" /></label>
+        <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Search size={14} /><input placeholder="جست‌وجوی ردیف، کد یا شرح…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} aria-label="جست‌وجو" /></label>
+        {books.length > 0 && <select value={bookF} onChange={(e) => setBookF(e.target.value)} aria-label="فهرست‌بها"><option value="">همهٔ فهرست‌ها</option>{books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}<option value="-">ردیف‌های دستی و خاص</option></select>}
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
           <button className="im-btn im-btn-sm" onClick={() => void writeXlsx(m.activities.map((a) => ({ 'شماره ردیف': a.itemNo, 'شرح': a.title, 'واحد': a.unit, 'فصل': a.chapter, 'نوع': ACTIVITY_KIND_LABEL_FA[a.kind], 'مقدار مبنا': a.baseQty, 'بهای واحد': a.unitPrice, 'وزن': a.weight, 'مبنای وزن': a.weightGroup, 'بخش': a.area, 'جبهه': a.front, 'ایستگاه': a.station })), 'فعالیت‌های-پروژه.xlsx', 'فعالیت‌ها')}><Download size={13} /> اکسل</button>
           {canEdit && <><input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} /><button className="im-btn im-btn-sm" onClick={() => fileRef.current?.click()}><Upload size={13} /> ورود از اکسل</button>
+            <button className="im-btn im-btn-sm" onClick={() => setImp(true)}><Upload size={13} /> ورود فهرست‌بها و مقادیر پیمان</button>
             <button className="im-btn im-btn-sm" onClick={() => setPicker(true)}><FilePlus2 size={13} /> افزودن از فهرست‌بها</button>
             <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setForm({})}><Plus size={14} /> ردیف خاص / دستی</button></>}
         </span>
       </div>
-      {rows.length === 0 ? <Empty>فعالیتی تعریف نشده است. ردیف‌های پیمان را از «فهرست‌بها» انتخاب کنید، از اکسل وارد کنید یا ردیف خاص بسازید.</Empty> : <DataTable cols={cols} rows={rows} rowKey={(a) => a.id} />}
+      {rows.length === 0 ? <Empty>فعالیتی تعریف نشده است. فهرست‌بها و مقادیر پیمان را از اکسل وارد کنید، از فهرست‌بها انتخاب کنید یا ردیف خاص بسازید.</Empty> : groups.map(([bk, g]) => (
+        <Section key={bk} title={g.book} hint={`${fa([...g.chapters.values()].reduce((s, c) => s + c.rows.length, 0))} ردیف · ارزش ${(g.value / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 2 })} میلیارد ریال`} flush>
+          {[...g.chapters.values()].map((c) => { const key = `${bk}|${c.name}`, isOpen = searching || openCh.has(key); return (
+            <div key={key}>
+              <button className="ex-chapter" onClick={() => setOpenCh((s0) => { const n2 = new Set(s0); if (n2.has(key)) n2.delete(key); else n2.add(key); return n2 })} aria-expanded={isOpen}><span>{isOpen ? '▾' : '◂'}</span><b>{c.name}</b><small>{fa(c.rows.length)} ردیف · {(c.value / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 2 })} میلیارد ریال</small></button>
+              {isOpen && <DataTable cols={cols} rows={c.rows} rowKey={(a) => a.id} />}
+            </div>) })}
+        </Section>))}
       {sums.length > 0 && <Section title="مجموع وزن‌ها" hint="در هر مبنای وزن‌دهی مجموع باید ۱۰۰ باشد؛ نسخهٔ مبنا بدون آن تصویب نمی‌شود." flush><DataTable cols={[{ key: 'g', label: 'مبنای وزن‌دهی', render: (s: (typeof sums)[number]) => s.group || 'کل پروژه' }, { key: 's', label: 'مجموع وزن', num: true, render: (s) => fa(s.sum, 2) }, { key: 'o', label: 'وضعیت', render: (s) => <Chip tone={s.ok ? 'good' : 'bad'}>{s.ok ? '۱۰۰٪' : s.sum > 100 ? 'بیش از ۱۰۰' : 'کمتر از ۱۰۰'}</Chip> }]} rows={sums} rowKey={(s) => s.group} /></Section>}
       {form && <FormModal title={form.a ? `ویرایش ${form.a.itemNo}` : form.seed ? 'فعالیت از فهرست‌بها' : 'ردیف خاص / دستی'} subtitle={!form.a ? 'ردیف ستاره‌دار و خاص پس از ثبت، منتظر تأیید کارفرما یا مشاور می‌ماند.' : undefined} submitLabel="ذخیره" fields={actFields()} initial={toVals(form.a ?? form.seed ?? { kind: 'special' })} onClose={() => setForm(null)}
         onSubmit={async (v) => { await ex.saveActivity({ id: form.a?.id, projectId, priceItemId: form.a?.priceItemId ?? (form.seed?.priceItemId ?? null), itemNo: String(v.itemNo), kind: v.kind as ActivityKind, title: String(v.title), unit: String(v.unit), chapter: String(v.chapter ?? ''), baseQty: Number(v.baseQty) || 0, unitPrice: Number(v.unitPrice) || 0, weight: Number(v.weight) || 0, weightGroup: String(v.weightGroup ?? ''), area: String(v.area ?? ''), front: String(v.front ?? ''), station: String(v.station ?? ''), kmFrom: v.kmFrom == null || v.kmFrom === '' ? null : Number(v.kmFrom), kmTo: v.kmTo == null || v.kmTo === '' ? null : Number(v.kmTo), plannedStart: (v.plannedStart as string) || null, plannedEnd: (v.plannedEnd as string) || null, metric: String(v.metric ?? ''), note: String(v.note ?? ''), active: form.a?.active ?? true, sort: form.a?.sort ?? m.activities.length + 1 }) }} />}
+      {imp && <ContractImport projectId={projectId} onClose={() => setImp(false)} />}
       {picker && <ItemPicker projectId={projectId} onClose={() => setPicker(false)} onPick={(it, book) => { setPicker(false); setForm({ seed: { priceItemId: it.id, itemNo: it.itemNo, title: it.description, unit: it.unit, chapter: it.chapter || book.discipline, unitPrice: it.unitPrice, kind: it.starred ? 'starred' : 'standard' } }) }} />}
     </div>
   )

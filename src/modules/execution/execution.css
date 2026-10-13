@@ -44,3 +44,7 @@
 @media (max-width: 900px) { .ex-sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ex-res { grid-template-columns: 1fr; } .ex-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ex-paper-info { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ex-paper { padding: 14px; } }
 @media (max-width: 560px) { .ex-sheet-grid { grid-template-columns: 1fr; } .ex-sheet-grid > label.wide { grid-column: auto; } .ex-form-grid { grid-template-columns: 1fr; } }
 @media print { .ex-paper { border: 0; padding: 0; } .ex-paper tr { break-inside: avoid; } }
+
+.ex-chapter { display: flex; width: 100%; gap: 10px; align-items: baseline; padding: 9px 16px; border: 0; border-top: 1px solid var(--im-line); background: var(--im-panel-2); color: inherit; font: inherit; cursor: pointer; text-align: start; }
+.ex-chapter b { font-size: 12.5px; } .ex-chapter small { margin-inline-start: auto; color: var(--im-muted); font-size: 11px; }
+.ex-chapter:hover { background: var(--im-panel-3, rgba(148,163,184,.12)); }

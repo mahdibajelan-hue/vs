@@ -8,13 +8,15 @@ export type ActivityApproval = 'draft' | 'pending' | 'approved' | 'rejected'
 export const ACTIVITY_APPROVAL_LABEL_FA: Record<ActivityApproval, string> = { draft: 'پیش‌نویس', pending: 'در انتظار تأیید', approved: 'تأییدشده', rejected: 'ردشده' }
 
 export interface PriceBook { id: string; projectId: string; discipline: string; year: number | null; season: string; title: string; version: number; status: 'active' | 'superseded'; note: string }
-export interface PriceItem { id: string; bookId: string; chapter: string; itemNo: string; description: string; unit: string; unitPrice: number; starred: boolean }
+export interface PriceItem { id: string; bookId: string; chapter: string; itemNo: string; /** size / weight range of the row (electrical books: one item code, many ranges) */ spec: string; description: string; unit: string; unitPrice: number; starred: boolean; remark: string; groupCode: string; groupTitle: string; /** code of the row a surcharge (اضافه‌بها) is added to */ parentItemNo: string; surchargePct: number | null }
 
 export interface Activity {
   id: string; projectId: string; priceItemId: string | null; itemNo: string; title: string; unit: string; chapter: string; kind: ActivityKind
   baseQty: number; unitPrice: number; weight: number; weightGroup: string; metric: string
   area: string; front: string; station: string; kmFrom: number | null; kmTo: number | null; plannedStart: string | null; plannedEnd: string | null
   active: boolean; approval: ActivityApproval; approvalNote: string; sort: number; note: string
+  /** the row's own number in the estimate (ردیف), the size range, the estimate's remark, the chapter number, the price book it came from and — for a surcharge — the row it is added to */
+  rowNo: string; spec: string; remark: string; chapterNo: string; bookId: string | null; parentActivityId: string | null; surchargePct: number | null
 }
 export interface Baseline { id: string; projectId: string; version: number; status: 'draft' | 'approved'; reason: string; effectiveDate: string; createdAt: string; approvedAt: string | null }
 export interface BaselineLine { id: string; baselineId: string; activityId: string; itemNo: string; title: string; unit: string; baseQty: number; weight: number; unitPrice: number; weightGroup: string; active: boolean }

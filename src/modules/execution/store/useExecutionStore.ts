@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { explainExecutionError } from '../lib/errors'
+import { weightsByValue, type ParsedBook } from '../lib/priceBookImport'
 import { roleAllows } from '../lib/perms'
 import {
   DEFAULT_EX_SETTINGS, type Activity, type Baseline, type BaselineLine, type DetectedGap, type ExProjectRole, type ExRole, type ExSettings, type FormMap, type Gap, type GapStatus, type PriceBook, type PriceItem,
@@ -18,6 +19,7 @@ function report(action: string, error: { message: string } | null): boolean {
 const n = (x: unknown) => Number(x ?? 0)
 const nn = (x: unknown): number | null => (x == null || x === '' ? null : Number(x))
 
+export type ItemInput = Pick<PriceItem, 'itemNo' | 'description' | 'unit' | 'unitPrice'> & Partial<Omit<PriceItem, 'id' | 'bookId'>>
 export interface ReportDraft { projectId: string; formKey: string; reportDate: string; front?: string; station?: string; shift?: string; contractorOrgId?: string | null; data?: Record<string, unknown>; notes?: string; status?: 'draft' | 'incomplete'; completionOf?: string | null; missing?: string[]; dueDate?: string | null }
 export interface LineInput { id?: string; activityId?: string | null; qty?: number; kmFrom?: number | null; kmTo?: number | null; location?: string; note?: string; detail?: Record<string, unknown>; sourceReportId?: string | null }
 export interface ResourceInput { kind: 'man' | 'equip'; name: string; activeQty: number; idleQty: number; hours: number; note?: string }
@@ -41,11 +43,12 @@ interface State {
   addRole: (projectId: string, userId: string, role: ExRole, organizationId?: string | null) => Promise<boolean>
   setRoleActive: (id: string, active: boolean) => Promise<boolean>
   saveBook: (b: Partial<PriceBook> & { projectId: string; title: string }) => Promise<string | null>
-  saveItems: (bookId: string, rows: Omit<PriceItem, 'id' | 'bookId'>[]) => Promise<boolean>
+  saveItems: (bookId: string, rows: ItemInput[]) => Promise<boolean>
+  importContract: (projectId: string, book: ParsedBook, o: { title: string; weightGroup: string; createActivities: boolean }) => Promise<{ items: number; activities: number } | null>
   removeItem: (id: string) => Promise<boolean>
   saveActivity: (a: Partial<Activity> & { projectId: string; title: string }) => Promise<string | null>
   removeActivity: (id: string) => Promise<boolean>
-  importActivities: (projectId: string, rows: Omit<Activity, 'id' | 'projectId' | 'approval' | 'approvalNote' | 'priceItemId'>[]) => Promise<number>
+  importActivities: (projectId: string, rows: (Pick<Activity, 'itemNo' | 'title' | 'unit' | 'baseQty' | 'unitPrice' | 'weight' | 'weightGroup'> & Partial<Activity>)[]) => Promise<number>
   newBookVersion: (bookId: string, note: string) => Promise<string | null>
   decideActivity: (id: string, approve: boolean, note?: string) => Promise<boolean>
   createBaseline: (projectId: string, reason: string, effective: string) => Promise<string | null>
@@ -68,7 +71,7 @@ interface State {
 
 const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null }
 
-const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '' })
+const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
 const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '' })
 const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no ?? 0, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location ?? '', note: r.note ?? '', detail: r.detail ?? {}, status: r.status, approvedQty: nn(r.approved_qty), reviewNote: r.review_note ?? '', sourceReportId: r.source_report_id })
 
@@ -92,7 +95,7 @@ export const useExecutionStore = create<State>((set, get) => ({
       roles: ok<Row>(roles).map((r): ExProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
       settingsByProject: sm,
       books: ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' })),
-      priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred })),
+      priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) })),
       activities: ok<Row>(acts).map(actRow),
       baselines: ok<Row>(bases).map((r): Baseline => ({ id: r.id, projectId: r.project_id, version: r.version, status: r.status, reason: r.reason ?? '', effectiveDate: r.effective_date, createdAt: r.created_at, approvedAt: r.approved_at })),
       blines: ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active })),
@@ -142,9 +145,9 @@ export const useExecutionStore = create<State>((set, get) => ({
     await get().fetchAll(); return (res.data as Row).id as string
   },
   saveItems: async (bookId, rows) => {
-    const payload = rows.map((r) => ({ book_id: bookId, chapter: r.chapter, item_no: r.itemNo, description: r.description, unit: r.unit, unit_price: r.unitPrice, starred: r.starred }))
+    const payload = rows.map((r) => ({ book_id: bookId, chapter: r.chapter, item_no: r.itemNo, spec: r.spec ?? '', description: r.description, unit: r.unit, unit_price: r.unitPrice, starred: r.starred, remark: r.remark ?? '', group_code: r.groupCode ?? '', group_title: r.groupTitle ?? '', parent_item_no: r.parentItemNo ?? '', surcharge_pct: r.surchargePct ?? null }))
     for (let i = 0; i < payload.length; i += 500) {
-      const { error } = await supabase.from('ex_price_items').upsert(payload.slice(i, i + 500), { onConflict: 'book_id,item_no' })
+      const { error } = await supabase.from('ex_price_items').upsert(payload.slice(i, i + 500), { onConflict: 'book_id,item_no,spec' })
       if (report('ذخیرهٔ ردیف‌های فهرست‌بها', error)) return false
     }
     await get().fetchAll(); return true
@@ -156,7 +159,7 @@ export const useExecutionStore = create<State>((set, get) => ({
   },
 
   saveActivity: async (a) => {
-    const row = { project_id: a.projectId, price_item_id: a.priceItemId ?? null, item_no: a.itemNo ?? '', title: a.title, unit: a.unit ?? '', chapter: a.chapter ?? '', kind: a.kind ?? 'standard', base_qty: a.baseQty ?? 0, unit_price: a.unitPrice ?? 0, weight: a.weight ?? 0, weight_group: a.weightGroup ?? '', metric: a.metric ?? '', area: a.area ?? '', front: a.front ?? '', station: a.station ?? '', km_from: a.kmFrom ?? null, km_to: a.kmTo ?? null, planned_start: a.plannedStart || null, planned_end: a.plannedEnd || null, active: a.active ?? true, sort: a.sort ?? 0, note: a.note ?? '', ...(a.id ? {} : { approval: (a.kind ?? 'standard') === 'standard' ? 'approved' : 'pending' }) }
+    const row = { project_id: a.projectId, price_item_id: a.priceItemId ?? null, book_id: a.bookId ?? null, row_no: a.rowNo ?? '', spec: a.spec ?? '', remark: a.remark ?? '', chapter_no: a.chapterNo ?? '', parent_activity_id: a.parentActivityId ?? null, surcharge_pct: a.surchargePct ?? null, item_no: a.itemNo ?? '', title: a.title, unit: a.unit ?? '', chapter: a.chapter ?? '', kind: a.kind ?? 'standard', base_qty: a.baseQty ?? 0, unit_price: a.unitPrice ?? 0, weight: a.weight ?? 0, weight_group: a.weightGroup ?? '', metric: a.metric ?? '', area: a.area ?? '', front: a.front ?? '', station: a.station ?? '', km_from: a.kmFrom ?? null, km_to: a.kmTo ?? null, planned_start: a.plannedStart || null, planned_end: a.plannedEnd || null, active: a.active ?? true, sort: a.sort ?? 0, note: a.note ?? '', ...(a.id ? {} : { approval: (a.kind ?? 'standard') === 'standard' ? 'approved' : 'pending' }) }
     const res = a.id ? await supabase.from('ex_activities').update(row).eq('id', a.id).select('id').single() : await supabase.from('ex_activities').insert(row).select('id').single()
     if (report('ذخیرهٔ فعالیت', res.error)) return null
     await get().fetchAll(); return (res.data as Row).id as string
@@ -168,7 +171,7 @@ export const useExecutionStore = create<State>((set, get) => ({
     await get().fetchAll(); return true
   },
   importActivities: async (projectId, rows) => {
-    const payload = rows.map((a, i) => ({ project_id: projectId, item_no: a.itemNo, title: a.title, unit: a.unit, chapter: a.chapter, kind: a.kind, base_qty: a.baseQty, unit_price: a.unitPrice, weight: a.weight, weight_group: a.weightGroup, metric: a.metric ?? '', area: a.area, front: a.front, station: a.station, km_from: a.kmFrom, km_to: a.kmTo, planned_start: a.plannedStart || null, planned_end: a.plannedEnd || null, active: a.active, sort: a.sort || i + 1, note: a.note, approval: a.kind === 'standard' ? 'approved' : 'pending' }))
+    const payload = rows.map((a, i) => ({ project_id: projectId, item_no: a.itemNo, title: a.title, unit: a.unit, chapter: a.chapter ?? '', kind: a.kind ?? 'standard', base_qty: a.baseQty, unit_price: a.unitPrice, weight: a.weight, weight_group: a.weightGroup, metric: a.metric ?? '', area: a.area ?? '', front: a.front ?? '', station: a.station ?? '', km_from: a.kmFrom ?? null, km_to: a.kmTo ?? null, planned_start: a.plannedStart || null, planned_end: a.plannedEnd || null, active: a.active ?? true, sort: a.sort || i + 1, note: a.note ?? '', approval: (a.kind ?? 'standard') === 'standard' ? 'approved' : 'pending' }))
     let done = 0
     for (let i = 0; i < payload.length; i += 300) {
       const { error } = await supabase.from('ex_activities').insert(payload.slice(i, i + 300))
@@ -177,12 +180,40 @@ export const useExecutionStore = create<State>((set, get) => ({
     }
     await get().fetchAll(); return done
   },
+  importContract: async (projectId, pb, o) => {
+    const bookId = await get().saveBook({ projectId, title: o.title, discipline: pb.discipline, year: pb.year, season: '', version: 1, note: `ورود از اکسل — ${pb.rows.length} ردیف` })
+    if (!bookId) return null
+    const itemsOk = await get().saveItems(bookId, pb.items.map((i) => ({ itemNo: i.itemNo, spec: i.spec, description: i.description, unit: i.unit, unitPrice: i.unitPrice, chapter: i.chapter, starred: i.starred, remark: i.remark, groupCode: i.groupCode, groupTitle: i.groupTitle, parentItemNo: i.parentItemNo, surchargePct: i.surchargePct })))
+    if (!itemsOk) return null
+    let acts = 0
+    if (o.createActivities) {
+      const idByKey = new Map(get().priceItems.filter((i) => i.bookId === bookId).map((i) => [`${i.itemNo}|${i.spec}`, i.id]))
+      const rows = pb.rows.filter((r) => r.qty > 0)
+      const w = weightsByValue(rows.map((r) => r.qty * r.unitPrice))
+      const base = get().activities.filter((a) => a.projectId === projectId).length
+      const payload = rows.map((r, i) => ({ project_id: projectId, price_item_id: idByKey.get(r.itemKey) ?? null, book_id: bookId, item_no: r.itemNo, row_no: r.rowNo, spec: r.spec, title: r.description, unit: r.unit, chapter: r.chapter, chapter_no: r.chapterNo, kind: r.starred ? 'starred' : 'standard', base_qty: r.qty, unit_price: r.unitPrice, weight: w[i], weight_group: o.weightGroup, remark: r.remark, surcharge_pct: r.surchargePct, sort: base + i + 1, approval: 'approved', active: true }))
+      for (let i = 0; i < payload.length; i += 200) {
+        const { error } = await supabase.from('ex_activities').insert(payload.slice(i, i + 200))
+        if (report('ورود ردیف‌های پیمان', error)) return null
+        acts += Math.min(200, payload.length - i)
+      }
+      // surcharges point at the row they are added to
+      const { data } = await supabase.from('ex_activities').select('id, item_no, chapter, row_no').eq('project_id', projectId).eq('book_id', bookId)
+      const list = (data ?? []) as Row[]
+      for (const r of rows.filter((x) => x.parentItemNo)) {
+        const me = list.find((a) => a.item_no === r.itemNo && a.row_no === r.rowNo && a.chapter === r.chapter)
+        const parent = list.find((a) => a.item_no === r.parentItemNo || String(a.item_no).endsWith(r.parentItemNo.replace(/^0+/, '')))
+        if (me && parent && me.id !== parent.id) await supabase.from('ex_activities').update({ parent_activity_id: parent.id }).eq('id', me.id)
+      }
+    }
+    await get().fetchAll(); return { items: pb.items.length, activities: acts }
+  },
   newBookVersion: async (bookId, note) => {
     const src = get().books.find((b) => b.id === bookId); if (!src) return null
     const { data, error } = await supabase.from('ex_price_books').insert({ project_id: src.projectId, discipline: src.discipline, year: src.year, season: src.season, title: src.title, version: src.version + 1, status: 'active', note }).select('id').single()
     if (report('ایجاد نسخهٔ جدید فهرست‌بها', error)) return null
     const nid = (data as Row).id as string
-    const items = get().priceItems.filter((i) => i.bookId === bookId).map((i) => ({ book_id: nid, chapter: i.chapter, item_no: i.itemNo, description: i.description, unit: i.unit, unit_price: i.unitPrice, starred: i.starred }))
+    const items = get().priceItems.filter((i) => i.bookId === bookId).map((i) => ({ book_id: nid, chapter: i.chapter, item_no: i.itemNo, spec: i.spec, description: i.description, unit: i.unit, unit_price: i.unitPrice, starred: i.starred, remark: i.remark, group_code: i.groupCode, group_title: i.groupTitle, parent_item_no: i.parentItemNo, surcharge_pct: i.surchargePct }))
     for (let k = 0; k < items.length; k += 500) { const r = await supabase.from('ex_price_items').insert(items.slice(k, k + 500)); if (report('کپی ردیف‌های فهرست‌بها', r.error)) return null }
     await supabase.from('ex_price_books').update({ status: 'superseded' }).eq('id', bookId)
     await get().fetchAll(); return nid
