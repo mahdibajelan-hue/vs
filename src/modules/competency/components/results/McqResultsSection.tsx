@@ -5,7 +5,8 @@ import { fa } from '../../lib/resultsModel'
 import { tone } from '../../lib/tone'
 import { QUESTION_TYPE_LABEL_FA, type QuestionType } from '../../types'
 import { mcqInsight } from '../../lib/mcqInsights'
-import { fetchMcqCohort, fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
+import { readIntegrity, INTEGRITY_KIND_LABEL_FA, type McqIntegritySummary } from '../../lib/mcqIntegrity'
+import { fetchMcqIntegrity, fetchMcqCohort, fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
 import { RingChart, DonutChart, type DonutSlice } from '../DonutChart'
 import { EmptyNote } from './ResultsSections'
 
@@ -38,6 +39,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
   const [cohort, setCohort] = useState<number[]>([])
+  const [integrity, setIntegrity] = useState<McqIntegritySummary | null>(null)
 
   useEffect(() => {
     let active = true
@@ -47,6 +49,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
         setTest(data)
         setLoading(false)
         if (data) void fetchMcqCohort('', assessmentId).then((c) => active && setCohort(c))
+        if (data) void fetchMcqIntegrity(assessmentId).then((x) => active && setIntegrity(x))
       }
     })
     return () => {
@@ -105,6 +108,20 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
           <StatTile label="زمان صرف‌شده" value={formatDuration(test.timeSpentSeconds)} icon={Clock} />
         </div>
       </div>
+
+      {(() => {
+        const r = readIntegrity({ scorePercent: test.scorePercent, secondsPerQuestion: insight.secondsPerQuestion, summary: integrity })
+        const col = r.level === 'CONFIRM' ? '#ef4444' : r.level === 'REVIEW' ? '#f59e0b' : '#10b981'
+        const title = r.level === 'CONFIRM' ? 'پیشنهاد: آزمون تأییدی حضوری پیش از استفاده از این نمره' : r.level === 'REVIEW' ? 'نیازمند نگاه ناظر آزمون' : 'رخداد مشکوکی ثبت نشده است'
+        const kinds = Object.entries(integrity?.counts ?? {}).filter(([, n]) => (n ?? 0) > 0)
+        return (
+          <div className="fx-card space-y-1.5 p-4" style={tone(col)}>
+            <p className="text-[12.5px] font-bold" style={{ color: col }}>{title}</p>
+            {r.reasons.map((t) => <p key={t} className="fx-text-2 text-[11.5px] leading-6">• {t}</p>)}
+            {kinds.length > 0 && <p className="fx-muted text-[11px]">رخدادها: {kinds.map(([k, n]) => `${INTEGRITY_KIND_LABEL_FA[k] ?? k} ×${fa(n ?? 0)}`).join('، ')}</p>}
+          </div>
+        )
+      })()}
 
       <div className="fx-card space-y-2.5 p-4">
         <p className="flex items-center gap-1.5 text-[12.5px] font-bold"><Gauge size={14} style={{ color: '#0ea5e9' }} /> خواندن نمره: وزن دشواری، حدس و جایگاه در گروه</p>

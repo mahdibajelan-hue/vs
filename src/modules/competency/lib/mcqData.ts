@@ -1,3 +1,4 @@
+import type { McqIntegritySummary } from './mcqIntegrity'
 import { supabase } from '../../../lib/supabaseClient'
 import type { JobRole, QuestionApprovalStatus, QuestionType } from '../types'
 
@@ -212,6 +213,11 @@ export async function fetchMcqTestDetail(assessmentId: string): Promise<{ data: 
   const { data, error } = await supabase.rpc('comp_mcq_get_test_detail', { p_assessment_id: assessmentId })
   if (error) return { data: null, error: error.message }
   return { data: (data as McqTestDetail | null) ?? null, error: null }
+}
+
+export async function fetchMcqIntegrity(assessmentId: string): Promise<McqIntegritySummary | null> {
+  const { data, error } = await supabase.rpc('comp_mcq_integrity_summary', { p_assessment_id: assessmentId })
+  return error || !data ? null : (data as McqIntegritySummary)
 }
 
 export async function generateMcqTest(
