@@ -6,6 +6,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import { jobRoleLabel, sortedJobRoles } from '../lib/competencyData'
 import { DonutChart, type DonutSlice } from '../components/DonutChart'
 import { CATEGORY_COLOR } from '../components/results/McqResultsSection'
+import { bankHealth, mcqQuality, MCQ_FLAW_LABEL_FA } from '../lib/mcqQuality'
 import '../styles/farinTheme.css'
 import {
   QUESTION_APPROVAL_STATUS_LABEL_FA,
@@ -1137,6 +1138,8 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<McqQuestion | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [flawOnly, setFlawOnly] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -1159,9 +1162,26 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
       if (activeFilter === 'active' && !q.active) return false
       if (activeFilter === 'inactive' && q.active) return false
       if (search.trim() && !q.stemFa.includes(search.trim()) && !q.topic.includes(search.trim())) return false
+      if (flawOnly && mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }).level === 'OK') return false
       return true
     })
-  }, [bank, roleFilter, categoryFilter, difficultyFilter, activeFilter, search])
+  }, [bank, roleFilter, categoryFilter, difficultyFilter, activeFilter, search, flawOnly])
+
+  // item-quality health of the questions in scope (the chosen role, otherwise the whole bank)
+  const scope = useMemo(() => bank.filter((q) => roleFilter === 'all' || q.jobRole === roleFilter), [bank, roleFilter])
+  const health = useMemo(() => bankHealth(scope.map((q) => ({ stem: q.stemFa, options: q.options, correct: q.correctOption }))), [scope])
+  const pendingInScope = useMemo(() => scope.filter((q) => q.approvalStatus === 'PENDING_REVIEW' && q.active), [scope])
+  const approveAllPending = async () => {
+    if (roleFilter === 'all' || pendingInScope.length === 0) return
+    if (!window.confirm(`${pendingInScope.length.toLocaleString('fa-IR')} سؤال در انتظار بررسی این شغل تأیید می‌شود و وارد آزمون‌ها می‌شود. آیا متن سؤال‌ها را بازبینی فنی کرده‌اید؟`)) return
+    setBulkBusy(true)
+    for (const q of pendingInScope) {
+      const err = await setMcqApproval(q.id, 'APPROVED')
+      if (err) { setError(mcqErrorFa(err)); break }
+    }
+    setBulkBusy(false)
+    await load()
+  }
 
   const countsByRole = useMemo(() => {
     const map = new Map<JobRole, { total: number; approved: number }>()
@@ -1240,6 +1260,32 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
             <p className="mb-3 text-[12px] font-bold text-primary">ترکیب بانک بر اساس سطح دشواری</p>
             <DonutChart slices={bankByDifficulty} centerLabel="سؤال" centerValue={bank.length.toLocaleString('fa-IR')} size={116} strokeWidth={16} />
           </div>
+        </div>
+      )}
+
+      {scope.length > 0 && (
+        <div className="fx-card flex flex-wrap items-center gap-4 p-4" aria-label="سلامت بانک سؤال">
+          <div className="min-w-[210px]">
+            <p className="text-[12px] font-bold text-primary">سلامت بانک {roleFilter === 'all' ? '(همهٔ شغل‌ها)' : `(${jobRoleLabel(jobRoleConfigs, roleFilter)})`}</p>
+            <p className="mt-1 text-[10.5px] leading-5 text-muted">
+              بازرس خودکار نشانه‌هایی را می‌سنجد که بدون دانش فنی هم پاسخ را لو می‌دهند: بلندترین‌بودن گزینهٔ درست، کلمات مطلق در گزینه‌های غلط و گزینه‌های بی‌محتوا.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-lg bg-emerald-500/12 px-2.5 py-1 font-bold text-emerald-300"><span className="num">{health.ok.toLocaleString('fa-IR')}</span> سالم</span>
+            <span className="rounded-lg bg-amber-500/12 px-2.5 py-1 font-bold text-amber-300"><span className="num">{health.warn.toLocaleString('fa-IR')}</span> نیازمند بازبینی</span>
+            <span className="rounded-lg bg-red-500/12 px-2.5 py-1 font-bold text-red-300"><span className="num">{health.bad.toLocaleString('fa-IR')}</span> معیوب</span>
+          </div>
+          <div className="min-w-[180px] text-[11px]">
+            <p className="text-muted">گزینهٔ درست محسوساً بلندترین است در</p>
+            <p className={`num text-lg font-extrabold ${health.longestShare > 0.4 ? 'text-red-300' : health.longestShare > 0.3 ? 'text-amber-300' : 'text-emerald-300'}`}>{Math.round(health.longestShare * 100).toLocaleString('fa-IR')}٪ <span className="text-[10px] font-normal text-muted">از سؤال‌ها (مطلوب: زیر ۲۵٪)</span></p>
+          </div>
+          <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-secondary"><input type="checkbox" checked={flawOnly} onChange={(e) => setFlawOnly(e.target.checked)} /> فقط سؤال‌های دارای ایراد</label>
+          {isModuleAdmin && roleFilter !== 'all' && pendingInScope.length > 0 && (
+            <button onClick={approveAllPending} disabled={bulkBusy} className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2 text-[11px] font-bold text-white hover:bg-emerald-400 disabled:opacity-60">
+              <CheckCircle2 size={13} /> {bulkBusy ? 'در حال تأیید…' : `تأیید ${pendingInScope.length.toLocaleString('fa-IR')} سؤال در انتظار`}
+            </button>
+          )}
         </div>
       )}
 
@@ -1326,6 +1372,7 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                   <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.usageCount.toLocaleString('fa-IR')} بار استفاده‌شده</span>
                 )}
                 {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
+                {(() => { const r = mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }); return r.level === 'OK' ? null : (<span title={r.flaws.map((f) => `${MCQ_FLAW_LABEL_FA[f.kind]}${f.detail ? ` — ${f.detail}` : ''}`).join('\n')} className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${r.level === 'BAD' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>{r.level === 'BAD' ? 'ایراد جدی' : 'نیازمند بازبینی'}: {MCQ_FLAW_LABEL_FA[r.flaws[0].kind]}</span>) })()}
                 <span
                   className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
                     q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
