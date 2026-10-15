@@ -18,6 +18,8 @@ import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ResourcePanel } from './ResourcePanel'
+import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
+import { useEpcStore } from '../store/useEpcStore'
 import { WeatherCard } from './WeatherCard'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
@@ -48,6 +50,10 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [pick, setPick] = useState('')
   const [search, setSearch] = useState('')
   const [bookF, setBookF] = useState('')
+  const epcAvailable = useEpcStore((x) => x.available)
+  const epcCrew = useEpcStore((x) => x.crewLogs)
+  const [crews, setCrews] = useState<CrewDraft[]>(() => epcCrew.filter((c) => c.reportId === reportId).map((c) => ({ key: c.id, activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
+  const [crewDirty, setCrewDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [paper, setPaper] = useState(false)
   const [showHist, setShowHist] = useState(false)
@@ -91,9 +97,10 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
     const okH = await ex.updateReport(reportId, { reportDate: head.reportDate, front: head.front, station: head.station, shift: head.shift, contractorOrgId: head.contractorOrgId || null, data, notes: head.notes })
     const lines: LineInput[] = rows.map((x) => ({ id: x.id, activityId: x.activityId, qty: x.qty, kmFrom: x.kmFrom, kmTo: x.kmTo, location: x.location, note: x.note, detail: x.detail, sourceReportId: x.sourceReportId }))
     const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, responsibility: s.responsibility, critical: s.critical, noticeDate: s.noticeDate, noticeRef: s.noticeRef, assessNote: s.assessNote })) })
+    const okC = !okB || !crewDirty || !epcAvailable || await useEpcStore.getState().saveCrewLogs(reportId, crews.map((c) => ({ activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
     setBusy(false)
-    if (okB) setDirty(false)
-    return !!okB
+    if (okB && okC) { setDirty(false); setCrewDirty(false) }
+    return !!okB && okC
   }
   const send = async () => {
     if (missing.length) return
@@ -260,6 +267,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
         </div>
       )}
 
+      {!form && epcAvailable && <CrewLogsPanel rows={crews} editable={editable} activities={acts} onChange={(n) => { setCrews(n); setCrewDirty(true); setDirty(true) }} />}
       {(!form || form.resources) && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
 
       {!form && (

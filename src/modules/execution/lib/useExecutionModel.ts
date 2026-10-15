@@ -28,7 +28,8 @@ export function useExecutionModel(projectId: string | null) {
     for (const l of lines) { const x = linesByReport.get(l.reportId); if (x) x.push(l); else linesByReport.set(l.reportId, [l]) }
     const base = { activities, baselines, blines, reports, lines }
     const groupWeights = settings.groupWeights
-    const approved = physicalProgress({ ...base, asOf: today, mode: 'approved', groupWeights })
+    const employer = ((settings as unknown as { employerStep?: string }).employerStep === 'binding' ? 'binding' : 'off') as 'binding' | 'off'
+    const approved = physicalProgress({ ...base, asOf: today, mode: 'approved', groupWeights, employer })
     const registered = physicalProgress({ ...base, asOf: today, mode: 'registered', groupWeights })
     const planned = plannedOverall({ activities, baselines, blines, asOf: today, groupWeights })
     const firstDate = reports.filter((r) => r.formKey === 'work').map((r) => r.reportDate).sort()[0] ?? ''

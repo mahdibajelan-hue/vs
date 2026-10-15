@@ -11,6 +11,9 @@ import { DataTable, KpiCard, fmtD, type Col } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, Empty, fa } from '../components/common'
 import { PaperModal, type PaperCtx } from '../components/ReportPaper'
 import type { Report } from '../types'
+import { EmployerPanel } from '../components/epc/EmployerPanel'
+import { VersionsCard } from '../components/epc/VersionsCard'
+import { epcSettings } from '../lib/epcSettings'
 
 type Dec = { decision: 'approved' | 'rejected' | 'returned'; qty: number; note: string }
 
@@ -106,6 +109,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const [busy, setBusy] = useState(false)
   const [paper, setPaper] = useState(false)
   if (!r) return null
+  const epc = epcSettings(m.settings as unknown as Record<string, unknown>)
+  const empOn = epc.employerStep !== 'off'
   const form = r.formKey === 'work' ? null : FORM_BY_KEY[r.formKey] ?? null
   const lines = m.linesByReport.get(reportId) ?? []
   const canReview = ex.can(m.projectId, 'review') && (r.status === 'submitted' || r.status === 'partially_approved')
@@ -145,7 +150,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
       <div className="im-card" style={{ padding: 0 }}>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           <table className="ex-lines">
-            <thead><tr><th>#</th><th>{form ? 'ردیف' : 'فعالیت'}</th><th className="num">{form ? '' : 'کارکرد گزارش‌شده'}</th>{!form && <th>تجمعی تأییدشده تا قبل</th>}<th>وضعیت</th>{canReview && <th>تصمیم شما</th>}</tr></thead>
+            <thead><tr><th>#</th><th>{form ? 'ردیف' : 'فعالیت'}</th><th className="num">{form ? '' : 'کارکرد گزارش‌شده'}</th>{!form && <th>تجمعی تأییدشده تا قبل</th>}<th>وضعیت</th><th className="num">بررسی نظارت</th>{empOn && <th className="num">کارفرما</th>}{canReview && <th>تصمیم شما</th>}</tr></thead>
             <tbody>{lines.map((l, i) => { const a = l.activityId ? m.actById.get(l.activityId) : undefined; const d = dec[l.id]; const prev = l.activityId ? before.get(l.activityId) ?? 0 : 0; const base = a ? m.baseOf(a, r.reportDate) : 0
               return (
                 <tr key={l.id}>
@@ -154,6 +159,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
                   <td className="num">{form ? '' : <b>{fa(l.qty, 3)} {a?.unit}</b>}</td>
                   {!form && <td><div className="ex-cum"><span>{fa(prev, 2)} {a?.unit}</span>{base > 0 && <span>مبنا: {fa(base, 2)} · باقی: {fa(Math.max(0, base - prev), 2)}</span>}</div></td>}
                   <td><LineStatusChip status={l.status} />{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}{l.reviewNote && <small className="sub">{l.reviewNote}</small>}</td>
+                  <td className="num">{l.status === 'approved' ? fa(l.approvedQty ?? l.qty, 3) : '—'}</td>
+                  {empOn && <td className="num">{l.employerStatus ? fa(l.employerQty ?? 0, 3) : '—'}</td>}
                   {canReview && <td style={{ minWidth: 300 }}>{l.status === 'pending' ? (
                     <div style={{ display: 'grid', gap: 4 }}>
                       <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -180,8 +187,16 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
           </div>
         </div>
       )}
+      {empOn && !form && <EmployerPanel reportId={reportId} lines={lines} actById={m.actById} mode={epc.employerStep as 'advisory' | 'binding'} canDecide={isEmployerSide(m.projectId) && (r.status === 'approved' || r.status === 'partially_approved')} />}
+      <VersionsCard reportId={reportId} actTitle={(id) => (id ? m.actById.get(id)?.title ?? '—' : '—')} people={ex.people} />
       <div className="im-card" style={{ padding: 14 }}><b><History size={14} style={{ verticalAlign: -2 }} /> سابقه</b><div className="ex-hist" style={{ marginTop: 8 }}>{hist.length === 0 ? <span className="im-helper">—</span> : hist.map((h) => <div key={h.id}><b>{h.action.startsWith('review:') ? `بررسی (${h.action.slice(7)})` : h.action === 'submit' ? 'ارسال' : h.action === 'reopen' ? 'بازگشایی' : h.action}</b><span>{ex.people.get(h.actor ?? '') ?? 'کاربر'}</span><small>{fmtD(h.at.slice(0, 10))} {new Date(h.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>{h.note && <span>— {h.note}</span>}</div>)}</div></div>
       {paper && <PaperModal c={paperCtx()} onClose={() => setPaper(false)} />}
     </div>
   )
+}
+
+/** the employer step is decided by the employer role or a manager/administrator of the project (same rule as the database function ex_is_employer) */
+function isEmployerSide(projectId: string): boolean {
+  const ex = useExecutionStore.getState()
+  return ex.myRoles(projectId).includes('employer') || ex.can(projectId, '*')
 }

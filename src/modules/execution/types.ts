@@ -33,6 +33,8 @@ export const LINE_STATUS_LABEL_FA: Record<LineStatus, string> = { pending: 'در
 export interface ReportLine {
   id: string; reportId: string; lineNo: number; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string
   detail: Record<string, unknown>; status: LineStatus; approvedQty: number | null; reviewNote: string; sourceReportId: string | null
+  /** optional employer step (EPC control): decision on top of the supervision's approval; never above approvedQty */
+  employerStatus?: 'approved' | 'rejected' | 'returned' | null; employerQty?: number | null; employerNote?: string
 }
 /** One manpower / machinery row of the daily report. Manpower: total, active, leave, stopped, native, non-native; machinery: total, active, inactive (idleQty), stopped, repair. */
 export interface ReportResource { id: string; reportId: string; kind: 'man' | 'equip'; section: string; name: string; totalQty: number; activeQty: number; idleQty: number; leaveQty: number; stoppedQty: number; nativeQty: number; nonnativeQty: number; repairQty: number; hours: number; note: string }

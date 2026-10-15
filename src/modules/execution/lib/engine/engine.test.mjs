@@ -130,3 +130,10 @@ assert.equal(parseScheduleGrid([['x', 'y']]).rows.length, 0)
 const mres = matchActivities(ps.rows, [{ id: 'A', itemNo: '510226007', rowNo: '', title: 'x' }, { id: 'B', itemNo: '', rowNo: '', title: 'تست' }, { id: 'C', itemNo: '', rowNo: '', title: 'تست' }])
 assert.equal(mres.matched.length, 1); assert.equal(mres.matched[0].activityId, 'A'); assert.equal(mres.ambiguous.length, 1); assert.equal(mres.unmatched.length, 0)
 console.log('engine tests ok')
+
+// ── employer step in the cumulative: binding counts only the employer-confirmed quantity
+import { lineValue, cumulative } from '../progress.ts'
+const ln = (o) => ({ id: 'l', reportId: 'r', lineNo: 1, activityId: 'a', qty: 40, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'approved', approvedQty: 30, reviewNote: '', sourceReportId: null, ...o })
+assert.equal(lineValue(ln({}), 'approved'), 30); assert.equal(lineValue(ln({}), 'approved', 'advisory'), 30)
+assert.equal(lineValue(ln({}), 'approved', 'binding'), 0); assert.equal(lineValue(ln({ employerStatus: 'approved', employerQty: 25 }), 'approved', 'binding'), 25); assert.equal(lineValue(ln({ employerStatus: 'rejected', employerQty: 0 }), 'approved', 'binding'), 0)
+console.log('employer-step tests ok')

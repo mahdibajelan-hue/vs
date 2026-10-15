@@ -8,13 +8,18 @@ export const isRegistered = (r: Pick<Report, 'status'>): boolean => REGISTERED.h
 
 export interface Cum { approved: number; pending: number }
 /** Quantity of one work-report line under the mode: approved = the supervision's approved quantity; registered = approved + still waiting (rejected / returned lines never count). */
-export function lineValue(l: ReportLine, mode: CumMode): number {
-  if (l.status === 'approved') return l.approvedQty ?? l.qty
+export type EmployerMode = 'off' | 'advisory' | 'binding'
+export function lineValue(l: ReportLine, mode: CumMode, employer: EmployerMode = 'off'): number {
+  if (l.status === 'approved') {
+    // binding employer step: only the employer-confirmed quantity counts (nothing until he decides)
+    if (employer === 'binding') return l.employerStatus === 'approved' ? l.employerQty ?? 0 : 0
+    return l.approvedQty ?? l.qty
+  }
   if (mode === 'registered' && l.status === 'pending') return l.qty
   return 0
 }
 
-export interface CumOpts { before?: string; until?: string; excludeReportId?: string; mode: CumMode }
+export interface CumOpts { before?: string; until?: string; excludeReportId?: string; mode: CumMode; employer?: EmployerMode }
 /** Running total per activity from the work reports — the single source of every «تجمعی» figure; nothing is stored. */
 export function cumulative(reports: Report[], lines: ReportLine[], o: CumOpts): Map<string, number> {
   const rep = new Map(reports.filter((r) => r.formKey === 'work' && isRegistered(r)).map((r) => [r.id, r]))
@@ -24,7 +29,7 @@ export function cumulative(reports: Report[], lines: ReportLine[], o: CumOpts): 
     const r = rep.get(l.reportId); if (!r || r.id === o.excludeReportId) continue
     if (o.before && r.reportDate >= o.before) continue
     if (o.until && r.reportDate > o.until) continue
-    const v = lineValue(l, o.mode); if (v) out.set(l.activityId, (out.get(l.activityId) ?? 0) + v)
+    const v = lineValue(l, o.mode, o.employer); if (v) out.set(l.activityId, (out.get(l.activityId) ?? 0) + v)
   }
   return out
 }
@@ -43,8 +48,8 @@ export interface GroupProgress { group: string; weightSum: number; pct: number; 
 export interface Progress { rows: ProgressRow[]; groups: GroupProgress[]; overall: number; weightsOk: boolean }
 
 /** Physical progress: per activity cumulative ÷ base, weighted inside each weighting basis (which must total 100%), then the bases averaged by their configured weight. Quantities of different units are never added. */
-export function physicalProgress(a: { activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]; reports: Report[]; lines: ReportLine[]; asOf: string; mode: CumMode; groupWeights?: Record<string, number> }): Progress {
-  const cum = cumulative(a.reports, a.lines, { until: a.asOf, mode: a.mode })
+export function physicalProgress(a: { activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]; reports: Report[]; lines: ReportLine[]; asOf: string; mode: CumMode; groupWeights?: Record<string, number>; employer?: EmployerMode }): Progress {
+  const cum = cumulative(a.reports, a.lines, { until: a.asOf, mode: a.mode, employer: a.employer })
   const rows: ProgressRow[] = a.activities.filter((x) => x.approval === 'approved').map((act) => {
     const base = effectiveBase(act, a.baselines, a.blines, a.asOf)
     const c = cum.get(act.id) ?? 0
