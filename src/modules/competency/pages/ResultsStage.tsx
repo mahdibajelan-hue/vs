@@ -58,6 +58,9 @@ import { generatePersonalityProfile } from '../lib/personalityAnalysis'
 import { APPROVAL_LABEL, approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, tierColor } from '../lib/competencyModel'
 import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
 import { WorkStatusEditor } from '../components/WorkStatusEditor'
+import { DecisionNoteDialog } from '../components/DecisionNoteDialog'
+import { DecisionNotesCard } from '../components/DecisionNotesCard'
+import { addDecisionNote, type DecisionKind } from '../lib/decisionNotes'
 import { computeCategoryScores, questionsForAssessment, resolveOfficialAnswers, usesLegacyPmRubric } from '../lib/roleCompetencyModel'
 import { jobRoleLabel as resolveJobRoleLabel } from '../lib/competencyData'
 import { buildGapRows, evidenceMethodMix, isAiAnalysisStale, isCriticalGap, isDevelopmentGap } from '../lib/competencyGap'
@@ -410,9 +413,19 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
       setExporting(false)
     }
   }
-  const handleApprove = async () => {
+  // Approving / revoking / declining always goes through the confidential-summary dialog first.
+  const [noteDecision, setNoteDecision] = useState<DecisionKind | null>(null)
+  const [notesRefresh, setNotesRefresh] = useState(0)
+  const handleApprove = () => setNoteDecision(assessment.isApproved ? 'APPROVAL_REVOKED' : 'APPROVED')
+  const confirmDecision = async (note: string) => {
+    if (!noteDecision) return
     setSettingApproval(true)
-    await setApproved(assessment.id, !assessment.isApproved)
+    const err = await addDecisionNote(assessment.id, noteDecision, note)
+    if (!err) {
+      if (noteDecision === 'APPROVED' || noteDecision === 'APPROVAL_REVOKED') await setApproved(assessment.id, noteDecision === 'APPROVED')
+      setNoteDecision(null)
+      setNotesRefresh((n) => n + 1)
+    } else window.alert('ثبت جمع‌بندی انجام نشد: ' + err)
     setSettingApproval(false)
   }
   const resultsShareUrl = `${window.location.origin}${window.location.pathname}?results=${assessment.resultsShareToken}`
@@ -922,7 +935,17 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
           </button>
         </div>
 
-        <WorkStatusEditor assessment={assessment} />
+        {!assessment.isApproved && (
+          <div className="flex justify-end">
+            <button onClick={() => setNoteDecision('NOT_APPROVED')} disabled={settingApproval} className="fx-sub flex min-h-10 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-red-300 hover:brightness-110 disabled:opacity-50">
+              <ShieldCheck size={14} /> ثبت عدم تأیید صلاحیت (با دلیل محرمانه)
+            </button>
+          </div>
+        )}
+
+        <WorkStatusEditor assessment={assessment} onDecisionSaved={() => setNotesRefresh((n) => n + 1)} />
+        <DecisionNotesCard assessmentId={assessment.id} refreshKey={notesRefresh} />
+        {noteDecision && <DecisionNoteDialog decision={noteDecision} candidateName={assessment.candidateName} onCancel={() => setNoteDecision(null)} onConfirm={confirmDecision} />}
 
         {isModuleAdmin && assessment.status === 'completed' && (
           <div className="fx-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:justify-between" style={tone('#f59e0b')}>

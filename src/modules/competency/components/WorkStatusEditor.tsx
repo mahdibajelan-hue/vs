@@ -3,6 +3,8 @@ import { Briefcase, CircleSlash, Save, UserCheck } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { OPEN_TO_WORK_GREEN } from './OpenToWorkRing'
 import type { CompetencyAssessment, WorkStatus } from '../types'
+import { DecisionNoteDialog } from './DecisionNoteDialog'
+import { addDecisionNote, type DecisionKind } from '../lib/decisionNotes'
 
 const OPTIONS: { id: WorkStatus; label: string; hint: string; icon: typeof Briefcase; color: string }[] = [
   { id: 'none', label: 'نامشخص', hint: 'چیزی روی کارت نشان داده نمی‌شود', icon: CircleSlash, color: '#94a3b8' },
@@ -12,13 +14,14 @@ const OPTIONS: { id: WorkStatus; label: string; hint: string; icon: typeof Brief
 
 /** Where the candidate stands after the assessment — drives the «Open to work» photo ring and the
  * «شاغل در پروژه …» line on the credential card, and the project filter on the dashboard. */
-export function WorkStatusEditor({ assessment }: { assessment: CompetencyAssessment }) {
+export function WorkStatusEditor({ assessment, onDecisionSaved }: { assessment: CompetencyAssessment; onDecisionSaved?: () => void }) {
   const setWorkStatus = useCompetencyStore((s) => s.setWorkStatus)
   const allAssessments = useCompetencyStore((s) => s.assessments)
   const [status, setStatus] = useState<WorkStatus>(assessment.workStatus)
   const [project, setProject] = useState(assessment.workProjectName)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [askNote, setAskNote] = useState(false)
 
   useEffect(() => {
     setStatus(assessment.workStatus)
@@ -33,12 +36,17 @@ export function WorkStatusEditor({ assessment }: { assessment: CompetencyAssessm
   const dirty = status !== assessment.workStatus || (needsProject && project.trim() !== assessment.workProjectName)
   const invalid = needsProject && !project.trim()
 
-  const save = async () => {
+  // Every change of status carries the lead's confidential interview summary (required when the candidate is NOT assigned to a project).
+  const decision: DecisionKind = status === 'on_project' ? 'ON_PROJECT' : status === 'open_to_work' ? 'OPEN_TO_WORK' : 'NOT_ASSIGNED'
+  const save = async (note: string) => {
     setSaving(true)
+    const err = await addDecisionNote(assessment.id, decision, note, status === 'on_project' ? project.trim() : '')
+    if (err) { setSaving(false); window.alert('ثبت جمع‌بندی انجام نشد: ' + err); return }
     const ok = await setWorkStatus(assessment.id, status, project)
     setSaving(false)
+    setAskNote(false)
     setSaved(ok)
-    if (ok) setTimeout(() => setSaved(false), 2500)
+    if (ok) { onDecisionSaved?.(); setTimeout(() => setSaved(false), 2500) }
   }
 
   return (
@@ -91,13 +99,14 @@ export function WorkStatusEditor({ assessment }: { assessment: CompetencyAssessm
       <div className="flex items-center justify-end gap-2">
         {saved && <span className="text-[11px] font-bold text-emerald-300">ثبت شد</span>}
         <button
-          onClick={save}
+          onClick={() => setAskNote(true)}
           disabled={!dirty || invalid || saving}
           className="flex min-h-10 items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-sky-500 disabled:opacity-40"
         >
           <Save size={14} aria-hidden /> ذخیره وضعیت اشتغال
         </button>
       </div>
+      {askNote && <DecisionNoteDialog decision={decision} candidateName={assessment.candidateName} onCancel={() => setAskNote(false)} onConfirm={save} />}
     </div>
   )
 }

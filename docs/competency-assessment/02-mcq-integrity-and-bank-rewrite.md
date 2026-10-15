@@ -18,3 +18,9 @@ Difficulty labels were uncalibrated and no human had reviewed any item (all 1054
 - Score = mean credit; "correct" = full credit. New tests are stamped `scoring_version = 2`.
 - Candidate RPCs: `comp_mcq_candidate_answer_v2` (type-aware validation); keys are never returned to candidates.
 - 10 sample items (2 per role) were added as `PENDING_REVIEW`; the bank editor now authors all four types (type is fixed after creation). Verified: an end-to-end DB run (answer → submit → score, rolled back) and a Playwright run of the candidate page against mocked RPCs.
+
+## Confidential decision notes (2026-10-15)
+`018_confidential_decision_notes.sql`: every approve / revoke / not-approved / open-to-work / on-project / not-assigned action opens a dialog for the lead's interview summary.
+Required (≥ 10 chars) for negative decisions (revoke, not approved, open-to-work, not assigned); optional for approve / on-project.
+The note is written through `comp_add_decision_note` (lead or site admin) and readable only by a **site admin** (`is_admin_user()` RLS on `comp_decision_notes`; no other RPC, report or public page returns it).
+Verified on the live DB (rolled back): non-admin sees 0 rows, non-lead RPC is `forbidden`, admin sees the row.
