@@ -12,6 +12,7 @@ import { addDays, jalaliText, weekdayOf, weekOf } from '../lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { Empty, fa, pct } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
+import { ActivityLinks } from '../components/epc/ActivityLinks'
 import { ENG_STATUS_LABEL_FA, PREREQ_KIND_LABEL_FA, type EngDocRow } from '../epcTypes'
 import type { PrereqKind, PrereqStatus } from '../lib/engine/readiness'
 
@@ -104,6 +105,7 @@ function Readiness({ m, projectId, can, acts }: { m: ReturnType<typeof useEpcMod
                 <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.title.trim()} onClick={() => void epc.savePrereq({ projectId, activityId: cur.activityId, kind: f.kind, title: f.title, refType: f.refType, refId: f.refId || null, status: f.status, neededDate: f.neededDate || null }).then(() => setF({ ...f, title: '' }))}><Plus size={13} /> پیش‌نیاز</button>
               </div>)}
           </div>
+          <div style={{ marginTop: 14 }}><ActivityLinks projectId={projectId} activityId={cur.activityId} can={useExecutionStore.getState().can(projectId, 'raise')} /></div>
         </Section>
       )}
     </div>

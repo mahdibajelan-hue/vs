@@ -8,13 +8,13 @@ import type { Report } from '../../types'
 const LABEL: Record<keyof Parties, string> = { employer: 'کارفرما', consultant: 'مشاور', contractor: 'پیمانکار' }
 
 /** Official letterhead (names + logos of the three parties) above and the fixed contractual-reservation text below every printed report. The letterhead frozen into the report at first submission is used when present, so old reports keep their historical header. */
-export function PaperFrame({ report, children }: { report: Report; children: ReactNode }) {
-  const settings = useExecutionStore((s) => s.settingsByProject.get(report.projectId))
-  const legal = useEpcStore((s) => s.legalByProject.get(report.projectId))
+export function PaperFrame({ projectId, letterhead, children }: { projectId: string; letterhead?: Report['letterhead']; children: ReactNode }) {
+  const settings = useExecutionStore((s) => s.settingsByProject.get(projectId))
+  const legal = useEpcStore((s) => s.legalByProject.get(projectId))
   const available = useEpcStore((s) => s.available)
-  useEffect(() => { if (available) void useEpcStore.getState().loadLegal(report.projectId) }, [available, report.projectId])
+  useEffect(() => { if (available) void useEpcStore.getState().loadLegal(projectId) }, [available, projectId])
   const live = epcSettings(settings as unknown as Record<string, unknown>).parties
-  const parties: Parties = { ...EMPTY_PARTIES, ...(report.letterhead ?? live) }
+  const parties: Parties = { ...EMPTY_PARTIES, ...(letterhead ?? live) }
   const show = (Object.keys(LABEL) as (keyof Parties)[]).filter((k) => parties[k]?.name || parties[k]?.logo)
   return (
     <div className="mt-printable ex-wrap">

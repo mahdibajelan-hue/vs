@@ -29,7 +29,7 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
-  return <PaperFrame report={c.report}><ReportPaperBody c={c} /></PaperFrame>
+  return <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /></PaperFrame>
 }
 function ReportPaperBody({ c }: { c: PaperCtx }) {
   const { report: r, form } = c

@@ -137,3 +137,21 @@ const ln = (o) => ({ id: 'l', reportId: 'r', lineNo: 1, activityId: 'a', qty: 40
 assert.equal(lineValue(ln({}), 'approved'), 30); assert.equal(lineValue(ln({}), 'approved', 'advisory'), 30)
 assert.equal(lineValue(ln({}), 'approved', 'binding'), 0); assert.equal(lineValue(ln({ employerStatus: 'approved', employerQty: 25 }), 'approved', 'binding'), 25); assert.equal(lineValue(ln({ employerStatus: 'rejected', employerQty: 0 }), 'approved', 'binding'), 0)
 console.log('employer-step tests ok')
+
+// ── assistant: answers only from the facts, says so when it cannot
+import { answer } from './assistant.ts'
+const facts = { today: '2026-01-10', projectName: 'پروژه', progress: { actual: 0.4, planned: 0.5, spi: 0.8 },
+  activities: [{ id: 'a', title: 'جوشکاری', unit: 'عدد', remaining: 100, pct: 0.3, plannedEnd: '2026-01-20', late: true, forecastFinish: '2026-02-01', onTimeProb: 0.1, lateRisk: 'high', unreliable: false, readiness: 'blocked', blockers: ['نقشه'], front: 'شمال' }],
+  stoppages: [{ category: 'material', hours: 30, critical: true }, { category: 'weather', hours: 5, critical: false }], alerts: [{ severity: 'critical', title: 'فعالیت مسدود', reason: 'x' }], ledger: [{ title: 'لوله', mismatches: ['اندازه‌گیری > تأییدشده'] }],
+  lookahead: { ppc: 0.5, committed: 4, missed: [{ title: 'خم', cause: 'کمبود لوله' }] }, pendingReviews: 2,
+  welding: [{ title: 'جوشکاری', remaining: 100, perDay: 10, requiredPerDay: 25, extraCrews: 2, reachable: true, capLabel: null, basis: 'assumed', confidence: 'medium', workDays: 18 }] }
+let an = answer('امروز هر پروژه نسبت به برنامه در چه وضعیتی است؟', facts); assert.ok(an.text.includes('۴۰٫۰٪') || an.text.includes('۴۰'), an.text); assert.ok(an.known); assert.equal(an.asOf, '2026-01-10'); assert.ok(an.sources.length)
+an = answer('کدام جبهه‌ها بیشترین عقب‌ماندگی را دارند و علت اصلی چیست؟', facts); assert.ok(an.text.includes('شمال') && an.text.includes('کمبود مصالح'))
+an = answer('برای جبران عقب‌ماندگی جوشکاری در سه هفته آینده چه منابعی لازم است؟', facts); assert.ok(an.text.includes('۲ اکیپ') && an.text.includes('ضریب فرضی'))
+an = answer('چه موانع مهندسی یا تأمین کالایی اثر دارند؟', facts); assert.ok(an.text.includes('نقشه') && an.text.includes('مسدود'))
+an = answer('کدام تعهدات انجام نشده است؟', facts); assert.ok(an.text.includes('کمبود لوله'))
+an = answer('وضعیت مقادیر اجرایی در مقایسه با صورت‌وضعیت چیست؟', facts); assert.ok(an.text.includes('لوله') && an.text.includes('استحقاق پرداخت'))
+an = answer('چه تصمیم‌هایی لازم است؟', facts); assert.ok(an.text.includes('فعالیت مسدود') && an.text.includes('۲'))
+an = answer('قیمت دلار چند است؟', facts); assert.equal(an.known, false); assert.ok(an.text.includes('ممکن نیست'))
+an = answer('برای جبران جوشکاری چه لازم است', { ...facts, welding: [{ ...facts.welding[0], perDay: null, requiredPerDay: null }] }); assert.ok(an.text.includes('ممکن نیست'))
+console.log('assistant tests ok')
