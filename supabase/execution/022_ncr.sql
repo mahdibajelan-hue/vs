@@ -1,0 +1,6 @@
+-- S15/S16: NCR core + Issue/Risk links as a separate, failure-tolerant step. Tables only for NCR data; ex_qc_allows is NEW (ex_allows / ex_default_perms are untouched).
+-- Tables: ex_ncr (state), ex_ncr_events (append-only history, trigger blocks update/delete), ex_ncr_links (issue/risk link status: linked|pending|failed|broken).
+-- Functions (SECURITY DEFINER, applied live; pg_get_functiondef is the source of truth): ex_qc_allows(uuid,text), ex_ncr_log, ex_ncr_create, ex_ncr_from_finding, ex_ncr_transition, ex_ncr_assign, ex_ncr_link, ex_ncr_links_refresh.
+-- Permission matrix (overridable per project in ex_settings.values_json.qcPerms): see the CASE in ex_qc_allows.
+-- Transitions: open->dispositioned (ncr_disposition, disposition required) · dispositioned->capa (ncr_capa) · dispositioned->verifying (accept_deviation only, ncr_disposition) · capa->verifying (ncr_capa) · verifying->closed|capa (ncr_verify; capa needs a note) · open|dispositioned->void (ncr_void, note required).
+-- Issue link uses im_categories.key 'quality' (the existing ex_raise uses 'construction', which is NOT an im_categories row: issues raised from execution reports fail the FK today).

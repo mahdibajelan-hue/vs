@@ -1,0 +1,10 @@
+-- ROLLBACK LEVELS (never automatic):
+-- R-A  disable: nothing reads these objects unless the UI flag is on (flags.weldRegistry / flags.ncr in ex_settings.values_json).
+-- R-B  git revert of the S12-S16 code commits (does NOT touch the database).
+-- R-C  only if the tables are EMPTY:  check  select count(*) from ex_ncr_events, ex_ncr, ex_ncr_links, ex_line_welds, ex_welds, ex_weld_merges, ex_weld_conflicts, ex_weld_dismissals;  then drop in this order:
+--        drop view ex_weld_suspects; drop function ex_ncr_links_refresh(uuid), ex_ncr_link(uuid,text), ex_ncr_assign(uuid,uuid,date), ex_ncr_transition(uuid,text,text,text), ex_ncr_from_finding(uuid), ex_ncr_create(uuid,uuid,text,text,text,text,uuid), ex_ncr_log(uuid,text,text,text,text), ex_qc_allows(uuid,text);
+--        drop table ex_ncr_links, ex_ncr_events, ex_ncr; drop trigger/function ex_ncr_events_append_only;
+--        drop function ex_weld_conflict_resolve(uuid,text,text), ex_weld_dismiss_suspect(uuid,text), ex_weld_set_status(uuid,text), ex_weld_unmerge(uuid), ex_weld_merge(uuid,uuid,text), ex_weld_sync(uuid), ex_weld_conflict_scan(uuid), ex_weld_n2(text), ex_weld_n1(text);
+--        drop table ex_weld_dismissals, ex_weld_merges, ex_weld_conflicts, ex_line_welds, ex_welds;
+-- R-D  tables WITH data: never dropped automatically; rename instead (alter table x rename to _retired_x_YYYYMMDD) and ask for a separate approval before any deletion.
+-- The registry is only an index over ex_report_lines (their text is untouched), so removing it loses no form data.
