@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ArrowLeft, Camera, CheckCircle2, Copy, FileText, Link2, Lock, LockOpen, RefreshCw, Upload, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { COMP_DOC_ACCEPT } from '../lib/compStorage'
+import { COMP_DOC_ACCEPT, PHOTO_LIMIT_FA } from '../lib/compStorage'
 import { CandidatePhoto } from '../components/CandidatePhoto'
 import { DocumentsGallery } from '../components/DocumentsGallery'
 import { useStaffProfileDocuments } from '../components/useStaffProfileDocuments'
@@ -201,6 +201,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           ) : (
             <span className="text-[10.5px] text-muted">بارگذاری عکس توسط مسئول ارزیابی یا طراح آزمون انجام می‌شود.</span>
           )}
+          <span className="text-[10px] text-muted">{PHOTO_LIMIT_FA}</span>
           <input
             ref={photoRef}
             type="file"

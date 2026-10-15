@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CheckCircle2, FileText, Loader2, Lock, Upload } from 'lucide-react'
 import { FARIN_NAME_FA } from '../../../components/common/Logo'
-import { compAnonClient, compDocErrorFa, getCompDocSignedUrl, removeCompDocObject, uploadCandidateDocument, uploadCompDocAsCandidate, validateCompDoc } from '../lib/compStorage'
+import { compAnonClient, compDocErrorFa, getCompDocSignedUrl, PHOTO_LIMIT_FA, preparePhoto, removeCompDocObject, uploadCandidateDocument, uploadCompDocAsCandidate, validateCompDoc } from '../lib/compStorage'
 import { ProfileForm } from '../components/ProfileForm'
 import { DocumentsGallery } from '../components/DocumentsGallery'
 import type { ProfileDocItem, ProfileDocuments } from '../lib/profileDocuments'
@@ -212,10 +212,16 @@ export function CandidateSelfServicePage({ token: rawToken }: { token: string })
       ? 'این فرم دیگر قابل ویرایش نیست (بررسی شده یا ارزیابی تکمیل شده است).'
       : 'بارگذاری انجام نشد. اتصال اینترنت و حجم/نوع فایل را بررسی کنید و دوباره تلاش کنید.'
 
-  const handlePhotoUpload = async (file: File) => {
+  const handlePhotoUpload = async (rawFile: File) => {
     const previous = photoPreview
-    setPhotoPreview(URL.createObjectURL(file))
     setPhotoError(null)
+    const prepared = await preparePhoto(rawFile)
+    if (!prepared.file) {
+      setPhotoError(prepared.error)
+      return
+    }
+    const file = prepared.file
+    setPhotoPreview(URL.createObjectURL(file))
     setUploadingPhoto(true)
     const { path, error } = await uploadCompDocAsCandidate(file, row!.id, token)
     let failed: string | null = null
@@ -391,6 +397,7 @@ export function CandidateSelfServicePage({ token: rawToken }: { token: string })
               e.target.value = ''
             }}
           />
+          <p className="w-full text-center text-[10px] text-muted">{PHOTO_LIMIT_FA}</p>
           {photoError && <p className="w-full text-center text-[11px] text-red-300">{photoError}</p>}
         </div>
 

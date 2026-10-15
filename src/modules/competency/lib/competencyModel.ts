@@ -298,6 +298,12 @@ export function approvalLevel(isApproved: boolean, overall: number | null | unde
   return isConditionalScore(overall) ? 'conditional' : 'approved'
 }
 
+/** Final verdict is in (assessment completed) and the lead did not approve the candidate. */
+export function isNotQualified(a: { status: string; isApproved: boolean }): boolean {
+  return a.status === 'completed' && !a.isApproved
+}
+export const NOT_QUALIFIED_LABEL = 'عدم تأیید صلاحیت'
+
 export const APPROVAL_LABEL: Record<ApprovalLevel, string> = { none: 'تأیید نشده', approved: 'تأیید شده', conditional: 'تأیید مشروط' }
 
 /** @deprecated kept for the short on-card label; prefer maturityBand for the full guidance text. */

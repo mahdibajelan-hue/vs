@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ArrowLeft, Pencil, User, Wand2 } from 'lucide-react'
 import { useCompetencyStore, type CandidateProfileInput } from '../store/useCompetencyStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, questionsForDomain } from '../lib/competencyModel'
+import { COMPETENCY_DOMAINS, computeCompletion, computeDomainScores, computeOverallPercent, isNotQualified, NOT_QUALIFIED_LABEL, questionsForDomain } from '../lib/competencyModel'
 import { usesLegacyPmRubric, computeCategoryScores, computeRoleCompletion, questionsForAssessment, resolveOfficialAnswers, resolveOfficialCapstone } from '../lib/roleCompetencyModel'
 import { jobRoleLabel } from '../lib/competencyData'
 import type { QuestionType } from '../types'
@@ -309,7 +309,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
   const headerRight = (
     <div className="flex flex-wrap items-center gap-1.5 text-xs text-secondary">
       {/* The candidate's photo on every wizard stage, for every judge — not only on the lead-only results page. */}
-      <CandidatePhoto path={assessment.photoUrl} size={26} openToWork={assessment.workStatus === 'open_to_work'} />
+      <CandidatePhoto path={assessment.photoUrl} size={26} openToWork={assessment.workStatus === 'open_to_work'} notQualified={isNotQualified(assessment)} />
       <AssessmentChainNav assessment={assessment} onOpen={(id) => openAssessment(id, 'profile')} />
       <User size={13} className="text-purple-300" />
       <span className="font-bold text-primary">{myName ?? '—'}</span>
@@ -366,8 +366,9 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
           <div className="glass-panel space-y-3 rounded-2xl p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <CandidatePhoto path={assessment.photoUrl} size={64} openToWork={assessment.workStatus === 'open_to_work'} />
+                <CandidatePhoto path={assessment.photoUrl} size={64} openToWork={assessment.workStatus === 'open_to_work'} notQualified={isNotQualified(assessment)} />
                 <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
+                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-300 ring-1 ring-red-400/40">{NOT_QUALIFIED_LABEL}</span>}
               </div>
               {/* Only the lead can save the profile (comp_assessments update = comp_is_lead). */}
               {isLead && (

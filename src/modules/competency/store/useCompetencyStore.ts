@@ -102,7 +102,7 @@ import {
   type CompRoleAssignmentRow,
   type ProfileLiteRow,
 } from '../lib/competencyData'
-import { compDocErrorFa, removeCompDocObject, uploadCompDoc, uploadCompDocument, validateCompDoc } from '../lib/compStorage'
+import { compDocErrorFa, preparePhoto, removeCompDocObject, uploadCompDoc, uploadCompDocument, validateCompDoc } from '../lib/compStorage'
 import { pickDiverseQuestions } from '../lib/questionSelection'
 
 // Fire-and-forget audit logging (spec section 31) — never blocks or fails the primary action it
@@ -1005,8 +1005,13 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
     if (reportError('حذف ارزیابی', error)) set({ assessments: previous })
   },
 
-  uploadPhoto: async (id, file) => {
-    const { path, error: uploadErr } = await uploadCompDoc(file, id)
+  uploadPhoto: async (id, rawFile) => {
+    const prepared = await preparePhoto(rawFile)
+    if (!prepared.file) {
+      reportError('بارگذاری عکس پرسنلی', { message: prepared.error ?? 'عکس نامعتبر' })
+      return
+    }
+    const { path, error: uploadErr } = await uploadCompDoc(prepared.file, id)
     if (uploadErr || !path) {
       reportError('بارگذاری عکس پرسنلی', { message: uploadErr ?? 'خطای نامشخص' })
       return

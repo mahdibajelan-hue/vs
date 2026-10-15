@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { User } from 'lucide-react'
+import { User, UserX } from 'lucide-react'
+import { NOT_QUALIFIED_LABEL } from '../lib/competencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { OpenToWorkRing } from './OpenToWorkRing'
 
@@ -10,7 +11,23 @@ import { OpenToWorkRing } from './OpenToWorkRing'
  * judges never saw it. Readable by the whole team (and, as the current photo, by any signed-in user)
  * through comp_docs_staff_can_read (schema.sql Section 55).
  */
-export function CandidatePhoto({ path, size = 56, className = '', openToWork = false }: { path: string | null | undefined; size?: number; className?: string; openToWork?: boolean }) {
+export function CandidatePhoto({
+  path,
+  size = 56,
+  className = '',
+  openToWork = false,
+  link = true,
+  notQualified = false,
+}: {
+  path: string | null | undefined
+  size?: number
+  className?: string
+  openToWork?: boolean
+  /** false → plain image (no full-size link), so a click falls through to the surrounding row/button. */
+  link?: boolean
+  /** Final verdict is «عدم تأیید صلاحیت» → red mark on the photo corner. */
+  notQualified?: boolean
+}) {
   const [url, setUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -31,18 +48,34 @@ export function CandidatePhoto({ path, size = 56, className = '', openToWork = f
     </span>
   )
 
-  const photo = url ? (
+  const photo = url && link ? (
     <a href={url} target="_blank" rel="noopener noreferrer" title="نمایش عکس در اندازه کامل">
       {box}
     </a>
   ) : (
     box
   )
-  return openToWork ? (
+  const ringed = openToWork ? (
     <OpenToWorkRing active size={size} shape="circle">
       {photo}
     </OpenToWorkRing>
   ) : (
     photo
+  )
+  if (!notQualified) return ringed
+  const m = Math.max(12, Math.round(size * 0.42))
+  return (
+    <span className="relative inline-flex shrink-0">
+      {ringed}
+      <span
+        role="img"
+        aria-label={NOT_QUALIFIED_LABEL}
+        title={NOT_QUALIFIED_LABEL}
+        className="pointer-events-none absolute -bottom-0.5 -left-0.5 flex items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-[var(--fx-ring-hole,#0b1020)]"
+        style={{ width: m, height: m }}
+      >
+        <UserX size={Math.round(m * 0.62)} aria-hidden />
+      </span>
+    </span>
   )
 }

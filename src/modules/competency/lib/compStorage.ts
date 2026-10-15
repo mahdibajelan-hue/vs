@@ -33,6 +33,45 @@ export function compDocErrorFa(message: string | null | undefined): string {
   return 'بارگذاری انجام نشد. اتصال اینترنت و حجم/نوع فایل را بررسی کنید و دوباره تلاش کنید.'
 }
 
+/** Personnel photo limits: jpg/png only; anything larger than the pixel box or byte budget is
+ * downscaled and re-encoded as JPEG in the browser before upload; only an unreadable image or a
+ * source above PHOTO_SOURCE_MAX_BYTES is refused. */
+export const PHOTO_MAX_SIDE_PX = 600
+export const PHOTO_MAX_BYTES = 150 * 1024
+export const PHOTO_SOURCE_MAX_BYTES = 8 * 1024 * 1024
+export const PHOTO_LIMIT_FA = 'عکس حداکثر ۶۰۰×۶۰۰ پیکسل و ۱۵۰ کیلوبایت (JPG/PNG)؛ عکس بزرگ‌تر خودکار کوچک می‌شود.'
+
+export async function preparePhoto(file: File): Promise<{ file: File | null; error: string | null }> {
+  if (!['jpg', 'jpeg', 'png'].includes(extensionOf(file))) return { file: null, error: 'فقط عکس JPG یا PNG قابل بارگذاری است.' }
+  if (file.size > PHOTO_SOURCE_MAX_BYTES) return { file: null, error: 'حجم عکس بیش از ۸ مگابایت است؛ عکس کوچک‌تری انتخاب کنید.' }
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file)
+  } catch {
+    return { file: null, error: 'فایل انتخاب‌شده عکس معتبری نیست.' }
+  }
+  const scale = Math.min(1, PHOTO_MAX_SIDE_PX / Math.max(bitmap.width, bitmap.height))
+  if (scale === 1 && file.size <= PHOTO_MAX_BYTES) {
+    bitmap.close()
+    return { file, error: null }
+  }
+  const w = Math.max(1, Math.round(bitmap.width * scale)), h = Math.max(1, Math.round(bitmap.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) { bitmap.close(); return { file: null, error: 'پردازش عکس در این مرورگر ممکن نیست.' } }
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, w, h)
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+  for (const q of [0.85, 0.75, 0.65, 0.55, 0.45]) {
+    const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', q))
+    if (blob && blob.size <= PHOTO_MAX_BYTES) return { file: new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }), error: null }
+  }
+  return { file: null, error: 'عکس را نمی‌توان به کمتر از ۱۵۰ کیلوبایت رساند؛ عکس ساده‌تری انتخاب کنید.' }
+}
+
 let anonClient: SupabaseClient | null = null
 
 /** A session-less client for the candidate self-service page: the candidate storage policies are

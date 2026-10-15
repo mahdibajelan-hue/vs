@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ClipboardList, Plus, Search, Trash2, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
-import { approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, maturityBand } from '../lib/competencyModel'
+import { approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, isNotQualified, maturityBand } from '../lib/competencyModel'
 import { computeCategoryScores, usesLegacyPmRubric, questionsForAssessment, resolveOfficialAnswers } from '../lib/roleCompetencyModel'
 import { DashboardOverview, MyTasksView, type MyTask } from '../components/DashboardOverview'
 import { ApprovalMedal } from '../components/ApprovalMedal'
@@ -463,8 +463,8 @@ function TalentPoolRow({
 
   return (
     <div className="fx-sub group flex items-center gap-2.5 rounded-lg border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
-      <CandidatePhoto path={a.photoUrl} size={26} />
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5 text-right">
+        <CandidatePhoto path={a.photoUrl} size={26} link={false} notQualified={isNotQualified(a)} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-[12.5px] font-bold">{a.candidateName}</p>
