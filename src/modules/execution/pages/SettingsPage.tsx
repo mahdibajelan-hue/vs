@@ -9,12 +9,14 @@ import { COMMON_FIELDS, FORMS, FORM_BY_KEY, FORM_GROUP_LABEL_FA } from '../lib/f
 import { Chip, DataTable, NumInput, Section, type Col } from '../../finance/components/fn'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Empty, fa } from '../components/common'
+import { EpcSettingsView } from './EpcSettingsView'
 import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExProjectRole, type ExRole } from '../types'
 
 export function SettingsPage({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'rules') return <RulesView projectId={projectId} />
   if (sub === 'forms') return <FormsView projectId={projectId} />
   if (sub === 'map') return <MapView projectId={projectId} />
+  if (sub === 'epc') return <EpcSettingsView projectId={projectId} />
   return <RolesView projectId={projectId} />
 }
 

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ClipboardList, FileBarChart2, Gauge, HardHat, Inbox, ListTree, Loader2, Settings2, TrendingUp } from 'lucide-react'
+import { AlertTriangle, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, ListTree, Loader2, Settings2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -13,9 +13,10 @@ import { useExecutionStore } from './store/useExecutionStore'
 import { useMaterialControlStore } from '../material/store/useMaterialControlStore'
 import { useMaterialStore } from '../material/store/useMaterialStore'
 import { useExecutionModel } from './lib/useExecutionModel'
+import { PortfolioStrip } from './components/epc/PortfolioStrip'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'activities' | 'daily' | 'review' | 'progress' | 'reports' | 'gaps' | 'settings'
+export type ExTab = 'dashboard' | 'activities' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'reports' | 'gaps' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
@@ -23,9 +24,11 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
-  { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
+  { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
+  { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'eng', label: 'مدارک مهندسی' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
+  { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
-  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }] },
+  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }, { id: 'epc', label: 'کنترل EPC (سربرگ، کارفرما، تحفظ، بهره‌وری)' }] },
 ]
 
 type P = { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }
@@ -35,6 +38,8 @@ const Activities = L(() => import('./pages/ActivitiesPage'), 'ActivitiesPage')
 const Daily = L(() => import('./pages/DailyPage'), 'DailyPage')
 const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
+const Productivity = L(() => import('./pages/ProductivityPage'), 'ProductivityPage')
+const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -87,6 +92,8 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'daily': return <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
+      case 'productivity': return <Productivity {...p} />
+      case 'plan': return <Plan {...p} />
       case 'reports': return <Reports {...p} />
       case 'gaps': return <Gaps {...p} />
       case 'settings': return <Settings {...p} />
@@ -138,6 +145,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
                 </div>
               </div>
             )}
+            {tab === 'dashboard' && !locked && <PortfolioStrip current={projectId} onPick={setProjectId} />}
             <Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}>{body(projectId)}</Suspense>
           </div>
         )}

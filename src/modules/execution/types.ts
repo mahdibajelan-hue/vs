@@ -27,6 +27,8 @@ export interface Report {
   id: string; projectId: string; formKey: string; reportNo: string; reportDate: string; contractorOrgId: string | null; front: string; station: string; shift: string
   status: ReportStatus; data: Record<string, unknown>; notes: string; missing: string[]; completionOf: string | null; dueDate: string | null
   createdBy: string | null; createdAt: string; submittedBy: string | null; submittedAt: string | null; reviewedBy: string | null; reviewedAt: string | null; reviewNote: string
+  /** names and logos of the parties frozen at first submission (historical letterhead) */
+  letterhead?: Record<string, { name: string; logo: string }> | null
 }
 export type LineStatus = 'pending' | 'approved' | 'rejected' | 'returned'
 export const LINE_STATUS_LABEL_FA: Record<LineStatus, string> = { pending: 'در انتظار', approved: 'تأییدشده', rejected: 'ردشده', returned: 'برگشت‌خورده' }

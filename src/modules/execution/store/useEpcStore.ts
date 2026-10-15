@@ -39,6 +39,7 @@ interface State {
   removePrereq: (id: string) => Promise<boolean>
   saveLookahead: (l: Partial<LookaheadRow> & { projectId: string; weekStart: string; activityId: string }) => Promise<boolean>
   saveDeps: (projectId: string, deps: Omit<DepRow, 'id' | 'projectId'>[]) => Promise<boolean>
+  applySchedule: (projectId: string, dates: { activityId: string; start: string | null; finish: string | null }[]) => Promise<number>
   logImport: (projectId: string, fileName: string, summary: Record<string, unknown>, issues: unknown[]) => Promise<void>
   saveMeasurement: (m: Partial<MeasurementRow> & { projectId: string; activityId: string; periodKey: string }) => Promise<boolean>
   employerReview: (reportId: string, decisions: { lineId: string; decision: 'approved' | 'rejected' | 'returned'; qty?: number; note?: string }[]) => Promise<boolean>
@@ -119,6 +120,19 @@ export const useEpcStore = create<State>((set, get) => ({
     const { error } = await supabase.from('ex_activity_deps').upsert(deps.map((d) => ({ project_id: projectId, pred_id: d.predId, succ_id: d.succId, dep_type: d.type, lag_days: d.lag })), { onConflict: 'pred_id,succ_id' })
     if (fail('ذخیرهٔ وابستگی‌ها', error)) return false
     await get().fetchAll(); return true
+  },
+  applySchedule: async (projectId, dates) => {
+    let done = 0
+    for (const d of dates) {
+      const patch: Record<string, string> = {}
+      if (d.start) patch.planned_start = d.start
+      if (d.finish) patch.planned_end = d.finish
+      if (!Object.keys(patch).length) continue
+      const { error } = await supabase.from('ex_activities').update(patch).eq('id', d.activityId).eq('project_id', projectId)
+      if (fail('اعمال تاریخ‌های برنامه', error)) break
+      done++
+    }
+    return done
   },
   logImport: async (projectId, fileName, summary, issues) => {
     await supabase.from('ex_schedule_imports').insert({ project_id: projectId, file_name: fileName, summary, issues })

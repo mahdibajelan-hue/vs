@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -11,9 +11,14 @@ import { FORM_BY_KEY } from '../lib/formCatalog'
 import { GAP_KIND_LABEL_FA } from '../types'
 import { buildStatement } from '../lib/statement'
 import type { ExTab } from '../ExecutionApp'
+import { ExecutionPulse } from '../components/epc/ExecutionPulse'
+import { AlertsPanel } from '../components/epc/AlertsPanel'
+import { useEpcModel } from '../lib/useEpcModel'
 
 export function DashboardPage({ projectId, onGo }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) {
   const m = useExecutionModel(projectId)
+  const epc = useEpcModel(projectId)
+  const [pulseKind, setPulseKind] = useState<'pipeline' | 'station' | 'all'>('all')
   const ex = useExecutionStore()
   const waiting = m.reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved')
   const returned = m.reports.filter((r) => r.status === 'returned' || r.status === 'incomplete')
@@ -41,6 +46,8 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
         <KpiCard i={5} label="کارکرد در انتظار تأیید (ریال)" value={fa(Math.round(money.pending))} tone={money.pending ? 'warn' : 'good'} sub="هنوز در صورت‌وضعیت حساب نمی‌شود" onClick={() => onGo('review')} />
         <KpiCard i={3} label="کسری گزارش‌ها" value={fa(gaps.length)} tone={gaps.length ? 'bad' : 'good'} sub="دریافت‌نشده، ناقص، ناسازگار" onClick={() => onGo('gaps')} />
       </div>
+      <Tile title="برنامه در برابر عملکرد واقعی" hint="نمایش زمانی از داده‌های تأییدشده و برنامهٔ مصوب"><div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>{([['all', 'همهٔ شاخص‌ها'], ['pipeline', 'خط لوله'], ['station', 'ایستگاه و تأسیسات']] as const).map(([k, l]) => <button key={k} className={`mt-pill${pulseKind === k ? ' on' : ''}`} onClick={() => setPulseKind(k)}>{l}</button>)}</div><ExecutionPulse m={m} kind={pulseKind} /></Tile>
+      <AlertsPanel alerts={epc.alerts} onGo={onGo} />
       <div className="mt-two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 12 }}>
         <Tile title="منحنی پیشرفت" hint="برنامه، ثبت‌شده و تأییدشده"><ProgressCurve data={m.curve} h={230} /></Tile>
         <Tile title="کارهای شما" hint={mine.length ? undefined : 'نقشی در این پروژه ندارید (مدیر سامانه همه‌چیز را می‌بیند)'}>

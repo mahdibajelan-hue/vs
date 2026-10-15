@@ -9,6 +9,7 @@ import { EQUIP_COLS, MAN_COLS, resUsed, type ResField } from '../lib/resourceCat
 import { asList, asNext } from './DayNotes'
 import { WeldingPaper } from './WeldingPaper'
 import { FormPaper, PAPER_FORMS } from './FormPapers'
+import { PaperFrame } from './epc/PaperFrame'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -28,6 +29,9 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
+  return <PaperFrame report={c.report}><ReportPaperBody c={c} /></PaperFrame>
+}
+function ReportPaperBody({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
   if (form?.key === 'welding' || form?.key === 'fitup') return <WeldingPaper c={c} />
   if (form && PAPER_FORMS.has(form.key)) return <FormPaper c={c} />
