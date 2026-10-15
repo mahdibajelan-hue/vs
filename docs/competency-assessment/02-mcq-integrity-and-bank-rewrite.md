@@ -24,3 +24,13 @@ Difficulty labels were uncalibrated and no human had reviewed any item (all 1054
 Required (≥ 10 chars) for negative decisions (revoke, not approved, open-to-work, not assigned); optional for approve / on-project.
 The note is written through `comp_add_decision_note` (lead or site admin) and readable only by a **site admin** (`is_admin_user()` RLS on `comp_decision_notes`; no other RPC, report or public page returns it).
 Verified on the live DB (rolled back): non-admin sees 0 rows, non-lead RPC is `forbidden`, admin sees the row.
+
+## Bank rewrite completed for all 24 roles (2026-10-15)
+- Every role's MCQ bank was rewritten (`015_mcq_rewrite_<role>.sql`: short, equally-detailed options; no absolute-word distractors; correct option position rotated) and **approved by the owner's instruction (no manual review)**.
+  A few single items in `site_supervisor` / `supervision_manager` were tightened afterwards directly on the live DB (22 options; same change pattern).
+- Two checks are now part of the rewrite tooling: the existing `mcqQuality` lint, and a *shared-first-word* cue check (e.g. three distractors start with «چون…» and the key does not).
+- Live audit over all 1054 single-answer items: correct option > 1.1× the longest distractor in **3 %** of items (was ~95 %); strictly longest in 32 % (chance = 25 %).
+- Where the original key was wrong (e.g. critical path = "highest-cost activities", FS relation = "finish together", total float = "workers' rest time", CPI-based EAC = "remaining cost zero") the key was corrected while rewriting.
+- Structured interview bank: 4 incomplete HSE rows completed; 144 STAR behavioural questions added (`019_behavioral_star_questions.sql`: 6 competencies × 24 roles, category `BEHAVIORAL`, with key points, excellent-answer indicators and common mistakes).
+- Remaining: ~190 interview rows have no `standard_reference`; calibration of difficulty labels from real item statistics.
+- Security note: the answer keys live in `015_*.sql` — keep the repository private.
