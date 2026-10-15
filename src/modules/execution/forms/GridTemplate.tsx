@@ -65,14 +65,4 @@ export function GridSheet({ tpl, values = {}, logos = {}, mark, onCell, selected
   )
 }
 
-/** Print geometry taken from the sheet's page setup. The scale is the Excel scale, reduced when needed so that the sheet fits one page wide. */
-export function printPlan(tpl: GridTemplate): { css: string; scale: number; pageW: number; excelScale: number } {
-  const A4 = tpl.print.orientation === 'landscape' ? { w: 11.69, h: 8.27 } : { w: 8.27, h: 11.69 }
-  const m = tpl.print.margins
-  const pageW = (A4.w - m.left - m.right) * 96
-  const total = tpl.cols.filter((c) => !c.hidden).reduce((s, c) => s + c.w, 0)
-  const excelScale = (tpl.print.scale ?? 100) / 100
-  const scale = Math.min(excelScale, pageW / total)
-  const css = `@page { size: A4 ${tpl.print.orientation}; margin: ${m.top}in ${m.right}in ${m.bottom}in ${m.left}in; }`
-  return { css, scale, pageW, excelScale }
-}
+export { printPlan } from './printPlan'
