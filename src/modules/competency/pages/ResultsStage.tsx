@@ -38,7 +38,6 @@ import {
   User,
   Users,
   Wrench,
-  UserX,
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
@@ -57,6 +56,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { generatePersonalityProfile } from '../lib/personalityAnalysis'
 import { APPROVAL_LABEL, approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, isNotQualified, NOT_QUALIFIED_LABEL, tierColor } from '../lib/competencyModel'
+import { RejectMark } from '../components/CandidatePhoto'
 import { OpenToWorkRing, WorkStatusChip } from '../components/OpenToWorkRing'
 import { WorkStatusEditor } from '../components/WorkStatusEditor'
 import { DecisionNoteDialog } from '../components/DecisionNoteDialog'
@@ -583,11 +583,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                   {photoUrl ? <img src={photoUrl} alt={`عکس ${assessment.candidateName}`} className="h-full w-full object-cover" /> : <User size={32} className="fx-muted" />}
                 </div>
               </OpenToWorkRing>
-              {isNotQualified(assessment) && (
-                <span className="absolute -bottom-1.5 -left-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-2 ring-[var(--fx-ring-hole)]" title={NOT_QUALIFIED_LABEL}>
-                  <UserX size={14} />
-                </span>
-              )}
+              {isNotQualified(assessment) && <RejectMark size={96} />}
               {assessment.isApproved && (
                 <span
                   className={`absolute -left-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-white shadow-lg ring-2 ring-[var(--fx-ring-hole)] ${assessment.workStatus === 'open_to_work' ? '-top-1.5' : '-bottom-1.5'} ${approval === 'conditional' ? '' : 'bg-emerald-500'}`}
@@ -602,7 +598,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
               <p className="flex items-center justify-center gap-1.5 text-xl font-black sm:justify-start">
                 {assessment.candidateName}
                 {assessment.isApproved && <ApprovalMedal level={approval} />}
-                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10.5px] font-bold text-red-300 ring-1 ring-red-400/40">{NOT_QUALIFIED_LABEL}</span>}
+                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10.5px] font-bold text-red-300 ring-1 ring-red-400/40">✕ Reject · {NOT_QUALIFIED_LABEL}</span>}
                 {status.state === 'final' && overall != null && overall >= 85 && <Star size={17} className="fill-amber-400 text-amber-400" />}
               </p>
               <p className="fx-text-2 text-[12px]">متقاضی سمت: {assessment.candidatePosition || roleLabel}</p>

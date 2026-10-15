@@ -368,7 +368,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
               <div className="flex items-center gap-3">
                 <CandidatePhoto path={assessment.photoUrl} size={64} openToWork={assessment.workStatus === 'open_to_work'} notQualified={isNotQualified(assessment)} />
                 <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
-                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-300 ring-1 ring-red-400/40">{NOT_QUALIFIED_LABEL}</span>}
+                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-300 ring-1 ring-red-400/40">✕ Reject · {NOT_QUALIFIED_LABEL}</span>}
               </div>
               {/* Only the lead can save the profile (comp_assessments update = comp_is_lead). */}
               {isLead && (

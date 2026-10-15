@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { User, UserX } from 'lucide-react'
+import { User, X } from 'lucide-react'
 import { NOT_QUALIFIED_LABEL } from '../lib/competencyModel'
 import { getCompDocSignedUrl } from '../lib/compStorage'
 import { OpenToWorkRing } from './OpenToWorkRing'
@@ -63,19 +63,29 @@ export function CandidatePhoto({
     photo
   )
   if (!notQualified) return ringed
-  const m = Math.max(12, Math.round(size * 0.42))
   return (
     <span className="relative inline-flex shrink-0">
       {ringed}
-      <span
-        role="img"
-        aria-label={NOT_QUALIFIED_LABEL}
-        title={NOT_QUALIFIED_LABEL}
-        className="pointer-events-none absolute -bottom-0.5 -left-0.5 flex items-center justify-center rounded-full bg-red-600 text-white shadow ring-2 ring-[var(--fx-ring-hole,#0b1020)]"
-        style={{ width: m, height: m }}
-      >
-        <UserX size={Math.round(m * 0.62)} aria-hidden />
-      </span>
+      <RejectMark size={size} />
     </span>
   )
+}
+
+/** Red ✕ Reject stamp straddling the bottom edge of a photo (final verdict: not qualified). */
+export function RejectMark({ size, className = '' }: { size: number; className?: string }) {
+  const fs = Math.max(7, Math.round(size * 0.15))
+  return (
+    <span
+      role="img"
+      aria-label={NOT_QUALIFIED_LABEL}
+      title={NOT_QUALIFIED_LABEL}
+      dir="ltr"
+      className={`pointer-events-none absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-px whitespace-nowrap rounded-full bg-red-600 font-black uppercase leading-none tracking-wide text-white shadow ring-1 ring-black/40 ${className}`}
+      style={{ fontSize: fs, padding: `${Math.round(fs * 0.22)}px ${Math.round(fs * 0.45)}px` }}
+    >
+      <X size={fs + 1} strokeWidth={3.5} aria-hidden />
+      Reject
+    </span>
+  )
+}
 }
