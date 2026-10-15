@@ -190,5 +190,38 @@ begin
     'scoringVersion', v_t.scoring_version, 'createdAt', v_t.created_at, 'items', v_items);
 end $$;
 
--- Guard: NUMERIC items skip the four-options rule; MULTI/ORDER/NUMERIC need a valid key; type/key count as content changes.
--- (Full function body is applied live; see the guard in the previous schema plus these three changes.)
+
+create or replace function comp_mcq_questions_guard() returns trigger language plpgsql set search_path to 'public' as $$
+declare
+  v_trusted boolean := current_user in ('postgres', 'supabase_admin', 'service_role') or comp_is_module_admin();
+  v_content_changed boolean;
+begin
+  if new.item_type <> 'NUMERIC' and (select count(distinct btrim(o)) from jsonb_array_elements_text(new.options) o where btrim(o) <> '') <> 4 then
+    raise exception 'invalid options: an MCQ needs four distinct, non-empty options';
+  end if;
+  if new.item_type = 'NUMERIC' and (new.answer_key is null or (new.answer_key->>'value') is null) then
+    raise exception 'invalid answer key: a numeric item needs a value';
+  end if;
+  if new.item_type in ('MULTI','ORDER') and (new.answer_key is null or jsonb_typeof(new.answer_key) <> 'array' or jsonb_array_length(new.answer_key) = 0) then
+    raise exception 'invalid answer key: this item type needs an index array';
+  end if;
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then new.created_by := auth.uid(); end if;
+    new.version := 1; new.usage_count := 0;
+    if not v_trusted then new.approval_status := 'PENDING_REVIEW'; end if;
+    return new;
+  end if;
+  v_content_changed := (new.job_role, new.category, new.topic, new.difficulty, new.stem_fa, new.options, new.correct_option, new.explanation_fa, new.standard_ref, new.item_type, new.answer_key)
+    is distinct from (old.job_role, old.category, old.topic, old.difficulty, old.stem_fa, old.options, old.correct_option, old.explanation_fa, old.standard_ref, old.item_type, old.answer_key);
+  if not v_trusted then
+    if new.approval_status = 'APPROVED' and old.approval_status <> 'APPROVED' then raise exception 'forbidden: only a module admin can approve an MCQ'; end if;
+    if new.usage_count is distinct from old.usage_count or new.last_used_at is distinct from old.last_used_at then raise exception 'forbidden: usage counters are maintained by test generation'; end if;
+    if v_content_changed then new.approval_status := 'PENDING_REVIEW'; end if;
+  end if;
+  new.created_by := old.created_by; new.created_at := old.created_at;
+  if v_content_changed then new.version := old.version + 1; else new.version := old.version; end if;
+  if (to_jsonb(new) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by']) = (to_jsonb(old) - array['usage_count', 'last_used_at', 'updated_at', 'updated_by']) then
+    new.updated_at := old.updated_at; new.updated_by := old.updated_by;
+  else new.updated_at := now(); new.updated_by := auth.uid(); end if;
+  return new;
+end $$;

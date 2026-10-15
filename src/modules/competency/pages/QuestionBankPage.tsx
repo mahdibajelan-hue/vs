@@ -34,6 +34,7 @@ import {
   type McqQuestion,
   type McqQuestionInput,
 } from '../lib/mcqData'
+import { MCQ_ITEM_TYPE_LABEL_FA, type McqItemType } from '../lib/mcqScoring'
 import {
   PERSONALITY_APPROVAL_STATUS_LABEL_FA,
   PERSONALITY_COMPLEXITY_LABEL_FA,
@@ -1114,6 +1115,8 @@ const MCQ_EMPTY_INPUT: McqQuestionInput = {
   stemFa: '',
   options: ['', '', '', ''],
   correctOption: 0,
+  itemType: 'SINGLE',
+  answerKey: null,
   explanationFa: '',
   standardRef: '',
   active: true,
@@ -1162,14 +1165,14 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
       if (activeFilter === 'active' && !q.active) return false
       if (activeFilter === 'inactive' && q.active) return false
       if (search.trim() && !q.stemFa.includes(search.trim()) && !q.topic.includes(search.trim())) return false
-      if (flawOnly && mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }).level === 'OK') return false
+      if (flawOnly && (q.itemType !== 'SINGLE' || mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }).level === 'OK')) return false
       return true
     })
   }, [bank, roleFilter, categoryFilter, difficultyFilter, activeFilter, search, flawOnly])
 
   // item-quality health of the questions in scope (the chosen role, otherwise the whole bank)
   const scope = useMemo(() => bank.filter((q) => roleFilter === 'all' || q.jobRole === roleFilter), [bank, roleFilter])
-  const health = useMemo(() => bankHealth(scope.map((q) => ({ stem: q.stemFa, options: q.options, correct: q.correctOption }))), [scope])
+  const health = useMemo(() => bankHealth(scope.filter((q) => q.itemType === 'SINGLE').map((q) => ({ stem: q.stemFa, options: q.options, correct: q.correctOption }))), [scope])
   const pendingInScope = useMemo(() => scope.filter((q) => q.approvalStatus === 'PENDING_REVIEW' && q.active), [scope])
   const approveAllPending = async () => {
     if (roleFilter === 'all' || pendingInScope.length === 0) return
@@ -1372,7 +1375,8 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                   <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.usageCount.toLocaleString('fa-IR')} بار استفاده‌شده</span>
                 )}
                 {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
-                {(() => { const r = mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }); return r.level === 'OK' ? null : (<span title={r.flaws.map((f) => `${MCQ_FLAW_LABEL_FA[f.kind]}${f.detail ? ` — ${f.detail}` : ''}`).join('\n')} className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${r.level === 'BAD' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>{r.level === 'BAD' ? 'ایراد جدی' : 'نیازمند بازبینی'}: {MCQ_FLAW_LABEL_FA[r.flaws[0].kind]}</span>) })()}
+                {q.itemType !== 'SINGLE' && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">{MCQ_ITEM_TYPE_LABEL_FA[q.itemType]}</span>}
+                {(() => { if (q.itemType !== 'SINGLE') return null; const r = mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }); return r.level === 'OK' ? null : (<span title={r.flaws.map((f) => `${MCQ_FLAW_LABEL_FA[f.kind]}${f.detail ? ` — ${f.detail}` : ''}`).join('\n')} className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${r.level === 'BAD' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>{r.level === 'BAD' ? 'ایراد جدی' : 'نیازمند بازبینی'}: {MCQ_FLAW_LABEL_FA[r.flaws[0].kind]}</span>) })()}
                 <span
                   className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
                     q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
@@ -1382,18 +1386,28 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                 </span>
               </div>
               <p className="text-xs leading-6">{q.stemFa}</p>
+              {q.itemType === 'NUMERIC' ? (
+                <p className="num mt-2 text-[11px] font-bold text-emerald-300">
+                  پاسخ درست: {String((q.answerKey as { value?: number } | null)?.value ?? '—')} {(q.answerKey as { unit?: string } | null)?.unit ?? ''} (تلرانس {String((q.answerKey as { tolPct?: number } | null)?.tolPct ?? 1)}٪)
+                </p>
+              ) : (
               <div className="mt-2 space-y-1">
-                {q.options.map((opt, i) => (
+                {q.options.map((opt, i) => {
+                  const keyArr = Array.isArray(q.answerKey) ? (q.answerKey as number[]) : []
+                  const ok = q.itemType === 'MULTI' ? keyArr.includes(i) : q.itemType === 'ORDER' ? false : i === q.correctOption
+                  return (
                   <p
                     key={i}
-                    className={`flex items-start gap-1.5 text-[11px] leading-6 ${i === q.correctOption ? 'font-bold text-emerald-300' : 'text-secondary'}`}
+                    className={`flex items-start gap-1.5 text-[11px] leading-6 ${ok ? 'font-bold text-emerald-300' : 'text-secondary'}`}
                   >
-                    <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{MCQ_OPTION_LETTERS[i]}.</span>
+                    <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{q.itemType === 'ORDER' ? (keyArr.indexOf(i) + 1).toLocaleString('fa-IR') : MCQ_OPTION_LETTERS[i]}.</span>
                     {opt}
-                    {i === q.correctOption && <CheckCircle2 size={11} className="mt-0.5 shrink-0" />}
+                    {ok && <CheckCircle2 size={11} className="mt-0.5 shrink-0" />}
                   </p>
-                ))}
+                  )
+                })}
               </div>
+              )}
               {q.explanationFa && <p className="mt-1.5 text-[10.5px] leading-6 text-muted">توضیح: {q.explanationFa}</p>}
               {isModuleAdmin && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1484,6 +1498,8 @@ function McqQuestionEditorModal({
           stemFa: initial.stemFa,
           options: [...initial.options],
           correctOption: initial.correctOption,
+          itemType: initial.itemType,
+          answerKey: initial.answerKey,
           explanationFa: initial.explanationFa,
           standardRef: initial.standardRef,
           active: initial.active,
@@ -1493,8 +1509,17 @@ function McqQuestionEditorModal({
   const [saving, setSaving] = useState(false)
 
   const setOption = (i: number, value: string) => setForm((f) => ({ ...f, options: f.options.map((o, idx) => (idx === i ? value : o)) }))
-  const optionsOk = form.options.every((o) => o.trim().length > 0) && new Set(form.options.map((o) => o.trim())).size === 4
-  const canSubmit = form.topic.trim() && form.stemFa.trim().length > 10 && optionsOk
+  const itemType: McqItemType = form.itemType ?? 'SINGLE'
+  const numKey = (form.answerKey && !Array.isArray(form.answerKey) ? form.answerKey : { value: NaN, tolPct: 1, unit: '' }) as { value: number; tolPct?: number; unit?: string }
+  const multiKey = Array.isArray(form.answerKey) ? (form.answerKey as number[]) : []
+  const changeType = (t: McqItemType) => setForm((f) => ({
+    ...f, itemType: t,
+    answerKey: t === 'ORDER' ? [0, 1, 2, 3] : t === 'MULTI' ? [] : t === 'NUMERIC' ? { value: NaN, tolPct: 1, unit: '' } : null,
+    options: t === 'NUMERIC' ? ['', '', '', ''] : f.options,
+  }))
+  const optionsOk = itemType === 'NUMERIC' ? true : form.options.every((o) => o.trim().length > 0) && new Set(form.options.map((o) => o.trim())).size === 4
+  const keyOk = itemType === 'NUMERIC' ? Number.isFinite(numKey.value) : itemType === 'MULTI' ? multiKey.length >= 1 && multiKey.length <= 3 : true
+  const canSubmit = form.topic.trim() && form.stemFa.trim().length > 10 && optionsOk && keyOk
 
   const submit = async () => {
     if (!canSubmit) return
@@ -1544,6 +1569,12 @@ function McqQuestionEditorModal({
           </FormField>
         </div>
 
+        <FormField label="نوع سؤال">
+          <select value={itemType} onChange={(e) => changeType(e.target.value as McqItemType)} className="input" disabled={!!initial}>
+            {(['SINGLE', 'MULTI', 'NUMERIC', 'ORDER'] as McqItemType[]).map((t) => <option key={t} value={t}>{MCQ_ITEM_TYPE_LABEL_FA[t]}</option>)}
+          </select>
+        </FormField>
+
         <FormField label="موضوع (برای گزارش جامعیت — مثلاً «WPS/PQR»)">
           <input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} className="input" list="mcq-existing-topics" />
           <datalist id="mcq-existing-topics">
@@ -1557,20 +1588,43 @@ function McqQuestionEditorModal({
           <textarea value={form.stemFa} onChange={(e) => setForm((f) => ({ ...f, stemFa: e.target.value }))} rows={3} className="input resize-none" />
         </FormField>
 
+        {itemType === 'NUMERIC' ? (
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField label="پاسخ درست (عدد) *">
+              <input type="number" step="any" dir="ltr" value={Number.isFinite(numKey.value) ? numKey.value : ''} onChange={(e) => setForm((f) => ({ ...f, answerKey: { ...numKey, value: e.target.value === '' ? NaN : Number(e.target.value) } }))} className="input" />
+            </FormField>
+            <FormField label="تلرانس (٪)">
+              <input type="number" min={0} step="any" dir="ltr" value={numKey.tolPct ?? 1} onChange={(e) => setForm((f) => ({ ...f, answerKey: { ...numKey, tolPct: Number(e.target.value) } }))} className="input" />
+            </FormField>
+            <FormField label="واحد (نمایش به متقاضی)">
+              <input value={numKey.unit ?? ''} onChange={(e) => setForm((f) => ({ ...f, answerKey: { ...numKey, unit: e.target.value } }))} className="input" placeholder="مثلاً میلی‌متر" />
+            </FormField>
+          </div>
+        ) : (
         <div className="mt-3 space-y-2">
-          <p className="text-[11px] text-muted">چهار گزینه — گزینه‌ی درست را با دکمه‌ی کنار آن مشخص کنید *</p>
+          <p className="text-[11px] text-muted">
+            {itemType === 'ORDER' ? 'چهار گزینه را به ترتیب درست (از اول تا آخر) بنویسید؛ متقاضی آن‌ها را درهم می‌بیند *'
+              : itemType === 'MULTI' ? 'چهار گزینه — یک تا سه گزینهٔ درست را با دکمهٔ کنار آن‌ها مشخص کنید *'
+              : 'چهار گزینه — گزینه‌ی درست را با دکمه‌ی کنار آن مشخص کنید *'}
+          </p>
           {form.options.map((opt, i) => (
             <div key={i} className="flex items-center gap-2">
+              {itemType === 'ORDER' ? (
+                <span className="num flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-[11px] font-bold text-muted">{(i + 1).toLocaleString('fa-IR')}</span>
+              ) : (
               <button
                 type="button"
-                onClick={() => setForm((f) => ({ ...f, correctOption: i }))}
+                onClick={() => setForm((f) => itemType === 'MULTI'
+                  ? { ...f, answerKey: multiKey.includes(i) ? multiKey.filter((k) => k !== i) : [...multiKey, i].sort() }
+                  : { ...f, correctOption: i })}
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold ${
-                  form.correctOption === i ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-white/10 text-muted hover:bg-white/5'
+                  (itemType === 'MULTI' ? multiKey.includes(i) : form.correctOption === i) ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-white/10 text-muted hover:bg-white/5'
                 }`}
                 title="این گزینه پاسخ درست است"
               >
                 {MCQ_OPTION_LETTERS[i]}
               </button>
+              )}
               <input value={opt} onChange={(e) => setOption(i, e.target.value)} className="input flex-1" placeholder={`متن گزینه ${MCQ_OPTION_LETTERS[i]}`} />
             </div>
           ))}
@@ -1578,6 +1632,7 @@ function McqQuestionEditorModal({
             <p className="text-[10.5px] text-amber-300">هر چهار گزینه باید پر و از یکدیگر متفاوت باشند.</p>
           )}
         </div>
+        )}
 
         <FormField label="توضیح کوتاه پاسخ (اختیاری — فقط برای کارکنان نمایش داده می‌شود)">
           <textarea value={form.explanationFa} onChange={(e) => setForm((f) => ({ ...f, explanationFa: e.target.value }))} rows={2} className="input resize-none" />

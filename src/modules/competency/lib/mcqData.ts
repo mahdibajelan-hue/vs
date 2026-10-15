@@ -42,6 +42,8 @@ export interface McqQuestion {
   stemFa: string
   options: string[]
   correctOption: number
+  itemType: McqItemType
+  answerKey: McqAnswerKey
   explanationFa: string
   standardRef: string
   approvalStatus: QuestionApprovalStatus
@@ -60,6 +62,8 @@ interface McqQuestionRow {
   stem_fa: string
   options: string[]
   correct_option: number
+  item_type?: string
+  answer_key?: McqAnswerKey
   explanation_fa: string
   standard_ref: string
   approval_status: string
@@ -78,6 +82,8 @@ const mcqFromRow = (r: McqQuestionRow): McqQuestion => ({
   stemFa: r.stem_fa,
   options: Array.isArray(r.options) ? r.options : [],
   correctOption: r.correct_option,
+  itemType: (r.item_type ?? 'SINGLE') as McqItemType,
+  answerKey: r.answer_key ?? null,
   explanationFa: r.explanation_fa ?? '',
   standardRef: r.standard_ref ?? '',
   approvalStatus: r.approval_status as QuestionApprovalStatus,
@@ -95,6 +101,8 @@ export interface McqQuestionInput {
   stemFa: string
   options: string[]
   correctOption: number
+  itemType?: McqItemType
+  answerKey?: McqAnswerKey
   explanationFa: string
   standardRef: string
   active: boolean
@@ -108,7 +116,9 @@ const inputToRow = (i: McqQuestionInput) => ({
   difficulty: i.difficulty,
   stem_fa: i.stemFa.trim(),
   options: i.options.map((o) => o.trim()),
-  correct_option: i.correctOption,
+  correct_option: i.itemType && i.itemType !== 'SINGLE' ? 0 : i.correctOption,
+  item_type: i.itemType ?? 'SINGLE',
+  answer_key: i.itemType && i.itemType !== 'SINGLE' ? i.answerKey ?? null : null,
   explanation_fa: i.explanationFa.trim(),
   standard_ref: i.standardRef.trim(),
   active: i.active,
@@ -116,7 +126,7 @@ const inputToRow = (i: McqQuestionInput) => ({
 })
 
 const MCQ_COLUMNS =
-  'id, job_role, category, topic, difficulty, stem_fa, options, correct_option, explanation_fa, standard_ref, approval_status, active, version, usage_count, updated_at'
+  'id, job_role, category, topic, difficulty, stem_fa, options, correct_option, item_type, answer_key, explanation_fa, standard_ref, approval_status, active, version, usage_count, updated_at'
 
 export async function fetchMcqBank(jobRole?: JobRole): Promise<{ data: McqQuestion[]; error: string | null }> {
   let q = supabase.from('comp_mcq_questions').select(MCQ_COLUMNS).order('job_role').order('category').order('topic').order('difficulty')
