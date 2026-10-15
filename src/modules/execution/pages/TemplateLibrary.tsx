@@ -3,6 +3,8 @@ import { CheckCircle2 } from 'lucide-react'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { BUNDLED_TEMPLATES } from '../forms/bundled'
+import { GRID_SPECS } from '../forms/gridSpecs'
+import { addr } from '../forms/gridTypes'
 import { designGrid } from '../forms/designGrid'
 import { GridSheet } from '../forms/GridTemplate'
 import { Chip, Section } from '../../finance/components/fn'
@@ -32,6 +34,17 @@ function Inner({ projectId }: { projectId: string }) {
         return (
           <Section key={b.formKey} title={b.title} hint={`برگ ${b.layout.sheet} از فایل ${b.layout.source.file} · ${fa(b.layout.stats.cells)} سلول · ${fa(b.layout.stats.merged)} ادغام`}>
             {!same && can && <button className="im-btn im-btn-primary im-btn-sm" disabled={busy === b.formKey} onClick={async () => { setBusy(b.formKey); await epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout: b.layout, bindings: b.bindings }); setBusy('') }}>ثبت این فایل در کتابخانه (پیش‌نویس)</button>}
+            {GRID_SPECS[b.formKey] && (
+              <details style={{ marginTop: 8 }}>
+                <summary>بازبینی نگاشت سلول‌ها (پیشنهادی — قابل تأیید توسط مسئول فرم)</summary>
+                {(() => { const sp = GRID_SPECS[b.formKey], txt = (r: number, c: number) => b.layout.cells.find((x) => x.r === r && x.c === c)?.v?.replace(/\s+/g, ' ').trim() ?? ''
+                  const colHead = (c: number) => { for (let r = sp.rows.first - 1; r >= Math.max(0, sp.rows.first - 4); r--) { const t = txt(r, c); if (t) return t } return '' }
+                  return <div className="fn-tbl-wrap" style={{ maxHeight: 260 }}><table className="ex-lines"><thead><tr><th>سلول</th><th>متن ثابت فرم</th><th>داده</th></tr></thead><tbody>
+                    {sp.headers.map((h) => <tr key={h.cell}><td dir="ltr">{h.cell}</td><td dir="auto">{b.layout.cells.find((x) => addr(x.r, x.c) === h.cell)?.v ?? '—'}</td><td>{h.key}{h.mode === 'append' ? ' (بعد از برچسب)' : ''}</td></tr>)}
+                    {sp.rows.cols.map((c, i) => <tr key={`c${i}`}><td dir="ltr">ستون {addr(0, c.c).replace(/\d+/, '')}{c.dr ? ' (ردیف دوم رکورد)' : ''}</td><td dir="auto">{colHead(c.c) || '—'}</td><td>فیلد ردیف</td></tr>)}
+                  </tbody></table></div> })()}
+              </details>
+            )}
             {mine.length === 0 && !can && <span className="im-helper">هنوز ثبت نشده است.</span>}
             <div className="fn-tbl-wrap" style={{ maxHeight: 'none', marginTop: 8 }}><table className="ex-lines"><thead><tr><th>نسخه</th><th>وضعیت</th><th>کد فرم</th><th>بازنگری</th><th>فایل مبدأ (هش)</th><th>تأیید</th><th /></tr></thead>
               <tbody>{mine.map((t) => {

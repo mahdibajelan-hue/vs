@@ -34,3 +34,22 @@ export function designGrid(d: DesignInput): GridTemplate {
     stats: { cells: cells.length, merged: cells.filter((c) => (c.cs ?? 1) > 1).length, texts: cells.filter((c) => c.v).length, hiddenCols: 0 },
   }
 }
+
+/** Structure of a designed sheet, read back from its frozen layout: header labels (in order) and table column labels. */
+export function designShape(t: GridTemplate): { headers: { r: number; c: number; label: string }[]; columns: string[]; firstRow: number; rows: number } {
+  const hdr = t.cells.find((c) => c.v === 'ردیف' && c.c === 0)
+  if (!hdr) return { headers: [], columns: [], firstRow: 0, rows: 0 }
+  const headers = t.cells.filter((c) => c.r > 0 && c.r < hdr.r && c.v?.endsWith(':')).sort((a, b) => a.r - b.r || a.c - b.c).map((c) => ({ r: c.r, c: c.c, label: (c.v as string).slice(0, -1) }))
+  const columns = t.cells.filter((c) => c.r === hdr.r && c.c > 0).sort((a, b) => a.c - b.c).map((c) => c.v ?? '')
+  const rows = t.cells.filter((c) => c.c === 0 && c.r > hdr.r && /^\d+$/.test(c.v ?? '')).length
+  return { headers, columns, firstRow: hdr.r + 1, rows }
+}
+
+/** Cell values of a designed sheet for the entered header and rows (rows beyond the sheet are ignored). */
+export function designValues(t: GridTemplate, header: string[], rows: string[][]): Record<string, string> {
+  const sh = designShape(t), out: Record<string, string> = {}
+  sh.headers.forEach((h, i) => { if (header[i]) out[`${colName(h.c)}${h.r + 1}`] = `${h.label}: ${header[i]}` })
+  rows.slice(0, sh.rows).forEach((row, k) => row.forEach((v, i) => { if (v) out[`${colName(i + 1)}${sh.firstRow + k + 1}`] = v }))
+  return out
+}
+const colName = (c: number): string => { let n = c + 1, s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26) } return s }

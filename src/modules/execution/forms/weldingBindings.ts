@@ -25,7 +25,7 @@ export function weldingValues(i: WeldingValuesInput, fixed: Record<string, strin
   for (const b of WELDING_BINDINGS) {
     const v = src[b.source] ?? ''
     if (!v) continue
-    out[b.cell] = b.mode === 'append' ? `${fixed[b.cell] ?? ''} ${v}`.trim() : v
+    out[b.cell] = b.mode === 'append' ? `${(fixed[b.cell] ?? '').trim()} ${v}` : v
   }
   return out
 }

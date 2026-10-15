@@ -21,7 +21,7 @@ type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
   { id: 'activities', label: 'فعالیت‌ها و فهرست‌بها', icon: ListTree, color: '#6366f1', subs: [{ id: 'activities', label: 'فعالیت‌های پروژه' }, { id: 'books', label: 'فهرست‌های بها' }, { id: 'baselines', label: 'نسخه‌های مبنا (مقدار و وزن)' }] },
-  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }] },
+  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
   { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
@@ -44,6 +44,7 @@ const Productivity = L(() => import('./pages/ProductivityPage'), 'ProductivityPa
 const Assistant = L(() => import('./pages/AssistantPage'), 'AssistantPage')
 const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
+const Designed = L(() => import('./pages/DesignedForms'), 'DesignedForms')
 const Qc = L(() => import('./pages/QcPage'), 'QcPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -93,7 +94,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     switch (tab) {
       case 'dashboard': return <Dashboard {...p} />
       case 'activities': return <Activities {...p} />
-      case 'daily': return <Daily {...p} />
+      case 'daily': return sub === 'designed' ? <Designed {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
       case 'productivity': return <Productivity {...p} />

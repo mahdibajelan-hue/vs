@@ -46,3 +46,5 @@ export interface EpcSettings {
 }
 
 export interface QcFindingRow { id: string; projectId: string; techReportId: string | null; lineId: string | null; kind: 'defect' | 'nonconformity' | 'observation'; severity: 'low' | 'medium' | 'high'; status: 'open' | 'closed'; weldRef: string; note: string; createdAt: string; closedAt: string | null }
+
+export interface FormEntryRow { id: string; projectId: string; templateId: string; entryDate: string; header: string[]; rows: string[][]; createdAt: string }

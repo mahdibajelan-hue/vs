@@ -43,12 +43,12 @@ export const GRID_SPECS: Record<string, GridSpec> = {
   },
   rt_request: {
     formKey: 'rt_request',
-    headers: [{ cell: 'G3', key: 'pipeSpec' }, { cell: 'C4', key: 'date' }, { cell: 'F4', key: 'reqNo', mode: 'append' }, { cell: 'J4', key: 'page' }, { cell: 'L4', key: 'pages' }],
+    headers: [{ cell: 'G3', key: 'pipeSpec' }, { cell: 'C4', key: 'date' }, { cell: 'H4', key: 'reqNo' }, { cell: 'J4', key: 'page' }, { cell: 'L4', key: 'pages' }],
     rows: { first: 7, step: 2, per: 20, numCol: 0, cols: [{ c: 1, get: k('sec') }, { c: 2, get: k('weldNo') }, { c: 3, get: k('thkIn') }, { c: 4, get: k('odIn') }, { c: 6, get: k('stampRoot') }, { c: 7, get: k('stampHot') }, { c: 8, get: k('stampFill') }, { c: 9, get: k('stampCap') }, { c: 6, dr: 1, get: k('stampRootC') }, { c: 7, dr: 1, get: k('stampHotC') }, { c: 8, dr: 1, get: k('stampFillC') }, { c: 9, dr: 1, get: k('stampCapC') }, { c: 10, get: k('remark') }] },
   },
   rt_request_rp: {
     formKey: 'rt_request_rp',
-    headers: [{ cell: 'G3', key: 'pipeSpec' }, { cell: 'C4', key: 'date' }, { cell: 'E4', key: 'reqNo', mode: 'append' }, { cell: 'H4', key: 'page' }],
+    headers: [{ cell: 'G3', key: 'pipeSpec' }, { cell: 'C4', key: 'date' }, { cell: 'H4', key: 'page' }],
     rows: { first: 5, step: 1, per: 20, numCol: 0, cols: [{ c: 1, get: k('sec') }, { c: 2, get: k('weldNo') }, { c: 3, get: k('thkIn') }, { c: 4, get: k('odIn') }, { c: 5, get: k('stNo') }, { c: 6, get: k('segment') }, { c: 7, get: k('remark') }] },
   },
   rt_report: {
@@ -70,7 +70,7 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
   const pages = specPages(spec, inp.rows.length), out: Record<string, string> = {}
   const set = (r: number, c: number, v: string) => { if (v !== '') out[addr(r, c)] = v }
   const hv: Record<string, string> = { ...inp.header, page: String(p + 1), pages: String(pages) }
-  for (const h of spec.headers) { const v = hv[h.key] ?? ''; if (!v) continue; out[h.cell] = h.mode === 'append' ? `${fixed[h.cell] ?? ''} ${v}`.trim() : v }
+  for (const h of spec.headers) { const v = hv[h.key] ?? ''; if (!v) continue; out[h.cell] = h.mode === 'append' ? `${(fixed[h.cell] ?? '').trim()} ${v}` : v }
   const R = spec.rows, slice = inp.rows.slice(p * R.per, (p + 1) * R.per), before = inp.rows.slice(0, p * R.per)
   slice.forEach((row, i) => {
     const base = R.first + R.step * i

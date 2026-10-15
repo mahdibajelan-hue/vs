@@ -48,7 +48,7 @@ export function GridSheet({ tpl, values = {}, logos = {}, mark }: { tpl: GridTem
               {(byRow.get(r) ?? []).filter((c) => !tpl.cols[c.c].hidden).map((c) => {
                 const a = addr(c.r, c.c), text = values[a] ?? c.v ?? ''
                 const colSpan = c.cs ? Array.from({ length: c.cs }, (_, k) => c.c + k).filter((ci) => !tpl.cols[ci]?.hidden).length : 1
-                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} style={{ ...cssOf(tpl.styles[c.s], text), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, background: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
+                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} style={{ ...cssOf(tpl.styles[c.s], text), ...(a in values && /^f{6}$/i.test(tpl.styles[c.s].f[5] ?? '') && (!tpl.styles[c.s].bg || /^f{6}$/i.test(tpl.styles[c.s].bg!)) ? { color: '#000' } : null), ...(a in values && !tpl.styles[c.s].a[2] ? { overflow: 'visible' } : null), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, background: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
               })}
             </tr>
           ))}
