@@ -5,15 +5,18 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useEpcModel, type EpcModel } from '../../execution/lib/useEpcModel'
 import { useEpcStore } from '../../execution/store/useEpcStore'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
-import { engProgress, DEFAULT_ENG_RULES, type Impact } from '../../execution/lib/engine/engineering'
-import { parseDate } from '../../execution/lib/engine/scheduleImport'
 import { readXlsx } from '../../material/lib/control/xlsx'
-import { addDays, daysBetween, jalaliText } from '../../execution/lib/periods'
-import { Chip, DataTable, KpiCard, Section, type Col } from '../../finance/components/fn'
-import { Empty, fa, pct } from '../../execution/components/common'
+import { jalaliText } from '../../execution/lib/periods'
+import type { Impact } from '../../execution/lib/engine/engineering'
+import { Chip, Section } from '../../finance/components/fn'
+import { Empty, fa } from '../../execution/components/common'
 import { EpcGate } from '../../execution/components/epc/EpcBanner'
 import { ActivityPicker } from '../components/ActivityPicker'
-import { ProgressCurve } from '../../execution/components/ProgressCurve'
+import { EngDash } from './EngDash'
+import { EngMyTasks } from './EngMyTasks'
+import { isMdlLayout, parseMdl, type MdlResult } from '../lib/mdlImport'
+import { readSheetRows } from '../lib/readRows'
+import { COURT_COLOR, COURT_LABEL_FA, courtOf } from '../lib/roles'
 import { ENG_STATUS_LABEL_FA, type EngDocRow, type EngStatus } from '../../execution/epcTypes'
 
 const READY_FA = { ready: 'آماده', ready_with_restrictions: 'آماده با محدودیت', not_ready: 'غیرآماده' } as const
@@ -28,54 +31,8 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'register') return <Register m={m} projectId={projectId} can={can} />
   if (sub === 'links') return <Links m={m} projectId={projectId} can={can} />
   if (sub === 'impact') return <ImpactView m={m} projectId={projectId} />
-  return <Dash m={m} />
-}
-
-function Dash({ m }: { m: EpcModel }) {
-  const { eng } = m
-  if (!m.engDocs.length) return <Empty><b style={{ display: 'block', marginBottom: 6 }}>فهرست مدارک مهندسی خالی است</b>در «فهرست مدارک» مدارک موردنیاز را با وزن و تاریخ‌های برنامه‌ای ثبت کنید (یا از اکسل وارد کنید).</Empty>
-  const pr = eng.progress
-  const from = m.engDocs.flatMap((x) => [x.plannedPrepared, x.actualPrepared]).filter((x): x is string => !!x).sort()[0] ?? m.today
-  const to = [...m.engDocs.flatMap((x) => [x.plannedApproved, x.actualApproved]).filter((x): x is string => !!x), m.today].sort().slice(-1)[0]
-  const span = Math.max(14, daysBetween(from, to)), step = Math.max(7, Math.ceil(span / 24 / 7) * 7)
-  const curve = []
-  for (let t = from; t <= to; t = addDays(t, step)) { const s = engProgress(m.engDocs, t); curve.push({ date: t, planned: s.plannedScore, actual: t <= m.today ? s.actualScore : 0, registered: t <= m.today ? s.actualPrepared : 0 }) }
-  const rows = (b: typeof eng.byDiscipline) => b.map((x) => ({ key: x.key, ...x.p }))
-  type R = ReturnType<typeof rows>[number]
-  const cols: Col<R>[] = [
-    { key: 'k', label: 'گروه', render: (r) => <span className="strong">{r.key}</span> }, { key: 'n', label: 'مدرک', num: true, render: (r) => fa(r.docs) },
-    { key: 'pp', label: 'تهیه — برنامه', num: true, render: (r) => pct(r.plannedPrepared, 0) }, { key: 'ap', label: 'تهیه — واقعی', num: true, render: (r) => pct(r.actualPrepared, 0) },
-    { key: 'pa', label: 'تأیید — برنامه', num: true, render: (r) => pct(r.plannedApproved, 0) }, { key: 'aa', label: 'تأیید — واقعی', num: true, render: (r) => pct(r.actualApproved, 0) },
-    { key: 'rd', label: 'آمادهٔ اجرا', num: true, render: (r) => pct(r.ready, 0) },
-    { key: 'sc', label: 'امتیاز وزنی (واقعی ÷ برنامه)', num: true, render: (r) => <><b>{pct(r.actualScore, 0)}</b><span className="sub">برنامه {pct(r.plannedScore, 0)}</span></>, sort: (r) => r.actualScore },
-  ]
-  const late = m.engDocs.filter((x) => x.status !== 'approved' && x.status !== 'superseded').map((x) => ({ doc: x, fc: m.docFc.get(x.id)! })).filter((x) => x.fc.overdue || (x.fc.expectedApproval && x.doc.plannedApproved && x.fc.expectedApproval > x.doc.plannedApproved)).sort((a, b) => b.fc.overdueDays - a.fc.overdueDays).slice(0, 12)
-  return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div className="fn-kpis">
-        <KpiCard i={0} label="امتیاز پیشرفت وزنی مهندسی" value={pct(pr.actualScore, 1)} tone={pr.actualScore + 0.03 >= pr.plannedScore ? 'good' : 'warn'} sub={`برنامه ${pct(pr.plannedScore, 1)}`} />
-        <KpiCard i={1} label="پیشرفت تهیه" value={pct(pr.actualPrepared, 1)} sub={`برنامه ${pct(pr.plannedPrepared, 1)}`} />
-        <KpiCard i={2} label="پیشرفت تأیید" value={pct(pr.actualApproved, 1)} sub={`برنامه ${pct(pr.plannedApproved, 1)}`} />
-        <KpiCard i={3} label="آمادهٔ اجرا" value={pct(pr.ready, 1)} sub="تأییدشده کامل + سهم تأیید با محدودیت" />
-      </div>
-      <div className="fn-kpis">
-        <KpiCard i={0} label="پیش‌بینی تکمیل همهٔ مدارک" value={eng.completion.date ? jalaliText(eng.completion.date) : '—'} sub={eng.completion.reason} />
-        <KpiCard i={1} label="مدارک بحرانی باز" value={fa(eng.criticalOpen.length)} tone={eng.criticalOpen.some((c) => c.fc.overdue) ? 'bad' : 'neutral'} sub={`${fa(eng.criticalOpen.filter((c) => c.fc.overdue).length)} عقب‌افتاده`} />
-        <KpiCard i={2} label="فعالیت غیرآمادهٔ اجرا" value={fa(eng.notReady.length)} tone={eng.notReady.length ? 'bad' : 'good'} />
-        <KpiCard i={3} label="بیشترین اثر بر تکمیل پروژه" value={eng.slipMax == null ? 'نامشخص' : `${eng.slipMax} روز`} tone={eng.slipMax ? 'bad' : 'neutral'} sub="پس از کسر شناوری یا فعالیت جایگزین" />
-      </div>
-      <Section title="روند پیشرفت مهندسی" hint="برنامه بر پایهٔ تاریخ‌های برنامه‌ای تهیه/تأیید هر مدرک؛ واقعی بر پایهٔ تاریخ‌ها/وضعیت ثبت‌شده؛ خط آبی: پیشرفت تهیه"><ProgressCurve data={curve} h={220} /></Section>
-      <Section title="به‌تفکیک رشته" flush><DataTable cols={cols} rows={rows(eng.byDiscipline)} rowKey={(r) => r.key} /></Section>
-      {eng.byContract.length > 1 && <Section title="به‌تفکیک پیمان" flush><DataTable cols={cols} rows={rows(eng.byContract)} rowKey={(r) => r.key} /></Section>}
-      <Section title="مدارک عقب‌افتاده یا در معرض تأخیر" flush>
-        <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>مدرک</th><th>رشته</th><th>وضعیت</th><th>تأیید برنامه‌ای</th><th>تأیید پیش‌بینی</th><th className="num">عقب‌افتادگی</th><th>مبنای پیش‌بینی</th></tr></thead>
-          <tbody>{late.length ? late.map(({ doc, fc }) => <tr key={doc.id}><td><b>{doc.code}</b>{doc.critical && <Chip tone="bad">بحرانی</Chip>}<span className="sub">{doc.title}</span></td><td>{doc.discipline}</td><td>{ENG_STATUS_LABEL_FA[doc.status]}</td><td>{d(doc.plannedApproved)}</td><td>{fc.expectedApproval ? d(fc.expectedApproval) : 'نامشخص'}</td><td className="num">{fc.overdue ? `${fa(fc.overdueDays)} روز` : '—'}</td><td className="sub">{fc.reason}</td></tr>) : <tr><td colSpan={7} className="sub">مدرک عقب‌افتاده‌ای نیست.</td></tr>}</tbody></table></div>
-      </Section>
-      <div className="im-card" style={{ padding: 12, fontSize: 12.5, lineHeight: 1.9 }}>
-        <b>روش محاسبه (قابل کنترل):</b> هر مدرک با وزن خودش در پیشرفت شرکت می‌کند (وزن صفر یا منسوخ حذف می‌شود). «تهیه» از وضعیت تهیه‌شده به بعد و «تأیید» از وضعیت تأییدشده یا تأیید با محدودیت شمرده می‌شود. «آمادهٔ اجرا» فقط تأیید کامل را ۱۰۰٪ و تأیید با محدودیت را {pct(DEFAULT_ENG_RULES.restrictedCredit, 0)} حساب می‌کند. امتیاز وزنی = {pct(DEFAULT_ENG_RULES.prepWeight, 0)} تهیه + {pct(DEFAULT_ENG_RULES.approveWeight, 0)} تأیید. پیش‌بینی تأخیر هر مدرک از میانگین انحراف مدارک تکمیل‌شدهٔ همان رشته (حداقل {DEFAULT_ENG_RULES.minSample} مدرک) و پیش‌بینی تکمیل کل از نرخ تأیید {DEFAULT_ENG_RULES.windowDays} روز اخیر (حداقل دو تأیید) به‌دست می‌آید؛ در غیر این صورت «نامشخص» نمایش داده می‌شود.
-      </div>
-    </div>
-  )
+  if (sub === 'my') return <EngMyTasks m={m} projectId={projectId} />
+  return <EngDash m={m} projectId={projectId} />
 }
 
 const EMPTY = { docNo: '', title: '', discipline: '', contract: '', preparer: '', approver: '', rev: '', weight: 1, plannedPrepared: '', plannedApproved: '', critical: false }
@@ -83,21 +40,31 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
   const epc = useEpcStore()
   const docs = epc.engDocs.filter((x) => x.projectId === projectId)
   const [f, setF] = useState(EMPTY)
-  const [flt, setFlt] = useState({ disc: '', st: '' })
+  const [flt, setFlt] = useState({ disc: '', st: '', phase: '', cat: '', court: '', q: '' })
+  const [mdl, setMdl] = useState<{ res: MdlResult; file: string } | null>(null)
   const ref = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState('')
   const discs = [...new Set(docs.map((x) => x.discipline).filter(Boolean))]
-  const shown = docs.filter((x) => (!flt.disc || x.discipline === flt.disc) && (!flt.st || x.status === flt.st))
+  const phases = [...new Set(docs.map((x) => x.phase).filter(Boolean))], cats = [...new Set(docs.map((x) => x.category).filter(Boolean))].sort()
+  const qn = flt.q.trim().toLowerCase()
+  const shown = docs.filter((x) => (!flt.disc || x.discipline === flt.disc) && (!flt.st || x.status === flt.st) && (!flt.phase || x.phase === flt.phase) && (!flt.cat || x.category === flt.cat) && (!flt.court || courtOf(x.status) === flt.court) && (!qn || `${x.docNo} ${x.title}`.toLowerCase().includes(qn)))
   const upd = (x: EngDocRow, p: Partial<EngDocRow>) => void epc.saveEngDoc({ ...x, ...p })
   const importFile = async (file: File) => {
+    const raw = await readSheetRows(file)
+    if (isMdlLayout(raw)) { setMdl({ res: parseMdl(raw), file: file.name }); setMsg(''); return }
     const rows = await readXlsx(file), pick = (r: Record<string, unknown>, ...k: string[]) => { for (const key of Object.keys(r)) if (k.includes(key.trim().toLowerCase())) return r[key]; return '' }
     let ok = 0
     for (const r of rows) {
       const no = String(pick(r, 'شناسه', 'شماره مدرک', 'doc_no', 'document no', 'کد')).trim(); if (!no) continue
-      const okSave = await epc.saveEngDoc({ projectId, docNo: no, rev: String(pick(r, 'rev', 'ویرایش')), title: String(pick(r, 'عنوان', 'title')), discipline: String(pick(r, 'رشته', 'discipline')), contract: String(pick(r, 'پیمان', 'contract')), preparer: String(pick(r, 'مسئول تهیه', 'preparer')), approver: String(pick(r, 'مسئول تأیید', 'approver')), weight: Number(pick(r, 'وزن', 'weight')) || 1, plannedPrepared: parseDate(pick(r, 'تاریخ برنامه تهیه', 'planned prepared') as never), plannedApproved: parseDate(pick(r, 'تاریخ برنامه تأیید', 'planned approved') as never), critical: ['1', 'بله', 'true', 'yes', 'بحرانی'].includes(String(pick(r, 'بحرانی', 'critical')).trim().toLowerCase()) })
+      const okSave = await epc.saveEngDoc({ projectId, docNo: no, rev: String(pick(r, 'rev', 'ویرایش')), title: String(pick(r, 'عنوان', 'title')), discipline: String(pick(r, 'رشته', 'discipline')), contract: String(pick(r, 'پیمان', 'contract')), preparer: String(pick(r, 'مسئول تهیه', 'preparer')), approver: String(pick(r, 'مسئول تأیید', 'approver')), weight: Number(pick(r, 'وزن', 'weight')) || 1 })
       if (okSave) ok++; else break
     }
     setMsg(`${fa(ok)} مدرک وارد شد.`)
+  }
+  const commitMdl = async () => {
+    if (!mdl) return
+    const n = await epc.saveEngDocsBulk(mdl.res.docs.map((x) => ({ projectId, docNo: x.docNo, title: x.title, discipline: x.discipline, category: x.category, phase: x.phase, targetIssue: x.targetIssue, price: x.price, weight: x.weight })))
+    setMsg(`${fa(n)} مدرک از فهرست MDL وارد/به‌روز شد (وضعیت و تاریخ مدارک موجود دست‌نخورده ماند).`); setMdl(null)
   }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -117,14 +84,30 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.docNo.trim()} onClick={() => void epc.saveEngDoc({ projectId, ...f, plannedPrepared: f.plannedPrepared || null, plannedApproved: f.plannedApproved || null }).then((ok) => ok && setF(EMPTY))}><Plus size={13} /> مدرک</button>
         <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const x = e.target.files?.[0]; if (x) void importFile(x); e.target.value = '' }} /><button className="im-btn im-btn-sm" onClick={() => ref.current?.click()}><Upload size={13} /> ورود از اکسل</button>
       </div>}
+      {mdl && (
+        <div className="im-card" style={{ padding: 12, display: 'grid', gap: 6 }}>
+          <b>فهرست MDL شناسایی شد — {mdl.file}</b>
+          <span className="im-helper" style={{ margin: 0 }}>{fa(mdl.res.docs.length)} مدرک · {fa(mdl.res.sections)} سرفصل · {fa(mdl.res.duplicates.length)} ردیف تکراری کنار گذاشته شد · مجموع وزن {fa(mdl.res.weightSum, 2)}٪ · مجموع مبلغ {fa(mdl.res.priceSum / 1e9, 1)} میلیارد ریال</span>
+          {mdl.res.warnings.map((w) => <span key={w} className="ex-bad" style={{ fontSize: 12 }}>{w}</span>)}
+          <div style={{ display: 'flex', gap: 8 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={() => void commitMdl()}>ورود {fa(mdl.res.docs.length)} مدرک</button><button className="im-btn im-btn-sm" onClick={() => setMdl(null)}>انصراف</button></div>
+        </div>
+      )}
       {msg && <div className="im-card" style={{ padding: 10 }}>{msg}</div>}
-      <div className="mt-filters"><select value={flt.disc} onChange={(e) => setFlt({ ...flt, disc: e.target.value })} aria-label="رشته"><option value="">همهٔ رشته‌ها</option>{discs.map((x) => <option key={x}>{x}</option>)}</select><select value={flt.st} onChange={(e) => setFlt({ ...flt, st: e.target.value })} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(ENG_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><span className="im-helper" style={{ margin: 0 }}>{fa(shown.length)} مدرک</span></div>
+      <div className="mt-filters" style={{ flexWrap: 'wrap' }}>
+        <input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="جست‌وجوی شماره یا عنوان…" dir="auto" aria-label="جست‌وجو" style={{ minWidth: 180 }} />
+        <select value={flt.disc} onChange={(e) => setFlt({ ...flt, disc: e.target.value })} aria-label="رشته"><option value="">همهٔ رشته‌ها</option>{discs.map((x) => <option key={x}>{x}</option>)}</select>
+        {phases.length > 0 && <select value={flt.phase} onChange={(e) => setFlt({ ...flt, phase: e.target.value })} aria-label="مرحله"><option value="">همهٔ مراحل</option>{phases.map((x) => <option key={x}>{x}</option>)}</select>}
+        {cats.length > 0 && <select value={flt.cat} onChange={(e) => setFlt({ ...flt, cat: e.target.value })} aria-label="نوع مدرک"><option value="">همهٔ انواع</option>{cats.map((x) => <option key={x}>{x}</option>)}</select>}
+        <select value={flt.st} onChange={(e) => setFlt({ ...flt, st: e.target.value })} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(ENG_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <select value={flt.court} onChange={(e) => setFlt({ ...flt, court: e.target.value })} aria-label="توپ دست"><option value="">همهٔ طرف‌ها</option>{(['contractor', 'consultant', 'employer', 'done'] as const).map((c) => <option key={c} value={c}>{COURT_LABEL_FA[c]}</option>)}</select>
+        <span className="im-helper" style={{ margin: 0 }}>{fa(shown.length)} مدرک</span>
+      </div>
       <div className="im-card" style={{ padding: 0 }}><div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>شناسه</th><th>عنوان / رشته</th><th>مسئولان</th><th className="num">وزن</th><th>تهیه (برنامه / واقعی)</th><th>تأیید (برنامه / واقعی)</th><th>وضعیت</th><th>توضیح مدیریتی</th><th /></tr></thead>
-        <tbody>{shown.map((x) => { const fc = m.docFc.get(x.id); return (
+        <tbody>{shown.slice(0, 400).map((x) => { const fc = m.docFc.get(x.id); return (
           <tr key={x.id} className={x.status === 'approved' ? 'locked' : undefined}>
             <td className="fn-code">{x.docNo}{x.rev && <small> Rev {x.rev}</small>}{x.critical && <Chip tone="bad">بحرانی</Chip>}</td>
-            <td>{x.title}<span className="sub">{x.discipline}{x.contract ? ` · ${x.contract}` : ''}</span></td>
-            <td className="sub">{x.preparer || '—'} / {x.approver || '—'}</td>
+            <td style={{ minWidth: 220, whiteSpace: 'normal' }}>{x.title}<span className="sub">{x.discipline}{x.category ? ` · ${x.category}` : ''}{x.phase ? ` · ${x.phase}` : ''}{x.targetIssue ? ` · ${x.targetIssue}` : ''}{x.contract ? ` · ${x.contract}` : ''}</span></td>
+            <td className="sub">{x.preparer || '—'} / {x.approver || '—'}{courtOf(x.status) !== 'done' && x.status !== 'superseded' && <span style={{ display: 'block', color: COURT_COLOR[courtOf(x.status)], fontWeight: 700 }}>توپ دست: {COURT_LABEL_FA[courtOf(x.status)]}</span>}</td>
             <td className="num">{can ? <input type="number" min={0} step="0.5" defaultValue={x.weight} onBlur={(e) => Number(e.target.value) !== x.weight && upd(x, { weight: Number(e.target.value) || 0 })} style={{ width: 60 }} aria-label="وزن" /> : fa(x.weight, 1)}</td>
             <td>{d(x.plannedPrepared)} / {can ? <JalaliDateInput value={x.actualPrepared ?? ''} onChange={(v) => upd(x, { actualPrepared: v || null })} /> : d(x.actualPrepared)}</td>
             <td>{d(x.plannedApproved)} / {can ? <JalaliDateInput value={x.actualApproved ?? ''} onChange={(v) => upd(x, { actualApproved: v || null })} /> : d(x.actualApproved)}{fc?.overdue && <small className="ex-bad" style={{ display: 'block' }}>{fa(fc.overdueDays)} روز دیرکرد</small>}</td>

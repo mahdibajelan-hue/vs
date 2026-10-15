@@ -17,6 +17,8 @@ export interface EngDocRow {
   id: string; projectId: string; docNo: string; title: string; discipline: string; rev: string; contract: string; preparer: string; approver: string; weight: number; critical: boolean
   status: EngStatus; restrictionNote: string; dueDate: string | null; issuedDate: string | null
   plannedPrepared: string | null; plannedApproved: string | null; actualPrepared: string | null; actualApproved: string | null; note: string
+  /** MDL register fields: document type (REP/DWG/…), phase (DP1 detail design / PP1 procurement), target issue purpose (IFA/IFI/POI), price the weight derives from */
+  category: string; phase: string; targetIssue: string; price: number
 }
 export const ENG_STATUS_LABEL_FA: Record<EngStatus, string> = { required: 'شروع‌نشده', in_preparation: 'در حال تهیه', issued: 'تهیه‌شده/صادرشده', pending_approval: 'در انتظار تأیید', approved: 'تأییدشده', restricted: 'تأیید با محدودیت اجرایی', superseded: 'منسوخ' }
 export interface DocLinkRow { id: string; projectId: string; docId: string; activityId: string; front: string; contract: string; needKind: 'start' | 'continue'; needDate: string | null; minStatus: 'issued' | 'approved'; allowRestricted: boolean; altActivityId: string | null; note: string }

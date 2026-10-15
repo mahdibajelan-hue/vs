@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { CrewLogRow, DepRow, DocLinkRow, EngDocRow, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -35,6 +35,8 @@ interface State {
   loadVersions: (reportId: string) => Promise<void>
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
+  saveEngDocsBulk: (rows: (Partial<EngDocRow> & { projectId: string; docNo: string })[]) => Promise<number>
+  transitionDoc: (docId: string, to: EngStatus, note?: string) => Promise<boolean>
   saveDocLink: (l: Partial<DocLinkRow> & { projectId: string; docId: string; activityId: string }) => Promise<boolean>
   removeDocLink: (id: string) => Promise<boolean>
   raiseDoc: (a: { projectId: string; docId: string; target: 'issue' | 'risk'; title: string; description: string; severity: string; impactDays?: number | null; front?: string }) => Promise<{ id: string; existing: boolean } | null>
@@ -64,7 +66,7 @@ export const useEpcStore = create<State>((set, get) => ({
     set({
       available: true, loaded: true,
       crewLogs: ok<Row>(crew).map(crewRow),
-      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', contract: r.contract ?? '', preparer: r.preparer ?? '', approver: r.approver ?? '', weight: n(r.weight ?? 1), critical: !!r.critical, status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date, plannedPrepared: r.planned_prepared, plannedApproved: r.planned_approved, actualPrepared: r.actual_prepared, actualApproved: r.actual_approved, note: r.note ?? '' })),
+      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', contract: r.contract ?? '', preparer: r.preparer ?? '', approver: r.approver ?? '', weight: n(r.weight ?? 1), critical: !!r.critical, status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date, plannedPrepared: r.planned_prepared, plannedApproved: r.planned_approved, actualPrepared: r.actual_prepared, actualApproved: r.actual_approved, note: r.note ?? '', category: r.category ?? '', phase: r.phase ?? '', targetIssue: r.target_issue ?? '', price: n(r.price ?? 0) })),
       docLinks: ok<Row>(dlinks).map((r): DocLinkRow => ({ id: r.id, projectId: r.project_id, docId: r.doc_id, activityId: r.activity_id, front: r.front ?? '', contract: r.contract ?? '', needKind: r.need_kind, needDate: r.need_date, minStatus: r.min_status, allowRestricted: !!r.allow_restricted, altActivityId: r.alt_activity_id, note: r.note ?? '' })),
       prereqs: ok<Row>(pre).map((r): PrereqRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, kind: r.kind, title: r.title ?? '', refType: r.ref_type ?? '', refId: r.ref_id, status: r.status, neededDate: r.needed_date, readyDate: r.ready_date, note: r.note ?? '' })),
       deps: ok<Row>(deps).map((r): DepRow => ({ id: r.id, projectId: r.project_id, predId: r.pred_id, succId: r.succ_id, type: r.dep_type, lag: n(r.lag_days) })),
@@ -97,9 +99,27 @@ export const useEpcStore = create<State>((set, get) => ({
     await get().fetchAll(); return true
   },
   saveEngDoc: async (d) => {
-    const row = { project_id: d.projectId, doc_no: d.docNo, title: d.title ?? '', discipline: d.discipline ?? '', rev: d.rev ?? '', contract: d.contract ?? '', preparer: d.preparer ?? '', approver: d.approver ?? '', weight: d.weight ?? 1, critical: d.critical ?? false, status: d.status ?? 'required', restriction_note: d.restrictionNote ?? '', due_date: d.dueDate || null, issued_date: d.issuedDate || null, planned_prepared: d.plannedPrepared || null, planned_approved: d.plannedApproved || null, actual_prepared: d.actualPrepared || null, actual_approved: d.actualApproved || null, note: d.note ?? '' }
+    const row = { project_id: d.projectId, doc_no: d.docNo, title: d.title ?? '', discipline: d.discipline ?? '', rev: d.rev ?? '', contract: d.contract ?? '', preparer: d.preparer ?? '', approver: d.approver ?? '', weight: d.weight ?? 1, critical: d.critical ?? false, status: d.status ?? 'required', restriction_note: d.restrictionNote ?? '', due_date: d.dueDate || null, issued_date: d.issuedDate || null, planned_prepared: d.plannedPrepared || null, planned_approved: d.plannedApproved || null, actual_prepared: d.actualPrepared || null, actual_approved: d.actualApproved || null, note: d.note ?? '', category: d.category ?? '', phase: d.phase ?? '', target_issue: d.targetIssue ?? '', price: d.price ?? 0 }
     const { error } = d.id ? await supabase.from('ex_eng_docs').update(row).eq('id', d.id) : await supabase.from('ex_eng_docs').insert(row)
     if (fail('ذخیرهٔ مدرک مهندسی', error)) return false
+    await get().fetchAll(); return true
+  },
+  saveEngDocsBulk: async (rows) => {
+    const mapRow = (d: (typeof rows)[number]) => ({ project_id: d.projectId, doc_no: d.docNo, rev: d.rev ?? '0', title: d.title ?? '', discipline: d.discipline ?? '', category: d.category ?? '', phase: d.phase ?? '', target_issue: d.targetIssue ?? '', price: d.price ?? 0, weight: d.weight ?? 1,
+      ...(d.contract != null ? { contract: d.contract } : {}), ...(d.preparer != null ? { preparer: d.preparer } : {}), ...(d.approver != null ? { approver: d.approver } : {}), ...(d.status ? { status: d.status } : {}), ...(d.critical != null ? { critical: d.critical } : {}),
+      ...(d.plannedPrepared ? { planned_prepared: d.plannedPrepared } : {}), ...(d.plannedApproved ? { planned_approved: d.plannedApproved } : {}) })
+    let ok = 0
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100).map(mapRow)
+      const { error } = await supabase.from('ex_eng_docs').upsert(chunk, { onConflict: 'project_id,doc_no,rev' })
+      if (fail('ورود مدارک مهندسی', error)) break
+      ok += chunk.length
+    }
+    await get().fetchAll(); return ok
+  },
+  transitionDoc: async (docId, to, note = '') => {
+    const { error } = await supabase.rpc('ex_doc_transition', { p_doc: docId, p_to: to, p_note: note })
+    if (fail('تغییر وضعیت مدرک', error)) return false
     await get().fetchAll(); return true
   },
   saveDocLink: async (l) => {

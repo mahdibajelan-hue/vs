@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { Gauge, Link2, Loader2, Ruler, ShieldCheck, FileStack } from 'lucide-react'
+import { Gauge, Link2, ListChecks, Loader2, Ruler, ShieldCheck, FileStack } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -12,11 +12,14 @@ import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
 import { useMaterialControlStore } from '../material/store/useMaterialControlStore'
 import { useMaterialStore } from '../material/store/useMaterialStore'
+import { useEpcStore } from '../execution/store/useEpcStore'
+import { buildEngTasks, lensOf } from './lib/roles'
 
 export const ENGINEERING_ACCENT = '#6366f1'
-type Tab = 'dash' | 'register' | 'links' | 'impact'
+type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد مهندسی', icon: Gauge, color: '#6366f1' },
+  { id: 'my', label: 'کارهای من', icon: ListChecks, color: '#ec4899' },
   { id: 'register', label: 'فهرست مدارک', icon: FileStack, color: '#0ea5e9' },
   { id: 'links', label: 'ارتباط مدارک و فعالیت‌ها', icon: Link2, color: '#14b8a6' },
   { id: 'impact', label: 'آمادگی و اثر تأخیر', icon: ShieldCheck, color: '#f97316' },
@@ -55,6 +58,9 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
     if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   const loading = !mdLoaded || !exLoaded
+  const engDocs = useEpcStore((s) => s.engDocs)
+  const myRoles = useExecutionStore((s) => (projectId ? s.myRoles(projectId) : []))
+  const myCount = projectId ? buildEngTasks(engDocs.filter((d) => d.projectId === projectId), lensOf(myRoles), new Date().toISOString().slice(0, 10)).length : 0
 
   return (
     <div className="im-root fn-root mt-root ex-root" dir="rtl" style={{ ['--im-accent' as string]: ENGINEERING_ACCENT }}>
@@ -76,7 +82,7 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های پایش مهندسی">
           {NAV.map((n) => (
-            <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}><n.icon size={15} aria-hidden />{n.label}</button>
+            <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}><n.icon size={15} aria-hidden />{n.label}{n.id === 'my' && myCount > 0 && <em className="im-nav-badge" style={{ fontStyle: 'normal', marginInlineStart: 4, background: '#ef4444', color: '#fff', borderRadius: 99, padding: '0 6px', fontSize: 10.5 }}>{myCount.toLocaleString('fa-IR')}</em>}</button>
           ))}
         </nav>
       </header>
