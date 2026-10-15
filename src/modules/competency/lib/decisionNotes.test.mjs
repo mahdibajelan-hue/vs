@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { noteRequired, noteValid } from './decisionNotes.ts'
+import { noteRequired, noteValid } from './decisionRules.ts'
 assert.equal(noteRequired('APPROVAL_REVOKED'), true)
 assert.equal(noteRequired('NOT_ASSIGNED'), true)
 assert.equal(noteRequired('OPEN_TO_WORK'), true)
