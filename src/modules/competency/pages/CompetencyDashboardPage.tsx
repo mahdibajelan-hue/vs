@@ -265,6 +265,8 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav, mode 
           topPerRole={topPerRole.map((t) => ({ role: t.role, roleLabel: jobRoleLabel(jobRoleConfigs, t.role), assessment: t.assessment, overall: t.overall }))}
           onOpen={onOpen}
           onMyTasks={nav.myTasks}
+          roleName={(r) => jobRoleLabel(jobRoleConfigs, r)}
+          onOpenBank={nav.questionBank}
         />
 
         {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per

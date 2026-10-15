@@ -5,6 +5,7 @@ import { ChartTip, HBars, PB, Tile, axisProps, gridProps } from '../../finance/c
 import { KpiCard } from '../../finance/components/fn'
 import { formatJalali } from '../../../lib/jalali'
 import type { NextStep } from '../lib/nextStep'
+import { McqOpsCard } from './McqOpsCard'
 import type { CompetencyAssessment } from '../types'
 import '../../finance/finance-dashboard.css'
 
@@ -24,10 +25,12 @@ export interface OverviewProps {
   topPerRole: { role: string; roleLabel: string; assessment: CompetencyAssessment; overall: number | null }[]
   onOpen: (id: string) => void
   onMyTasks?: () => void
+  roleName?: (role: string) => string
+  onOpenBank?: () => void
 }
 
 /** The module's first screen: four numbers, three pictures and the short lists people act on — what the lists below used to say in a wall of cards. */
-export function DashboardOverview({ assessments, scored, nextStepById, readyForInterview, awaitingDocsReview, topPerRole, onOpen, onMyTasks }: OverviewProps) {
+export function DashboardOverview({ assessments, scored, nextStepById, readyForInterview, awaitingDocsReview, topPerRole, onOpen, onMyTasks, roleName: roleNameProp, onOpenBank }: OverviewProps) {
   const [queue, setQueue] = useState<'ready' | 'docs'>('ready')
   const total = assessments.length
   const approved = assessments.filter((a) => a.isApproved).length
@@ -83,6 +86,8 @@ export function DashboardOverview({ assessments, scored, nextStepById, readyForI
           <HBars fmt={(x) => fa(x)} data={byRole.map(([r, n], i) => ({ name: roleName(r), value: n, color: [PB.teal, PB.blue, PB.yellow, PB.violet, PB.orange, PB.sky][i % 6] }))} />
         </Tile>
       </div>
+
+      <McqOpsCard roleName={roleNameProp ?? ((r) => r)} onOpenBank={onOpenBank} />
 
       <div className="comp-dash-grid2">
         <section className="im-card comp-box">
