@@ -87,7 +87,7 @@ const docs = new Map([['d1', { id: 'd1', docNo: 'DWG-1', title: '', rev: 'B', st
 const supply = new Map([['m1', { id: 'm1', onSite: 40, required: 100 }], ['m2', { id: 'm2', onSite: 100, required: 100 }]])
 const pr = (id, o) => ({ id, activityId: 'a', kind: 'material', title: id, refType: '', refId: null, status: 'pending', neededDate: null, readyDate: null, ...o })
 let rd = activityReadiness('a', [pr('p1', { kind: 'drawing', refType: 'eng_doc', refId: 'd1' }), pr('p2', { refType: 'material', refId: 'm2' })], docs, supply, '2026-01-01'); assert.equal(rd.state, 'ready')
-rd = activityReadiness('a', [pr('p1', { kind: 'drawing', refType: 'eng_doc', refId: 'd2' }), pr('p2', { refType: 'material', refId: 'm1' })], docs, supply, '2026-01-01'); assert.equal(rd.state, 'blocked'); assert.ok(rd.blockers[0].includes('منتظر مجوز'))
+rd = activityReadiness('a', [pr('p1', { kind: 'drawing', refType: 'eng_doc', refId: 'd2' }), pr('p2', { refType: 'material', refId: 'm1' })], docs, supply, '2026-01-01'); assert.equal(rd.state, 'at_risk'); assert.ok(rd.items[0].reason.includes('منتظر مجوز'))
 rd = activityReadiness('a', [pr('p2', { refType: 'material', refId: 'm1' })], docs, supply, '2026-01-01'); assert.equal(rd.state, 'at_risk')
 rd = activityReadiness('a', [pr('p3', { kind: 'permit', status: 'pending', neededDate: '2025-12-30' })], docs, supply, '2026-01-01'); assert.equal(rd.state, 'at_risk'); assert.ok(rd.items[0].reason.includes('گذشته'))
 assert.equal(activityReadiness('zzz', [pr('p9')], docs, supply, '2026-01-01').state, 'unknown')
@@ -155,3 +155,52 @@ an = answer('چه تصمیم‌هایی لازم است؟', facts); assert.ok(an
 an = answer('قیمت دلار چند است؟', facts); assert.equal(an.known, false); assert.ok(an.text.includes('ممکن نیست'))
 an = answer('برای جبران جوشکاری چه لازم است', { ...facts, welding: [{ ...facts.welding[0], perDay: null, requiredPerDay: null }] }); assert.ok(an.text.includes('ممکن نیست'))
 console.log('assistant tests ok')
+
+// ── engineering progress, forecast, float, impact, readiness
+import { engProgress, engProgressBy, forecastDoc, forecastCompletion, linkState, totalFloat, docImpact, execReadiness, DEFAULT_ENG_RULES } from './engineering.ts'
+const doc = (id, o = {}) => ({ id, code: id.toUpperCase(), title: id, discipline: 'civil', contract: 'C1', weight: 1, critical: false, plannedPrepared: '2026-01-05', plannedApproved: '2026-01-10', actualPrepared: null, actualApproved: null, status: 'required', ...o })
+const edocs = [doc('d1', { weight: 2, status: 'approved', actualPrepared: '2026-01-04', actualApproved: '2026-01-12' }), doc('d2', { weight: 1, status: 'issued', actualPrepared: '2026-01-06' }), doc('d3', { weight: 1, status: 'restricted', actualPrepared: '2026-01-05', actualApproved: '2026-01-10' }), doc('d4', { weight: 0, status: 'approved', actualApproved: '2026-01-01', actualPrepared: '2026-01-01' }), doc('d5', { weight: 4, status: 'required', plannedPrepared: '2026-03-01', plannedApproved: '2026-03-10' })]
+let ep = engProgress(edocs, '2026-01-20')
+// weights 2+1+1+4 = 8 (d4 has weight 0 and is ignored); planned prepared by 01-20: d1,d2,d3 = 4/8; actual prepared: d1,d2,d3 = 4/8; approved: d1,d3 = 3/8; ready = (2 + .5)/8
+near(ep.plannedPrepared, 0.5); near(ep.actualPrepared, 0.5); near(ep.plannedApproved, 0.5); near(ep.actualApproved, 3 / 8); near(ep.ready, 2.5 / 8); near(ep.actualScore, 0.6 * 0.5 + 0.4 * 3 / 8); assert.equal(ep.docs, 4)
+near(engProgress(edocs, '2026-01-03').actualPrepared, 0) // before anything happened (string date compare)
+assert.equal(engProgressBy([doc('a', { discipline: 'civil' }), doc('b', { discipline: 'mech', weight: 3 })], '2026-02-01', 'discipline')[0].key, 'mech')
+// forecast of a late document: discipline slip learned from completed ones
+const done = [doc('c1', { plannedApproved: '2026-01-10', actualApproved: '2026-01-20', status: 'approved' }), doc('c2', { plannedApproved: '2026-01-10', actualApproved: '2026-01-16', status: 'approved' }), doc('c3', { plannedApproved: '2026-01-10', actualApproved: '2026-01-14', status: 'approved' })]
+const open1 = doc('o1', { plannedApproved: '2026-02-01', status: 'in_preparation' })
+let fd = forecastDoc(open1, [...done, open1], '2026-01-25'); assert.equal(fd.lagDays, 7); assert.equal(fd.expectedApproval, '2026-02-08'); assert.equal(fd.overdue, false); assert.equal(fd.sample, 3)
+fd = forecastDoc(doc('o2', { plannedApproved: '2026-01-05', status: 'in_preparation' }), [...done], '2026-01-25'); assert.equal(fd.overdue, true); assert.equal(fd.overdueDays, 20); assert.equal(fd.expectedApproval, '2026-01-25') // never earlier than today
+fd = forecastDoc(open1, [open1, done[0]], '2026-01-25'); assert.equal(fd.expectedApproval, null); assert.ok(fd.reason.includes('کافی نیست')); assert.equal(forecastDoc(doc('o3', { plannedApproved: null }), done, '2026-01-25').expectedApproval, null)
+// completion forecast from recent throughput
+const fc2 = forecastCompletion([doc('x1', { weight: 2, status: 'approved', actualApproved: '2026-01-20' }), doc('x2', { weight: 2, status: 'approved', actualApproved: '2026-01-24' }), doc('x3', { weight: 8, status: 'in_preparation' })], '2026-02-01', { ...DEFAULT_ENG_RULES, windowDays: 42 })
+near(fc2.ratePerWeek, 4 / 42 * 7); assert.equal(fc2.date, '2026-04-26') // remaining 8 / (4/42 per day) = 84 days → 2026-02-01 + 84
+assert.equal(forecastCompletion([doc('y', { weight: 3, status: 'approved', actualApproved: '2026-01-20' }), doc('y2', { weight: 3 })], '2026-02-01').date, null)
+// link state against the required status
+const lk = (o = {}) => ({ id: 'l', docId: 'd', activityId: 'a', front: '', needKind: 'start', needDate: '2026-02-10', minStatus: 'approved', allowRestricted: false, altActivityId: null, ...o })
+assert.equal(linkState(lk(), doc('d', { status: 'approved' })), 'ok'); assert.equal(linkState(lk(), doc('d', { status: 'issued' })), 'open'); assert.equal(linkState(lk({ minStatus: 'issued' }), doc('d', { status: 'issued' })), 'ok')
+assert.equal(linkState(lk(), doc('d', { status: 'restricted' })), 'open'); assert.equal(linkState(lk({ allowRestricted: true }), doc('d', { status: 'restricted' })), 'restricted'); assert.equal(linkState(lk(), undefined), 'missing')
+// float: A→B→C chain, project end = C end; D standalone
+const A = { id: 'A', plannedStart: '2026-02-01', plannedEnd: '2026-02-10' }, B = { id: 'B', plannedStart: '2026-02-11', plannedEnd: '2026-02-20' }, C = { id: 'C', plannedStart: '2026-02-21', plannedEnd: '2026-03-01' }, Dd = { id: 'D', plannedStart: '2026-02-01', plannedEnd: '2026-02-05' }, E = { id: 'E', plannedStart: '2026-02-01', plannedEnd: '2026-02-05' }
+let fl = totalFloat([A, B, C, Dd], [{ predId: 'A', succId: 'B', type: 'FS', lag: 0 }, { predId: 'B', succId: 'C', type: 'FS', lag: 0 }])
+assert.equal(fl.get('A').float, 0); assert.equal(fl.get('C').float, 0); assert.equal(fl.get('D').assumed, true); assert.equal(fl.get('A').assumed, false)
+// D feeds C with slack: D ends 02-05, C starts 02-21 → 15 days between end and C's late start
+fl = totalFloat([A, B, C, Dd], [{ predId: 'A', succId: 'B', type: 'FS', lag: 0 }, { predId: 'B', succId: 'C', type: 'FS', lag: 0 }, { predId: 'D', succId: 'C', type: 'FS', lag: 0 }]); assert.equal(fl.get('D').float, 15); assert.equal(fl.get('D').assumed, false)
+// impact: need date independent of the planned issue date; float and alternatives absorb the delay
+const actD = { id: 'D', title: 'D', plannedStart: '2026-02-01', plannedEnd: '2026-02-05' }
+const baseIn = { link: lk({ activityId: 'D', needDate: '2026-02-01' }), doc: doc('d', { status: 'in_preparation', plannedApproved: '2026-01-25' }), forecast: { docId: 'd', overdue: false, overdueDays: 0, expectedApproval: '2026-02-11', lagDays: 5, sample: 4, reason: 'r' }, activity: actD, float: { float: 15, assumed: false }, today: '2026-01-25' }
+let im = docImpact(baseIn); assert.equal(im.lateDays, 10); assert.equal(im.projectSlipDays, 0); assert.equal(im.absorbedBy, 'float'); assert.equal(im.startSlipDays, 10)
+im = docImpact({ ...baseIn, float: { float: 4, assumed: false } }); assert.equal(im.projectSlipDays, 6)
+im = docImpact({ ...baseIn, float: { float: 0, assumed: true } }); assert.equal(im.projectSlipDays, 10); assert.ok(im.assumptions.some((x) => x.includes('شناوری صفر')))
+im = docImpact({ ...baseIn, link: lk({ activityId: 'D', needDate: '2026-02-01', altActivityId: 'Z' }) }); assert.equal(im.absorbedBy, 'alternative'); assert.equal(im.projectSlipDays, 0)
+im = docImpact({ ...baseIn, forecast: { ...baseIn.forecast, expectedApproval: null, reason: 'نمونه کافی نیست' } }); assert.equal(im.known, false); assert.equal(im.projectSlipDays, null)
+im = docImpact({ ...baseIn, link: lk({ needDate: null }), activity: { ...actD, plannedStart: null } }); assert.equal(im.known, false)
+im = docImpact({ ...baseIn, doc: doc('d', { status: 'approved' }) }); assert.equal(im.projectSlipDays, 0); assert.equal(im.state, 'ok')
+// readiness: a document alone never makes an activity ready
+const okDoc = { impact: { state: 'ok' }, docCode: 'D1', needDate: '2026-02-01' }
+assert.equal(execReadiness({ docs: [okDoc], others: [{ title: 'لوله', state: 'blocked' }], today: '2026-01-25' }).state, 'not_ready')
+assert.equal(execReadiness({ docs: [okDoc], others: [{ title: 'مجوز', state: 'pending' }], today: '2026-01-25' }).state, 'ready_with_restrictions')
+assert.equal(execReadiness({ docs: [okDoc], others: [], today: '2026-01-25' }).state, 'ready')
+assert.equal(execReadiness({ docs: [{ impact: { state: 'open' }, docCode: 'D2', needDate: '2026-01-20' }], others: [], today: '2026-01-25' }).state, 'not_ready')
+const fut = execReadiness({ docs: [{ impact: { state: 'open' }, docCode: 'D2', needDate: '2026-03-01' }], others: [], today: '2026-01-25' }); assert.equal(fut.state, 'ready_with_restrictions'); assert.deepEqual(fut.open, ['مدرک D2'])
+assert.equal(execReadiness({ docs: [{ impact: { state: 'restricted' }, docCode: 'D3', needDate: null }], others: [], today: '2026-01-25' }).state, 'ready_with_restrictions')
+console.log('engineering tests ok')

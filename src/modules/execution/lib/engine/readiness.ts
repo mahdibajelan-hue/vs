@@ -1,7 +1,7 @@
 export type PrereqKind = 'drawing' | 'material' | 'equipment' | 'permit' | 'land' | 'inspection' | 'manpower' | 'other'
 export type PrereqStatus = 'ready' | 'pending' | 'blocked' | 'na'
 export interface Prereq { id: string; activityId: string; kind: PrereqKind; title: string; refType: string; refId: string | null; status: PrereqStatus; neededDate: string | null; readyDate: string | null }
-export interface EngDoc { id: string; docNo: string; title: string; rev: string; status: 'required' | 'issued' | 'pending_approval' | 'approved' | 'restricted' | 'superseded'; restrictionNote: string; dueDate: string | null }
+export interface EngDoc { id: string; docNo: string; title: string; rev: string; status: 'required' | 'in_preparation' | 'issued' | 'pending_approval' | 'approved' | 'restricted' | 'superseded'; restrictionNote: string; dueDate: string | null }
 /** Supply status of a referenced material / package, resolved by the caller from the material module: remaining quantity on site vs required. */
 export interface SupplyState { id: string; onSite: number; required: number; stage?: string }
 
@@ -17,9 +17,10 @@ export function prereqState(p: Prereq, docs: Map<string, EngDoc>, supply: Map<st
     const d = docs.get(p.refId)
     if (!d) return { ...base, state: 'pending', reason: 'مدرک مرتبط یافت نشد' }
     if (d.status === 'approved') return { ...base, state: 'ready', reason: `مدرک ${d.docNo} (Rev ${d.rev}) تأییدشده` }
-    if (d.status === 'restricted') return { ...base, state: 'blocked', reason: `مدرک ${d.docNo} دارای محدودیت اجرایی: ${d.restrictionNote || '—'}` }
+    if (d.status === 'restricted') return { ...base, state: 'pending', reason: `مدرک ${d.docNo} با محدودیت اجرایی تأیید شده: ${d.restrictionNote || '—'}` }
     if (d.status === 'superseded') return { ...base, state: 'blocked', reason: `مدرک ${d.docNo} منسوخ شده است` }
-    return { ...base, state: 'pending', reason: `مدرک ${d.docNo} در وضعیت «${d.status}»` }
+    const lateNeed = p.neededDate && p.neededDate <= today
+    return { ...base, state: lateNeed ? 'blocked' : 'pending', reason: `مدرک ${d.docNo} در وضعیت «${d.status}»${lateNeed ? ' و موعد نیاز آن رسیده است' : ''}` }
   }
   if ((p.refType === 'material' || p.refType === 'package') && p.refId) {
     const s = supply.get(p.refId)

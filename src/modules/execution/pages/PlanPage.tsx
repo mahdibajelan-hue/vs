@@ -13,11 +13,11 @@ import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { Empty, fa, pct } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { ActivityLinks } from '../components/epc/ActivityLinks'
-import { ENG_STATUS_LABEL_FA, PREREQ_KIND_LABEL_FA, type EngDocRow } from '../epcTypes'
+import { PREREQ_KIND_LABEL_FA } from '../epcTypes'
 import type { PrereqKind, PrereqStatus } from '../lib/engine/readiness'
 
 const READY_TONE = { ready: 'good', at_risk: 'warn', blocked: 'bad', unknown: 'neutral' } as const
-const READY_FA = { ready: 'آماده', at_risk: 'در معرض خطر', blocked: 'مسدود', unknown: 'پیش‌نیازی تعریف نشده' } as const
+const READY_FA = { ready: 'آماده', at_risk: 'آماده با محدودیت', blocked: 'غیرآماده', unknown: 'پیش‌نیازی تعریف نشده' } as const
 
 export function PlanPage(p: { projectId: string; sub: string }) { return <EpcGate><Inner {...p} /></EpcGate> }
 function Inner({ projectId, sub }: { projectId: string; sub: string }) {
@@ -29,7 +29,6 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const title = (id: string) => m.ex.actById.get(id)?.title ?? '—'
   if (!acts.length) return <Empty>ابتدا فعالیت‌های پروژه را تعریف کنید.</Empty>
   if (sub === 'readiness') return <Readiness m={m} projectId={projectId} can={can} acts={acts} />
-  if (sub === 'eng') return <EngDocs projectId={projectId} can={can} />
   if (sub === 'import') return <Import projectId={projectId} can={can} acts={acts} />
   return <Lookahead m={m} projectId={projectId} can={can} acts={acts} title={title} epcLook={epc.lookahead.filter((l) => l.projectId === projectId)} />
 }
@@ -108,30 +107,6 @@ function Readiness({ m, projectId, can, acts }: { m: ReturnType<typeof useEpcMod
           <div style={{ marginTop: 14 }}><ActivityLinks projectId={projectId} activityId={cur.activityId} can={useExecutionStore.getState().can(projectId, 'raise')} /></div>
         </Section>
       )}
-    </div>
-  )
-}
-
-function EngDocs({ projectId, can }: { projectId: string; can: boolean }) {
-  const epc = useEpcStore()
-  const docs = epc.engDocs.filter((d) => d.projectId === projectId)
-  const [f, setF] = useState({ docNo: '', title: '', rev: '', discipline: '' })
-  const upd = (d: EngDocRow, status: EngDocRow['status']) => void epc.saveEngDoc({ ...d, status })
-  return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <p className="im-helper" style={{ margin: 0 }}>فهرست سبک مدارک مهندسی موردنیاز اجرا. سامانه هنوز ماژول کامل مدارک مهندسی ندارد؛ این فهرست فقط وضعیت مدرک را برای آمادگی فعالیت‌ها نگه می‌دارد و با اتصال به یک سامانهٔ مدیریت مدارک جایگزین می‌شود.</p>
-      {can && <div className="im-card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <label className="ex-lab">شماره مدرک<input value={f.docNo} onChange={(e) => setF({ ...f, docNo: e.target.value })} dir="ltr" /></label>
-        <label className="ex-lab">Rev<input value={f.rev} onChange={(e) => setF({ ...f, rev: e.target.value })} dir="ltr" style={{ width: 60 }} /></label>
-        <label className="ex-lab">عنوان<input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} dir="auto" style={{ width: 240 }} /></label>
-        <label className="ex-lab">دیسیپلین<input value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })} dir="auto" style={{ width: 120 }} /></label>
-        <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.docNo.trim()} onClick={() => void epc.saveEngDoc({ projectId, ...f }).then(() => setF({ docNo: '', title: '', rev: '', discipline: '' }))}><Plus size={13} /> مدرک</button>
-      </div>}
-      <Section title="مدارک" flush><div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>شماره</th><th>Rev</th><th>عنوان</th><th>دیسیپلین</th><th>وضعیت</th><th>محدودیت اجرایی</th></tr></thead>
-        <tbody>{docs.map((d) => <tr key={d.id}><td className="fn-code">{d.docNo}</td><td>{d.rev}</td><td>{d.title}</td><td>{d.discipline}</td>
-          <td>{can ? <select value={d.status} onChange={(e) => upd(d, e.target.value as EngDocRow['status'])}>{Object.entries(ENG_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select> : ENG_STATUS_LABEL_FA[d.status]}</td>
-          <td>{can ? <input defaultValue={d.restrictionNote} placeholder="در صورت وجود" dir="auto" onBlur={(e) => { if (e.target.value !== d.restrictionNote) void epc.saveEngDoc({ ...d, restrictionNote: e.target.value }) }} /> : d.restrictionNote}</td></tr>)}
-          {docs.length === 0 && <tr><td colSpan={6} className="sub">مدرکی ثبت نشده است.</td></tr>}</tbody></table></div></Section>
     </div>
   )
 }

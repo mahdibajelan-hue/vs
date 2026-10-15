@@ -12,8 +12,14 @@ export const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+x
 export interface LegalText { body: string; status: 'draft' | 'legal_approved'; version: number; scope: 'project' | 'default' }
 
 export interface CrewLogRow { id: string; reportId: string; activityId: string | null; crewName: string; composition: Record<string, number>; usefulHours: number; idleHours: number; outputQty: number; conditions: Record<string, unknown>; note: string }
-export interface EngDocRow { id: string; projectId: string; docNo: string; title: string; discipline: string; rev: string; status: 'required' | 'issued' | 'pending_approval' | 'approved' | 'restricted' | 'superseded'; restrictionNote: string; dueDate: string | null; issuedDate: string | null }
-export const ENG_STATUS_LABEL_FA: Record<EngDocRow['status'], string> = { required: 'موردنیاز', issued: 'صادرشده', pending_approval: 'در انتظار تأیید', approved: 'تأییدشده', restricted: 'دارای محدودیت اجرایی', superseded: 'منسوخ' }
+export type EngStatus = 'required' | 'in_preparation' | 'issued' | 'pending_approval' | 'approved' | 'restricted' | 'superseded'
+export interface EngDocRow {
+  id: string; projectId: string; docNo: string; title: string; discipline: string; rev: string; contract: string; preparer: string; approver: string; weight: number; critical: boolean
+  status: EngStatus; restrictionNote: string; dueDate: string | null; issuedDate: string | null
+  plannedPrepared: string | null; plannedApproved: string | null; actualPrepared: string | null; actualApproved: string | null; note: string
+}
+export const ENG_STATUS_LABEL_FA: Record<EngStatus, string> = { required: 'شروع‌نشده', in_preparation: 'در حال تهیه', issued: 'تهیه‌شده/صادرشده', pending_approval: 'در انتظار تأیید', approved: 'تأییدشده', restricted: 'تأیید با محدودیت اجرایی', superseded: 'منسوخ' }
+export interface DocLinkRow { id: string; projectId: string; docId: string; activityId: string; front: string; contract: string; needKind: 'start' | 'continue'; needDate: string | null; minStatus: 'issued' | 'approved'; allowRestricted: boolean; altActivityId: string | null; note: string }
 export interface PrereqRow { id: string; projectId: string; activityId: string; kind: PrereqKind; title: string; refType: string; refId: string | null; status: PrereqStatus; neededDate: string | null; readyDate: string | null; note: string }
 export const PREREQ_KIND_LABEL_FA: Record<PrereqKind, string> = { drawing: 'نقشه/مدرک مهندسی', material: 'مصالح', equipment: 'تجهیز/ماشین‌آلات', permit: 'مجوز', land: 'زمین/جبهه', inspection: 'بازرسی/تأییدیه', manpower: 'نیروی انسانی', other: 'سایر' }
 export interface DepRow { id: string; projectId: string; predId: string; succId: string; type: 'FS' | 'SS' | 'FF' | 'SF'; lag: number }

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { CrewLogRow, DepRow, EngDocRow, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { CrewLogRow, DepRow, DocLinkRow, EngDocRow, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -28,13 +28,16 @@ const crewRow = (r: Row): CrewLogRow => ({ id: r.id, reportId: r.report_id, acti
 interface State {
   /** false when migration 010 is not applied yet (the tables are missing) — the EPC pages then show an explanatory banner instead of failing */
   available: boolean; loaded: boolean
-  crewLogs: CrewLogRow[]; engDocs: EngDocRow[]; prereqs: PrereqRow[]; deps: DepRow[]; lookahead: LookaheadRow[]; measurements: MeasurementRow[]; versions: VersionRow[]; proposals: FormProposalRow[]; imports: ScheduleImportRow[]
+  crewLogs: CrewLogRow[]; engDocs: EngDocRow[]; docLinks: DocLinkRow[]; prereqs: PrereqRow[]; deps: DepRow[]; lookahead: LookaheadRow[]; measurements: MeasurementRow[]; versions: VersionRow[]; proposals: FormProposalRow[]; imports: ScheduleImportRow[]
   legalByProject: Map<string, LegalText>
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
   loadVersions: (reportId: string) => Promise<void>
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
+  saveDocLink: (l: Partial<DocLinkRow> & { projectId: string; docId: string; activityId: string }) => Promise<boolean>
+  removeDocLink: (id: string) => Promise<boolean>
+  raiseDoc: (a: { projectId: string; docId: string; target: 'issue' | 'risk'; title: string; description: string; severity: string; impactDays?: number | null; front?: string }) => Promise<{ id: string; existing: boolean } | null>
   savePrereq: (p: Partial<PrereqRow> & { projectId: string; activityId: string; title: string }) => Promise<boolean>
   removePrereq: (id: string) => Promise<boolean>
   saveLookahead: (l: Partial<LookaheadRow> & { projectId: string; weekStart: string; activityId: string }) => Promise<boolean>
@@ -50,18 +53,19 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(),
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(),
 
   fetchAll: async () => {
     const t = (name: string) => supabase.from(name).select('*')
-    const [crew, docs, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
+    const [crew, docs, dlinks, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once
     if (crew.error && /does not exist|schema cache|relation/i.test(crew.error.message)) { set({ available: false, loaded: true }); return }
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
     set({
       available: true, loaded: true,
       crewLogs: ok<Row>(crew).map(crewRow),
-      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date })),
+      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', contract: r.contract ?? '', preparer: r.preparer ?? '', approver: r.approver ?? '', weight: n(r.weight ?? 1), critical: !!r.critical, status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date, plannedPrepared: r.planned_prepared, plannedApproved: r.planned_approved, actualPrepared: r.actual_prepared, actualApproved: r.actual_approved, note: r.note ?? '' })),
+      docLinks: ok<Row>(dlinks).map((r): DocLinkRow => ({ id: r.id, projectId: r.project_id, docId: r.doc_id, activityId: r.activity_id, front: r.front ?? '', contract: r.contract ?? '', needKind: r.need_kind, needDate: r.need_date, minStatus: r.min_status, allowRestricted: !!r.allow_restricted, altActivityId: r.alt_activity_id, note: r.note ?? '' })),
       prereqs: ok<Row>(pre).map((r): PrereqRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, kind: r.kind, title: r.title ?? '', refType: r.ref_type ?? '', refId: r.ref_id, status: r.status, neededDate: r.needed_date, readyDate: r.ready_date, note: r.note ?? '' })),
       deps: ok<Row>(deps).map((r): DepRow => ({ id: r.id, projectId: r.project_id, predId: r.pred_id, succId: r.succ_id, type: r.dep_type, lag: n(r.lag_days) })),
       lookahead: ok<Row>(look).map((r): LookaheadRow => ({ id: r.id, projectId: r.project_id, weekStart: r.week_start, activityId: r.activity_id, front: r.front ?? '', responsible: r.responsible ?? '', plannedQty: n(r.planned_qty), resources: r.resources ?? {}, committed: !!r.committed, achievedQty: nn(r.achieved_qty), deviationCause: r.deviation_cause ?? '', recoveryPlan: r.recovery_plan ?? '', note: r.note ?? '' })),
@@ -93,10 +97,26 @@ export const useEpcStore = create<State>((set, get) => ({
     await get().fetchAll(); return true
   },
   saveEngDoc: async (d) => {
-    const row = { project_id: d.projectId, doc_no: d.docNo, title: d.title ?? '', discipline: d.discipline ?? '', rev: d.rev ?? '', status: d.status ?? 'required', restriction_note: d.restrictionNote ?? '', due_date: d.dueDate || null, issued_date: d.issuedDate || null }
+    const row = { project_id: d.projectId, doc_no: d.docNo, title: d.title ?? '', discipline: d.discipline ?? '', rev: d.rev ?? '', contract: d.contract ?? '', preparer: d.preparer ?? '', approver: d.approver ?? '', weight: d.weight ?? 1, critical: d.critical ?? false, status: d.status ?? 'required', restriction_note: d.restrictionNote ?? '', due_date: d.dueDate || null, issued_date: d.issuedDate || null, planned_prepared: d.plannedPrepared || null, planned_approved: d.plannedApproved || null, actual_prepared: d.actualPrepared || null, actual_approved: d.actualApproved || null, note: d.note ?? '' }
     const { error } = d.id ? await supabase.from('ex_eng_docs').update(row).eq('id', d.id) : await supabase.from('ex_eng_docs').insert(row)
     if (fail('ذخیرهٔ مدرک مهندسی', error)) return false
     await get().fetchAll(); return true
+  },
+  saveDocLink: async (l) => {
+    const row = { project_id: l.projectId, doc_id: l.docId, activity_id: l.activityId, front: l.front ?? '', contract: l.contract ?? '', need_kind: l.needKind ?? 'start', need_date: l.needDate || null, min_status: l.minStatus ?? 'approved', allow_restricted: l.allowRestricted ?? false, alt_activity_id: l.altActivityId || null, note: l.note ?? '' }
+    const { error } = await supabase.from('ex_doc_links').upsert(row, { onConflict: 'doc_id,activity_id' })
+    if (fail('ذخیرهٔ ارتباط مدرک و فعالیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  removeDocLink: async (id) => {
+    const { error } = await supabase.from('ex_doc_links').delete().eq('id', id)
+    if (fail('حذف ارتباط', error)) return false
+    await get().fetchAll(); return true
+  },
+  raiseDoc: async (a) => {
+    const { data, error } = await supabase.rpc('ex_raise_doc', { p_project: a.projectId, p_doc: a.docId, p_target: a.target, p_title: a.title, p_description: a.description, p_severity: a.severity, p_extra: { impact_days: a.impactDays ?? null, front: a.front ?? '' } })
+    if (error) { useSystemStore.getState().setStorageError(`خطا در ثبت ${a.target === 'issue' ? 'مسئله' : 'ریسک'}: ${error.message.includes('no_issue_mapping') || error.message.includes('no_risk_mapping') ? 'این پروژه هنوز به ماژول مربوط نگاشت نشده است.' : error.message}`); return null }
+    return { id: String((data as Row).id), existing: !!(data as Row).existing }
   },
   savePrereq: async (p) => {
     const row = { project_id: p.projectId, activity_id: p.activityId, kind: p.kind ?? 'other', title: p.title, ref_type: p.refType ?? '', ref_id: p.refId ?? null, status: p.status ?? 'pending', needed_date: p.neededDate || null, ready_date: p.readyDate || null, note: p.note ?? '' }
