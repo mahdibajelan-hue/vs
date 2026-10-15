@@ -44,3 +44,5 @@ export interface EpcSettings {
   productivity: { windowDays: number; weighting: 'all' | 'wma' | 'sma'; smaDays: number; outlierSigma: number; assumedElasticity: number; extraShiftEfficiency: number; shiftHours: number; crewDayCost: number | null; laborKeys: string[] }
   thresholds: import('./lib/engine/alerts').AlertThresholds
 }
+
+export interface QcFindingRow { id: string; projectId: string; techReportId: string | null; lineId: string | null; kind: 'defect' | 'nonconformity' | 'observation'; severity: 'low' | 'medium' | 'high'; status: 'open' | 'closed'; weldRef: string; note: string; createdAt: string; closedAt: string | null }

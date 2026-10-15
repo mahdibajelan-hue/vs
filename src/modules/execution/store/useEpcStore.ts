@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { FormTemplateRow, ReportLinkRow, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -30,13 +30,15 @@ interface State {
   available: boolean; loaded: boolean
   crewLogs: CrewLogRow[]; engDocs: EngDocRow[]; docLinks: DocLinkRow[]; prereqs: PrereqRow[]; deps: DepRow[]; lookahead: LookaheadRow[]; measurements: MeasurementRow[]; versions: VersionRow[]; proposals: FormProposalRow[]; imports: ScheduleImportRow[]
   legalByProject: Map<string, LegalText>
-  templates: FormTemplateRow[]; reportLinks: ReportLinkRow[]
+  templates: FormTemplateRow[]; reportLinks: ReportLinkRow[]; findings: QcFindingRow[]
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
   loadVersions: (reportId: string) => Promise<void>
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
   saveTemplateDraft: (t: { formKey: string; title: string; layout: FormTemplateRow['layout']; bindings: FormTemplateRow['bindings'] }) => Promise<boolean>
   approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
+  saveFinding: (f: { projectId: string; techReportId?: string | null; kind: QcFindingRow['kind']; severity: QcFindingRow['severity']; weldRef: string; note: string }) => Promise<boolean>
+  closeFinding: (id: string, reopen?: boolean) => Promise<boolean>
   linkReport: (projectId: string, lineId: string, techReportId: string) => Promise<boolean>
   unlinkReport: (id: string) => Promise<boolean>
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
@@ -60,13 +62,15 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [], findings: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
     const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), supabase.from('ex_report_links').select('*')])
     if (!tpl.error) set({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
     if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
+    const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
+    if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
     const t = (name: string) => supabase.from(name).select('*')
     const [crew, docs, dlinks, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once
@@ -116,6 +120,16 @@ export const useEpcStore = create<State>((set, get) => ({
   approveTemplate: async (id, code, revision) => {
     const { error } = await supabase.rpc('ex_form_template_approve', { p_id: id, p_code: code, p_revision: revision })
     if (fail('تأیید الگوی فرم', error)) return false
+    await get().fetchAll(); return true
+  },
+  saveFinding: async (f) => {
+    const { error } = await supabase.from('ex_qc_findings').insert({ project_id: f.projectId, tech_report_id: f.techReportId ?? null, kind: f.kind, severity: f.severity, weld_ref: f.weldRef, note: f.note })
+    if (fail('ثبت مغایرت کنترل کیفیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  closeFinding: async (id, reopen) => {
+    const { error } = await supabase.from('ex_qc_findings').update({ status: reopen ? 'open' : 'closed', closed_at: reopen ? null : new Date().toISOString() }).eq('id', id)
+    if (fail('بستن مغایرت', error)) return false
     await get().fetchAll(); return true
   },
   linkReport: async (projectId, lineId, techReportId) => {
