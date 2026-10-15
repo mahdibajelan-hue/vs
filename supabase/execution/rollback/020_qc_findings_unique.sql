@@ -1,0 +1,2 @@
+-- R-C (index only, no data): drop index if exists ex_qc_findings_open_uq;
+-- The closed duplicate (id 0c687489-84e1-485c-8577-5ad91897a695) can be reopened with: update ex_qc_findings set status='open', closed_at=null where id='0c687489-84e1-485c-8577-5ad91897a695';  (a backup of both rows is in _bak_s7_ex_qc_findings)

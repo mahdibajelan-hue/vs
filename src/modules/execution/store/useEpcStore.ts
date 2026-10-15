@@ -129,6 +129,7 @@ export const useEpcStore = create<State>((set, get) => ({
   },
   saveFinding: async (f) => {
     const { error } = await supabase.from('ex_qc_findings').insert({ project_id: f.projectId, tech_report_id: f.techReportId ?? null, kind: f.kind, severity: f.severity, weld_ref: f.weldRef, note: f.note })
+    if (error?.code === '23505') { window.alert('این مغایرت برای همین گزارش و سرجوش قبلاً ثبت شده و هنوز باز است.'); return false }
     if (fail('ثبت مغایرت کنترل کیفیت', error)) return false
     await get().fetchAll(); return true
   },

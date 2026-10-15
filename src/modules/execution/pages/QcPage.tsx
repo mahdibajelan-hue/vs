@@ -19,6 +19,7 @@ function Inner({ projectId }: { projectId: string }) {
   const m = useExecutionModel(projectId)
   const epc = useEpcStore()
   const can = useExecutionStore((s) => s.can(projectId, 'record') || s.can(projectId, 'raise') || s.can(projectId, '*'))
+  const [busy, setBusy] = useState(false)
   const [f, setF] = useState({ kind: 'defect' as QcFindingRow['kind'], severity: 'medium' as QcFindingRow['severity'], weldRef: '', note: '', rep: '' })
   const tech = useMemo(() => m.reports.filter((r) => r.formKey !== 'work' && r.status !== 'rejected'), [m.reports])
   const byForm = useMemo(() => {
@@ -61,7 +62,7 @@ function Inner({ projectId }: { projectId: string }) {
       <Section title="وضعیت فرم‌ها"><DataTable cols={cols} rows={byForm} rowKey={(r) => r.key} empty="هنوز فرم فنی ثبت نشده است." /></Section>
       {suggestions.length > 0 && (
         <Section title={`پیشنهاد ثبت مغایرت (${fa(suggestions.length)})`} hint="سرجوش‌هایی که در فرم‌ها مردود یا نیازمند تعمیرند و هنوز مغایرتی برایشان ثبت نشده است.">
-          <div className="fn-tbl-wrap" style={{ maxHeight: 280 }}><table className="ex-lines"><tbody>{suggestions.slice(0, 50).map((x) => <tr key={x.key}><td dir="ltr">{x.weld}</td><td>{x.why}</td><td>{m.reports.find((r) => r.id === x.reportId)?.reportNo}</td><td>{can && <button className="im-btn im-btn-sm im-btn-primary" onClick={() => void epc.saveFinding({ projectId, techReportId: x.reportId, kind: 'defect', severity: 'medium', weldRef: x.weld, note: x.why })}>ثبت مغایرت</button>}</td></tr>)}</tbody></table></div>
+          <div className="fn-tbl-wrap" style={{ maxHeight: 280 }}><table className="ex-lines"><tbody>{suggestions.slice(0, 50).map((x) => <tr key={x.key}><td dir="ltr">{x.weld}</td><td>{x.why}</td><td>{m.reports.find((r) => r.id === x.reportId)?.reportNo}</td><td>{can && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy} onClick={async () => { setBusy(true); await epc.saveFinding({ projectId, techReportId: x.reportId, kind: 'defect', severity: 'medium', weldRef: x.weld, note: x.why }); setBusy(false) }}>ثبت مغایرت</button>}</td></tr>)}</tbody></table></div>
         </Section>
       )}
       <Section title="ثبت مغایرت و نتایج بازرسی" hint="مغایرت را به یک گزارش فنی وصل کنید؛ تا بسته‌شدن، در شاخص‌ها باز می‌ماند.">
@@ -72,7 +73,7 @@ function Inner({ projectId }: { projectId: string }) {
             <select value={f.rep} onChange={(e) => setF({ ...f, rep: e.target.value })} aria-label="گزارش فنی" style={{ maxWidth: 260 }}><option value="">بدون اتصال به گزارش</option>{tech.map((r) => <option key={r.id} value={r.id}>{r.reportNo} — {FORM_BY_KEY[r.formKey]?.title ?? r.formKey}</option>)}</select>
             <input value={f.weldRef} onChange={(e) => setF({ ...f, weldRef: e.target.value })} placeholder="شمارهٔ سرجوش/لوله" dir="ltr" style={{ width: 150 }} />
             <input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="شرح مغایرت" style={{ flex: 1, minWidth: 200 }} />
-            <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.note.trim()} onClick={async () => { if (await epc.saveFinding({ projectId, techReportId: f.rep || null, kind: f.kind, severity: f.severity, weldRef: f.weldRef, note: f.note })) setF({ ...f, weldRef: '', note: '' }) }}>ثبت</button>
+            <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.note.trim() || busy} onClick={async () => { setBusy(true); const ok = await epc.saveFinding({ projectId, techReportId: f.rep || null, kind: f.kind, severity: f.severity, weldRef: f.weldRef, note: f.note }); setBusy(false); if (ok) setF({ ...f, weldRef: '', note: '' }) }}>ثبت</button>
           </div>
         )}
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>نوع</th><th>شدت</th><th>سرجوش</th><th>شرح</th><th>گزارش</th><th>وضعیت</th><th /></tr></thead>

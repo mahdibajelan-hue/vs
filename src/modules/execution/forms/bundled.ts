@@ -8,7 +8,7 @@ import rtRepair from './templates/rt_req_repair.grid.json'
 import rtReport from './templates/rt_report.grid.json'
 import pqr from './templates/pqr.grid.json'
 import wqt from './templates/wqt.grid.json'
-import cardWelder from './templates/card_welder.grid.json'
+import cardWelder from './templates/welder_card.grid.json'
 import { WELDING_BINDINGS } from './weldingBindings'
 import { GRID_SPECS } from './gridSpecs'
 import type { CellBinding, GridTemplate } from './gridTypes'
@@ -31,5 +31,5 @@ export const BUNDLED_TEMPLATES: BundledTemplate[] = [
   spec('rt_report', 'گزارش رادیوگرافی', rtReport),
   stat('pqr', 'PQR — گزارش تأیید روش جوشکاری', pqr),
   stat('wqt', 'WQT — آزمون صلاحیت جوشکار', wqt),
-  stat('card_welder', 'کارت جوشکار — CARD WELDER', cardWelder),
+  stat('welder_card', 'کارت جوشکار — CARD WELDER', cardWelder),
 ]

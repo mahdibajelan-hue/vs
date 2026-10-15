@@ -1,0 +1,3 @@
+-- S8 data change (applied live): template key card_welder -> welder_card.
+-- New approved row: id 52de3419-09ff-4c6b-9f90-ec4d1ea1d886 (form_key welder_card v1). Old row 3947836e-c76d-482d-971c-0a4edf63f977 (card_welder v1) is now 'retired'; copy in _bak_s8_ex_form_templates.
+-- To undo: update ex_form_templates set status='retired' where id='52de3419-09ff-4c6b-9f90-ec4d1ea1d886';  (a retired template never returns to approved; register a new draft under the key you want.)
