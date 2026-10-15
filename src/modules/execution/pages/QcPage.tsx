@@ -31,6 +31,18 @@ function Inner({ projectId }: { projectId: string }) {
   const rp = lines('weld_repair'), rpDone = rp.filter((l) => l.detail.repairDone === 'done').length
   const weldN = lines('welding').length, vtRej = lines('welding').filter((l) => l.detail.vt === 'rej').length
   const mine = epc.findings.filter((x) => x.projectId === projectId), open = mine.filter((x) => x.status === 'open')
+  // suggestions: weld results that already say "repair" / "rejected" but have no finding yet
+  const suggestions = useMemo(() => {
+    const have = new Set(mine.map((x) => `${x.techReportId}|${x.weldRef}`))
+    const out: { key: string; reportId: string; weld: string; why: string }[] = []
+    for (const l of m.lines) {
+      const rep = tech.find((r) => r.id === l.reportId); if (!rep) continue
+      const weld = String(l.detail.weldNo ?? '')
+      const why = rep.formKey === 'rt_report' && l.detail.result === 'rep' ? `رادیوگرافی: نیاز به تعمیر${l.detail.defect ? ` (${String(l.detail.defect)})` : ''}` : rep.formKey === 'welding' && l.detail.vt === 'rej' ? 'بازرسی چشمی: مردود' : ''
+      if (why && weld && !have.has(`${rep.id}|${weld}`)) out.push({ key: l.id, reportId: rep.id, weld, why })
+    }
+    return out
+  }, [m.lines, tech, mine])
   const cols: Col<(typeof byForm)[number]>[] = [
     { key: 'title', label: 'فرم', render: (r) => r.title },
     { key: 'n', label: 'تعداد گزارش', num: true, render: (r) => fa(r.n) },
@@ -47,6 +59,11 @@ function Inner({ projectId }: { projectId: string }) {
         <KpiCard label="مغایرت‌های باز" value={fa(open.length)} tone={open.length ? 'bad' : 'good'} />
       </div>
       <Section title="وضعیت فرم‌ها"><DataTable cols={cols} rows={byForm} rowKey={(r) => r.key} empty="هنوز فرم فنی ثبت نشده است." /></Section>
+      {suggestions.length > 0 && (
+        <Section title={`پیشنهاد ثبت مغایرت (${fa(suggestions.length)})`} hint="سرجوش‌هایی که در فرم‌ها مردود یا نیازمند تعمیرند و هنوز مغایرتی برایشان ثبت نشده است.">
+          <div className="fn-tbl-wrap" style={{ maxHeight: 280 }}><table className="ex-lines"><tbody>{suggestions.slice(0, 50).map((x) => <tr key={x.key}><td dir="ltr">{x.weld}</td><td>{x.why}</td><td>{m.reports.find((r) => r.id === x.reportId)?.reportNo}</td><td>{can && <button className="im-btn im-btn-sm im-btn-primary" onClick={() => void epc.saveFinding({ projectId, techReportId: x.reportId, kind: 'defect', severity: 'medium', weldRef: x.weld, note: x.why })}>ثبت مغایرت</button>}</td></tr>)}</tbody></table></div>
+        </Section>
+      )}
       <Section title="ثبت مغایرت و نتایج بازرسی" hint="مغایرت را به یک گزارش فنی وصل کنید؛ تا بسته‌شدن، در شاخص‌ها باز می‌ماند.">
         {can && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>

@@ -105,6 +105,9 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const send = async () => {
     if (missing.length) return
     if (!(await save())) return
+    // the report remembers which approved sheet version it was printed on
+    const tpl = form ? useEpcStore.getState().templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined
+    if (tpl) await useEpcStore.getState().stampTemplate(reportId, tpl.id)
     if (await ex.submitReport(reportId)) onClose()
   }
   const remove = async () => { if (window.confirm('این پیش‌نویس حذف شود؟')) { if (await ex.deleteReport(reportId)) onClose() } }
@@ -239,7 +242,7 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
                 return (
                   <tr key={l.key} className={lockedLine(l) ? 'locked' : undefined}>
                     <td>{fa(i + 1)}</td>
-                    <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.rowNo ? `ردیف ${a.rowNo} · ` : ''}{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}{a.parentActivityId ? ' · اضافه‌بها' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}</td>
+                    <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.rowNo ? `ردیف ${a.rowNo} · ` : ''}{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}{a.parentActivityId ? ' · اضافه‌بها' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}{l.id && a && epcAvailable && <LineForms lineId={l.id} activityId={a.id} projectId={m.projectId} reportId={reportId} head={head} model={m} editable={editable} />}</td>
                     <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" /><span style={{ display: 'flex', gap: 3 }}><DecInput className="" value={l.kmFrom ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmFrom: n || null })} label="کیلومتر از" placeholder="km از" /><DecInput className="" value={l.kmTo ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmTo: n || null })} label="کیلومتر تا" placeholder="km تا" /></span></div></td>
                     <td className="num" style={{ minWidth: 100 }}>{lockedLine(l) ? <b>{fa(l.qty, 3)}</b> : <DecInput value={l.qty} onValue={(n) => patchRow(l.key, { qty: n })} label="کارکرد امروز" />}{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}</td>
                     <td style={{ minWidth: 150 }}><div className="ex-cum"><span>تا روز قبل: <b>{fa(prev, 2)}</b></span><span>تجمعی جدید: <b>{fa(total, 2)}</b></span><span>باقی‌مانده: <b className={overRows.has(l.key) ? 'ex-bad' : undefined}>{base ? fa(base - total, 2) : '—'}</b> {a?.unit}</span>{overRows.has(l.key) && <span className="ex-bad">بیش از مقدار مبنا ({fa(base, 2)})</span>}</div></td>
@@ -348,6 +351,34 @@ function LinkCard({ reportId, projectId, date, front, model: m }: { reportId: st
         </select>
         <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={async () => { if (await useEpcStore.getState().linkReport(projectId, pick, reportId)) setPick('') }}>اتصال</button>
       </div>
+    </div>
+  )
+}
+
+/** Technical forms of one work-report row: the linked ones as chips, and a picker that offers only the forms mapped to this activity; a new form starts with date, front and contractor already filled. */
+function LineForms({ lineId, activityId, projectId, reportId, head, model: m, editable }: { lineId: string; activityId: string; projectId: string; reportId: string; head: { reportDate: string; front: string; station: string; shift: string; contractorOrgId: string }; model: ExecutionModel; editable: boolean }) {
+  const ex = useExecutionStore()
+  const links = useEpcStore((x) => x.reportLinks)
+  const mine = links.filter((x) => x.lineId === lineId)
+  const keys = useMemo(() => [...new Set(m.maps.filter((x) => x.activityId === activityId).map((x) => x.formKey))].filter((k) => FORM_BY_KEY[k]), [m.maps, activityId])
+  const [busy, setBusy] = useState(false)
+  const create = async (formKey: string) => {
+    setBusy(true)
+    const id = await ex.createReport({ projectId, formKey, reportDate: head.reportDate, front: head.front, station: head.station, shift: head.shift, contractorOrgId: head.contractorOrgId || null })
+    if (id) await useEpcStore.getState().linkReport(projectId, lineId, id)
+    setBusy(false)
+    if (id) window.alert('فرم فنی ساخته و به این ردیف وصل شد؛ از «گزارش روزانه ← فرم‌های فنی» آن را تکمیل کنید.')
+  }
+  void reportId
+  if (!mine.length && !(editable && keys.length)) return null
+  return (
+    <div className="no-print" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+      {mine.map((x) => { const t = m.reports.find((r) => r.id === x.techReportId); return <Chip key={x.id} tone={t?.status === 'approved' ? 'good' : 'neutral'}>{t ? `${FORM_BY_KEY[t.formKey]?.title ?? t.formKey} · ${t.reportNo}` : 'فرم حذف‌شده'}</Chip> })}
+      {editable && keys.length > 0 && (
+        <select value="" disabled={busy} onChange={(e) => e.target.value && void create(e.target.value)} aria-label="ثبت فرم فنی" style={{ maxWidth: 170 }}>
+          <option value="">+ فرم فنی…</option>{keys.map((k) => <option key={k} value={k}>{FORM_BY_KEY[k].title}</option>)}
+        </select>
+      )}
     </div>
   )
 }

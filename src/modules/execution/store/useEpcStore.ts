@@ -39,6 +39,7 @@ interface State {
   approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
   saveFinding: (f: { projectId: string; techReportId?: string | null; kind: QcFindingRow['kind']; severity: QcFindingRow['severity']; weldRef: string; note: string }) => Promise<boolean>
   closeFinding: (id: string, reopen?: boolean) => Promise<boolean>
+  stampTemplate: (reportId: string, templateId: string) => Promise<boolean>
   linkReport: (projectId: string, lineId: string, techReportId: string) => Promise<boolean>
   unlinkReport: (id: string) => Promise<boolean>
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
@@ -131,6 +132,10 @@ export const useEpcStore = create<State>((set, get) => ({
     const { error } = await supabase.from('ex_qc_findings').update({ status: reopen ? 'open' : 'closed', closed_at: reopen ? null : new Date().toISOString() }).eq('id', id)
     if (fail('بستن مغایرت', error)) return false
     await get().fetchAll(); return true
+  },
+  stampTemplate: async (reportId, templateId) => {
+    const { error } = await supabase.from('ex_reports').update({ template_id: templateId }).eq('id', reportId)
+    return !fail('ثبت نسخهٔ قالب گزارش', error)
   },
   linkReport: async (projectId, lineId, techReportId) => {
     const { error } = await supabase.from('ex_report_links').upsert({ project_id: projectId, line_id: lineId, tech_report_id: techReportId }, { onConflict: 'line_id,tech_report_id' })
