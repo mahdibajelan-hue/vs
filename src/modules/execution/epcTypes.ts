@@ -5,6 +5,9 @@ export const EMPLOYER_STEP_LABEL_FA: Record<EmployerStep, string> = { off: 'غی
 
 export interface PartyBrand { name: string; /** data URL, ≤ 150 KB, png/jpeg/webp/svg */ logo: string }
 export interface Parties { employer: PartyBrand; consultant: PartyBrand; contractor: PartyBrand }
+/** Project identity used by approved technical forms (defined once; every form of the project reads it). The official title and parties' names/logos come from the project and the letterhead above. */
+export interface FormIdentity { contractNo: string; lineNo: string; diameterIn: string; kmFrom: string; kmTo: string; pipeGrade: string; pipeStandard: string }
+export const EMPTY_IDENTITY: FormIdentity = { contractNo: '', lineNo: '', diameterIn: '', kmFrom: '', kmTo: '', pipeGrade: '', pipeStandard: '' }
 export const EMPTY_PARTIES: Parties = { employer: { name: '', logo: '' }, consultant: { name: '', logo: '' }, contractor: { name: '', logo: '' } }
 export const LOGO_MAX_BYTES = 150 * 1024
 export const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
@@ -29,12 +32,15 @@ export interface LookaheadRow { id: string; projectId: string; weekStart: string
 export interface MeasurementRow { id: string; projectId: string; activityId: string; periodKey: string; measured: number; billed: number; paid: number; certificateId: string | null; note: string }
 export interface VersionRow { id: number; reportId: string; version: number; status: string; snapshot: Record<string, unknown>; actor: string | null; at: string }
 export interface FormProposalRow { id: string; projectId: string; formKey: string; title: string; definition: Record<string, unknown>; reason: string; status: 'proposed' | 'approved' | 'rejected'; proposedBy: string | null; decidedBy: string | null; decisionNote: string }
+export interface FormTemplateRow { id: string; formKey: string; version: number; title: string; code: string; revision: string; status: 'draft' | 'approved' | 'retired'; layout: import('./forms/gridTypes').GridTemplate; bindings: import('./forms/gridTypes').CellBinding[]; sourceFile: string; sourceSha256: string; approvedAt: string | null }
+export interface ReportLinkRow { id: string; projectId: string; lineId: string; techReportId: string }
 export interface ScheduleImportRow { id: string; projectId: string; fileName: string; summary: Record<string, unknown>; importedAt: string }
 
 /** EPC settings kept inside ex_settings.values_json (extends ExSettings without touching its type). */
 export interface EpcSettings {
   employerStep: EmployerStep
   parties: Parties
+  identity: FormIdentity
   productivity: { windowDays: number; weighting: 'all' | 'wma' | 'sma'; smaDays: number; outlierSigma: number; assumedElasticity: number; extraShiftEfficiency: number; shiftHours: number; crewDayCost: number | null; laborKeys: string[] }
   thresholds: import('./lib/engine/alerts').AlertThresholds
 }

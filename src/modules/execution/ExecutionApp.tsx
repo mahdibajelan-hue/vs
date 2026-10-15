@@ -29,7 +29,7 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
-  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }, { id: 'epc', label: 'کنترل EPC (سربرگ، کارفرما، تحفظ، بهره‌وری)' }, { id: 'tplpilot', label: 'الگوی آزمایشی فرم مصوب (جوشکاری)' }] },
+  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }, { id: 'epc', label: 'کنترل EPC (سربرگ، کارفرما، تحفظ، بهره‌وری)' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های مصوب فرم' }, { id: 'tplpilot', label: 'الگوی آزمایشی فرم مصوب (جوشکاری)' }] },
 ]
 
 type P = { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }

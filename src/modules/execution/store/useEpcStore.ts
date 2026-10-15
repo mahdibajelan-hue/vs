@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -30,10 +30,15 @@ interface State {
   available: boolean; loaded: boolean
   crewLogs: CrewLogRow[]; engDocs: EngDocRow[]; docLinks: DocLinkRow[]; prereqs: PrereqRow[]; deps: DepRow[]; lookahead: LookaheadRow[]; measurements: MeasurementRow[]; versions: VersionRow[]; proposals: FormProposalRow[]; imports: ScheduleImportRow[]
   legalByProject: Map<string, LegalText>
+  templates: FormTemplateRow[]; reportLinks: ReportLinkRow[]
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
   loadVersions: (reportId: string) => Promise<void>
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
+  saveTemplateDraft: (t: { formKey: string; title: string; layout: FormTemplateRow['layout']; bindings: FormTemplateRow['bindings'] }) => Promise<boolean>
+  approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
+  linkReport: (projectId: string, lineId: string, techReportId: string) => Promise<boolean>
+  unlinkReport: (id: string) => Promise<boolean>
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
   saveEngDocsBulk: (rows: (Partial<EngDocRow> & { projectId: string; docNo: string })[]) => Promise<number>
   transitionDoc: (docId: string, to: EngStatus, note?: string) => Promise<boolean>
@@ -55,9 +60,13 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(),
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [],
 
   fetchAll: async () => {
+    // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
+    const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), supabase.from('ex_report_links').select('*')])
+    if (!tpl.error) set({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
+    if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
     const t = (name: string) => supabase.from(name).select('*')
     const [crew, docs, dlinks, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once
@@ -96,6 +105,27 @@ export const useEpcStore = create<State>((set, get) => ({
       const { error } = await supabase.from('ex_crew_logs').insert(rows.map((r) => ({ report_id: reportId, activity_id: r.activityId, crew_name: r.crewName, composition: r.composition, useful_hours: r.usefulHours, idle_hours: r.idleHours, output_qty: r.outputQty, conditions: r.conditions, note: r.note })))
       if (fail('ذخیرهٔ اکیپ‌ها', error)) return false
     }
+    await get().fetchAll(); return true
+  },
+  saveTemplateDraft: async (t) => {
+    const ver = Math.max(0, ...get().templates.filter((x) => x.formKey === t.formKey).map((x) => x.version)) + 1
+    const { error } = await supabase.from('ex_form_templates').insert({ form_key: t.formKey, version: ver, title: t.title, layout: t.layout, bindings: t.bindings, source_file: t.layout.source.file, source_sha256: t.layout.source.sha256, status: 'draft' })
+    if (fail('ثبت الگوی فرم', error)) return false
+    await get().fetchAll(); return true
+  },
+  approveTemplate: async (id, code, revision) => {
+    const { error } = await supabase.rpc('ex_form_template_approve', { p_id: id, p_code: code, p_revision: revision })
+    if (fail('تأیید الگوی فرم', error)) return false
+    await get().fetchAll(); return true
+  },
+  linkReport: async (projectId, lineId, techReportId) => {
+    const { error } = await supabase.from('ex_report_links').upsert({ project_id: projectId, line_id: lineId, tech_report_id: techReportId }, { onConflict: 'line_id,tech_report_id' })
+    if (fail('اتصال فرم فنی به ردیف گزارش', error)) return false
+    await get().fetchAll(); return true
+  },
+  unlinkReport: async (id) => {
+    const { error } = await supabase.from('ex_report_links').delete().eq('id', id)
+    if (fail('حذف اتصال', error)) return false
     await get().fetchAll(); return true
   },
   saveEngDoc: async (d) => {

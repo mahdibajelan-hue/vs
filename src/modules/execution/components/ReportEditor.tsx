@@ -211,6 +211,8 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
         </div>
       </div>
 
+      {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}
+
       {!form && <WeatherCard data={data} editable={editable} onChange={(k, v) => setD(k, v)} />}
 
       <div className="im-card" style={{ padding: 0 }}>
@@ -313,6 +315,39 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
       )}
       {showHist && <div className="im-card" style={{ padding: 14 }}><b>سابقهٔ ارسال، اصلاح و تأیید</b><div className="ex-hist" style={{ marginTop: 8 }}>{hist.length === 0 ? <span className="im-helper">هنوز سابقه‌ای نیست.</span> : hist.map((h) => <div key={h.id}><b>{h.action.startsWith('review:') ? `بررسی (${h.action.slice(7)})` : h.action === 'submit' ? 'ارسال' : h.action === 'reopen' ? 'بازگشایی' : h.action}</b><span>{ex.people.get(h.actor ?? '') ?? 'کاربر'}</span><small>{fmtD(h.at.slice(0, 10))} {new Date(h.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>{h.note && <span>— {h.note}</span>}</div>)}</div></div>}
       {paper && <PaperModal c={paperCtx()} onClose={() => setPaper(false)} />}
+    </div>
+  )
+}
+
+/** one activity can carry many technical forms: pick the work-report row(s) this form belongs to, nothing is retyped */
+function LinkCard({ reportId, projectId, date, front, model: m }: { reportId: string; projectId: string; date: string; front: string; model: ExecutionModel }) {
+  const links = useEpcStore((x) => x.reportLinks)
+  const mine = useMemo(() => links.filter((l) => l.techReportId === reportId), [links, reportId])
+  const [pick, setPick] = useState('')
+  const lineLabel = (id: string) => {
+    const l = m.lines.find((x) => x.id === id)
+    const a = l?.activityId ? m.actById.get(l.activityId) : undefined
+    const rep = l ? m.reports.find((x) => x.id === l.reportId) : undefined
+    return l ? `${a ? `${a.itemNo} — ${a.title}` : 'ردیف'}${l.location ? ` · ${l.location}` : ''}${rep ? ` (${rep.reportNo})` : ''}` : 'ردیف حذف‌شده'
+  }
+  const options = useMemo(() => {
+    const used = new Set(mine.map((x) => x.lineId))
+    const days = new Set(m.reports.filter((x) => x.formKey === 'work' && x.reportDate === date && (!front || !x.front || x.front === front)).map((x) => x.id))
+    return m.lines.filter((l) => days.has(l.reportId) && !used.has(l.id))
+  }, [m.reports, m.lines, mine, date, front])
+  return (
+    <div className="im-card" style={{ padding: 14, display: 'grid', gap: 8 }}>
+      <b>اتصال به ردیف گزارش کارکرد روزانه</b>
+      <span className="im-helper" style={{ margin: 0 }}>یک فعالیت می‌تواند چند فرم فنی داشته باشد؛ تاریخ و جبهه از همین گزارش خوانده می‌شود و دوباره وارد نمی‌شود.</span>
+      {mine.length === 0 && <span className="im-helper" style={{ margin: 0 }}>هنوز به ردیفی وصل نشده است.</span>}
+      {mine.map((l) => <div key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{lineLabel(l.lineId)}</span><button className="im-btn im-btn-sm" onClick={() => void useEpcStore.getState().unlinkReport(l.id)}>جداکردن</button></div>)}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="ردیف گزارش کارکرد" style={{ minWidth: 260, maxWidth: 480 }}>
+          <option value="">ردیف گزارش کارکرد همین روز ({fa(options.length)})…</option>
+          {options.map((l) => <option key={l.id} value={l.id}>{lineLabel(l.id)}</option>)}
+        </select>
+        <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={async () => { if (await useEpcStore.getState().linkReport(projectId, pick, reportId)) setPick('') }}>اتصال</button>
+      </div>
     </div>
   )
 }

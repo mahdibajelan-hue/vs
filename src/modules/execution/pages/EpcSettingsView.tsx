@@ -7,7 +7,7 @@ import { compressImage } from '../../../lib/imageTools'
 import { Chip, Section } from '../../finance/components/fn'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { fa } from '../components/common'
-import { EMPLOYER_STEP_LABEL_FA, LOGO_MAX_BYTES, LOGO_TYPES, type EmployerStep, type Parties } from '../epcTypes'
+import { EMPLOYER_STEP_LABEL_FA, LOGO_MAX_BYTES, LOGO_TYPES, type EmployerStep, type FormIdentity, type Parties } from '../epcTypes'
 import type { ExSettings } from '../types'
 
 type Raw = Record<string, unknown>
@@ -29,6 +29,7 @@ function Inner({ projectId }: { projectId: string }) {
         ))}</div>
       </Section>
       <Parties parties={s.parties} can={canCfg} onSave={(parties) => save({ parties })} />
+      <IdentityCard identity={s.identity} can={canCfg} onSave={(identity) => save({ identity })} />
       <LegalView projectId={projectId} />
       <Section title="پارامترهای موتور بهره‌وری" hint="هر عدد در خروجی‌ها به‌عنوان فرض نمایش داده می‌شود">
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -122,6 +123,18 @@ function Proposals({ projectId, canCfg }: { projectId: string; canCfg: boolean }
         <textarea rows={3} placeholder={'فیلدها، هر خط یکی: عنوان | نوع (text/num/date/select)\nفشار آزمون | num'} value={f.fields} onChange={(e) => setF({ ...f, fields: e.target.value })} dir="auto" />
         <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!/^[a-z][a-z0-9_]{2,40}$/.test(f.formKey.trim()) || !f.title.trim() || !f.fields.trim()} onClick={() => void propose()}>ثبت پیشنهاد فرم</button></div>
       </div>}
+    </Section>
+  )
+}
+
+const IDENTITY_FIELDS: [keyof FormIdentity, string, string][] = [['contractNo', 'شمارهٔ قرارداد', ''], ['lineNo', 'شمارهٔ خط', ''], ['diameterIn', 'قطر اسمی لوله (in)', '48'], ['kmFrom', 'کیلومتر شروع', ''], ['kmTo', 'کیلومتر پایان', ''], ['pipeGrade', 'گرید لوله', 'API 5L X70'], ['pipeStandard', 'استاندارد جوش/اجرا', 'API 1104']]
+/** «شناسنامهٔ فرم‌های فنی»: defined once per project and written automatically into the bound cells of every approved form. */
+function IdentityCard({ identity, can, onSave }: { identity: FormIdentity; can: boolean; onSave: (i: FormIdentity) => Promise<boolean> }) {
+  return (
+    <Section title="شناسنامهٔ فرم‌های فنی پروژه" hint="یک‌بار تعریف می‌شود و در همهٔ فرم‌های مصوب این پروژه (در سلول‌های نگاشت‌شده) درج می‌شود. عنوان رسمی پروژه و نام/لوگوی طرف‌ها از بخش‌های دیگر می‌آید.">
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {IDENTITY_FIELDS.map(([k, label, ph]) => <label key={k} className="ex-lab">{label}<input disabled={!can} defaultValue={identity[k]} placeholder={ph} dir="auto" style={{ width: 150 }} onBlur={(e) => { if (e.target.value !== identity[k]) void onSave({ ...identity, [k]: e.target.value }) }} /></label>)}
+      </div>
     </Section>
   )
 }

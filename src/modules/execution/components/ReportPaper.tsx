@@ -10,6 +10,8 @@ import { asList, asNext } from './DayNotes'
 import { WeldingPaper } from './WeldingPaper'
 import { FormPaper, PAPER_FORMS } from './FormPapers'
 import { PaperFrame } from './epc/PaperFrame'
+import { TemplatePaper } from './TemplatePaper'
+import { useEpcStore } from '../store/useEpcStore'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -29,6 +31,10 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
+  const templates = useEpcStore((s) => s.templates)
+  // an approved sheet exists for this form → print on it as-is (no letterhead frame, no extra header/footer: the sheet carries its own)
+  const approved = c.form ? templates.find((t) => t.formKey === c.form!.key && t.status === 'approved') : undefined
+  if (approved) return <TemplatePaper c={c} template={approved} />
   return <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /></PaperFrame>
 }
 function ReportPaperBody({ c }: { c: PaperCtx }) {

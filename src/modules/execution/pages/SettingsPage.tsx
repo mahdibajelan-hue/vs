@@ -11,6 +11,7 @@ import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Empty, fa } from '../components/common'
 import { EpcSettingsView } from './EpcSettingsView'
 import { FormTemplatePilot } from './FormTemplatePilot'
+import { TemplateLibrary } from './TemplateLibrary'
 import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExProjectRole, type ExRole } from '../types'
 
 export function SettingsPage({ projectId, sub }: { projectId: string; sub: string }) {
@@ -18,6 +19,7 @@ export function SettingsPage({ projectId, sub }: { projectId: string; sub: strin
   if (sub === 'forms') return <FormsView projectId={projectId} />
   if (sub === 'map') return <MapView projectId={projectId} />
   if (sub === 'epc') return <EpcSettingsView projectId={projectId} />
+  if (sub === 'tpl') return <TemplateLibrary projectId={projectId} />
   if (sub === 'tplpilot') return <FormTemplatePilot projectId={projectId} />
   return <RolesView projectId={projectId} />
 }
