@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Printer } from 'lucide-react'
+import { FORM_BY_KEY } from '../lib/formCatalog'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { designShape, designValues } from '../forms/designGrid'
@@ -8,18 +9,18 @@ import { Section, fmtD } from '../../finance/components/fn'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 
-const FREE = new Set(['pqr', 'wqt', 'card_welder'])
 /** Forms designed in the app (future forms): fill the header and the table, save, print on the frozen approved sheet. */
 export function DesignedForms({ projectId }: { projectId: string }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
 function Inner({ projectId }: { projectId: string }) {
   const epc = useEpcStore()
   const can = useExecutionStore((s) => s.can(projectId, 'record') || s.can(projectId, '*'))
-  const tpls = useMemo(() => epc.templates.filter((t) => t.status === 'approved' && (t.layout.source.file === 'designed-in-app' || FREE.has(t.formKey))), [epc.templates])
+  // forms that exist in the form catalog are filled in the technical-forms entry (one entry path per form); only sheets without a catalog form are filled here
+  const tpls = useMemo(() => epc.templates.filter((t) => t.status === 'approved' && !FORM_BY_KEY[t.formKey]), [epc.templates])
   const [tid, setTid] = useState('')
   const tpl = tpls.find((t) => t.id === tid) ?? tpls[0]
   const mine = epc.entries.filter((e) => e.projectId === projectId && tpl && e.templateId === tpl.id)
   const shape = useMemo(() => (tpl ? designShape(tpl.layout) : null), [tpl])
-  const free = !!tpl && FREE.has(tpl.formKey)
+  const free = !!tpl && tpl.layout.source.file !== 'designed-in-app'
   const [sel, setSel] = useState<{ a: string; fixed: string } | null>(null)
   const [cur, setCur] = useState<{ id?: string; date: string; header: string[]; rows: string[][] } | null>(null)
   if (!tpls.length) return <p className="im-helper">هنوز فرم طراحی‌شدهٔ تأییدشده‌ای نیست. از «تنظیمات ← کتابخانهٔ قالب‌های مصوب فرم» یک فرم طراحی و تأیید کنید.</p>
