@@ -88,4 +88,3 @@ export function RejectMark({ size, className = '' }: { size: number; className?:
     </span>
   )
 }
-}
