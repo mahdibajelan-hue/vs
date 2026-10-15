@@ -17,4 +17,4 @@ Difficulty labels were uncalibrated and no human had reviewed any item (all 1054
 - Credit: SINGLE 1/0 (unchanged, old results unaffected); MULTI (hits − wrong picks)/keys, floor 0; NUMERIC within tolerance; ORDER exact = 1, otherwise half of the concordant-pair surplus over chance (random order ≈ 0).
 - Score = mean credit; "correct" = full credit. New tests are stamped `scoring_version = 2`.
 - Candidate RPCs: `comp_mcq_candidate_answer_v2` (type-aware validation); keys are never returned to candidates.
-- 10 sample items (2 per role) were added as `PENDING_REVIEW`; the bank editor UI does not yet author new types (SQL only for now).
+- 10 sample items (2 per role) were added as `PENDING_REVIEW`; the bank editor now authors all four types (type is fixed after creation). Verified: an end-to-end DB run (answer → submit → score, rolled back) and a Playwright run of the candidate page against mocked RPCs.
