@@ -24,7 +24,7 @@ export function cssOf(st: GridStyle, value: string): CSSProperties {
 }
 
 /** Draws an approved sheet exactly as its grid: same column widths, row heights, merged ranges, fonts and borders. `values` overrides the text of single cells by address (e.g. {"A2": "…"}); `logos` maps a logo anchor to an image URL. */
-export function GridSheet({ tpl, values = {}, logos = {}, mark }: { tpl: GridTemplate; values?: Record<string, string>; logos?: Record<string, string>; mark?: Set<string> }) {
+export function GridSheet({ tpl, values = {}, logos = {}, mark, onCell, selected }: { tpl: GridTemplate; values?: Record<string, string>; logos?: Record<string, string>; mark?: Set<string>; onCell?: (addr: string, fixed: string) => void; selected?: string }) {
   const byRow = useMemo(() => { const m = new Map<number, typeof tpl.cells>(); for (const c of tpl.cells) { const a = m.get(c.r); if (a) a.push(c); else m.set(c.r, [c]) } for (const a of m.values()) a.sort((x, y) => x.c - y.c); return m }, [tpl])
   const visCols = tpl.cols.map((c, i) => ({ ...c, i })).filter((c) => !c.hidden)
   const total = visCols.reduce((s, c) => s + c.w, 0)
@@ -48,7 +48,7 @@ export function GridSheet({ tpl, values = {}, logos = {}, mark }: { tpl: GridTem
               {(byRow.get(r) ?? []).filter((c) => !tpl.cols[c.c].hidden).map((c) => {
                 const a = addr(c.r, c.c), text = values[a] ?? c.v ?? ''
                 const colSpan = c.cs ? Array.from({ length: c.cs }, (_, k) => c.c + k).filter((ci) => !tpl.cols[ci]?.hidden).length : 1
-                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} style={{ ...cssOf(tpl.styles[c.s], text), ...(a in values && /^f{6}$/i.test(tpl.styles[c.s].f[5] ?? '') && (!tpl.styles[c.s].bg || /^f{6}$/i.test(tpl.styles[c.s].bg!)) ? { color: '#000' } : null), ...(a in values && !tpl.styles[c.s].a[2] ? { overflow: 'visible' } : null), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, background: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
+                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} onClick={onCell ? () => onCell(a, c.v ?? '') : undefined} style={{ ...(onCell ? { cursor: 'cell' } : null), ...(selected === a ? { outline: '2px solid #0ea5e9', outlineOffset: -2 } : null), ...cssOf(tpl.styles[c.s], text), ...(a in values && /^f{6}$/i.test(tpl.styles[c.s].f[5] ?? '') && (!tpl.styles[c.s].bg || /^f{6}$/i.test(tpl.styles[c.s].bg!)) ? { color: '#000' } : null), ...(a in values && !tpl.styles[c.s].a[2] ? { overflow: 'visible' } : null), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, background: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
               })}
             </tr>
           ))}

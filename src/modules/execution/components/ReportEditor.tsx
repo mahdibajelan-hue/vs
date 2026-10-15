@@ -12,7 +12,7 @@ import { FORM_BY_KEY, STOPPAGE_CATEGORY_FA, type FieldDef } from '../lib/formCat
 import { mergeCatalog, resUsed, toRow, type ResRow } from '../lib/resourceCatalog'
 import { computeMetrics, cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
 import { cumulative } from '../lib/progress'
-import type { Activity, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
+import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import { LINE_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
@@ -31,11 +31,14 @@ const EDITABLE = new Set(['draft', 'returned', 'incomplete'])
 const WEATHER = [{ value: 'sunny', label: 'آفتابی' }, { value: 'partly', label: 'نیمه‌ابری' }, { value: 'cloudy', label: 'ابری' }, { value: 'rainy', label: 'بارانی' }, { value: 'snowy', label: 'برفی' }, { value: 'stormy', label: 'طوفانی (باد و خاک)' }]
 
 /** One report — the work report on the price-list rows, or any technical form of the catalog — with live cumulative figures, live completeness check, save / send / print. */
-export function ReportEditor({ reportId, model: m, onClose }: { reportId: string; model: ExecutionModel; onClose: () => void }) {
+export function ReportEditor(p: { reportId: string; model: ExecutionModel; onClose: () => void }) {
+  return p.model.reports.some((x) => x.id === p.reportId) ? <ReportEditorBody {...p} /> : null
+}
+function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; model: ExecutionModel; onClose: () => void }) {
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === m.projectId))
-  const r = m.reports.find((x) => x.id === reportId)
+  const r = m.reports.find((x) => x.id === reportId) as Report
   const form = r && r.formKey !== 'work' ? FORM_BY_KEY[r.formKey] ?? null : null
   const mm = useMaterialModel(m.projectId)
   const shortMats = useMemo(() => mm.materials.filter((x) => (mm.positions.get(x.id)?.siteGap ?? 0) > 0).sort((a, b) => (mm.positions.get(b.id)?.uncoveredGap ?? 0) - (mm.positions.get(a.id)?.uncoveredGap ?? 0)).slice(0, 80), [mm.materials, mm.positions])
@@ -58,7 +61,6 @@ export function ReportEditor({ reportId, model: m, onClose }: { reportId: string
   const [paper, setPaper] = useState(false)
   const [showHist, setShowHist] = useState(false)
   const [dirty, setDirty] = useState(false)
-  if (!r) return null
 
   const canRecord = ex.can(m.projectId, 'record')
   const editable = canRecord && EDITABLE.has(r.status)
