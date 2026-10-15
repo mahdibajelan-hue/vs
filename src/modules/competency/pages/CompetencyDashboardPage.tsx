@@ -15,6 +15,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { fetchMcqTestStatuses, type McqTestStatus } from '../lib/mcqData'
 import type { CompetencyAssessment, JobRole } from '../types'
+import { CandidatePhoto } from '../components/CandidatePhoto'
 
 interface CompetencyDashboardPageProps {
   onOpen: (id: string) => void
@@ -269,7 +270,7 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav, mode 
           onOpenBank={nav.questionBank}
         />
 
-        {/* Talent pool — every candidate, kept deliberately lightweight (no photo, one line per
+        {/* Talent pool — every candidate, kept deliberately lightweight (a tiny thumbnail, one line per
             candidate) so this reads as a scannable roster for succession planning rather than a wall of
             avatar cards; a candidate's full profile is a click away for whoever needs it. This is the
             one section allowed to keep scrolling — it can legitimately run to dozens of rows. */}
@@ -462,6 +463,7 @@ function TalentPoolRow({
 
   return (
     <div className="fx-sub group flex items-center gap-2.5 rounded-lg border-r-[3px] p-1.5 pr-3 transition-colors hover:bg-white/5" style={{ borderRightColor: tier }}>
+      <CandidatePhoto path={a.photoUrl} size={26} />
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5 text-right">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
