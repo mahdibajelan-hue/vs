@@ -3,7 +3,7 @@
  * Print check of the approved sheets (read-only tool: writes only into --out, never into the app or the database).
  * For every bundled sheet it renders 1, capacity and capacity+1 records exactly like the sheet wrapper of TemplatePaper, prints to PDF with Chromium
  * and reports: pages printed vs expected, measured sheet size, applied scale, page area. Run twice → identical numbers (deterministic).
- *   node scripts/print-check.mjs [--out DIR] [--only formKey] [--json]
+ *   node scripts/print-check.mjs [--out DIR] [--only formKey] [--json] [--blank]   (--blank also writes the data-free sheets to DIR/blank for scripts/conformity-check.py)
  * Needs: Playwright with Chromium (PLAYWRIGHT_BROWSERS_PATH or /opt/pw-browsers).
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
@@ -20,7 +20,8 @@ mkdirSync(out, { recursive: true })
 
 // 1) bundle the entry (vite SSR) into the output folder
 await build({ root, configFile: false, logLevel: 'silent', build: { ssr: join(root, 'scripts/print-check.entry.tsx'), outDir: join(out, '.bundle'), emptyOutDir: true, rollupOptions: { output: { format: 'esm', entryFileNames: 'entry.mjs' } } }, ssr: { noExternal: true } })
-const { renderCases } = await import(pathToFileURL(join(out, '.bundle/entry.mjs')).href)
+const { renderCases, renderBlank } = await import(pathToFileURL(join(out, '.bundle/entry.mjs')).href)
+if (process.argv.includes('--blank')) { mkdirSync(join(out, 'blank'), { recursive: true }); for (const b of renderBlank()) writeFileSync(join(out, 'blank', `${b.formKey}.html`), b.html) }
 const cases = renderCases(only)
 
 // guard: the wrapper CSS used here must still be the one TemplatePaper uses

@@ -40,3 +40,8 @@ export function renderCases(only?: string): Case[] {
   }
   return out
 }
+
+/** The sheets with no data at all (every cell as the approved file has it) — used by the conformity check against the source workbook. */
+export function renderBlank(): { formKey: string; html: string }[] {
+  return BUNDLED_TEMPLATES.map((b) => ({ formKey: b.formKey, html: renderToStaticMarkup(<GridSheet tpl={b.layout} />) }))
+}
