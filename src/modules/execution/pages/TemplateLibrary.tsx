@@ -22,6 +22,9 @@ function Inner({ projectId }: { projectId: string }) {
   const can = useExecutionStore((s) => s.can(projectId, '*') || s.can(projectId, 'configure'))
   const [fields, setFields] = useState<Record<string, { code: string; rev: string }>>({})
   const [busy, setBusy] = useState('')
+  const ex = useExecutionStore.getState()
+  const flags = (useExecutionStore((s) => s.settingsByProject.get(projectId)) as unknown as { flags?: Record<string, boolean> } | undefined)?.flags ?? {}
+  const todayOn = !!flags.today
   const [d, setD] = useState({ key: '', title: '', headers: 'تاریخ، شمارهٔ گزارش، محل', cols: 'شرح، مقدار، توضیحات', rows: 15 })
   const split = (x: string) => x.split(/[،,\n]/).map((v) => v.trim()).filter(Boolean)
   const preview = d.title.trim() ? designGrid({ formKey: d.key || 'new_form', title: d.title, headerLabels: split(d.headers), columns: split(d.cols).map((label) => ({ label })), rows: Math.min(40, Math.max(1, d.rows)), signers: ['نماینده پیمانکار', 'نماینده دستگاه نظارت'] }) : null
@@ -55,7 +58,7 @@ function Inner({ projectId }: { projectId: string }) {
                   <td>{t.status === 'draft' && can ? <input dir="ltr" value={f.rev} onChange={(e) => setFields({ ...fields, [t.id]: { ...f, rev: e.target.value } })} placeholder="بازنگری" style={{ width: 80 }} aria-label="شمارهٔ بازنگری" /> : t.revision || '—'}</td>
                   <td className="fn-code" title={t.sourceSha256}>{t.sourceFile} · {t.sourceSha256.slice(0, 8)}</td>
                   <td>{t.approvedAt ? fmtD(t.approvedAt.slice(0, 10)) : '—'}</td>
-                  <td>{t.status === 'draft' && can && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy === t.id} onClick={async () => { setBusy(t.id); await epc.approveTemplate(t.id, f.code, f.rev); setBusy('') }}><CheckCircle2 size={13} /> تأیید و فعال‌سازی</button>}</td>
+                  <td>{t.status === 'draft' && can && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy === t.id} onClick={async () => { setBusy(t.id); await epc.approveTemplate(t.id, f.code, f.rev); setBusy('') }}><CheckCircle2 size={13} /> تأیید و فعال‌سازی</button>}{t.status === 'approved' && (() => { const ap = epc.mappingApprovals.find((x) => x.templateId === t.id && !x.revokedAt); return ap ? <span className="im-helper">نگاشت سلول‌ها تأیید شده ({fmtD(ap.approvedAt.slice(0, 10))}){can && <button className="im-btn im-btn-sm" style={{ marginInlineStart: 6 }} onClick={() => void epc.revokeMapping(ap.id)}>ابطال</button>}</span> : can ? <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('جدول نگاشت سلول‌ها بررسی و تأیید شود؟ این تأیید برای همین نسخه ثبت می‌شود.')) void epc.approveMapping(t.id, '') }}><CheckCircle2 size={13} /> تأیید نگاشت سلول‌ها</button> : <span className="im-helper">نگاشت تأیید نشده</span> })()}</td>
                 </tr>
               })}{mine.length === 0 && <tr><td colSpan={7} className="sub">نسخه‌ای ثبت نشده است.</td></tr>}</tbody></table></div>
           </Section>
@@ -74,6 +77,9 @@ function Inner({ projectId }: { projectId: string }) {
           {preview && <div style={{ overflow: 'auto', marginTop: 10, border: '1px solid var(--border, #ddd)' }}><GridSheet tpl={preview} /></div>}
         </Section>
       )}
+      {can && <Section title="نماهای آزمایشی" hint="هر نمای آزمایشی با یک پرچم پروژه روشن می‌شود و منوی فعلی را تغییر نمی‌دهد.">
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={todayOn} onChange={(x) => void ex.saveSettings(projectId, { flags: { ...flags, today: x.target.checked } } as never)} /> «امروز در کارگاه» (زیرمنوی گزارش روزانه)</label>
+      </Section>}
     </div>
   )
 }

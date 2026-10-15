@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, NcrRow, NcrEventRow, NcrLinkRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -39,6 +39,11 @@ interface State {
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
   saveTemplateDraft: (t: { formKey: string; title: string; layout: FormTemplateRow['layout']; bindings: FormTemplateRow['bindings'] }) => Promise<boolean>
   approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
+  requiredForms: RequiredFormRow[]; mappingApprovals: MappingApprovalRow[]
+  addRequiredForm: (projectId: string, activityId: string, formKey: string, note?: string) => Promise<boolean>
+  removeRequiredForm: (id: string) => Promise<boolean>
+  approveMapping: (templateId: string, note: string) => Promise<boolean>
+  revokeMapping: (id: string) => Promise<boolean>
   saveFinding: (f: { projectId: string; techReportId?: string | null; kind: QcFindingRow['kind']; severity: QcFindingRow['severity']; weldRef: string; note: string }) => Promise<boolean>
   closeFinding: (id: string, reopen?: boolean) => Promise<boolean>
   syncWelds: (reportId: string) => Promise<void>
@@ -73,13 +78,16 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
     const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), supabase.from('ex_report_links').select('*')])
     if (!tpl.error) set({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
     if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
+    const [rq, ma] = await Promise.all([supabase.from('ex_required_forms').select('*'), supabase.from('ex_form_mapping_approvals').select('*')])
+    if (!rq.error) set({ requiredForms: ((rq.data ?? []) as Row[]).map((r): RequiredFormRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, formKey: r.form_key, note: r.note ?? '' })) })
+    if (!ma.error) set({ mappingApprovals: ((ma.data ?? []) as Row[]).map((r): MappingApprovalRow => ({ id: r.id, templateId: r.template_id, approvedAt: r.approved_at, note: r.note ?? '', revokedAt: r.revoked_at })) })
     const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
     if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
     const [wl, lw, wc, ws, wm, nc, ne, nl] = await Promise.all([supabase.from('ex_welds').select('*'), supabase.from('ex_line_welds').select('line_id, weld_id, project_id, raw_pipe'), supabase.from('ex_weld_conflicts').select('*').eq('status', 'open'), supabase.from('ex_weld_suspects').select('*'), supabase.from('ex_weld_merges').select('*').is('undone_at', null), supabase.from('ex_ncr').select('*').order('seq', { ascending: false }), supabase.from('ex_ncr_events').select('*').order('at'), supabase.from('ex_ncr_links').select('*')])
@@ -142,6 +150,28 @@ export const useEpcStore = create<State>((set, get) => ({
   approveTemplate: async (id, code, revision) => {
     const { error } = await supabase.rpc('ex_form_template_approve', { p_id: id, p_code: code, p_revision: revision })
     if (fail('تأیید الگوی فرم', error)) return false
+    await get().fetchAll(); return true
+  },
+  addRequiredForm: async (projectId, activityId, formKey, note = '') => {
+    const { error } = await supabase.from('ex_required_forms').insert({ project_id: projectId, activity_id: activityId, form_key: formKey, note })
+    if (error?.code === '23505') return true // already required: nothing to do
+    if (fail('ثبت فرم لازم فعالیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  removeRequiredForm: async (id) => {
+    const { error } = await supabase.from('ex_required_forms').delete().eq('id', id)
+    if (fail('حذف فرم لازم فعالیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  approveMapping: async (templateId, note) => {
+    const { error } = await supabase.from('ex_form_mapping_approvals').insert({ template_id: templateId, note })
+    if (error?.code === '23505') return true
+    if (fail('تأیید نگاشت سلول‌ها', error)) return false
+    await get().fetchAll(); return true
+  },
+  revokeMapping: async (id) => {
+    const { error } = await supabase.from('ex_form_mapping_approvals').update({ revoked_at: new Date().toISOString() }).eq('id', id)
+    if (fail('ابطال تأیید نگاشت', error)) return false
     await get().fetchAll(); return true
   },
   saveFinding: async (f) => {

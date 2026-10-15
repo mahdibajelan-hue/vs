@@ -58,3 +58,6 @@ export type NcrStatus = 'open' | 'dispositioned' | 'capa' | 'verifying' | 'close
 export interface NcrRow { id: string; projectId: string; code: string; findingId: string | null; weldId: string | null; weldRef: string; techReportId: string | null; kind: 'defect' | 'nonconformity' | 'observation'; severity: 'low' | 'medium' | 'high'; description: string; disposition: 'repair' | 'accept_deviation' | 'reject' | 'rework' | null; status: NcrStatus; ownerId: string | null; dueDate: string | null; rcaRequired: boolean; createdAt: string; closedAt: string | null }
 export interface NcrEventRow { id: string; ncrId: string; at: string; by: string | null; kind: string; fromStatus: string | null; toStatus: string | null; note: string }
 export interface NcrLinkRow { id: string; ncrId: string; targetType: 'issue' | 'risk'; targetId: string | null; status: 'linked' | 'pending' | 'failed' | 'broken'; error: string }
+
+export interface RequiredFormRow { id: string; projectId: string; activityId: string; formKey: string; note: string }
+export interface MappingApprovalRow { id: string; templateId: string; approvedAt: string; note: string; revokedAt: string | null }
