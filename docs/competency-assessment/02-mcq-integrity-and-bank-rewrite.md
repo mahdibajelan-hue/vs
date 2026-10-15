@@ -10,3 +10,11 @@ Difficulty labels were uncalibrated and no human had reviewed any item (all 1054
 - Candidate page: question rail, flag-for-review, keyboard (1–4, ←/→, F), fullscreen start, per-candidate option order (server-side, already existing).
 
 **Not done yet:** versioned scoring engine, new item types (numeric, multi-select, ordering, scenario), results-dashboard redesign.
+
+## Scoring v2 and item types (2026-10-15)
+- `017_mcq_item_types.sql`: `item_type` (SINGLE / MULTI / NUMERIC / ORDER) + `answer_key` on questions, `answer` + `credit` on responses, `scoring_version` on tests.
+  `comp_mcq_item_credit` is the single scoring authority; `lib/mcqScoring.ts` mirrors it for previews/tests.
+- Credit: SINGLE 1/0 (unchanged, old results unaffected); MULTI (hits − wrong picks)/keys, floor 0; NUMERIC within tolerance; ORDER exact = 1, otherwise half of the concordant-pair surplus over chance (random order ≈ 0).
+- Score = mean credit; "correct" = full credit. New tests are stamped `scoring_version = 2`.
+- Candidate RPCs: `comp_mcq_candidate_answer_v2` (type-aware validation); keys are never returned to candidates.
+- 10 sample items (2 per role) were added as `PENDING_REVIEW`; the bank editor UI does not yet author new types (SQL only for now).

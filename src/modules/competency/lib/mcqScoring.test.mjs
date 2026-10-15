@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict'
+import { itemCredit } from './mcqScoring.ts'
+assert.equal(itemCredit('SINGLE', null, 2, 2, null), 1)
+assert.equal(itemCredit('SINGLE', null, 2, null, null), 0)
+assert.equal(itemCredit('MULTI', [0, 2], 0, null, [0, 2]), 1)
+assert.equal(itemCredit('MULTI', [0, 2], 0, null, [0]), 0.5)
+assert.equal(itemCredit('MULTI', [0, 2], 0, null, [0, 1]), 0)
+assert.equal(itemCredit('MULTI', [0, 2], 0, null, [0, 1, 2, 3]), 0)
+assert.equal(itemCredit('NUMERIC', { value: 0.8, tolPct: 1 }, 0, null, { value: 0.8 }), 1)
+assert.equal(itemCredit('NUMERIC', { value: 30, tolPct: 0 }, 0, null, { value: 31 }), 0)
+assert.equal(itemCredit('NUMERIC', { value: 30, tolPct: 0 }, 0, null, { value: 30 }), 1)
+assert.equal(itemCredit('ORDER', [2, 0, 1, 3], 0, null, [2, 0, 1, 3]), 1)
+assert.equal(itemCredit('ORDER', [2, 0, 1, 3], 0, null, [3, 1, 0, 2]), 0)
+assert.ok(Math.abs(itemCredit('ORDER', [2, 0, 1, 3], 0, null, [0, 2, 1, 3]) - 1 / 3) < 1e-9)
+console.log('mcqScoring ok')

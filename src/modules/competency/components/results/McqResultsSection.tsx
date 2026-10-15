@@ -5,6 +5,7 @@ import { fa } from '../../lib/resultsModel'
 import { tone } from '../../lib/tone'
 import { QUESTION_TYPE_LABEL_FA, type QuestionType } from '../../types'
 import { mcqInsight } from '../../lib/mcqInsights'
+import { MCQ_ITEM_TYPE_LABEL_FA } from '../../lib/mcqScoring'
 import { readIntegrity, INTEGRITY_KIND_LABEL_FA, type McqIntegritySummary } from '../../lib/mcqIntegrity'
 import { fetchMcqIntegrity, fetchMcqCohort, fetchMcqTestDetail, formatDuration, MCQ_DIFFICULTY_LABEL_FA, MCQ_DIFFICULTY_COLOR, MCQ_OPTION_LETTERS, MCQ_TEST_STATUS_LABEL_FA, type McqDifficulty, type McqTestDetail } from '../../lib/mcqData'
 import { RingChart, DonutChart, type DonutSlice } from '../DonutChart'
@@ -204,16 +205,28 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
                 <span className="fx-sub px-2 py-0.5 text-[9.5px] font-bold text-secondary">{QUESTION_TYPE_LABEL_FA[item.category] ?? item.category}</span>
                 <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{item.topic}</span>
                 <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{MCQ_DIFFICULTY_LABEL_FA[item.difficulty]}</span>
+                {item.itemType && item.itemType !== 'SINGLE' && <span className="fx-sub px-2 py-0.5 text-[9.5px] font-bold text-secondary">{MCQ_ITEM_TYPE_LABEL_FA[item.itemType]}</span>}
                 <span className="fx-tone-bg fx-tone-text mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold">
-                  {item.isCorrect ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {item.isCorrect ? 'پاسخ درست' : item.chosenOption == null ? 'بدون پاسخ' : 'پاسخ نادرست'}
+                  {item.isCorrect ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {item.isCorrect ? 'پاسخ درست' : item.itemType && item.itemType !== 'SINGLE' ? (item.credit ? `نمرهٔ جزئی ${fa((item.credit ?? 0) * 100, 0)}٪` : item.answer == null ? 'بدون پاسخ' : 'پاسخ نادرست') : item.chosenOption == null ? 'بدون پاسخ' : 'پاسخ نادرست'}
                   {item.responseTimeMs != null && <span className="num"> — {Math.round(item.responseTimeMs / 1000).toLocaleString('fa-IR')} ثانیه</span>}
                 </span>
               </div>
               <p className="mb-2 text-[12px] leading-6">{item.stem}</p>
+              {item.itemType === 'NUMERIC' ? (
+                <p className="fx-sub num px-3 py-2 text-[11.5px] leading-7">
+                  پاسخ متقاضی: <b>{item.answer && typeof item.answer === 'object' ? String((item.answer as { value?: number }).value ?? '—') : '—'}</b>
+                  {' '}— پاسخ درست: <b>{String((item.answerKey as { value?: number } | null)?.value ?? '—')}</b> {(item.answerKey as { unit?: string } | null)?.unit ?? ''}
+                </p>
+              ) : (
               <div className="space-y-1">
                 {item.options.map((opt, i) => {
-                  const isCorrectOpt = i === item.correctOption
-                  const isChosen = i === item.chosenOption
+                  const keyArr = Array.isArray(item.answerKey) ? (item.answerKey as number[]) : null
+                  const ansArr = Array.isArray(item.answer) ? (item.answer as number[]).map(Number) : null
+                  const isOrder = item.itemType === 'ORDER'
+                  const isCorrectOpt = isOrder ? false : item.itemType === 'MULTI' ? !!keyArr?.includes(i) : i === item.correctOption
+                  const isChosen = isOrder ? false : item.itemType === 'MULTI' ? !!ansArr?.includes(i) : i === item.chosenOption
+                  const rankKey = isOrder && keyArr ? keyArr.indexOf(i) + 1 : 0
+                  const rankAns = isOrder && ansArr ? ansArr.indexOf(i) + 1 : 0
                   return (
                     <p
                       key={i}
@@ -221,7 +234,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
                         isCorrectOpt ? 'bg-emerald-500/12 font-bold text-emerald-300' : isChosen ? 'bg-red-500/12 text-red-300' : 'text-secondary'
                       }`}
                     >
-                      <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{MCQ_OPTION_LETTERS[i]}.</span>
+                      <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{isOrder ? `${fa(rankKey)}→${rankAns ? fa(rankAns) : '—'}` : `${MCQ_OPTION_LETTERS[i]}.`}</span>
                       <span className="flex-1">{opt}</span>
                       {isCorrectOpt && <CheckCircle2 size={12} className="mt-0.5 shrink-0" />}
                       {isChosen && !isCorrectOpt && <XCircle size={12} className="mt-0.5 shrink-0" />}
@@ -229,6 +242,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
                   )
                 })}
               </div>
+              )}
               {item.explanation && <p className="mt-2 text-[10.5px] leading-6 text-muted">توضیح: {item.explanation}</p>}
             </div>
           ))}

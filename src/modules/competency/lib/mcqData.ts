@@ -1,4 +1,5 @@
 import type { McqIntegritySummary } from './mcqIntegrity'
+import type { McqAnswerKey, McqItemType } from './mcqScoring'
 import { supabase } from '../../../lib/supabaseClient'
 import type { JobRole, QuestionApprovalStatus, QuestionType } from '../types'
 
@@ -170,6 +171,10 @@ export interface McqTestItem {
   options: string[]
   correctOption: number
   chosenOption: number | null
+  itemType?: McqItemType
+  answerKey?: McqAnswerKey
+  answer?: unknown
+  credit?: number | null
   isCorrect: boolean | null
   responseTimeMs: number | null
   answeredAt: string | null

@@ -6,15 +6,30 @@ interface CandidateOption {
   key: number
   text: string
 }
+type ItemType = 'SINGLE' | 'MULTI' | 'NUMERIC' | 'ORDER'
 interface CandidateQuestion {
   id: string
+  type?: ItemType
+  unit?: string | null
   stem: string
   options: CandidateOption[]
 }
 interface CandidateAnswer {
-  option: number
+  option: number | null
+  payload?: unknown
   timeMs: number | null
 }
+/** What is sent to comp_mcq_candidate_answer_v2 — shape depends on the item type. */
+type AnswerBody = { option: number } | { picked: number[] } | { value: string } | { order: number[] }
+const isAnswered = (q: CandidateQuestion, a: CandidateAnswer | undefined): boolean => {
+  if (!a) return false
+  const t = q.type ?? 'SINGLE'
+  if (t === 'SINGLE') return a.option != null
+  if (t === 'MULTI') return Array.isArray(a.payload) && a.payload.length > 0
+  if (t === 'ORDER') return Array.isArray(a.payload) && a.payload.length === 4
+  return a.payload != null && typeof a.payload === 'object' && (a.payload as { value?: unknown }).value !== undefined && (a.payload as { value?: unknown }).value !== ''
+}
+const faDigitsToEn = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[٫,،]/g, '.').replace(/[^0-9.\-]/g, '')
 interface CandidateState {
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'SCORED'
   locked: boolean
@@ -46,7 +61,9 @@ export function McqCandidatePage({ token }: { token: string }) {
   const [index, setIndex] = useState(0)
   const [reviewing, setReviewing] = useState(false)
   const [saving, setSaving] = useState<Record<string, boolean>>({})
-  const [saveErrors, setSaveErrors] = useState<Record<string, number>>({})
+  const [saveErrors, setSaveErrors] = useState<Record<string, AnswerBody>>({})
+  const [orderDraft, setOrderDraft] = useState<Record<string, number[]>>({})
+  const [numDraft, setNumDraft] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmingSubmit, setConfirmingSubmit] = useState(false)
@@ -61,7 +78,7 @@ export function McqCandidatePage({ token }: { token: string }) {
     clockOffsetRef.current = new Date(s.serverNow).getTime() - Date.now()
     setState(s)
     if (s.status === 'IN_PROGRESS' && s.questions.length > 0) {
-      const firstUnanswered = s.questions.findIndex((q) => s.answers[q.id] == null)
+      const firstUnanswered = s.questions.findIndex((q) => !isAnswered(q, s.answers[q.id]))
       setIndex(firstUnanswered === -1 ? s.questions.length - 1 : firstUnanswered)
       setReviewing(false)
     }
@@ -153,22 +170,23 @@ export function McqCandidatePage({ token }: { token: string }) {
 
   const currentQuestion = state?.questions[index] ?? null
 
-  const submitAnswer = async (questionId: string, option: number) => {
+  const submitAnswer = async (questionId: string, body: AnswerBody) => {
     if (!state) return
-    setState({ ...state, answers: { ...state.answers, [questionId]: { option, timeMs: null } } })
+    const local: CandidateAnswer = 'option' in body ? { option: body.option, timeMs: null } : 'picked' in body ? { option: null, payload: body.picked, timeMs: null } : 'order' in body ? { option: null, payload: body.order, timeMs: null } : { option: null, payload: { value: body.value }, timeMs: null }
+    setState({ ...state, answers: { ...state.answers, [questionId]: local } })
     setSaving((p) => ({ ...p, [questionId]: true }))
     const startedAt = shownAtRef.current[questionId] ?? Date.now()
     const responseTimeMs = Math.max(0, Date.now() - startedAt)
-    const { data, error } = await supabase.rpc('comp_mcq_candidate_answer', {
+    const { data, error } = await supabase.rpc('comp_mcq_candidate_answer_v2', {
       p_token: token,
       p_question_id: questionId,
-      p_option: option,
+      p_answer: body,
       p_response_time_ms: responseTimeMs,
     })
     setSaving((p) => ({ ...p, [questionId]: false }))
     const timedOut = !error && data && (data as { saved: boolean; reason?: string }).reason === 'TIME_OVER'
     if (error || timedOut) {
-      setSaveErrors((p) => ({ ...p, [questionId]: option }))
+      setSaveErrors((p) => ({ ...p, [questionId]: body }))
       if (timedOut) await load('comp_mcq_candidate_get')
       return
     }
@@ -179,18 +197,35 @@ export function McqCandidatePage({ token }: { token: string }) {
     })
   }
 
-  const answeredCount = state ? state.questions.filter((q) => state.answers[q.id] != null && saveErrors[q.id] == null).length : 0
+  const answeredCount = state ? state.questions.filter((q) => isAnswered(q, state.answers[q.id]) && saveErrors[q.id] == null).length : 0
   const totalCount = state?.questions.length ?? 0
   const pendingSaves = Object.values(saving).some(Boolean)
   const failedCount = Object.keys(saveErrors).length
   const allAnswered = totalCount > 0 && answeredCount === totalCount && !pendingSaves
 
+  const chooseOption = (q: CandidateQuestion, key: number) => {
+    const t = q.type ?? 'SINGLE'
+    if (t === 'SINGLE') return void submitAnswer(q.id, { option: key })
+    if (t === 'MULTI') {
+      const cur = Array.isArray(state?.answers[q.id]?.payload) ? (state!.answers[q.id].payload as number[]).map(Number) : []
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]
+      return void submitAnswer(q.id, { picked: next })
+    }
+    if (t === 'ORDER') {
+      const cur = orderDraft[q.id] ?? []
+      if (cur.includes(key)) return
+      const next = [...cur, key]
+      setOrderDraft((p) => ({ ...p, [q.id]: next }))
+      if (next.length === 4) void submitAnswer(q.id, { order: next })
+    }
+  }
   // Keyboard: 1–4 choose, ←/→ move (RTL: ← is next), F flags. Keyboard actions are instant (no animation).
   useEffect(() => {
     if (state?.status !== 'IN_PROGRESS' || reviewing || confirmingSubmit) return
     const onKey = (e: KeyboardEvent) => {
       const q = state.questions[index]; if (!q || e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key >= '1' && e.key <= '4') { const o = q.options[Number(e.key) - 1]; if (o) void submitAnswer(q.id, o.key) }
+      if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return
+      if (e.key >= '1' && e.key <= '4') { const o = q.options[Number(e.key) - 1]; if (o) chooseOption(q, o.key) }
       else if (e.key === 'ArrowLeft') setIndex((i) => Math.min(state.questions.length - 1, i + 1))
       else if (e.key === 'ArrowRight') setIndex((i) => Math.max(0, i - 1))
       else if (e.key === 'f' || e.key === 'F') toggleFlag(q.id)
@@ -299,7 +334,7 @@ export function McqCandidatePage({ token }: { token: string }) {
   const seconds = remainingMs != null ? Math.max(0, Math.floor((remainingMs % 60000) / 1000)) : 0
   const timeLow = remainingMs != null && remainingMs < 5 * 60 * 1000
   const flaggedCount = state.questions.filter((q) => flags[q.id]).length
-  const qState = (q: CandidateQuestion) => (state.answers[q.id] != null && saveErrors[q.id] == null ? 'a' : 'u')
+  const qState = (q: CandidateQuestion) => (isAnswered(q, state.answers[q.id]) && saveErrors[q.id] == null ? 'a' : 'u')
 
   const rail = (
     <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 lg:grid-cols-5">
@@ -361,23 +396,62 @@ export function McqCandidatePage({ token }: { token: string }) {
                   <Flag size={11} fill={flags[currentQuestion.id] ? 'currentColor' : 'none'} /> بازبینی
                 </button>
               </div>
-              <div className="space-y-2">
-                {currentQuestion.options.map((opt, i) => {
-                  const selected = state.answers[currentQuestion.id]?.option === opt.key
+              {(() => {
+                const q = currentQuestion
+                const t = q.type ?? 'SINGLE'
+                const ans = state.answers[q.id]
+                if (t === 'NUMERIC') {
+                  const val = numDraft[q.id] ?? (ans?.payload && typeof ans.payload === 'object' ? String((ans.payload as { value?: unknown }).value ?? '') : '')
+                  const commit = () => { const v = faDigitsToEn(val); if (v !== '' && v !== '-' && v !== '.' && !Number.isNaN(Number(v))) void submitAnswer(q.id, { value: v }) }
                   return (
-                    <button
-                      key={opt.key}
-                      onClick={() => submitAnswer(currentQuestion.id, opt.key)}
-                      className={`flex w-full items-start gap-2.5 rounded-xl border p-3 text-right text-[12.5px] leading-7 transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.99] ${
-                        selected ? 'border-teal-400 bg-teal-500/20 text-teal-100' : 'border-white/10 bg-white/[0.02] text-secondary hover:bg-white/5'
-                      }`}
-                    >
-                      <span className={`num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${selected ? 'bg-teal-400 text-slate-900' : 'bg-white/10 text-muted'}`}>{(i + 1).toLocaleString('fa-IR')}</span>
-                      <span>{opt.text}</span>
-                    </button>
+                    <div className="space-y-2">
+                      <p className="text-[10.5px] text-muted">پاسخ را به‌صورت عدد وارد کنید{q.unit ? ` (واحد: ${q.unit})` : ''}. اعشار با نقطه یا «٫».</p>
+                      <input
+                        inputMode="decimal"
+                        dir="ltr"
+                        value={val}
+                        onChange={(e) => setNumDraft((p) => ({ ...p, [q.id]: e.target.value }))}
+                        onBlur={commit}
+                        onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+                        className="num w-full rounded-xl border border-white/15 bg-white/[0.03] px-3 py-2.5 text-center text-[16px] font-bold text-primary outline-none focus:border-teal-400"
+                        placeholder="۰"
+                      />
+                    </div>
                   )
-                })}
-              </div>
+                }
+                const savedOrder = t === 'ORDER' && Array.isArray(ans?.payload) ? (ans!.payload as number[]).map(Number) : []
+                const shownOrder = t === 'ORDER' ? (orderDraft[q.id] ?? savedOrder) : []
+                return (
+                  <div className="space-y-2">
+                    {t === 'MULTI' && <p className="text-[10.5px] text-amber-300/90">این سؤال چندپاسخی است؛ همهٔ گزینه‌های درست را انتخاب کنید. انتخاب نادرست از نمره می‌کاهد.</p>}
+                    {t === 'ORDER' && (
+                      <p className="flex items-center justify-between text-[10.5px] text-amber-300/90">
+                        <span>گزینه‌ها را به ترتیب درست (از اول تا آخر) لمس کنید.</span>
+                        {shownOrder.length > 0 && <button onClick={() => { setOrderDraft((p) => ({ ...p, [q.id]: [] })); }} className="rounded-lg border border-white/10 px-2 py-0.5 text-[10px] text-secondary hover:bg-white/5">پاک کردن ترتیب</button>}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {q.options.map((opt, i) => {
+                        const selected = t === 'SINGLE' ? ans?.option === opt.key : t === 'MULTI' ? (Array.isArray(ans?.payload) && (ans!.payload as number[]).map(Number).includes(opt.key)) : shownOrder.includes(opt.key)
+                        const badge = t === 'ORDER' ? (shownOrder.indexOf(opt.key) >= 0 ? shownOrder.indexOf(opt.key) + 1 : null) : i + 1
+                        return (
+                          <button
+                            key={opt.key}
+                            onClick={() => chooseOption(q, opt.key)}
+                            aria-pressed={selected}
+                            className={`flex w-full items-start gap-2.5 rounded-xl border p-3 text-right text-[12.5px] leading-7 transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.99] ${
+                              selected ? 'border-teal-400 bg-teal-500/20 text-teal-100' : 'border-white/10 bg-white/[0.02] text-secondary hover:bg-white/5'
+                            }`}
+                          >
+                            <span className={`num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-bold ${t === 'MULTI' ? 'rounded-md' : 'rounded-full'} ${selected ? 'bg-teal-400 text-slate-900' : 'bg-white/10 text-muted'}`}>{badge == null ? '' : badge.toLocaleString('fa-IR')}</span>
+                            <span>{opt.text}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
               {saving[currentQuestion.id] && <p className="mt-2 text-[9.5px] text-muted">در حال ذخیره…</p>}
               {!saving[currentQuestion.id] && saveErrors[currentQuestion.id] != null && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px] text-red-300">
