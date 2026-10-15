@@ -455,7 +455,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
     { id: 'r-technical', label: 'فنی و تخصصی', color: '#a855f7' },
     { id: 'r-mcq', label: '↳ آزمون تستی آنلاین', color: '#a855f7' },
     { id: 'r-behavior', label: 'شخصیت و رفتاری', color: '#ec4899' },
-    { id: 'r-interview', label: 'مصاحبه ساختاریافته', color: '#0ea5e9' },
+    ...(interviewRows.some((r) => r.ratings.length > 0) ? [{ id: 'r-interview', label: 'مصاحبه ساختاریافته (قدیمی)', color: '#0ea5e9' }] : []),
     { id: 'r-experience', label: 'سوابق و تجربه', color: '#f59e0b' },
     { id: 'r-summary', label: 'جمع‌بندی و تحلیل', color: '#6366f1' },
     { id: 'r-gap', label: '↳ شکاف شایستگی', color: '#6366f1' },
@@ -811,11 +811,13 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
           )}
         </div>
 
-        {/* ================= CATEGORY 3 — مصاحبه ساختاریافته ================= */}
+        {/* Retired method: shown only when this candidate already has legacy interview ratings. */}
+        {interviewRows.some((r) => r.ratings.length > 0) && (
         <div id="r-interview" className="fx-category scroll-mt-20" style={tone('#0ea5e9')}>
           <CategoryHeading icon={MessagesSquare} color="#0ea5e9" title="مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی، در برابر سطح مورد نیاز شغل" />
           <InterviewResults rows={interviewRows} inDesign={assessment.needsStructuredInterview} />
         </div>
+        )}
 
         {/* ================= CATEGORY 4 — سوابق و تجربه ================= */}
         <div id="r-experience" className="fx-category scroll-mt-20 space-y-3" style={tone('#f59e0b')}>

@@ -34,6 +34,12 @@ export function InServicePage({ onExitToHub, nav }: { onExitToHub: () => void; n
   const cycle = st.cycles.find((c) => c.id === sel) ?? null
   const mine = (c: InServiceCycle) => st.raters.find((r) => r.cycleId === c.id && r.userId === me?.id)
   const visible = st.cycles
+  // people working on a project who have no cycle for the current quarter yet: a cycle is only ever created by a manager, so without this list they would never appear on the page
+  const quarter = useMemo(() => jalaliQuarter(new Date().toISOString().slice(0, 10)), [])
+  const waiting = useMemo(() => assessments.filter((a) => a.workStatus === 'on_project' && !st.cycles.some((c) => c.assessmentId === a.id && c.periodStart === quarter.start)), [assessments, st.cycles, quarter])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const openFor = async (a: { id: string; workProjectName: string }) => { const id = await st.createCycle({ assessmentId: a.id, periodLabel: quarter.label, periodStart: quarter.start, periodEnd: quarter.end, projectName: a.workProjectName, dueDate: quarter.end }); if (id) setSel(id) }
+  const openAll = async () => { setBulkBusy(true); for (const a of waiting) await openFor(a); setBulkBusy(false) }
   const sc = useMemo(() => {
     if (!cycle) return null
     const kindOf = new Map(st.raters.filter((r) => r.cycleId === cycle.id).map((r) => [r.userId, r.kind]))
@@ -50,6 +56,14 @@ export function InServicePage({ onExitToHub, nav }: { onExitToHub: () => void; n
 
       <div className="comp-inv">
         <section className="im-card comp-box">
+          {isManager && waiting.length > 0 && (
+            <div className="im-card" style={{ padding: 10, marginBottom: 10, display: 'grid', gap: 6, borderInlineStart: '3px solid var(--im-amber)' }}>
+              <b>شاغلان در پروژه بدون دورهٔ {quarter.label}</b>
+              <small className="im-helper" style={{ margin: 0 }}>دورهٔ ارزیابی خودکار ساخته نمی‌شود؛ برای هر فرد شاغل باید باز شود.</small>
+              {waiting.map((a) => <div key={a.id} className="comp-talent-row" style={{ alignItems: 'center' }}><span style={{ flex: 1 }}><b>{a.candidateName}</b>{a.workProjectName ? <small className="im-helper"> — {a.workProjectName}</small> : null}</span><button className="im-btn im-btn-sm im-btn-primary" disabled={bulkBusy} onClick={() => void openFor(a)}>باز کردن دوره</button></div>)}
+              {waiting.length > 1 && <button className="im-btn im-btn-sm" disabled={bulkBusy} onClick={() => void openAll()}>باز کردن دوره برای همهٔ {fa(waiting.length)} نفر</button>}
+            </div>
+          )}
           <header><h3><ClipboardCheck size={15} aria-hidden /> دوره‌ها <em>{fa(visible.length)}</em></h3></header>
           {visible.length === 0 ? <p className="im-helper" style={{ margin: 0 }}>{isManager ? 'هنوز دوره‌ای ثبت نشده است. با «دورهٔ ارزیابی جدید» برای یک فرد شاغل در پروژه شروع کنید.' : 'ارزیابی‌ای به شما ارجاع نشده است.'}</p> : (
             <ul className="comp-rows">

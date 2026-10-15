@@ -538,6 +538,8 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         )}
       </Section>
 
+      {interview.some((r) => r.ratings.length > 0) && (
+      <>
       {/* ================= CATEGORY — مصاحبه ساختاریافته ================= */}
       <CategoryBanner title="مصاحبه ساختاریافته" subtitle="امتیاز ۱ تا ۵ هر داور روی سطوح مهارت هر شایستگی، در برابر سطح مورد نیاز شغل (خط سیاه)" color="#0369a1" />
 
@@ -590,6 +592,8 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           </table>
         )}
       </Section>
+      </>
+      )}
 
       {/* ================= CATEGORY — سوابق و تجربه ================= */}
       <CategoryBanner title="سوابق و تجربه" subtitle="تحصیلات، سوابق شغلی و گواهینامه‌ها — و کارت امتیاز صلاحیت رسمی" color={GOLD} />

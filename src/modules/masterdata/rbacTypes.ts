@@ -8,6 +8,7 @@ export type ModuleKeyRef =
   | 'finance'
   | 'material'
   | 'execution'
+  | 'engineering'
   | 'pipelinedigitaltwin'
   | 'competency'
   | 'estimator'

@@ -1363,7 +1363,6 @@ const BLUEPRINT_METHOD_FIELDS: {
   { key: 'includesTechnical', label: 'ارزیابی فنی تخصصی (حضوری)' },
   { key: 'includesPersonality', label: 'شخصیت و رفتاری (آنلاین، شامل SJT)' },
   { key: 'includesOnlineMcq', label: 'آزمون تستی آنلاین' },
-  { key: 'includesStructuredInterview', label: 'مصاحبه ساختاریافته' },
   { key: 'includesExperience', label: 'سوابق و تجربه' },
 ]
 
@@ -1413,7 +1412,7 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
     active: true,
     includesTechnical: true,
     includesPersonality: true,
-    includesStructuredInterview: true,
+    includesStructuredInterview: false,
     includesExperience: true,
     includesOnlineMcq: true,
     technicalTemplateId: null,
@@ -1564,7 +1563,7 @@ function BlueprintEditor({
   const [draft, setDraft] = useState<AssessmentBlueprintInput>(initial)
   const [saving, setSaving] = useState(false)
   const patch = (p: Partial<AssessmentBlueprintInput>) => setDraft((d) => ({ ...d, ...p }))
-  const noMethod = !draft.includesTechnical && !draft.includesPersonality && !draft.includesStructuredInterview && !draft.includesExperience && !draft.includesOnlineMcq
+  const noMethod = !draft.includesTechnical && !draft.includesPersonality && !draft.includesExperience && !draft.includesOnlineMcq
 
   return (
     <div className="space-y-2.5 rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3">

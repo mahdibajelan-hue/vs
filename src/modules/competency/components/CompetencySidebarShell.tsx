@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Award, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, MessagesSquare, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
+import { Award, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import { ModuleHeaderActions } from '../../../components/common/ModuleHeaderActions'
@@ -17,7 +17,6 @@ export type CompetencySection =
   | 'personality'
   | 'mcq'
   | 'questions'
-  | 'interview'
   | 'results'
   | 'aiAnalysis'
   | 'idp'
@@ -42,7 +41,6 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   personality: { label: 'ارزیابی شخصیت و رفتاری', icon: BrainCircuit },
   mcq: { label: 'آزمون تستی آنلاین', icon: ListTree },
   questions: { label: 'ارزیابی فنی تخصصی', icon: ListChecks },
-  interview: { label: 'مصاحبه ساختاریافته', icon: MessagesSquare },
   results: { label: 'نتیجه', icon: Award },
   aiAnalysis: { label: 'تحلیل جامع هوش مصنوعی', icon: Sparkles },
   idp: { label: 'برنامه توسعه فردی', icon: Sprout },
@@ -63,7 +61,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // personality/mcq sit between it and questions — see AssessmentWizardPage's LEAD_STAGES for the full
 // ordering. "بانک سؤالات" now covers both the technical and the personality question banks as tabs on
 // one page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
-const CANDIDATE_SECTIONS: CompetencySection[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'interview', 'results', 'aiAnalysis', 'idp']
+const CANDIDATE_SECTIONS: CompetencySection[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'results', 'aiAnalysis', 'idp']
 const MODULE_SECTIONS: CompetencySection[] = ['dashboard', 'myTasks', 'talent', 'inservice', 'discipline', 'questionBank', 'reports', 'settings']
 /** accent per module tab, same idea as the other modules' coloured nav */
 const TAB_COLOR: Partial<Record<CompetencySection, string>> = { dashboard: '#a855f7', myTasks: '#f43f5e', inservice: '#22c55e', discipline: '#ef4444', talent: '#14b8a6', questionBank: '#6366f1', reports: '#0ea5e9', personalityReports: '#ec4899', settings: '#64748b' }
@@ -131,12 +129,10 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
             <div className="comp-stagebar no-print">
               <div className="comp-stagebar-title"><Sparkles size={15} aria-hidden style={{ color: COMPETENCY_ACCENT }} /><b>{title}</b>{stageStrip && <StageStrip stages={stageStrip} />}</div>
               <div className="comp-stagebar-nav" role="tablist" aria-label="مراحل ارزیابی این داوطلب">
-                {CANDIDATE_SECTIONS.filter((x) => x !== 'interview').map((section) => {
-                  // The technical questions and the structured interview are one in-person session: one pill, two views.
-                  const merged = section === 'questions'
-                  const meta = merged ? { label: 'ارزیابی حضوری', icon: ListChecks } : SECTION_META[section]
-                  const handler = merged ? nav.questions ?? nav.interview : nav[section]
-                  const isActive = merged ? active === 'questions' || active === 'interview' : section === active
+                {CANDIDATE_SECTIONS.map((section) => {
+                  const meta = SECTION_META[section]
+                  const handler = nav[section]
+                  const isActive = section === active
                   return (
                     <button key={section} role="tab" aria-selected={isActive} disabled={!isActive && !handler} onClick={handler} className={isActive ? 'on' : ''}>
                       <meta.icon size={13} aria-hidden />{meta.label}{!isActive && !handler && <Lock size={10} aria-hidden style={{ opacity: 0.55 }} />}
@@ -144,12 +140,6 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
                   )
                 })}
               </div>
-              {(active === 'questions' || active === 'interview') && (
-                <div className="comp-seg" role="tablist" aria-label="بخش‌های ارزیابی حضوری">
-                  <button role="tab" aria-selected={active === 'questions'} className={active === 'questions' ? 'on' : ''} disabled={active !== 'questions' && !nav.questions} onClick={nav.questions}>سؤال‌های فنی تخصصی</button>
-                  <button role="tab" aria-selected={active === 'interview'} className={active === 'interview' ? 'on' : ''} disabled={active !== 'interview' && !nav.interview} onClick={nav.interview}>مصاحبهٔ ساختاریافته (شایستگی‌ها)</button>
-                </div>
-              )}
             </div>
           )}
           {!inCandidate && !stageStrip && <h2 className="comp-page-title">{title}</h2>}

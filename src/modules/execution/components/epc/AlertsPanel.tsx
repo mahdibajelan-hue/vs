@@ -5,7 +5,7 @@ import type { ExTab } from '../../ExecutionApp'
 
 const ICON = { critical: AlertOctagon, warn: AlertTriangle, info: Info } as const
 const COLOR = { critical: 'var(--im-coral)', warn: 'var(--im-amber)', info: 'var(--im-muted)' } as const
-const GO: Record<Alert['area'], [ExTab, string?]> = { engineering: ['eng', 'impact'], schedule: ['progress'], forecast: ['productivity', 'forecast'], readiness: ['plan', 'readiness'], blocker: ['plan', 'readiness'], review: ['review'], commitment: ['plan', 'lookahead'], finance: ['reports', 'ledger'], quality: ['productivity', 'rates'] }
+const GO: Record<Alert['area'], [ExTab, string?]> = { engineering: ['plan', 'readiness'], schedule: ['progress'], forecast: ['productivity', 'forecast'], readiness: ['plan', 'readiness'], blocker: ['plan', 'readiness'], review: ['review'], commitment: ['plan', 'lookahead'], finance: ['reports', 'ledger'], quality: ['productivity', 'rates'] }
 
 /** Rule-based alerts. Each shows the rule and numbers behind it and links to the page with the underlying data. */
 export function AlertsPanel({ alerts, onGo }: { alerts: Alert[]; onGo: (t: ExTab, s?: string) => void }) {

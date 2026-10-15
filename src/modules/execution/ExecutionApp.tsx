@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, CalendarRange, Ruler, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, ListTree, Loader2, Settings2, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, ListTree, Loader2, Settings2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -16,7 +16,7 @@ import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'activities' | 'daily' | 'review' | 'progress' | 'eng' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'settings'
+export type ExTab = 'dashboard' | 'activities' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
@@ -24,7 +24,6 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
-  { id: 'eng', label: 'پیشرفت مهندسی و آمادگی', icon: Ruler, color: '#6366f1', subs: [{ id: 'dash', label: 'داشبورد مهندسی' }, { id: 'register', label: 'فهرست مدارک' }, { id: 'links', label: 'ارتباط مدارک و فعالیت‌ها' }, { id: 'impact', label: 'آمادگی و اثر تأخیر' }] },
   { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
@@ -42,7 +41,6 @@ const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
 const Productivity = L(() => import('./pages/ProductivityPage'), 'ProductivityPage')
 const Assistant = L(() => import('./pages/AssistantPage'), 'AssistantPage')
-const Eng = L(() => import('./pages/EngPage'), 'EngPage')
 const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
@@ -97,7 +95,6 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
       case 'productivity': return <Productivity {...p} />
-      case 'eng': return <Eng {...p} />
       case 'plan': return <Plan {...p} />
       case 'assistant': return <Assistant {...p} />
       case 'reports': return <Reports {...p} />

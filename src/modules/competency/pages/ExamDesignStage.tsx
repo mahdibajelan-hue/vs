@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BrainCircuit, Briefcase, CheckCircle2, LayoutTemplate, ListChecks, Loader2, MessagesSquare, Wand2 } from 'lucide-react'
+import { ArrowLeft, BrainCircuit, Briefcase, CheckCircle2, LayoutTemplate, ListChecks, Loader2, Wand2 } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { usePersonalityStore } from '../../personality/store/usePersonalityStore'
 import { PersonalityDesignerModal } from '../../personality/components/PersonalityDesignerModal'
@@ -100,7 +100,6 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
     !!appliedBlueprint &&
     (appliedBlueprint.includesTechnical !== assessment.needsTechnicalAssessment ||
       appliedBlueprint.includesPersonality !== assessment.needsPersonalityAssessment ||
-      appliedBlueprint.includesStructuredInterview !== assessment.needsStructuredInterview ||
       appliedBlueprint.includesExperience !== assessment.includesExperience ||
       appliedBlueprint.includesOnlineMcq !== assessment.needsOnlineMcq)
 
@@ -138,7 +137,6 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
       [
         ['personality', assessment.needsPersonalityAssessment && !selectedBlueprint.includesPersonality],
         ['technical', assessment.needsTechnicalAssessment && !selectedBlueprint.includesTechnical],
-        ['interview', assessment.needsStructuredInterview && !selectedBlueprint.includesStructuredInterview],
         ['experience', assessment.includesExperience && !selectedBlueprint.includesExperience],
         ['onlineMcq', assessment.needsOnlineMcq && !selectedBlueprint.includesOnlineMcq],
       ] as const
@@ -283,15 +281,6 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
             onChange={(checked) => toggle({ technical: checked })}
           />
           <ExamDesignToggle
-            icon={<MessagesSquare size={14} />}
-            color="#38bdf8"
-            title="مصاحبه ساختاریافته"
-            description="امتیازدهی مستقیم هر داور به شایستگی‌های کلیدی شغل بر اساس سطوح مهارت."
-            checked={assessment.needsStructuredInterview}
-            isDesigner={canEdit}
-            onChange={(checked) => toggle({ interview: checked })}
-          />
-          <ExamDesignToggle
             icon={<Briefcase size={14} />}
             color="#34d399"
             title="سوابق و تجربه"
@@ -394,7 +383,6 @@ const BLUEPRINT_METHODS: {
   { key: 'includesPersonality', label: 'شخصیت و رفتاری (آنلاین، با SJT)' },
   { key: 'includesOnlineMcq', label: 'آزمون تستی (آنلاین)' },
   { key: 'includesTechnical', label: 'آزمون فنی (حضوری)' },
-  { key: 'includesStructuredInterview', label: 'مصاحبه ساختاریافته' },
   { key: 'includesExperience', label: 'سوابق و تجربه' },
 ]
 

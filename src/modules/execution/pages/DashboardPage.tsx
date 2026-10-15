@@ -49,10 +49,10 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
       <Tile title="برنامه در برابر عملکرد واقعی" hint="نمایش زمانی از داده‌های تأییدشده و برنامهٔ مصوب"><div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>{([['all', 'همهٔ شاخص‌ها'], ['pipeline', 'خط لوله'], ['station', 'ایستگاه و تأسیسات']] as const).map(([k, l]) => <button key={k} className={`mt-pill${pulseKind === k ? ' on' : ''}`} onClick={() => setPulseKind(k)}>{l}</button>)}</div><ExecutionPulse m={m} kind={pulseKind} /></Tile>
       {epc.engDocs.length > 0 && (
         <div className="fn-kpis">
-          <KpiCard i={0} label="امتیاز پیشرفت مهندسی" value={pct(epc.eng.progress.actualScore)} tone={epc.eng.progress.actualScore + 0.03 >= epc.eng.progress.plannedScore ? 'good' : 'warn'} sub={`برنامه ${pct(epc.eng.progress.plannedScore)}`} onClick={() => onGo('eng', 'dash')} />
-          <KpiCard i={1} label="مدارک بحرانی باز" value={fa(epc.eng.criticalOpen.length)} tone={epc.eng.criticalOpen.some((c) => c.fc.overdue) ? 'bad' : 'neutral'} sub={`${fa(epc.eng.criticalOpen.filter((c) => c.fc.overdue).length)} عقب‌افتاده`} onClick={() => onGo('eng', 'register')} />
-          <KpiCard i={2} label="فعالیت غیرآمادهٔ اجرا (مدارک)" value={fa(epc.eng.notReady.length)} tone={epc.eng.notReady.length ? 'bad' : 'good'} onClick={() => onGo('eng', 'impact')} />
-          <KpiCard i={3} label="اثر پیش‌بینی‌شدهٔ مدارک بر تکمیل پروژه" value={epc.eng.slipMax == null ? 'نامشخص' : `${fa(epc.eng.slipMax)} روز`} tone={epc.eng.slipMax ? 'bad' : 'neutral'} onClick={() => onGo('eng', 'impact')} />
+          <KpiCard i={0} label="امتیاز پیشرفت مهندسی" value={pct(epc.eng.progress.actualScore)} tone={epc.eng.progress.actualScore + 0.03 >= epc.eng.progress.plannedScore ? 'good' : 'warn'} sub={`برنامه ${pct(epc.eng.progress.plannedScore)}`} />
+          <KpiCard i={1} label="مدارک بحرانی باز" value={fa(epc.eng.criticalOpen.length)} tone={epc.eng.criticalOpen.some((c) => c.fc.overdue) ? 'bad' : 'neutral'} sub={`${fa(epc.eng.criticalOpen.filter((c) => c.fc.overdue).length)} عقب‌افتاده`} />
+          <KpiCard i={2} label="فعالیت غیرآمادهٔ اجرا (مدارک)" value={fa(epc.eng.notReady.length)} tone={epc.eng.notReady.length ? 'bad' : 'good'} />
+          <KpiCard i={3} label="اثر پیش‌بینی‌شدهٔ مدارک بر تکمیل پروژه" value={epc.eng.slipMax == null ? 'نامشخص' : `${fa(epc.eng.slipMax)} روز`} tone={epc.eng.slipMax ? 'bad' : 'neutral'} />
         </div>
       )}
       <AlertsPanel alerts={epc.alerts} onGo={onGo} />

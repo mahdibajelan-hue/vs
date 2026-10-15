@@ -121,7 +121,7 @@ export function compAssessmentFromRow(r: CompAssessmentRow): CompetencyAssessmen
     selectedQuestionIds: r.selected_question_ids ?? [],
     needsPersonalityAssessment: r.needs_personality_assessment ?? false,
     needsTechnicalAssessment: r.needs_technical_assessment ?? true,
-    needsStructuredInterview: r.needs_structured_interview ?? false,
+    needsStructuredInterview: false, // retired: STAR behavioural questions replace the structured interview
     includesExperience: r.includes_experience ?? true,
     needsOnlineMcq: r.needs_online_mcq ?? false,
     blueprintId: r.blueprint_id ?? null,
@@ -583,7 +583,7 @@ export function compAssessmentBlueprintFromRow(r: CompAssessmentBlueprintRow): C
     active: r.active,
     includesTechnical: r.includes_technical,
     includesPersonality: r.includes_personality,
-    includesStructuredInterview: r.includes_structured_interview,
+    includesStructuredInterview: false,
     includesExperience: r.includes_experience,
     includesOnlineMcq: r.includes_online_mcq ?? false,
     technicalTemplateId: r.technical_template_id,

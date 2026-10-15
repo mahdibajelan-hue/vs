@@ -360,7 +360,7 @@ function blueprintToRowPayload(input: AssessmentBlueprintInput) {
     active: input.active,
     includes_technical: input.includesTechnical,
     includes_personality: input.includesPersonality,
-    includes_structured_interview: input.includesStructuredInterview,
+    includes_structured_interview: false,
     includes_experience: input.includesExperience,
     includes_online_mcq: input.includesOnlineMcq,
     technical_template_id: input.technicalTemplateId,
@@ -1163,7 +1163,7 @@ export const useCompetencyStore = create<CompetencyState>()((set, get) => ({
 
   applyBlueprint: async (assessmentId, blueprint) => {
     await get().setExamDesign(assessmentId, blueprint.includesPersonality, blueprint.includesTechnical, {
-      needsStructuredInterview: blueprint.includesStructuredInterview,
+      needsStructuredInterview: false,
       includesExperience: blueprint.includesExperience,
       needsOnlineMcq: blueprint.includesOnlineMcq,
       blueprintId: blueprint.id,
