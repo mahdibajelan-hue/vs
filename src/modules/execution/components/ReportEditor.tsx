@@ -17,6 +17,7 @@ import { LINE_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
+import { ActivityPicker } from './ActivityPicker'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -51,8 +52,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const [res, setRes] = useState<ResRow[]>(() => mergeCatalog(m.resources.filter((x) => x.reportId === reportId).map(toRow)))
   const [stops, setStops] = useState<StopRow[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId, responsibility: x.responsibility, critical: x.critical, noticeDate: x.noticeDate, noticeRef: x.noticeRef, assessNote: x.assessNote })))
   const [pick, setPick] = useState('')
-  const [search, setSearch] = useState('')
-  const [bookF, setBookF] = useState('')
   const epcAvailable = useEpcStore((x) => x.available)
   const epcCrew = useEpcStore((x) => x.crewLogs)
   const [crews, setCrews] = useState<CrewDraft[]>(() => epcCrew.filter((c) => c.reportId === reportId).map((c) => ({ key: c.id, activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
@@ -71,7 +70,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const lockedLine = (l: LRow) => !editable || l.status === 'approved'
 
   const acts = useMemo(() => m.activities.filter((a) => a.approval === 'approved' && a.active), [m.activities])
-  const options = useMemo(() => acts.filter((a) => (!bookF || a.bookId === bookF) && (!search || `${a.itemNo} ${a.rowNo} ${a.title} ${a.spec} ${a.chapter}`.includes(search))).filter((a) => !rows.some((x) => x.activityId === a.id && x.location === '' && x.kmFrom == null)), [acts, search, rows, bookF])
+  const options = useMemo(() => acts.filter((a) => !rows.some((x) => x.activityId === a.id && x.location === '' && x.kmFrom == null)), [acts, rows])
   const addActivity = () => {
     if (!pick) return
     const blank = (activityId: string, note = ''): LRow => ({ key: uid0(), activityId, qty: 0, kmFrom: null, kmTo: null, location: '', note, detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null })
@@ -226,9 +225,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
           {editable && !form && (
             <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
-              <input placeholder="جست‌وجوی ردیف یا شرح…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 170 }} aria-label="جست‌وجو" />
-              {m.activities.some((a) => a.bookId) && <select value={bookF} onChange={(e) => setBookF(e.target.value)} aria-label="فهرست‌بها" style={{ maxWidth: 190 }}><option value="">همهٔ فهرست‌ها</option>{[...new Set(m.activities.map((a) => a.bookId).filter(Boolean))].map((id) => <option key={id} value={id!}>{ex.books.find((b) => b.id === id)?.title ?? 'فهرست'}</option>)}</select>}
-              <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="فعالیت" style={{ minWidth: 260, maxWidth: 420 }}><option value="">فعالیت را انتخاب کنید ({fa(options.length)})…</option>{options.slice(0, 300).map((a) => <option key={a.id} value={a.id}>{a.rowNo ? `${a.rowNo}) ` : ''}{a.itemNo} — {a.title} ({a.unit})</option>)}</select>
+              <ActivityPicker activities={options} value={pick} onChange={setPick} emptyLabel={`فعالیت را انتخاب کنید (${fa(options.length)})…`} title="انتخاب فعالیت برای گزارش" width={420} />
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={addActivity}><Plus size={13} /> افزودن</button>
               <button className="im-btn im-btn-sm" onClick={copyLastRows} title="ردیف‌ها و محل‌های آخرین گزارش همین جبهه را با مقدار خالی اضافه می‌کند — فقط مقدار امروز را بنویسید"><Copy size={13} /> ادامهٔ کار قبلی</button>
               <button className="im-btn im-btn-sm" onClick={prefill} title="مقدارهای فرم‌های فنی همین روز را که به فعالیت وصل شده‌اند وارد می‌کند"><Wand2 size={13} /> پیش‌پر از فرم‌های فنی</button>

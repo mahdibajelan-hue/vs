@@ -1,4 +1,5 @@
 import { Plus, Trash2, Users } from 'lucide-react'
+import { ActivityPicker } from '../ActivityPicker'
 import { DecInput } from '../../../material/components/control/DecInput'
 import type { Activity } from '../../types'
 import type { CrewLogRow } from '../../epcTypes'
@@ -24,9 +25,7 @@ export function CrewLogsPanel({ rows, editable, activities, onChange }: { rows: 
           {rows.map((r) => (
             <div key={r.key} className="im-card" style={{ padding: 10, display: 'grid', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <select disabled={!editable} value={r.activityId ?? ''} onChange={(e) => patch(r.key, { activityId: e.target.value || null })} aria-label="فعالیت" style={{ minWidth: 240, maxWidth: 420 }}>
-                  <option value="">فعالیت…</option>{activities.map((a) => <option key={a.id} value={a.id}>{a.itemNo ? `${a.itemNo} — ` : ''}{a.title}</option>)}
-                </select>
+                <ActivityPicker activities={activities} value={r.activityId ?? ''} onChange={(id) => editable && patch(r.key, { activityId: id || null })} allowEmpty emptyLabel="فعالیت…" width={420} />
                 <input disabled={!editable} placeholder="نام اکیپ" value={r.crewName} onChange={(e) => patch(r.key, { crewName: e.target.value })} style={{ width: 130 }} dir="auto" aria-label="نام اکیپ" />
                 <label className="ex-lab">ساعت مفید<DecInput value={r.usefulHours} onValue={(n) => patch(r.key, { usefulHours: n })} label="ساعت مفید" /></label>
                 <label className="ex-lab">ساعت توقف<DecInput value={r.idleHours} onValue={(n) => patch(r.key, { idleHours: n })} label="ساعت توقف" /></label>

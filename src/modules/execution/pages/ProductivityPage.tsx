@@ -5,6 +5,7 @@ import { jalaliText } from '../lib/periods'
 import { Chip, DataTable, KpiCard, Section, type Col } from '../../finance/components/fn'
 import { Empty, fa, pct } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
+import { ActivityPicker } from '../components/ActivityPicker'
 import { useEpcStore } from '../store/useEpcStore'
 import type { ActivityInsight } from '../lib/useEpcModel'
 
@@ -50,7 +51,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
     )
   }
   if (!cur) return <Empty>برای هیچ فعالیتی لاگ اکیپ ثبت نشده است.</Empty>
-  const picker = <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>فعالیت <select className="im-input" value={cur.activityId} onChange={(e) => setSel(e.target.value)} style={{ minWidth: 260 }}>{withLogs.map((i) => <option key={i.activityId} value={i.activityId}>{title(i.activityId)}</option>)}</select></label>
+  const picker = <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>فعالیت <ActivityPicker activities={withLogs.map((i) => m.ex.actById.get(i.activityId)).filter((a): a is NonNullable<typeof a> => !!a)} value={cur.activityId} onChange={(id) => id && setSel(id)} width={360} /></label>
 
   if (sub === 'scenarios') return <Scenarios m={m} cur={cur} picker={picker} />
   const r = cur.prod.rates, q = cur.prod.quality

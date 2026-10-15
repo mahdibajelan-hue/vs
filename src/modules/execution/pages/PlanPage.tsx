@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { ActivityPicker } from '../components/ActivityPicker'
 import { Plus, Trash2, Upload } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEpcModel } from '../lib/useEpcModel'
@@ -53,7 +54,7 @@ function Lookahead({ m, projectId, can, acts, title, epcLook }: { m: ReturnType<
       </div>
       {can && <div className="im-card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label className="ex-lab">هفته<select value={add.weekStart} onChange={(e) => setAdd({ ...add, weekStart: e.target.value })}>{weeks.map((w) => <option key={w.weekStart} value={w.weekStart}>{jalaliText(w.weekStart)}</option>)}</select></label>
-        <label className="ex-lab">فعالیت<select value={add.activityId} onChange={(e) => setAdd({ ...add, activityId: e.target.value })} style={{ minWidth: 240, maxWidth: 380 }}><option value="">—</option>{acts.map((a) => <option key={a.id} value={a.id}>{a.itemNo ? `${a.itemNo} — ` : ''}{a.title}</option>)}</select></label>
+        <label className="ex-lab">فعالیت<ActivityPicker activities={acts} value={add.activityId} onChange={(id) => setAdd({ ...add, activityId: id })} allowEmpty emptyLabel="انتخاب فعالیت…" width={380} /></label>
         <label className="ex-lab">جبهه<input value={add.front} onChange={(e) => setAdd({ ...add, front: e.target.value })} dir="auto" style={{ width: 110 }} /></label>
         <label className="ex-lab">مسئول<input value={add.responsible} onChange={(e) => setAdd({ ...add, responsible: e.target.value })} dir="auto" style={{ width: 120 }} /></label>
         <label className="ex-lab">مقدار برنامه<input type="number" min={0} value={add.qty} onChange={(e) => setAdd({ ...add, qty: Number(e.target.value) || 0 })} style={{ width: 100 }} /></label>

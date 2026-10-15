@@ -11,6 +11,7 @@ import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Empty, fa } from '../components/common'
 import { EpcSettingsView } from './EpcSettingsView'
 import { FormTemplatePilot } from './FormTemplatePilot'
+import { ActivityPicker } from '../components/ActivityPicker'
 import { TemplateLibrary } from './TemplateLibrary'
 import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExProjectRole, type ExRole } from '../types'
 
@@ -142,7 +143,7 @@ function MapView({ projectId }: { projectId: string }) {
     { key: 'f', label: 'فرم', render: (x) => FORM_BY_KEY[x.formKey]?.title ?? x.formKey },
     { key: 'm', label: 'شمارنده', render: (x) => FORM_BY_KEY[x.formKey]?.metrics.find((y) => y.key === x.metricKey)?.label ?? x.metricKey },
     { key: 'g', label: 'گروه (مثلاً ضخامت)', render: (x) => x.groupValue || 'همه' },
-    { key: 'a', label: 'فعالیت', render: (x) => { const a = m.actById.get(x.activityId); return a ? `${a.itemNo} — ${a.title} (${a.unit})` : '—' } },
+    { key: 'a', label: 'فعالیت', render: (x) => { const a = m.actById.get(x.activityId); return a ? <span style={{ display: 'block', maxWidth: 480, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{`${a.itemNo} — ${a.title} (${a.unit})`}</span> : '—' } },
     { key: 'd', label: '', render: (x) => can ? <button className="im-btn im-btn-sm" aria-label="حذف" onClick={() => void ex.saveMap(projectId, x.formKey, x.metricKey, x.groupValue, null)}><Trash2 size={12} /></button> : null },
   ]
   return (
@@ -153,7 +154,7 @@ function MapView({ projectId }: { projectId: string }) {
           <select value={fk} onChange={(e) => { setFk(e.target.value); setMk('') }} aria-label="فرم"><option value="">فرم…</option>{FORMS.filter((f) => f.metrics.length).map((f) => <option key={f.key} value={f.key}>{f.title}</option>)}</select>
           <select value={mk} onChange={(e) => setMk(e.target.value)} aria-label="شمارنده" disabled={!form}><option value="">شمارنده…</option>{form?.metrics.map((x) => <option key={x.key} value={x.key}>{x.label} ({x.unit})</option>)}</select>
           {metric?.groupBy && <input placeholder={`مقدار ${form?.columns.find((c) => c.key === metric.groupBy)?.label ?? 'گروه'} (خالی = همه)`} value={gv} onChange={(e) => setGv(e.target.value)} dir="auto" style={{ width: 190 }} />}
-          <select value={act} onChange={(e) => setAct(e.target.value)} aria-label="فعالیت" style={{ minWidth: 260 }}><option value="">فعالیت…</option>{acts.map((a) => <option key={a.id} value={a.id}>{a.itemNo} — {a.title} ({a.unit})</option>)}</select>
+          <ActivityPicker activities={acts} value={act} onChange={setAct} emptyLabel="انتخاب فعالیت…" title="اتصال به کدام فعالیت؟" width={320} />
           <button className="im-btn im-btn-primary im-btn-sm" disabled={!fk || !mk || !act} onClick={async () => { if (await ex.saveMap(projectId, fk, mk, gv.trim(), act)) { setGv(''); setAct('') } }}>افزودن اتصال</button>
         </div>
       )}
