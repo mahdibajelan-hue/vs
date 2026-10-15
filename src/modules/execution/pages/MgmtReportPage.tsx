@@ -10,6 +10,7 @@ import { lookaheadWeeks, ppc, deviationCauses, type LookaheadItem } from '../lib
 import { weekdayOf } from '../lib/periods'
 import { PaperFrame } from '../components/epc/PaperFrame'
 import { EpcGate } from '../components/epc/EpcBanner'
+import { qcSummary, DATA_STATUS_FA } from '../lib/qcSummary'
 import { fa, pct } from '../components/common'
 
 const CAT_FA: Record<string, string> = { material: 'مصالح', drawing: 'نقشه/مدرک', land: 'زمین/جبهه', permit: 'مجوز', weather: 'آب‌وهوا', equipment: 'تجهیزات', manpower: 'نیروی انسانی', hse: 'ایمنی', other: 'سایر' }
@@ -23,6 +24,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const name = useMasterDataStore((s) => s.projects.find((x) => x.id === projectId)?.officialName ?? '')
   const [anchor, setAnchor] = useState(m.today)
   const e = m.ex
+  const qcF = useEpcStore((s) => s.findings).filter((x) => x.projectId === projectId), qcN = useEpcStore((s) => s.ncrs).filter((x) => x.projectId === projectId), qcW = useEpcStore((s) => s.welds).filter((x) => x.projectId === projectId && x.status !== 'merged').length
   const per: Period = periodOf(sub === 'mgmt-month' ? 'month' : 'week', anchor, e.settings.weekStart)
   const inPer = e.reports.filter((r) => r.formKey === 'work' && r.reportDate >= per.from && r.reportDate <= per.to)
   const repIds = new Set(inPer.map((r) => r.id))
@@ -68,6 +70,9 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
           <p>{m.ledger.filter((l) => l.mismatches.some((x) => x.kind !== 'approved_not_measured')).map((l) => `${l.title}: ${l.mismatches.map((x) => x.detail).join('، ')}`).join(' — ') || 'مغایرتی ثبت نشده است. (تأیید فنی به‌معنای استحقاق پرداخت نیست.)'}</p>
           <T>۹. تصمیم‌های موردنیاز مدیران</T>
           <ul style={{ margin: 0, paddingInlineStart: 20 }}>{crit.length ? crit.slice(0, 8).map((a) => <li key={a.id}>{a.title} — {a.reason}</li>) : <li>مورد بحرانی نیست.</li>}</ul>
+          <T>۱۰. کیفیت (فرم‌های فنی)</T>
+          {(() => { const q = qcSummary(e.reports, qcF, qcN, qcW, per.from, per.to); return <><p>وضعیت داده: <b>{DATA_STATUS_FA[q.dataStatus]}</b> ({fa(q.approvedForms)} از {fa(q.forms)} فرم فنی ثبت‌شدهٔ دوره تأیید شده است).</p>
+            <p>مغایرت ثبت‌شده در دوره: {fa(q.findingsInPeriod)} · مغایرت باز تا امروز: {fa(q.openFindings)} (شدید: {fa(q.highOpen)}) · NCR گشوده/بسته‌شده در دوره: {fa(q.ncrOpened)}/{fa(q.ncrClosed)} · NCR باز: {fa(q.ncrOpen)} · سرجوش‌های رجیستر: {fa(q.welds)}. این بخش فقط اطلاع‌رسانی است و در درصد پیشرفت و کارکرد دخالتی ندارد.</p></> })()}
         </div>
       </PaperFrame>
     </div>
