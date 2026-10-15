@@ -34,3 +34,11 @@ Verified on the live DB (rolled back): non-admin sees 0 rows, non-lead RPC is `f
 - Structured interview bank: 4 incomplete HSE rows completed; 144 STAR behavioural questions added (`019_behavioral_star_questions.sql`: 6 competencies × 24 roles, category `BEHAVIORAL`, with key points, excellent-answer indicators and common mistakes).
 - Remaining: ~190 interview rows have no `standard_reference`; calibration of difficulty labels from real item statistics.
 - Security note: the answer keys live in `015_*.sql` — keep the repository private.
+
+## Round 3 — specialised technical items, varied formats, STAR visibility
+
+- `020_mcq_specialized_<role>.sql`: ~20 standard-cited technical items per technical role (weld defects & repair, RT film interpretation, concrete / USCS soil / compaction, CP criteria & coating, B31.8 design/test calculations, PRS/CGS, metering, compressor stations). Each row names its source in `standard_ref`.
+- `021_mcq_multi_order_specialized.sql`: multi-answer (MULTI), ordering (ORDER) and numeric (NUMERIC) items across 14 roles, plus single-choice items for goods/materials, HSE, inspection-body, survey roles. MULTI correct-position pairs are rotated; ORDER options are stored in correct order (the test shuffles them).
+- `022_mcq_generate_prefer_specialised.sql`: test generation keeps breadth-first topic sampling but favours TECHNICAL and non-SINGLE items on ties (sample of 30 for welding_inspector ≈ 27 technical, some misc.).
+- `023_templates_include_behavioral.sql`: the 8 saved exam templates had no BEHAVIORAL cell, so the 144 STAR questions were never drawn; each template now has 2 × BEHAVIORAL (L3). Already-generated (frozen) assessments are unchanged — regenerate their question selection to pick the STAR items up.
+- All figures are unreviewed by a domain expert; verify against the cited standard before relying on them.
