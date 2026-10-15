@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Gauge, Link2, ListChecks, Loader2, Ruler, ShieldCheck, FileStack } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -14,6 +14,8 @@ import { useMaterialControlStore } from '../material/store/useMaterialControlSto
 import { useMaterialStore } from '../material/store/useMaterialStore'
 import { useEpcStore } from '../execution/store/useEpcStore'
 import { buildEngTasks, lensOf } from './lib/roles'
+import { ErrorBoundary } from '../../components/common/ErrorBoundary'
+import { useAuthStore } from '../../store/useAuthStore'
 
 export const ENGINEERING_ACCENT = '#6366f1'
 type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact'
@@ -59,8 +61,14 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   }, [projects, projectId, contextProjectId])
   const loading = !mdLoaded || !exLoaded
   const engDocs = useEpcStore((s) => s.engDocs)
-  const myRoles = useExecutionStore((s) => (projectId ? s.myRoles(projectId) : []))
-  const myCount = projectId ? buildEngTasks(engDocs.filter((d) => d.projectId === projectId), lensOf(myRoles), new Date().toISOString().slice(0, 10)).length : 0
+  const exRoles = useExecutionStore((s) => s.roles)
+  const isAdmin = useAuthStore((s) => !!s.profile?.isAdmin)
+  const uid = useAuthStore((s) => s.profile?.id)
+  const myCount = useMemo(() => {
+    if (!projectId) return 0
+    const mine = exRoles.filter((r) => r.projectId === projectId && r.userId === uid && r.active).map((r) => r.role)
+    return buildEngTasks(engDocs.filter((d) => d.projectId === projectId), isAdmin ? 'manager' : lensOf(mine), new Date().toISOString().slice(0, 10)).length
+  }, [exRoles, uid, engDocs, projectId, isAdmin])
 
   return (
     <div className="im-root fn-root mt-root ex-root" dir="rtl" style={{ ['--im-accent' as string]: ENGINEERING_ACCENT }}>
@@ -97,7 +105,7 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
           <div className="im-page"><div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div></div>
         ) : (
           <div className="im-page" key={`${tab}:${projectId}`}>
-            <Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}><EngPage projectId={projectId} sub={tab} /></Suspense>
+            <ErrorBoundary area="پایش مهندسی"><Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}><EngPage projectId={projectId} sub={tab} /></Suspense></ErrorBoundary>
           </div>
         )}
       </main>
