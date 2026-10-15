@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Printer } from 'lucide-react'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { fmtD } from '../../finance/components/fn'
@@ -12,6 +13,8 @@ import { FormPaper, PAPER_FORMS } from './FormPapers'
 import { PaperFrame } from './epc/PaperFrame'
 import { TemplatePaper } from './TemplatePaper'
 import { useEpcStore } from '../store/useEpcStore'
+import { useExecutionStore } from '../store/useExecutionStore'
+import { paperChoice, printModeOf } from '../forms/printMode'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -32,10 +35,35 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
   const templates = useEpcStore((s) => s.templates)
-  // an approved sheet exists for this form → print on it as-is (no letterhead frame, no extra header/footer: the sheet carries its own)
+  const settings = useExecutionStore((s) => s.settingsByProject.get(c.report.projectId))
+  const [preview, setPreview] = useState(false)
   const approved = c.form ? templates.find((t) => t.formKey === c.form!.key && t.status === 'approved') : undefined
-  if (approved) return <TemplatePaper c={c} template={approved} />
-  return <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /></PaperFrame>
+  // the built-in paper stays the default for every form; the approved sheet is used only when the form was switched to template mode after its conformity was signed, or for an explicit experimental preview
+  const choice = paperChoice({ mode: c.form ? printModeOf(settings, c.form.key) : 'legacy', hasApproved: !!approved, preview })
+  if (choice === 'template' && approved) {
+    const experimental = !!c.form && printModeOf(settings, c.form.key) !== 'template'
+    return (
+      <>
+        {experimental && (
+          <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px', background: '#fef3c7', border: '1px solid #f59e0b', marginBottom: 6, fontSize: 12.5 }}>
+            <b>پیش‌نمایش آزمایشی با قالب مصوب — انطباق با نمونهٔ مصوب هنوز تأیید نشده؛ برای بایگانی رسمی استفاده نشود.</b>
+            <button type="button" className="im-btn im-btn-sm" onClick={() => setPreview(false)}>بازگشت به برگهٔ فعلی</button>
+          </div>
+        )}
+        <TemplatePaper c={c} template={approved} note={experimental ? 'پیش‌نمایش آزمایشی — بایگانی رسمی نیست' : undefined} />
+      </>
+    )
+  }
+  return (
+    <>
+      {approved && (
+        <div className="no-print" style={{ marginBottom: 6 }}>
+          <button type="button" className="im-btn im-btn-sm" onClick={() => setPreview(true)}>پیش‌نمایش آزمایشی با قالب مصوب</button>
+        </div>
+      )}
+      <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /></PaperFrame>
+    </>
+  )
 }
 function ReportPaperBody({ c }: { c: PaperCtx }) {
   const { report: r, form } = c

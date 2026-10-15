@@ -16,8 +16,10 @@ const d = (l: ReportLine, k: string) => (l.detail[k] == null ? '' : String(l.det
 const num = (v: unknown) => { const x = Number(String(v ?? '').replace('٫', '.')); return Number.isFinite(x) && String(v ?? '') !== '' ? x : null }
 
 /** The daily welding report printed on the APPROVED sheet (frozen grid of the approved Excel version): same geometry, only the bound cells carry data. */
-export function TemplatePaper({ c, template }: { c: PaperCtx; template: FormTemplateRow }) {
-  if (template.formKey !== 'welding' && GRID_SPECS[template.formKey]) return <SpecPaper c={c} template={template} />
+export function TemplatePaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
+  return template.formKey !== 'welding' && GRID_SPECS[template.formKey] ? <SpecPaper c={c} template={template} note={note} /> : <WeldingTemplatePaper c={c} template={template} note={note} />
+}
+function WeldingTemplatePaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
   const r = c.report
   const settings = useExecutionStore((s) => s.settingsByProject.get(r.projectId))
   const ep = epcSettings(settings as unknown as Record<string, unknown>)
@@ -34,6 +36,7 @@ export function TemplatePaper({ c, template }: { c: PaperCtx; template: FormTemp
   const plan = printPlan(template.layout)
   return (
     <div className="mt-printable gt-paper" dir="ltr">
+      {note && <p style={{ margin: '0 0 4px', fontSize: 11, textAlign: 'center' }}>{note}</p>}
       <style>{`${plan.css} @media print { .gt-page { zoom: ${plan.scale}; break-after: page; } .gt-page:last-child { break-after: auto; } }`}</style>
       {Array.from({ length: pages }, (_, p) => {
         const res = weldingGridPage(template.layout, { header, thk, rows, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) } }, p)
@@ -48,7 +51,7 @@ export function TemplatePaper({ c, template }: { c: PaperCtx; template: FormTemp
 
 const str = (v: unknown) => (v == null ? '' : String(v))
 /** Any other approved sheet that has a declarative cell mapping (gridSpecs.ts). */
-function SpecPaper({ c, template }: { c: PaperCtx; template: FormTemplateRow }) {
+function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
   const r = c.report, spec = GRID_SPECS[template.formKey]
   const settings = useExecutionStore((s) => s.settingsByProject.get(r.projectId))
   const ep = epcSettings(settings as unknown as Record<string, unknown>)
@@ -64,6 +67,7 @@ function SpecPaper({ c, template }: { c: PaperCtx; template: FormTemplateRow }) 
   template.layout.logos.forEach((l) => { if (l.from && l.kind === 'pic') logos[`${l.from[0]},${l.from[1]}`] = ep.parties.employer?.logo || `${import.meta.env.BASE_URL}form-logo-welding-original.png` })
   return (
     <div className="mt-printable gt-paper" dir="ltr">
+      {note && <p style={{ margin: '0 0 4px', fontSize: 11, textAlign: 'center' }}>{note}</p>}
       <style>{`${plan.css} @media print { .gt-page { zoom: ${plan.scale}; break-after: page; } .gt-page:last-child { break-after: auto; } }`}</style>
       {Array.from({ length: pages }, (_, p) => <div key={p} className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet tpl={template.layout} values={specPage(spec, template.layout, inp, p).values} logos={logos} /></div>)}
       <small className="wd-foot">{r.reportNo} · نسخهٔ قالب {template.version} · نسخهٔ بایگانی</small>
