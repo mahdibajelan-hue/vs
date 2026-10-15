@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, NcrRow, NcrEventRow, NcrLinkRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -31,6 +31,8 @@ interface State {
   crewLogs: CrewLogRow[]; engDocs: EngDocRow[]; docLinks: DocLinkRow[]; prereqs: PrereqRow[]; deps: DepRow[]; lookahead: LookaheadRow[]; measurements: MeasurementRow[]; versions: VersionRow[]; proposals: FormProposalRow[]; imports: ScheduleImportRow[]
   legalByProject: Map<string, LegalText>
   templates: FormTemplateRow[]; reportLinks: ReportLinkRow[]; findings: QcFindingRow[]; entries: FormEntryRow[]
+  welds: WeldRow[]; lineWelds: LineWeldRow[]; weldConflicts: WeldConflictRow[]; weldSuspects: WeldSuspectRow[]; weldMerges: WeldMergeRow[]
+  ncrs: NcrRow[]; ncrEvents: NcrEventRow[]; ncrLinks: NcrLinkRow[]
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
   loadVersions: (reportId: string) => Promise<void>
@@ -39,6 +41,12 @@ interface State {
   approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
   saveFinding: (f: { projectId: string; techReportId?: string | null; kind: QcFindingRow['kind']; severity: QcFindingRow['severity']; weldRef: string; note: string }) => Promise<boolean>
   closeFinding: (id: string, reopen?: boolean) => Promise<boolean>
+  syncWelds: (reportId: string) => Promise<void>
+  weldAction: (fn: 'ex_weld_merge' | 'ex_weld_unmerge' | 'ex_weld_set_status' | 'ex_weld_dismiss_suspect' | 'ex_weld_conflict_resolve', args: Record<string, unknown>) => Promise<boolean>
+  ncrFromFinding: (findingId: string) => Promise<string | null>
+  ncrTransition: (ncrId: string, to: NcrStatus, note: string, disposition?: string) => Promise<boolean>
+  ncrAssign: (ncrId: string, owner: string | null, due: string | null) => Promise<boolean>
+  ncrLink: (ncrId: string, target: 'issue' | 'risk') => Promise<{ status: string; error?: string } | null>
   saveEntry: (e: { id?: string; projectId: string; templateId: string; entryDate: string; header: string[]; rows: string[][] }) => Promise<boolean>
   deleteEntry: (id: string) => Promise<boolean>
   stampTemplate: (reportId: string, templateId: string) => Promise<boolean>
@@ -65,7 +73,7 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [], findings: [], entries: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
@@ -74,6 +82,15 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
     const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
     if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
+    const [wl, lw, wc, ws, wm, nc, ne, nl] = await Promise.all([supabase.from('ex_welds').select('*'), supabase.from('ex_line_welds').select('line_id, weld_id, project_id, raw_pipe'), supabase.from('ex_weld_conflicts').select('*').eq('status', 'open'), supabase.from('ex_weld_suspects').select('*'), supabase.from('ex_weld_merges').select('*').is('undone_at', null), supabase.from('ex_ncr').select('*').order('seq', { ascending: false }), supabase.from('ex_ncr_events').select('*').order('at'), supabase.from('ex_ncr_links').select('*')])
+    if (!wl.error) set({ welds: ((wl.data ?? []) as Row[]).map((r): WeldRow => ({ id: r.id, projectId: r.project_id, sectionKey: r.section_key, weldKey: r.weld_key, sectionRaw: r.section_raw, weldRaw: r.weld_raw, pipeNo: r.pipe_no, status: r.status, mergedInto: r.merged_into })) })
+    if (!lw.error) set({ lineWelds: ((lw.data ?? []) as Row[]).map((r): LineWeldRow => ({ lineId: r.line_id, weldId: r.weld_id, projectId: r.project_id, rawPipe: r.raw_pipe })) })
+    if (!wc.error) set({ weldConflicts: ((wc.data ?? []) as Row[]).map((r): WeldConflictRow => ({ id: r.id, projectId: r.project_id, weldId: r.weld_id, kind: r.kind, detail: r.detail, status: r.status })) })
+    if (!ws.error) set({ weldSuspects: ((ws.data ?? []) as Row[]).map((r): WeldSuspectRow => ({ projectId: r.project_id, n2: r.n2, weldIds: r.weld_ids, raws: r.raws })) })
+    if (!wm.error) set({ weldMerges: ((wm.data ?? []) as Row[]).map((r): WeldMergeRow => ({ id: r.id, projectId: r.project_id, fromWeld: r.from_weld, intoWeld: r.into_weld, reason: r.reason, undoneAt: r.undone_at })) })
+    if (!nc.error) set({ ncrs: ((nc.data ?? []) as Row[]).map((r): NcrRow => ({ id: r.id, projectId: r.project_id, code: r.code, findingId: r.finding_id, weldId: r.weld_id, weldRef: r.weld_ref ?? '', techReportId: r.tech_report_id, kind: r.kind, severity: r.severity, description: r.description ?? '', disposition: r.disposition, status: r.status, ownerId: r.owner_id, dueDate: r.due_date, rcaRequired: !!r.rca_required, createdAt: r.created_at, closedAt: r.closed_at })) })
+    if (!ne.error) set({ ncrEvents: ((ne.data ?? []) as Row[]).map((r): NcrEventRow => ({ id: r.id, ncrId: r.ncr_id, at: r.at, by: r.by, kind: r.kind, fromStatus: r.from_status, toStatus: r.to_status, note: r.note ?? '' })) })
+    if (!nl.error) set({ ncrLinks: ((nl.data ?? []) as Row[]).map((r): NcrLinkRow => ({ id: r.id, ncrId: r.ncr_id, targetType: r.target_type, targetId: r.target_id, status: r.status, error: r.error ?? '' })) })
     const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
     if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
     const t = (name: string) => supabase.from(name).select('*')
@@ -137,6 +154,35 @@ export const useEpcStore = create<State>((set, get) => ({
     const { error } = await supabase.from('ex_qc_findings').update({ status: reopen ? 'open' : 'closed', closed_at: reopen ? null : new Date().toISOString() }).eq('id', id)
     if (fail('بستن مغایرت', error)) return false
     await get().fetchAll(); return true
+  },
+  syncWelds: async (reportId) => {
+    const { error } = await supabase.rpc('ex_weld_sync', { p_report: reportId })
+    if (!error) await get().fetchAll() // a missing function/table is not an error the user can act on
+  },
+  weldAction: async (fn, args) => {
+    const { error } = await supabase.rpc(fn, args)
+    if (fail('عملیات سرجوش', error)) return false
+    await get().fetchAll(); return true
+  },
+  ncrFromFinding: async (findingId) => {
+    const { data, error } = await supabase.rpc('ex_ncr_from_finding', { p_finding: findingId })
+    if (fail('ثبت عدم انطباق (NCR)', error)) return null
+    await get().fetchAll(); return data as string
+  },
+  ncrTransition: async (ncrId, to, note, disposition) => {
+    const { error } = await supabase.rpc('ex_ncr_transition', { p_ncr: ncrId, p_to: to, p_note: note, p_disposition: disposition ?? null })
+    if (fail('تغییر وضعیت NCR', error)) return false
+    await get().fetchAll(); return true
+  },
+  ncrAssign: async (ncrId, owner, due) => {
+    const { error } = await supabase.rpc('ex_ncr_assign', { p_ncr: ncrId, p_owner: owner, p_due: due })
+    if (fail('تعیین مسئول NCR', error)) return false
+    await get().fetchAll(); return true
+  },
+  ncrLink: async (ncrId, target) => {
+    const { data, error } = await supabase.rpc('ex_ncr_link', { p_ncr: ncrId, p_target: target })
+    if (fail('اتصال NCR', error)) return null
+    await get().fetchAll(); return data as { status: string; error?: string }
   },
   saveEntry: async (e) => {
     const row = { project_id: e.projectId, template_id: e.templateId, entry_date: e.entryDate, header: e.header, rows: e.rows }

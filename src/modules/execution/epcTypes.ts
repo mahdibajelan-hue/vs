@@ -48,3 +48,13 @@ export interface EpcSettings {
 export interface QcFindingRow { id: string; projectId: string; techReportId: string | null; lineId: string | null; kind: 'defect' | 'nonconformity' | 'observation'; severity: 'low' | 'medium' | 'high'; status: 'open' | 'closed'; weldRef: string; note: string; createdAt: string; closedAt: string | null }
 
 export interface FormEntryRow { id: string; projectId: string; templateId: string; entryDate: string; header: string[]; rows: string[][]; createdAt: string }
+
+export interface WeldRow { id: string; projectId: string; sectionKey: string; weldKey: string; sectionRaw: string; weldRaw: string; pipeNo: string | null; status: 'auto' | 'confirmed' | 'merged' | 'orphan'; mergedInto: string | null }
+export interface LineWeldRow { lineId: string; weldId: string; projectId: string; rawPipe: string }
+export interface WeldConflictRow { id: string; projectId: string; weldId: string; kind: 'pipe' | 'size' | 'thickness' | 'front'; detail: string; status: 'open' | 'resolved' | 'dismissed' }
+export interface WeldSuspectRow { projectId: string; n2: string; weldIds: string[]; raws: string[] }
+export interface WeldMergeRow { id: string; projectId: string; fromWeld: string; intoWeld: string; reason: string; undoneAt: string | null }
+export type NcrStatus = 'open' | 'dispositioned' | 'capa' | 'verifying' | 'closed' | 'void'
+export interface NcrRow { id: string; projectId: string; code: string; findingId: string | null; weldId: string | null; weldRef: string; techReportId: string | null; kind: 'defect' | 'nonconformity' | 'observation'; severity: 'low' | 'medium' | 'high'; description: string; disposition: 'repair' | 'accept_deviation' | 'reject' | 'rework' | null; status: NcrStatus; ownerId: string | null; dueDate: string | null; rcaRequired: boolean; createdAt: string; closedAt: string | null }
+export interface NcrEventRow { id: string; ncrId: string; at: string; by: string | null; kind: string; fromStatus: string | null; toStatus: string | null; note: string }
+export interface NcrLinkRow { id: string; ncrId: string; targetType: 'issue' | 'risk'; targetId: string | null; status: 'linked' | 'pending' | 'failed' | 'broken'; error: string }

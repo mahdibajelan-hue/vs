@@ -100,7 +100,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, responsibility: s.responsibility, critical: s.critical, noticeDate: s.noticeDate, noticeRef: s.noticeRef, assessNote: s.assessNote })) })
     const okC = !okB || !crewDirty || !epcAvailable || await useEpcStore.getState().saveCrewLogs(reportId, crews.map((c) => ({ activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
     setBusy(false)
-    if (okB && okC) { setDirty(false); setCrewDirty(false) }
+    if (okB && okC) { setDirty(false); setCrewDirty(false); if (form) void useEpcStore.getState().syncWelds(reportId) } // keeps the weld registry (an index over the forms) in step; never blocks saving
     return !!okB && okC
   }
   const send = async () => {
@@ -164,6 +164,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   }
   const hist = m.history.filter((h) => h.reportId === reportId)
 
+  const welds = useEpcStore((x) => x.welds)
+  const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
     const dis = lockedLine(l)
@@ -171,7 +173,13 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     if (f.kind === 'num' || f.kind === 'km') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
     if (f.kind === 'date') return dis ? <span>{fmtD(String(v ?? ''))}</span> : <JalaliDateInput value={String(v ?? '')} onChange={(x) => patchDetail(l.key, f.key, x)} />
     if (f.kind === 'time') return <input type="time" disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label} />
-    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label} dir="auto" />
+    const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : null
+    const onText = (val: string) => {
+      patchDetail(l.key, f.key, val)
+      // a known weld brings its pipe along when the row has none yet — only a suggestion, the person can overwrite it
+      if (known === 'weld' && !l.detail.pipeNo) { const w = weldHints.find((x) => x.weld === val && x.sec === String(l.detail.sec ?? '')); if (w?.pipe) patchDetail(l.key, 'pipeNo', w.pipe) }
+    }
+    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : undefined} />
   }
   const headField = (f: FieldDef) => (
     <label key={f.key} className={f.wide ? 'wide' : undefined}>{f.label}{f.req ? ' *' : ''}
@@ -202,6 +210,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {r.status === 'incomplete' && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}><b>فرم نیازمند تکمیل است.</b> این گزارش از اطلاعات موجود پیش‌پر شده؛ فقط بخش‌های ناقص زیر را کامل کنید:<ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{r.missing.map((x) => <li key={x}>{x}</li>)}</ul></div>}
       {!EDITABLE.has(r.status) && <div className="im-card" style={{ padding: '8px 14px' }}><span className="im-helper" style={{ margin: 0 }}>این گزارش ارسال یا بررسی شده و فقط‌خواندنی است. برای اصلاح، دستگاه نظارت باید آن را برگرداند یا بازگشایی کند.</span></div>}
 
+      {form && <><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{[...new Set(weldHints.map((w) => w.pipe).filter(Boolean))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist></>}
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>

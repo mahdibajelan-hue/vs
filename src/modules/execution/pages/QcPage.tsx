@@ -8,13 +8,15 @@ import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import type { QcFindingRow } from '../epcTypes'
 import type { ExTab } from '../ExecutionApp'
+import { WeldsPage } from './WeldsPage'
+import { NcrPanel } from '../components/NcrPanel'
 
 const KIND_FA = { defect: 'عیب جوش/اجرا', nonconformity: 'عدم انطباق', observation: 'مشاهده' } as const
 const SEV_FA = { low: 'کم', medium: 'متوسط', high: 'زیاد' } as const
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0)
 
 /** Quality control view built on the technical forms already recorded: completion/approval of forms, radiography acceptance, repair progress, and the register of findings. */
-export function QcPage({ projectId }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
+export function QcPage({ projectId, sub }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) { return sub === 'welds' ? <WeldsPage projectId={projectId} sub={sub} /> : <EpcGate><Inner projectId={projectId} /></EpcGate> }
 function Inner({ projectId }: { projectId: string }) {
   const m = useExecutionModel(projectId)
   const epc = useEpcStore()
@@ -65,6 +67,7 @@ function Inner({ projectId }: { projectId: string }) {
           <div className="fn-tbl-wrap" style={{ maxHeight: 280 }}><table className="ex-lines"><tbody>{suggestions.slice(0, 50).map((x) => <tr key={x.key}><td dir="ltr">{x.weld}</td><td>{x.why}</td><td>{m.reports.find((r) => r.id === x.reportId)?.reportNo}</td><td>{can && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy} onClick={async () => { setBusy(true); await epc.saveFinding({ projectId, techReportId: x.reportId, kind: 'defect', severity: 'medium', weldRef: x.weld, note: x.why }); setBusy(false) }}>ثبت مغایرت</button>}</td></tr>)}</tbody></table></div>
         </Section>
       )}
+      <NcrPanel projectId={projectId} />
       <Section title="ثبت مغایرت و نتایج بازرسی" hint="مغایرت را به یک گزارش فنی وصل کنید؛ تا بسته‌شدن، در شاخص‌ها باز می‌ماند.">
         {can && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -77,7 +80,7 @@ function Inner({ projectId }: { projectId: string }) {
           </div>
         )}
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>نوع</th><th>شدت</th><th>سرجوش</th><th>شرح</th><th>گزارش</th><th>وضعیت</th><th /></tr></thead>
-          <tbody>{mine.map((x) => <tr key={x.id}><td>{fmtD(x.createdAt.slice(0, 10))}</td><td>{KIND_FA[x.kind]}</td><td><Chip tone={x.severity === 'high' ? 'bad' : x.severity === 'medium' ? 'warn' : 'neutral'}>{SEV_FA[x.severity]}</Chip></td><td dir="ltr">{x.weldRef || '—'}</td><td>{x.note}</td><td>{m.reports.find((r) => r.id === x.techReportId)?.reportNo ?? '—'}</td><td><Chip tone={x.status === 'open' ? 'bad' : 'good'}>{x.status === 'open' ? 'باز' : 'بسته'}</Chip></td><td>{can && <button className="im-btn im-btn-sm" onClick={() => void epc.closeFinding(x.id, x.status === 'closed')}>{x.status === 'open' ? 'بستن' : 'بازکردن'}</button>}</td></tr>)}
+          <tbody>{mine.map((x) => <tr key={x.id}><td>{fmtD(x.createdAt.slice(0, 10))}</td><td>{KIND_FA[x.kind]}</td><td><Chip tone={x.severity === 'high' ? 'bad' : x.severity === 'medium' ? 'warn' : 'neutral'}>{SEV_FA[x.severity]}</Chip></td><td dir="ltr">{x.weldRef || '—'}</td><td>{x.note}</td><td>{m.reports.find((r) => r.id === x.techReportId)?.reportNo ?? '—'}</td><td><Chip tone={x.status === 'open' ? 'bad' : 'good'}>{x.status === 'open' ? 'باز' : 'بسته'}</Chip></td><td>{can && <span style={{ display: 'inline-flex', gap: 4 }}><button className="im-btn im-btn-sm" onClick={() => void epc.closeFinding(x.id, x.status === 'closed')}>{x.status === 'open' ? 'بستن' : 'بازکردن'}</button>{x.status === 'open' && !epc.ncrs.some((n) => n.findingId === x.id) && <button className="im-btn im-btn-sm" disabled={busy} onClick={async () => { setBusy(true); await epc.ncrFromFinding(x.id); setBusy(false) }}>تبدیل به NCR</button>}</span>}</td></tr>)}
             {mine.length === 0 && <tr><td colSpan={8} className="sub">مغایرتی ثبت نشده است.</td></tr>}</tbody></table></div>
       </Section>
     </div>
