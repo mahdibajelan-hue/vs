@@ -21,3 +21,15 @@ for (const [key, spec] of Object.entries(GRID_SPECS)) {
   }
 }
 console.log('grid specs: all assertions passed')
+
+// sheet entry: a clicked cell maps back to its field
+{
+  const { cellTarget, editableCells } = await import('./gridSpecs.ts')
+  const sp = GRID_SPECS.fitup
+  assert.deepEqual(cellTarget(sp, 'A4', 0), { kind: 'header', key: 'pipeSpec' })
+  assert.equal(cellTarget(sp, 'D5', 0), null) // reportNo is derived
+  assert.deepEqual(cellTarget(sp, 'C10', 0), { kind: 'row', row: 0, key: 'jointNo' })
+  assert.equal(cellTarget(sp, 'C10', 1)?.row, 20)
+  assert.ok(editableCells(sp, 0).has('A4') && !editableCells(sp, 0).has('D5'))
+  console.log('sheet-entry targets ok')
+}

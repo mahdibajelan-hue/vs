@@ -11,6 +11,7 @@ import { OfficeRoundTrip, downloadWorkbook } from '../forms/OfficeRoundTrip'
 import { TemplateAdjuster } from '../forms/TemplateAdjuster'
 import { Chip, Section } from '../../finance/components/fn'
 import { fa } from '../components/common'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { fmtD } from '../../finance/components/fn'
 
@@ -22,6 +23,7 @@ export function TemplateLibrary({ projectId }: { projectId: string }) { return <
 function Inner({ projectId }: { projectId: string }) {
   const epc = useEpcStore()
   const can = useExecutionStore((s) => s.can(projectId, '*') || s.can(projectId, 'configure'))
+  const isAdmin = useAuthStore((s) => Boolean(s.profile?.isAdmin))
   const [fields, setFields] = useState<Record<string, { code: string; rev: string }>>({})
   const [busy, setBusy] = useState('')
   // after a draft is saved the viewer jumps to it (otherwise the old version stays on screen and the change looks lost)
@@ -77,7 +79,7 @@ function Inner({ projectId }: { projectId: string }) {
               </details>
             )}
             {mine.length === 0 && !can && <span className="im-helper">هنوز ثبت نشده است.</span>}
-            <div className="fn-tbl-wrap" style={{ maxHeight: 'none', marginTop: 8 }}><table className="ex-lines"><thead><tr><th>نسخه</th><th>وضعیت</th><th>کد فرم</th><th>بازنگری</th><th>فایل مبدأ (هش)</th><th>تأیید</th><th /></tr></thead>
+            <div className="fn-tbl-wrap" style={{ maxHeight: 'none', marginTop: 8 }}><table className="ex-lines"><thead><tr><th>نسخه</th><th>وضعیت</th><th>کد فرم</th><th>بازنگری</th><th>فایل مبدأ (هش)</th><th>تأیید</th><th /><th /></tr></thead>
               <tbody>{mine.map((t) => {
                 const f = fields[t.id] ?? { code: '', rev: '' }
                 return <tr key={t.id}>
@@ -87,8 +89,9 @@ function Inner({ projectId }: { projectId: string }) {
                   <td className="fn-code" title={t.sourceSha256}>{t.sourceFile} · {t.sourceSha256.slice(0, 8)}</td>
                   <td>{t.approvedAt ? fmtD(t.approvedAt.slice(0, 10)) : '—'}</td>
                   <td>{t.status === 'draft' && can && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy === t.id} onClick={async () => { setBusy(t.id); await epc.approveTemplate(t.id, f.code, f.rev); setBusy('') }}><CheckCircle2 size={13} /> تأیید و فعال‌سازی</button>}{t.status === 'approved' && (() => { const ap = epc.mappingApprovals.find((x) => x.templateId === t.id && !x.revokedAt); return ap ? <span className="im-helper">نگاشت سلول‌ها تأیید شده ({fmtD(ap.approvedAt.slice(0, 10))}){can && <button className="im-btn im-btn-sm" style={{ marginInlineStart: 6 }} onClick={() => void epc.revokeMapping(ap.id)}>ابطال</button>}</span> : can ? <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('جدول نگاشت سلول‌ها بررسی و تأیید شود؟ این تأیید برای همین نسخه ثبت می‌شود.')) void epc.approveMapping(t.id, '') }}><CheckCircle2 size={13} /> تأیید نگاشت سلول‌ها</button> : <span className="im-helper">نگاشت تأیید نشده</span> })()}</td>
+                  <td>{isAdmin && <button className="im-btn im-btn-sm" disabled={busy === t.id} title="فقط مدیر سامانه؛ فرمی که از این نسخه ثبت شده باشد مانع حذف است" onClick={async () => { if (!window.confirm(`نسخهٔ ${t.version} این فرم برای همیشه حذف شود؟${t.status === 'approved' ? ' این نسخه مصوب و فعال است و فرم تا تأیید نسخهٔ دیگر بدون الگو می‌ماند.' : ''}`)) return; setBusy(t.id); await epc.deleteTemplate(t.id); setBusy('') }}>حذف نسخه</button>}</td>
                 </tr>
-              })}{mine.length === 0 && <tr><td colSpan={7} className="sub">نسخه‌ای ثبت نشده است.</td></tr>}</tbody></table></div>
+              })}{mine.length === 0 && <tr><td colSpan={8} className="sub">نسخه‌ای ثبت نشده است.</td></tr>}</tbody></table></div>
           </Section>
         )
       })}

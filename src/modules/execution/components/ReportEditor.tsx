@@ -29,6 +29,9 @@ import { weldKey } from '../lib/welds'
 import { attrOfKey, centralKey } from '../lib/weldCentral'
 import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
+import { SheetEntry } from './SheetEntry'
+import { epcSettings } from '../lib/epcSettings'
+import { GRID_SPECS } from '../forms/gridSpecs'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
 /** a stoppage row; the delay-register fields ride along so saving the report never drops an assessment or notice */
@@ -86,6 +89,10 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const kids = acts.filter((x) => x.parentActivityId === pick && !rows.some((r) => r.activityId === x.id && r.location === ''))
     setRows((a) => [...a, blank(pick), ...kids.map((k) => blank(k.id, 'اضافه‌بها — مقدار را وارد یا ردیف را حذف کنید'))]); setPick(''); setDirty(true)
   }
+  const [sheetMode, setSheetMode] = useState(false)
+  const sheetTpl = useEpcStore((x) => (form && GRID_SPECS[form.key] && form.key !== 'welding' ? x.templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined))
+  const exSettings = useExecutionStore((x) => x.settingsByProject.get(m.projectId))
+  const ensureRows = (n: number) => { setRows((a) => (a.length >= n ? a : [...a, ...Array.from({ length: n - a.length }, () => ({ key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending' as const, approvedQty: null, reviewNote: '', sourceReportId: null }))])); setDirty(true) }
   const addBlank = () => { setRows((a) => [...a, { key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setDirty(true) }
   const copyRow = (l: LRow) => { setRows((a) => { const i = a.findIndex((x) => x.key === l.key); const c: LRow = { ...l, key: uid0(), id: undefined, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null, detail: { ...l.detail } }; return [...a.slice(0, i + 1), c, ...a.slice(i + 1)] }); setDirty(true) }
   const delRow = (key: string) => { setRows((a) => a.filter((x) => x.key !== key)); setDirty(true) }
@@ -206,6 +213,14 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   }
   const centralOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { centralWeld?: boolean } } | undefined)?.flags?.centralWeld
   const centralByKey = useMemo(() => new Map(welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => [`${w.sectionKey}|${w.weldKey}`, w])), [welds, m.projectId])
+  // what the sheet shows: the typed values plus the facts the central weld record already holds (never typed again)
+  const shownRows = useMemo(() => rows.map((l) => {
+    if (!centralOn || !form) return l
+    const ck = centralKey(l.detail), w = ck ? centralByKey.get(ck) : undefined; if (!w) return l
+    const extra: Record<string, unknown> = {}
+    for (const f of form.columns) { const at = attrOfKey(form.key, f.key); const v = at ? w.central[at] : undefined; if (v && (l.detail[f.key] == null || l.detail[f.key] === '')) extra[f.key] = v }
+    return Object.keys(extra).length ? { ...l, detail: { ...l.detail, ...extra } } : l
+  }), [rows, centralOn, form, centralByKey])
   const [autoFilled, setAutoFilled] = useState<Record<string, string[]>>({})
   const colKeys = useMemo(() => new Set(form?.columns.map((c) => c.key) ?? []), [form])
   const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
@@ -308,7 +323,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
               <button className="im-btn im-btn-sm" onClick={prefill} title="مقدارهای فرم‌های فنی همین روز را که به فعالیت وصل شده‌اند وارد می‌کند"><Wand2 size={13} /> پیش‌پر از فرم‌های فنی</button>
             </span>
           )}
-          {editable && form && <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
+          {form && sheetTpl && <button className={`im-btn im-btn-sm${sheetMode ? ' im-btn-primary' : ''}`} style={{ marginInlineStart: 'auto' }} onClick={() => setSheetMode((x) => !x)} title="خود فرم مصوب (اکسل) را باز می‌کند تا مقدارها را روی همان سلول‌ها وارد کنید">{sheetMode ? 'ورود جدولی' : 'ورود روی خود فرم'}</button>}
+          {editable && form && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={form && sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           {!form && actionOn ? (
@@ -330,6 +346,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
                   </tr>
                 ) })}</tbody>
             </table>
+          ) : form && sheetTpl && sheetMode ? (
+            <SheetEntry template={sheetTpl} form={form} report={{ ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }} rows={shownRows} identity={epcSettings(exSettings as unknown as Record<string, unknown>).identity} metrics={metrics} editable={editable} ensureRows={ensureRows}
+              renderRow={(f, rk) => { const l = rows.find((x) => x.key === rk); return l ? cell(f, l) : null }} renderHeader={(f) => headField(f)} />
           ) : form.columns.length === 0 ? <p className="im-helper" style={{ margin: 14 }}>این فرم فقط شامل اطلاعات سربرگ است.</p> : (
             <table className="ex-lines">
               <thead><tr><th>#</th>{form.columns.map((c) => <th key={c.key}>{c.label}{c.req ? ' *' : ''}</th>)}<th>وضعیت</th><th /></tr></thead>

@@ -42,6 +42,8 @@ interface State {
   saveCrewLogs: (reportId: string, rows: Omit<CrewLogRow, 'id' | 'reportId'>[]) => Promise<boolean>
   saveTemplateDraft: (t: { formKey: string; title: string; layout: FormTemplateRow['layout']; bindings: FormTemplateRow['bindings'] }) => Promise<boolean>
   approveTemplate: (id: string, code: string, revision: string) => Promise<boolean>
+  /** admin only: removes one version (trial revisions); refused when entries use it */
+  deleteTemplate: (id: string) => Promise<boolean>
   requiredForms: RequiredFormRow[]; mappingApprovals: MappingApprovalRow[]
   addRequiredForm: (projectId: string, activityId: string, formKey: string, note?: string) => Promise<boolean>
   removeRequiredForm: (id: string) => Promise<boolean>
@@ -190,6 +192,12 @@ export const useEpcStore = create<State>((set, get) => ({
   approveTemplate: async (id, code, revision) => {
     const { error } = await supabase.rpc('ex_form_template_approve', { p_id: id, p_code: code, p_revision: revision })
     if (fail('تأیید الگوی فرم', error)) return false
+    await get().fetchAll(); return true
+  },
+  deleteTemplate: async (id) => {
+    const { error } = await supabase.rpc('ex_form_template_delete', { p_id: id })
+    if (error?.message?.includes('template_in_use')) { fail('حذف نسخهٔ فرم (فرم ثبت‌شده‌ای از این نسخه استفاده می‌کند)', error); return false }
+    if (fail('حذف نسخهٔ فرم', error)) return false
     await get().fetchAll(); return true
   },
   addRequiredForm: async (projectId, activityId, formKey, note = '') => {

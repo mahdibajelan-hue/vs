@@ -56,18 +56,24 @@ function WeldingTemplatePaper({ c, template, note }: { c: PaperCtx; template: Fo
 }
 
 const str = (v: unknown) => (v == null ? '' : String(v))
+
+/** The data a sheet is drawn from: header fields of the report + the plain detail of each line (shared by print and by the sheet-entry screen). */
+export function specInputOf(r: PaperCtx['report'], lines: { detail: Record<string, unknown> }[], id: { diameterIn?: string | number; pipeGrade?: string; pipeStandard?: string }, metrics?: PaperCtx['metrics']): SpecInput {
+  const header: Record<string, string> = Object.fromEntries(Object.entries(r.data).map(([k, v]) => [k, str(v)]))
+  Object.assign(header, { reportNo: r.reportNo, date: jd(r.reportDate), pipeSpec: str(r.data.pipeSpec) || (id.diameterIn ? `Pipe ${id.diameterIn}" , ${id.pipeGrade} , ${id.pipeStandard}` : ''), wps: str(r.data.wpsNo), reqNo: str(r.data.reqNo) })
+  const rows = lines.map((l) => Object.fromEntries(Object.entries(l.detail).map(([k, v]) => [k, str(v)])))
+  const thk = thicknessSet(r.data.thkSet)
+  const pr = (key: string, i: number) => (metrics ?? []).filter((m) => m.metric.key === key && Math.abs((num(m.group) ?? -1) - thk[i]) < 0.0005).reduce((s, m) => s + m.prior, 0)
+  return { header, rows, thk, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) } }
+}
 /** Any other approved sheet that has a declarative cell mapping (gridSpecs.ts). */
 function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
   const r = c.report, spec = GRID_SPECS[template.formKey]
   const settings = useExecutionStore((s) => s.settingsByProject.get(r.projectId))
   const ep = epcSettings(settings as unknown as Record<string, unknown>)
   const id = ep.identity
-  const header: Record<string, string> = Object.fromEntries(Object.entries(r.data).map(([k, v]) => [k, str(v)]))
-  Object.assign(header, { reportNo: r.reportNo, date: jd(r.reportDate), pipeSpec: str(r.data.pipeSpec) || (id.diameterIn ? `Pipe ${id.diameterIn}" , ${id.pipeGrade} , ${id.pipeStandard}` : ''), wps: str(r.data.wpsNo), reqNo: str(r.data.reqNo) })
-  const rows = c.lines.map((l) => Object.fromEntries(Object.entries(l.detail).map(([k, v]) => [k, str(v)])))
-  const thk = thicknessSet(r.data.thkSet)
-  const pr = (key: string, i: number) => (c.metrics ?? []).filter((m) => m.metric.key === key && Math.abs((num(m.group) ?? -1) - thk[i]) < 0.0005).reduce((s, m) => s + m.prior, 0)
-  const inp: SpecInput = { header, rows, thk, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) } }
+  const inp = specInputOf(r, c.lines, id, c.metrics)
+  const rows = inp.rows
   const pages = specPages(spec, rows.length), plan = printPlan(template.layout)
   const logos: Record<string, string> = {}
   template.layout.logos.forEach((l) => { if (l.from && l.kind === 'pic') logos[`${l.from[0]},${l.from[1]}`] = ep.parties.employer?.logo || `${import.meta.env.BASE_URL}form-logo-welding-original.png` })

@@ -1,3 +1,4 @@
+import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Bot, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -124,13 +125,13 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت اجرا">
+        <NavScroller label="بخش‌های مدیریت اجرا"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت اجرا">
           {NAV.map((n) => { const b = projectId ? badge(n.id) : 0; return (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}{b > 0 && <span className="im-nav-count" aria-label={`${b} مورد`}>{b.toLocaleString('fa-IR')}</span>}
             </button>
           ) })}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />

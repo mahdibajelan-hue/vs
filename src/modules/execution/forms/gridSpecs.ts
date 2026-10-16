@@ -2,7 +2,7 @@ import { addr, type GridTemplate } from './gridTypes'
 
 /** Declarative cell mapping of an approved sheet: header cells (by address) and the repeating row block. Anything not listed stays exactly as the approved sheet has it. All addresses are PROPOSED until the form owner confirms them. */
 export interface HeaderBind { cell: string; key: string; mode?: 'replace' | 'append' }
-export interface RowCol { c: number; get: (d: Record<string, string>) => string; dr?: number }
+export interface RowCol { c: number; get: ((d: Record<string, string>) => string) & { key?: string }; dr?: number }
 export interface ThkTotals { headerRow: number; thk0: number; head: number; today: number; until: number; lenCols: number[]; jntCols: number[]; lenTotal: number; jntTotal: number }
 export interface GridSpec {
   formKey: string
@@ -14,7 +14,8 @@ export interface GridSpec {
 export interface SpecInput { header: Record<string, string>; rows: Record<string, string>[]; thk?: number[]; prior?: { len: number[]; joints: number[] } }
 export interface SpecPage { values: Record<string, string>; missing: string[]; pages: number }
 
-const k = (key: string): RowCol['get'] => (d) => d[key] ?? ''
+/** a plain field of the row; `.key` lets the sheet-entry screen map a clicked cell back to the field */
+const k = (key: string): RowCol['get'] => Object.assign((d: Record<string, string>) => d[key] ?? '', { key })
 const mark = (key: string, eq: string): RowCol['get'] => (d) => (d[key] === eq ? '✓' : '')
 const both = (a: string, b: string): RowCol['get'] => (d) => [d[a], d[b]].filter(Boolean).join('  ')
 
@@ -91,4 +92,24 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
   }
   const have = new Set(tpl.cells.map((c) => addr(c.r, c.c)))
   return { values: out, missing: Object.keys(out).filter((a) => !have.has(a)), pages }
+}
+
+/** Which field a cell of the sheet edits: a header field, or a plain field of record `row`. Derived/composite cells (page numbers, ticks, totals) are not editable. */
+export type CellTarget = { kind: 'header'; key: string } | { kind: 'row'; row: number; key: string }
+export const DERIVED_HEADER = new Set(['date', 'reportNo', 'page', 'pages'])
+export function cellTarget(spec: GridSpec, address: string, page: number): CellTarget | null {
+  const h = spec.headers.find((x) => x.cell === address)
+  if (h) return DERIVED_HEADER.has(h.key) ? null : { kind: 'header', key: h.key }
+  const R = spec.rows
+  for (let i = 0; i < R.per; i++) for (const c of R.cols) {
+    if (addr(R.first + R.step * i + (c.dr ?? 0), c.c) === address && c.get.key) return { kind: 'row', row: page * R.per + i, key: c.get.key }
+  }
+  return null
+}
+/** every editable cell of page `page` (used to outline them on the sheet) */
+export function editableCells(spec: GridSpec, page: number): Set<string> {
+  const out = new Set<string>(spec.headers.filter((h) => !DERIVED_HEADER.has(h.key)).map((h) => h.cell)), R = spec.rows
+  for (let i = 0; i < R.per; i++) for (const c of R.cols) if (c.get.key) out.add(addr(R.first + R.step * i + (c.dr ?? 0), c.c))
+  void page
+  return out
 }
