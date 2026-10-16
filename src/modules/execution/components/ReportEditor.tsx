@@ -23,6 +23,7 @@ import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
 import { useEpcStore } from '../store/useEpcStore'
 import { weldKey } from '../lib/welds'
+import { attrOfKey, centralKey } from '../lib/weldCentral'
 import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
@@ -104,7 +105,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, responsibility: s.responsibility, critical: s.critical, noticeDate: s.noticeDate, noticeRef: s.noticeRef, assessNote: s.assessNote })) })
     const okC = !okB || !crewDirty || !epcAvailable || await useEpcStore.getState().saveCrewLogs(reportId, crews.map((c) => ({ activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
     setBusy(false)
-    if (okB && okC) { setDirty(false); setCrewDirty(false); if (form) void useEpcStore.getState().syncWelds(reportId) } // keeps the weld registry (an index over the forms) in step; never blocks saving
+    if (okB && okC) { setDirty(false); setCrewDirty(false); if (form) void (async () => { await useEpcStore.getState().syncWelds(reportId); if (centralOn) await useEpcStore.getState().weldAbsorb(reportId) })() } // keeps the weld registry (an index over the forms) in step; never blocks saving
     return !!okB && okC
   }
   const send = async () => {
@@ -183,12 +184,19 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     }
     return new Map([...acc].map(([k, v]) => [k, buildProfile(v)] as [string, Profile]))
   }, [welds, lineWelds, m.reports, m.lines, m.projectId])
+  const centralOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { centralWeld?: boolean } } | undefined)?.flags?.centralWeld
+  const centralByKey = useMemo(() => new Map(welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => [`${w.sectionKey}|${w.weldKey}`, w])), [welds, m.projectId])
   const [autoFilled, setAutoFilled] = useState<Record<string, string[]>>({})
   const colKeys = useMemo(() => new Set(form?.columns.map((c) => c.key) ?? []), [form])
   const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
     const dis = lockedLine(l)
+    // central weld table: a fact the weld's central record already has is shown, not typed again
+    const cattr = centralOn && form ? attrOfKey(form.key, f.key) : null
+    const ck = cattr ? centralKey(l.detail) : null
+    const cval = cattr && ck ? centralByKey.get(ck)?.central[cattr] : undefined
+    if (cval) return <span dir="ltr" className="ex-central" title="از جدول مرکزی سرجوش — برای تغییر، «کارت سرجوش» را باز کنید" style={{ background: 'rgba(14,165,233,.12)', padding: '2px 6px', borderRadius: 6, display: 'inline-block' }}>{cval}</span>
     if (f.kind === 'select') return <select disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label}><option value="">—</option>{f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
     if (f.kind === 'num' || f.kind === 'km') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
     if (f.kind === 'date') return dis ? <span>{fmtD(String(v ?? ''))}</span> : <JalaliDateInput value={String(v ?? '')} onChange={(x) => patchDetail(l.key, f.key, x)} />

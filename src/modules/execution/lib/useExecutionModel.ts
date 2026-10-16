@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { useExecutionStore } from '../store/useExecutionStore'
+import { useEpcStore } from '../store/useEpcStore'
+import { overlayDetail } from './weldCentral'
 import { detectGaps } from './completeness'
 import { physicalProgress, plannedOverall, progressCurve, effectiveBase } from './progress'
 import { DEFAULT_EX_SETTINGS, type Activity } from '../types'
@@ -7,6 +9,7 @@ import { DEFAULT_EX_SETTINGS, type Activity } from '../types'
 /** One project's execution data with every derived figure — progress, planned progress, curve, detected gaps — computed once from the stored daily reports. */
 export function useExecutionModel(projectId: string | null) {
   const st = useExecutionStore()
+  const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds)
   return useMemo(() => {
     const pid = projectId ?? ''
     const settings = st.settingsByProject.get(pid) ?? DEFAULT_EX_SETTINGS
@@ -17,7 +20,12 @@ export function useExecutionModel(projectId: string | null) {
     const blines = st.blines.filter((l) => baselineIds.has(l.baselineId))
     const reports = st.reports.filter((r) => r.projectId === pid)
     const repIds = new Set(reports.map((r) => r.id))
-    const lines = st.lines.filter((l) => repIds.has(l.reportId))
+    let lines = st.lines.filter((l) => repIds.has(l.reportId))
+    // project flag «central weld table»: shared weld facts are read from the weld's central record, so every consumer (forms, papers, counters, rules) sees one value
+    if ((settings as unknown as { flags?: { centralWeld?: boolean } }).flags?.centralWeld) {
+      const central = new Map(epcWelds.filter((w) => w.projectId === pid).map((w) => [w.id, w.central])), weldOf = new Map(epcLineWelds.filter((x) => x.projectId === pid).map((x) => [x.lineId, x.weldId])), formOf = new Map(reports.map((r) => [r.id, r.formKey]))
+      lines = lines.map((l) => { const c = central.get(weldOf.get(l.id) ?? ''); return c && Object.keys(c).length ? { ...l, detail: overlayDetail(formOf.get(l.reportId) ?? '', l.detail, c) } : l })
+    }
     const resources = st.resources.filter((r) => repIds.has(r.reportId))
     const stoppages = st.stoppages.filter((r) => repIds.has(r.reportId))
     const history = st.history.filter((h) => repIds.has(h.reportId))
@@ -38,6 +46,6 @@ export function useExecutionModel(projectId: string | null) {
     const detected = detectGaps({ today, settings, reports, lines, resources, activities, baselines, blines })
     const baseOf = (a: Activity, asOf = today) => effectiveBase(a, baselines, blines, asOf).baseQty
     return { projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, approved, registered, planned, curve, detected, baseOf, people: st.people }
-  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, projectId])
+  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, projectId])
 }
 export type ExecutionModel = ReturnType<typeof useExecutionModel>

@@ -49,7 +49,7 @@ export interface QcFindingRow { id: string; projectId: string; techReportId: str
 
 export interface FormEntryRow { id: string; projectId: string; templateId: string; entryDate: string; header: string[]; rows: string[][]; createdAt: string }
 
-export interface WeldRow { id: string; projectId: string; sectionKey: string; weldKey: string; sectionRaw: string; weldRaw: string; pipeNo: string | null; status: 'auto' | 'confirmed' | 'merged' | 'orphan'; mergedInto: string | null }
+export interface WeldRow { id: string; projectId: string; sectionKey: string; weldKey: string; sectionRaw: string; weldRaw: string; pipeNo: string | null; status: 'auto' | 'confirmed' | 'merged' | 'orphan'; mergedInto: string | null; central: Partial<Record<'pipe' | 'size' | 'thk' | 'length' | 'bend', string>> }
 export interface LineWeldRow { lineId: string; weldId: string; projectId: string; rawPipe: string }
 export interface WeldConflictRow { id: string; projectId: string; weldId: string; kind: 'pipe' | 'size' | 'thickness' | 'front'; detail: string; status: 'open' | 'resolved' | 'dismissed' }
 export interface WeldSuspectRow { projectId: string; n2: string; weldIds: string[]; raws: string[] }
@@ -61,3 +61,7 @@ export interface NcrLinkRow { id: string; ncrId: string; targetType: 'issue' | '
 
 export interface RequiredFormRow { id: string; projectId: string; activityId: string; formKey: string; note: string }
 export interface MappingApprovalRow { id: string; templateId: string; approvedAt: string; note: string; revokedAt: string | null }
+
+export interface WeldHistoryRow { id: number; weldId: string; attr: 'pipe' | 'size' | 'thk' | 'length' | 'bend'; oldValue: string | null; newValue: string | null; source: 'form' | 'manual' | 'backfill'; note: string; at: string }
+/** list columns of the archive (the frozen snapshot is fetched only when a record is opened) */
+export interface ArchiveRow { id: string; projectId: string; reportId: string; version: number; formKey: string; formTitle: string; category: string; reportNo: string; reportDate: string; status: string; note: string; createdAt: string }

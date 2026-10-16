@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -8,6 +8,7 @@ import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import type { WeldRow } from '../epcTypes'
 import { buildProfile, SHARED } from '../lib/weldProfile'
+import { ATTR_LABEL, type Attr } from '../lib/weldCentral'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { fmtD } from '../../finance/components/fn'
 
@@ -24,6 +25,7 @@ function Inner({ projectId }: { projectId: string }) {
   const [q, setQ] = useState('')
   const [noRt, setNoRt] = useState(false)
   const [open, setOpen] = useState('')
+  useEffect(() => { if (open) void epc.loadWeldHistory(open) }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const welds = useMemo(() => epc.welds.filter((w) => w.projectId === projectId && w.status !== 'merged'), [epc.welds, projectId])
   const byId = useMemo(() => new Map(epc.welds.map((w) => [w.id, w])), [epc.welds])
   const reportById = useMemo(() => new Map(m.reports.map((r) => [r.id, r])), [m.reports])
@@ -64,7 +66,13 @@ function Inner({ projectId }: { projectId: string }) {
         const mine = epc.lineWelds.filter((x) => x.weldId === open).map((x) => { const l = lineById.get(x.lineId), r = l ? reportById.get(l.reportId) : undefined; return l && r ? { l, r } : null }).filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => a.r.reportDate.localeCompare(b.r.reportDate))
         const prof = buildProfile(mine.map(({ l, r }) => ({ formKey: r.formKey, date: r.reportDate, detail: l.detail })))
         const KEYS = ['result', 'vt', 'repairDone', 'vtCheck', 'rtReqNo', 'rtReportNo', 'defect', 'defectType', 'stamp', 'coatType', 'batchNo']
-        return <Section title={`کارت سرجوش — ${label(w)}`} hint="هر اطلاعات یک‌بار ثبت می‌شود و در فرم‌های بعدی همین سرجوش پیشنهاد داده می‌شود. این کارت از روی ردیف‌های ثبت‌شدهٔ فرم‌ها ساخته می‌شود و چیزی را عوض نمی‌کند." action={<button className="im-btn im-btn-sm" onClick={() => setOpen('')}>بستن</button>}>
+        return <Section title={`کارت سرجوش — ${label(w)}`} hint="مشخصات مرکزی در جدول مرکزی ذخیره می‌شود؛ مقدارهای زیرِ آن (چیپ‌ها) صرفاً خلاصهٔ آخرین مقدارهای ثبت‌شده در ردیف‌های فرم‌هاست و چیزی را عوض نمی‌کند." action={<button className="im-btn im-btn-sm" onClick={() => setOpen('')}>بستن</button>}>
+          <div style={{ marginBottom: 10 }}>
+            <b>مشخصات مرکزی سرجوش</b> <span className="im-helper">(یک مقدار برای همهٔ فرم‌ها؛ تغییر نیازمند دلیل است و در تاریخچه می‌ماند)</span>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>{(Object.keys(ATTR_LABEL) as Attr[]).map((a) => <label key={a} className="im-helper" style={{ display: 'grid', gap: 2 }}>{ATTR_LABEL[a]}
+              <input key={`${w.id}${a}${w.central[a] ?? ''}`} disabled={!can} defaultValue={w.central[a] ?? ''} dir="ltr" style={{ width: 110 }} onBlur={(e) => { const v = e.target.value.trim(); if (v === (w.central[a] ?? '')) return; let note = ''; if (w.central[a]) { note = window.prompt(`دلیل تغییر «${ATTR_LABEL[a]}» از ${w.central[a]} به ${v || '(خالی)'}:`) ?? ''; if (!note.trim()) { e.target.value = w.central[a] ?? ''; return } } void epc.weldSetAttr(w.id, a, v, note) }} /></label>)}</div>
+            {epc.weldHistory.filter((h) => h.weldId === w.id).length > 0 && <details style={{ marginTop: 6 }}><summary className="im-helper">تاریخچهٔ تغییر مشخصات</summary><table className="ex-lines"><tbody>{epc.weldHistory.filter((h) => h.weldId === w.id).map((h) => <tr key={h.id}><td>{fmtD(h.at.slice(0, 10))}</td><td>{ATTR_LABEL[h.attr]}</td><td dir="ltr">{h.oldValue ?? '—'} ← {h.newValue ?? '—'}</td><td>{h.source === 'manual' ? 'دستی' : h.source === 'backfill' ? 'انتقال از سوابق' : 'از فرم'}</td><td dir="auto">{h.note}</td></tr>)}</tbody></table></details>}
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{SHARED.map((a) => { const f = prof[a.attr]; return <Chip key={a.attr} tone={f ? 'good' : 'neutral'}>{a.label}: {f ? <b dir="ltr">{f.value}</b> : '—'}{f ? ` (از ${FORM_BY_KEY[f.from]?.title ?? f.from})` : ''}</Chip> })}</div>
           <div className="fn-tbl-wrap" style={{ maxHeight: 320 }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>فرم</th><th>شمارهٔ گزارش</th><th>وضعیت گزارش</th><th>اطلاعات مرحله</th></tr></thead><tbody>
             {mine.map(({ l, r }) => <tr key={l.id}><td>{fmtD(r.reportDate)}</td><td>{FORM_BY_KEY[r.formKey]?.title ?? r.formKey}</td><td className="fn-code">{r.reportNo}</td><td>{r.status}</td><td dir="auto">{KEYS.filter((k) => String(l.detail[k] ?? '').trim()).map((k) => `${FORM_BY_KEY[r.formKey]?.columns.find((c) => c.key === k)?.label ?? k}: ${l.detail[k]}`).join(' · ') || '—'}</td></tr>)}

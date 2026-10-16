@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import { FORM_BY_KEY } from '../lib/formCatalog'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -47,6 +48,13 @@ interface State {
   saveFinding: (f: { projectId: string; techReportId?: string | null; kind: QcFindingRow['kind']; severity: QcFindingRow['severity']; weldRef: string; note: string }) => Promise<boolean>
   closeFinding: (id: string, reopen?: boolean) => Promise<boolean>
   syncWelds: (reportId: string) => Promise<void>
+  weldHistory: WeldHistoryRow[]; archive: ArchiveRow[]
+  loadWeldHistory: (weldId: string) => Promise<void>
+  weldSetAttr: (weldId: string, attr: string, value: string, note: string) => Promise<boolean>
+  weldAbsorb: (reportId: string) => Promise<void>
+  weldBackfill: (projectId: string) => Promise<number | null>
+  archiveReport: (reportId: string, silent?: boolean) => Promise<boolean>
+  loadSnapshot: (archiveId: string) => Promise<Record<string, unknown> | null>
   weldAction: (fn: 'ex_weld_merge' | 'ex_weld_unmerge' | 'ex_weld_set_status' | 'ex_weld_dismiss_suspect' | 'ex_weld_conflict_resolve', args: Record<string, unknown>) => Promise<boolean>
   ncrFromFinding: (findingId: string) => Promise<string | null>
   ncrTransition: (ncrId: string, to: NcrStatus, note: string, disposition?: string) => Promise<boolean>
@@ -78,7 +86,7 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
@@ -91,7 +99,7 @@ export const useEpcStore = create<State>((set, get) => ({
     const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
     if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
     const [wl, lw, wc, ws, wm, nc, ne, nl] = await Promise.all([supabase.from('ex_welds').select('*'), supabase.from('ex_line_welds').select('line_id, weld_id, project_id, raw_pipe'), supabase.from('ex_weld_conflicts').select('*').eq('status', 'open'), supabase.from('ex_weld_suspects').select('*'), supabase.from('ex_weld_merges').select('*').is('undone_at', null), supabase.from('ex_ncr').select('*').order('seq', { ascending: false }), supabase.from('ex_ncr_events').select('*').order('at'), supabase.from('ex_ncr_links').select('*')])
-    if (!wl.error) set({ welds: ((wl.data ?? []) as Row[]).map((r): WeldRow => ({ id: r.id, projectId: r.project_id, sectionKey: r.section_key, weldKey: r.weld_key, sectionRaw: r.section_raw, weldRaw: r.weld_raw, pipeNo: r.pipe_no, status: r.status, mergedInto: r.merged_into })) })
+    if (!wl.error) set({ welds: ((wl.data ?? []) as Row[]).map((r): WeldRow => ({ id: r.id, projectId: r.project_id, sectionKey: r.section_key, weldKey: r.weld_key, sectionRaw: r.section_raw, weldRaw: r.weld_raw, pipeNo: r.pipe_no, status: r.status, mergedInto: r.merged_into, central: Object.fromEntries(([['pipe', r.c_pipe], ['size', r.c_size], ['thk', r.c_thk], ['length', r.c_length], ['bend', r.c_bend]] as [string, string | null][]).filter(([, v]) => v != null && v !== '')) })) })
     if (!lw.error) set({ lineWelds: ((lw.data ?? []) as Row[]).map((r): LineWeldRow => ({ lineId: r.line_id, weldId: r.weld_id, projectId: r.project_id, rawPipe: r.raw_pipe })) })
     if (!wc.error) set({ weldConflicts: ((wc.data ?? []) as Row[]).map((r): WeldConflictRow => ({ id: r.id, projectId: r.project_id, weldId: r.weld_id, kind: r.kind, detail: r.detail, status: r.status })) })
     if (!ws.error) set({ weldSuspects: ((ws.data ?? []) as Row[]).map((r): WeldSuspectRow => ({ projectId: r.project_id, n2: r.n2, weldIds: r.weld_ids, raws: r.raws })) })
@@ -99,6 +107,8 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!nc.error) set({ ncrs: ((nc.data ?? []) as Row[]).map((r): NcrRow => ({ id: r.id, projectId: r.project_id, code: r.code, findingId: r.finding_id, weldId: r.weld_id, weldRef: r.weld_ref ?? '', techReportId: r.tech_report_id, kind: r.kind, severity: r.severity, description: r.description ?? '', disposition: r.disposition, status: r.status, ownerId: r.owner_id, dueDate: r.due_date, rcaRequired: !!r.rca_required, createdAt: r.created_at, closedAt: r.closed_at })) })
     if (!ne.error) set({ ncrEvents: ((ne.data ?? []) as Row[]).map((r): NcrEventRow => ({ id: r.id, ncrId: r.ncr_id, at: r.at, by: r.by, kind: r.kind, fromStatus: r.from_status, toStatus: r.to_status, note: r.note ?? '' })) })
     if (!nl.error) set({ ncrLinks: ((nl.data ?? []) as Row[]).map((r): NcrLinkRow => ({ id: r.id, ncrId: r.ncr_id, targetType: r.target_type, targetId: r.target_id, status: r.status, error: r.error ?? '' })) })
+    const arc = await supabase.from('ex_report_archive').select('id, project_id, report_id, version, form_key, form_title, category, report_no, report_date, status, note, created_at').order('report_date', { ascending: false }).limit(2000)
+    if (!arc.error) set({ archive: ((arc.data ?? []) as Row[]).map((r): ArchiveRow => ({ id: r.id, projectId: r.project_id, reportId: r.report_id, version: r.version, formKey: r.form_key, formTitle: r.form_title ?? '', category: r.category ?? '', reportNo: r.report_no ?? '', reportDate: r.report_date, status: r.status, note: r.note ?? '', createdAt: r.created_at })) })
     const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
     if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
     const t = (name: string) => supabase.from(name).select('*')
@@ -188,6 +198,36 @@ export const useEpcStore = create<State>((set, get) => ({
   syncWelds: async (reportId) => {
     const { error } = await supabase.rpc('ex_weld_sync', { p_report: reportId })
     if (!error) await get().fetchAll() // a missing function/table is not an error the user can act on
+  },
+  loadWeldHistory: async (weldId) => {
+    const { data, error } = await supabase.from('ex_weld_attr_history').select('*').eq('weld_id', weldId).order('at', { ascending: false }).limit(100)
+    if (error) return
+    set({ weldHistory: [...get().weldHistory.filter((h) => h.weldId !== weldId), ...((data ?? []) as Row[]).map((r): WeldHistoryRow => ({ id: r.id, weldId: r.weld_id, attr: r.attr, oldValue: r.old_value, newValue: r.new_value, source: r.source, note: r.note ?? '', at: r.at }))] })
+  },
+  weldSetAttr: async (weldId, attr, value, note) => {
+    const { error } = await supabase.rpc('ex_weld_set_attr', { p_weld: weldId, p_attr: attr, p_value: value, p_source: 'manual', p_note: note })
+    if (fail('ثبت مشخصات سرجوش', error)) return false
+    await get().fetchAll(); await get().loadWeldHistory(weldId); return true
+  },
+  weldAbsorb: async (reportId) => {
+    const { error } = await supabase.rpc('ex_weld_absorb', { p_report: reportId })
+    if (!error) await get().fetchAll()
+  },
+  weldBackfill: async (projectId) => {
+    const { data, error } = await supabase.rpc('ex_weld_central_backfill', { p_project: projectId })
+    if (fail('تکمیل جدول مرکزی از فرم‌های ثبت‌شده', error)) return null
+    await get().fetchAll(); return Number((data as { filled?: number } | null)?.filled ?? 0)
+  },
+  archiveReport: async (reportId, silent) => {
+    const { data: rep } = await supabase.from('ex_reports').select('form_key').eq('id', reportId).single()
+    const fk = String((rep as Row | null)?.form_key ?? ''), form = FORM_BY_KEY[fk]
+    const { error } = await supabase.rpc('ex_archive_report', { p_report: reportId, p_category: form?.group ?? 'other', p_title: form?.title ?? fk, p_note: '' })
+    if (error) { if (!silent) fail('بایگانی گزارش', error); return false }
+    await get().fetchAll(); return true
+  },
+  loadSnapshot: async (archiveId) => {
+    const { data, error } = await supabase.from('ex_report_archive').select('snapshot').eq('id', archiveId).single()
+    return error ? null : ((data as Row).snapshot as Record<string, unknown>)
   },
   weldAction: async (fn, args) => {
     const { error } = await supabase.rpc(fn, args)

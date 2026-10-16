@@ -73,11 +73,17 @@ interface State {
   saveMap: (projectId: string, formKey: string, metricKey: string, groupValue: string, activityId: string | null) => Promise<boolean>
 }
 
+/** files an approved technical form in the archive; failures are silent (the archive page can catch up) */
+async function archiveIfDone(r: { id: string; formKey: string; status: string } | undefined) {
+  if (!r || r.formKey === 'work' || !(r.status === 'approved' || r.status === 'partially_approved')) return
+  const { useEpcStore } = await import('./useEpcStore')
+  await useEpcStore.getState().archiveReport(r.id, true)
+}
 const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
-const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
-const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no ?? 0, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location ?? '', note: r.note ?? '', detail: r.detail ?? {}, status: r.status, approvedQty: nn(r.approved_qty), reviewNote: r.review_note ?? '', sourceReportId: r.source_report_id, employerStatus: r.employer_status ?? null, employerQty: nn(r.employer_qty), employerNote: r.employer_note ?? '' })
+export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
+export const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no ?? 0, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location ?? '', note: r.note ?? '', detail: r.detail ?? {}, status: r.status, approvedQty: nn(r.approved_qty), reviewNote: r.review_note ?? '', sourceReportId: r.source_report_id, employerStatus: r.employer_status ?? null, employerQty: nn(r.employer_qty), employerNote: r.employer_note ?? '' })
 
 export const useExecutionStore = create<State>((set, get) => ({
   ...initial,
@@ -318,12 +324,16 @@ export const useExecutionStore = create<State>((set, get) => ({
   reviewReport: async (id, decisions, note) => {
     const { error } = await supabase.rpc('ex_report_review', { p_id: id, p_decisions: decisions.map((d) => ({ line_id: d.lineId, decision: d.decision, qty: d.qty ?? null, note: d.note ?? '' })), p_note: note })
     if (report('ثبت نتیجهٔ بررسی', error)) return false
-    await get().fetchAll(); return true
+    await get().fetchAll()
+    void archiveIfDone(get().reports.find((r) => r.id === id)) // approved technical forms are filed in the archive automatically
+    return true
   },
   decideWhole: async (id, decision, note) => {
     const { error } = await supabase.rpc('ex_report_decide_whole', { p_id: id, p_decision: decision, p_note: note })
     if (report('ثبت نتیجهٔ بررسی', error)) return false
-    await get().fetchAll(); return true
+    await get().fetchAll()
+    void archiveIfDone(get().reports.find((r) => r.id === id)) // approved technical forms are filed in the archive automatically
+    return true
   },
   reopenReport: async (id, reason) => {
     const { error } = await supabase.rpc('ex_report_reopen', { p_id: id, p_reason: reason })

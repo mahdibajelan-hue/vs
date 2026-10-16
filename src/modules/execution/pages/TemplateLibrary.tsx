@@ -109,7 +109,9 @@ function Inner({ projectId }: { projectId: string }) {
           {preview && <div style={{ overflow: 'auto', marginTop: 10, border: '1px solid var(--border, #ddd)' }}><GridSheet tpl={preview} /></div>}
         </Section>
       )}
-      {can && <Section title="نماهای آزمایشی" hint="هر نمای آزمایشی با یک پرچم پروژه روشن می‌شود و منوی فعلی را تغییر نمی‌دهد.">
+      {can && <Section title="قابلیت‌های آزمایشی" hint="هر قابلیت آزمایشی با یک پرچم پروژه روشن می‌شود و با خاموش‌کردن، رفتار قبلی برمی‌گردد.">
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={!!flags.centralWeld} onChange={(x) => void ex.saveSettings(projectId, { flags: { ...flags, centralWeld: x.target.checked } } as never)} /> «جدول مرکزی سرجوش»: مشخصات مشترک سرجوش (لوله، قطر، ضخامت، طول، زاویه) فقط یک‌بار در جدول مرکزی ذخیره و در همهٔ فرم‌ها از همان خوانده شود</label>
+        {!!flags.centralWeld && <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0 10px' }}><button className="im-btn im-btn-sm" disabled={busy === 'bf'} onClick={async () => { setBusy('bf'); const n = await epc.weldBackfill(projectId); setBusy(''); if (n != null) window.alert(`${n} مقدار از فرم‌های ثبت‌شده به جدول مرکزی منتقل شد (سطرهای فرم‌ها تغییر نکرد).`) }}>تکمیل جدول مرکزی از فرم‌های ثبت‌شده</button><span className="im-helper">فقط مقدارهای خالی پر می‌شود؛ تاریخچهٔ هر مقدار نگه داشته می‌شود.</span></div>}
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={todayOn} onChange={(x) => void ex.saveSettings(projectId, { flags: { ...flags, today: x.target.checked } } as never)} /> «امروز در کارگاه» (زیرمنوی گزارش روزانه)</label>
       </Section>}
     </div>
