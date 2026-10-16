@@ -1,3 +1,4 @@
+import { ActionsSettings } from './ActionsSettings'
 import { FrontsEditor } from './FrontsEditor'
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
@@ -19,6 +20,7 @@ import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExProjectRole, type ExRole } from '.
 export function SettingsPage({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'rules') return <RulesView projectId={projectId} />
   if (sub === 'forms') return <FormsView projectId={projectId} />
+  if (sub === 'actions') return <ActionsSettings projectId={projectId} />
   if (sub === 'map') return <MapView projectId={projectId} />
   if (sub === 'epc') return <EpcSettingsView projectId={projectId} />
   if (sub === 'tpl') return <TemplateLibrary projectId={projectId} />

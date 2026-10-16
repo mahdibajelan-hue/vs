@@ -47,7 +47,7 @@ export function missingForReport(report: Pick<Report, 'formKey' | 'front' | 'con
   if (!filled(report.data.weather)) miss.push('وضعیت آب‌وهوا')
   if (!form) {
     if (!lines.length) miss.push('جدول کارکرد (حداقل یک ردیف)')
-    lines.forEach((l, i) => { if (!l.activityId) miss.push(`ردیف ${i + 1}: فعالیت`); if (!(l.qty > 0)) miss.push(`ردیف ${i + 1}: مقدار کارکرد`) })
+    lines.forEach((l, i) => { if (!l.activityId && !l.detail.actionKey) miss.push(`ردیف ${i + 1}: ${l.detail.actionKey === undefined ? 'فعالیت' : 'اقدام'}`); if (!(l.qty > 0)) miss.push(`ردیف ${i + 1}: مقدار کارکرد`) })
     if (!resources.some((r) => r.kind === 'man' && (r.totalQty > 0 || r.activeQty > 0 || r.idleQty > 0))) miss.push('نیروی انسانی')
     return miss
   }

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useEpcStore } from '../store/useEpcStore'
 import { overlayDetail } from './weldCentral'
+import { resolveLines } from './workActions'
 import { detectGaps } from './completeness'
 import { physicalProgress, plannedOverall, progressCurve, effectiveBase } from './progress'
 import { DEFAULT_EX_SETTINGS, type Activity } from '../types'
@@ -9,7 +10,7 @@ import { DEFAULT_EX_SETTINGS, type Activity } from '../types'
 /** One project's execution data with every derived figure — progress, planned progress, curve, detected gaps — computed once from the stored daily reports. */
 export function useExecutionModel(projectId: string | null) {
   const st = useExecutionStore()
-  const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds)
+  const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds), epcRules = useEpcStore((x) => x.actionRules)
   return useMemo(() => {
     const pid = projectId ?? ''
     const settings = st.settingsByProject.get(pid) ?? DEFAULT_EX_SETTINGS
@@ -34,6 +35,10 @@ export function useExecutionModel(projectId: string | null) {
     const actById = new Map(activities.map((a) => [a.id, a]))
     const linesByReport = new Map<string, typeof lines>()
     for (const l of lines) { const x = linesByReport.get(l.reportId); if (x) x.push(l); else linesByReport.set(l.reportId, [l]) }
+    // lines entered by ACTION are converted to the mapped price-book activity (qty × factor) for every computation; `linesByReport` keeps what was entered
+    const rules = epcRules.filter((r) => r.projectId === pid)
+    const res = resolveLines(lines, rules)
+    lines = res.lines
     const base = { activities, baselines, blines, reports, lines }
     const groupWeights = settings.groupWeights
     const employer = ((settings as unknown as { employerStep?: string }).employerStep === 'binding' ? 'binding' : 'off') as 'binding' | 'off'
@@ -45,7 +50,7 @@ export function useExecutionModel(projectId: string | null) {
     const curve = progressCurve({ ...base, from: start, to: today, settings })
     const detected = detectGaps({ today, settings, reports, lines, resources, activities, baselines, blines })
     const baseOf = (a: Activity, asOf = today) => effectiveBase(a, baselines, blines, asOf).baseQty
-    return { projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, approved, registered, planned, curve, detected, baseOf, people: st.people }
-  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, projectId])
+    return { projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, unmappedActions: res.unmapped, approved, registered, planned, curve, detected, baseOf, people: st.people }
+  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, epcRules, projectId])
 }
 export type ExecutionModel = ReturnType<typeof useExecutionModel>

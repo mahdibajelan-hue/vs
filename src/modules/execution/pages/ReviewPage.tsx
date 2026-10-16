@@ -41,6 +41,7 @@ export function ReviewPage({ projectId }: { projectId: string }) {
       let fine = true
       for (const l of ls) {
         const a = l.activityId ? m.actById.get(l.activityId) : undefined
+        if (!a && l.detail.actionKey && l.qty > 0) continue // an action line has no base quantity to check; it is converted at the statement
         if (!a || !(l.qty > 0)) { fine = false; break }
         const tot = (before.get(a.id) ?? 0) + (used.get(a.id) ?? 0) + l.qty; used.set(a.id, (used.get(a.id) ?? 0) + l.qty)
         const base = m.baseOf(a, r.reportDate)
@@ -155,8 +156,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
               return (
                 <tr key={l.id}>
                   <td>{fa(i + 1)}</td>
-                  <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo}{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}</span></> : <span>{detailText(l) || '—'}</span>}{l.note && <small className="sub">{l.note}</small>}</td>
-                  <td className="num">{form ? '' : <b>{fa(l.qty, 3)} {a?.unit}</b>}</td>
+                  <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo}{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}</span></> : l.detail.actionKey ? <><b>{String(l.detail.actionTitle ?? l.detail.actionKey)}</b><span className="sub">اقدام کارگاهی{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => ` · ${k}: ${v}`).join('')}</span></> : <span>{detailText(l) || '—'}</span>}{l.note && <small className="sub">{l.note}</small>}</td>
+                  <td className="num">{form ? '' : <b>{fa(l.qty, 3)} {a?.unit ?? String(l.detail.actionUnit ?? '')}</b>}</td>
                   {!form && <td><div className="ex-cum"><span>{fa(prev, 2)} {a?.unit}</span>{base > 0 && <span>مبنا: {fa(base, 2)} · باقی: {fa(Math.max(0, base - prev), 2)}</span>}</div></td>}
                   <td><LineStatusChip status={l.status} />{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}{l.reviewNote && <small className="sub">{l.reviewNote}</small>}</td>
                   <td className="num">{l.status === 'approved' ? fa(l.approvedQty ?? l.qty, 3) : '—'}</td>

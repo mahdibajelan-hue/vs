@@ -19,6 +19,8 @@ import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ActivityPicker } from './ActivityPicker'
+import { ActionLines } from './ActionLines'
+import { actionOf } from '../lib/workActions'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -184,6 +186,20 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     }
     return new Map([...acc].map(([k, v]) => [k, buildProfile(v)] as [string, Profile]))
   }, [welds, lineWelds, m.reports, m.lines, m.projectId])
+  const actionOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { actionEntry?: boolean } } | undefined)?.flags?.actionEntry
+  const allActions = useEpcStore((x) => x.workActions)
+  const actions = useMemo(() => allActions.filter((a) => a.projectId === m.projectId && a.active).sort((a, b) => a.sort - b.sort), [allActions, m.projectId])
+  const [pickAction, setPickAction] = useState('')
+  const addAction = () => {
+    const a = actions.find((x) => x.key === pickAction); if (!a) return
+    setRows((r) => [...r, { key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: { actionKey: a.key, actionTitle: a.title, actionUnit: a.unit }, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setDirty(true)
+  }
+  // cumulative per ACTION from the other registered work reports (what was entered, in the action's own unit)
+  const actionCum = (key: string, today: number) => {
+    const ids = new Set(m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && x.status !== 'rejected' && x.status !== 'draft').map((x) => x.id))
+    let prev = 0; for (const [rid, ls] of m.linesByReport) if (ids.has(rid)) for (const l of ls) if (actionOf(l) === key && l.status !== 'rejected') prev += l.qty
+    return { prev, total: prev + today }
+  }
   const centralOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { centralWeld?: boolean } } | undefined)?.flags?.centralWeld
   const centralByKey = useMemo(() => new Map(welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => [`${w.sectionKey}|${w.weldKey}`, w])), [welds, m.projectId])
   const [autoFilled, setAutoFilled] = useState<Record<string, string[]>>({})
@@ -272,7 +288,13 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         <div className="mt-filters no-print" style={{ padding: '10px 14px' }}>
           <b>{form ? 'جدول ردیف‌ها' : 'جدول کارکرد روزانه'}</b>
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
-          {editable && !form && (
+          {editable && !form && actionOn && (
+            <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
+              <select value={pickAction} onChange={(e) => setPickAction(e.target.value)} aria-label="اقدام"><option value="">اقدام را انتخاب کنید ({fa(actions.length)})…</option>{[...new Set(actions.map((a) => a.group))].map((g) => <optgroup key={g} label={g || 'سایر'}>{actions.filter((a) => a.group === g).map((a) => <option key={a.key} value={a.key}>{a.title} ({a.unit})</option>)}</optgroup>)}</select>
+              <button className="im-btn im-btn-primary im-btn-sm" disabled={!pickAction} onClick={addAction}><Plus size={13} /> افزودن</button>
+            </span>
+          )}
+          {editable && !form && !actionOn && (
             <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
               <ActivityPicker activities={options} value={pick} onChange={setPick} emptyLabel={`فعالیت را انتخاب کنید (${fa(options.length)})…`} title="انتخاب فعالیت برای گزارش" width={420} />
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={addActivity}><Plus size={13} /> افزودن</button>
@@ -283,7 +305,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           {editable && form && <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
-          {!form ? (
+          {!form && actionOn ? (
+            <ActionLines rows={rows} actions={actions} locked={lockedLine} editable={editable} cum={actionCum} onPatch={patchRow} onDetail={patchDetail} onCopy={copyRow} onDelete={delRow} />
+          ) : !form ? (
             <table className="ex-lines">
               <thead><tr><th>#</th><th>فعالیت (ردیف فهرست‌بها)</th><th>محل / کیلومتر</th><th className="num">کارکرد امروز *</th><th>تجمعی</th><th>توضیحات</th><th>وضعیت</th><th /></tr></thead>
               <tbody>{rows.length === 0 ? <tr><td colSpan={8} className="fn-empty">هنوز ردیفی نیست. فعالیت را از بالا انتخاب کنید.</td></tr> : rows.map((l, i) => { const a = l.activityId ? m.actById.get(l.activityId) : undefined; const prev = l.activityId ? before.get(l.activityId) ?? 0 : 0; const others = l.activityId ? (upToday.get(l.activityId) ?? 0) - prev : 0; const base = a ? m.baseOf(a, head.reportDate) : 0; const total = prev + others + l.qty

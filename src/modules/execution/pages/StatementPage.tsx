@@ -6,6 +6,7 @@ import { useExecutionModel } from '../lib/useExecutionModel'
 import { jalaliText, periodsBetween, type Period } from '../lib/periods'
 import { buildStatement, type StatementTotals } from '../lib/statement'
 import { Chip, KpiCard } from '../../finance/components/fn'
+import { UnmappedActions } from './ActionsSettings'
 import { Empty, fa, pct } from '../components/common'
 
 const money = (n: number) => fa(Math.round(n))
@@ -43,6 +44,7 @@ export function StatementPage({ projectId }: { projectId: string }) {
   }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <div className="no-print"><UnmappedActions projectId={projectId} can={ex.can(projectId, '*') || ex.can(projectId, 'configure') || ex.can(projectId, 'edit_activities')} /></div>
       <div className="mt-filters no-print">
         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <button className="im-btn im-btn-sm" disabled={pi <= 0} onClick={() => setIdx(pi - 1)} aria-label="ماه قبل"><ChevronRight size={14} /></button>
