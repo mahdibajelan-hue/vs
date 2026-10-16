@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
+import { desiredSlots, diffSlots, type SignRole } from '../lib/signRoles'
 import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
 import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, SignSlot, ReportSignature, SignParty, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
@@ -57,6 +58,7 @@ interface State {
   signSlots: SignSlot[]; signatures: ReportSignature[]
   saveSlot: (s: { projectId: string; formKey: string; slotKey: string; label: string; party: SignParty; userId: string | null; sort: number; required: boolean; active?: boolean }) => Promise<boolean>
   removeSlot: (id: string) => Promise<boolean>
+  applySignRoles: (projectId: string, roles: SignRole[]) => Promise<boolean>
   loadSignatures: (reportId: string) => Promise<void>
   signReport: (reportId: string, slotKey: string) => Promise<boolean>
   unsignReport: (reportId: string, slotKey: string) => Promise<boolean>
@@ -243,6 +245,13 @@ export const useEpcStore = create<State>((set, get) => ({
   saveSlot: async (x) => {
     const { error } = await supabase.from('ex_sign_slots').upsert({ project_id: x.projectId, form_key: x.formKey, slot_key: x.slotKey, label: x.label, party: x.party, user_id: x.userId, sort: x.sort, required: x.required, active: x.active ?? true }, { onConflict: 'project_id,form_key,slot_key' })
     if (fail('ذخیرهٔ جایگاه امضا', error)) return false
+    await get().fetchAll(); return true
+  },
+  applySignRoles: async (projectId, roles) => {
+    const existing = get().signSlots.filter((x) => x.projectId === projectId).map((x) => ({ id: x.id, formKey: x.formKey, slotKey: x.slotKey, label: x.label, party: x.party, userId: x.userId, sort: x.sort, required: x.required }))
+    const { upsert, remove } = diffSlots(existing, desiredSlots(roles))
+    if (upsert.length) { const { error } = await supabase.from('ex_sign_slots').upsert(upsert.map((u) => ({ project_id: projectId, form_key: u.formKey, slot_key: u.slotKey, label: u.label, party: u.party, user_id: u.userId, sort: u.sort, required: u.required, active: true })), { onConflict: 'project_id,form_key,slot_key' }); if (fail('ذخیرهٔ نقش‌های امضا', error)) return false }
+    if (remove.length) { const { error } = await supabase.from('ex_sign_slots').delete().in('id', remove); if (fail('حذف جایگاه‌های امضا', error)) return false }
     await get().fetchAll(); return true
   },
   removeSlot: async (id) => {

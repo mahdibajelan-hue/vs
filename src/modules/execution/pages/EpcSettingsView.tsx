@@ -50,7 +50,6 @@ function Inner({ projectId }: { projectId: string }) {
           <label key={k} className="ex-lab">{l}<input type="number" step="0.05" disabled={!canCfg} value={s.thresholds[k]} onChange={(e) => void save({ thresholds: { ...s.thresholds, [k]: num(e.target.value, s.thresholds[k]) } })} style={{ width: 100 }} /></label>
         ))}</div>
       </Section>
-      <Proposals projectId={projectId} canCfg={canCfg} />
     </div>
   )
 }
@@ -108,28 +107,6 @@ function LegalView({ projectId }: { projectId: string }) {
   )
 }
 
-function Proposals({ projectId, canCfg }: { projectId: string; canCfg: boolean }) {
-  const epc = useEpcStore()
-  const list = epc.proposals.filter((x) => x.projectId === projectId)
-  const [f, setF] = useState({ formKey: '', title: '', reason: '', fields: '' })
-  const mine = useExecutionStore((x) => x.can(projectId, 'record') || x.can(projectId, 'edit_activities'))
-  const propose = async () => {
-    const fields = f.fields.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [label, type = 'text'] = l.split('|').map((x) => x.trim()); return { label, type } })
-    if (await epc.proposeForm({ projectId, formKey: f.formKey.trim(), title: f.title.trim(), definition: { fields }, reason: f.reason })) setF({ formKey: '', title: '', reason: '', fields: '' })
-  }
-  return (
-    <Section title="فرم‌های پیشنهادی" hint="فرم‌های استاندارد موجود دست‌نخورده می‌مانند. فرم تازه فقط پیشنهاد است و تا تأیید فرد مجاز فعال نمی‌شود.">
-      {list.length > 0 && <div className="fn-tbl-wrap" style={{ maxHeight: 'none', marginBottom: 10 }}><table className="ex-lines"><thead><tr><th>کلید</th><th>عنوان</th><th>فیلدها</th><th>علت</th><th>وضعیت</th><th /></tr></thead>
-        <tbody>{list.map((x) => <tr key={x.id}><td className="fn-code">{x.formKey}</td><td>{x.title}</td><td className="sub">{((x.definition.fields as { label: string }[] | undefined) ?? []).map((q) => q.label).join('، ')}</td><td className="sub">{x.reason}</td><td><Chip tone={x.status === 'approved' ? 'good' : x.status === 'rejected' ? 'bad' : 'warn'}>{x.status === 'approved' ? 'تأییدشده' : x.status === 'rejected' ? 'ردشده' : 'در انتظار تأیید'}</Chip></td>
-          <td>{canCfg && x.status === 'proposed' && <span style={{ display: 'flex', gap: 4 }}><button className="im-btn im-btn-sm im-btn-primary" onClick={() => void epc.decideProposal(x.id, true, '')}>تأیید</button><button className="im-btn im-btn-sm" onClick={() => { const n = window.prompt('علت رد:'); if (n?.trim()) void epc.decideProposal(x.id, false, n.trim()) }}>رد</button></span>}</td></tr>)}</tbody></table></div>}
-      {mine && <div style={{ display: 'grid', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input placeholder="کلید لاتین فرم (مثلاً hydro_test)" value={f.formKey} onChange={(e) => setF({ ...f, formKey: e.target.value })} dir="ltr" /><input placeholder="عنوان فرم" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} dir="auto" style={{ minWidth: 220 }} /><input placeholder="علت نیاز" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} dir="auto" style={{ minWidth: 220 }} /></div>
-        <textarea rows={3} placeholder={'فیلدها، هر خط یکی: عنوان | نوع (text/num/date/select)\nفشار آزمون | num'} value={f.fields} onChange={(e) => setF({ ...f, fields: e.target.value })} dir="auto" />
-        <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!/^[a-z][a-z0-9_]{2,40}$/.test(f.formKey.trim()) || !f.title.trim() || !f.fields.trim()} onClick={() => void propose()}>ثبت پیشنهاد فرم</button></div>
-      </div>}
-    </Section>
-  )
-}
 
 const IDENTITY_FIELDS: [keyof FormIdentity, string, string][] = [['contractNo', 'شمارهٔ قرارداد', ''], ['lineNo', 'شمارهٔ خط', ''], ['diameterIn', 'قطر اسمی لوله (in)', '48'], ['kmFrom', 'کیلومتر شروع', ''], ['kmTo', 'کیلومتر پایان', ''], ['pipeGrade', 'گرید لوله', 'API 5L X70'], ['pipeStandard', 'استاندارد جوش/اجرا', 'API 1104']]
 /** «شناسنامهٔ فرم‌های فنی»: defined once per project and written automatically into the bound cells of every approved form. */
