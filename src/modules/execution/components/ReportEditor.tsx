@@ -20,6 +20,7 @@ import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ActivityPicker } from './ActivityPicker'
 import { ActionLines } from './ActionLines'
+import { SignaturesCard } from './SignaturesCard'
 import { actionOf } from '../lib/workActions'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
@@ -94,7 +95,10 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const upToday = useMemo(() => cumulative(m.reports, m.lines, { until: head.reportDate, excludeReportId: reportId, mode: 'registered' }), [m.reports, m.lines, head.reportDate, reportId])
   const asLines = (): ReportLine[] => rows.map((x, i) => ({ id: x.key, reportId, lineNo: i, activityId: x.activityId, qty: x.qty, kmFrom: x.kmFrom, kmTo: x.kmTo, location: x.location, note: x.note, detail: x.detail, status: x.status, approvedQty: x.approvedQty, reviewNote: x.reviewNote, sourceReportId: x.sourceReportId }))
   const asRes = (): ReportResource[] => res.map((x, i) => ({ ...x, id: String(i), reportId }))
-  const missing = missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes())
+  const slotsAll = useEpcStore((x) => x.signSlots), sigsAll = useEpcStore((x) => x.signatures)
+  const reportSigs = sigsAll.filter((g) => g.reportId === reportId)
+  const unsignedPrep = slotsAll.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party === 'contractor' && !reportSigs.some((g) => g.slotKey === x.slotKey)).map((x) => `امضای «${x.label}»`)
+  const missing = [...missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes()), ...unsignedPrep]
   const incons = form ? [] : inconsistenciesForReport(asLines(), m.actById)
   const overRows = useMemo(() => new Set(rows.filter((x) => { const a = x.activityId ? m.actById.get(x.activityId) : undefined; if (!a) return false; const base = m.baseOf(a, head.reportDate); return base > 0 && (upToday.get(a.id) ?? 0) + rows.filter((y) => y.activityId === a.id).reduce((s, y) => s + y.qty, 0) > base * (1 + m.settings.overBasePct / 100) + 1e-9 }).map((x) => x.key)), [rows, upToday, m, head.reportDate])
 
@@ -161,7 +165,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     setCarried(true); setRes(lastRows); setDirty(true)
   }, [carried, editable, lastRows, res, r.formKey])
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
-  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
+  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), signatures: reportSigs, people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
   const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
   const raise = async (s: StopRow) => {
     const mat = s.materialId ? mm.materials.find((x) => x.id === s.materialId) : undefined
@@ -279,6 +283,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           <label className="wide">توضیحات<input disabled={!editable} value={head.notes} onChange={(e) => setH('notes', e.target.value)} dir="auto" /></label>
         </div>
       </div>
+
+      <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
 
       {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}
 

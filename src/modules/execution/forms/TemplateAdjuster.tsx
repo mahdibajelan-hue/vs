@@ -8,7 +8,7 @@ const parse = (a: string): [number, number] => { const m = /^([A-Z]+)(\d+)$/.exe
 const SCOPES: { v: Scope; t: string }[] = [{ v: 'cell', t: 'همین سلول' }, { v: 'row', t: 'کل ردیف' }, { v: 'col', t: 'کل ستون' }, { v: 'all', t: 'کل فرم' }]
 
 /** View a registered sheet exactly as frozen, and — when allowed — make small look-only changes (row heights, column widths, alignment, font size / weight, wrapping). The result is saved as a NEW draft version; it still has to be approved and its mapping confirmed. Mapped cells are highlighted. */
-export function TemplateAdjuster({ base, bindings, fromVersion, canEdit, onSave }: { base: GridTemplate; bindings: CellBinding[]; fromVersion: number | null; canEdit: boolean; onSave: (layout: GridTemplate) => Promise<boolean> }) {
+export function TemplateAdjuster({ base, bindings, fromVersion, canEdit, slots = [], onSave }: { base: GridTemplate; bindings: CellBinding[]; fromVersion: number | null; canEdit: boolean; /** signature slots of this form: a signature box cell can be bound to one */ slots?: { slotKey: string; label: string }[]; onSave: (layout: GridTemplate, bindings: CellBinding[]) => Promise<boolean> }) {
   const [hist, setHist] = useState<GridTemplate[]>([base])
   const [at, setAt] = useState(0) // index of the working copy in hist
   const [sel, setSel] = useState<string>('')
@@ -16,13 +16,16 @@ export function TemplateAdjuster({ base, bindings, fromVersion, canEdit, onSave 
   const [zoom, setZoom] = useState(0.8)
   const [busy, setBusy] = useState(false)
   const work = hist[at]
-  const mark = useMemo(() => new Set(bindings.map((b) => b.cell)), [bindings])
+  const [bnd, setBnd] = useState<CellBinding[]>(bindings)
+  const [slot, setSlot] = useState('')
+  const mark = useMemo(() => new Set(bnd.map((b) => b.cell)), [bnd])
   const [r, c] = sel ? parse(sel) : [-1, -1]
   const cell = sel ? work.cells.find((x) => x.r === r && x.c === c) : undefined
   const st = cell ? work.styles[cell.s] : undefined
   const push = (t: GridTemplate) => { if (t === work) return; setHist([...hist.slice(0, at + 1), t]); setAt(at + 1) }
   const style = (p: StylePatch) => { if (sel) push(styleCells(work, scope, [r, c], p)) }
-  const dirty = at > 0
+  const bindingsChanged = JSON.stringify(bnd) !== JSON.stringify(bindings)
+  const dirty = at > 0 || bindingsChanged
   const num = (v: string, d: number) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : d }
   const btn = (on: boolean) => ({ className: `im-btn im-btn-sm${on ? ' im-btn-primary' : ''}`, disabled: !canEdit || !sel })
   return (
@@ -56,13 +59,21 @@ export function TemplateAdjuster({ base, bindings, fromVersion, canEdit, onSave 
             <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 6 }}>
               <button className="im-btn im-btn-sm" disabled={at === 0} onClick={() => setAt(at - 1)} aria-label="بازگردانی"><Undo2 size={14} /></button>
               <button className="im-btn im-btn-sm" disabled={at >= hist.length - 1} onClick={() => setAt(at + 1)} aria-label="از نو"><Redo2 size={14} /></button>
-              <button className="im-btn im-btn-sm" disabled={!dirty} onClick={() => { setHist([base]); setAt(0) }}>برگشت به نسخهٔ پایه</button>
+              <button className="im-btn im-btn-sm" disabled={!dirty} onClick={() => { setHist([base]); setAt(0); setBnd(bindings) }}>برگشت به نسخهٔ پایه</button>
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!dirty || busy} onClick={async () => {
                 if (!window.confirm('اصلاحات به‌صورت یک نسخهٔ پیش‌نویس جدید ثبت می‌شود؛ متن و ادغام سلول‌ها تغییر نمی‌کند. بعد از ثبت باید نسخه را تأیید و نگاشت را تأیید کنید. ادامه؟')) return
-                setBusy(true); const ok = await onSave({ ...work, adjusted: { fromVersion, ops: work.adjusted?.ops ?? [] } }); setBusy(false); if (ok) { setHist([base]); setAt(0); setSel('') }
+                setBusy(true); const ok = await onSave({ ...work, adjusted: { fromVersion, ops: [...(work.adjusted?.ops ?? []), ...(bindingsChanged ? ['اتصال جعبه‌های امضا'] : [])] } }, bnd); setBusy(false); if (ok) { setHist([base]); setAt(0); setSel('') }
               }}><Save size={13} /> ثبت به‌عنوان نسخهٔ پیش‌نویس جدید</button>
             </span>
           </div>
+          {slots.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className="im-helper">جعبهٔ امضا:</span>
+              <select value={slot} onChange={(e) => setSlot(e.target.value)} aria-label="جایگاه امضا"><option value="">جایگاه امضا…</option>{slots.map((x) => <option key={x.slotKey} value={x.slotKey}>{x.label}</option>)}</select>
+              <button className="im-btn im-btn-sm" disabled={!sel || !slot} onClick={() => setBnd((b) => [...b.filter((x) => x.cell !== sel && x.source !== `sign:${slot}`), { cell: sel, source: `sign:${slot}`, mode: 'replace', note: `امضای الکترونیکی: ${slots.find((x) => x.slotKey === slot)?.label ?? slot}` }])}>اتصال امضا به خانهٔ انتخاب‌شده</button>
+              {bnd.filter((x) => x.source.startsWith('sign:')).map((x) => <Chip2 key={x.cell} text={`${x.cell} ← ${slots.find((s) => `sign:${s.slotKey}` === x.source)?.label ?? x.source}`} onRemove={() => setBnd((b) => b.filter((y) => y !== x))} />)}
+            </div>
+          )}
           {dirty && <details><summary className="im-helper">{work.adjusted?.ops.length} اصلاح انجام‌شده</summary><ol style={{ margin: '4px 0', paddingInlineStart: 20 }}>{work.adjusted?.ops.map((o, i) => <li key={i} className="im-helper">{o}</li>)}</ol></details>}
         </div>
       )}
@@ -74,3 +85,5 @@ export function TemplateAdjuster({ base, bindings, fromVersion, canEdit, onSave 
     </div>
   )
 }
+
+const Chip2 = ({ text, onRemove }: { text: string; onRemove: () => void }) => <span className="im-chip" style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }} dir="auto">{text}<button className="im-btn im-btn-sm" aria-label="حذف اتصال" onClick={onRemove}>×</button></span>

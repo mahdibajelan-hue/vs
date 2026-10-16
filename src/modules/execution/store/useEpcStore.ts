@@ -4,7 +4,7 @@ import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, SignSlot, ReportSignature, SignParty, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -54,6 +54,12 @@ interface State {
   saveAction: (projectId: string, a: { key: string; title: string; unit: string; group: string; fields: ActionField[]; sort?: number; active?: boolean; billable?: boolean }) => Promise<boolean>
   seedActions: (projectId: string) => Promise<boolean>
   statements: StatementRow0[]; statementLines: StatementLine[]
+  signSlots: SignSlot[]; signatures: ReportSignature[]
+  saveSlot: (s: { projectId: string; formKey: string; slotKey: string; label: string; party: SignParty; userId: string | null; sort: number; required: boolean; active?: boolean }) => Promise<boolean>
+  removeSlot: (id: string) => Promise<boolean>
+  loadSignatures: (reportId: string) => Promise<void>
+  signReport: (reportId: string, slotKey: string) => Promise<boolean>
+  unsignReport: (reportId: string, slotKey: string) => Promise<boolean>
   createStatement: (projectId: string, from: string, to: string, rows: { activity_id: string; sys: number; unit_price: number; base_qty: number }[]) => Promise<string | null>
   refreshStatement: (id: string, rows: { activity_id: string; sys: number; unit_price: number; base_qty: number }[]) => Promise<boolean>
   setStatementCell: (rowId: string, col: 'req' | 'con' | 'prev_sys' | 'prev_req' | 'prev_con', value: number | null) => Promise<boolean>
@@ -100,7 +106,7 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], signSlots: [], signatures: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
@@ -129,6 +135,8 @@ export const useEpcStore = create<State>((set, get) => ({
     const [sts, stl] = await Promise.all([supabase.from('ex_statements').select('*').order('no'), supabase.from('ex_statement_rows').select('*')])
     if (!sts.error) set({ statements: ((sts.data ?? []) as Row[]).map((r): StatementRow0 => ({ id: r.id, projectId: r.project_id, no: r.no, periodFrom: r.period_from, periodTo: r.period_to, status: r.status, note: r.note ?? '', finalizedAt: r.finalized_at })) })
     if (!stl.error) set({ statementLines: ((stl.data ?? []) as Row[]).map((r): StatementLine => ({ id: r.id, statementId: r.statement_id, activityId: r.activity_id, unitPrice: Number(r.unit_price) || 0, baseQty: Number(r.base_qty) || 0, sys: Number(r.sys_cum) || 0, req: r.req_cum == null ? null : Number(r.req_cum), con: r.con_cum == null ? null : Number(r.con_cum), reqEdited: !!r.req_edited, prevSys: Number(r.prev_sys) || 0, prevReq: Number(r.prev_req) || 0, prevCon: Number(r.prev_con) || 0 })) })
+    const sl = await supabase.from('ex_sign_slots').select('*').order('sort')
+    if (!sl.error) set({ signSlots: ((sl.data ?? []) as Row[]).map((r): SignSlot => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, slotKey: r.slot_key, label: r.label, party: r.party, userId: r.user_id, sort: r.sort ?? 0, required: !!r.required, active: !!r.active })) })
     const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
     if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
     const t = (name: string) => supabase.from(name).select('*')
@@ -231,6 +239,31 @@ export const useEpcStore = create<State>((set, get) => ({
     const { error } = await supabase.from('ex_work_actions').insert(rows)
     if (fail('افزودن اقدام‌های پیش‌فرض', error)) return false
     await get().fetchAll(); return true
+  },
+  saveSlot: async (x) => {
+    const { error } = await supabase.from('ex_sign_slots').upsert({ project_id: x.projectId, form_key: x.formKey, slot_key: x.slotKey, label: x.label, party: x.party, user_id: x.userId, sort: x.sort, required: x.required, active: x.active ?? true }, { onConflict: 'project_id,form_key,slot_key' })
+    if (fail('ذخیرهٔ جایگاه امضا', error)) return false
+    await get().fetchAll(); return true
+  },
+  removeSlot: async (id) => {
+    const { error } = await supabase.from('ex_sign_slots').delete().eq('id', id)
+    if (fail('حذف جایگاه امضا', error)) return false
+    await get().fetchAll(); return true
+  },
+  loadSignatures: async (reportId) => {
+    const { data, error } = await supabase.from('ex_report_signatures').select('*').eq('report_id', reportId)
+    if (error) return
+    set({ signatures: [...get().signatures.filter((x) => x.reportId !== reportId), ...((data ?? []) as Row[]).map((r): ReportSignature => ({ id: r.id, reportId: r.report_id, slotKey: r.slot_key, label: r.label ?? '', userId: r.user_id, userName: r.user_name ?? '', image: r.image, signedAt: r.signed_at }))] })
+  },
+  signReport: async (reportId, slotKey) => {
+    const { error } = await supabase.rpc('ex_report_sign', { p_report: reportId, p_slot: slotKey })
+    if (error) { const m = error.message; window.alert(/signature_required/.test(m) ? 'امضای نمونهٔ شما ثبت نشده است؛ ابتدا از پروفایل خود امضا را ثبت کنید.' : /previous_missing/.test(m) ? 'ابتدا امضاهای قبلیِ این فرم (به ترتیب) باید ثبت شود.' : /not_assignee/.test(m) ? 'این جایگاه امضا برای شما تعریف نشده است.' : /already_signed/.test(m) ? 'این جایگاه قبلاً امضا شده است.' : /bad_state/.test(m) ? 'در این وضعیت گزارش امضا ممکن نیست.' : `امضا ثبت نشد: ${m}`); return false }
+    await get().loadSignatures(reportId); return true
+  },
+  unsignReport: async (reportId, slotKey) => {
+    const { error } = await supabase.rpc('ex_report_unsign', { p_report: reportId, p_slot: slotKey })
+    if (fail('لغو امضا', error)) return false
+    await get().loadSignatures(reportId); return true
   },
   createStatement: async (projectId, from, to, rows) => {
     const { data, error } = await supabase.rpc('ex_statement_create', { p_project: projectId, p_from: from, p_to: to, p_rows: rows })

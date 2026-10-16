@@ -58,7 +58,7 @@ function Inner({ projectId }: { projectId: string }) {
                     <option value="base">فایل اصلی همراه برنامه (ثبت‌نشده)</option>
                   </select></label>
                   {ver?.layout.adjusted && <span className="im-helper">این نسخه فقط از نظر ظاهر اصلاح شده است: {ver.layout.adjusted.ops.join(' · ')}</span>}
-                  <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout) => savedDraft(b.formKey, b.title, layout, bnd)} />
+                  <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout, nb) => savedDraft(b.formKey, b.title, layout, nb)} slots={epc.signSlots.filter((x) => x.projectId === projectId && x.formKey === b.formKey && x.active).map((x) => ({ slotKey: x.slotKey, label: x.label }))} />
                   <details><summary className="im-helper">ویرایش در Excel (دریافت فایل ← ویرایش در آفیس ← بارگذاری)</summary>
                     <OfficeRoundTrip key={`o${vid}`} formKey={b.formKey} title={b.title} base={lay} bindings={bnd} version={ver?.version ?? null} strict={b.renderer !== 'static'} canEdit={can} onSave={(layout) => savedDraft(b.formKey, b.title, layout, bnd)} />
                   </details>

@@ -1,3 +1,4 @@
+import { SignSlotsSettings } from './SignSlotsSettings'
 import { ActionsSettings } from './ActionsSettings'
 import { FrontsEditor } from './FrontsEditor'
 import { useState } from 'react'
@@ -20,6 +21,7 @@ import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExProjectRole, type ExRole } from '.
 export function SettingsPage({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'rules') return <RulesView projectId={projectId} />
   if (sub === 'forms') return <FormsView projectId={projectId} />
+  if (sub === 'signers') return <SignSlotsSettings projectId={projectId} />
   if (sub === 'actions') return <ActionsSettings projectId={projectId} />
   if (sub === 'map') return <MapView projectId={projectId} />
   if (sub === 'epc') return <EpcSettingsView projectId={projectId} />

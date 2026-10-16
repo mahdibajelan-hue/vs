@@ -9,6 +9,8 @@ import { cumulative } from '../lib/progress'
 import { cumulativeMetrics } from '../lib/forms'
 import { DataTable, KpiCard, fmtD, type Col } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, Empty, fa } from '../components/common'
+import { SignaturesCard } from '../components/SignaturesCard'
+import { useEpcStore as useEpcStoreSig } from '../store/useEpcStore'
 import { PaperModal, type PaperCtx } from '../components/ReportPaper'
 import type { Report } from '../types'
 import { EmployerPanel } from '../components/epc/EmployerPanel'
@@ -132,7 +134,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const reopen = async () => { const why = window.prompt('علت بازگشایی گزارش تأییدشده (الزامی):'); if (why?.trim() && (await ex.reopenReport(reportId, why.trim()))) onClose() }
   const orgName = orgs.find((o) => o.id === r.contractorOrgId)?.name ?? '—'
   const hist = m.history.filter((h) => h.reportId === reportId)
-  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName, people: ex.people, report: r, form, lines, resources: m.resources.filter((x) => x.reportId === reportId), stoppages: m.stoppages.filter((x) => x.reportId === reportId), acts: m.actById, prev: before, baseOf: (a) => m.baseOf(a, r.reportDate), metrics: form ? cumulativeMetrics(form, r, lines, m.reports, m.lines) : undefined })
+  const paperCtx = (): PaperCtx => ({ signatures: useEpcStoreSig.getState().signatures.filter((g) => g.reportId === reportId), projectName: project?.officialName ?? '', orgName, people: ex.people, report: r, form, lines, resources: m.resources.filter((x) => x.reportId === reportId), stoppages: m.stoppages.filter((x) => x.reportId === reportId), acts: m.actById, prev: before, baseOf: (a) => m.baseOf(a, r.reportDate), metrics: form ? cumulativeMetrics(form, r, lines, m.reports, m.lines) : undefined })
   const detailText = (l: (typeof lines)[number]) => (form ? form.columns.slice(0, 5).map((c) => { const v = l.detail[c.key]; const o = c.options?.find((x) => x.value === String(v)); return v == null || v === '' ? '' : `${c.label}: ${o ? o.label : String(v)}` }).filter(Boolean).join(' · ') : '')
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -145,6 +147,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
           {canReopen && <button className="im-btn im-btn-sm" onClick={() => void reopen()}><RotateCcw size={13} /> بازگشایی</button>}
         </span>
       </div>
+      <SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} />
       <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13 }}>
         <span>تاریخ: <b>{fmtD(r.reportDate)}</b></span><span>پیمانکار: <b>{orgName}</b></span><span>جبهه: <b>{r.front || '—'}</b></span><span>ارسال‌کننده: <b>{ex.people.get(r.submittedBy ?? '') ?? '—'}</b></span><span>ارسال: <b>{fmtD((r.submittedAt ?? '').slice(0, 10))}</b></span>
       </div>

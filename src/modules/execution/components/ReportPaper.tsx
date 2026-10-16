@@ -15,6 +15,7 @@ import { TemplatePaper } from './TemplatePaper'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { paperChoice, printModeOf } from '../forms/printMode'
+import type { ReportSignature } from '../epcTypes'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -23,6 +24,8 @@ export interface PaperCtx {
   /** work report: cumulative before the date, per activity */
   prev?: Map<string, number>; baseOf?: (a: Activity) => number
   metrics?: MetricRow[]
+  /** electronic signatures of the report (frozen images); printed in the template's signature boxes or, without bindings, as a row under the form */
+  signatures?: ReportSignature[]
 }
 
 const WEATHER_FA: Record<string, string> = { sunny: 'آفتابی', partly: 'نیمه‌ابری', cloudy: 'ابری', rainy: 'بارانی', snowy: 'برفی', stormy: 'طوفانی (باد و خاک)' }
@@ -51,6 +54,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
           </div>
         )}
         <TemplatePaper c={c} template={approved} note={experimental ? 'پیش‌نمایش آزمایشی — بایگانی رسمی نیست' : undefined} />
+        {!approved.bindings.some((b) => b.source.startsWith('sign:')) && <SignatureStrip signatures={c.signatures} />}
       </>
     )
   }
@@ -61,8 +65,21 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
           <button type="button" className="im-btn im-btn-sm" onClick={() => setPreview(true)}>پیش‌نمایش آزمایشی با قالب مصوب</button>
         </div>
       )}
-      <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /></PaperFrame>
+      <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /><SignatureStrip signatures={c.signatures} /></PaperFrame>
     </>
+  )
+}
+/** electronic signatures printed in a row (used where the paper has no bound signature boxes) */
+export function SignatureStrip({ signatures }: { signatures?: ReportSignature[] }) {
+  if (!signatures?.length) return null
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14, breakInside: 'avoid' }}>
+      {signatures.slice().sort((a, b) => a.signedAt.localeCompare(b.signedAt)).map((g) => (
+        <div key={g.id} style={{ flex: '1 1 150px', border: '1px solid #9ca3af', padding: 6, textAlign: 'center', minHeight: 84, fontSize: 11 }}>
+          <b dir="auto">{g.label}</b><br /><img src={g.image} alt="" style={{ maxHeight: 44, maxWidth: '100%', objectFit: 'contain' }} /><br />
+          <span dir="auto">{g.userName}</span> · {fmtD(g.signedAt.slice(0, 10))}
+        </div>))}
+    </div>
   )
 }
 function ReportPaperBody({ c }: { c: PaperCtx }) {

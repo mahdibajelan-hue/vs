@@ -68,3 +68,7 @@ export interface ArchiveRow { id: string; projectId: string; reportId: string; v
 
 export interface StatementRow0 { id: string; projectId: string; no: number; periodFrom: string; periodTo: string; status: 'draft' | 'finalized'; note: string; finalizedAt: string | null }
 export interface StatementLine { id: string; statementId: string; activityId: string; unitPrice: number; baseQty: number; sys: number; req: number | null; con: number | null; reqEdited: boolean; prevSys: number; prevReq: number; prevCon: number }
+
+export type SignParty = 'contractor' | 'consultant' | 'supervision' | 'employer' | 'other'
+export interface SignSlot { id: string; projectId: string; formKey: string; slotKey: string; label: string; party: SignParty; userId: string | null; sort: number; required: boolean; active: boolean }
+export interface ReportSignature { id: string; reportId: string; slotKey: string; label: string; userId: string; userName: string; image: string; signedAt: string }
