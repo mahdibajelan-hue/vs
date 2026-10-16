@@ -4,7 +4,7 @@ import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -53,6 +53,14 @@ interface State {
   workActions: (WorkAction & { projectId: string })[]; actionRules: (ActionRule & { projectId: string })[]
   saveAction: (projectId: string, a: { key: string; title: string; unit: string; group: string; fields: ActionField[]; sort?: number; active?: boolean; billable?: boolean }) => Promise<boolean>
   seedActions: (projectId: string) => Promise<boolean>
+  statements: StatementRow0[]; statementLines: StatementLine[]
+  createStatement: (projectId: string, from: string, to: string, rows: { activity_id: string; sys: number; unit_price: number; base_qty: number }[]) => Promise<string | null>
+  refreshStatement: (id: string, rows: { activity_id: string; sys: number; unit_price: number; base_qty: number }[]) => Promise<boolean>
+  setStatementCell: (rowId: string, col: 'req' | 'con' | 'prev_sys' | 'prev_req' | 'prev_con', value: number | null) => Promise<boolean>
+  acceptRequests: (id: string) => Promise<number | null>
+  finalizeStatement: (id: string) => Promise<boolean>
+  reopenStatement: (id: string) => Promise<boolean>
+  updateRule: (id: string, patch: { factor?: number; multFields?: string }) => Promise<boolean>
   saveRule: (projectId: string, r: { actionKey: string; activityId: string; factor: number; whenField?: string; whenValue?: string; note?: string; multFields?: string }) => Promise<boolean>
   removeRule: (id: string) => Promise<boolean>
   loadWeldHistory: (weldId: string) => Promise<void>
@@ -92,7 +100,7 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
+  crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
@@ -118,6 +126,9 @@ export const useEpcStore = create<State>((set, get) => ({
     const [wa, ar] = await Promise.all([supabase.from('ex_work_actions').select('*').order('sort'), supabase.from('ex_action_map').select('*')])
     if (!wa.error) set({ workActions: ((wa.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, key: r.key, title: r.title, unit: r.unit ?? '', group: r.group_label ?? '', fields: (r.fields ?? []) as ActionField[], sort: r.sort ?? 0, active: !!r.active, billable: r.billable !== false })) })
     if (!ar.error) set({ actionRules: ((ar.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, actionKey: r.action_key, activityId: r.activity_id, factor: Number(r.factor) || 1, whenField: r.when_field ?? '', whenValue: r.when_value ?? '', note: r.note ?? '', multFields: r.mult_fields ?? '' })) })
+    const [sts, stl] = await Promise.all([supabase.from('ex_statements').select('*').order('no'), supabase.from('ex_statement_rows').select('*')])
+    if (!sts.error) set({ statements: ((sts.data ?? []) as Row[]).map((r): StatementRow0 => ({ id: r.id, projectId: r.project_id, no: r.no, periodFrom: r.period_from, periodTo: r.period_to, status: r.status, note: r.note ?? '', finalizedAt: r.finalized_at })) })
+    if (!stl.error) set({ statementLines: ((stl.data ?? []) as Row[]).map((r): StatementLine => ({ id: r.id, statementId: r.statement_id, activityId: r.activity_id, unitPrice: Number(r.unit_price) || 0, baseQty: Number(r.base_qty) || 0, sys: Number(r.sys_cum) || 0, req: r.req_cum == null ? null : Number(r.req_cum), con: r.con_cum == null ? null : Number(r.con_cum), reqEdited: !!r.req_edited, prevSys: Number(r.prev_sys) || 0, prevReq: Number(r.prev_req) || 0, prevCon: Number(r.prev_con) || 0 })) })
     const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
     if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
     const t = (name: string) => supabase.from(name).select('*')
@@ -219,6 +230,44 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!rows.length) return true
     const { error } = await supabase.from('ex_work_actions').insert(rows)
     if (fail('افزودن اقدام‌های پیش‌فرض', error)) return false
+    await get().fetchAll(); return true
+  },
+  createStatement: async (projectId, from, to, rows) => {
+    const { data, error } = await supabase.rpc('ex_statement_create', { p_project: projectId, p_from: from, p_to: to, p_rows: rows })
+    if (error) { const m = error.message; window.alert(/draft_exists/.test(m) ? 'یک صورت‌وضعیت پیش‌نویس باز است؛ ابتدا آن را نهایی کنید.' : /exists/.test(m) ? 'برای این دوره قبلاً صورت‌وضعیت ساخته شده است.' : /not_allowed/.test(m) ? 'دسترسی ساخت صورت‌وضعیت را ندارید.' : `ساخت صورت‌وضعیت ممکن نشد: ${m}`); return null }
+    await get().fetchAll(); return data as string
+  },
+  refreshStatement: async (id, rows) => {
+    const { error } = await supabase.rpc('ex_statement_refresh', { p_stmt: id, p_rows: rows })
+    if (fail('به‌روزرسانی مقادیر سیستمی', error)) return false
+    await get().fetchAll(); return true
+  },
+  setStatementCell: async (rowId, col, value) => {
+    const { error } = await supabase.rpc('ex_statement_set', { p_row: rowId, p_col: col, p_value: value })
+    if (error) { window.alert(/locked/.test(error.message) ? 'صورت‌وضعیت نهایی شده و قابل تغییر نیست.' : /not_allowed/.test(error.message) ? 'این ستون را فقط نقش مربوط (پیمانکار برای درخواست، مشاور برای نظر) می‌تواند ثبت کند.' : /not_first/.test(error.message) ? 'مقادیر قبلی فقط در اولین صورت‌وضعیت قابل ورود است.' : `ثبت نشد: ${error.message}`); return false }
+    await get().fetchAll(); return true
+  },
+  acceptRequests: async (id) => {
+    const { data, error } = await supabase.rpc('ex_statement_accept', { p_stmt: id })
+    if (fail('پذیرش مقادیر درخواستی', error)) return null
+    await get().fetchAll(); return Number(data ?? 0)
+  },
+  finalizeStatement: async (id) => {
+    const { error } = await supabase.rpc('ex_statement_finalize', { p_stmt: id })
+    if (fail('نهایی‌کردن صورت‌وضعیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  reopenStatement: async (id) => {
+    const { error } = await supabase.rpc('ex_statement_reopen', { p_stmt: id })
+    if (fail('بازگشایی صورت‌وضعیت', error)) return false
+    await get().fetchAll(); return true
+  },
+  updateRule: async (id, patch) => {
+    const row: Record<string, unknown> = {}
+    if (patch.factor !== undefined) row.factor = patch.factor
+    if (patch.multFields !== undefined) row.mult_fields = patch.multFields
+    const { error } = await supabase.from('ex_action_map').update(row).eq('id', id)
+    if (fail('ویرایش تطبیق', error)) return false
     await get().fetchAll(); return true
   },
   saveRule: async (projectId, r) => {

@@ -2,6 +2,7 @@ import { PeriodReportsPage } from './PeriodReportsPage'
 import { StatementPage } from './StatementPage'
 import { DelaysPage } from './DelaysPage'
 import { LedgerPage } from './LedgerPage'
+import { ContractStatementPage } from './ContractStatementPage'
 import { ArchivePage } from './ArchivePage'
 import { MgmtReportPage } from './MgmtReportPage'
 
@@ -9,6 +10,7 @@ import { MgmtReportPage } from './MgmtReportPage'
 export function ReportsRouter({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'statement') return <StatementPage projectId={projectId} />
   if (sub === 'mgmt-week' || sub === 'mgmt-month') return <MgmtReportPage projectId={projectId} sub={sub} />
+  if (sub === 'contract') return <ContractStatementPage projectId={projectId} />
   if (sub === 'archive') return <ArchivePage projectId={projectId} />
   if (sub === 'ledger') return <LedgerPage projectId={projectId} />
   if (sub === 'delays') return <DelaysPage projectId={projectId} />

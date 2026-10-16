@@ -65,3 +65,6 @@ export interface MappingApprovalRow { id: string; templateId: string; approvedAt
 export interface WeldHistoryRow { id: number; weldId: string; attr: 'pipe' | 'size' | 'thk' | 'length' | 'bend'; oldValue: string | null; newValue: string | null; source: 'form' | 'manual' | 'backfill'; note: string; at: string }
 /** list columns of the archive (the frozen snapshot is fetched only when a record is opened) */
 export interface ArchiveRow { id: string; projectId: string; reportId: string; version: number; formKey: string; formTitle: string; category: string; reportNo: string; reportDate: string; status: string; note: string; createdAt: string }
+
+export interface StatementRow0 { id: string; projectId: string; no: number; periodFrom: string; periodTo: string; status: 'draft' | 'finalized'; note: string; finalizedAt: string | null }
+export interface StatementLine { id: string; statementId: string; activityId: string; unitPrice: number; baseQty: number; sys: number; req: number | null; con: number | null; reqEdited: boolean; prevSys: number; prevReq: number; prevCon: number }
