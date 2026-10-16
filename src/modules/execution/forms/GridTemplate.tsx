@@ -14,10 +14,16 @@ export function cssOf(st: GridStyle, value: string): CSSProperties {
   const rtl = isRtlText(value)
   const css: CSSProperties = {
     fontFamily: name ? `"${name}", ${FALLBACK}` : FALLBACK, fontSize: sz ? `${sz * 96 / 72}px` : undefined, fontWeight: b ? 700 : 400, fontStyle: i ? 'italic' : 'normal', textDecoration: u ? 'underline' : undefined,
-    color: col ? `#${col}` : '#000', background: st.bg ? `#${st.bg}` : undefined,
+    color: col ? `#${col}` : '#000', backgroundColor: st.bg ? `#${st.bg}` : undefined,
     borderTop: edge(st.b[0]), borderRight: edge(st.b[1]), borderBottom: edge(st.b[2]), borderLeft: edge(st.b[3]),
     textAlign: h && h !== 'general' ? HALIGN[h] : rtl ? 'right' : 'left', verticalAlign: v ? VALIGN[v] : 'bottom',
     whiteSpace: wrap ? 'pre-wrap' : 'pre', overflow: 'hidden', padding: '0 2px', direction: rtl ? 'rtl' : 'ltr', lineHeight: 1.25, wordBreak: wrap ? 'break-word' : undefined,
+  }
+  if (st.dg && (st.dg.up || st.dg.down)) { // a diagonal line across the cell (drawn as a thin gradient so it scales with merged cells)
+    const col = `#${st.dg.e[1] === 'None' ? '000000' : st.dg.e[1]}`, w = st.dg.e[0] === 'medium' || st.dg.e[0] === 'thick' ? 1.2 : 0.6
+    const line = (dir: string) => `linear-gradient(${dir}, transparent calc(50% - ${w}px), ${col} calc(50% - ${w}px), ${col} calc(50% + ${w}px), transparent calc(50% + ${w}px))`
+    css.backgroundImage = [st.dg.up && line('to top left'), st.dg.down && line('to top right')].filter(Boolean).join(', ')
+    ;(css as Record<string, unknown>).WebkitPrintColorAdjust = 'exact'; (css as Record<string, unknown>).printColorAdjust = 'exact'
   }
   if (rot === 90 || rot === 255) { css.writingMode = 'vertical-rl'; css.transform = 'rotate(180deg)' }
   return css
@@ -48,7 +54,7 @@ export function GridSheet({ tpl, values = {}, logos = {}, mark, onCell, selected
               {(byRow.get(r) ?? []).filter((c) => !tpl.cols[c.c].hidden).map((c) => {
                 const a = addr(c.r, c.c), text = values[a] ?? c.v ?? ''
                 const colSpan = c.cs ? Array.from({ length: c.cs }, (_, k) => c.c + k).filter((ci) => !tpl.cols[ci]?.hidden).length : 1
-                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} onClick={onCell ? () => onCell(a, c.v ?? '') : undefined} style={{ ...(onCell ? { cursor: 'cell' } : null), ...(selected === a ? { outline: '2px solid #0ea5e9', outlineOffset: -2 } : null), ...cssOf(tpl.styles[c.s], text), ...(a in values && /^f{6}$/i.test(tpl.styles[c.s].f[5] ?? '') && (!tpl.styles[c.s].bg || /^f{6}$/i.test(tpl.styles[c.s].bg!)) ? { color: '#000' } : null), ...(a in values && !tpl.styles[c.s].a[2] ? { overflow: 'visible' } : null), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, background: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
+                return <td key={a} colSpan={colSpan || 1} rowSpan={c.rs} data-cell={a} onClick={onCell ? () => onCell(a, c.v ?? '') : undefined} style={{ ...(onCell ? { cursor: 'cell' } : null), ...(selected === a ? { outline: '2px solid #0ea5e9', outlineOffset: -2 } : null), ...cssOf(tpl.styles[c.s], text), ...(a in values && /^f{6}$/i.test(tpl.styles[c.s].f[5] ?? '') && (!tpl.styles[c.s].bg || /^f{6}$/i.test(tpl.styles[c.s].bg!)) ? { color: '#000' } : null), ...(a in values && !tpl.styles[c.s].a[2] ? { overflow: 'visible' } : null), boxSizing: 'border-box', outline: mark?.has(a) ? '2px solid #f59e0b' : undefined, outlineOffset: -2, backgroundColor: mark?.has(a) ? '#fef3c7' : tpl.styles[c.s].bg ? `#${tpl.styles[c.s].bg}` : undefined }}>{text}</td>
               })}
             </tr>
           ))}

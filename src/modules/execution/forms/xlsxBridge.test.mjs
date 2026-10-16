@@ -19,3 +19,13 @@ for (const name of ['bend', 'connection', 'welder_card']) {
     const d = compareLayouts(base, layout, []); assert.equal(d.textChanges.length, 0); assert.equal(d.structural, false)
   })
 }
+
+await test('a diagonal line survives the round trip', async () => {
+  const base = load('bend')
+  const idx = base.styles.length, withDg = { ...base, styles: [...base.styles, { ...base.styles[base.cells[3].s], dg: { up: false, down: true, e: ['thin', '000000'] } }], cells: base.cells.map((c, i) => (i === 3 ? { ...c, s: idx } : c)) }
+  const buf = await gridToWorkbook(withDg, { title: 't', version: 1 })
+  const { layout } = await workbookToGrid(buf, 'x.xlsx', { formKey: 'bend', base })
+  const c = layout.cells.find((x) => x.r === withDg.cells[3].r && x.c === withDg.cells[3].c)
+  assert.deepEqual(layout.styles[c.s].dg, { up: false, down: true, e: ['thin', '000000'] })
+  assert.equal(layout.styles.filter((s) => s.dg).length, 1) // only that cell
+})

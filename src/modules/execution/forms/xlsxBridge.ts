@@ -27,7 +27,7 @@ export async function gridToWorkbook(tpl: GridTemplate, meta: { title: string; v
     const cell = ws.getCell(rr + 1, cc + 1), [name, sz, b, i, u, col] = st.f, [h, v, wrap, rot] = st.a
     cell.font = { name: name ?? undefined, size: sz ?? undefined, bold: b, italic: i, underline: u, color: argb(col) }
     cell.alignment = { horizontal: h && h !== 'general' ? (h as never) : undefined, vertical: v ? ((v === 'center' ? 'middle' : v) as never) : undefined, wrapText: wrap, textRotation: rot === 255 ? 'vertical' : rot > 90 ? 90 - rot : rot || undefined }
-    cell.border = edges(st, rr, cc, box[0], box[1], box[2], box[3])
+    cell.border = { ...edges(st, rr, cc, box[0], box[1], box[2], box[3]), ...(st.dg && rr === box[0] && cc === box[1] ? { diagonal: { up: st.dg.up, down: st.dg.down, style: st.dg.e[0] as never, color: argb(st.dg.e[1] === 'None' ? '000000' : st.dg.e[1]) } } : {}) }
     if (st.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: argb(st.bg) }
     if (st.nf) cell.numFmt = st.nf
     return cell
@@ -90,6 +90,7 @@ export async function workbookToGrid(buf: ArrayBuffer, fileName: string, opts: {
       f: [f.name ?? null, f.size ?? null, !!f.bold, !!f.italic, !!f.underline, colorOf(f.color as XColor)],
       a: [al.horizontal ?? null, al.vertical ? (al.vertical === 'middle' ? 'center' : al.vertical) : null, !!al.wrapText, al.textRotation === 'vertical' ? 255 : typeof al.textRotation === 'number' ? (al.textRotation < 0 ? 90 - al.textRotation : al.textRotation) : 0, 0],
       b: [edge(top as never), edge(right as never), edge(bottom as never), edge(left as never)],
+      ...(cell.border?.diagonal?.style && (cell.border.diagonal.up || cell.border.diagonal.down) ? { dg: { up: !!cell.border.diagonal.up, down: !!cell.border.diagonal.down, e: [cell.border.diagonal.style as string, colorOf(cell.border.diagonal.color as XColor) ?? '000000'] as [string, string] } } : {}),
       bg: fl && fl.type === 'pattern' && fl.pattern === 'solid' ? colorOf(fl.fgColor) : null,
       nf: cell.numFmt && cell.numFmt !== 'General' ? cell.numFmt : null,
     }

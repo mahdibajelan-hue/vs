@@ -1,6 +1,6 @@
 /** Frozen grid template of one approved Excel sheet (produced by scripts/xlsx-to-grid.py). Geometry and fixed texts are never edited at runtime. */
 export type Edge = [string, string] | null
-export interface GridStyle { f: [string | null, number | null, boolean, boolean, boolean, string | null]; a: [string | null, string | null, boolean, number, number]; b: [Edge, Edge, Edge, Edge]; bg: string | null; nf: string | null }
+export interface GridStyle { f: [string | null, number | null, boolean, boolean, boolean, string | null]; a: [string | null, string | null, boolean, number, number]; b: [Edge, Edge, Edge, Edge]; bg: string | null; nf: string | null; /** diagonal line(s) across the cell: up = bottom-left→top-right, down = top-left→bottom-right */ dg?: { up: boolean; down: boolean; e: [string, string] } }
 export interface GridCell { r: number; c: number; s: number; rs?: number; cs?: number; v?: string | null; formula?: string }
 export interface GridLogo { kind: 'pic' | 'shape' | 'error'; media: string | null; from?: [number, number]; to?: [number, number] | null; text: string | null }
 export interface GridTemplate {

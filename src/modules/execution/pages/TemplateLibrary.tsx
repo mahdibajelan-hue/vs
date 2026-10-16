@@ -24,6 +24,12 @@ function Inner({ projectId }: { projectId: string }) {
   const can = useExecutionStore((s) => s.can(projectId, '*') || s.can(projectId, 'configure'))
   const [fields, setFields] = useState<Record<string, { code: string; rev: string }>>({})
   const [busy, setBusy] = useState('')
+  // after a draft is saved the viewer jumps to it (otherwise the old version stays on screen and the change looks lost)
+  const savedDraft = async (formKey: string, title: string, layout: Parameters<typeof epc.saveTemplateDraft>[0]['layout'], bindings: Parameters<typeof epc.saveTemplateDraft>[0]['bindings']) => {
+    const ok = await epc.saveTemplateDraft({ formKey, title, layout, bindings })
+    if (ok) { const t = useEpcStore.getState().templates.filter((x) => x.formKey === formKey).sort((a, b) => b.version - a.version)[0]; if (t) setViewing((v) => ({ ...v, [formKey]: t.id })); window.alert(`نسخهٔ ${t?.version ?? ''} به‌صورت پیش‌نویس ثبت شد و نمایش داده می‌شود. برای اعمال در چاپ: «تأیید و فعال‌سازی» نسخه، سپس «تأیید نگاشت سلول‌ها».`) }
+    return ok
+  }
   const [nf, setNf] = useState({ key: '', title: '' })
   const [viewing, setViewing] = useState<Record<string, string>>({})
   const ex = useExecutionStore.getState()
@@ -52,9 +58,9 @@ function Inner({ projectId }: { projectId: string }) {
                     <option value="base">فایل اصلی همراه برنامه (ثبت‌نشده)</option>
                   </select></label>
                   {ver?.layout.adjusted && <span className="im-helper">این نسخه فقط از نظر ظاهر اصلاح شده است: {ver.layout.adjusted.ops.join(' · ')}</span>}
-                  <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout, bindings: bnd })} />
+                  <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout) => savedDraft(b.formKey, b.title, layout, bnd)} />
                   <details><summary className="im-helper">ویرایش در Excel (دریافت فایل ← ویرایش در آفیس ← بارگذاری)</summary>
-                    <OfficeRoundTrip key={`o${vid}`} formKey={b.formKey} title={b.title} base={lay} bindings={bnd} version={ver?.version ?? null} strict={b.renderer !== 'static'} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout, bindings: bnd })} />
+                    <OfficeRoundTrip key={`o${vid}`} formKey={b.formKey} title={b.title} base={lay} bindings={bnd} version={ver?.version ?? null} strict={b.renderer !== 'static'} canEdit={can} onSave={(layout) => savedDraft(b.formKey, b.title, layout, bnd)} />
                   </details>
                 </div>
               })()}
