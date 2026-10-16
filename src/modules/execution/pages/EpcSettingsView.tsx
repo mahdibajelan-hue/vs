@@ -1,3 +1,5 @@
+import { projectParties } from '../lib/projectParties'
+import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useEffect, useState } from 'react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useEpcStore } from '../store/useEpcStore'
@@ -28,7 +30,7 @@ function Inner({ projectId }: { projectId: string }) {
           <label key={k} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}><input type="radio" name="emp" disabled={!canCfg} checked={s.employerStep === k} onChange={() => void save({ employerStep: k })} /><span>{EMPLOYER_STEP_LABEL_FA[k]}</span></label>
         ))}</div>
       </Section>
-      <Parties parties={s.parties} can={canCfg} onSave={(parties) => save({ parties })} />
+      <Parties projectId={projectId} parties={s.parties} can={canCfg} onSave={(parties) => save({ parties })} />
       <IdentityCard identity={s.identity} can={canCfg} onSave={(identity) => save({ identity })} />
       <LegalView projectId={projectId} />
       <Section title="پارامترهای موتور بهره‌وری" hint="هر عدد در خروجی‌ها به‌عنوان فرض نمایش داده می‌شود">
@@ -53,8 +55,10 @@ function Inner({ projectId }: { projectId: string }) {
   )
 }
 
-function Parties({ parties, can, onSave }: { parties: Parties; can: boolean; onSave: (p: Parties) => Promise<boolean> }) {
+function Parties({ projectId, parties, can, onSave }: { projectId: string; parties: Parties; can: boolean; onSave: (p: Parties) => Promise<boolean> }) {
   const [msg, setMsg] = useState('')
+  const project = useMasterDataStore((x) => x.projects.find((p) => p.id === projectId)), orgs = useMasterDataStore((x) => x.organizations)
+  const base = projectParties(project, orgs)
   const set = async (who: keyof Parties, patch: Partial<Parties[keyof Parties]>) => { await onSave({ ...parties, [who]: { ...parties[who], ...patch } }) }
   const pick = async (who: keyof Parties, f: File) => {
     setMsg('')
@@ -72,7 +76,7 @@ function Parties({ parties, can, onSave }: { parties: Parties; can: boolean; onS
         {L.map(([k, label]) => (
           <div key={k} className="im-card" style={{ padding: 12, display: 'grid', gap: 8 }}>
             <b>{label}</b>
-            <input disabled={!can} placeholder="نام رسمی" defaultValue={parties[k].name} onBlur={(e) => { if (e.target.value !== parties[k].name) void set(k, { name: e.target.value }) }} dir="auto" aria-label={`نام رسمی ${label}`} />
+            {base[k] ? <input readOnly value={base[k]!.name} title="از اطلاعات پایهٔ پروژه؛ برای تغییر، اطلاعات پایه را اصلاح کنید" dir="auto" aria-label={`نام رسمی ${label}`} /> : <input disabled={!can} placeholder="نام رسمی (در اطلاعات پایه تعریف نشده)" defaultValue={parties[k].name} onBlur={(e) => { if (e.target.value !== parties[k].name) void set(k, { name: e.target.value }) }} dir="auto" aria-label={`نام رسمی ${label}`} />}
             <div style={{ height: 64, display: 'grid', placeItems: 'center', background: 'rgba(148,163,184,.1)', borderRadius: 8 }}>{parties[k].logo ? <img src={parties[k].logo} alt={`لوگوی ${label}`} style={{ maxHeight: 56, maxWidth: '90%', objectFit: 'contain' }} /> : <span className="im-helper">بدون لوگو</span>}</div>
             {can && <span style={{ display: 'flex', gap: 6 }}><label className="im-btn im-btn-sm" style={{ cursor: 'pointer' }}>بارگذاری<input type="file" accept={LOGO_TYPES.join(',')} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(k, f); e.target.value = '' }} /></label>{parties[k].logo && <button className="im-btn im-btn-sm" onClick={() => void set(k, { logo: '' })}>برداشتن</button>}</span>}
           </div>))}

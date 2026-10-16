@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
+import { projectParties } from '../lib/projectParties'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -15,6 +16,7 @@ export function DailyPage({ projectId, sub }: { projectId: string; sub: string }
   const ex = useExecutionStore()
   const ex0 = useExecutionStore.getState()
   const orgs = useMasterDataStore((s) => s.organizations)
+  const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
   const [open, setOpen] = useState<string | null>(null)
   const focus = useExecutionStore((x) => x.focusReportId)
   useEffect(() => { if (focus) { setOpen(focus); ex0.setFocus(null) } }, [focus]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -30,7 +32,7 @@ export function DailyPage({ projectId, sub }: { projectId: string; sub: string }
 
   const create = async (key: string) => {
     const front = m.settings.expectedFronts[0] ?? ''
-    const id = await ex.createReport({ projectId, formKey: key, reportDate: m.today, front, contractorOrgId: myOrg })
+    const id = await ex.createReport({ projectId, formKey: key, reportDate: m.today, front, contractorOrgId: projectParties(project, orgs).contractor?.id ?? myOrg })
     if (id) setOpen(id)
   }
   if (open) return <ReportEditor reportId={open} model={m} onClose={() => setOpen(null)} />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, FilePlus2, RefreshCw } from 'lucide-react'
+import { projectParties } from '../lib/projectParties'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -52,7 +53,8 @@ export function GapsPage({ projectId, onGo }: { projectId: string; sub: string; 
   const openN = all.filter(isOpen).length
   const overdue = all.filter((g) => isOpen(g) && g.dueDate && g.dueDate < m.today).length
   const unowned = all.filter((g) => isOpen(g) && !g.responsible).length
-  const orgOf = ex.roles.find((r) => r.projectId === projectId && r.active && r.organizationId)?.organizationId ?? orgs[0]?.id ?? null
+  const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
+  const orgOf = projectParties(project, orgs).contractor?.id ?? ex.roles.find((r) => r.projectId === projectId && r.active && r.organizationId)?.organizationId ?? orgs[0]?.id ?? null
 
   const generate = async (g: Gap) => {
     setBusy(true)

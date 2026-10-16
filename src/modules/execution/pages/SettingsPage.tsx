@@ -1,3 +1,4 @@
+import { FrontsEditor } from './FrontsEditor'
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
@@ -82,6 +83,7 @@ function RulesView({ projectId }: { projectId: string }) {
           <label>مهلت اخطار کتبی تأخیر (روز)<NumInput value={s.delayNoticeDays ?? 14} label="مهلت اخطار تأخیر" decimals={0} onCommit={(n) => can && save({ delayNoticeDays: n })} /></label>
         </div>
       </Section>
+      <FrontsEditor projectId={projectId} can={can} />
       <Section title="جبهه‌های موردانتظار گزارش روزانه" hint="برای هر روز کاری از این جبهه‌ها گزارش کارکرد انتظار می‌رود؛ نبودن آن «گزارش دریافت‌نشده» ثبت می‌شود. فهرست جبهه‌ها از «ماژول تأمین ← تنظیمات ← فهرست‌های پایه» می‌آید (مشترک، بدون تکرار).">
         {fronts.length === 0 ? <p className="im-helper" style={{ margin: 0 }}>هنوز جبهه‌ای تعریف نشده است.</p> : <span style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{fronts.map((f) => <label key={f.value} style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto' }} disabled={!can} checked={s.expectedFronts.includes(f.value)} onChange={(e) => save({ expectedFronts: e.target.checked ? [...s.expectedFronts, f.value] : s.expectedFronts.filter((x) => x !== f.value) })} />{f.label}</label>)}</span>}
       </Section>

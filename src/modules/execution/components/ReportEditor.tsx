@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Copy, History, Plus, Printer, Send, Trash2, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { projectParties } from '../lib/projectParties'
 import { useLookupOptions } from '../../material/lib/control/lookups'
 import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
 import { DecInput } from '../../material/components/control/DecInput'
@@ -39,6 +40,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === m.projectId))
+  const parties = projectParties(project, orgs)
   const r = m.reports.find((x) => x.id === reportId) as Report
   const form = r && r.formKey !== 'work' ? FORM_BY_KEY[r.formKey] ?? null : null
   const mm = useMaterialModel(m.projectId)
@@ -46,7 +48,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const frontOpts = useLookupOptions(m.projectId, 'front', r?.front)
   const stationOpts = useLookupOptions(m.projectId, 'facility', r?.station)
 
-  const [head, setHead] = useState(() => ({ reportDate: r?.reportDate ?? m.today, front: r?.front ?? '', station: r?.station ?? '', shift: r?.shift ?? 'day', contractorOrgId: r?.contractorOrgId ?? '', notes: r?.notes ?? '' }))
+  const [head, setHead] = useState(() => ({ reportDate: r?.reportDate ?? m.today, front: r?.front ?? '', station: r?.station ?? '', shift: r?.shift ?? 'day', contractorOrgId: r?.contractorOrgId ?? projectParties(project, orgs).contractor?.id ?? '', notes: r?.notes ?? '' }))
   const [data, setData] = useState<Record<string, unknown>>(() => ({ ...(r?.data ?? {}) }))
   const [rows, setRows] = useState<LRow[]>(() => (m.linesByReport.get(reportId) ?? []).map((l) => ({ key: l.id, id: l.id, activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: { ...l.detail }, status: l.status, approvedQty: l.approvedQty, reviewNote: l.reviewNote, sourceReportId: l.sourceReportId })))
   const [res, setRes] = useState<ResRow[]>(() => mergeCatalog(m.resources.filter((x) => x.reportId === reportId).map(toRow)))
@@ -214,7 +216,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>
-          <label>پیمانکار *<select disabled={!editable} value={head.contractorOrgId} onChange={(e) => setH('contractorOrgId', e.target.value)}><option value="">—</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+          {parties.contractor && head.contractorOrgId === parties.contractor.id
+            ? <label>پیمانکار<input readOnly value={parties.contractor.name} title="از اطلاعات پایهٔ پروژه" dir="auto" /></label>
+            : <label>پیمانکار *<select disabled={!editable} value={head.contractorOrgId} onChange={(e) => setH('contractorOrgId', e.target.value)}><option value="">—</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{!parties.contractor && <small className="im-helper">پیمانکار پروژه در «اطلاعات پایه» تعریف نشده است.</small>}</label>}
           <label>جبهه کاری *<select disabled={!editable} value={head.front} onChange={(e) => setH('front', e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>ایستگاه / محدوده<select disabled={!editable} value={head.station} onChange={(e) => setH('station', e.target.value)}><option value="">—</option>{stationOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>شیفت<select disabled={!editable} value={head.shift} onChange={(e) => setH('shift', e.target.value)}><option value="day">روز</option><option value="night">شب</option></select></label>
