@@ -8,6 +8,9 @@ import { Chip, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { WelderProfile } from '../components/WelderProfile'
+import { useExecutionModel } from '../lib/useExecutionModel'
+import { monthOf } from '../lib/periods'
+import { rankWelders, welderQuality } from '../lib/welderQuality'
 
 const ST_FA = { active: 'فعال', suspended: 'معلق', left: 'ترک کار' } as const
 const today = () => new Date().toISOString().slice(0, 10)
@@ -28,6 +31,18 @@ function Inner({ projectId }: { projectId: string }) {
   const [adding, setAdding] = useState(false)
   const [nw, setNw] = useState({ raw: '', fullName: '', nationalId: '' })
   const [q, setQ] = useState('')
+  const [period, setPeriod] = useState('ALL')
+  const [minTested, setMinTested] = useState(5)
+  const m = useExecutionModel(projectId)
+  // repair % per welder per month, from the quality records (welding + radiography rows of reports that are in the system, not drafts)
+  const quality = useMemo(() => {
+    const rep = new Map(m.reports.filter((r) => !['draft', 'rejected', 'returned', 'incomplete'].includes(r.status)).map((r) => [r.id, r]))
+    const rows = m.lines.flatMap((l) => { const r = rep.get(l.reportId); return r && (r.formKey === 'welding' || r.formKey === 'tie_in' || r.formKey === 'rt_report') ? [{ formKey: r.formKey, date: r.reportDate, detail: l.detail }] : [] })
+    return welderQuality(rows, (iso) => { const p = monthOf(iso); return { key: p.key, label: p.label } })
+  }, [m.lines, m.reports])
+  const ranks = useMemo(() => rankWelders(quality, period, minTested), [quality, period, minTested])
+  const monthsAll = useMemo(() => { const set = new Map<string, string>(); for (const v of quality.values()) for (const x of v.months) set.set(x.key, x.label); return [...set].sort((a, b) => b[0].localeCompare(a[0])) }, [quality])
+  const curMonth = monthOf(new Date().toISOString().slice(0, 10)).key
   const all = useMemo(() => epc.welders.filter((w) => w.projectId === projectId), [epc.welders, projectId])
   const list = useMemo(() => all.filter((w) => w.kind === kind && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q])
   const testsOf = (id: string) => epc.quals.filter((x) => x.welderId === id)
@@ -60,14 +75,26 @@ function Inner({ projectId }: { projectId: string }) {
         </Section>
       )}
       {list.length === 0 ? <Empty>هنوز {KIND_FA[kind]}ی ثبت نشده است.</Empty> : (
-        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th>{kind === 'welder' && <th>آزمون</th>}<th>کارت</th><th>وضعیت</th></tr></thead>
+        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th>{kind === 'welder' && <th>آزمون</th>}<th>کارت</th>{kind === 'welder' && <><th className="num">٪ ریپیر ماه جاری</th><th className="num">رتبه</th></>}<th>وضعیت</th></tr></thead>
           <tbody>{list.map((w) => { const st = stateOf(w); return (
             <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
               <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td>{kind === 'welder' && <td>{testChip(w)}</td>}
               <td><Chip tone={ST_CHIP[st].tone}>{w.cardStatus === 'issued' ? `${ST_CHIP[st].label} · ${w.cardNo}` : ST_CHIP[st].label}</Chip></td>
+              {kind === 'welder' && (() => { const qv = quality.get(w.key), cm = qv?.months.find((x) => x.key === curMonth), rk = ranks.get(w.key); return <><td className="num">{cm ? `${fa(cm.rate, 1)}٪` : '—'}</td><td className="num">{rk?.rank ? fa(rk.rank) : '—'}</td></> })()}
               <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>
       )}
-      {cur ? <WelderProfile w={cur} projectId={projectId} can={can} tests={testsOf(cur.id) as WelderQual[]} projectName={projectName} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
+      {cur ? <WelderProfile w={cur} projectId={projectId} can={can} tests={testsOf(cur.id) as WelderQual[]} projectName={projectName} quality={quality.get(cur.key)} rank={rankWelders(quality, 'ALL', minTested).get(cur.key)} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
+      {kind === 'welder' && quality.size > 0 && (
+        <Section title="رتبه‌بندی جوشکاران بر اساس ریپیر" hint="رتبهٔ ۱ = کمترین درصد ریپیر. درصد ریپیر از نتیجهٔ اولین RT هر سرجوش در سامانهٔ کیفیت محاسبه می‌شود؛ کسی که سرجوش RT‌شدهٔ کافی ندارد رتبه نمی‌گیرد.">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="دوره"><option value="ALL">کل دوره</option>{monthsAll.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>حداقل سرجوش دارای RT برای رتبه<input type="number" min={1} value={minTested} onChange={(e) => setMinTested(Math.max(1, Number(e.target.value) || 1))} style={{ width: 70 }} /></label>
+          </div>
+          <div className="fn-tbl-wrap" style={{ maxHeight: 360 }}><table className="ex-lines"><thead><tr><th className="num">رتبه</th><th>نشانه</th><th>نام</th><th className="num">سرجوش دارای RT</th><th className="num">ریپیر</th><th className="num">٪ ریپیر</th><th className="num">نمره</th></tr></thead>
+            <tbody>{[...ranks].map(([k, r]) => ({ k, r, w: all.find((x) => x.key === k && x.kind === 'welder') })).filter((x) => x.r.tested > 0).sort((a, b) => (a.r.rank ?? 1e9) - (b.r.rank ?? 1e9) || b.r.tested - a.r.tested).map(({ k, r, w }) => (
+              <tr key={k} onClick={() => w && setSel(w.id)} style={{ cursor: w ? 'pointer' : undefined, opacity: r.rank ? 1 : 0.6 }}><td className="num"><b>{r.rank ? fa(r.rank) : '—'}</b></td><td dir="ltr">{w?.raw ?? k}{!w && <small className="sub"> (در رجیستر نیست)</small>}</td><td>{w?.fullName || '—'}</td><td className="num">{fa(r.tested)}</td><td className="num">{fa(r.repaired)}</td><td className="num">{fa(r.rate, 1)}٪</td><td className="num">{r.score != null ? fa(r.score, 1) : '—'}</td></tr>))}</tbody></table></div>
+        </Section>
+      )}
       <ScanBox people={all} onFound={(w) => { setKind(w.kind); setSel(w.id) }} stateOf={stateOf} />
       {canCfg && <SignerSettings projectId={projectId} />}
     </div>

@@ -12,6 +12,7 @@ import { fa } from './common'
 import { IdCard } from './IdCard'
 import { jdLatin, photoFromFile } from './PersonSheet'
 import { cardPayload } from '../lib/registers'
+import type { Rank, WelderQuality } from '../lib/welderQuality'
 
 function Field({ f, v, set, dis }: { f: PField; v: string; set: (x: string) => void; dis: boolean }) {
   if (f.kind === 'multi') {
@@ -47,7 +48,7 @@ function SignSlot({ label, sig, expected, mine, canSign, onSign, disabledWhy, bu
   )
 }
 
-export function WelderProfile({ w, projectId, can, tests, projectName }: { w: Welder; projectId: string; can: boolean; tests: WelderQual[]; projectName: string }) {
+export function WelderProfile({ w, projectId, can, tests, projectName, quality, rank }: { w: Welder; projectId: string; can: boolean; tests: WelderQual[]; projectName: string; quality?: WelderQuality; rank?: Rank }) {
   const epc = useEpcStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const me = useAuthStore((s) => s.profile?.id)
@@ -158,6 +159,22 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
         )}
         {w.cardStatus === 'issued' && <IdCard kind={w.kind} data={data} photo={w.photo} cardNo={w.cardNo} projectName={projectName} payload={cardPayload(w.cardNo, w.raw)} sigA={w.cardSignA} sigB={w.cardSignB} labelA="Site Head" labelB="Supervision Head" />}
       </Step>
+      {w.kind === 'welder' && (
+        <Step n={4} title="عملکرد کیفیت (از سامانهٔ کیفیت)" state={rank?.rank ? <Chip tone={rank.rank <= Math.max(1, Math.ceil(rank.of / 3)) ? 'good' : rank.rank > Math.ceil((rank.of * 2) / 3) ? 'bad' : 'neutral'}>رتبه {fa(rank.rank)} از {fa(rank.of)} · نمره {fa(rank.score ?? 0, 1)}</Chip> : <Chip tone="neutral">بدون رتبه (نمونهٔ کم)</Chip>}>
+          {!quality || quality.tested === 0 ? <p className="im-helper" style={{ margin: 0 }}>هنوز سرجوشی از این جوشکار رادیوگرافی نشده است. درصد ریپیر خودکار از گزارش‌های جوشکاری و رادیوگرافی محاسبه می‌شود و جایی تایپ نمی‌شود.</p> : (
+            <>
+              <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+                <div><div className="sub">ریپیر کل دوره</div><b style={{ fontSize: 22 }}>{fa(quality.rate, 1)}٪</b></div>
+                <div><div className="sub">سرجوش دارای RT</div><b style={{ fontSize: 22 }}>{fa(quality.tested)}</b></div>
+                <div><div className="sub">نیازمند تعمیر</div><b style={{ fontSize: 22 }}>{fa(quality.repaired)}</b></div>
+              </div>
+              <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>ماه</th><th className="num">سرجوش دارای RT</th><th className="num">ریپیر</th><th className="num">٪ ریپیر</th><th style={{ width: '30%' }} /></tr></thead>
+                <tbody>{[...quality.months].reverse().map((m) => <tr key={m.key}><td>{m.label}</td><td className="num">{fa(m.tested)}</td><td className="num">{fa(m.repaired)}</td><td className="num"><b>{fa(m.rate, 1)}٪</b></td><td><div style={{ height: 8, borderRadius: 4, background: 'rgba(148,163,184,.25)' }}><div style={{ height: 8, borderRadius: 4, width: `${Math.min(100, m.rate)}%`, background: m.rate <= 5 ? '#10b981' : m.rate <= 10 ? '#f59e0b' : '#ef4444' }} /></div></td></tr>)}</tbody></table></div>
+              <p className="im-helper" style={{ margin: 0 }}>روش: نتیجهٔ اولین RT هر سرجوش (در ماه همان RT) به همهٔ جوشکاران نام‌برده در ردیف جوشکاری آن سرجوش نسبت داده می‌شود؛ RT مجدد پس از تعمیر دوباره شمرده نمی‌شود. نمره = ۱۰۰ − ٪ ریپیر.</p>
+            </>
+          )}
+        </Step>
+      )}
       {w.cardIssuedAt && <p className="im-helper" style={{ margin: 0 }}>تاریخ صدور: {fmtD(w.cardIssuedAt.slice(0, 10))}</p>}
     </div>
   )
