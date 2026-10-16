@@ -101,3 +101,13 @@ export function findByCode<T extends { key: string; cardNo: string; nationalId?:
   const k = registerKey(code); if (!k) return undefined
   return people.find((p) => p.key === k) ?? people.find((p) => p.cardNo && registerKey(p.cardNo) === k) ?? people.find((p) => p.nationalId && registerKey(p.nationalId) === k)
 }
+
+/** What a QR / barcode reader delivers: a card's payload «RASTA|<WC|WA>|<card no>|<stamp>» or a plain number. Returns the plain stamp when it is a card payload. */
+export const QR_PREFIX = 'RASTA'
+export const cardPayload = (cardNo: string, stamp: string) => `${QR_PREFIX}|WC|${cardNo}|${stamp}`
+export function scanTokens(text: string): string[] {
+  const t = text.trim(); if (!t) return []
+  return t.startsWith(`${QR_PREFIX}|`) ? t.split('|').slice(2).reverse() : [t] // the stamp first, then the card number
+}
+/** value to put in a welder field when a scanner typed `text` (a card payload gives the stamp, anything else is kept) */
+export const fromScan = (text: string): string => (text.trim().startsWith(`${QR_PREFIX}|`) ? scanTokens(text)[0] ?? text : text)

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey, findByCode } from './registers.ts'
+import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey, findByCode, cardPayload, scanTokens, fromScan } from './registers.ts'
 import { weldLifecycle } from './weldLifecycle.ts'
 
 const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, cardNo: '', cardIssuedAt: null, cardIssuedBy: null, createdBy: null, cardSignA: null, cardSignB: null })
@@ -49,4 +49,5 @@ assert.equal(r.state, 'needs_repair')
 const people = [{ key: 'A12', cardNo: 'WLD-0001', nationalId: '146-122037-8' }, { key: 'B5', cardNo: '' }]
 assert.equal(findByCode('146-122037-8', people).key, 'A12')
 assert.equal(findByCode('a12', people).key, 'A12'); assert.equal(findByCode('wld-0001', people).key, 'A12'); assert.equal(findByCode('Z1', people), undefined); assert.equal(findByCode('  ', people), undefined)
+assert.equal(cardPayload('WLD-0001', '35'), 'RASTA|WC|WLD-0001|35'); assert.deepEqual(scanTokens('RASTA|WC|WLD-0001|35'), ['35', 'WLD-0001']); assert.equal(fromScan('RASTA|WC|WLD-0001|35'), '35'); assert.equal(fromScan('A12'), 'A12')
 console.log('registers + weld lifecycle: all assertions passed')

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
-import { findByCode, type Welder, type WelderQual } from '../lib/registers'
+import { findByCode, scanTokens, type Welder, type WelderQual } from '../lib/registers'
 import { KIND_FA, type PersonKind } from '../lib/personnelForms'
 import { Chip, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
@@ -80,7 +80,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   const [res, setRes] = useState<{ w?: Welder; code: string } | null>(null)
   const [cam, setCam] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
-  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = findByCode(v, people); setRes({ w, code: v }); if (w) onFound(w); setCode('') }
+  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = scanTokens(v).map((t) => findByCode(t, people)).find(Boolean); setRes({ w, code: v }); if (w) onFound(w); setCode('') }
   useEffect(() => {
     if (!cam) return
     let stop = false, stream: MediaStream | null = null
@@ -98,9 +98,9 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   }, [cam]) // eslint-disable-line react-hooks/exhaustive-deps
   const hasCam = typeof window !== 'undefined' && 'BarcodeDetector' in window
   return (
-    <Section title="اسکن بارکد کارت / پلاک">
+    <Section title="اسکن QR کارت">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input dir="ltr" autoComplete="off" placeholder="بارکد را اسکن کنید یا شناسه را بنویسید و Enter بزنید" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); look(code) } }} style={{ minWidth: 280 }} aria-label="اسکن بارکد" />
+        <input dir="ltr" autoComplete="off" placeholder="QR کارت را اسکن کنید یا نشانه/کد ملی را بنویسید و Enter بزنید" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); look(code) } }} style={{ minWidth: 280 }} aria-label="اسکن بارکد" />
         <button className="im-btn im-btn-sm" onClick={() => look(code)}>جست‌وجو</button>
         {hasCam ? <button className="im-btn im-btn-sm" onClick={() => setCam((x) => !x)}>{cam ? 'بستن دوربین' : 'اسکن با دوربین'}</button> : <span className="sub">دوربین‌خوان در این مرورگر نیست؛ از اسکنر دستی استفاده کنید.</span>}
       </div>
@@ -123,7 +123,7 @@ function SignerSettings({ projectId }: { projectId: string }) {
   const ex = useExecutionStore()
   const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === projectId && t.userId)
   const cur = ((ex.settingsByProject.get(projectId) as unknown as { personnelSigners?: Record<string, string> } | undefined)?.personnelSigners ?? {}) as Record<string, string>
-  const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
+  const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون جوشکار)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون جوشکار)'], ['coat_supervisor', 'ناظر (آزمون عایق‌کار)'], ['coat_contractor', 'نماینده پیمانکار (آزمون عایق‌کار)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
   return (
     <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت</summary>
       <div className="ex-sheet-grid" style={{ marginTop: 8 }}>{slots.map(([k, l]) => (

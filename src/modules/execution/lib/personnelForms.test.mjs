@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { WQT_FIELDS, WQT_GROUPS, wqtDefaults, testProblems, cardData, validityText } from './personnelForms.ts'
+import { WQT_FIELDS, WQT_GROUPS, wqtDefaults, testProblems, cardData, validityText, testConfig, COATER_SCOPE } from './personnelForms.ts'
 // every field belongs to exactly one group (nothing hidden, nothing asked twice)
 const grouped = WQT_GROUPS.flatMap((g) => g.keys)
 assert.deepEqual([...grouped].sort(), WQT_FIELDS.map((f) => f.key).sort())
@@ -14,6 +14,15 @@ assert.equal(d.nationalId, '146-122037-8'); assert.equal(d.stamp, '35'); assert.
 assert.deepEqual(d.rows.find((r) => r[0] === 'Test Date'), ['Test Date', '2026/05/01']); assert.deepEqual(d.rows.find((r) => r[0] === 'Type Manual'), ['Type Manual', 'DCEP'])
 assert.deepEqual(d.dirs, { fill: 'down', root: 'down' }); assert.deepEqual(d.table[0], ['WQT NO', '36'])
 assert.equal(validityText('2027-01-01', (x) => `J${x}`), 'J2027-01-01'); assert.equal(validityText(''), '')
-const c = cardData({ kind: 'coater', fullName: 'Reza', nationalId: '1', raw: 'C1', card: { sys: 'Sleeve', size: '30"' } }, undefined)
-assert.equal(c.title, 'COATING APPLICATOR QUALIFICATION CARD'); assert.equal(c.rows.length, 2)
+// coating applicator: test = the field-joint coating test sheet; the card lists the work he may do
+{
+  const cfg = testConfig('coater'), g = cfg.groups.flatMap((x) => x.keys)
+  assert.deepEqual([...g].sort(), cfg.fields.map((f) => f.key).sort()); assert.equal(new Set(g).size, g.length)
+  assert.equal(testProblems({ wqtNo: '1', testDate: '2026-01-01', qualified: 'YES' }, 'coater').length, 1) // qualified without a scope
+  assert.equal(testProblems({ wqtNo: '1', testDate: '2026-01-01', qualified: 'YES', scope: 'FJC-HS' }, 'coater').length, 0)
+  assert.equal(testProblems({ wqtNo: '1', testDate: '2026-01-01', qualified: 'NO' }, 'coater').length, 0)
+  const c = cardData({ kind: 'coater', fullName: 'Reza', nationalId: '1', raw: 'C1', card: { validity: '2027-01-01' } }, { wqtNo: 'T1', sys: 'Heat-shrink sleeve', size: '30"', scope: 'FJC-HS,PATCH', adhPipe: '12', voltage: '25' })
+  assert.equal(c.title, 'COATING APPLICATOR QUALIFICATION CARD'); assert.deepEqual(c.scope, ['Field joint — heat-shrink sleeve', 'Closure patch'])
+  assert.ok(c.rows.some((r) => r[0] === 'Test No' && r[1] === 'T1')); assert.ok(COATER_SCOPE.length === 4)
+}
 console.log('personnel forms: all assertions passed')

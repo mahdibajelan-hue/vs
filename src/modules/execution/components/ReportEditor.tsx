@@ -30,7 +30,7 @@ import { attrOfKey, centralKey } from '../lib/weldCentral'
 import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { SheetEntry } from './SheetEntry'
-import { WELDER_FIELDS, checkPipeCell, checkWelderCell, isPipeField, isWelderField, pipeFillPatch, registerKey, splitStamps, welderQualified } from '../lib/registers'
+import { WELDER_FIELDS, fromScan, checkPipeCell, checkWelderCell, isPipeField, isWelderField, pipeFillPatch, registerKey, splitStamps, welderQualified } from '../lib/registers'
 import { epcSettings } from '../lib/epcSettings'
 import { GRID_SPECS } from '../forms/gridSpecs'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
@@ -293,7 +293,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     }
     const auto = autoFilled[l.key]?.includes(f.key)
     const badReg = isWelderField(f.key) ? (welderList.length ? (() => { const c = checkWelderCell(v, welderList); return c.unknown.length || c.blocked.length })() : 0) : isPipeField(f.key) && pipeList.length && form?.key !== 'pipe_entry' ? (() => { const c = checkPipeCell(v, pipeList); return c.unknown || c.bad ? 1 : 0 })() : 0
-    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : isWelderField(f.key) ? 'ex-hint-welder' : undefined} title={badReg ? 'در رجیستر ثبت نشده یا فعال نیست' : auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={badReg ? { outline: '2px solid #ef4444', outlineOffset: -1 } : auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
+    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} onKeyDown={isWelderField(f.key) ? (e) => { if (e.key === 'Enter') { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) { e.preventDefault(); onText(x) } } } : undefined} onBlur={isWelderField(f.key) ? (e) => { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) onText(x) } : undefined} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : isWelderField(f.key) ? 'ex-hint-welder' : undefined} title={badReg ? 'در رجیستر ثبت نشده یا فعال نیست' : auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={badReg ? { outline: '2px solid #ef4444', outlineOffset: -1 } : auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
   }
   const headField = (f: FieldDef) => (
     <label key={f.key} className={f.wide ? 'wide' : undefined}>{f.label}{f.req ? ' *' : ''}

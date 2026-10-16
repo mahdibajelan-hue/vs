@@ -5,15 +5,23 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
-import { COATER_CARD_FIELDS, KIND_FA, WELDER_CARD_EXTRA, WQT_FIELDS, WQT_GROUPS, cardData, testProblems, wqtDefaults, type PField } from '../lib/personnelForms'
+import { COATER_CARD_FIELDS, COATER_SCOPE, KIND_FA, WELDER_CARD_EXTRA, cardData, testConfig, testProblems, type PField } from '../lib/personnelForms'
 import type { PersonSig, Welder, WelderQual } from '../lib/registers'
 import { Chip, fmtD } from '../../finance/components/fn'
 import { fa } from './common'
 import { IdCard } from './IdCard'
 import { jdLatin, photoFromFile } from './PersonSheet'
-import { code39Supported } from '../lib/code39'
+import { cardPayload } from '../lib/registers'
 
 function Field({ f, v, set, dis }: { f: PField; v: string; set: (x: string) => void; dis: boolean }) {
+  if (f.kind === 'multi') {
+    const on = new Set(v.split(',').filter(Boolean))
+    return (
+      <div className="wide" style={{ display: 'grid', gap: 4 }}><span>{f.label}</span>
+        {COATER_SCOPE.map((o) => <label key={o.value} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto' }} disabled={dis} checked={on.has(o.value)} onChange={(e) => { const n = new Set(on); if (e.target.checked) n.add(o.value); else n.delete(o.value); set(COATER_SCOPE.filter((x) => n.has(x.value)).map((x) => x.value).join(',')) }} />{o.label}</label>)}
+      </div>
+    )
+  }
   return (
     <label className={f.wide ? 'wide' : undefined}>{f.label}
       {f.kind === 'select' ? <select disabled={dis} value={v} onChange={(e) => set(e.target.value)}>{f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
@@ -58,27 +66,27 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
   const idDirty = id.fullName !== w.fullName || id.nationalId !== w.nationalId || (id.orgId || null) !== w.orgId || id.status !== w.status || photo !== w.photo
 
   // ── 2. test (welders only)
+  const cfg = testConfig(w.kind)
   const sorted = useMemo(() => [...tests].sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? '')), [tests])
   const [tid, setTid] = useState('')
   const cur = sorted.find((t) => t.id === tid) ?? sorted[0]
   const [fresh, setFresh] = useState(false)
-  const base = (t?: WelderQual) => ({ ...wqtDefaults(), ...(t?.wqt ?? {}) } as Record<string, string>)
+  const base = (t?: WelderQual) => ({ ...cfg.defaults, ...(t?.wqt ?? {}) } as Record<string, string>)
   const [d, setD] = useState<Record<string, string>>(base(cur))
   useEffect(() => { setD(base(fresh ? undefined : cur)) }, [cur?.id, cur?.wqt, fresh]) // eslint-disable-line react-hooks/exhaustive-deps
   const testLocked = !fresh && cur?.wqtStatus === 'confirmed'
   const testDirty = fresh ? true : JSON.stringify(d) !== JSON.stringify(base(cur))
-  const tProblems = testProblems(d)
+  const tProblems = testProblems(d, w.kind)
   const qualifying = useMemo(() => sorted.find((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid'), [sorted])
 
   // ── 3. card
-  const extraFields = w.kind === 'welder' ? WELDER_CARD_EXTRA : COATER_CARD_FIELDS
+  const extraFields: PField[] = w.kind === 'welder' ? WELDER_CARD_EXTRA : COATER_CARD_FIELDS
   const cardBase = () => Object.fromEntries(extraFields.filter((f) => f.def).map((f) => [f.key, f.def as string])) as Record<string, string>
   const [card, setCard] = useState<Record<string, string>>({ ...cardBase(), ...w.card })
   useEffect(() => setCard({ ...cardBase(), ...w.card }), [w.id, w.card]) // eslint-disable-line react-hooks/exhaustive-deps
   const cardDirty = JSON.stringify(card) !== JSON.stringify({ ...cardBase(), ...w.card })
   const data = cardData({ kind: w.kind, fullName: w.fullName, nationalId: w.nationalId, raw: w.raw, card: w.card }, qualifying?.wqt, jdLatin)
-  const cardReady = w.kind === 'coater' || !!qualifying
-  const barcode = code39Supported(w.raw.toUpperCase()) ? w.raw.toUpperCase() : w.cardNo
+  const cardReady = !!qualifying
   const validityMode = card.validity === 'END' ? 'END' : card.validity ? 'DATE' : ''
 
   return (
@@ -101,15 +109,15 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
         {can && idDirty && <div><button className="im-btn im-btn-primary im-btn-sm" onClick={() => void epc.saveWelder({ ...w, projectId, raw: w.raw, fullName: id.fullName, nationalId: id.nationalId, orgId: id.orgId || null, status: id.status, photo, card: w.card })}>ذخیرهٔ مشخصات</button></div>}
       </Step>
 
-      {w.kind === 'welder' && (
-        <Step n={2} title="فرم آزمون صلاحیت (WQT)" state={cur && !fresh ? <Chip tone={cur.wqtStatus === 'confirmed' ? 'good' : 'warn'}>{cur.wqtStatus === 'confirmed' ? (cur.wqt.qualified === 'YES' ? 'تأیید شد — واجد صلاحیت' : 'تأیید شد — فاقد صلاحیت') : 'پیش‌نویس'}</Chip> : <Chip tone="warn">آزمون جدید</Chip>}>
+      {(
+        <Step n={2} title={w.kind === 'welder' ? 'فرم آزمون صلاحیت (WQT)' : 'آزمون صلاحیت عایق‌کار (تست پوشش سرجوش)'} state={cur && !fresh ? <Chip tone={cur.wqtStatus === 'confirmed' ? 'good' : 'warn'}>{cur.wqtStatus === 'confirmed' ? (cur.wqt.qualified === 'YES' ? 'تأیید شد — واجد صلاحیت' : 'تأیید شد — فاقد صلاحیت') : 'پیش‌نویس'}</Chip> : <Chip tone="warn">آزمون جدید</Chip>}>
           {(sorted.length > 0 || fresh) && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {sorted.map((t) => <button key={t.id} className={`im-btn im-btn-sm${!fresh && cur?.id === t.id ? ' im-btn-primary' : ''}`} onClick={() => { setFresh(false); setTid(t.id) }}>آزمون {t.wqtNo || 'بدون شماره'}</button>)}
             {can && !fresh && <button className="im-btn im-btn-sm" onClick={() => setFresh(true)}>+ آزمون جدید</button>}
             {fresh && sorted.length > 0 && <button className="im-btn im-btn-sm" onClick={() => setFresh(false)}>انصراف</button>}
           </div>}
-          {WQT_GROUPS.map((g) => {
-            const fields = g.keys.map((k) => WQT_FIELDS.find((f) => f.key === k)!)
+          {cfg.groups.map((g) => {
+            const fields = g.keys.map((k) => cfg.fields.find((f) => f.key === k)!)
             const grid = <div className="ex-sheet-grid">{fields.map((f) => <Field key={f.key} f={f} v={d[f.key] ?? ''} set={(x) => setD({ ...d, [f.key]: x })} dis={!can || testLocked} />)}</div>
             return g.folded ? <details key={g.title}><summary className="im-helper">{g.title}</summary>{grid}</details> : <div key={g.title}><div className="im-helper" style={{ margin: '0 0 4px', fontWeight: 700 }}>{g.title}</div>{grid}</div>
           })}
@@ -117,18 +125,18 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
           {can && !testLocked && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!testDirty || !w.fullName} title={!w.fullName ? 'ابتدا نام جوشکار را ذخیره کنید' : undefined} onClick={async () => { const sid = await epc.saveQual({ id: fresh ? undefined : cur?.id, projectId, welderId: w.id, wqt: { ...d, welderName: w.fullName, welderId: w.nationalId, stamp: w.raw } }); if (sid) { setFresh(false); setTid(sid) } }}>ذخیرهٔ فرم آزمون</button></div>}
           {cur && !fresh && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <SignSlot label="ناظر جوش" sig={cur.wqtSignA} expected={who('weld_inspector')} mine={mine('weld_inspector')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'a')} />
-              <SignSlot label="مفسر عیوب جوش" sig={cur.wqtSignB} expected={who('defect_interpreter')} mine={mine('defect_interpreter')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'b')} />
+              <SignSlot label={w.kind === 'welder' ? 'ناظر جوش' : 'ناظر'} sig={cur.wqtSignA} expected={who(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} mine={mine(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'a')} />
+              <SignSlot label={w.kind === 'welder' ? 'مفسر عیوب جوش' : 'نماینده پیمانکار'} sig={cur.wqtSignB} expected={who(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} mine={mine(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'b')} />
               {canReview && cur.wqtStatus === 'confirmed' && <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('آزمون بازگشایی و امضاها پاک شود؟')) void epc.personReopen('wqt', cur.id) }}><Undo2 size={13} /> بازگشایی</button>}
             </div>
           )}
         </Step>
       )}
 
-      <Step n={w.kind === 'welder' ? 3 : 2} title={`کارت صلاحیت ${KIND_FA[w.kind]}`} state={<Chip tone={w.cardStatus === 'issued' ? 'good' : 'warn'}>{w.cardStatus === 'issued' ? `صادر شد · ${w.cardNo}` : 'صادر نشده'}</Chip>}>
-        {!cardReady ? <p className="im-helper" style={{ margin: 0 }}>کارت پس از تأیید آزمون با نتیجهٔ «YES» صادر می‌شود. نام، کد ملی، فرایند، وضعیت جوش، الکترود و محدودهٔ صلاحیت از همان آزمون خوانده می‌شود و دوباره پرسیده نمی‌شود.</p> : (
+      <Step n={3} title={`کارت صلاحیت ${KIND_FA[w.kind]}`} state={<Chip tone={w.cardStatus === 'issued' ? 'good' : 'warn'}>{w.cardStatus === 'issued' ? `صادر شد · ${w.cardNo}` : 'صادر نشده'}</Chip>}>
+        {!cardReady ? <p className="im-helper" style={{ margin: 0 }}>کارت پس از تأیید آزمون (دو امضا) با نتیجهٔ «YES» صادر می‌شود. {w.kind === 'welder' ? 'فرایند، وضعیت جوش، الکترود و محدودهٔ صلاحیت' : 'سیستم پوشش و نوع عایق‌کاری مجاز'} از همان آزمون خوانده می‌شود و دوباره پرسیده نمی‌شود.</p> : (
           <>
-            {w.kind === 'welder' && qualifying && <p className="im-helper" style={{ margin: 0 }}>از آزمون {qualifying.wqtNo}: {data.rows.slice(0, 5).map(([k, v]) => `${k} ${v}`).join(' · ')}</p>}
+            {qualifying && <p className="im-helper" style={{ margin: 0 }}>از آزمون {qualifying.wqtNo}: {data.scope?.length ? `${data.scope.join('، ')} · ` : ''}{data.rows.slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ')}</p>}
             <div className="ex-sheet-grid">
               <label>اعتبار کارت *<select disabled={!can || locked} value={validityMode} onChange={(e) => setCard({ ...card, validity: e.target.value === 'END' ? 'END' : e.target.value === 'DATE' ? new Date().toISOString().slice(0, 10) : '' })}><option value="">—</option><option value="END">تا پایان پروژه</option><option value="DATE">تا تاریخ مشخص</option></select></label>
               {validityMode === 'DATE' && <label>تاریخ انقضا<JalaliDateInput value={card.validity} onChange={(x) => !locked && setCard({ ...card, validity: x })} /></label>}
@@ -143,7 +151,7 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
             {canReview && locked && <div><button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('کارت بازگشایی شود؟ امضاها پاک می‌شود و کارت تا امضای دوبارهٔ دو سرپرست معتبر نیست.')) void epc.personReopen('card', w.id) }}><Undo2 size={13} /> بازگشایی کارت</button></div>}
           </>
         )}
-        {w.cardStatus === 'issued' && <IdCard kind={w.kind} data={data} photo={w.photo} cardNo={w.cardNo} projectName={projectName} barcodeText={barcode} sigA={w.cardSignA} sigB={w.cardSignB} labelA="Site Head" labelB="Supervision Head" />}
+        {w.cardStatus === 'issued' && <IdCard kind={w.kind} data={data} photo={w.photo} cardNo={w.cardNo} projectName={projectName} payload={cardPayload(w.cardNo, w.raw)} sigA={w.cardSignA} sigB={w.cardSignB} labelA="Site Head" labelB="Supervision Head" />}
       </Step>
       {w.cardIssuedAt && <p className="im-helper" style={{ margin: 0 }}>تاریخ صدور: {fmtD(w.cardIssuedAt.slice(0, 10))}</p>}
     </div>
