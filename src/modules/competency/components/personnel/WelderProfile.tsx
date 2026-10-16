@@ -45,7 +45,16 @@ function SignSlot({ label, sig, expected, mine, canSign, onSign, disabledWhy, bu
   )
 }
 
-export function WelderProfile({ w, tests, projectName }: { w: Welder; tests: WelderQual[]; projectName: string }) {
+/** the issued qualification card of one person (front + back, print / save) */
+export function IssuedCard({ w, tests, projectName }: { w: Welder; tests: WelderQual[]; projectName: string }) {
+  const st = usePersonnelStore()
+  useEffect(() => { if ((w.hasPhoto && !w.photo) || (w.cardSignA && !w.cardSignA.image) || (w.cardSignB && !w.cardSignB.image)) void st.loadImages(w.id) }, [w.id, w.cardStatus, w.hasPhoto]) // eslint-disable-line react-hooks/exhaustive-deps
+  const q = tests.find((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid')
+  const data = cardData({ kind: w.kind, fullName: w.fullName, nationalId: w.nationalId, raw: w.raw, card: w.card }, q?.wqt, jdLatin)
+  return <IdCard kind={w.kind} data={data} photo={w.photo} cardNo={w.raw} projectName={projectName} payload={cardPayload(w.raw, w.raw)} sigA={w.cardSignA} sigB={w.cardSignB} labelA="Site Head" labelB="Supervision Head" />
+}
+
+export function WelderProfile({ w, tests }: { w: Welder; tests: WelderQual[] }) {
   const st = usePersonnelStore()
   const orgs = useMasterDataStore((x) => x.organizations)
   const team = useMasterDataStore((x) => x.team)
@@ -137,7 +146,7 @@ export function WelderProfile({ w, tests, projectName }: { w: Welder; tests: Wel
         </Step>
       )}
 
-      <Step n={3} title={`کارت صلاحیت ${KIND_FA[w.kind]}`} state={<Chip tone={w.cardStatus === 'issued' ? 'good' : 'warn'}>{w.cardStatus === 'issued' ? `صادر شد · ${w.cardNo}` : 'صادر نشده'}</Chip>}>
+      <Step n={3} title={`کارت صلاحیت ${KIND_FA[w.kind]}`} state={<Chip tone={w.cardStatus === 'issued' ? 'good' : 'warn'}>{w.cardStatus === 'issued' ? `صادر شد · ${w.raw}` : 'صادر نشده'}</Chip>}>
         {!cardReady ? <p className="im-helper" style={{ margin: 0 }}>کارت پس از تأیید آزمون (دو امضا) با نتیجهٔ «YES» صادر می‌شود. {w.kind === 'welder' ? 'فرایند، وضعیت جوش، الکترود و محدودهٔ صلاحیت' : 'سیستم پوشش و نوع عایق‌کاری مجاز'} از همان آزمون خوانده می‌شود و دوباره پرسیده نمی‌شود.</p> : (
           <>
             {qualifying && <p className="im-helper" style={{ margin: 0 }}>از آزمون {qualifying.wqtNo}: {data.scope?.length ? `${data.scope.join('، ')} · ` : ''}{data.rows.slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ')}</p>}
@@ -155,7 +164,6 @@ export function WelderProfile({ w, tests, projectName }: { w: Welder; tests: Wel
             {canReview && locked && <div><button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('کارت بازگشایی شود؟ امضاها پاک می‌شود و کارت تا امضای دوبارهٔ دو سرپرست معتبر نیست.')) void st.reopen('card', w.id) }}><Undo2 size={13} /> بازگشایی کارت</button></div>}
           </>
         )}
-        {w.cardStatus === 'issued' && <IdCard kind={w.kind} data={data} photo={w.photo} cardNo={w.cardNo} projectName={projectName} payload={cardPayload(w.cardNo, w.raw)} sigA={w.cardSignA} sigB={w.cardSignB} labelA="Site Head" labelB="Supervision Head" />}
       </Step>
       {w.cardIssuedAt && <p className="im-helper" style={{ margin: 0 }}>تاریخ صدور: {fmtD(w.cardIssuedAt.slice(0, 10))}</p>}
     </div>

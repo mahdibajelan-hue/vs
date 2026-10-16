@@ -67,7 +67,6 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
               {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontSize: 10, opacity: 0.6 }}>PHOTO</div>}
             </div>
             <div style={{ textAlign: 'center', lineHeight: 1.1 }}><div style={{ fontSize: 8, letterSpacing: 1.2, opacity: 0.75 }}>STAMP</div><div style={{ fontSize: 26, fontWeight: 800, color: AMBER, direction: 'ltr' }}>{data.stamp}</div></div>
-            <div style={{ marginTop: 'auto', fontSize: 9, letterSpacing: 1, opacity: 0.85, direction: 'ltr' }}>{cardNo}</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, padding: '14px 16px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, direction: 'ltr' }}>
@@ -96,7 +95,7 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
         <div ref={back} style={{ ...card, flexDirection: 'column' }}>
           <div style={{ background: `linear-gradient(90deg, ${NAVY}, ${NAVY2})`, color: '#fff', padding: '9px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'ltr' }}>
             <div><div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4 }}>{data.title}</div><div style={{ fontSize: 8.5, opacity: 0.8 }}>{projectName}</div></div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: AMBER, letterSpacing: 1 }}>{cardNo}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: AMBER, letterSpacing: 1 }}>{data.stamp}</div>
           </div>
           <div style={{ padding: '10px 16px', display: 'grid', gap: 8, flex: 1, alignContent: 'start', direction: 'ltr' }}>
             {data.table && data.table.length > 0 && (

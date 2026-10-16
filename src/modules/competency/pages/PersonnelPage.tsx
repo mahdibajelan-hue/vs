@@ -3,7 +3,7 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { usePersonnelStore } from '../store/usePersonnelStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
-import { WelderProfile } from '../components/personnel/WelderProfile'
+import { IssuedCard, WelderProfile } from '../components/personnel/WelderProfile'
 import type { Welder } from '../lib/personnel'
 import { KIND_FA, type PersonKind } from '../lib/personnelForms'
 import { Chip, Section } from '../../finance/components/fn'
@@ -87,10 +87,18 @@ function Body({ projectName }: { projectName: string }) {
           <tbody>{list.map((w) => { const s = stateOf(w); return (
             <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
               <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td><td>{testChip(w)}</td>
-              <td><Chip tone={ST_CHIP[s].tone}>{w.cardStatus === 'issued' ? `${ST_CHIP[s].label} · ${w.cardNo}` : ST_CHIP[s].label}</Chip></td>
+              <td><Chip tone={ST_CHIP[s].tone}>{ST_CHIP[s].label}</Chip></td>
               <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>
       )}
-      {cur ? <WelderProfile key={cur.id} w={cur} tests={testsOf(cur.id)} projectName={projectName} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
+      {cur ? (
+        <>
+          {cur.cardStatus === 'issued' && <IssuedCard key={`c${cur.id}`} w={cur} tests={testsOf(cur.id)} projectName={projectName} />}
+          <details open={cur.cardStatus !== 'issued'} key={`d${cur.id}${cur.cardStatus === 'issued'}`} className="im-card" style={{ padding: '10px 14px' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 800 }}>اطلاعات تفصیلی{cur.cardStatus !== 'issued' ? ' (کارت هنوز صادر نشده)' : ''}</summary>
+            <div style={{ marginTop: 10 }}><WelderProfile w={cur} tests={testsOf(cur.id)} /></div>
+          </details>
+        </>
+      ) : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
       <ScanBox people={all} onFound={(w) => { setKind(w.kind); setSel(w.id) }} stateOf={stateOf} />
       {caps.admin && <SignerSettings />}
     </div>
@@ -134,7 +142,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
           <b>{res.w.fullName || res.w.raw}</b><span dir="ltr">{res.w.raw}</span><span>{KIND_FA[res.w.kind]}</span>
           <Chip tone={res.w.status === 'active' ? 'good' : 'bad'}>{ST_FA[res.w.status]}</Chip>
           <Chip tone={ST_CHIP[stateOf(res.w)].tone}>{ST_CHIP[stateOf(res.w)].label}</Chip>
-          {res.w.cardNo ? <span dir="ltr">{res.w.cardNo}</span> : <span className="sub">کارت صادر نشده</span>}
+          {res.w.cardStatus !== 'issued' && <span className="sub">کارت صادر نشده</span>}
         </div>
       ) : <p style={{ marginTop: 8, color: 'var(--im-coral, #dc2626)' }}>«{res.code}» در رجیستر این پروژه نیست.</p>)}
     </Section>
