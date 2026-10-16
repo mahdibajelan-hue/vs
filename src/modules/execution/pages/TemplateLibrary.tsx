@@ -7,6 +7,7 @@ import { GRID_SPECS } from '../forms/gridSpecs'
 import { addr } from '../forms/gridTypes'
 import { designGrid } from '../forms/designGrid'
 import { GridSheet } from '../forms/GridTemplate'
+import { OfficeRoundTrip, downloadWorkbook } from '../forms/OfficeRoundTrip'
 import { TemplateAdjuster } from '../forms/TemplateAdjuster'
 import { Chip, Section } from '../../finance/components/fn'
 import { fa } from '../components/common'
@@ -23,6 +24,7 @@ function Inner({ projectId }: { projectId: string }) {
   const can = useExecutionStore((s) => s.can(projectId, '*') || s.can(projectId, 'configure'))
   const [fields, setFields] = useState<Record<string, { code: string; rev: string }>>({})
   const [busy, setBusy] = useState('')
+  const [nf, setNf] = useState({ key: '', title: '' })
   const [viewing, setViewing] = useState<Record<string, string>>({})
   const ex = useExecutionStore.getState()
   const flags = (useExecutionStore((s) => s.settingsByProject.get(projectId)) as unknown as { flags?: Record<string, boolean> } | undefined)?.flags ?? {}
@@ -51,6 +53,9 @@ function Inner({ projectId }: { projectId: string }) {
                   </select></label>
                   {ver?.layout.adjusted && <span className="im-helper">این نسخه فقط از نظر ظاهر اصلاح شده است: {ver.layout.adjusted.ops.join(' · ')}</span>}
                   <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout, bindings: bnd })} />
+                  <details><summary className="im-helper">ویرایش در Excel (دریافت فایل ← ویرایش در آفیس ← بارگذاری)</summary>
+                    <OfficeRoundTrip key={`o${vid}`} formKey={b.formKey} title={b.title} base={lay} bindings={bnd} version={ver?.version ?? null} strict={b.renderer !== 'static'} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout, bindings: bnd })} />
+                  </details>
                 </div>
               })()}
             </details>
@@ -82,6 +87,15 @@ function Inner({ projectId }: { projectId: string }) {
         )
       })}
       {can && (
+        <Section title="فرم جدید از فایل Excel" hint="فرم را در Excel بسازید (یا بالا یک نمونه را دریافت و تغییر دهید یا از «طراحی فرم جدید» پایین فایل شروع بگیرید)، سپس اینجا بارگذاری کنید. فرم به‌صورت پیش‌نویس و بدون نگاشت ثبت می‌شود؛ بعد از تأیید در «فرم‌های طراحی‌شده» قابل پر کردن است.">
+          <div style={{ display: 'grid', gap: 6, maxWidth: 640 }}>
+            <input value={nf.title} onChange={(e) => setNf({ ...nf, title: e.target.value })} placeholder="عنوان فرم" aria-label="عنوان فرم جدید" />
+            <input dir="ltr" value={nf.key} onChange={(e) => setNf({ ...nf, key: e.target.value.replace(/[^a-z0-9_]/gi, '').toLowerCase() })} placeholder="کلید لاتین فرم (مثلاً hydro_test)" aria-label="کلید فرم جدید" />
+            {nf.title.trim() && nf.key ? <OfficeRoundTrip key={nf.key} formKey={nf.key} title={nf.title} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: nf.key, title: nf.title, layout, bindings: [] })} /> : <span className="im-helper">ابتدا عنوان و کلید فرم را بنویسید.</span>}
+          </div>
+        </Section>
+      )}
+      {can && (
         <Section title="طراحی فرم جدید" hint="برای فرم‌های آینده: عنوان، فیلدهای سربرگ و ستون‌های جدول را بنویسید؛ نمونهٔ چاپی ساخته می‌شود و پس از ثبت، مانند بقیهٔ قالب‌ها با تأیید قفل می‌شود.">
           <div style={{ display: 'grid', gap: 6, maxWidth: 640 }}>
             <input value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="عنوان فرم" aria-label="عنوان فرم" />
@@ -91,6 +105,7 @@ function Inner({ projectId }: { projectId: string }) {
             <label>تعداد ردیف جدول <input type="number" min={1} max={40} value={d.rows} onChange={(e) => setD({ ...d, rows: Number(e.target.value) })} style={{ width: 80 }} /></label>
             <button className="im-btn im-btn-primary im-btn-sm" disabled={!preview || !d.key || busy === 'design'} onClick={async () => { if (!preview) return; setBusy('design'); await epc.saveTemplateDraft({ formKey: d.key, title: d.title, layout: preview, bindings: [] }); setBusy('') }}>ثبت به‌عنوان پیش‌نویس قالب</button>
           </div>
+          {preview && <button className="im-btn im-btn-sm" style={{ marginTop: 8 }} onClick={() => void downloadWorkbook(preview, `${d.key || 'new_form'}-start.xlsx`, { title: d.title, version: null })}>دریافت این طرح به‌صورت Excel (برای ادامهٔ طراحی در آفیس)</button>}
           {preview && <div style={{ overflow: 'auto', marginTop: 10, border: '1px solid var(--border, #ddd)' }}><GridSheet tpl={preview} /></div>}
         </Section>
       )}
