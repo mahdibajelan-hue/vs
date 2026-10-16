@@ -32,3 +32,8 @@ create index if not exists ex_action_map_proj on ex_action_map (project_id, acti
 alter table ex_action_map enable row level security;
 create policy ex_action_map_sel on ex_action_map for select to authenticated using (true);
 create policy ex_action_map_w on ex_action_map for all to authenticated using (ex_can_configure(project_id) or ex_allows(project_id, 'edit_activities')) with check (ex_can_configure(project_id) or ex_allows(project_id, 'edit_activities'));
+
+-- 025b: an action can be informational (billable = false: no price-book row, e.g. fit-up or bending that are inside the welding row)
+-- and a rule can multiply the quantity by numeric fields of the action (length × width × depth → m³).
+alter table ex_action_map add column if not exists mult_fields text not null default '';
+alter table ex_work_actions add column if not exists billable boolean not null default true;

@@ -51,9 +51,9 @@ interface State {
   syncWelds: (reportId: string) => Promise<void>
   weldHistory: WeldHistoryRow[]; archive: ArchiveRow[]
   workActions: (WorkAction & { projectId: string })[]; actionRules: (ActionRule & { projectId: string })[]
-  saveAction: (projectId: string, a: { key: string; title: string; unit: string; group: string; fields: ActionField[]; sort?: number; active?: boolean }) => Promise<boolean>
+  saveAction: (projectId: string, a: { key: string; title: string; unit: string; group: string; fields: ActionField[]; sort?: number; active?: boolean; billable?: boolean }) => Promise<boolean>
   seedActions: (projectId: string) => Promise<boolean>
-  saveRule: (projectId: string, r: { actionKey: string; activityId: string; factor: number; whenField?: string; whenValue?: string; note?: string }) => Promise<boolean>
+  saveRule: (projectId: string, r: { actionKey: string; activityId: string; factor: number; whenField?: string; whenValue?: string; note?: string; multFields?: string }) => Promise<boolean>
   removeRule: (id: string) => Promise<boolean>
   loadWeldHistory: (weldId: string) => Promise<void>
   weldSetAttr: (weldId: string, attr: string, value: string, note: string) => Promise<boolean>
@@ -116,8 +116,8 @@ export const useEpcStore = create<State>((set, get) => ({
     const arc = await supabase.from('ex_report_archive').select('id, project_id, report_id, version, form_key, form_title, category, report_no, report_date, status, note, created_at').order('report_date', { ascending: false }).limit(2000)
     if (!arc.error) set({ archive: ((arc.data ?? []) as Row[]).map((r): ArchiveRow => ({ id: r.id, projectId: r.project_id, reportId: r.report_id, version: r.version, formKey: r.form_key, formTitle: r.form_title ?? '', category: r.category ?? '', reportNo: r.report_no ?? '', reportDate: r.report_date, status: r.status, note: r.note ?? '', createdAt: r.created_at })) })
     const [wa, ar] = await Promise.all([supabase.from('ex_work_actions').select('*').order('sort'), supabase.from('ex_action_map').select('*')])
-    if (!wa.error) set({ workActions: ((wa.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, key: r.key, title: r.title, unit: r.unit ?? '', group: r.group_label ?? '', fields: (r.fields ?? []) as ActionField[], sort: r.sort ?? 0, active: !!r.active })) })
-    if (!ar.error) set({ actionRules: ((ar.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, actionKey: r.action_key, activityId: r.activity_id, factor: Number(r.factor) || 1, whenField: r.when_field ?? '', whenValue: r.when_value ?? '', note: r.note ?? '' })) })
+    if (!wa.error) set({ workActions: ((wa.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, key: r.key, title: r.title, unit: r.unit ?? '', group: r.group_label ?? '', fields: (r.fields ?? []) as ActionField[], sort: r.sort ?? 0, active: !!r.active, billable: r.billable !== false })) })
+    if (!ar.error) set({ actionRules: ((ar.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, actionKey: r.action_key, activityId: r.activity_id, factor: Number(r.factor) || 1, whenField: r.when_field ?? '', whenValue: r.when_value ?? '', note: r.note ?? '', multFields: r.mult_fields ?? '' })) })
     const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
     if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
     const t = (name: string) => supabase.from(name).select('*')
@@ -209,20 +209,20 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!error) await get().fetchAll() // a missing function/table is not an error the user can act on
   },
   saveAction: async (projectId, a) => {
-    const { error } = await supabase.from('ex_work_actions').upsert({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort ?? 0, active: a.active ?? true }, { onConflict: 'project_id,key' })
+    const { error } = await supabase.from('ex_work_actions').upsert({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort ?? 0, active: a.active ?? true, billable: a.billable ?? true }, { onConflict: 'project_id,key' })
     if (fail('ذخیرهٔ اقدام کارگاهی', error)) return false
     await get().fetchAll(); return true
   },
   seedActions: async (projectId) => {
     const have = new Set(get().workActions.filter((x) => x.projectId === projectId).map((x) => x.key))
-    const rows = DEFAULT_ACTIONS.filter((a) => !have.has(a.key)).map((a) => ({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort, active: true }))
+    const rows = DEFAULT_ACTIONS.filter((a) => !have.has(a.key)).map((a) => ({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort, active: true, billable: a.billable !== false }))
     if (!rows.length) return true
     const { error } = await supabase.from('ex_work_actions').insert(rows)
     if (fail('افزودن اقدام‌های پیش‌فرض', error)) return false
     await get().fetchAll(); return true
   },
   saveRule: async (projectId, r) => {
-    const { error } = await supabase.from('ex_action_map').insert({ project_id: projectId, action_key: r.actionKey, activity_id: r.activityId, factor: r.factor, when_field: r.whenField ?? '', when_value: r.whenValue ?? '', note: r.note ?? '' })
+    const { error } = await supabase.from('ex_action_map').insert({ project_id: projectId, action_key: r.actionKey, activity_id: r.activityId, factor: r.factor, when_field: r.whenField ?? '', when_value: r.whenValue ?? '', note: r.note ?? '', mult_fields: r.multFields ?? '' })
     if (error?.code === '23505') { window.alert('این تطبیق قبلاً ثبت شده است.'); return false }
     if (fail('ثبت تطبیق اقدام با فهرست‌بها', error)) return false
     await get().fetchAll(); return true

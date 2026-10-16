@@ -15,4 +15,10 @@ assert.deepEqual(r.unmapped, [{ actionKey: 'rt', title: 'رادیوگرافی', 
 assert.equal(ruleFor(L('z', { actionKey: 'trench', soil: 'باتلاقی' }), rules).activityId, 'A-soil') // no matching condition → the default rule
 assert.equal(ruleFor(L('z', {}), rules), null)
 assert.ok(new Set(DEFAULT_ACTIONS.map((a) => a.key)).size === DEFAULT_ACTIONS.length)
+// multiplier fields (length × width × depth → m³) and informational actions
+const volRules = [{ id: 'v', actionKey: 'trench', activityId: 'A-vol', factor: 1, whenField: '', whenValue: '', note: '', multFields: 'widthM,depthM' }]
+const vol = resolveLines([L('v1', { actionKey: 'trench', widthM: 1.2, depthM: 2 }, { qty: 100, approvedQty: 50 }), L('v2', { actionKey: 'trench', widthM: 1.2 }, { qty: 10 }), L('i', { actionKey: 'fitup' })], volRules, [{ key: 'fitup', billable: false }])
+assert.equal(vol.lines[0].qty, 240); assert.equal(vol.lines[0].approvedQty, 120); assert.equal(vol.lines[0].activityId, 'A-vol')
+assert.equal(vol.lines[1].activityId, null); assert.equal(vol.unmapped.length, 1); assert.match(vol.unmapped[0].reason, /depthM/) // incomplete line is flagged, not guessed
+assert.equal(vol.lines[2].activityId, null) // informational action: untouched and not reported as unmapped
 console.log('workActions ok')

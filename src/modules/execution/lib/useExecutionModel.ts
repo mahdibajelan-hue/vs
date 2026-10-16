@@ -10,7 +10,7 @@ import { DEFAULT_EX_SETTINGS, type Activity } from '../types'
 /** One project's execution data with every derived figure — progress, planned progress, curve, detected gaps — computed once from the stored daily reports. */
 export function useExecutionModel(projectId: string | null) {
   const st = useExecutionStore()
-  const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds), epcRules = useEpcStore((x) => x.actionRules)
+  const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds), epcRules = useEpcStore((x) => x.actionRules), epcActions = useEpcStore((x) => x.workActions)
   return useMemo(() => {
     const pid = projectId ?? ''
     const settings = st.settingsByProject.get(pid) ?? DEFAULT_EX_SETTINGS
@@ -37,7 +37,7 @@ export function useExecutionModel(projectId: string | null) {
     for (const l of lines) { const x = linesByReport.get(l.reportId); if (x) x.push(l); else linesByReport.set(l.reportId, [l]) }
     // lines entered by ACTION are converted to the mapped price-book activity (qty × factor) for every computation; `linesByReport` keeps what was entered
     const rules = epcRules.filter((r) => r.projectId === pid)
-    const res = resolveLines(lines, rules)
+    const res = resolveLines(lines, rules, epcActions.filter((a) => a.projectId === pid))
     lines = res.lines
     const base = { activities, baselines, blines, reports, lines }
     const groupWeights = settings.groupWeights
@@ -51,6 +51,6 @@ export function useExecutionModel(projectId: string | null) {
     const detected = detectGaps({ today, settings, reports, lines, resources, activities, baselines, blines })
     const baseOf = (a: Activity, asOf = today) => effectiveBase(a, baselines, blines, asOf).baseQty
     return { projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, unmappedActions: res.unmapped, approved, registered, planned, curve, detected, baseOf, people: st.people }
-  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, epcRules, projectId])
+  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, epcRules, epcActions, projectId])
 }
 export type ExecutionModel = ReturnType<typeof useExecutionModel>
