@@ -27,7 +27,7 @@ const NAV: { id: MatTab; label: string; icon: LucideIcon; color: string; subs?: 
   { id: 'discrepancy', label: 'تطبیق و مغایرت‌ها', icon: ShieldAlert, color: '#ef4444' },
   { id: 'packages', label: 'بسته‌های خرید', icon: ShoppingCart, color: '#0ea5e9', subs: [{ id: 'packages', label: 'بسته‌ها و مراحل' }, { id: 'orders', label: 'درخواست خرید و سفارش' }, { id: 'factory', label: 'ساخت و بازرسی' }, { id: 'shipping', label: 'حواله و حمل' }] },
   { id: 'progress', label: 'پیشرفت تأمین', icon: TrendingUp, color: '#14b8a6', subs: [{ id: 'overview', label: 'پیشرفت وزنی' }, { id: 'inbox', label: 'کارتابل تأیید' }, { id: 'late', label: 'مراحل عقب‌افتاده' }] },
-  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی', term: 'stock_view' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری', term: 'shortage' }, { id: 'receiving', label: 'رسید و بازرسی ورودی', term: 'receipt' }, { id: 'allocation', label: 'تخصیص (رزرو) به جبهه', term: 'allocation' }, { id: 'vouchers', label: 'حواله انبار', term: 'requisition' }] },
+  { id: 'stock', label: 'موجودی و انبار', icon: Warehouse, color: '#a855f7', subs: [{ id: 'stock', label: 'موجودی', term: 'stock_view' }, { id: 'locations', label: 'به‌تفکیک انبار' }, { id: 'shortage', label: 'کسری', term: 'shortage' }, { id: 'receiving', label: 'رسید و بازرسی ورودی', term: 'receipt' }, { id: 'pipes', label: 'ورود لوله به کارگاه (MRS)' }, { id: 'allocation', label: 'تخصیص (رزرو) به جبهه', term: 'allocation' }, { id: 'vouchers', label: 'حواله انبار', term: 'requisition' }] },
   { id: 'consumption', label: 'مصرف', icon: Flame, color: '#f97316', subs: [{ id: 'usage', label: 'مصرف واقعی در برابر نیاز', term: 'deviation' }, { id: 'weld', label: 'جداول مبنای محاسبه اقلام مصرفی', term: 'weld_table' }] },
   { id: 'balance', label: 'بالانس', icon: Scale, color: '#22c55e' },
   { id: 'reports', label: 'گزارش‌ها', icon: FileBarChart2, color: '#94a3b8' },
@@ -45,6 +45,7 @@ const Packages = L(() => import('./pages/control/PackagesPage'), 'PackagesPage')
 const Progress = L(() => import('./pages/control/ProgressPage'), 'ProgressPage')
 const Stock = L(() => import('./pages/control/StockPage'), 'StockPage')
 const Consumption = L(() => import('./pages/control/ConsumptionPage'), 'ConsumptionPage')
+const PipeReceipt = L(() => import('./pages/control/PipeReceiptPage'), 'PipeReceiptPage')
 const Weld = L(() => import('./pages/control/WeldTablesPage'), 'WeldTablesPage')
 const Balance = L(() => import('./pages/control/BalancePage'), 'BalancePage')
 const Reports = L(() => import('./pages/control/ReportsPage'), 'ReportsPage')
@@ -103,7 +104,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
       case 'discrepancy': return <Discrepancy {...p} />
       case 'packages': return sub === 'orders' ? <Orders {...p} /> : sub === 'factory' ? <Factory {...p} /> : sub === 'shipping' ? <Shipping {...p} /> : <Packages {...p} />
       case 'progress': return <Progress {...p} />
-      case 'stock': return sub === 'allocation' ? <Allocation {...p} /> : sub === 'vouchers' ? <Requisitions {...p} /> : <Stock {...p} />
+      case 'stock': return sub === 'pipes' ? <PipeReceipt {...p} /> : sub === 'allocation' ? <Allocation {...p} /> : sub === 'vouchers' ? <Requisitions {...p} /> : <Stock {...p} />
       case 'consumption': return sub === 'weld' ? <Weld {...p} /> : <Consumption {...p} />
       case 'balance': return <Balance {...p} />
       case 'reports': return <Reports {...p} />

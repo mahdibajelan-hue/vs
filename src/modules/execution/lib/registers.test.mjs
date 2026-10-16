@@ -6,7 +6,7 @@ const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key,
 assert.deepEqual(splitStamps('a12 / b-3 ، ۱۴ و c9'), ['A12', 'B-3', '14', 'C9'])
 assert.deepEqual(checkWelderCell('A12/Z9/S1', [W('A12'), W('S1', 'suspended')]), { unknown: ['Z9'], blocked: ['S1'] })
 assert.equal(registerKey(' p-۱۰۰۱ '), 'P-1001')
-const P = { id: 'x', projectId: 'p', key: 'P-1001', raw: 'P-1001', entryDate: '2026-01-01', heatNo: 'H1', odIn: 30, wtIn: 0.438, lengthM: 12.1, grade: '', coating: '', supplier: '', wayBill: '', materialId: null, entryLineId: null, status: 'in_stock', note: '' }
+const P = { id: 'x', projectId: 'p', key: 'P-1001', raw: 'P-1001', entryDate: '2026-01-01', heatNo: 'H1', odIn: 30, wtIn: 0.438, lengthM: 12.1, grade: '', coating: '', supplier: '', wayBill: '', materialId: null, entryLineId: null, receiptId: null, status: 'in_stock', note: '' }
 assert.deepEqual(checkPipeCell('p-1001', [P]), { unknown: false, bad: false })
 assert.deepEqual(checkPipeCell('P-9', [P]), { unknown: true, bad: false })
 assert.equal(checkPipeCell('P-1001', [{ ...P, status: 'rejected' }]).bad, true)

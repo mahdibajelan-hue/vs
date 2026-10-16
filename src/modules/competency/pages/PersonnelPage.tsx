@@ -1,51 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
-import { useEpcStore } from '../store/useEpcStore'
-import { useExecutionStore } from '../store/useExecutionStore'
-import { findByCode, scanTokens, type Welder, type WelderQual } from '../lib/registers'
+import { useProjectContextStore } from '../../../store/useProjectContextStore'
+import { usePersonnelStore } from '../store/usePersonnelStore'
+import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
+import { WelderProfile } from '../components/personnel/WelderProfile'
+import type { Welder } from '../lib/personnel'
 import { KIND_FA, type PersonKind } from '../lib/personnelForms'
 import { Chip, Section } from '../../finance/components/fn'
-import { Empty, fa } from '../components/common'
-import { EpcGate } from '../components/epc/EpcBanner'
-import { WelderProfile } from '../components/WelderProfile'
-import { useExecutionModel } from '../lib/useExecutionModel'
-import { monthOf } from '../lib/periods'
-import { rankWelders, welderQuality } from '../lib/welderQuality'
 
+const fa = (n: number | string) => String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const ST_FA = { active: 'فعال', suspended: 'معلق', left: 'ترک کار' } as const
 const today = () => new Date().toISOString().slice(0, 10)
 const plus = (d: string, n: number) => new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10)
 type St = 'valid' | 'soon' | 'expired' | 'none'
 const ST_CHIP: Record<St, { tone: 'good' | 'warn' | 'bad'; label: string }> = { valid: { tone: 'good', label: 'معتبر' }, soon: { tone: 'warn', label: 'رو به انقضا' }, expired: { tone: 'bad', label: 'منقضی' }, none: { tone: 'bad', label: 'کارت ندارد' } }
+const normKey = (v: string) => v.trim().toUpperCase().replace(/\s+/g, ' ')
+/** the codes a QR / barcode reader delivers: «RASTA|WC|<card no>|<stamp>» or a plain number */
+const scanTokens = (text: string): string[] => { const t = text.trim(); if (!t) return []; return t.startsWith('RASTA|') ? t.split('|').slice(2).reverse() : [t] }
+const findByCode = (code: string, people: Welder[]): Welder | undefined => { const k = normKey(code); if (!k) return undefined; return people.find((p) => p.key === k) ?? people.find((p) => p.cardNo && normKey(p.cardNo) === k) ?? people.find((p) => p.nationalId && normKey(p.nationalId) === k) }
 
-/** Welders and coating applicators: introduce → (welder) qualification test signed by the weld inspector and defect interpreter → card signed by the site head and supervision head → printable card with barcode. */
-export function WeldersPage({ projectId }: { projectId: string }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
-function Inner({ projectId }: { projectId: string }) {
-  const epc = useEpcStore()
-  const ex = useExecutionStore()
-  const projectName = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId)?.officialName ?? '')
-  const can = ex.can(projectId, 'record') || ex.can(projectId, 'review') || ex.can(projectId, '*') || ex.can(projectId, 'configure')
-  const canCfg = ex.can(projectId, '*') || ex.can(projectId, 'configure')
+/** «صلاحیت جوشکاران و عایق‌کاران»: introduce → qualification test signed by two people → card signed by the site head and the supervision head → printable card with QR. The Execution module reads the issued cards of each project. */
+export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; nav: Partial<Record<CompetencySection, () => void>> }) {
+  const projects = useMasterDataStore((s) => s.projects)
+  const ctx = useProjectContextStore((s) => s.projectId)
+  const st = usePersonnelStore()
+  const [projectId, setProjectId] = useState<string>('')
+  useEffect(() => { if (!projectId && projects.length) setProjectId(ctx && projects.some((p) => p.id === ctx) ? ctx : projects[0].id) }, [projects, ctx, projectId])
+  useEffect(() => { if (projectId) void st.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const projectName = projects.find((p) => p.id === projectId)?.officialName ?? ''
+  return (
+    <CompetencySidebarShell active="personnel" nav={nav} title="صلاحیت جوشکاران و عایق‌کاران" onExitToHub={onExitToHub}
+      headerRight={<select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="پروژه" className="im-select-pill">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>}>
+      {!projectId ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <Body projectName={projectName} />}
+    </CompetencySidebarShell>
+  )
+}
+
+function Body({ projectName }: { projectName: string }) {
+  const st = usePersonnelStore()
+  const { caps } = st
+  const can = caps.register
   const [kind, setKind] = useState<PersonKind>('welder')
   const [sel, setSel] = useState('')
   const [adding, setAdding] = useState(false)
   const [nw, setNw] = useState({ raw: '', fullName: '', nationalId: '' })
   const [q, setQ] = useState('')
-  const [period, setPeriod] = useState('ALL')
-  const [minTested, setMinTested] = useState(5)
-  const m = useExecutionModel(projectId)
-  // repair % per welder per month, from the quality records (welding + radiography rows of reports that are in the system, not drafts)
-  const quality = useMemo(() => {
-    const rep = new Map(m.reports.filter((r) => !['draft', 'rejected', 'returned', 'incomplete'].includes(r.status)).map((r) => [r.id, r]))
-    const rows = m.lines.flatMap((l) => { const r = rep.get(l.reportId); return r && (r.formKey === 'welding' || r.formKey === 'tie_in' || r.formKey === 'rt_report') ? [{ formKey: r.formKey, date: r.reportDate, detail: l.detail }] : [] })
-    return welderQuality(rows, (iso) => { const p = monthOf(iso); return { key: p.key, label: p.label } })
-  }, [m.lines, m.reports])
-  const ranks = useMemo(() => rankWelders(quality, period, minTested), [quality, period, minTested])
-  const monthsAll = useMemo(() => { const set = new Map<string, string>(); for (const v of quality.values()) for (const x of v.months) set.set(x.key, x.label); return [...set].sort((a, b) => b[0].localeCompare(a[0])) }, [quality])
-  const curMonth = monthOf(new Date().toISOString().slice(0, 10)).key
-  const all = useMemo(() => epc.welders.filter((w) => w.projectId === projectId), [epc.welders, projectId])
+  const all = st.welders
   const list = useMemo(() => all.filter((w) => w.kind === kind && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q])
-  const testsOf = (id: string) => epc.quals.filter((x) => x.welderId === id)
+  const testsOf = (id: string) => st.quals.filter((x) => x.welderId === id)
   const qualifying = (id: string) => testsOf(id).some((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid')
   const on = today()
   const stateOf = (w: Welder): St => {
@@ -55,8 +57,9 @@ function Inner({ projectId }: { projectId: string }) {
     return 'valid'
   }
   const cur = all.find((w) => w.id === sel)
-  const add = async () => { const id = await epc.saveWelder({ projectId, kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId }); if (id) { setNw({ raw: '', fullName: '', nationalId: '' }); setAdding(false); setSel(id) } }
-  const testChip = (w: Welder) => { const t = testsOf(w.id); if (w.kind === 'coater') return <span className="sub">—</span>; if (!t.length) return <Chip tone="bad">ثبت نشده</Chip>; if (qualifying(w.id)) return <Chip tone="good">واجد صلاحیت</Chip>; if (t.some((x) => x.wqtStatus === 'confirmed')) return <Chip tone="bad">فاقد صلاحیت</Chip>; return <Chip tone="warn">در انتظار امضا</Chip> }
+  const add = async () => { const id = await st.saveWelder({ kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId }); if (id) { setNw({ raw: '', fullName: '', nationalId: '' }); setAdding(false); setSel(id) } }
+  const testChip = (w: Welder) => { const t = testsOf(w.id); if (!t.length) return <Chip tone="bad">ثبت نشده</Chip>; if (qualifying(w.id)) return <Chip tone="good">واجد صلاحیت</Chip>; if (t.some((x) => x.wqtStatus === 'confirmed')) return <Chip tone="bad">فاقد صلاحیت</Chip>; return <Chip tone="warn">در انتظار امضا</Chip> }
+  if (st.loading) return <div className="im-skeleton" style={{ height: 200 }} />
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -64,6 +67,7 @@ function Inner({ projectId }: { projectId: string }) {
         <input placeholder="جست‌وجوی نشانه، نام یا کد ملی…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220, marginInlineStart: 'auto' }} aria-label="جست‌وجو" />
         {can && <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setAdding((x) => !x)}>{adding ? 'انصراف' : `+ ${KIND_FA[kind]} جدید`}</button>}
       </div>
+      {!can && <p className="im-helper" style={{ margin: 0 }}>در این پروژه دسترسی ثبت ندارید؛ فقط مشاهده می‌کنید.</p>}
       {adding && (
         <Section title={`${KIND_FA[kind]} جدید`} hint="فقط سه مورد؛ بقیه (عکس، آزمون، کارت) در مراحل بعد در پروندهٔ همین فرد می‌آید.">
           <div className="ex-sheet-grid">
@@ -74,29 +78,17 @@ function Inner({ projectId }: { projectId: string }) {
           <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!nw.raw.trim() || !nw.fullName.trim() || !nw.nationalId.trim()} onClick={() => void add()}>ثبت و ادامه</button></div>
         </Section>
       )}
-      {list.length === 0 ? <Empty>هنوز {KIND_FA[kind]}ی ثبت نشده است.</Empty> : (
-        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th>{kind === 'welder' && <th>آزمون</th>}<th>کارت</th>{kind === 'welder' && <><th className="num">٪ ریپیر ماه جاری</th><th className="num">رتبه</th></>}<th>وضعیت</th></tr></thead>
-          <tbody>{list.map((w) => { const st = stateOf(w); return (
+      {list.length === 0 ? <div className="im-card im-empty" style={{ padding: 20 }}>هنوز {KIND_FA[kind]}ی برای این پروژه ثبت نشده است.</div> : (
+        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th><th>آزمون</th><th>کارت</th><th>وضعیت</th></tr></thead>
+          <tbody>{list.map((w) => { const s = stateOf(w); return (
             <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
-              <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td>{kind === 'welder' && <td>{testChip(w)}</td>}
-              <td><Chip tone={ST_CHIP[st].tone}>{w.cardStatus === 'issued' ? `${ST_CHIP[st].label} · ${w.cardNo}` : ST_CHIP[st].label}</Chip></td>
-              {kind === 'welder' && (() => { const qv = quality.get(w.key), cm = qv?.months.find((x) => x.key === curMonth), rk = ranks.get(w.key); return <><td className="num">{cm ? `${fa(cm.rate, 1)}٪` : '—'}</td><td className="num">{rk?.rank ? fa(rk.rank) : '—'}</td></> })()}
+              <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td><td>{testChip(w)}</td>
+              <td><Chip tone={ST_CHIP[s].tone}>{w.cardStatus === 'issued' ? `${ST_CHIP[s].label} · ${w.cardNo}` : ST_CHIP[s].label}</Chip></td>
               <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>
       )}
-      {cur ? <WelderProfile w={cur} projectId={projectId} can={can} tests={testsOf(cur.id) as WelderQual[]} projectName={projectName} quality={quality.get(cur.key)} rank={rankWelders(quality, 'ALL', minTested).get(cur.key)} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
-      {kind === 'welder' && quality.size > 0 && (
-        <Section title="رتبه‌بندی جوشکاران بر اساس ریپیر" hint="رتبهٔ ۱ = کمترین درصد ریپیر. درصد ریپیر از نتیجهٔ اولین RT هر سرجوش در سامانهٔ کیفیت محاسبه می‌شود؛ کسی که سرجوش RT‌شدهٔ کافی ندارد رتبه نمی‌گیرد.">
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="دوره"><option value="ALL">کل دوره</option>{monthsAll.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>حداقل سرجوش دارای RT برای رتبه<input type="number" min={1} value={minTested} onChange={(e) => setMinTested(Math.max(1, Number(e.target.value) || 1))} style={{ width: 70 }} /></label>
-          </div>
-          <div className="fn-tbl-wrap" style={{ maxHeight: 360 }}><table className="ex-lines"><thead><tr><th className="num">رتبه</th><th>نشانه</th><th>نام</th><th className="num">سرجوش دارای RT</th><th className="num">ریپیر</th><th className="num">٪ ریپیر</th><th className="num">نمره</th></tr></thead>
-            <tbody>{[...ranks].map(([k, r]) => ({ k, r, w: all.find((x) => x.key === k && x.kind === 'welder') })).filter((x) => x.r.tested > 0).sort((a, b) => (a.r.rank ?? 1e9) - (b.r.rank ?? 1e9) || b.r.tested - a.r.tested).map(({ k, r, w }) => (
-              <tr key={k} onClick={() => w && setSel(w.id)} style={{ cursor: w ? 'pointer' : undefined, opacity: r.rank ? 1 : 0.6 }}><td className="num"><b>{r.rank ? fa(r.rank) : '—'}</b></td><td dir="ltr">{w?.raw ?? k}{!w && <small className="sub"> (در رجیستر نیست)</small>}</td><td>{w?.fullName || '—'}</td><td className="num">{fa(r.tested)}</td><td className="num">{fa(r.repaired)}</td><td className="num">{fa(r.rate, 1)}٪</td><td className="num">{r.score != null ? fa(r.score, 1) : '—'}</td></tr>))}</tbody></table></div>
-        </Section>
-      )}
+      {cur ? <WelderProfile key={cur.id} w={cur} tests={testsOf(cur.id)} projectName={projectName} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
       <ScanBox people={all} onFound={(w) => { setKind(w.kind); setSel(w.id) }} stateOf={stateOf} />
-      {canCfg && <SignerSettings projectId={projectId} />}
+      {caps.admin && <SignerSettings />}
     </div>
   )
 }
@@ -107,7 +99,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   const [res, setRes] = useState<{ w?: Welder; code: string } | null>(null)
   const [cam, setCam] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
-  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = scanTokens(v).map((t) => findByCode(t, people)).find(Boolean); setRes({ w, code: v }); if (w) { onFound(w); void useEpcStore.getState().loadPersonImages(w.id) } setCode('') }
+  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = scanTokens(v).map((t) => findByCode(t, people)).find(Boolean); setRes({ w, code: v }); if (w) { onFound(w); void usePersonnelStore.getState().loadImages(w.id) } setCode('') }
   useEffect(() => {
     if (!cam) return
     let stop = false, stream: MediaStream | null = null
@@ -146,15 +138,17 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
 }
 
 /** who signs the test and the card (per project); a slot left empty may be signed by any reviewer */
-function SignerSettings({ projectId }: { projectId: string }) {
-  const ex = useExecutionStore()
-  const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === projectId && t.userId)
-  const cur = ((ex.settingsByProject.get(projectId) as unknown as { personnelSigners?: Record<string, string> } | undefined)?.personnelSigners ?? {}) as Record<string, string>
+
+/** who signs the tests and the cards of this project (a slot left empty may be signed by any reviewer) */
+function SignerSettings() {
+  const st = usePersonnelStore()
+  const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === st.projectId && t.userId)
+  const cur = st.caps.signers
   const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون جوشکار)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون جوشکار)'], ['coat_supervisor', 'ناظر (آزمون عایق‌کار)'], ['coat_contractor', 'نماینده پیمانکار (آزمون عایق‌کار)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
   return (
-    <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت</summary>
+    <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت این پروژه</summary>
       <div className="ex-sheet-grid" style={{ marginTop: 8 }}>{slots.map(([k, l]) => (
-        <label key={k}>{l}<select value={cur[k] ?? ''} onChange={(e) => void ex.saveSettings(projectId, { personnelSigners: { ...cur, [k]: e.target.value } } as never)}><option value="">هر بررسی‌کننده</option>{team.map((t) => <option key={t.id} value={t.userId!}>{t.personName || ex.people.get(t.userId!) || '—'}</option>)}</select></label>
+        <label key={k}>{l}<select value={cur[k] ?? ''} onChange={(e) => void st.setSigners({ ...cur, [k]: e.target.value })}><option value="">هر بررسی‌کننده</option>{team.map((t) => <option key={t.id} value={t.userId!}>{t.personName || '—'}</option>)}</select></label>
       ))}</div>
       <p className="im-helper">امضا با نمونهٔ امضای ثبت‌شدهٔ همان کاربر در پروفایلش انجام می‌شود.</p>
     </details>

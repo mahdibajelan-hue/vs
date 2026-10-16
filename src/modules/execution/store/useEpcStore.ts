@@ -5,8 +5,9 @@ import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { desiredSlots, diffSlots, type SignRole } from '../lib/signRoles'
 import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
-import { registerKey } from '../lib/registers'
-import type { PersonSig, Welder, WelderQual, Pipe } from '../lib/registers'
+import { mapPipe } from '../lib/registers'
+import type { Welder, WelderQual, Pipe } from '../lib/registers'
+import { WELDER_COLS, QUAL_COLS, mapWelder, mapQual } from '../../competency/lib/personnel'
 import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, SignSlot, ReportSignature, SignParty, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -16,14 +17,6 @@ function fail(action: string, error: { message: string } | null): boolean {
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${explainEpcError(error.message)}`)
   return true
-}
-export function explainPersonError(msg: string): string {
-  const map: Record<string, string> = {
-    not_assignee: 'شما امضاکنندهٔ تعیین‌شدهٔ این مرحله نیستید (امضاکنندگان در پایین صفحه تعیین می‌شوند).', signature_required: 'ابتدا امضای نمونهٔ خود را در پروفایل کاربری ثبت کنید.',
-    wqt_incomplete: 'ابتدا فرم آزمون را با شمارهٔ آزمون، تاریخ آزمون و نتیجه ذخیره کنید.', no_qualifying_test: 'ابتدا آزمون این جوشکار با نتیجهٔ YES و دو امضا تأیید شود.',
-    card_incomplete: 'نام یا کد ملی جوشکار کامل نیست.', already_signed: 'این مرحله قبلاً امضا شده است.', bad_state: 'در وضعیت فعلی امکان امضا نیست؛ ابتدا باز کنید.', not_allowed: 'اجازهٔ این کار را ندارید.', confirmed_locked: 'تأییدشده قفل است؛ ابتدا بازگشایی کنید.', use_rpc: 'این مقدار فقط با امضا تغییر می‌کند.',
-  }
-  const k = Object.keys(map).find((x) => msg.includes(x)); return k ? map[k] : msg
 }
 /** Messages of the migration-010 guards, translated; anything else goes through the shared explainer. */
 export function explainEpcError(msg: string): string {
@@ -38,13 +31,6 @@ export function explainEpcError(msg: string): string {
 
 const crewRow = (r: Row): CrewLogRow => ({ id: r.id, reportId: r.report_id, activityId: r.activity_id, crewName: r.crew_name ?? '', composition: r.composition ?? {}, usefulHours: n(r.useful_hours), idleHours: n(r.idle_hours), outputQty: n(r.output_qty), conditions: r.conditions ?? {}, note: r.note ?? '' })
 
-/** list columns of the registers: photos and signature images are NOT loaded with the lists (they are loaded for the open person); signatures come as name/date only */
-const WELDER_COLS = 'id, project_id, welder_key, welder_raw, full_name, national_id, org_id, status, note, kind, card, card_status, card_confirmed_by, card_confirmed_at, card_no, card_issued_at, card_issued_by, created_by, has_photo, sa_name:card_sign_a->>name, sa_at:card_sign_a->>at, sa_user:card_sign_a->>user, sb_name:card_sign_b->>name, sb_at:card_sign_b->>at, sb_user:card_sign_b->>user'
-const QUAL_COLS = 'id, project_id, welder_id, wqt_no, process, position, material_group, thk_min, thk_max, dia_min, dia_max, issue_date, expiry_date, wqt_report_id, status, note, wqt, wqt_status, wqt_confirmed_by, wqt_confirmed_at, created_by, sa_name:wqt_sign_a->>name, sa_at:wqt_sign_a->>at, sa_user:wqt_sign_a->>user, sb_name:wqt_sign_b->>name, sb_at:wqt_sign_b->>at, sb_user:wqt_sign_b->>user'
-const sigLite = (name: string | null, at: string | null, user: string | null, old: PersonSig | null | undefined): PersonSig | null => (name ? { user: user ?? '', name, at: at ?? '', image: old && old.at === (at ?? '') ? old.image : '' } : null)
-const mapWelder = (r: Row, old?: Welder): Welder => ({ id: r.id, projectId: r.project_id, key: r.welder_key, raw: r.welder_raw, fullName: r.full_name ?? '', nationalId: r.national_id ?? '', orgId: r.org_id, status: r.status, note: r.note ?? '', kind: r.kind ?? 'welder', photo: r.has_photo ? (old?.photo ?? '') : '', hasPhoto: !!r.has_photo, card: (r.card ?? {}) as Record<string, string>, cardStatus: r.card_status ?? 'draft', cardConfirmedBy: r.card_confirmed_by, cardConfirmedAt: r.card_confirmed_at, cardNo: r.card_no ?? '', cardIssuedAt: r.card_issued_at, cardIssuedBy: r.card_issued_by, createdBy: r.created_by, cardSignA: sigLite(r.sa_name, r.sa_at, r.sa_user, old?.cardSignA), cardSignB: sigLite(r.sb_name, r.sb_at, r.sb_user, old?.cardSignB) })
-const mapQual = (r: Row): WelderQual => ({ id: r.id, projectId: r.project_id, welderId: r.welder_id, wqtNo: r.wqt_no ?? '', process: r.process ?? '', position: r.position ?? '', materialGroup: r.material_group ?? '', thkMin: r.thk_min == null ? null : Number(r.thk_min), thkMax: r.thk_max == null ? null : Number(r.thk_max), diaMin: r.dia_min == null ? null : Number(r.dia_min), diaMax: r.dia_max == null ? null : Number(r.dia_max), issueDate: r.issue_date, expiryDate: r.expiry_date, wqtReportId: r.wqt_report_id, status: r.status, note: r.note ?? '', wqt: (r.wqt ?? {}) as Record<string, string>, wqtStatus: r.wqt_status ?? 'draft', wqtConfirmedBy: r.wqt_confirmed_by, wqtConfirmedAt: r.wqt_confirmed_at, createdBy: r.created_by, wqtSignA: sigLite(r.sa_name, r.sa_at, r.sa_user, null), wqtSignB: sigLite(r.sb_name, r.sb_at, r.sb_user, null) })
-const mapPipe = (r: Row): Pipe => ({ id: r.id, projectId: r.project_id, key: r.pipe_key, raw: r.pipe_raw, entryDate: r.entry_date, heatNo: r.heat_no ?? '', odIn: r.od_in == null ? null : Number(r.od_in), wtIn: r.wt_in == null ? null : Number(r.wt_in), lengthM: r.length_m == null ? null : Number(r.length_m), grade: r.grade ?? '', coating: r.coating ?? '', supplier: r.supplier ?? '', wayBill: r.way_bill ?? '', materialId: r.material_id, entryLineId: r.entry_line_id, status: r.status, note: r.note ?? '' })
 
 interface State {
   /** false when migration 010 is not applied yet (the tables are missing) — the EPC pages then show an explanatory banner instead of failing */
@@ -55,19 +41,9 @@ interface State {
   welds: WeldRow[]; lineWelds: LineWeldRow[]; weldConflicts: WeldConflictRow[]; weldSuspects: WeldSuspectRow[]; weldMerges: WeldMergeRow[]
   ncrs: NcrRow[]; ncrEvents: NcrEventRow[]; ncrLinks: NcrLinkRow[]
   /** identity registers (migration 030) */
-  welders: Welder[]; quals: WelderQual[]; pipes: Pipe[]; registerHistory: { entity: string; entityId: string; attr: string; oldValue: string | null; newValue: string | null; at: string }[]
+  welders: Welder[]; quals: WelderQual[]; pipes: Pipe[]
   /** reloads only the welder / pipe registers (one parallel round trip) — used after saves and signatures instead of reloading the whole module */
   refreshRegisters: () => Promise<void>
-  /** loads the photo and signature images of one person (they are not part of the lists) */
-  loadPersonImages: (id: string) => Promise<void>
-  saveWelder: (w: Partial<Welder> & { projectId: string; raw: string }) => Promise<string | null>
-  saveQual: (q: Partial<WelderQual> & { projectId: string; welderId: string }) => Promise<string | null>
-  savePipes: (projectId: string, rows: (Partial<Pipe> & { raw: string; entryDate: string })[]) => Promise<{ added: number; skipped: string[] } | null>
-  updatePipe: (id: string, patch: Partial<Pipe>) => Promise<boolean>
-  /** sign a welder test (`wqt`: slot a = weld inspector, b = defect interpreter) or a card (`card`: a = site head, b = supervision head); the second signature completes it */
-  personSign: (entity: 'wqt' | 'card', id: string, slot: 'a' | 'b') => Promise<boolean>
-  personReopen: (entity: 'wqt' | 'card', id: string) => Promise<boolean>
-  loadRegisterHistory: (entity: string, id: string) => Promise<void>
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
   loadVersions: (reportId: string) => Promise<void>
@@ -142,7 +118,7 @@ interface State {
 
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false,
-  welders: [], quals: [], pipes: [], registerHistory: [], crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], signSlots: [], signatures: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
+  welders: [], quals: [], pipes: [], crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], signSlots: [], signatures: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
@@ -399,64 +375,6 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!rw.error) { const old = new Map(get().welders.map((x) => [x.id, x])); set({ welders: ((rw.data ?? []) as unknown as Row[]).map((r) => mapWelder(r, old.get(r.id))) }) }
     if (!rqu.error) set({ quals: ((rqu.data ?? []) as unknown as Row[]).map(mapQual) })
     if (!rp.error) set({ pipes: ((rp.data ?? []) as Row[]).map(mapPipe) })
-  },
-  loadPersonImages: async (id) => {
-    const { data, error } = await supabase.from('ex_welders').select('photo, card_sign_a, card_sign_b').eq('id', id).single()
-    if (error || !data) return
-    const d = data as unknown as { photo: string; card_sign_a: PersonSig | null; card_sign_b: PersonSig | null }
-    set({ welders: get().welders.map((w) => (w.id === id ? { ...w, photo: d.photo ?? '', cardSignA: d.card_sign_a ?? w.cardSignA, cardSignB: d.card_sign_b ?? w.cardSignB } : w)) })
-  },
-  saveWelder: async (w) => {
-    const row = { project_id: w.projectId, welder_key: registerKey(w.raw), welder_raw: w.raw.trim(), full_name: w.fullName ?? '', national_id: w.nationalId ?? '', org_id: w.orgId ?? null, status: w.status ?? 'active', note: w.note ?? '', kind: w.kind ?? 'welder' }
-    if (!row.welder_key) return null
-    const res = w.id ? await supabase.from('ex_welders').update({ welder_raw: row.welder_raw, full_name: row.full_name, national_id: row.national_id, org_id: row.org_id, status: row.status, note: row.note, ...(w.photo !== undefined ? { photo: w.photo } : {}), ...(w.card ? { card: w.card } : {}) }).eq('id', w.id).select('id').single() : await supabase.from('ex_welders').insert({ ...row, photo: w.photo ?? '', card: w.card ?? {} }).select('id').single()
-    if (res.error?.code === '23505') { fail('ثبت جوشکار (این شناسه قبلاً ثبت شده است)', res.error); return null }
-    if (fail('ثبت جوشکار', res.error)) return null
-    const sid = (res.data as { id: string }).id
-    await get().refreshRegisters()
-    if (w.photo !== undefined) set({ welders: get().welders.map((x) => (x.id === sid ? { ...x, photo: w.photo as string } : x)) })
-    return sid
-  },
-  saveQual: async (q) => {
-    const row = { project_id: q.projectId, welder_id: q.welderId, wqt_no: q.wqtNo ?? '', process: q.process ?? '', position: q.position ?? '', material_group: q.materialGroup ?? '', thk_min: q.thkMin ?? null, thk_max: q.thkMax ?? null, dia_min: q.diaMin ?? null, dia_max: q.diaMax ?? null, issue_date: q.issueDate || null, expiry_date: q.expiryDate || null, wqt_report_id: q.wqtReportId ?? null, status: q.status ?? 'valid', note: q.note ?? '', ...(q.wqt ? { wqt: q.wqt } : {}) }
-    // the test form is the source: its numbers feed the columns the form checks use
-    if (q.wqt) {
-      const nz = (v: string | undefined) => { const x = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(x) ? x : null }
-      Object.assign(row, { wqt_no: q.wqt.wqtNo ?? '', process: q.wqt.process ?? '', position: q.wqt.position ?? '', material_group: q.wqt.baseMat ?? '', thk_min: nz(q.wqt.thkMin), thk_max: nz(q.wqt.thkMax), issue_date: q.wqt.testDate || null })
-    }
-    const res = q.id ? await supabase.from('ex_welder_quals').update(row).eq('id', q.id).select('id').single() : await supabase.from('ex_welder_quals').insert(row).select('id').single()
-    if (fail('ثبت آزمون جوشکار', res.error)) return null
-    await get().refreshRegisters(); return (res.data as { id: string }).id
-  },
-  savePipes: async (projectId, rows) => {
-    const have = new Set(get().pipes.filter((p) => p.projectId === projectId).map((p) => p.key)), seen = new Set<string>(), skipped: string[] = [], ins: Record<string, unknown>[] = []
-    for (const r of rows) {
-      const k = registerKey(r.raw); if (!k) continue
-      if (have.has(k) || seen.has(k)) { skipped.push(r.raw); continue }
-      seen.add(k)
-      ins.push({ project_id: projectId, pipe_key: k, pipe_raw: r.raw.trim(), entry_date: r.entryDate, heat_no: r.heatNo ?? '', od_in: r.odIn ?? null, wt_in: r.wtIn ?? null, length_m: r.lengthM ?? null, grade: r.grade ?? '', coating: r.coating ?? '', supplier: r.supplier ?? '', way_bill: r.wayBill ?? '', material_id: r.materialId ?? null, entry_line_id: r.entryLineId ?? null, status: r.status ?? 'in_stock', note: r.note ?? '' })
-    }
-    if (ins.length) { const { error } = await supabase.from('ex_pipes').insert(ins); if (fail('ثبت لوله‌های ورودی', error)) return null }
-    await get().refreshRegisters(); return { added: ins.length, skipped }
-  },
-  personSign: async (entity, id, slot) => {
-    const { error } = await supabase.rpc('ex_person_sign', { p_entity: entity, p_id: id, p_slot: slot })
-    if (error) { useSystemStore.getState().setStorageError(`خطا در امضا: ${explainPersonError(error.message)}`); return false }
-    await get().refreshRegisters(); return true
-  },
-  personReopen: async (entity, id) => {
-    const { error } = await supabase.rpc('ex_person_reopen', { p_entity: entity, p_id: id })
-    if (error) { useSystemStore.getState().setStorageError(`خطا در بازگشایی: ${explainPersonError(error.message)}`); return false }
-    await get().refreshRegisters(); return true
-  },
-  updatePipe: async (id, p) => {
-    const { error } = await supabase.from('ex_pipes').update({ pipe_raw: p.raw, entry_date: p.entryDate, heat_no: p.heatNo, od_in: p.odIn, wt_in: p.wtIn, length_m: p.lengthM, grade: p.grade, coating: p.coating, supplier: p.supplier, way_bill: p.wayBill, material_id: p.materialId, status: p.status, note: p.note }).eq('id', id)
-    if (fail('ویرایش لوله', error)) return false
-    await get().refreshRegisters(); return true
-  },
-  loadRegisterHistory: async (entity, id) => {
-    const { data, error } = await supabase.from('ex_register_history').select('entity, entity_id, attr, old_value, new_value, at').eq('entity', entity).eq('entity_id', id).order('at', { ascending: false }).limit(100)
-    if (!error) set({ registerHistory: ((data ?? []) as Row[]).map((r) => ({ entity: r.entity, entityId: r.entity_id, attr: r.attr, oldValue: r.old_value, newValue: r.new_value, at: r.at })) })
   },
   weldAction: async (fn, args) => {
     const { error } = await supabase.rpc(fn, args)

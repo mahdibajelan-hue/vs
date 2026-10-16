@@ -109,7 +109,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   // identity registers (welders, pipes received into the warehouse): a name that is not in the register is flagged; with the project flag «strictRegisters» it also blocks sending
   const regWelders = useEpcStore((x) => x.welders), regQuals = useEpcStore((x) => x.quals), regPipes = useEpcStore((x) => x.pipes)
   const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
-  const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId && w.kind === 'welder'), [regWelders, m.projectId])
+  const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId && w.kind === 'welder' && w.cardStatus === 'issued'), [regWelders, m.projectId])
   const pipeList = useMemo(() => regPipes.filter((p) => p.projectId === m.projectId), [regPipes, m.projectId])
   const regWarnings = useMemo(() => {
     if (!form) return []
@@ -121,7 +121,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         for (const f of WELDER_FIELDS) {
           if (!(f in l.detail)) continue
           const c = checkWelderCell(l.detail[f], welderList)
-          for (const u of c.unknown) out.push(`${at}: جوشکار «${u}» در رجیستر جوشکاران نیست`)
+          for (const u of c.unknown) out.push(`${at}: جوشکار «${u}» در فهرست جوشکاران تأییدصلاحیت‌شدهٔ این پروژه نیست`)
           for (const b of c.blocked) out.push(`${at}: جوشکار «${b}» فعال نیست (معلق یا ترک‌کار)`)
           if (form.key === 'welding' || form.key === 'tie_in') for (const t of splitStamps(l.detail[f])) {
             if (seen.has(t)) continue; seen.add(t)
@@ -342,7 +342,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
       {form && regWarnings.length > 0 && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: `3px solid ${strictRegs ? 'var(--im-coral)' : 'var(--im-amber)'}` }}><b>{strictRegs ? 'موارد رجیستر که پیش از ارسال باید اصلاح شود' : 'هشدار رجیستر لوله و جوشکار'} ({fa(regWarnings.length)})</b>
         <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{regWarnings.slice(0, 12).map((w) => <li key={w}>{w}</li>)}{regWarnings.length > 12 && <li>و {fa(regWarnings.length - 12)} مورد دیگر…</li>}</ul>
-        <small className="sub">رجیستر در «لوله‌ها و جوشکاران» است؛ شناسهٔ تازه را آنجا ثبت کنید، نه اینکه در فرم‌ها متفاوت بنویسید.</small></div>}
+        <small className="sub">جوشکاران در «ارزیابی شایستگی ← صلاحیت جوشکاران و عایق‌کاران» و لوله‌ها در «کالا ← ورود لوله به کارگاه (MRS)» ثبت می‌شوند؛ شناسهٔ تازه را آنجا ثبت کنید.</small></div>}
       <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
 
       {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}

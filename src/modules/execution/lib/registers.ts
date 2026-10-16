@@ -8,10 +8,9 @@ export const WELDER_FIELDS = ['stampRoot', 'stampHot', 'stampFill', 'stampCap', 
 export const isWelderField = (k: string) => WELDER_FIELDS.includes(k)
 export const isPipeField = (k: string) => k === 'pipeNo'
 
-export interface PersonSig { user: string; name: string; image: string; at: string }
-export interface Welder { id: string; projectId: string; key: string; raw: string; fullName: string; nationalId: string; orgId: string | null; status: 'active' | 'suspended' | 'left'; note: string; /** welder, or a field-joint coating applicator */ kind: 'welder' | 'coater'; /** small JPEG data URL — empty until the person's images are loaded (lists do not carry them) */ photo: string; hasPhoto: boolean; card: Record<string, string>; cardStatus: 'draft' | 'confirmed' | 'issued'; cardConfirmedBy: string | null; cardConfirmedAt: string | null; cardNo: string; cardIssuedAt: string | null; cardIssuedBy: string | null; createdBy: string | null; cardSignA: PersonSig | null; cardSignB: PersonSig | null }
-export interface WelderQual { id: string; projectId: string; welderId: string; wqtNo: string; process: string; position: string; materialGroup: string; thkMin: number | null; thkMax: number | null; diaMin: number | null; diaMax: number | null; issueDate: string | null; expiryDate: string | null; wqtReportId: string | null; status: 'valid' | 'revoked'; note: string; wqt: Record<string, string>; wqtStatus: 'draft' | 'confirmed'; wqtConfirmedBy: string | null; wqtConfirmedAt: string | null; createdBy: string | null; wqtSignA: PersonSig | null; wqtSignB: PersonSig | null }
-export interface Pipe { id: string; projectId: string; key: string; raw: string; entryDate: string; heatNo: string; odIn: number | null; wtIn: number | null; lengthM: number | null; grade: string; coating: string; supplier: string; wayBill: string; materialId: string | null; entryLineId: string | null; status: 'in_stock' | 'rejected' | 'scrapped'; note: string }
+export type { PersonSig, Welder, WelderQual } from '../../competency/lib/personnel'
+import type { Welder, WelderQual } from '../../competency/lib/personnel'
+export interface Pipe { id: string; projectId: string; key: string; raw: string; entryDate: string; heatNo: string; odIn: number | null; wtIn: number | null; lengthM: number | null; grade: string; coating: string; supplier: string; wayBill: string; materialId: string | null; entryLineId: string | null; /** the warehouse receipt (MRS) the pipe arrived with */ receiptId: string | null; status: 'in_stock' | 'rejected' | 'scrapped'; note: string }
 
 /** «A12/B3», «A12 , B3», «A12 و B3» → ['A12','B3'] (N1-normalised) */
 export const splitStamps = (v: unknown): string[] => String(v ?? '').split(/[\/,،;+\n]|\s+و\s+/).map((x) => registerKey(x)).filter(Boolean)
@@ -111,3 +110,7 @@ export function scanTokens(text: string): string[] {
 }
 /** value to put in a welder field when a scanner typed `text` (a card payload gives the stamp, anything else is kept) */
 export const fromScan = (text: string): string => (text.trim().startsWith(`${QR_PREFIX}|`) ? scanTokens(text)[0] ?? text : text)
+
+export const PIPE_COLS = '*'
+type PipeRow = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+export const mapPipe = (r: PipeRow): Pipe => ({ id: r.id, projectId: r.project_id, key: r.pipe_key, raw: r.pipe_raw, entryDate: r.entry_date, heatNo: r.heat_no ?? '', odIn: r.od_in == null ? null : Number(r.od_in), wtIn: r.wt_in == null ? null : Number(r.wt_in), lengthM: r.length_m == null ? null : Number(r.length_m), grade: r.grade ?? '', coating: r.coating ?? '', supplier: r.supplier ?? '', wayBill: r.way_bill ?? '', materialId: r.material_id, entryLineId: r.entry_line_id, receiptId: r.receipt_id ?? null, status: r.status, note: r.note ?? '' })

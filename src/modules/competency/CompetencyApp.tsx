@@ -9,6 +9,7 @@ import { QuestionBankPage } from './pages/QuestionBankPage'
 import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
 import { InServicePage } from './pages/InServicePage'
 import { DisciplinePage } from './pages/DisciplinePage'
+import { PersonnelPage } from './pages/PersonnelPage'
 import { useInServiceStore } from './store/useInServiceStore'
 import { TalentPage } from './pages/TalentPage'
 import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
@@ -33,6 +34,7 @@ type View =
   | { name: 'myTasks' }
   | { name: 'inservice' }
   | { name: 'discipline' }
+  | { name: 'personnel' }
   | { name: 'settings' }
   // The personality module's own admin pages (reports/settings), reachable from this module's
   // sidebar/question bank now that the standalone Personality module has been merged in — see the
@@ -118,6 +120,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
     talent: () => setView({ name: 'talent' }),
     myTasks: () => setView({ name: 'myTasks' }),
     inservice: () => setView({ name: 'inservice' }),
+    personnel: () => setView({ name: 'personnel' }),
     ...(isModuleAdmin || assessmentDesigners.some((d) => d.userId === myProfile?.id) ? { discipline: () => setView({ name: 'discipline' }) } : {}),
     ...(isQuestionBankViewer ? { questionBank: () => setView({ name: 'questionBank' }) } : {}),
     ...(isModuleAdmin ? { settings: () => setView({ name: 'settings' }) } : {}),
@@ -192,6 +195,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   if (view.name === 'inservice') return <InServicePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  if (view.name === 'personnel') return <PersonnelPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
   if (view.name === 'discipline') return <DisciplinePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
 
   if (view.name === 'myTasks') {

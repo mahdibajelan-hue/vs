@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { KIND_FA, type CardData, type PersonKind } from '../lib/personnelForms'
-import type { PersonSig } from '../lib/registers'
-import { jdLatin } from './PersonSheet'
+import { KIND_FA, type CardData, type PersonKind } from '../../lib/personnelForms'
+import type { PersonSig } from '../../lib/personnel'
+import { jdLatin } from './util'
 
 const NAVY = '#0b2545', NAVY2 = '#14407a', AMBER = '#f59e0b', INK = '#0f172a', MUTE = '#64748b'
 const FONT = 'Vazirmatn, Tahoma, sans-serif'

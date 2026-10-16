@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Award, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
+import { Award, BadgeCheck, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import { ModuleHeaderActions } from '../../../components/common/ModuleHeaderActions'
@@ -23,6 +23,7 @@ export type CompetencySection =
   | 'questionBank'
   | 'reports'
   | 'settings'
+  | 'personnel'
   | 'personalityReports'
   | 'talent'
   | 'myTasks'
@@ -47,6 +48,7 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
   questionBank: { label: 'بانک سؤالات', icon: BookOpen },
   reports: { label: 'گزارش‌ها', icon: FileBarChart2 },
   settings: { label: 'تنظیمات', icon: Settings },
+  personnel: { label: 'صلاحیت جوشکاران و عایق‌کاران', icon: BadgeCheck },
   personalityReports: { label: 'گزارش‌های شخصیت', icon: LineChart },
   talent: { label: 'بانک استعداد و تناسب شغلی', icon: Radar },
   myTasks: { label: 'کارهای من', icon: ListTodo },
@@ -62,9 +64,9 @@ const SECTION_META: Record<CompetencySection, { label: string; icon: typeof Layo
 // ordering. "بانک سؤالات" now covers both the technical and the personality question banks as tabs on
 // one page (see QuestionBankPage.tsx) — there is no separate personalityQuestionBank section anymore.
 const CANDIDATE_SECTIONS: CompetencySection[] = ['profile', 'documents', 'panel', 'personality', 'mcq', 'questions', 'results', 'aiAnalysis', 'idp']
-const MODULE_SECTIONS: CompetencySection[] = ['dashboard', 'myTasks', 'talent', 'inservice', 'discipline', 'questionBank', 'reports', 'settings']
+const MODULE_SECTIONS: CompetencySection[] = ['dashboard', 'myTasks', 'talent', 'inservice', 'discipline', 'personnel', 'questionBank', 'reports', 'settings']
 /** accent per module tab, same idea as the other modules' coloured nav */
-const TAB_COLOR: Partial<Record<CompetencySection, string>> = { dashboard: '#a855f7', myTasks: '#f43f5e', inservice: '#22c55e', discipline: '#ef4444', talent: '#14b8a6', questionBank: '#6366f1', reports: '#0ea5e9', personalityReports: '#ec4899', settings: '#64748b' }
+const TAB_COLOR: Partial<Record<CompetencySection, string>> = { dashboard: '#a855f7', myTasks: '#f43f5e', inservice: '#22c55e', discipline: '#ef4444', personnel: '#f59e0b', talent: '#14b8a6', questionBank: '#6366f1', reports: '#0ea5e9', personalityReports: '#ec4899', settings: '#64748b' }
 
 interface CompetencySidebarShellProps {
   active: CompetencySection
