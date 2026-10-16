@@ -28,7 +28,7 @@ export function ProgressPage({ projectId }: { projectId: string }) {
     { key: 'ct', label: 'سهم در پیشرفت گروه', num: true, render: (r) => pct(r.contribution, 2), sort: (r) => r.contribution },
     { key: 'v', label: 'نسخهٔ مبنا', render: (r) => (r.base.version ? <Chip>v{fa(r.base.version)}</Chip> : <Chip tone="warn">مقدار فعلی</Chip>) },
   ]
-  if (!m.activities.length) return <Empty>ابتدا فعالیت‌های پروژه را در «فعالیت‌ها و فهرست‌بها» تعریف کنید.</Empty>
+  if (!m.activities.length) return <Empty>ابتدا فعالیت‌های پروژه را در «فعالیت‌های پروژه» و «تنظیمات ← فهرست‌های بها» تعریف کنید.</Empty>
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="fn-kpis">

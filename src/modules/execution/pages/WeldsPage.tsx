@@ -7,6 +7,9 @@ import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import type { WeldRow } from '../epcTypes'
+import { buildProfile, SHARED } from '../lib/weldProfile'
+import { FORM_BY_KEY } from '../lib/formCatalog'
+import { fmtD } from '../../finance/components/fn'
 
 const STAGES: { key: WeldStage; label: string }[] = [{ key: 'fitup', label: 'فیت‌آپ' }, { key: 'weld', label: 'جوش' }, { key: 'rt_request', label: 'درخواست RT' }, { key: 'rt', label: 'RT' }, { key: 'repair', label: 'تعمیر' }, { key: 'coating', label: 'پوشش' }]
 const KIND_FA = { pipe: 'شمارهٔ لوله', size: 'قطر', thickness: 'ضخامت', front: 'جبهه' } as const
@@ -20,6 +23,7 @@ function Inner({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<'list' | 'conflicts' | 'suspects'>('list')
   const [q, setQ] = useState('')
   const [noRt, setNoRt] = useState(false)
+  const [open, setOpen] = useState('')
   const welds = useMemo(() => epc.welds.filter((w) => w.projectId === projectId && w.status !== 'merged'), [epc.welds, projectId])
   const byId = useMemo(() => new Map(epc.welds.map((w) => [w.id, w])), [epc.welds])
   const reportById = useMemo(() => new Map(m.reports.map((r) => [r.id, r])), [m.reports])
@@ -55,6 +59,19 @@ function Inner({ projectId }: { projectId: string }) {
         <KpiCard label="ناسازگاری باز" value={fa(conflicts.length)} tone={conflicts.length ? 'bad' : 'good'} />
         <KpiCard label="موارد مشکوک به یکی‌بودن" value={fa(suspects.length)} tone={suspects.length ? 'warn' : 'good'} hint="هرگز خودکار ادغام نمی‌شوند" />
       </div>
+      {open && (() => {
+        const w = byId.get(open); if (!w) return null
+        const mine = epc.lineWelds.filter((x) => x.weldId === open).map((x) => { const l = lineById.get(x.lineId), r = l ? reportById.get(l.reportId) : undefined; return l && r ? { l, r } : null }).filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => a.r.reportDate.localeCompare(b.r.reportDate))
+        const prof = buildProfile(mine.map(({ l, r }) => ({ formKey: r.formKey, date: r.reportDate, detail: l.detail })))
+        const KEYS = ['result', 'vt', 'repairDone', 'vtCheck', 'rtReqNo', 'rtReportNo', 'defect', 'defectType', 'stamp', 'coatType', 'batchNo']
+        return <Section title={`کارت سرجوش — ${label(w)}`} hint="هر اطلاعات یک‌بار ثبت می‌شود و در فرم‌های بعدی همین سرجوش پیشنهاد داده می‌شود. این کارت از روی ردیف‌های ثبت‌شدهٔ فرم‌ها ساخته می‌شود و چیزی را عوض نمی‌کند." action={<button className="im-btn im-btn-sm" onClick={() => setOpen('')}>بستن</button>}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{SHARED.map((a) => { const f = prof[a.attr]; return <Chip key={a.attr} tone={f ? 'good' : 'neutral'}>{a.label}: {f ? <b dir="ltr">{f.value}</b> : '—'}{f ? ` (از ${FORM_BY_KEY[f.from]?.title ?? f.from})` : ''}</Chip> })}</div>
+          <div className="fn-tbl-wrap" style={{ maxHeight: 320 }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>فرم</th><th>شمارهٔ گزارش</th><th>وضعیت گزارش</th><th>اطلاعات مرحله</th></tr></thead><tbody>
+            {mine.map(({ l, r }) => <tr key={l.id}><td>{fmtD(r.reportDate)}</td><td>{FORM_BY_KEY[r.formKey]?.title ?? r.formKey}</td><td className="fn-code">{r.reportNo}</td><td>{r.status}</td><td dir="auto">{KEYS.filter((k) => String(l.detail[k] ?? '').trim()).map((k) => `${FORM_BY_KEY[r.formKey]?.columns.find((c) => c.key === k)?.label ?? k}: ${l.detail[k]}`).join(' · ') || '—'}</td></tr>)}
+            {mine.length === 0 && <tr><td colSpan={5} className="sub">ردیفی برای این سرجوش ثبت نشده است.</td></tr>}
+          </tbody></table></div>
+        </Section>
+      })()}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {([['list', 'سرجوش‌ها'], ['conflicts', `ناسازگاری‌ها (${fa(conflicts.length)})`], ['suspects', `موارد مشکوک (${fa(suspects.length)})`]] as const).map(([k, l]) => <button key={k} className={`im-btn im-btn-sm${tab === k ? ' im-btn-primary' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
@@ -62,7 +79,7 @@ function Inner({ projectId }: { projectId: string }) {
         <Section title="سرجوش‌ها و مراحل" action={<span style={{ display: 'inline-flex', gap: 6 }}><input placeholder="جست‌وجوی سکشن، سرجوش، لوله…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جست‌وجو" /><label><input type="checkbox" checked={noRt} onChange={(e) => setNoRt(e.target.checked)} /> فقط بدون RT</label></span>}>
           <div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>سرجوش</th><th>لوله</th>{STAGES.map((s) => <th key={s.key}>{s.label}</th>)}<th>وضعیت</th><th /></tr></thead>
             <tbody>{rows.slice(0, 300).map((w) => { const e = info.get(w.id); return (
-              <tr key={w.id}><td dir="ltr">{label(w)}</td><td dir="ltr">{w.pipeNo ?? <Chip tone="warn">نامشخص</Chip>}</td>
+              <tr key={w.id}><td dir="ltr"><button className="im-btn im-btn-sm" onClick={() => setOpen(open === w.id ? '' : w.id)} aria-expanded={open === w.id}>{label(w)}</button></td><td dir="ltr">{w.pipeNo ?? <Chip tone="warn">نامشخص</Chip>}</td>
                 {STAGES.map((s) => { const n = e?.stages[s.key] ?? 0; const res = s.key === 'rt' ? e?.rt : s.key === 'weld' ? e?.vt : ''; return <td key={s.key}>{n ? <Chip tone={res === 'rep' || res === 'rej' ? 'bad' : 'good'}>{res === 'rep' ? 'تعمیر' : res === 'rej' ? 'مردود' : '✓'}{n > 1 ? ` ×${fa(n)}` : ''}</Chip> : <span className="sub">—</span>}</td> })}
                 <td>{w.status === 'confirmed' ? <Chip tone="good">تأییدشده</Chip> : (e?.status.length ? <Chip tone="warn">موقت</Chip> : <Chip tone="neutral">خودکار</Chip>)}{confByWeld.get(w.id) ? <Chip tone="bad">ناسازگار</Chip> : null}</td>
                 <td>{can && w.status !== 'confirmed' && <button className="im-btn im-btn-sm" onClick={() => act('ex_weld_set_status', { p_weld: w.id, p_status: 'confirmed' })}>تأیید</button>}</td></tr>) })}

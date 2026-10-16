@@ -22,6 +22,8 @@ import { ActivityPicker } from './ActivityPicker'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
 import { useEpcStore } from '../store/useEpcStore'
+import { weldKey } from '../lib/welds'
+import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
 
@@ -167,6 +169,22 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const hist = m.history.filter((h) => h.reportId === reportId)
 
   const welds = useEpcStore((x) => x.welds)
+  const lineWelds = useEpcStore((x) => x.lineWelds)
+  // the facts already known about each weld (pipe, size, thickness …), derived from every saved row of every form of that weld
+  const profiles = useMemo(() => {
+    const byId = new Map(welds.filter((w) => w.projectId === m.projectId).map((w) => [w.id, `${w.sectionKey}|${w.weldKey}`]))
+    const repById = new Map(m.reports.map((x) => [x.id, x])), lineById = new Map(m.lines.map((x) => [x.id, x]))
+    const acc = new Map<string, { formKey: string; date: string; detail: Record<string, unknown> }[]>()
+    for (const lw of lineWelds) {
+      if (lw.projectId !== m.projectId) continue
+      const k = byId.get(lw.weldId), l = lineById.get(lw.lineId), rp = l ? repById.get(l.reportId) : undefined
+      if (!k || !l || !rp) continue
+      acc.set(k, [...(acc.get(k) ?? []), { formKey: rp.formKey, date: rp.reportDate, detail: l.detail }])
+    }
+    return new Map([...acc].map(([k, v]) => [k, buildProfile(v)] as [string, Profile]))
+  }, [welds, lineWelds, m.reports, m.lines, m.projectId])
+  const [autoFilled, setAutoFilled] = useState<Record<string, string[]>>({})
+  const colKeys = useMemo(() => new Set(form?.columns.map((c) => c.key) ?? []), [form])
   const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
@@ -178,10 +196,20 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : null
     const onText = (val: string) => {
       patchDetail(l.key, f.key, val)
-      // a known weld brings its pipe along when the row has none yet — only a suggestion, the person can overwrite it
-      if (known === 'weld' && !l.detail.pipeNo) { const w = weldHints.find((x) => x.weld === val && x.sec === String(l.detail.sec ?? '')); if (w?.pipe) patchDetail(l.key, 'pipeNo', w.pipe) }
+      setAutoFilled((a) => (a[l.key]?.includes(f.key) ? { ...a, [l.key]: a[l.key].filter((x) => x !== f.key) } : a)) // typing over a filled value makes it the person's own
+      // a known weld brings its facts along (pipe, size, thickness …) into the EMPTY fields of this row — a suggestion the person can overwrite
+      if (form && (f.key === 'sec' || f.key === 'weldNo' || f.key === 'jointNo')) {
+        const sec = f.key === 'sec' ? val : l.detail.sec, wd = f.key === 'sec' ? (l.detail.weldNo ?? l.detail.jointNo) : val
+        const k = weldKey(sec, wd), prof = k ? profiles.get(k) : undefined
+        if (prof) {
+          const patch = fillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, prof)
+          for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv)
+          if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] }))
+        }
+      }
     }
-    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : undefined} />
+    const auto = autoFilled[l.key]?.includes(f.key)
+    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : undefined} title={auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
   }
   const headField = (f: FieldDef) => (
     <label key={f.key} className={f.wide ? 'wide' : undefined}>{f.label}{f.req ? ' *' : ''}

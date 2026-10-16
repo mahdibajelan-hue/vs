@@ -145,7 +145,7 @@ function ItemPicker({ projectId, onClose, onPick }: { projectId: string; onClose
     <ModalPortal>
       <div className="im-overlay"><div className="im-modal" style={{ maxWidth: 860 }} role="dialog" aria-modal="true" aria-label="انتخاب از فهرست‌بها">
         <div className="im-modal-head"><div className="im-modal-title">انتخاب ردیف از فهرست‌بها</div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
-        {books.length === 0 ? <p className="im-helper">ابتدا یک فهرست‌بها در «فهرست‌های بها» ثبت کنید.</p> : <>
+        {books.length === 0 ? <p className="im-helper">ابتدا یک فهرست‌بها در «تنظیمات ← فهرست‌های بها» ثبت کنید.</p> : <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}><select value={bookId} onChange={(e) => setBookId(e.target.value)} aria-label="فهرست‌بها">{books.map((b) => <option key={b.id} value={b.id}>{b.title} — نسخه {fa(b.version)}</option>)}</select><input placeholder="شمارهٔ ردیف یا شرح…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus aria-label="جست‌وجو" /></div>
           <div className="fn-tbl-wrap" style={{ maxHeight: '50vh' }}><table className="ex-lines"><thead><tr><th>ردیف</th><th>شرح</th><th>واحد</th><th className="num">بهای واحد</th><th /></tr></thead>
             <tbody>{items.map((i) => <tr key={i.id}><td className="fn-code">{i.itemNo}{i.starred ? ' ★' : ''}</td><td>{i.description}</td><td>{i.unit}</td><td className="num">{fa(i.unitPrice)}</td><td>{used.has(i.id) ? <Chip>افزوده شده</Chip> : <button className="im-btn im-btn-sm" onClick={() => book && onPick(i, book)}>انتخاب</button>}</td></tr>)}{items.length === 0 && <tr><td colSpan={5} className="fn-empty">ردیفی پیدا نشد.</td></tr>}</tbody></table></div></>}
