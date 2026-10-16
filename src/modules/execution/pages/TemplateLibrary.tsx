@@ -7,6 +7,7 @@ import { GRID_SPECS } from '../forms/gridSpecs'
 import { addr } from '../forms/gridTypes'
 import { designGrid } from '../forms/designGrid'
 import { GridSheet } from '../forms/GridTemplate'
+import { TemplateAdjuster } from '../forms/TemplateAdjuster'
 import { Chip, Section } from '../../finance/components/fn'
 import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
@@ -22,6 +23,7 @@ function Inner({ projectId }: { projectId: string }) {
   const can = useExecutionStore((s) => s.can(projectId, '*') || s.can(projectId, 'configure'))
   const [fields, setFields] = useState<Record<string, { code: string; rev: string }>>({})
   const [busy, setBusy] = useState('')
+  const [viewing, setViewing] = useState<Record<string, string>>({})
   const ex = useExecutionStore.getState()
   const flags = (useExecutionStore((s) => s.settingsByProject.get(projectId)) as unknown as { flags?: Record<string, boolean> } | undefined)?.flags ?? {}
   const todayOn = !!flags.today
@@ -37,6 +39,21 @@ function Inner({ projectId }: { projectId: string }) {
         return (
           <Section key={b.formKey} title={b.title} hint={`برگ ${b.layout.sheet} از فایل ${b.layout.source.file} · ${fa(b.layout.stats.cells)} سلول · ${fa(b.layout.stats.merged)} ادغام`}>
             {!same && can && <button className="im-btn im-btn-primary im-btn-sm" disabled={busy === b.formKey} onClick={async () => { setBusy(b.formKey); await epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout: b.layout, bindings: b.bindings }); setBusy('') }}>ثبت این فایل در کتابخانه (پیش‌نویس)</button>}
+            <details style={{ marginTop: 8 }} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) setViewing((v) => ({ ...v, [b.formKey]: v[b.formKey] ?? (mine[0]?.id ?? 'base') })) }}>
+              <summary>مشاهده و اصلاح ظاهر فرم (فاصلهٔ سطر و ستون، تراز، اندازهٔ فونت)</summary>
+              {viewing[b.formKey] !== undefined && (() => {
+                const vid = viewing[b.formKey], ver = mine.find((t) => t.id === vid)
+                const lay = (ver?.layout ?? b.layout) as typeof b.layout, bnd = ver?.bindings ?? b.bindings
+                return <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                  <label className="im-helper">نسخه: <select value={vid} onChange={(e) => setViewing({ ...viewing, [b.formKey]: e.target.value })}>
+                    {mine.map((t) => <option key={t.id} value={t.id}>نسخهٔ {t.version} — {ST_FA[t.status]}{t.layout.adjusted ? ' (اصلاح ظاهر)' : ''}</option>)}
+                    <option value="base">فایل اصلی همراه برنامه (ثبت‌نشده)</option>
+                  </select></label>
+                  {ver?.layout.adjusted && <span className="im-helper">این نسخه فقط از نظر ظاهر اصلاح شده است: {ver.layout.adjusted.ops.join(' · ')}</span>}
+                  <TemplateAdjuster key={vid} base={lay} bindings={bnd} fromVersion={ver?.version ?? null} canEdit={can} onSave={(layout) => epc.saveTemplateDraft({ formKey: b.formKey, title: b.title, layout, bindings: bnd })} />
+                </div>
+              })()}
+            </details>
             {GRID_SPECS[b.formKey] && (
               <details style={{ marginTop: 8 }}>
                 <summary>بازبینی نگاشت سلول‌ها (پیشنهادی — قابل تأیید توسط مسئول فرم)</summary>

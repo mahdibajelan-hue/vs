@@ -9,6 +9,8 @@ export interface GridTemplate {
   rtl: boolean; cols: { w: number; hidden: boolean }[]; rows: { h: number; hidden: boolean }[]
   styles: GridStyle[]; cells: GridCell[]; logos: GridLogo[]
   stats: { cells: number; merged: number; texts: number; hiddenCols: number }
+  /** set when a form owner changed only the look (sizes, alignment, fonts) of a registered version; texts, merges and bindings are never touched */
+  adjusted?: { fromVersion: number | null; ops: string[] }
 }
 /** Where a value goes in the template. Anything not bound stays exactly as the approved sheet has it. */
 export interface CellBinding { cell: string; source: string; mode: 'replace' | 'append'; note?: string }
