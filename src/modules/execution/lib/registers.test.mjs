@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
-import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey } from './registers.ts'
+import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey, findByCode } from './registers.ts'
 import { weldLifecycle } from './weldLifecycle.ts'
 
-const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, createdBy: null })
+const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, cardNo: '', cardIssuedAt: null, cardIssuedBy: null, createdBy: null })
 assert.deepEqual(splitStamps('a12 / b-3 ، ۱۴ و c9'), ['A12', 'B-3', '14', 'C9'])
 assert.deepEqual(checkWelderCell('A12/Z9/S1', [W('A12'), W('S1', 'suspended')]), { unknown: ['Z9'], blocked: ['S1'] })
 assert.equal(registerKey(' p-۱۰۰۱ '), 'P-1001')
@@ -46,4 +46,6 @@ assert.ok(r.anomalies.includes('پوشش سرجوش پیش از پذیرفته�
 // a re-weld / new VT reject after acceptance drops the acceptance
 r = run([E('welding', '2'), E('rt_report', '3', { result: 'acc' }), E('welding', '4', { vt: 'rej' })])
 assert.equal(r.state, 'needs_repair')
+const people = [{ key: 'A12', cardNo: 'WLD-0001' }, { key: 'B5', cardNo: '' }]
+assert.equal(findByCode('a12', people).key, 'A12'); assert.equal(findByCode('wld-0001', people).key, 'A12'); assert.equal(findByCode('Z1', people), undefined); assert.equal(findByCode('  ', people), undefined)
 console.log('registers + weld lifecycle: all assertions passed')

@@ -9,7 +9,6 @@ import rtReport from './templates/rt_report.grid.json'
 import pqr from './templates/pqr.grid.json'
 import wqt from './templates/wqt.grid.json'
 import cardWelder from './templates/welder_card.grid.json'
-import coaterCard from './templates/coater_card.grid.json'
 import pipeEntry from './templates/pipe_entry.grid.json'
 import { WELDING_BINDINGS } from './weldingBindings'
 import { GRID_SPECS } from './gridSpecs'
@@ -34,6 +33,5 @@ export const BUNDLED_TEMPLATES: BundledTemplate[] = [
   stat('pqr', 'PQR — گزارش تأیید روش جوشکاری', pqr),
   stat('wqt', 'WQT — آزمون صلاحیت جوشکار', wqt),
   stat('welder_card', 'کارت جوشکار — CARD WELDER', cardWelder),
-  stat('coater_card', 'کارت عایق‌کار — فرم طراحی‌شده بر پایهٔ کارت جوشکار (نیازمند تأیید مسئول فرم)', coaterCard),
   spec('pipe_entry', 'صورتجلسه ورود لوله‌ها به کارگاه', pipeEntry),
 ]

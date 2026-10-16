@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
-import { welderStats, type Welder, type WelderQual } from '../lib/registers'
+import { findByCode, welderStats, type Welder, type WelderQual } from '../lib/registers'
 import { Chip, KpiCard, NumInput, Section, fmtD } from '../../finance/components/fn'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Empty, fa } from '../components/common'
@@ -56,6 +56,7 @@ function Inner({ projectId }: { projectId: string }) {
         <KpiCard label="صلاحیت در ۳۰ روز آینده منقضی می‌شود" value={fa(states.filter((s) => s === 'soon').length)} tone={states.includes('soon') ? 'warn' : 'good'} />
         <KpiCard label="بدون صلاحیت معتبر" value={fa(states.filter((s) => s === 'none' || s === 'expired').length)} tone={states.some((s) => s === 'none' || s === 'expired') ? 'bad' : 'good'} hint="جوشکار بدون صلاحیت معتبر نباید در فرم‌ها انتخاب شود" />
       </div>
+      <ScanBox people={allPeople} stateOf={(w) => stateOf(w)} onFound={(w) => { setKind(w.kind); setSel(w.id) }} />
       {can && (
         <Section title={`${KIND_FA[kind]} جدید`} hint="شناسه همان نشانه/شماره‌ای است که در فرم‌ها می‌نویسند (مثلاً A12). هر شناسه فقط یک‌بار در پروژه ثبت می‌شود و پس از ثبت، حذف نمی‌شود؛ فقط وضعیتش تغییر می‌کند.">
           <div className="ex-sheet-grid">
@@ -83,6 +84,50 @@ function Inner({ projectId }: { projectId: string }) {
   )
 }
 
+/** Scan or type a code from the welder's plate: a hand scanner types the code and presses Enter; on phones the camera reader is used when the browser has one. */
+function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: Welder) => void; stateOf: (w: Welder) => string }) {
+  const [code, setCode] = useState('')
+  const [res, setRes] = useState<{ w?: Welder; code: string } | null>(null)
+  const [cam, setCam] = useState(false)
+  const video = useRef<HTMLVideoElement>(null)
+  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = findByCode(v, people); setRes({ w, code: v }); if (w) onFound(w); setCode('') }
+  useEffect(() => {
+    if (!cam) return
+    let stop = false, stream: MediaStream | null = null
+    const Det = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector
+    void (async () => {
+      try {
+        if (!Det) return
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (video.current) { video.current.srcObject = stream; await video.current.play() }
+        const det = new Det({ formats: ['code_39', 'code_128', 'qr_code'] })
+        while (!stop && video.current) { const r = await det.detect(video.current).catch(() => []); if (r[0]) { look(r[0].rawValue); setCam(false); break } await new Promise((x) => setTimeout(x, 250)) }
+      } catch { setCam(false) }
+    })()
+    return () => { stop = true; stream?.getTracks().forEach((t) => t.stop()) }
+  }, [cam]) // eslint-disable-line react-hooks/exhaustive-deps
+  const hasCam = typeof window !== 'undefined' && 'BarcodeDetector' in window
+  return (
+    <Section title="اسکن پلاک / بارکد" hint="با اسکنر دستی (مثل صفحه‌کلید) یا دوربین موبایل، بارکد روی کارت یا پلاک جوشکار را بخوانید تا مشخصات و اعتبارش نمایش داده شود. همین شناسه در فیلد جوشکار فرم‌ها هم با اسکنر وارد می‌شود.">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input dir="ltr" autoComplete="off" placeholder="بارکد را اسکن کنید یا شناسه را بنویسید و Enter بزنید" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); look(code) } }} style={{ minWidth: 280 }} aria-label="اسکن بارکد" />
+        <button className="im-btn im-btn-sm" onClick={() => look(code)}>جست‌وجو</button>
+        {hasCam ? <button className="im-btn im-btn-sm" onClick={() => setCam((x) => !x)}>{cam ? 'بستن دوربین' : 'اسکن با دوربین'}</button> : <span className="sub">دوربین‌خوان در این مرورگر نیست؛ از اسکنر دستی استفاده کنید.</span>}
+      </div>
+      {cam && <video ref={video} muted playsInline style={{ marginTop: 8, width: 'min(100%, 360px)', borderRadius: 8, background: '#000' }} />}
+      {res && (res.w ? (
+        <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(16,185,129,.1)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          {res.w.photo && <img src={res.w.photo} alt="" style={{ width: 44, height: 56, objectFit: 'cover', borderRadius: 4 }} />}
+          <b>{res.w.fullName || res.w.raw}</b><span dir="ltr">{res.w.raw}</span><span>{KIND_FA[res.w.kind]}</span>
+          <Chip tone={res.w.status === 'active' ? 'good' : 'bad'}>{ST_FA[res.w.status]}</Chip>
+          <Chip tone={stateOf(res.w) === 'valid' ? 'good' : stateOf(res.w) === 'soon' ? 'warn' : 'bad'}>{{ valid: 'صلاحیت معتبر', soon: 'رو به انقضا', expired: 'منقضی / لغو', none: 'صلاحیت ثبت نشده' }[stateOf(res.w) as 'valid']}</Chip>
+          {res.w.cardNo ? <span dir="ltr">{res.w.cardNo}</span> : <span className="sub">کارت صادر نشده</span>}
+        </div>
+      ) : <p style={{ marginTop: 8, color: 'var(--im-coral, #dc2626)' }}>«{res.code}» در رجیستر این پروژه نیست.</p>)}
+    </Section>
+  )
+}
+
 function Card({ w, can, canConfirm, projectId, stats, quals, history }: { w: Welder; can: boolean; canConfirm: boolean; projectId: string; stats?: { welds: number; rtWelds: number; rtRepair: number }; quals: WelderQual[]; history: { entity: string; attr: string; oldValue: string | null; newValue: string | null; at: string }[] }) {
   const epc = useEpcStore()
   const blank = { wqtNo: '', process: '', position: '', materialGroup: '', thkMin: null as number | null, thkMax: null as number | null, diaMin: null as number | null, diaMax: null as number | null, issueDate: '', expiryDate: '' }
@@ -92,7 +137,7 @@ function Card({ w, can, canConfirm, projectId, stats, quals, history }: { w: Wel
   const dirty = d.fullName !== w.fullName || d.nationalId !== w.nationalId || d.status !== w.status || d.note !== w.note
   return (
     <Section title={`شناسنامهٔ ${KIND_FA[w.kind]} — ${w.raw}`} hint="تغییر مشخصات و صلاحیت‌ها در تاریخچهٔ زیر ثبت می‌شود. سرجوش‌ها و نتیجهٔ RT از فرم‌های ثبت‌شده محاسبه می‌شوند و در اینجا تایپ نمی‌شوند.">
-      <PersonnelCard w={w} projectId={projectId} can={can} canConfirm={canConfirm} />
+      <PersonnelCard w={w} projectId={projectId} can={can} canConfirm={canConfirm} quals={quals} />
       <h4 style={{ margin: '14px 0 6px' }}>وضعیت و مشخصات عمومی</h4>
       <div className="ex-sheet-grid">
         <label>نام<input disabled={!can} dir="auto" value={d.fullName} onChange={(e) => setD({ ...d, fullName: e.target.value })} /></label>
