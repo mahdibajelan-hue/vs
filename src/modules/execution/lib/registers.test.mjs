@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey, findByCode, cardPayload, scanTokens, fromScan } from './registers.ts'
 import { weldLifecycle } from './weldLifecycle.ts'
 
-const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, cardNo: '', cardIssuedAt: null, cardIssuedBy: null, createdBy: null, cardSignA: null, cardSignB: null })
+const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', hasPhoto: false, card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, cardNo: '', cardIssuedAt: null, cardIssuedBy: null, createdBy: null, cardSignA: null, cardSignB: null })
 assert.deepEqual(splitStamps('a12 / b-3 ، ۱۴ و c9'), ['A12', 'B-3', '14', 'C9'])
 assert.deepEqual(checkWelderCell('A12/Z9/S1', [W('A12'), W('S1', 'suspended')]), { unknown: ['Z9'], blocked: ['S1'] })
 assert.equal(registerKey(' p-۱۰۰۱ '), 'P-1001')

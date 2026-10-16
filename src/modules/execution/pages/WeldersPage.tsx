@@ -80,7 +80,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   const [res, setRes] = useState<{ w?: Welder; code: string } | null>(null)
   const [cam, setCam] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
-  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = scanTokens(v).map((t) => findByCode(t, people)).find(Boolean); setRes({ w, code: v }); if (w) onFound(w); setCode('') }
+  const look = (c: string) => { const v = c.trim(); if (!v) return; const w = scanTokens(v).map((t) => findByCode(t, people)).find(Boolean); setRes({ w, code: v }); if (w) { onFound(w); void useEpcStore.getState().loadPersonImages(w.id) } setCode('') }
   useEffect(() => {
     if (!cam) return
     let stop = false, stream: MediaStream | null = null

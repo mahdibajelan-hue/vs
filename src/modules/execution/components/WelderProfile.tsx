@@ -38,11 +38,11 @@ const Step = ({ n, title, state, children }: { n: number; title: string; state?:
 )
 
 /** one signature slot: who signed, or the button for the person who may */
-function SignSlot({ label, sig, expected, mine, canSign, onSign, disabledWhy }: { label: string; sig: PersonSig | null; expected: string; mine: boolean; canSign: boolean; onSign: () => void; disabledWhy?: string }) {
+function SignSlot({ label, sig, expected, mine, canSign, onSign, disabledWhy, busy }: { label: string; sig: PersonSig | null; expected: string; mine: boolean; canSign: boolean; onSign: () => void; disabledWhy?: string; busy?: boolean }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 10px', border: '1px solid var(--im-line, #cbd5e1)', borderRadius: 8, minWidth: 230 }}>
       <div style={{ flex: 1 }}><div className="sub">{label}</div>{sig ? <b>{sig.name} <small className="sub">{jdLatin(sig.at.slice(0, 10))}</small></b> : <span className="sub">{expected ? `منتظر امضای ${expected}` : 'منتظر امضا'}</span>}</div>
-      {sig ? <BadgeCheck size={18} color="#10b981" /> : <button className="im-btn im-btn-sm im-btn-primary" disabled={!canSign || !mine} title={disabledWhy ?? (mine ? undefined : 'امضاکنندهٔ این مرحله شما نیستید')} onClick={onSign}>امضا</button>}
+      {sig ? <BadgeCheck size={18} color="#10b981" /> : <button className="im-btn im-btn-sm im-btn-primary" disabled={!canSign || !mine || busy} title={disabledWhy ?? (mine ? undefined : 'امضاکنندهٔ این مرحله شما نیستید')} onClick={onSign}>{busy ? 'در حال امضا…' : 'امضا'}</button>}
     </div>
   )
 }
@@ -54,6 +54,8 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
   const settings = useExecutionStore((s) => s.settingsByProject.get(projectId)) as unknown as { personnelSigners?: Record<string, string> } | undefined
   const canReview = useExecutionStore((s) => s.can(projectId, 'review') || s.can(projectId, '*') || s.can(projectId, 'configure'))
   const people = useExecutionStore((s) => s.people)
+  const [busy, setBusy] = useState('')
+  const run = async (k: string, f: () => Promise<unknown>) => { setBusy(k); try { await f() } finally { setBusy('') } }
   const signers = settings?.personnelSigners ?? {}
   const mine = (key: string) => (signers[key] ? signers[key] === me : canReview)
   const who = (key: string) => (signers[key] ? people.get(signers[key]) ?? '' : '')
@@ -63,7 +65,10 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
   const [photo, setPhoto] = useState(w.photo)
   useEffect(() => { setId({ fullName: w.fullName, nationalId: w.nationalId, orgId: w.orgId ?? '', status: w.status }); setPhoto(w.photo) }, [w.id, w.fullName, w.nationalId, w.orgId, w.status, w.photo])
   const locked = w.cardStatus !== 'draft'
-  const idDirty = id.fullName !== w.fullName || id.nationalId !== w.nationalId || (id.orgId || null) !== w.orgId || id.status !== w.status || photo !== w.photo
+  // lists carry no images: load this person's photo and signature images once when the file is opened (and after a card is issued)
+  const photoLoaded = !w.hasPhoto || w.photo !== ''
+  useEffect(() => { if ((w.hasPhoto && !w.photo) || (w.cardSignA && !w.cardSignA.image) || (w.cardSignB && !w.cardSignB.image)) void epc.loadPersonImages(w.id) }, [w.id, w.cardStatus, w.hasPhoto]) // eslint-disable-line react-hooks/exhaustive-deps
+  const idDirty = id.fullName !== w.fullName || id.nationalId !== w.nationalId || (id.orgId || null) !== w.orgId || id.status !== w.status || (photoLoaded && photo !== w.photo)
 
   // ── 2. test (welders only)
   const cfg = testConfig(w.kind)
@@ -106,7 +111,7 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
             <label>وضعیت<select disabled={!can} value={id.status} onChange={(e) => setId({ ...id, status: e.target.value as Welder['status'] })}><option value="active">فعال</option><option value="suspended">معلق</option><option value="left">ترک کار</option></select></label>
           </div>
         </div>
-        {can && idDirty && <div><button className="im-btn im-btn-primary im-btn-sm" onClick={() => void epc.saveWelder({ ...w, projectId, raw: w.raw, fullName: id.fullName, nationalId: id.nationalId, orgId: id.orgId || null, status: id.status, photo, card: w.card })}>ذخیرهٔ مشخصات</button></div>}
+        {can && idDirty && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={busy === 'id'} onClick={() => void run('id', () => epc.saveWelder({ ...w, projectId, raw: w.raw, fullName: id.fullName, nationalId: id.nationalId, orgId: id.orgId || null, status: id.status, photo: photoLoaded ? photo : undefined, card: w.card }))}>{busy === 'id' ? 'در حال ذخیره…' : 'ذخیرهٔ مشخصات'}</button></div>}
       </Step>
 
       {(
@@ -122,11 +127,11 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
             return g.folded ? <details key={g.title}><summary className="im-helper">{g.title}</summary>{grid}</details> : <div key={g.title}><div className="im-helper" style={{ margin: '0 0 4px', fontWeight: 700 }}>{g.title}</div>{grid}</div>
           })}
           {tProblems.length > 0 && !testLocked && <p className="im-helper" style={{ margin: 0 }}>برای امضا لازم است: {tProblems.join('، ')}.</p>}
-          {can && !testLocked && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!testDirty || !w.fullName} title={!w.fullName ? 'ابتدا نام جوشکار را ذخیره کنید' : undefined} onClick={async () => { const sid = await epc.saveQual({ id: fresh ? undefined : cur?.id, projectId, welderId: w.id, wqt: { ...d, welderName: w.fullName, welderId: w.nationalId, stamp: w.raw } }); if (sid) { setFresh(false); setTid(sid) } }}>ذخیرهٔ فرم آزمون</button></div>}
+          {can && !testLocked && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!testDirty || !w.fullName || busy === 'test'} title={!w.fullName ? 'ابتدا نام را در مرحلهٔ ۱ ذخیره کنید' : undefined} onClick={() => void run('test', async () => { const sid = await epc.saveQual({ id: fresh ? undefined : cur?.id, projectId, welderId: w.id, wqt: { ...d, welderName: w.fullName, welderId: w.nationalId, stamp: w.raw } }); if (sid) { setFresh(false); setTid(sid) } })}>{busy === 'test' ? 'در حال ذخیره…' : 'ذخیرهٔ فرم آزمون'}</button></div>}
           {cur && !fresh && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <SignSlot label={w.kind === 'welder' ? 'ناظر جوش' : 'ناظر'} sig={cur.wqtSignA} expected={who(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} mine={mine(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'a')} />
-              <SignSlot label={w.kind === 'welder' ? 'مفسر عیوب جوش' : 'نماینده پیمانکار'} sig={cur.wqtSignB} expected={who(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} mine={mine(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} onSign={() => void epc.personSign('wqt', cur.id, 'b')} />
+              <SignSlot label={w.kind === 'welder' ? 'ناظر جوش' : 'ناظر'} sig={cur.wqtSignA} expected={who(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} mine={mine(w.kind === 'welder' ? 'weld_inspector' : 'coat_supervisor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} busy={busy === 'wa'} onSign={() => void run('wa', () => epc.personSign('wqt', cur.id, 'a'))} />
+              <SignSlot label={w.kind === 'welder' ? 'مفسر عیوب جوش' : 'نماینده پیمانکار'} sig={cur.wqtSignB} expected={who(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} mine={mine(w.kind === 'welder' ? 'defect_interpreter' : 'coat_contractor')} canSign={!testDirty && tProblems.length === 0} disabledWhy={testDirty ? 'ابتدا فرم را ذخیره کنید' : tProblems[0]} busy={busy === 'wb'} onSign={() => void run('wb', () => epc.personSign('wqt', cur.id, 'b'))} />
               {canReview && cur.wqtStatus === 'confirmed' && <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('آزمون بازگشایی و امضاها پاک شود؟')) void epc.personReopen('wqt', cur.id) }}><Undo2 size={13} /> بازگشایی</button>}
             </div>
           )}
@@ -142,11 +147,11 @@ export function WelderProfile({ w, projectId, can, tests, projectName }: { w: We
               {validityMode === 'DATE' && <label>تاریخ انقضا<JalaliDateInput value={card.validity} onChange={(x) => !locked && setCard({ ...card, validity: x })} /></label>}
               {extraFields.map((f) => <Field key={f.key} f={f} v={card[f.key] ?? ''} set={(x) => setCard({ ...card, [f.key]: x })} dis={!can || locked} />)}
             </div>
-            {can && !locked && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!cardDirty} onClick={() => void epc.saveWelder({ ...w, projectId, raw: w.raw, card })}>ذخیرهٔ اطلاعات کارت</button></div>}
+            {can && !locked && <div><button className="im-btn im-btn-primary im-btn-sm" disabled={!cardDirty || busy === 'card'} onClick={() => void run('card', () => epc.saveWelder({ ...w, projectId, raw: w.raw, card, photo: undefined }))}>{busy === 'card' ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات کارت'}</button></div>}
             {!w.fullName || !w.nationalId ? <p className="im-helper" style={{ margin: 0, color: 'var(--im-amber)' }}>برای صدور، نام و کد ملی را در مرحلهٔ ۱ ذخیره کنید.</p> : null}
             {!locked && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <SignSlot label="سرپرست کارگاه" sig={w.cardSignA} expected={who('site_head')} mine={mine('site_head')} canSign={!cardDirty && !!w.fullName && !!w.nationalId && !!w.card.validity} disabledWhy={cardDirty ? 'ابتدا اطلاعات کارت را ذخیره کنید' : !w.card.validity ? 'اعتبار کارت را مشخص و ذخیره کنید' : undefined} onSign={() => void epc.personSign('card', w.id, 'a')} />
-              <SignSlot label="سرپرست نظارت" sig={w.cardSignB} expected={who('supervision_head')} mine={mine('supervision_head')} canSign={!cardDirty && !!w.fullName && !!w.nationalId && !!w.card.validity} disabledWhy={cardDirty ? 'ابتدا اطلاعات کارت را ذخیره کنید' : !w.card.validity ? 'اعتبار کارت را مشخص و ذخیره کنید' : undefined} onSign={() => void epc.personSign('card', w.id, 'b')} />
+              <SignSlot label="سرپرست کارگاه" sig={w.cardSignA} expected={who('site_head')} mine={mine('site_head')} canSign={!cardDirty && !!w.fullName && !!w.nationalId && !!w.card.validity} disabledWhy={cardDirty ? 'ابتدا اطلاعات کارت را ذخیره کنید' : !w.card.validity ? 'اعتبار کارت را مشخص و ذخیره کنید' : undefined} busy={busy === 'ca'} onSign={() => void run('ca', () => epc.personSign('card', w.id, 'a'))} />
+              <SignSlot label="سرپرست نظارت" sig={w.cardSignB} expected={who('supervision_head')} mine={mine('supervision_head')} canSign={!cardDirty && !!w.fullName && !!w.nationalId && !!w.card.validity} disabledWhy={cardDirty ? 'ابتدا اطلاعات کارت را ذخیره کنید' : !w.card.validity ? 'اعتبار کارت را مشخص و ذخیره کنید' : undefined} busy={busy === 'cb'} onSign={() => void run('cb', () => epc.personSign('card', w.id, 'b'))} />
             </div>}
             {canReview && locked && <div><button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('کارت بازگشایی شود؟ امضاها پاک می‌شود و کارت تا امضای دوبارهٔ دو سرپرست معتبر نیست.')) void epc.personReopen('card', w.id) }}><Undo2 size={13} /> بازگشایی کارت</button></div>}
           </>
