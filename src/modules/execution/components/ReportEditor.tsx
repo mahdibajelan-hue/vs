@@ -30,6 +30,7 @@ import { attrOfKey, centralKey } from '../lib/weldCentral'
 import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { SheetEntry } from './SheetEntry'
+import { WELDER_FIELDS, checkPipeCell, checkWelderCell, isPipeField, isWelderField, pipeFillPatch, registerKey, splitStamps, welderQualified } from '../lib/registers'
 import { epcSettings } from '../lib/epcSettings'
 import { GRID_SPECS } from '../forms/gridSpecs'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
@@ -105,7 +106,40 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const slotsAll = useEpcStore((x) => x.signSlots), sigsAll = useEpcStore((x) => x.signatures)
   const reportSigs = sigsAll.filter((g) => g.reportId === reportId)
   const unsignedPrep = slotsAll.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party === 'contractor' && !reportSigs.some((g) => g.slotKey === x.slotKey)).map((x) => `امضای «${x.label}»`)
-  const missing = [...missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes()), ...unsignedPrep]
+  // identity registers (welders, pipes received into the warehouse): a name that is not in the register is flagged; with the project flag «strictRegisters» it also blocks sending
+  const regWelders = useEpcStore((x) => x.welders), regQuals = useEpcStore((x) => x.quals), regPipes = useEpcStore((x) => x.pipes)
+  const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
+  const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId), [regWelders, m.projectId])
+  const pipeList = useMemo(() => regPipes.filter((p) => p.projectId === m.projectId), [regPipes, m.projectId])
+  const regWarnings = useMemo(() => {
+    if (!form) return []
+    const out: string[] = [], toNum = (v: unknown) => { const n = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null }
+    rows.forEach((l, i) => {
+      const at = `ردیف ${i + 1}`
+      if (welderList.length) {
+        const seen = new Set<string>()
+        for (const f of WELDER_FIELDS) {
+          if (!(f in l.detail)) continue
+          const c = checkWelderCell(l.detail[f], welderList)
+          for (const u of c.unknown) out.push(`${at}: جوشکار «${u}» در رجیستر جوشکاران نیست`)
+          for (const b of c.blocked) out.push(`${at}: جوشکار «${b}» فعال نیست (معلق یا ترک‌کار)`)
+          if (form.key === 'welding' || form.key === 'tie_in') for (const t of splitStamps(l.detail[f])) {
+            if (seen.has(t)) continue; seen.add(t)
+            const w = welderList.find((x) => x.key === t); if (!w || w.status !== 'active') continue
+            const r = welderQualified(regQuals.filter((q) => q.welderId === w.id), { date: head.reportDate, thk: toNum(l.detail.thkIn), dia: toNum(l.detail.sizeIn) })
+            if (!r.ok) out.push(`${at}: جوشکار «${t}» صلاحیت معتبر برای این جوش ندارد (${r.reasons.join('، ')})`)
+          }
+        }
+      }
+      if (pipeList.length && isPipeField('pipeNo') && 'pipeNo' in l.detail) {
+        const c = checkPipeCell(l.detail.pipeNo, pipeList)
+        if (c.unknown && form.key !== 'pipe_entry') out.push(`${at}: لولهٔ «${String(l.detail.pipeNo).trim()}» در رجیستر لوله‌های ورودی نیست`)
+        if (c.bad) out.push(`${at}: لولهٔ «${String(l.detail.pipeNo).trim()}» مردود/اسقاط ثبت شده است`)
+      }
+    })
+    return [...new Set(out)]
+  }, [form, rows, welderList, pipeList, regQuals, head.reportDate])
+  const missing = [...missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes()), ...unsignedPrep, ...(strictRegs ? regWarnings : [])]
   const incons = form ? [] : inconsistenciesForReport(asLines(), m.actById)
   const overRows = useMemo(() => new Set(rows.filter((x) => { const a = x.activityId ? m.actById.get(x.activityId) : undefined; if (!a) return false; const base = m.baseOf(a, head.reportDate); return base > 0 && (upToday.get(a.id) ?? 0) + rows.filter((y) => y.activityId === a.id).reduce((s, y) => s + y.qty, 0) > base * (1 + m.settings.overBasePct / 100) + 1e-9 }).map((x) => x.key)), [rows, upToday, m, head.reportDate])
 
@@ -239,6 +273,11 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : null
     const onText = (val: string) => {
       patchDetail(l.key, f.key, val)
+      // a pipe from the warehouse register brings its size / thickness (and length on pipe-level forms) into the EMPTY fields
+      if (form && isPipeField(f.key)) {
+        const pp = pipeList.find((x) => x.key === registerKey(val))
+        if (pp) { const patch = pipeFillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, pp); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
+      }
       setAutoFilled((a) => (a[l.key]?.includes(f.key) ? { ...a, [l.key]: a[l.key].filter((x) => x !== f.key) } : a)) // typing over a filled value makes it the person's own
       // a known weld brings its facts along (pipe, size, thickness …) into the EMPTY fields of this row — a suggestion the person can overwrite
       if (form && (f.key === 'sec' || f.key === 'weldNo' || f.key === 'jointNo')) {
@@ -252,7 +291,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       }
     }
     const auto = autoFilled[l.key]?.includes(f.key)
-    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : undefined} title={auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
+    const badReg = isWelderField(f.key) ? (welderList.length ? (() => { const c = checkWelderCell(v, welderList); return c.unknown.length || c.blocked.length })() : 0) : isPipeField(f.key) && pipeList.length && form?.key !== 'pipe_entry' ? (() => { const c = checkPipeCell(v, pipeList); return c.unknown || c.bad ? 1 : 0 })() : 0
+    return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : isWelderField(f.key) ? 'ex-hint-welder' : undefined} title={badReg ? 'در رجیستر ثبت نشده یا فعال نیست' : auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={badReg ? { outline: '2px solid #ef4444', outlineOffset: -1 } : auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
   }
   const headField = (f: FieldDef) => (
     <label key={f.key} className={f.wide ? 'wide' : undefined}>{f.label}{f.req ? ' *' : ''}
@@ -283,7 +323,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {r.status === 'incomplete' && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}><b>فرم نیازمند تکمیل است.</b> این گزارش از اطلاعات موجود پیش‌پر شده؛ فقط بخش‌های ناقص زیر را کامل کنید:<ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{r.missing.map((x) => <li key={x}>{x}</li>)}</ul></div>}
       {!EDITABLE.has(r.status) && <div className="im-card" style={{ padding: '8px 14px' }}><span className="im-helper" style={{ margin: 0 }}>این گزارش ارسال یا بررسی شده و فقط‌خواندنی است. برای اصلاح، دستگاه نظارت باید آن را برگرداند یا بازگشایی کند.</span></div>}
 
-      {form && <><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{[...new Set(weldHints.map((w) => w.pipe).filter(Boolean))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist></>}
+      {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{[...new Set([...pipeList.map((p) => p.raw), ...weldHints.map((w) => w.pipe)].filter(Boolean))].slice(0, 800).map((x) => <option key={x} value={x} />)}</datalist></>}
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>
@@ -299,6 +339,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
       </div>
 
+      {form && regWarnings.length > 0 && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: `3px solid ${strictRegs ? 'var(--im-coral)' : 'var(--im-amber)'}` }}><b>{strictRegs ? 'موارد رجیستر که پیش از ارسال باید اصلاح شود' : 'هشدار رجیستر لوله و جوشکار'} ({fa(regWarnings.length)})</b>
+        <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{regWarnings.slice(0, 12).map((w) => <li key={w}>{w}</li>)}{regWarnings.length > 12 && <li>و {fa(regWarnings.length - 12)} مورد دیگر…</li>}</ul>
+        <small className="sub">رجیستر در «لوله‌ها و جوشکاران» است؛ شناسهٔ تازه را آنجا ثبت کنید، نه اینکه در فرم‌ها متفاوت بنویسید.</small></div>}
       <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
 
       {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}

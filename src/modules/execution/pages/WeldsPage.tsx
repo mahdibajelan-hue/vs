@@ -10,6 +10,7 @@ import type { WeldRow } from '../epcTypes'
 import { buildProfile, SHARED } from '../lib/weldProfile'
 import { ATTR_LABEL, type Attr } from '../lib/weldCentral'
 import { FORM_BY_KEY } from '../lib/formCatalog'
+import { WSTATE_FA, weldLifecycle, type WState } from '../lib/weldLifecycle'
 import { fmtD } from '../../finance/components/fn'
 
 const STAGES: { key: WeldStage; label: string }[] = [{ key: 'fitup', label: 'فیت‌آپ' }, { key: 'weld', label: 'جوش' }, { key: 'rt_request', label: 'درخواست RT' }, { key: 'rt', label: 'RT' }, { key: 'repair', label: 'تعمیر' }, { key: 'coating', label: 'پوشش' }]
@@ -47,10 +48,21 @@ function Inner({ projectId }: { projectId: string }) {
     }
     return out
   }, [epc.lineWelds, lineById, reportById, projectId])
+  // quality chain per weld (fit-up → weld → RT → repair → RT again → coating → coating test), derived from the rows
+  const life = useMemo(() => {
+    const ev = new Map<string, import('../lib/weldLifecycle').WEvent[]>()
+    for (const lw of epc.lineWelds) {
+      if (lw.projectId !== projectId) continue
+      const l = lineById.get(lw.lineId); const r = l ? reportById.get(l.reportId) : undefined; if (!l || !r || r.status === 'rejected') continue
+      const a = ev.get(lw.weldId) ?? []; a.push({ formKey: r.formKey, date: r.reportDate, result: String(l.detail.result ?? ''), vt: String(l.detail.vt ?? ''), repairDone: String(l.detail.repairDone ?? ''), lineId: l.id }); ev.set(lw.weldId, a)
+    }
+    return new Map([...ev].map(([id, e]) => [id, weldLifecycle(e)]))
+  }, [epc.lineWelds, lineById, reportById, projectId])
+  const [lifeF, setLifeF] = useState<WState | ''>('')
   const conflicts = epc.weldConflicts.filter((c) => c.projectId === projectId)
   const suspects = epc.weldSuspects.filter((s) => s.projectId === projectId)
   const confByWeld = new Map<string, number>(); for (const c of conflicts) confByWeld.set(c.weldId, (confByWeld.get(c.weldId) ?? 0) + 1)
-  const rows = welds.filter((w) => (!q || `${w.sectionRaw} ${w.weldRaw} ${w.pipeNo ?? ''}`.toLowerCase().includes(q.toLowerCase())) && (!noRt || !(info.get(w.id)?.stages.rt))).sort((a, b) => (a.sectionKey + a.weldKey < b.sectionKey + b.weldKey ? -1 : 1))
+  const rows = welds.filter((w) => (!q || `${w.sectionRaw} ${w.weldRaw} ${w.pipeNo ?? ''}`.toLowerCase().includes(q.toLowerCase())) && (!noRt || !(info.get(w.id)?.stages.rt)) && (!lifeF || life.get(w.id)?.state === lifeF)).sort((a, b) => (a.sectionKey + a.weldKey < b.sectionKey + b.weldKey ? -1 : 1))
   const label = (w: WeldRow | undefined) => (w ? `سکشن ${w.sectionRaw} · ${w.weldRaw}` : '—')
   const act = (fn: Parameters<typeof epc.weldAction>[0], args: Record<string, unknown>) => void epc.weldAction(fn, args)
   return (
@@ -58,6 +70,10 @@ function Inner({ projectId }: { projectId: string }) {
       <div className="fn-kpis">
         <KpiCard label="سرجوش‌های شناخته‌شده" value={fa(welds.length)} sub="شاخصی روی فرم‌ها؛ متن فرم‌ها دست‌نخورده" />
         <KpiCard label="بدون درخواست/گزارش RT" value={fa(welds.filter((w) => !info.get(w.id)?.stages.rt).length)} tone="warn" />
+        <KpiCard label="نیازمند تعمیر" value={fa([...life.values()].filter((x) => x.state === 'needs_repair').length)} tone={[...life.values()].some((x) => x.state === 'needs_repair') ? 'bad' : 'good'} onClick={() => setLifeF(lifeF === 'needs_repair' ? '' : 'needs_repair')} />
+        <KpiCard label="تعمیرشده، منتظر RT مجدد" value={fa([...life.values()].filter((x) => x.state === 'repaired').length)} tone="warn" onClick={() => setLifeF(lifeF === 'repaired' ? '' : 'repaired')} />
+        <KpiCard label="RT پذیرفته، منتظر پوشش" value={fa([...life.values()].filter((x) => x.state === 'rt_accepted').length)} onClick={() => setLifeF(lifeF === 'rt_accepted' ? '' : 'rt_accepted')} />
+        <KpiCard label="پوشش‌شده، منتظر تست پوشش" value={fa([...life.values()].filter((x) => x.state === 'coated').length)} onClick={() => setLifeF(lifeF === 'coated' ? '' : 'coated')} />
         <KpiCard label="ناسازگاری باز" value={fa(conflicts.length)} tone={conflicts.length ? 'bad' : 'good'} />
         <KpiCard label="موارد مشکوک به یکی‌بودن" value={fa(suspects.length)} tone={suspects.length ? 'warn' : 'good'} hint="هرگز خودکار ادغام نمی‌شوند" />
       </div>
@@ -84,14 +100,16 @@ function Inner({ projectId }: { projectId: string }) {
         {([['list', 'سرجوش‌ها'], ['conflicts', `ناسازگاری‌ها (${fa(conflicts.length)})`], ['suspects', `موارد مشکوک (${fa(suspects.length)})`]] as const).map(([k, l]) => <button key={k} className={`im-btn im-btn-sm${tab === k ? ' im-btn-primary' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'list' && (
-        <Section title="سرجوش‌ها و مراحل" action={<span style={{ display: 'inline-flex', gap: 6 }}><input placeholder="جست‌وجوی سکشن، سرجوش، لوله…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جست‌وجو" /><label><input type="checkbox" checked={noRt} onChange={(e) => setNoRt(e.target.checked)} /> فقط بدون RT</label></span>}>
-          <div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>سرجوش</th><th>لوله</th>{STAGES.map((s) => <th key={s.key}>{s.label}</th>)}<th>وضعیت</th><th /></tr></thead>
+        <Section title="سرجوش‌ها و مراحل" action={<span style={{ display: 'inline-flex', gap: 6 }}><input placeholder="جست‌وجوی سکشن، سرجوش، لوله…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جست‌وجو" /><select value={lifeF} onChange={(e) => setLifeF(e.target.value as WState | '')} aria-label="وضعیت کیفیت"><option value="">همهٔ وضعیت‌های کیفیت</option>{(['welded', 'rt_requested', 'needs_repair', 'repaired', 'rt_accepted', 'coated', 'coat_failed', 'coat_tested'] as WState[]).map((k) => <option key={k} value={k}>{WSTATE_FA[k]}</option>)}</select><label><input type="checkbox" checked={noRt} onChange={(e) => setNoRt(e.target.checked)} /> فقط بدون RT</label></span>}>
+          <div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>سرجوش</th><th>لوله</th>{STAGES.map((s) => <th key={s.key}>{s.label}</th>)}<th>وضعیت کیفیت</th><th>گام بعدی</th><th>وضعیت</th><th /></tr></thead>
             <tbody>{rows.slice(0, 300).map((w) => { const e = info.get(w.id); return (
               <tr key={w.id}><td dir="ltr"><button className="im-btn im-btn-sm" onClick={() => setOpen(open === w.id ? '' : w.id)} aria-expanded={open === w.id}>{label(w)}</button></td><td dir="ltr">{w.pipeNo ?? <Chip tone="warn">نامشخص</Chip>}</td>
                 {STAGES.map((s) => { const n = e?.stages[s.key] ?? 0; const res = s.key === 'rt' ? e?.rt : s.key === 'weld' ? e?.vt : ''; return <td key={s.key}>{n ? <Chip tone={res === 'rep' || res === 'rej' ? 'bad' : 'good'}>{res === 'rep' ? 'تعمیر' : res === 'rej' ? 'مردود' : '✓'}{n > 1 ? ` ×${fa(n)}` : ''}</Chip> : <span className="sub">—</span>}</td> })}
+                <td>{(() => { const lf = life.get(w.id); if (!lf || lf.state === 'none') return <span className="sub">—</span>; const bad = lf.state === 'needs_repair' || lf.state === 'coat_failed'; return <span title={lf.anomalies.join(' · ') || undefined}><Chip tone={bad ? 'bad' : lf.state === 'coat_tested' ? 'good' : 'warn'}>{WSTATE_FA[lf.state]}{lf.cycle ? ` · چرخهٔ تعمیر ${fa(lf.cycle)}` : ''}</Chip>{lf.anomalies.length > 0 && <Chip tone="bad">ناهمخوانی ترتیب</Chip>}</span> })()}</td>
+                <td>{life.get(w.id)?.next ?? <span className="sub">—</span>}</td>
                 <td>{w.status === 'confirmed' ? <Chip tone="good">تأییدشده</Chip> : (e?.status.length ? <Chip tone="warn">موقت</Chip> : <Chip tone="neutral">خودکار</Chip>)}{confByWeld.get(w.id) ? <Chip tone="bad">ناسازگار</Chip> : null}</td>
                 <td>{can && w.status !== 'confirmed' && <button className="im-btn im-btn-sm" onClick={() => act('ex_weld_set_status', { p_weld: w.id, p_status: 'confirmed' })}>تأیید</button>}</td></tr>) })}
-              {rows.length === 0 && <tr><td colSpan={STAGES.length + 4} className="sub">سرجوشی ثبت نشده است؛ با ذخیرهٔ فرم‌های فنی ساخته می‌شود.</td></tr>}</tbody></table></div>
+              {rows.length === 0 && <tr><td colSpan={STAGES.length + 6} className="sub">سرجوشی ثبت نشده است؛ با ذخیرهٔ فرم‌های فنی ساخته می‌شود.</td></tr>}</tbody></table></div>
           {rows.length > 300 && <p className="im-helper">۳۰۰ ردیف اول نمایش داده شد؛ جست‌وجو کنید.</p>}
         </Section>
       )}
