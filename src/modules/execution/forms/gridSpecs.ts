@@ -10,8 +10,12 @@ export interface GridSpec {
   /** `first` = 0-based row of the first record, `step` rows per record, `per` records per page, `numCol` = column that prints the running number (continued on later pages) */
   rows: { first: number; step: number; per: number; numCol: number; numDr?: number; cols: RowCol[] }
   thk?: ThkTotals
+  /** totals printed as stacked blocks, one per wall thickness (the pipe-delivery sheet): rows `today`/`until`, thickness read from the label cell, length and count columns */
+  vblocks?: { labelCol: number; lenCol: number; cntCol: number; blocks: { today: number; until: number }[]; grand?: { row: number; cntRow?: number } }
+  /** separator of the printed date (the sheet's own style) */
+  dateSep?: '/' | '.'
 }
-export interface SpecInput { header: Record<string, string>; rows: Record<string, string>[]; thk?: number[]; prior?: { len: number[]; joints: number[] } }
+export interface SpecInput { header: Record<string, string>; rows: Record<string, string>[]; thk?: number[]; prior?: { len: number[]; joints: number[] }; /** earlier totals by thickness label («0.688») for vblocks sheets */ priorByThk?: Record<string, { len: number; joints: number }> }
 export interface SpecPage { values: Record<string, string>; missing: string[]; pages: number }
 
 /** a plain field of the row; `.key` lets the sheet-entry screen map a clicked cell back to the field */
@@ -57,6 +61,12 @@ export const GRID_SPECS: Record<string, GridSpec> = {
     headers: [{ cell: 'F4', key: 'date' }, { cell: 'T4', key: 'page' }, { cell: 'U4', key: 'reportNo', mode: 'append' }, { cell: 'P5', key: 'code', mode: 'append' }, { cell: 'O6', key: 'iqi', mode: 'append' }, { cell: 'A7', key: 'focal', mode: 'append' }, { cell: 'H7', key: 'strength', mode: 'append' }, { cell: 'O7', key: 'sensitivity', mode: 'append' }, { cell: 'R7', key: 'groove', mode: 'append' }, { cell: 'U7', key: 'sfd', mode: 'append' }, { cell: 'A9', key: 'isotope', mode: 'append' }, { cell: 'H9', key: 'exposure', mode: 'append' }, { cell: 'O9', key: 'film', mode: 'append' }, { cell: 'R9', key: 'process', mode: 'append' }, { cell: 'U9', key: 'ug', mode: 'append' }],
     rows: { first: 11, step: 1, per: 20, numCol: 0, cols: [{ c: 1, get: k('rtReqNo') }, { c: 2, get: k('sec') }, { c: 3, get: k('weldNo') }, { c: 5, get: k('odIn') }, { c: 6, get: k('thkIn') }, { c: 8, get: mark('result', 'acc') }, { c: 9, get: mark('result', 'rep') }, { c: 10, get: mark('repairKind', 'RS') }, { c: 11, get: mark('repairKind', 'RT') }, { c: 12, get: mark('repairKind', 'CO') }, { c: 13, get: mark('repairKind', 'RC') }, { c: 14, get: k('defect') }] },
   },
+  pipe_entry: {
+    formKey: 'pipe_entry', dateSep: '/',
+    headers: [{ cell: 'A4', key: 'date' }, { cell: 'H4', key: 'reportNo' }],
+    rows: { first: 5, step: 1, per: 25, numCol: 0, cols: [{ c: 1, get: k('pipeNo') }, { c: 2, get: k('lengthM') }, { c: 3, get: k('thkIn') }, { c: 4, get: k('sizeIn') }, { c: 5, get: k('billNo') }, { c: 6, get: k('loadDate') }, { c: 7, get: k('truckNo') }, { c: 8, get: k('unloadDate') }, { c: 9, get: k('status') }] },
+    vblocks: { labelCol: 3, lenCol: 4, cntCol: 9, blocks: [{ today: 31, until: 32 }, { today: 33, until: 34 }, { today: 35, until: 36 }, { today: 37, until: 38 }], grand: { row: 39 } },
+  },
 }
 
 const f2 = (x: number) => x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -71,6 +81,7 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
   const pages = specPages(spec, inp.rows.length), out: Record<string, string> = {}
   const set = (r: number, c: number, v: string) => { if (v !== '') out[addr(r, c)] = v }
   const hv: Record<string, string> = { ...inp.header, page: String(p + 1), pages: String(pages) }
+  if (spec.dateSep === '/' && hv.date) hv.date = hv.date.replace(/\./g, '/')
   for (const h of spec.headers) { const v = hv[h.key] ?? ''; if (!v) continue; out[h.cell] = h.mode === 'append' ? `${(fixed[h.cell] ?? '').trim()} ${v}` : v }
   const R = spec.rows, slice = inp.rows.slice(p * R.per, (p + 1) * R.per), before = inp.rows.slice(0, p * R.per)
   slice.forEach((row, i) => {
@@ -89,6 +100,19 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
     set(T.today, T.lenTotal, f2(sum(today))); set(T.until, T.lenTotal, f2(sum(until))); set(T.today, T.jntTotal, String(sum(tj))); set(T.until, T.jntTotal, String(sum(uj)))
     // each weld's length goes under its thickness column
     slice.forEach((row, i) => { const ci = thk.findIndex((t) => near(Number(row.thkIn), t)); if (ci >= 0 && row.lengthM) set(R.first + R.step * i, T.thk0 + ci, f2(Number(row.lengthM))) })
+  }
+  const V = spec.vblocks
+  if (V) {
+    let gl = 0, gc = 0
+    for (const b of V.blocks) {
+      const t = parseFloat(fixed[addr(b.today, V.labelCol)] ?? ''); if (!Number.isFinite(t)) continue
+      const sel = (rs: Record<string, string>[]) => rs.filter((r) => near(Number(r.thkIn), t))
+      const tl = sel(slice).reduce((a, r) => a + (Number(r.lengthM) || 0), 0), tc = sel(slice).length
+      const pr = inp.priorByThk?.[t.toFixed(3)] ?? { len: 0, joints: 0 }
+      const ul = sel(before).reduce((a, r) => a + (Number(r.lengthM) || 0), 0) + pr.len + tl, uc = sel(before).length + pr.joints + tc
+      set(b.today, V.lenCol, f2(tl)); set(b.today, V.cntCol, String(tc)); set(b.until, V.lenCol, f2(ul)); set(b.until, V.cntCol, String(uc)); gl += ul; gc += uc
+    }
+    if (V.grand) { set(V.grand.row, V.lenCol, f2(gl)); set(V.grand.row, V.cntCol, String(gc)) }
   }
   const have = new Set(tpl.cells.map((c) => addr(c.r, c.c)))
   return { values: out, missing: Object.keys(out).filter((a) => !have.has(a)), pages }

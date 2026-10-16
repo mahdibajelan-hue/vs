@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { splitStamps, checkWelderCell, checkPipeCell, qualProblems, welderQualified, pipeFillPatch, pipeProgress, welderStats, registerKey } from './registers.ts'
 import { weldLifecycle } from './weldLifecycle.ts'
 
-const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '' })
+const W = (key, status = 'active') => ({ id: key, projectId: 'p', key, raw: key, fullName: '', nationalId: '', orgId: null, status, note: '', kind: 'welder', photo: '', card: {}, cardStatus: 'draft', cardConfirmedBy: null, cardConfirmedAt: null, createdBy: null })
 assert.deepEqual(splitStamps('a12 / b-3 ، ۱۴ و c9'), ['A12', 'B-3', '14', 'C9'])
 assert.deepEqual(checkWelderCell('A12/Z9/S1', [W('A12'), W('S1', 'suspended')]), { unknown: ['Z9'], blocked: ['S1'] })
 assert.equal(registerKey(' p-۱۰۰۱ '), 'P-1001')
@@ -14,7 +14,7 @@ assert.equal(checkPipeCell('P-1001', [{ ...P, status: 'rejected' }]).bad, true)
 assert.deepEqual(pipeFillPatch('string', new Set(['pipeNo', 'lengthM', 'thkIn', 'diaIn']), { thkIn: '' }, P), { diaIn: '30', thkIn: '0.438', lengthM: '12.1' })
 assert.deepEqual(pipeFillPatch('fitup', new Set(['lengthM', 'thkIn', 'sizeIn']), { thkIn: '0.5' }, P), { sizeIn: '30' })
 
-const Q = { id: 'q', projectId: 'p', welderId: 'W1', wqtNo: '1', process: 'SMAW/GTAW', position: '', materialGroup: '', thkMin: 0.2, thkMax: 0.8, diaMin: null, diaMax: null, issueDate: '2026-01-01', expiryDate: '2026-06-30', wqtReportId: null, status: 'valid', note: '' }
+const Q = { id: 'q', projectId: 'p', welderId: 'W1', wqtNo: '1', process: 'SMAW/GTAW', position: '', materialGroup: '', thkMin: 0.2, thkMax: 0.8, diaMin: null, diaMax: null, issueDate: '2026-01-01', expiryDate: '2026-06-30', wqtReportId: null, status: 'valid', note: '', wqt: {}, wqtStatus: 'draft', wqtConfirmedBy: null, wqtConfirmedAt: null, createdBy: null }
 assert.deepEqual(qualProblems(Q, { date: '2026-03-01', thk: 0.438, process: 'smaw' }), [])
 assert.deepEqual(qualProblems(Q, { date: '2026-07-01', thk: 1 }), ['منقضی', 'خارج از محدودهٔ ضخامت'])
 assert.equal(welderQualified([], { date: '2026-03-01' }).ok, false)

@@ -61,10 +61,14 @@ const str = (v: unknown) => (v == null ? '' : String(v))
 export function specInputOf(r: PaperCtx['report'], lines: { detail: Record<string, unknown> }[], id: { diameterIn?: string | number; pipeGrade?: string; pipeStandard?: string }, metrics?: PaperCtx['metrics']): SpecInput {
   const header: Record<string, string> = Object.fromEntries(Object.entries(r.data).map(([k, v]) => [k, str(v)]))
   Object.assign(header, { reportNo: r.reportNo, date: jd(r.reportDate), pipeSpec: str(r.data.pipeSpec) || (id.diameterIn ? `Pipe ${id.diameterIn}" , ${id.pipeGrade} , ${id.pipeStandard}` : ''), wps: str(r.data.wpsNo), reqNo: str(r.data.reqNo) })
-  const rows = lines.map((l) => Object.fromEntries(Object.entries(l.detail).map(([k, v]) => [k, str(v)])))
+  const dateText = (k: string, v: unknown) => (/Date$/.test(k) && /^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? jd(str(v)) : str(v))
+  const rows = lines.map((l) => Object.fromEntries(Object.entries(l.detail).map(([k, v]) => [k, dateText(k, v)])))
   const thk = thicknessSet(r.data.thkSet)
   const pr = (key: string, i: number) => (metrics ?? []).filter((m) => m.metric.key === key && Math.abs((num(m.group) ?? -1) - thk[i]) < 0.0005).reduce((s, m) => s + m.prior, 0)
-  return { header, rows, thk, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) } }
+  // earlier totals by thickness (pipe-delivery metrics are named «length» / «joints» and grouped by thickness)
+  const priorByThk: Record<string, { len: number; joints: number }> = {}
+  for (const m of metrics ?? []) { const t = num(m.group); if (t == null) continue; const e = priorByThk[t.toFixed(3)] ?? { len: 0, joints: 0 }; if (m.metric.key === 'length') e.len += m.prior; if (m.metric.key === 'joints') e.joints += m.prior; priorByThk[t.toFixed(3)] = e }
+  return { header, rows, thk, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) }, priorByThk }
 }
 /** Any other approved sheet that has a declarative cell mapping (gridSpecs.ts). */
 function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {

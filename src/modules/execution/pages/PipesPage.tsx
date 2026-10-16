@@ -8,6 +8,29 @@ import { Chip, KpiCard, NumInput, Section, fmtD } from '../../finance/components
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Empty, fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
+import { GridSheet, printPlan } from '../forms/GridTemplate'
+import { GRID_SPECS, specPage, specPages } from '../forms/gridSpecs'
+import { jdLatin, useSheet } from '../components/PersonSheet'
+
+/** The pipe-delivery record printed from the register for one entry date: the register is the source, nothing is typed again. Totals «to date» add every earlier entry. */
+function EntryPreview({ pipes, date }: { pipes: Pipe[]; date: string }) {
+  const { layout, approved } = useSheet('pipe_entry')
+  if (!layout) return null
+  const spec = GRID_SPECS.pipe_entry
+  const today = pipes.filter((p) => p.entryDate === date).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }))
+  const prior: Record<string, { len: number; joints: number }> = {}
+  for (const p of pipes) if (p.entryDate < date && p.wtIn != null) { const k = p.wtIn.toFixed(3), e = prior[k] ?? { len: 0, joints: 0 }; e.len += p.lengthM ?? 0; e.joints++; prior[k] = e }
+  const rows = today.map((p) => ({ pipeNo: p.raw, lengthM: String(p.lengthM ?? ''), thkIn: String(p.wtIn ?? ''), sizeIn: String(p.odIn ?? ''), billNo: p.wayBill, loadDate: '', truckNo: '', unloadDate: jdLatin(p.entryDate), status: '' }))
+  const other = today.filter((p) => p.wtIn == null || ![0.406, 0.562, 0.688, 0.75].some((t) => Math.abs(t - (p.wtIn as number)) < 0.0005)).length
+  const plan = printPlan(layout), n = specPages(spec, rows.length)
+  return (
+    <div className="mt-printable gt-paper" dir="ltr">
+      <p className="no-print" style={{ margin: '0 0 4px', fontSize: 11, textAlign: 'center' }}>{approved ? '' : 'پیش‌نمایش با قالب همراه برنامه؛ برای چاپ رسمی قالب را در کتابخانه تأیید کنید. '}{other ? `${other} لوله ضخامتی خارج از چهار ضخامت جدول جمع‌بندی فرم دارد و در جمع‌ها نمی‌آید.` : ''}</p>
+      <style>{`${plan.css} @media print { .gt-page { zoom: ${plan.scale}; break-after: page; } .gt-page:last-child { break-after: auto; } }`}</style>
+      {Array.from({ length: n }, (_, i) => <div key={i} className="gt-page" style={{ width: 'fit-content', margin: '0 auto', maxWidth: '100%', overflow: 'auto' }}><GridSheet tpl={layout} values={specPage(spec, layout, { header: { date: jdLatin(date), reportNo: '' }, rows, priorByThk: prior }, i).values} /></div>)}
+    </div>
+  )
+}
 
 const ST_FA = { in_stock: 'سالم', rejected: 'مردود', scrapped: 'اسقاط' } as const
 const today = () => new Date().toISOString().slice(0, 10)
@@ -27,6 +50,8 @@ function Inner({ projectId }: { projectId: string }) {
   const [date, setDate] = useState(today())
   const [one, setOne] = useState({ raw: '', heatNo: '', odIn: null as number | null, wtIn: null as number | null, lengthM: null as number | null, grade: '', supplier: '', wayBill: '', material: '' })
   const [paste, setPaste] = useState('')
+  const [prevDate, setPrevDate] = useState('')
+  const dates = useMemo(() => [...new Set(pipes.map((p) => p.entryDate))].sort().reverse(), [pipes])
   const matByCode = useMemo(() => new Map(mats.map((x) => [x.materialCode, x])), [mats])
 
   // where each pipe has got to: every row of every form that names it + the pipe numbers held by the weld records
@@ -90,6 +115,13 @@ function Inner({ projectId }: { projectId: string }) {
           </details>
         </Section>
       )}
+      <Section title="صورتجلسهٔ ورود لوله (چاپ از رجیستر)" hint="تاریخ ورود را انتخاب کنید؛ فرم رسمی از همین رجیستر پر می‌شود و دوباره تایپ نمی‌شود.">
+        <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={prevDate} onChange={(e) => setPrevDate(e.target.value)} aria-label="تاریخ ورود"><option value="">تاریخ ورود…</option>{dates.map((d) => <option key={d} value={d}>{fmtD(d)}</option>)}</select>
+          {prevDate && <button className="im-btn im-btn-sm" onClick={() => window.print()}>چاپ</button>}
+        </div>
+        {prevDate && <EntryPreview pipes={pipes} date={prevDate} />}
+      </Section>
       <Section title="لوله‌های ورودی" action={<span style={{ display: 'inline-flex', gap: 6 }}><select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="مرحله"><option value="">همهٔ مراحل</option>{(Object.keys(PIPE_STAGE_FA) as PipeStage[]).map((s) => <option key={s} value={s}>{PIPE_STAGE_FA[s]}</option>)}</select><input placeholder="جست‌وجوی شماره، Heat، بارنامه…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} /></span>}>
         {rows.length === 0 ? <Empty>لوله‌ای ثبت نشده است.</Empty> : (
           <div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>شمارهٔ لوله</th><th>تاریخ ورود</th><th>Heat</th><th className="num">قطر</th><th className="num">ضخامت</th><th className="num">طول (m)</th><th>تأمین‌کننده</th><th>بارنامه</th><th>کالا</th><th>وضعیت</th><th>پیشرفت (از فرم‌ها)</th></tr></thead>

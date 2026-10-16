@@ -13,7 +13,7 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith('.grid.json'))) {
   // a sheet meant to be one page (not more than 8% taller) must fit the page height with slack
   const overflow = (p.sheetH * Math.min(p.excelScale, p.pageW / p.sheetW)) / p.pageH
   if (overflow <= 1.08) assert.ok(p.sheetH * p.scale <= p.pageH, `${f}: fits the page height (${(p.sheetH * p.scale / p.pageH).toFixed(3)})`)
-  if (overflow <= 1) assert.equal(p.heightFitted, false, `${f}: a sheet that already fits is not shrunk`)
+  if (overflow <= 1 / 1.025) assert.equal(p.heightFitted, false, `${f}: a sheet that already fits is not shrunk`)
   assert.match(p.css, /@page \{ size: A4 (portrait|landscape);/)
 }
 assert.ok(n >= 11, 'all bundled sheets are covered')

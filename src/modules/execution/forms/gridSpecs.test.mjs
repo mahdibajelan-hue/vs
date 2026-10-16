@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { addr } from './gridTypes.ts'
 import { GRID_SPECS, specPage, specPages } from './gridSpecs.ts'
 
-const file = { fitup: 'fit_up', bend: 'bend', weld_repair: 'repair', tie_in: 'connection', rt_request: 'rt_req_full', rt_request_rp: 'rt_req_repair', rt_report: 'rt_report' }
+const file = { fitup: 'fit_up', bend: 'bend', weld_repair: 'repair', tie_in: 'connection', rt_request: 'rt_req_full', rt_request_rp: 'rt_req_repair', rt_report: 'rt_report', pipe_entry: 'pipe_entry' }
 for (const [key, spec] of Object.entries(GRID_SPECS)) {
   const t = JSON.parse(readFileSync(new URL(`./templates/${file[key]}.grid.json`, import.meta.url)))
   assert.equal(t.formKey, key)
@@ -32,4 +32,18 @@ console.log('grid specs: all assertions passed')
   assert.equal(cellTarget(sp, 'C10', 1)?.row, 20)
   assert.ok(editableCells(sp, 0).has('A4') && !editableCells(sp, 0).has('D5'))
   console.log('sheet-entry targets ok')
+}
+
+// pipe-delivery sheet: stacked thickness blocks with this-report and to-date totals
+{
+  const t = JSON.parse(readFileSync(new URL('./templates/pipe_entry.grid.json', import.meta.url)))
+  const sp = GRID_SPECS.pipe_entry
+  const rows = [{ pipeNo: 'P1', lengthM: '12', thkIn: '0.688' }, { pipeNo: 'P2', lengthM: '11.5', thkIn: '0.688' }, { pipeNo: 'P3', lengthM: '10', thkIn: '0.406' }]
+  const r = specPage(sp, t, { header: { date: '1402/08/13', reportNo: '002' }, rows, priorByThk: { '0.688': { len: 100, joints: 9 } } }, 0)
+  assert.equal(r.values.E36, '23.50'); assert.equal(r.values.J36, '2')      // 0.688 today
+  assert.equal(r.values.E37, '123.50'); assert.equal(r.values.J37, '11')    // to date = prior + today
+  assert.equal(r.values.E32, '10.00'); assert.equal(r.values.J33, '1')      // 0.406
+  assert.equal(r.values.E40, '133.50'); assert.equal(r.values.J40, '12')    // grand totals
+  assert.equal(r.values.C6, '12'); assert.equal(r.values.A4, '1402/08/13'); assert.deepEqual(r.missing, [])
+  console.log('pipe entry vblocks ok')
 }

@@ -109,7 +109,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   // identity registers (welders, pipes received into the warehouse): a name that is not in the register is flagged; with the project flag «strictRegisters» it also blocks sending
   const regWelders = useEpcStore((x) => x.welders), regQuals = useEpcStore((x) => x.quals), regPipes = useEpcStore((x) => x.pipes)
   const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
-  const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId), [regWelders, m.projectId])
+  const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId && w.kind === 'welder'), [regWelders, m.projectId])
   const pipeList = useMemo(() => regPipes.filter((p) => p.projectId === m.projectId), [regPipes, m.projectId])
   const regWarnings = useMemo(() => {
     if (!form) return []
