@@ -30,7 +30,7 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
   { id: 'qc', label: 'کنترل کیفیت', icon: ShieldCheck, color: '#22c55e', subs: [{ id: 'qc', label: 'مغایرت‌ها و NCR' }, { id: 'welds', label: 'سرجوش‌ها' }] },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
-  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'نقش‌ها و دسترسی' }, { id: 'rules', label: 'تقویم و قواعد' }, { id: 'forms', label: 'فرم‌ها و ماتریس تطبیق' }, { id: 'books', label: 'فهرست‌های بها (پیمان و پایه)' }, { id: 'baselines', label: 'مقادیر پیمان و نسخه‌های مبنا' }, { id: 'signers', label: 'امضاکنندگان فرم‌ها (امضای الکترونیکی)' }, { id: 'actions', label: 'اقدام‌های کارگاهی و تطبیق با فهرست‌بها' }, { id: 'map', label: 'اتصال فرم فنی به فعالیت' }, { id: 'epc', label: 'کنترل EPC (سربرگ، کارفرما، تحفظ، بهره‌وری)' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های مصوب فرم' }, { id: 'tplpilot', label: 'الگوی آزمایشی فرم مصوب (جوشکاری)' }] },
+  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'افراد، نقش‌ها و تنظیمات پایه' }, { id: 'rules', label: 'فهرست‌ها، مقادیر پیمان، تقویم و قواعد' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های فرم‌های فنی' }, { id: 'signers', label: 'امضاکنندگان فرم‌ها' }, { id: 'actions', label: 'اقدام‌های کارگاهی و تطبیق با فهرست‌بها' }] },
 ]
 
 type P = { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }
@@ -106,7 +106,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'reports': return <Reports {...p} />
       case 'gaps': return <Gaps {...p} />
       case 'qc': return <Qc {...p} />
-      case 'settings': return sub === 'books' || sub === 'baselines' ? <Activities {...p} /> : <Settings {...p} />
+      case 'settings': return <Settings {...p} />
     }
   }
   return (
