@@ -1,5 +1,5 @@
-export type ExRole = 'contractor' | 'supervision' | 'consultant' | 'employer' | 'manager' | 'site_head' | 'planner' | 'claims' | 'payment'
-export const EX_ROLE_LABEL_FA: Record<ExRole, string> = { contractor: 'پیمانکار', supervision: 'دستگاه نظارت', consultant: 'مشاور', employer: 'کارفرما', manager: 'مدیر اجرا', site_head: 'سرپرست کارگاه', planner: 'مدیر برنامه‌ریزی', claims: 'تحلیلگر تأخیرات و کلیم', payment: 'کارشناس صورت‌وضعیت' }
+export type ExRole = 'contractor' | 'supervision' | 'consultant' | 'employer' | 'manager' | 'site_head' | 'planner' | 'claims' | 'payment' | 'viewer' | 'approver'
+export const EX_ROLE_LABEL_FA: Record<ExRole, string> = { contractor: 'پیمانکار', supervision: 'دستگاه نظارت', consultant: 'مشاور', employer: 'کارفرما', manager: 'مدیر اجرا', site_head: 'سرپرست کارگاه', planner: 'مدیر برنامه‌ریزی', claims: 'تحلیلگر تأخیرات و کلیم', payment: 'کارشناس صورت‌وضعیت', viewer: 'مشاهده‌گر', approver: 'تصویب‌کننده' }
 export interface ExProjectRole { id: string; projectId: string; userId: string; role: ExRole; organizationId: string | null; active: boolean }
 
 export type ActivityKind = 'standard' | 'starred' | 'special'

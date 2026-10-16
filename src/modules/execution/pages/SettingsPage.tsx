@@ -1,17 +1,15 @@
-import { suggestExRole } from '../lib/roleSuggest'
 import { TEAM_POSITION_LABEL } from '../../masterdata/types'
 import { SigningRoles, useSignRoles } from '../components/SigningRoles'
 import { ActionsSettings } from './ActionsSettings'
 import { FrontsEditor } from './FrontsEditor'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useLookupOptions } from '../../material/lib/control/lookups'
-import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
 import { ACTIONS, DEFAULT_PERMS } from '../lib/perms'
 import { NumInput, Section } from '../../finance/components/fn'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
-import { Empty, fa } from '../components/common'
+import { Empty } from '../components/common'
 import { EpcSettingsView } from './EpcSettingsView'
 import { TemplateLibrary } from './TemplateLibrary'
 import { ActivitiesPage } from './ActivitiesPage'
@@ -27,34 +25,27 @@ export function SettingsPage({ projectId, sub }: { projectId: string; sub: strin
 function RolesView({ projectId }: { projectId: string }) {
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
-  const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
   const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === projectId).sort((a, b) => a.sort - b.sort)
-  const epc = useEpcStore()
   const signRoles = useSignRoles(projectId)
   const roles = ex.roles.filter((r) => r.projectId === projectId)
   const canCfg = ex.can(projectId, '*') || ex.can(projectId, 'configure')
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
   const positionOf = (t: (typeof team)[number]) => t.positionTitle || TEAM_POSITION_LABEL[t.positionKey] || t.positionKey
-  const inTeam = new Set(team.map((t) => t.userId).filter(Boolean) as string[])
-  const outside = roles.filter((r) => !inTeam.has(r.userId))
-  const missingSuggest = team.filter((t) => t.userId && !roles.some((r) => r.userId === t.userId) && suggestExRole(t.positionKey, t.organizationId, project))
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <Section title="افراد پروژه" hint="افراد، سمت و سازمان از «اطلاعات پایه ← ساختار پروژه» (مدیریت کاربران و داده‌های پایه) می‌آید و همهٔ ماژول‌ها از همان استفاده می‌کنند؛ برای افزودن یا تغییر فرد، سمت یا سازمان همان‌جا اقدام کنید. اینجا فقط «نقش این فرد در ماژول اجرا» تعیین می‌شود.">
-        {canCfg && missingSuggest.length > 0 && <div style={{ marginBottom: 8 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={async () => { for (const t of missingSuggest) { const r = suggestExRole(t.positionKey, t.organizationId, project); if (r && t.userId) await ex.addRole(projectId, t.userId, r, t.organizationId) } }}>تخصیص نقش پیشنهادی به {fa(missingSuggest.length)} نفر بدون نقش</button> <span className="im-helper">بر اساس سازمان (کارفرما/مشاور/پیمانکار) و سمت؛ بعداً قابل تغییر است.</span></div>}
-        {team.length === 0 ? <Empty>ساختار منابع انسانی این پروژه در اطلاعات پایه هنوز تعریف نشده است.</Empty> : (
-          <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>فرد</th><th>سمت</th><th>سازمان</th><th>نقش در ماژول اجرا</th><th>نقش امضا</th></tr></thead><tbody>
-            {team.map((t) => { const mine = t.userId ? roles.filter((r) => r.userId === t.userId) : [], sug = t.userId ? suggestExRole(t.positionKey, t.organizationId, project) : null
-              return <tr key={t.id}><td><b>{t.personName || (t.userId ? ex.people.get(t.userId) : '') || '—'}</b>{!t.userId && <small className="sub">بدون حساب کاربری</small>}</td><td>{positionOf(t)}</td><td>{orgName(t.organizationId)}</td>
-                <td style={{ minWidth: 280 }}>{!t.userId ? <span className="im-helper">برای تعیین نقش، فرد باید حساب کاربری داشته باشد</span> : <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {mine.map((r) => <span key={r.id} className="im-chip" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', opacity: r.active ? 1 : 0.5 }}>{EX_ROLE_LABEL_FA[r.role]}{canCfg && <input type="checkbox" checked={r.active} onChange={(e) => void ex.setRoleActive(r.id, e.target.checked)} aria-label={`فعال بودن نقش ${EX_ROLE_LABEL_FA[r.role]}`} />}</span>)}
-                  {canCfg && <select value="" onChange={(e) => e.target.value && void ex.addRole(projectId, t.userId!, e.target.value as ExRole, t.organizationId)} aria-label="افزودن نقش"><option value="">{mine.length ? '+ نقش دیگر' : 'تعیین نقش…'}</option>{(Object.keys(EX_ROLE_LABEL_FA) as ExRole[]).filter((k) => !mine.some((r) => r.role === k)).map((k) => <option key={k} value={k}>{EX_ROLE_LABEL_FA[k]}{k === sug ? ' (پیشنهادی)' : ''}</option>)}</select>}
-                </div>}</td>
-                <td style={{ minWidth: 220 }}>{!t.userId ? '—' : <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>{signRoles.filter((x) => x.userId === t.userId).map((x) => <span key={x.key} className="im-chip" dir="auto">{x.label}</span>)}{canCfg && signRoles.length > 0 && <select value="" onChange={(e) => { const k = e.target.value; if (k) void (async () => { const next = signRoles.map((x) => (x.key === k ? { ...x, userId: t.userId } : x)); if (await ex.saveSettings(projectId, { signRoles: next } as never)) await epc.applySignRoles(projectId, next) })() }} aria-label="تعیین نقش امضا"><option value="">+ نقش امضا</option>{signRoles.filter((x) => x.userId !== t.userId).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select>}</div>}</td></tr> })}
+      <Section title="دسترسی سایر افراد پروژه" hint="افراد از «اطلاعات پایه ← ساختار پروژه» می‌آیند. امضاکنندگان فرم‌ها در «نقش‌های امضا» تعریف می‌شوند و گردش کار از همان ساخته می‌شود؛ اینجا فقط برای افراد دیگر، «مشاهده‌گر» (فقط دیدن) یا «تصویب‌کننده» (بررسی و تصویب) تعیین می‌شود.">
+        {team.filter((t) => t.userId).length === 0 ? <Empty>فردی با حساب کاربری در ساختار این پروژه نیست.</Empty> : (
+          <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>فرد</th><th>سمت</th><th>سازمان</th><th>دسترسی</th></tr></thead><tbody>
+            {team.filter((t) => t.userId).map((t) => { const mine = roles.filter((r) => r.userId === t.userId), light = mine.find((r) => r.role === 'viewer' || r.role === 'approver'), sign = signRoles.filter((x) => x.userId === t.userId)
+              const pick = async (v: string) => { for (const r of mine) if ((r.role === 'viewer' || r.role === 'approver') && r.role !== v && r.active) await ex.setRoleActive(r.id, false); if (v === 'viewer' || v === 'approver') { const ex2 = mine.find((r) => r.role === v); if (ex2) await ex.setRoleActive(ex2.id, true); else await ex.addRole(projectId, t.userId!, v, t.organizationId) } }
+              return <tr key={t.id}><td><b>{t.personName || ex.people.get(t.userId!) || '—'}</b></td><td>{positionOf(t)}</td><td>{orgName(t.organizationId)}</td>
+                <td style={{ minWidth: 260 }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {sign.map((x) => <span key={x.key} className="im-chip" dir="auto" title="امضاکننده">{x.label}</span>)}
+                  {mine.filter((r) => r.role !== 'viewer' && r.role !== 'approver' && r.active).map((r) => <span key={r.id} className="im-chip">{EX_ROLE_LABEL_FA[r.role]}</span>)}
+                  {canCfg && <select value={light?.active ? light.role : ''} onChange={(e) => void pick(e.target.value)} aria-label="مشاهده‌گر یا تصویب‌کننده"><option value="">{sign.length || mine.length ? '+ دسترسی' : 'بدون دسترسی'}</option><option value="viewer">مشاهده‌گر</option><option value="approver">تصویب‌کننده</option></select>}
+                </div></td></tr> })}
           </tbody></table></div>
         )}
-        {outside.length > 0 && <div style={{ marginTop: 10 }}><b>دارای نقش، ولی در ساختار پروژه نیستند</b> <span className="im-helper">(در اطلاعات پایه به ساختار پروژه اضافه‌شان کنید)</span>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>{outside.map((r) => <span key={r.id} className="im-chip" style={{ opacity: r.active ? 1 : 0.5 }}>{ex.people.get(r.userId) ?? 'کاربر'} — {EX_ROLE_LABEL_FA[r.role]}{r.organizationId ? ` — ${orgName(r.organizationId)}` : ''}{canCfg && <input type="checkbox" style={{ marginInlineStart: 6 }} checked={r.active} onChange={(e) => void ex.setRoleActive(r.id, e.target.checked)} aria-label="فعال" />}</span>)}</div></div>}
       </Section>
       <SigningRoles projectId={projectId} can={canCfg} people={team.filter((t) => t.userId).map((t) => ({ id: t.userId!, name: t.personName || ex.people.get(t.userId!) || '—' }))} />
       <Section title="ماتریس دسترسی هر نقش در ماژول اجرا" hint="نقش‌ها و جابه‌جایی افراد از اطلاعات پایه می‌آید؛ اینکه هر نقش در این ماژول چه اقداماتی می‌تواند انجام دهد اینجاست. مدیر سامانه و «مدیر اجرا» به همهٔ بخش‌ها دسترسی دارند." flush>
@@ -80,7 +71,9 @@ function RulesView({ projectId }: { projectId: string }) {
     <div style={{ display: 'grid', gap: 12 }}>
       <h3 style={{ margin: 0, fontSize: 15 }}>فهرست‌های بها (پیمان و پایه)</h3>
       <ActivitiesPage projectId={projectId} sub="books" />
-      <h3 style={{ margin: '10px 0 0', fontSize: 15 }}>مقادیر پیمان و نسخه‌های مبنا</h3>
+      <h3 style={{ margin: '10px 0 0', fontSize: 15 }}>مقادیر پیمان</h3>
+      <ActivitiesPage projectId={projectId} sub="" />
+      <h3 style={{ margin: '10px 0 0', fontSize: 15 }}>نسخه‌های مبنا</h3>
       <ActivitiesPage projectId={projectId} sub="baselines" />
       <h3 style={{ margin: '10px 0 0', fontSize: 15 }}>تقویم، قواعد کنترل و فهرست‌ها</h3>
       {!can && <p className="im-helper" style={{ margin: 0 }}>فقط مدیر اجرا یا مدیر سامانه می‌تواند قواعد را تغییر دهد.</p>}

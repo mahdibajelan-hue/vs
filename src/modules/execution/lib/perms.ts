@@ -10,6 +10,8 @@ export const DEFAULT_PERMS: Record<ExRole, string[]> = {
   planner: ['assistant', 'edit_activities', 'edit_baseline', 'manage_gaps', 'raise'],
   claims: ['assess_delay', 'notice', 'manage_gaps', 'raise'],
   payment: ['raise', 'measure'],
+  viewer: [],
+  approver: ['review', 'approve_activity', 'approve_baseline'],
   manager: ['*'],
 }
 export const ACTIONS: { key: string; label: string }[] = [

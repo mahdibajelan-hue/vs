@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, ListTree, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -16,11 +16,10 @@ import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'activities' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
+export type ExTab = 'dashboard' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
-  { id: 'activities', label: 'فعالیت‌های پروژه', icon: ListTree, color: '#6366f1' },
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
@@ -36,7 +35,6 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
 type P = { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }
 const L = <T extends Record<string, unknown>>(f: () => Promise<T>, k: keyof T) => lazy(() => f().then((m) => ({ default: m[k] as React.ComponentType<P> })))
 const Dashboard = L(() => import('./pages/DashboardPage'), 'DashboardPage')
-const Activities = L(() => import('./pages/ActivitiesPage'), 'ActivitiesPage')
 const Daily = L(() => import('./pages/DailyPage'), 'DailyPage')
 const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
@@ -96,7 +94,6 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     const p: P = { projectId: pid, sub, onGo: go }
     switch (tab) {
       case 'dashboard': return <Dashboard {...p} />
-      case 'activities': return <Activities {...p} />
       case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />

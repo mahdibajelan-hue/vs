@@ -28,7 +28,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const can = ex.can(projectId, 'edit_activities')
   const acts = useMemo(() => m.ex.activities.filter((a) => a.active && a.approval === 'approved'), [m.ex.activities])
   const title = (id: string) => m.ex.actById.get(id)?.title ?? '—'
-  if (!acts.length) return <Empty>ابتدا فعالیت‌های پروژه را تعریف کنید.</Empty>
+  if (!acts.length) return <Empty>ابتدا مقادیر پیمان را در «تنظیمات ← فهرست‌ها، مقادیر پیمان…» تعریف کنید.</Empty>
   if (sub === 'readiness') return <Readiness m={m} projectId={projectId} can={can} acts={acts} />
   if (sub === 'import') return <Import projectId={projectId} can={can} acts={acts} />
   return <Lookahead m={m} projectId={projectId} can={can} acts={acts} title={title} epcLook={epc.lookahead.filter((l) => l.projectId === projectId)} />

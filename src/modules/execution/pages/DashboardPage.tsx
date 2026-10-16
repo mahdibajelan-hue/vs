@@ -33,7 +33,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
     <Empty>
       <b style={{ display: 'block', marginBottom: 6 }}>شروع کار در «مدیریت اجرا»</b>
       ۱) در «تنظیمات ← فهرست‌های بها» فهرست‌بهای قرارداد و ردیف‌های پیمان را تعریف کنید. ۲) در «تنظیمات» نقش‌ها (پیمانکار، دستگاه نظارت…) و جبهه‌های موردانتظار را مشخص کنید. ۳) پیمانکار هر روز «گزارش کارکرد» می‌سازد و ارسال می‌کند؛ دستگاه نظارت ردیف‌ها را تأیید می‌کند و پیشرفت و گزارش‌های هفتگی و ماهانه خودکار ساخته می‌شود.
-      <div style={{ marginTop: 10 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={() => onGo('activities')}>رفتن به فعالیت‌ها <ArrowLeft size={13} /></button></div>
+      <div style={{ marginTop: 10 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={() => onGo('settings', 'rules')}>رفتن به مقادیر پیمان <ArrowLeft size={13} /></button></div>
     </Empty>
   )
   return (
