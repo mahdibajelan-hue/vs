@@ -22,6 +22,10 @@ const findByCode = (code: string, people: Welder[]): Welder | undefined => { con
 /** «صلاحیت جوشکاران و عایق‌کاران»: introduce → qualification test signed by two people → card signed by the site head and the supervision head → printable card with QR. The Execution module reads the issued cards of each project. */
 export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; nav: Partial<Record<CompetencySection, () => void>> }) {
   const projects = useMasterDataStore((s) => s.projects)
+  const mdLoaded = useMasterDataStore((s) => s.loaded)
+  const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
+  // this module never loads the project list by itself: fetch it when the section opens
+  useEffect(() => { if (!mdLoaded) fetchMasterData() }, [mdLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
   const ctx = useProjectContextStore((s) => s.projectId)
   const st = usePersonnelStore()
   const [projectId, setProjectId] = useState<string>('')
@@ -31,7 +35,7 @@ export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; n
   return (
     <CompetencySidebarShell active="personnel" nav={nav} title="صلاحیت جوشکاران و عایق‌کاران" onExitToHub={onExitToHub}
       headerRight={<select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="پروژه" className="im-select-pill">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>}>
-      {!projectId ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <Body projectName={projectName} />}
+      {!mdLoaded && !projects.length ? <div className="im-skeleton" style={{ height: 160 }} /> : !projectId ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <Body projectName={projectName} />}
     </CompetencySidebarShell>
   )
 }
