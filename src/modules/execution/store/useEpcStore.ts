@@ -17,6 +17,14 @@ function fail(action: string, error: { message: string } | null): boolean {
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${explainEpcError(error.message)}`)
   return true
 }
+export function explainPersonError(msg: string): string {
+  const map: Record<string, string> = {
+    not_assignee: 'شما امضاکنندهٔ تعیین‌شدهٔ این مرحله نیستید (امضاکنندگان در پایین صفحه تعیین می‌شوند).', signature_required: 'ابتدا امضای نمونهٔ خود را در پروفایل کاربری ثبت کنید.',
+    wqt_incomplete: 'ابتدا فرم آزمون را با شمارهٔ آزمون، تاریخ آزمون و نتیجه ذخیره کنید.', no_qualifying_test: 'ابتدا آزمون این جوشکار با نتیجهٔ YES و دو امضا تأیید شود.',
+    card_incomplete: 'نام یا کد ملی جوشکار کامل نیست.', already_signed: 'این مرحله قبلاً امضا شده است.', bad_state: 'در وضعیت فعلی امکان امضا نیست؛ ابتدا باز کنید.', not_allowed: 'اجازهٔ این کار را ندارید.', confirmed_locked: 'تأییدشده قفل است؛ ابتدا بازگشایی کنید.', use_rpc: 'این مقدار فقط با امضا تغییر می‌کند.',
+  }
+  const k = Object.keys(map).find((x) => msg.includes(x)); return k ? map[k] : msg
+}
 /** Messages of the migration-010 guards, translated; anything else goes through the shared explainer. */
 export function explainEpcError(msg: string): string {
   const m = msg.match(/measured_exceeds_approved|billed_exceeds_measured|paid_exceeds_billed|employer_step_off|supervision_not_approved|note_required|empty_text|self_approval|use_rpc/)
@@ -41,13 +49,12 @@ interface State {
   /** identity registers (migration 030) */
   welders: Welder[]; quals: WelderQual[]; pipes: Pipe[]; registerHistory: { entity: string; entityId: string; attr: string; oldValue: string | null; newValue: string | null; at: string }[]
   saveWelder: (w: Partial<Welder> & { projectId: string; raw: string }) => Promise<string | null>
-  saveQual: (q: Partial<WelderQual> & { projectId: string; welderId: string }) => Promise<boolean>
+  saveQual: (q: Partial<WelderQual> & { projectId: string; welderId: string }) => Promise<string | null>
   savePipes: (projectId: string, rows: (Partial<Pipe> & { raw: string; entryDate: string })[]) => Promise<{ added: number; skipped: string[] } | null>
   updatePipe: (id: string, patch: Partial<Pipe>) => Promise<boolean>
-  /** confirm / reopen a welder card or a WQT (reviewer only; the database enforces it) */
-  setConfirm: (what: 'card' | 'wqt', id: string, confirmed: boolean) => Promise<boolean>
-  /** card life cycle: draft → confirmed → issued (reviewer only; issuing gives the card number) */
-  setCardStatus: (id: string, to: 'draft' | 'confirmed' | 'issued') => Promise<boolean>
+  /** sign a welder test (`wqt`: slot a = weld inspector, b = defect interpreter) or a card (`card`: a = site head, b = supervision head); the second signature completes it */
+  personSign: (entity: 'wqt' | 'card', id: string, slot: 'a' | 'b') => Promise<boolean>
+  personReopen: (entity: 'wqt' | 'card', id: string) => Promise<boolean>
   loadRegisterHistory: (entity: string, id: string) => Promise<void>
   fetchAll: (projectIds?: string[]) => Promise<void>
   loadLegal: (projectId: string) => Promise<void>
@@ -145,8 +152,8 @@ export const useEpcStore = create<State>((set, get) => ({
     if (!ne.error) set({ ncrEvents: ((ne.data ?? []) as Row[]).map((r): NcrEventRow => ({ id: r.id, ncrId: r.ncr_id, at: r.at, by: r.by, kind: r.kind, fromStatus: r.from_status, toStatus: r.to_status, note: r.note ?? '' })) })
     if (!nl.error) set({ ncrLinks: ((nl.data ?? []) as Row[]).map((r): NcrLinkRow => ({ id: r.id, ncrId: r.ncr_id, targetType: r.target_type, targetId: r.target_id, status: r.status, error: r.error ?? '' })) })
     const [rw, rqu, rp] = await Promise.all([supabase.from('ex_welders').select('*'), supabase.from('ex_welder_quals').select('*'), supabase.from('ex_pipes').select('*').order('entry_date', { ascending: false })])
-    if (!rw.error) set({ welders: ((rw.data ?? []) as Row[]).map((r): Welder => ({ id: r.id, projectId: r.project_id, key: r.welder_key, raw: r.welder_raw, fullName: r.full_name ?? '', nationalId: r.national_id ?? '', orgId: r.org_id, status: r.status, note: r.note ?? '', kind: r.kind ?? 'welder', photo: r.photo ?? '', card: (r.card ?? {}) as Record<string, string>, cardStatus: r.card_status ?? 'draft', cardConfirmedBy: r.card_confirmed_by, cardConfirmedAt: r.card_confirmed_at, cardNo: r.card_no ?? '', cardIssuedAt: r.card_issued_at, cardIssuedBy: r.card_issued_by, createdBy: r.created_by })) })
-    if (!rqu.error) set({ quals: ((rqu.data ?? []) as Row[]).map((r): WelderQual => ({ id: r.id, projectId: r.project_id, welderId: r.welder_id, wqtNo: r.wqt_no ?? '', process: r.process ?? '', position: r.position ?? '', materialGroup: r.material_group ?? '', thkMin: r.thk_min == null ? null : Number(r.thk_min), thkMax: r.thk_max == null ? null : Number(r.thk_max), diaMin: r.dia_min == null ? null : Number(r.dia_min), diaMax: r.dia_max == null ? null : Number(r.dia_max), issueDate: r.issue_date, expiryDate: r.expiry_date, wqtReportId: r.wqt_report_id, status: r.status, note: r.note ?? '', wqt: (r.wqt ?? {}) as Record<string, string>, wqtStatus: r.wqt_status ?? 'draft', wqtConfirmedBy: r.wqt_confirmed_by, wqtConfirmedAt: r.wqt_confirmed_at, createdBy: r.created_by })) })
+    if (!rw.error) set({ welders: ((rw.data ?? []) as Row[]).map((r): Welder => ({ id: r.id, projectId: r.project_id, key: r.welder_key, raw: r.welder_raw, fullName: r.full_name ?? '', nationalId: r.national_id ?? '', orgId: r.org_id, status: r.status, note: r.note ?? '', kind: r.kind ?? 'welder', photo: r.photo ?? '', card: (r.card ?? {}) as Record<string, string>, cardStatus: r.card_status ?? 'draft', cardConfirmedBy: r.card_confirmed_by, cardConfirmedAt: r.card_confirmed_at, cardNo: r.card_no ?? '', cardIssuedAt: r.card_issued_at, cardIssuedBy: r.card_issued_by, createdBy: r.created_by, cardSignA: r.card_sign_a ?? null, cardSignB: r.card_sign_b ?? null })) })
+    if (!rqu.error) set({ quals: ((rqu.data ?? []) as Row[]).map((r): WelderQual => ({ id: r.id, projectId: r.project_id, welderId: r.welder_id, wqtNo: r.wqt_no ?? '', process: r.process ?? '', position: r.position ?? '', materialGroup: r.material_group ?? '', thkMin: r.thk_min == null ? null : Number(r.thk_min), thkMax: r.thk_max == null ? null : Number(r.thk_max), diaMin: r.dia_min == null ? null : Number(r.dia_min), diaMax: r.dia_max == null ? null : Number(r.dia_max), issueDate: r.issue_date, expiryDate: r.expiry_date, wqtReportId: r.wqt_report_id, status: r.status, note: r.note ?? '', wqt: (r.wqt ?? {}) as Record<string, string>, wqtStatus: r.wqt_status ?? 'draft', wqtConfirmedBy: r.wqt_confirmed_by, wqtConfirmedAt: r.wqt_confirmed_at, createdBy: r.created_by, wqtSignA: r.wqt_sign_a ?? null, wqtSignB: r.wqt_sign_b ?? null })) })
     if (!rp.error) set({ pipes: ((rp.data ?? []) as Row[]).map((r): Pipe => ({ id: r.id, projectId: r.project_id, key: r.pipe_key, raw: r.pipe_raw, entryDate: r.entry_date, heatNo: r.heat_no ?? '', odIn: r.od_in == null ? null : Number(r.od_in), wtIn: r.wt_in == null ? null : Number(r.wt_in), lengthM: r.length_m == null ? null : Number(r.length_m), grade: r.grade ?? '', coating: r.coating ?? '', supplier: r.supplier ?? '', wayBill: r.way_bill ?? '', materialId: r.material_id, entryLineId: r.entry_line_id, status: r.status, note: r.note ?? '' })) })
     const arc = await supabase.from('ex_report_archive').select('id, project_id, report_id, version, form_key, form_title, category, report_no, report_date, status, note, created_at').order('report_date', { ascending: false }).limit(2000)
     if (!arc.error) set({ archive: ((arc.data ?? []) as Row[]).map((r): ArchiveRow => ({ id: r.id, projectId: r.project_id, reportId: r.report_id, version: r.version, formKey: r.form_key, formTitle: r.form_title ?? '', category: r.category ?? '', reportNo: r.report_no ?? '', reportDate: r.report_date, status: r.status, note: r.note ?? '', createdAt: r.created_at })) })
@@ -388,9 +395,14 @@ export const useEpcStore = create<State>((set, get) => ({
   },
   saveQual: async (q) => {
     const row = { project_id: q.projectId, welder_id: q.welderId, wqt_no: q.wqtNo ?? '', process: q.process ?? '', position: q.position ?? '', material_group: q.materialGroup ?? '', thk_min: q.thkMin ?? null, thk_max: q.thkMax ?? null, dia_min: q.diaMin ?? null, dia_max: q.diaMax ?? null, issue_date: q.issueDate || null, expiry_date: q.expiryDate || null, wqt_report_id: q.wqtReportId ?? null, status: q.status ?? 'valid', note: q.note ?? '', ...(q.wqt ? { wqt: q.wqt } : {}) }
-    const { error } = q.id ? await supabase.from('ex_welder_quals').update(row).eq('id', q.id) : await supabase.from('ex_welder_quals').insert(row)
-    if (fail('ثبت صلاحیت جوشکار', error)) return false
-    await get().fetchAll(); return true
+    // the test form is the source: its numbers feed the columns the form checks use
+    if (q.wqt) {
+      const nz = (v: string | undefined) => { const x = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(x) ? x : null }
+      Object.assign(row, { wqt_no: q.wqt.wqtNo ?? '', process: q.wqt.process ?? '', position: q.wqt.position ?? '', material_group: q.wqt.baseMat ?? '', thk_min: nz(q.wqt.thkMin), thk_max: nz(q.wqt.thkMax), issue_date: q.wqt.testDate || null })
+    }
+    const res = q.id ? await supabase.from('ex_welder_quals').update(row).eq('id', q.id).select('id').single() : await supabase.from('ex_welder_quals').insert(row).select('id').single()
+    if (fail('ثبت آزمون جوشکار', res.error)) return null
+    await get().fetchAll(); return (res.data as { id: string }).id
   },
   savePipes: async (projectId, rows) => {
     const have = new Set(get().pipes.filter((p) => p.projectId === projectId).map((p) => p.key)), seen = new Set<string>(), skipped: string[] = [], ins: Record<string, unknown>[] = []
@@ -403,16 +415,14 @@ export const useEpcStore = create<State>((set, get) => ({
     if (ins.length) { const { error } = await supabase.from('ex_pipes').insert(ins); if (fail('ثبت لوله‌های ورودی', error)) return null }
     await get().fetchAll(); return { added: ins.length, skipped }
   },
-  setConfirm: async (what, id, confirmed) => {
-    const { error } = what === 'card' ? await supabase.from('ex_welders').update({ card_status: confirmed ? 'confirmed' : 'draft' }).eq('id', id) : await supabase.from('ex_welder_quals').update({ wqt_status: confirmed ? 'confirmed' : 'draft' }).eq('id', id)
-    if (error?.message?.includes('card_incomplete')) { fail('تأیید کارت (نام جوشکار/عایق‌کار در کارت خالی است)', error); return false }
-    if (fail(confirmed ? 'تأیید' : 'بازگشایی', error)) return false
+  personSign: async (entity, id, slot) => {
+    const { error } = await supabase.rpc('ex_person_sign', { p_entity: entity, p_id: id, p_slot: slot })
+    if (error) { useSystemStore.getState().setStorageError(`خطا در امضا: ${explainPersonError(error.message)}`); return false }
     await get().fetchAll(); return true
   },
-  setCardStatus: async (id, to) => {
-    const { error } = await supabase.from('ex_welders').update({ card_status: to }).eq('id', id)
-    if (error?.message?.includes('card_incomplete')) { fail('تأیید کارت (نام در کارت خالی است)', error); return false }
-    if (fail(to === 'issued' ? 'صدور کارت' : to === 'confirmed' ? 'تأیید کارت' : 'بازگشایی کارت', error)) return false
+  personReopen: async (entity, id) => {
+    const { error } = await supabase.rpc('ex_person_reopen', { p_entity: entity, p_id: id })
+    if (error) { useSystemStore.getState().setStorageError(`خطا در بازگشایی: ${explainPersonError(error.message)}`); return false }
     await get().fetchAll(); return true
   },
   updatePipe: async (id, p) => {

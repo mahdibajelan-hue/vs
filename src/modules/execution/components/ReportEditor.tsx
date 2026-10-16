@@ -126,8 +126,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           if (form.key === 'welding' || form.key === 'tie_in') for (const t of splitStamps(l.detail[f])) {
             if (seen.has(t)) continue; seen.add(t)
             const w = welderList.find((x) => x.key === t); if (!w || w.status !== 'active') continue
-            const r = welderQualified(regQuals.filter((q) => q.welderId === w.id), { date: head.reportDate, thk: toNum(l.detail.thkIn), dia: toNum(l.detail.sizeIn) })
-            if (!r.ok) out.push(`${at}: جوشکار «${t}» صلاحیت معتبر برای این جوش ندارد (${r.reasons.join('، ')})`)
+            const vd = /^\d{4}-\d{2}-\d{2}$/.test(w.card.validity ?? '') ? w.card.validity : null // card validity is the expiry of the qualification
+            const r = welderQualified(regQuals.filter((q) => q.welderId === w.id && q.wqtStatus === 'confirmed' && q.wqt.qualified === 'YES').map((q) => ({ ...q, expiryDate: vd })), { date: head.reportDate, thk: toNum(l.detail.thkIn), dia: toNum(l.detail.sizeIn) })
+            if (!r.ok) out.push(`${at}: جوشکار «${t}» آزمون تأییدشده یا صلاحیت معتبر برای این جوش ندارد (${r.reasons.join('، ')})`)
           }
         }
       }

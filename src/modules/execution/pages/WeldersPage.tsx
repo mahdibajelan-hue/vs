@@ -2,90 +2,80 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
-import { useExecutionModel } from '../lib/useExecutionModel'
-import { findByCode, welderStats, type Welder, type WelderQual } from '../lib/registers'
-import { Chip, KpiCard, NumInput, Section, fmtD } from '../../finance/components/fn'
-import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { findByCode, type Welder, type WelderQual } from '../lib/registers'
+import { KIND_FA, type PersonKind } from '../lib/personnelForms'
+import { Chip, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
-import { PersonnelCard, WqtPanel } from '../components/PersonnelCard'
-import { KIND_FA, type PersonKind } from '../lib/personnelForms'
+import { WelderProfile } from '../components/WelderProfile'
 
 const ST_FA = { active: 'فعال', suspended: 'معلق', left: 'ترک کار' } as const
 const today = () => new Date().toISOString().slice(0, 10)
 const plus = (d: string, n: number) => new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10)
-/** valid today = at least one non-revoked qualification inside its dates */
-const qualState = (qs: WelderQual[], on: string): 'valid' | 'soon' | 'expired' | 'none' => {
-  const live = qs.filter((q) => q.status === 'valid')
-  if (!qs.length) return 'none'
-  const ok = live.filter((q) => (!q.issueDate || q.issueDate <= on) && (!q.expiryDate || q.expiryDate >= on))
-  if (!ok.length) return 'expired'
-  return ok.some((q) => !q.expiryDate || q.expiryDate > plus(on, 30)) ? 'valid' : 'soon'
-}
+type St = 'valid' | 'soon' | 'expired' | 'none'
+const ST_CHIP: Record<St, { tone: 'good' | 'warn' | 'bad'; label: string }> = { valid: { tone: 'good', label: 'معتبر' }, soon: { tone: 'warn', label: 'رو به انقضا' }, expired: { tone: 'bad', label: 'منقضی' }, none: { tone: 'bad', label: 'کارت ندارد' } }
 
-/** Welder register: who may weld (identity + qualifications). The forms refer to a welder by his stamp/ID; his record of welds and radiography is derived from those forms. */
+/** Welders and coating applicators: introduce → (welder) qualification test signed by the weld inspector and defect interpreter → card signed by the site head and supervision head → printable card with barcode. */
 export function WeldersPage({ projectId }: { projectId: string }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
 function Inner({ projectId }: { projectId: string }) {
   const epc = useEpcStore()
-  const m = useExecutionModel(projectId)
-  const orgs = useMasterDataStore((s) => s.organizations)
-  const can = useExecutionStore((s) => s.can(projectId, 'record') || s.can(projectId, 'review') || s.can(projectId, '*') || s.can(projectId, 'configure'))
+  const ex = useExecutionStore()
+  const projectName = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId)?.officialName ?? '')
+  const can = ex.can(projectId, 'record') || ex.can(projectId, 'review') || ex.can(projectId, '*') || ex.can(projectId, 'configure')
+  const canCfg = ex.can(projectId, '*') || ex.can(projectId, 'configure')
   const [kind, setKind] = useState<PersonKind>('welder')
-  const allPeople = useMemo(() => epc.welders.filter((w) => w.projectId === projectId), [epc.welders, projectId])
-  const welders = useMemo(() => allPeople.filter((w) => w.kind === kind).sort((a, b) => a.key.localeCompare(b.key)), [allPeople, kind])
-  const quals = useMemo(() => epc.quals.filter((q) => q.projectId === projectId), [epc.quals, projectId])
-  const stats = useMemo(() => welderStats(m.lines.map((l) => ({ formKey: m.reports.find((r) => r.id === l.reportId)?.formKey ?? '', detail: l.detail }))), [m.lines, m.reports])
   const [sel, setSel] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [nw, setNw] = useState({ raw: '', fullName: '', nationalId: '' })
   const [q, setQ] = useState('')
-  const [nw, setNw] = useState({ raw: '', fullName: '', nationalId: '', orgId: '' })
-  const canConfirm = useExecutionStore((s) => s.can(projectId, 'review') || s.can(projectId, '*') || s.can(projectId, 'configure'))
+  const all = useMemo(() => epc.welders.filter((w) => w.projectId === projectId), [epc.welders, projectId])
+  const list = useMemo(() => all.filter((w) => w.kind === kind && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q])
+  const testsOf = (id: string) => epc.quals.filter((x) => x.welderId === id)
+  const qualifying = (id: string) => testsOf(id).some((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid')
   const on = today()
-  const cur = welders.find((w) => w.id === sel)
-  useEffect(() => { if (cur) void epc.loadRegisterHistory('welder', cur.id) }, [cur?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const qsOf = (id: string) => quals.filter((x) => x.welderId === id)
-  const rows = welders.filter((w) => !q || `${w.raw} ${w.fullName}`.toLowerCase().includes(q.toLowerCase()))
-  const add = async () => { const id = await epc.saveWelder({ projectId, kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId, orgId: nw.orgId || null }); if (id) { setNw({ raw: '', fullName: '', nationalId: '', orgId: '' }); setSel(id) } }
-  const stateOf = (w: Welder) => (w.kind === 'coater' ? (w.cardStatus === 'confirmed' && w.card.validity ? (w.card.validity >= on ? (w.card.validity > plus(on, 30) ? 'valid' : 'soon') : 'expired') : 'none') : qualState(qsOf(w.id), on)) as ReturnType<typeof qualState>
-  const states = welders.map(stateOf)
+  const stateOf = (w: Welder): St => {
+    if (w.cardStatus !== 'issued') return 'none'
+    const v = w.card.validity
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v ?? '')) return v < on ? 'expired' : v <= plus(on, 30) ? 'soon' : 'valid'
+    return 'valid'
+  }
+  const cur = all.find((w) => w.id === sel)
+  const add = async () => { const id = await epc.saveWelder({ projectId, kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId }); if (id) { setNw({ raw: '', fullName: '', nationalId: '' }); setAdding(false); setSel(id) } }
+  const testChip = (w: Welder) => { const t = testsOf(w.id); if (w.kind === 'coater') return <span className="sub">—</span>; if (!t.length) return <Chip tone="bad">ثبت نشده</Chip>; if (qualifying(w.id)) return <Chip tone="good">واجد صلاحیت</Chip>; if (t.some((x) => x.wqtStatus === 'confirmed')) return <Chip tone="bad">فاقد صلاحیت</Chip>; return <Chip tone="warn">در انتظار امضا</Chip> }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 6 }}>{(['welder', 'coater'] as PersonKind[]).map((k) => <button key={k} className={`im-btn im-btn-sm${kind === k ? ' im-btn-primary' : ''}`} onClick={() => { setKind(k); setSel('') }}>{KIND_FA[k]}ان ({fa(allPeople.filter((w) => w.kind === k).length)})</button>)}</div>
-      <div className="fn-kpis">
-        <KpiCard label={`${KIND_FA[kind]}ان ثبت‌شده`} value={fa(welders.length)} sub={`${fa(welders.filter((w) => w.status === 'active').length)} فعال`} />
-        <KpiCard label="دارای صلاحیت معتبر امروز" value={fa(states.filter((s) => s === 'valid' || s === 'soon').length)} tone="good" />
-        <KpiCard label="صلاحیت در ۳۰ روز آینده منقضی می‌شود" value={fa(states.filter((s) => s === 'soon').length)} tone={states.includes('soon') ? 'warn' : 'good'} />
-        <KpiCard label="بدون صلاحیت معتبر" value={fa(states.filter((s) => s === 'none' || s === 'expired').length)} tone={states.some((s) => s === 'none' || s === 'expired') ? 'bad' : 'good'} hint="جوشکار بدون صلاحیت معتبر نباید در فرم‌ها انتخاب شود" />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(['welder', 'coater'] as PersonKind[]).map((k) => <button key={k} className={`im-btn im-btn-sm${kind === k ? ' im-btn-primary' : ''}`} onClick={() => { setKind(k); setSel('') }}>{KIND_FA[k]}ان ({fa(all.filter((w) => w.kind === k).length)})</button>)}
+        <input placeholder="جست‌وجوی نشانه، نام یا کد ملی…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220, marginInlineStart: 'auto' }} aria-label="جست‌وجو" />
+        {can && <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setAdding((x) => !x)}>{adding ? 'انصراف' : `+ ${KIND_FA[kind]} جدید`}</button>}
       </div>
-      <ScanBox people={allPeople} stateOf={(w) => stateOf(w)} onFound={(w) => { setKind(w.kind); setSel(w.id) }} />
-      {can && (
-        <Section title={`${KIND_FA[kind]} جدید`} hint="شناسه همان نشانه/شماره‌ای است که در فرم‌ها می‌نویسند (مثلاً A12). هر شناسه فقط یک‌بار در پروژه ثبت می‌شود و پس از ثبت، حذف نمی‌شود؛ فقط وضعیتش تغییر می‌کند.">
+      {adding && (
+        <Section title={`${KIND_FA[kind]} جدید`} hint="فقط سه مورد؛ بقیه (عکس، آزمون، کارت) در مراحل بعد در پروندهٔ همین فرد می‌آید.">
           <div className="ex-sheet-grid">
-            <label>شناسه / نشانه جوشکار *<input dir="ltr" value={nw.raw} onChange={(e) => setNw({ ...nw, raw: e.target.value })} /></label>
-            <label>نام و نام‌خانوادگی<input dir="auto" value={nw.fullName} onChange={(e) => setNw({ ...nw, fullName: e.target.value })} /></label>
-            <label>کد ملی<input dir="ltr" value={nw.nationalId} onChange={(e) => setNw({ ...nw, nationalId: e.target.value })} /></label>
-            <label>شرکت / پیمانکار<select value={nw.orgId} onChange={(e) => setNw({ ...nw, orgId: e.target.value })}><option value="">—</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+            <label>شمارهٔ نشانه / پلاک *<input dir="ltr" value={nw.raw} onChange={(e) => setNw({ ...nw, raw: e.target.value })} placeholder="همان که در فرم‌ها نوشته می‌شود، مثلاً 35" /></label>
+            <label>نام و نام‌خانوادگی *<input dir="auto" value={nw.fullName} onChange={(e) => setNw({ ...nw, fullName: e.target.value })} /></label>
+            <label>کد ملی (Welder ID) *<input dir="ltr" value={nw.nationalId} onChange={(e) => setNw({ ...nw, nationalId: e.target.value })} /></label>
           </div>
-          <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!nw.raw.trim()} onClick={() => void add()}>ثبت جوشکار</button></div>
+          <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!nw.raw.trim() || !nw.fullName.trim() || !nw.nationalId.trim()} onClick={() => void add()}>ثبت و ادامه</button></div>
         </Section>
       )}
-      <Section title={`فهرست ${KIND_FA[kind]}ان`} action={<input placeholder="جست‌وجوی شناسه یا نام…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />}>
-        {rows.length === 0 ? <Empty>هنوز جوشکاری ثبت نشده است.</Empty> : (
-          <div className="fn-tbl-wrap" style={{ maxHeight: 420 }}><table className="ex-lines"><thead><tr><th>شناسه</th><th>نام</th><th>شرکت</th><th>وضعیت</th><th>صلاحیت</th><th className="num">سرجوش</th><th className="num">دارای RT</th><th className="num">نرخ تعمیر</th></tr></thead>
-            <tbody>{rows.map((w) => { const qs = stateOf(w), s = stats.get(w.key)
-              return <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.1)' : undefined }}>
-                <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td>{orgs.find((o) => o.id === w.orgId)?.name ?? '—'}</td>
-                <td><Chip tone={w.status === 'active' ? 'good' : 'warn'}>{ST_FA[w.status]}</Chip></td>
-                <td><Chip tone={qs === 'valid' ? 'good' : qs === 'soon' ? 'warn' : 'bad'}>{{ valid: 'معتبر', soon: 'رو به انقضا', expired: 'منقضی / لغو', none: 'ثبت نشده' }[qs]}</Chip></td>
-                <td className="num">{fa(s?.welds ?? 0)}</td><td className="num">{fa(s?.rtWelds ?? 0)}</td><td className="num">{s && s.rtWelds ? `${fa(Math.round((s.rtRepair / s.rtWelds) * 100))}٪` : '—'}</td></tr> })}</tbody></table></div>
-        )}
-      </Section>
-      {cur && <Card w={cur} can={can} canConfirm={canConfirm} projectId={projectId} stats={stats.get(cur.key)} quals={qsOf(cur.id)} history={epc.registerHistory.filter((h) => h.entity === 'welder' || h.entity === 'welder_qual')} />}
+      {list.length === 0 ? <Empty>هنوز {KIND_FA[kind]}ی ثبت نشده است.</Empty> : (
+        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th>{kind === 'welder' && <th>آزمون</th>}<th>کارت</th><th>وضعیت</th></tr></thead>
+          <tbody>{list.map((w) => { const st = stateOf(w); return (
+            <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
+              <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td>{kind === 'welder' && <td>{testChip(w)}</td>}
+              <td><Chip tone={ST_CHIP[st].tone}>{w.cardStatus === 'issued' ? `${ST_CHIP[st].label} · ${w.cardNo}` : ST_CHIP[st].label}</Chip></td>
+              <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>
+      )}
+      {cur ? <WelderProfile w={cur} projectId={projectId} can={can} tests={testsOf(cur.id) as WelderQual[]} projectName={projectName} /> : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
+      <ScanBox people={all} onFound={(w) => { setKind(w.kind); setSel(w.id) }} stateOf={stateOf} />
+      {canCfg && <SignerSettings projectId={projectId} />}
     </div>
   )
 }
 
 /** Scan or type a code from the welder's plate: a hand scanner types the code and presses Enter; on phones the camera reader is used when the browser has one. */
-function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: Welder) => void; stateOf: (w: Welder) => string }) {
+function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: Welder) => void; stateOf: (w: Welder) => St }) {
   const [code, setCode] = useState('')
   const [res, setRes] = useState<{ w?: Welder; code: string } | null>(null)
   const [cam, setCam] = useState(false)
@@ -108,7 +98,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   }, [cam]) // eslint-disable-line react-hooks/exhaustive-deps
   const hasCam = typeof window !== 'undefined' && 'BarcodeDetector' in window
   return (
-    <Section title="اسکن پلاک / بارکد" hint="با اسکنر دستی (مثل صفحه‌کلید) یا دوربین موبایل، بارکد روی کارت یا پلاک جوشکار را بخوانید تا مشخصات و اعتبارش نمایش داده شود. همین شناسه در فیلد جوشکار فرم‌ها هم با اسکنر وارد می‌شود.">
+    <Section title="اسکن بارکد کارت / پلاک">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input dir="ltr" autoComplete="off" placeholder="بارکد را اسکن کنید یا شناسه را بنویسید و Enter بزنید" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); look(code) } }} style={{ minWidth: 280 }} aria-label="اسکن بارکد" />
         <button className="im-btn im-btn-sm" onClick={() => look(code)}>جست‌وجو</button>
@@ -120,7 +110,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
           {res.w.photo && <img src={res.w.photo} alt="" style={{ width: 44, height: 56, objectFit: 'cover', borderRadius: 4 }} />}
           <b>{res.w.fullName || res.w.raw}</b><span dir="ltr">{res.w.raw}</span><span>{KIND_FA[res.w.kind]}</span>
           <Chip tone={res.w.status === 'active' ? 'good' : 'bad'}>{ST_FA[res.w.status]}</Chip>
-          <Chip tone={stateOf(res.w) === 'valid' ? 'good' : stateOf(res.w) === 'soon' ? 'warn' : 'bad'}>{{ valid: 'صلاحیت معتبر', soon: 'رو به انقضا', expired: 'منقضی / لغو', none: 'صلاحیت ثبت نشده' }[stateOf(res.w) as 'valid']}</Chip>
+          <Chip tone={ST_CHIP[stateOf(res.w)].tone}>{ST_CHIP[stateOf(res.w)].label}</Chip>
           {res.w.cardNo ? <span dir="ltr">{res.w.cardNo}</span> : <span className="sub">کارت صادر نشده</span>}
         </div>
       ) : <p style={{ marginTop: 8, color: 'var(--im-coral, #dc2626)' }}>«{res.code}» در رجیستر این پروژه نیست.</p>)}
@@ -128,50 +118,18 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
   )
 }
 
-function Card({ w, can, canConfirm, projectId, stats, quals, history }: { w: Welder; can: boolean; canConfirm: boolean; projectId: string; stats?: { welds: number; rtWelds: number; rtRepair: number }; quals: WelderQual[]; history: { entity: string; attr: string; oldValue: string | null; newValue: string | null; at: string }[] }) {
-  const epc = useEpcStore()
-  const blank = { wqtNo: '', process: '', position: '', materialGroup: '', thkMin: null as number | null, thkMax: null as number | null, diaMin: null as number | null, diaMax: null as number | null, issueDate: '', expiryDate: '' }
-  const [f, setF] = useState(blank)
-  const [d, setD] = useState({ fullName: w.fullName, nationalId: w.nationalId, status: w.status, note: w.note })
-  useEffect(() => setD({ fullName: w.fullName, nationalId: w.nationalId, status: w.status, note: w.note }), [w.id, w.fullName, w.nationalId, w.status, w.note])
-  const dirty = d.fullName !== w.fullName || d.nationalId !== w.nationalId || d.status !== w.status || d.note !== w.note
+/** who signs the test and the card (per project); a slot left empty may be signed by any reviewer */
+function SignerSettings({ projectId }: { projectId: string }) {
+  const ex = useExecutionStore()
+  const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === projectId && t.userId)
+  const cur = ((ex.settingsByProject.get(projectId) as unknown as { personnelSigners?: Record<string, string> } | undefined)?.personnelSigners ?? {}) as Record<string, string>
+  const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
   return (
-    <Section title={`شناسنامهٔ ${KIND_FA[w.kind]} — ${w.raw}`} hint="تغییر مشخصات و صلاحیت‌ها در تاریخچهٔ زیر ثبت می‌شود. سرجوش‌ها و نتیجهٔ RT از فرم‌های ثبت‌شده محاسبه می‌شوند و در اینجا تایپ نمی‌شوند.">
-      <PersonnelCard w={w} projectId={projectId} can={can} canConfirm={canConfirm} quals={quals} />
-      <h4 style={{ margin: '14px 0 6px' }}>وضعیت و مشخصات عمومی</h4>
-      <div className="ex-sheet-grid">
-        <label>نام<input disabled={!can} dir="auto" value={d.fullName} onChange={(e) => setD({ ...d, fullName: e.target.value })} /></label>
-        <label>کد ملی<input disabled={!can} dir="ltr" value={d.nationalId} onChange={(e) => setD({ ...d, nationalId: e.target.value })} /></label>
-        <label>وضعیت<select disabled={!can} value={d.status} onChange={(e) => setD({ ...d, status: e.target.value as Welder['status'] })}>{Object.entries(ST_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-        <label className="wide">یادداشت<input disabled={!can} dir="auto" value={d.note} onChange={(e) => setD({ ...d, note: e.target.value })} /></label>
-      </div>
-      {can && dirty && <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" onClick={() => void epc.saveWelder({ ...w, ...d, projectId, raw: w.raw })}>ذخیرهٔ مشخصات</button></div>}
-      {w.kind === 'welder' && <p className="im-helper" style={{ margin: '10px 0 4px' }}>سابقهٔ کاری (از فرم‌ها): <b>{fa(stats?.welds ?? 0)}</b> سرجوش · <b>{fa(stats?.rtWelds ?? 0)}</b> سرجوش دارای نتیجهٔ RT · <b>{fa(stats?.rtRepair ?? 0)}</b> مورد نیازمند تعمیر</p>}
-      {w.kind === 'welder' && <>
-      <h4 style={{ margin: '12px 0 6px' }}>صلاحیت‌ها (WQT)</h4>
-      <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>شمارهٔ WQT</th><th>فرایند</th><th>وضعیت جوش</th><th>گروه متریال</th><th>ضخامت (in)</th><th>قطر (in)</th><th>صدور</th><th>انقضا</th><th>وضعیت</th></tr></thead>
-        <tbody>{quals.map((q) => <tr key={q.id}><td dir="ltr">{q.wqtNo || '—'}</td><td>{q.process || '—'}</td><td>{q.position || '—'}</td><td>{q.materialGroup || '—'}</td>
-          <td dir="ltr">{q.thkMin ?? '…'} – {q.thkMax ?? '…'}</td><td dir="ltr">{q.diaMin ?? '…'} – {q.diaMax ?? '…'}</td><td>{q.issueDate ? fmtD(q.issueDate) : '—'}</td><td>{q.expiryDate ? fmtD(q.expiryDate) : '—'}</td>
-          <td>{can ? <select value={q.status} onChange={(e) => void epc.saveQual({ ...q, status: e.target.value as WelderQual['status'] })}><option value="valid">معتبر</option><option value="revoked">لغو شده</option></select> : q.status === 'valid' ? 'معتبر' : 'لغو شده'}</td></tr>)}
-          {quals.length === 0 && <tr><td colSpan={9} className="sub">صلاحیتی ثبت نشده است.</td></tr>}</tbody></table></div>
-      {can && (
-        <div className="ex-sheet-grid" style={{ marginTop: 8 }}>
-          <label>شمارهٔ WQT<input dir="ltr" value={f.wqtNo} onChange={(e) => setF({ ...f, wqtNo: e.target.value })} /></label>
-          <label>فرایند (SMAW/GTAW…)<input dir="ltr" value={f.process} onChange={(e) => setF({ ...f, process: e.target.value })} /></label>
-          <label>وضعیت جوش (Position)<input dir="ltr" value={f.position} onChange={(e) => setF({ ...f, position: e.target.value })} /></label>
-          <label>گروه متریال<input dir="ltr" value={f.materialGroup} onChange={(e) => setF({ ...f, materialGroup: e.target.value })} /></label>
-          <label>ضخامت از (in)<NumInput value={f.thkMin ?? 0} label="ضخامت از" decimals={3} onCommit={(n) => setF({ ...f, thkMin: n || null })} /></label>
-          <label>ضخامت تا (in)<NumInput value={f.thkMax ?? 0} label="ضخامت تا" decimals={3} onCommit={(n) => setF({ ...f, thkMax: n || null })} /></label>
-          <label>قطر از (in)<NumInput value={f.diaMin ?? 0} label="قطر از" decimals={2} onCommit={(n) => setF({ ...f, diaMin: n || null })} /></label>
-          <label>قطر تا (in)<NumInput value={f.diaMax ?? 0} label="قطر تا" decimals={2} onCommit={(n) => setF({ ...f, diaMax: n || null })} /></label>
-          <label>تاریخ صدور<JalaliDateInput value={f.issueDate} onChange={(x) => setF({ ...f, issueDate: x })} /></label>
-          <label>تاریخ انقضا<JalaliDateInput value={f.expiryDate} onChange={(x) => setF({ ...f, expiryDate: x })} /></label>
-          <div style={{ alignSelf: 'end' }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!f.wqtNo.trim() && !f.process.trim()} onClick={async () => { if (await epc.saveQual({ projectId, welderId: w.id, ...f, issueDate: f.issueDate || null, expiryDate: f.expiryDate || null })) setF(blank) }}>افزودن صلاحیت</button></div>
-        </div>
-      )}
-      {quals.map((q) => <WqtPanel key={q.id} q={q} w={w} can={can} canConfirm={canConfirm} />)}
-      </>}
-      {history.length > 0 && <details style={{ marginTop: 10 }}><summary className="im-helper">تاریخچهٔ تغییرات ({fa(history.length)})</summary><table className="ex-lines"><tbody>{history.map((h, i) => <tr key={i}><td>{fmtD(h.at.slice(0, 10))}</td><td>{h.entity === 'welder_qual' ? 'صلاحیت' : 'جوشکار'}</td><td dir="ltr">{h.attr}</td><td dir="auto">{h.oldValue ?? '—'} ← {h.newValue ?? '—'}</td></tr>)}</tbody></table></details>}
-    </Section>
+    <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت</summary>
+      <div className="ex-sheet-grid" style={{ marginTop: 8 }}>{slots.map(([k, l]) => (
+        <label key={k}>{l}<select value={cur[k] ?? ''} onChange={(e) => void ex.saveSettings(projectId, { personnelSigners: { ...cur, [k]: e.target.value } } as never)}><option value="">هر بررسی‌کننده</option>{team.map((t) => <option key={t.id} value={t.userId!}>{t.personName || ex.people.get(t.userId!) || '—'}</option>)}</select></label>
+      ))}</div>
+      <p className="im-helper">امضا با نمونهٔ امضای ثبت‌شدهٔ همان کاربر در پروفایلش انجام می‌شود.</p>
+    </details>
   )
 }

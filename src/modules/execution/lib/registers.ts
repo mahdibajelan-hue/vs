@@ -8,8 +8,9 @@ export const WELDER_FIELDS = ['stampRoot', 'stampHot', 'stampFill', 'stampCap', 
 export const isWelderField = (k: string) => WELDER_FIELDS.includes(k)
 export const isPipeField = (k: string) => k === 'pipeNo'
 
-export interface Welder { id: string; projectId: string; key: string; raw: string; fullName: string; nationalId: string; orgId: string | null; status: 'active' | 'suspended' | 'left'; note: string; /** welder, or a field-joint coating applicator */ kind: 'welder' | 'coater'; /** small JPEG data URL */ photo: string; card: Record<string, string>; cardStatus: 'draft' | 'confirmed' | 'issued'; cardConfirmedBy: string | null; cardConfirmedAt: string | null; cardNo: string; cardIssuedAt: string | null; cardIssuedBy: string | null; createdBy: string | null }
-export interface WelderQual { id: string; projectId: string; welderId: string; wqtNo: string; process: string; position: string; materialGroup: string; thkMin: number | null; thkMax: number | null; diaMin: number | null; diaMax: number | null; issueDate: string | null; expiryDate: string | null; wqtReportId: string | null; status: 'valid' | 'revoked'; note: string; wqt: Record<string, string>; wqtStatus: 'draft' | 'confirmed'; wqtConfirmedBy: string | null; wqtConfirmedAt: string | null; createdBy: string | null }
+export interface PersonSig { user: string; name: string; image: string; at: string }
+export interface Welder { id: string; projectId: string; key: string; raw: string; fullName: string; nationalId: string; orgId: string | null; status: 'active' | 'suspended' | 'left'; note: string; /** welder, or a field-joint coating applicator */ kind: 'welder' | 'coater'; /** small JPEG data URL */ photo: string; card: Record<string, string>; cardStatus: 'draft' | 'confirmed' | 'issued'; cardConfirmedBy: string | null; cardConfirmedAt: string | null; cardNo: string; cardIssuedAt: string | null; cardIssuedBy: string | null; createdBy: string | null; cardSignA: PersonSig | null; cardSignB: PersonSig | null }
+export interface WelderQual { id: string; projectId: string; welderId: string; wqtNo: string; process: string; position: string; materialGroup: string; thkMin: number | null; thkMax: number | null; diaMin: number | null; diaMax: number | null; issueDate: string | null; expiryDate: string | null; wqtReportId: string | null; status: 'valid' | 'revoked'; note: string; wqt: Record<string, string>; wqtStatus: 'draft' | 'confirmed'; wqtConfirmedBy: string | null; wqtConfirmedAt: string | null; createdBy: string | null; wqtSignA: PersonSig | null; wqtSignB: PersonSig | null }
 export interface Pipe { id: string; projectId: string; key: string; raw: string; entryDate: string; heatNo: string; odIn: number | null; wtIn: number | null; lengthM: number | null; grade: string; coating: string; supplier: string; wayBill: string; materialId: string | null; entryLineId: string | null; status: 'in_stock' | 'rejected' | 'scrapped'; note: string }
 
 /** «A12/B3», «A12 , B3», «A12 و B3» → ['A12','B3'] (N1-normalised) */
@@ -96,7 +97,7 @@ export function welderStats(lines: { formKey: string; detail: Record<string, unk
 }
 
 /** a scanned / typed code: the welder number printed as the barcode, or the card number */
-export function findByCode<T extends { key: string; cardNo: string }>(code: string, people: T[]): T | undefined {
+export function findByCode<T extends { key: string; cardNo: string; nationalId?: string }>(code: string, people: T[]): T | undefined {
   const k = registerKey(code); if (!k) return undefined
-  return people.find((p) => p.key === k) ?? people.find((p) => p.cardNo && registerKey(p.cardNo) === k)
+  return people.find((p) => p.key === k) ?? people.find((p) => p.cardNo && registerKey(p.cardNo) === k) ?? people.find((p) => p.nationalId && registerKey(p.nationalId) === k)
 }
