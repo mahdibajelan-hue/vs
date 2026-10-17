@@ -14643,6 +14643,24 @@ create trigger trg_comp_assessments_sync_personality_job_role after update on co
 -- just those aggregates (never individual responses, validity details or the full trait/dimension
 -- set). The role-fit math is a straight SQL port of computeRoleAlignment() in
 -- src/modules/personality/lib/roleAlignment.ts (same rowFitScore branches, weighted over covered rows).
+-- Single job-readiness number — SQL twin of computeReadiness() in src/modules/competency/lib/competencyGap.ts:
+-- attainment min(actual/required,1) × confidence factor (HIGH 1, MEDIUM .9, LOW .75, NONE .6), criticals weigh double,
+-- scaled by 0.4 + 0.6 × evidenced weight share, capped at 59 when any critical gap exists.
+create or replace function comp_readiness_percent(p_assessment uuid) returns numeric language sql stable security definer set search_path = public as $f$
+  with s as (
+    select weight * (case when is_critical then 2 else 1 end) w, required_level r, actual_level a, status, confidence
+    from comp_competency_scores where assessment_id = p_assessment
+  ), g as (
+    select sum(w) total,
+      sum(w) filter (where status <> 'INSUFFICIENT_EVIDENCE' and a is not null) evw,
+      sum(w * least(a / greatest(r, 0.0001), 1) * (case confidence when 'HIGH' then 1 when 'MEDIUM' then 0.9 when 'LOW' then 0.75 else 0.6 end)) filter (where status <> 'INSUFFICIENT_EVIDENCE' and a is not null) num,
+      bool_or(status = 'CRITICAL_GAP') crit
+    from s
+  )
+  select case when evw > 0 and total > 0 then round(least(num / evw * (0.4 + 0.6 * evw / total) * 100, case when crit then 59 else 100 end)) end from g;
+$f$;
+revoke execute on function comp_readiness_percent(uuid) from public;
+
 create or replace function comp_public_extra_scores_get(p_token uuid)
 returns jsonb
 language plpgsql
@@ -14716,7 +14734,8 @@ begin
 
   return jsonb_build_object(
     'mcq_percent', case when v_mcq is null then null else round(v_mcq) end,
-    'role_fit_percent', v_fit,
+    -- the single «آمادگی برای شغل» number (competency engine); the behavioural-only fit stays only as a fallback when no competency score exists
+    'role_fit_percent', coalesce(comp_readiness_percent(v_id), v_fit),
     'traits', v_traits
   );
 end;
