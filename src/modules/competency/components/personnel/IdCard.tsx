@@ -6,6 +6,8 @@ import type { PersonSig } from '../../lib/personnel'
 import { jdLatin } from './util'
 
 const NAVY = '#0b2545', NAVY2 = '#14407a', AMBER = '#f59e0b', INK = '#0f172a', MUTE = '#64748b'
+/** on-screen size relative to the real card (print and export stay full size) */
+const VIEW = 0.6
 const FONT = 'Vazirmatn, Tahoma, sans-serif'
 const card: React.CSSProperties = { width: 454, height: 286, boxSizing: 'border-box', borderRadius: 16, background: '#fff', color: INK, overflow: 'hidden', position: 'relative', fontFamily: FONT, border: '1px solid #cbd5e1', boxShadow: '0 6px 18px rgba(15,23,42,.12)', display: 'flex', direction: 'ltr' }
 const lab: React.CSSProperties = { fontSize: 8, color: MUTE, letterSpacing: 0.6, textTransform: 'uppercase', lineHeight: 1.1 }
@@ -112,12 +114,12 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       {/* one card on screen: click turns it over; the export copies stay flat and off-screen */}
-      <div style={{ perspective: 1200, width: 454, maxWidth: '100%' }}>
+      <div style={{ width: 454 * VIEW, height: 286 * VIEW, position: 'relative', direction: 'ltr' }}><div style={{ perspective: 1200, width: 454, height: 286, transform: `scale(${VIEW})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
         <button type="button" onClick={() => setFlipped((x) => !x)} aria-label={flipped ? 'نمایش روی کارت' : 'نمایش پشت کارت'} title="برای برگرداندن کارت کلیک کنید" style={{ all: 'unset', cursor: 'pointer', display: 'block', width: 454, height: 286, position: 'relative', transformStyle: 'preserve-3d', transition: 'transform 420ms cubic-bezier(0.77, 0, 0.175, 1)', transform: flipped ? 'rotateY(180deg)' : 'none' }}>
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>{frontFace()}</div>
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>{backFace()}</div>
         </button>
-      </div>
+      </div></div>
       <div className="sub" style={{ fontSize: 11 }}>روی کارت کلیک کنید تا {flipped ? 'روی' : 'پشت'} آن نمایش داده شود.</div>
       <div aria-hidden style={{ position: 'fixed', left: -10000, top: 0, display: 'grid', gap: 10, pointerEvents: 'none' }}>{frontFace(front)}{backFace(back)}</div>
       <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
