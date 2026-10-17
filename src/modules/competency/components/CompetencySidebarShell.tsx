@@ -10,6 +10,7 @@ import '../styles/competency-im.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
 import type { CompetencyAssessment } from '../types'
 import { useDoneSections } from '../lib/useDoneSections'
+import { SectionHelp } from './SectionHelp'
 
 export type CompetencySection =
   | 'dashboard'
@@ -134,7 +135,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, assessm
         <div className="im-page" style={{ display: 'grid', gap: 14 }}>
           {(inCandidate || stageStrip) && (
             <div className="comp-stagebar no-print">
-              <div className="comp-stagebar-title"><Sparkles size={15} aria-hidden style={{ color: COMPETENCY_ACCENT }} /><b>{title}</b></div>
+              <div className="comp-stagebar-title"><Sparkles size={15} aria-hidden style={{ color: COMPETENCY_ACCENT }} /><b>{title}</b><SectionHelp section={active} /></div>
               <div className="comp-stagebar-nav" role="tablist" aria-label="مراحل ارزیابی این داوطلب">
                 {CANDIDATE_SECTIONS.map((section) => {
                   const meta = SECTION_META[section]
@@ -149,7 +150,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, assessm
               </div>
             </div>
           )}
-          {!inCandidate && !stageStrip && <h2 className="comp-page-title">{title}</h2>}
+          {!inCandidate && !stageStrip && <h2 className="comp-page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{title}<SectionHelp section={active} /></h2>}
           {/* A crash in one page's content stays inside this box (navigation still works); keyed so
               moving to another page/candidate resets it. */}
           <ErrorBoundary key={`${active}:${title}`} area={title}>
