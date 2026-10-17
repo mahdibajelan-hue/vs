@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../../../lib/supabaseClient'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { usePersonnelStore } from '../store/usePersonnelStore'
@@ -21,21 +22,28 @@ const findByCode = (code: string, people: Welder[]): Welder | undefined => { con
 
 /** «صلاحیت جوشکاران و عایق‌کاران»: introduce → qualification test signed by two people → card signed by the site head and the supervision head → printable card with QR. The Execution module reads the issued cards of each project. */
 export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; nav: Partial<Record<CompetencySection, () => void>> }) {
-  const projects = useMasterDataStore((s) => s.projects)
+  const mdProjects = useMasterDataStore((s) => s.projects)
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
-  // this module never loads the project list by itself: fetch it when the section opens
-  useEffect(() => { if (!mdLoaded) fetchMasterData() }, [mdLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
   const ctx = useProjectContextStore((s) => s.projectId)
   const st = usePersonnelStore()
-  const [projectId, setProjectId] = useState<string>('')
-  useEffect(() => { if (!projectId && projects.length) setProjectId(ctx && projects.some((p) => p.id === ctx) ? ctx : projects[0].id) }, [projects, ctx, projectId])
-  useEffect(() => { if (projectId) void st.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the register opens at once: the project list is a tiny query of its own and the people load starts in parallel (the heavy master-data load — organisations, team, profiles — is deferred)
+  const [light, setLight] = useState<{ id: string; officialName: string }[]>([])
+  const [projectId, setProjectId] = useState<string>(ctx ?? '')
+  useEffect(() => {
+    let live = true
+    void supabase.from('master_projects').select('id, official_name').order('created_at', { ascending: false }).then(({ data }) => { if (live && data) setLight(data.map((r) => ({ id: r.id as string, officialName: r.official_name as string }))) })
+    const t = window.setTimeout(() => { if (!useMasterDataStore.getState().loaded) void fetchMasterData() }, 1200)
+    return () => { live = false; window.clearTimeout(t) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const projects = mdLoaded ? mdProjects : light
+  useEffect(() => { if (projects.length && !projects.some((p) => p.id === projectId)) setProjectId(ctx && projects.some((p) => p.id === ctx) ? ctx : projects[0].id) }, [projects, ctx, projectId])
+  useEffect(() => { if (projectId && st.projectId !== projectId) void st.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
   const projectName = projects.find((p) => p.id === projectId)?.officialName ?? ''
   return (
     <CompetencySidebarShell active="personnel" nav={nav} title="صلاحیت جوشکاران و عایق‌کاران" onExitToHub={onExitToHub}
       headerRight={<select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="پروژه" className="im-select-pill">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>}>
-      {!mdLoaded && !projects.length ? <div className="im-skeleton" style={{ height: 160 }} /> : !projectId ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <Body projectName={projectName} />}
+      {!projectId ? (projects.length || mdLoaded ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <div className="im-skeleton" style={{ height: 160 }} />) : <Body projectName={projectName} />}
     </CompetencySidebarShell>
   )
 }

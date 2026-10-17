@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from './store/useCompetencyStore'
 import { usePersonalityStore } from '../personality/store/usePersonalityStore'
@@ -9,7 +9,7 @@ import { QuestionBankPage } from './pages/QuestionBankPage'
 import { CompetencyReportsPage } from './pages/CompetencyReportsPage'
 import { InServicePage } from './pages/InServicePage'
 import { DisciplinePage } from './pages/DisciplinePage'
-import { PersonnelPage } from './pages/PersonnelPage'
+const PersonnelPage = lazy(() => import('./pages/PersonnelPage').then((m) => ({ default: m.PersonnelPage })))
 import { useInServiceStore } from './store/useInServiceStore'
 import { TalentPage } from './pages/TalentPage'
 import { CompetencySettingsPage } from './pages/CompetencySettingsPage'
@@ -195,7 +195,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   }
 
   if (view.name === 'inservice') return <InServicePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
-  if (view.name === 'personnel') return <PersonnelPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
+  if (view.name === 'personnel') return <Suspense fallback={<div className="im-skeleton" style={{ height: 200, margin: 16 }} />}><PersonnelPage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} /></Suspense>
   if (view.name === 'discipline') return <DisciplinePage onExitToHub={onExitToHub} nav={{ dashboard: () => setView({ name: 'list' }), ...moduleNav }} />
 
   if (view.name === 'myTasks') {
