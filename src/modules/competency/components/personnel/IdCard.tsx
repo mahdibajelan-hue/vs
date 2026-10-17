@@ -18,6 +18,7 @@ const val: React.CSSProperties = { fontSize: 11.5, fontWeight: 700, lineHeight: 
 export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, sigB, labelA, labelB }: { kind: PersonKind; data: CardData; photo: string; cardNo: string; projectName: string; payload: string; sigA: PersonSig | null; sigB: PersonSig | null; labelA: string; labelB: string }) {
   const front = useRef<HTMLDivElement>(null), back = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
+  const [flipped, setFlipped] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(data.validityRaw) ? data.validityRaw : ''
   const open = data.validityRaw === 'END'
@@ -56,60 +57,69 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
     </div>
   )
   const facts = data.rows.filter(([k]) => !['Test No', 'Test Date'].includes(k) || kind === 'welder').slice(0, kind === 'welder' ? 6 : 2)
-  return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        {/* ── front */}
-        <div ref={front} style={card}>
-          <div style={{ width: 138, flex: 'none', background: `linear-gradient(160deg, ${NAVY} 0%, ${NAVY2} 100%)`, color: '#fff', padding: '14px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 8, letterSpacing: 0.8, opacity: 0.75, textAlign: 'center', lineHeight: 1.4 }}>{projectName}</div>
-            <div style={{ width: 104, height: 132, borderRadius: 14, overflow: 'hidden', border: `3px solid ${AMBER}`, background: '#1e3a5f', boxShadow: '0 4px 12px rgba(0,0,0,.35)' }}>
-              {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontSize: 10, opacity: 0.6 }}>PHOTO</div>}
-            </div>
-            <div style={{ textAlign: 'center', lineHeight: 1.1 }}><div style={{ fontSize: 8, letterSpacing: 1.2, opacity: 0.75 }}>STAMP</div><div style={{ fontSize: 26, fontWeight: 800, color: AMBER, direction: 'ltr' }}>{data.stamp}</div></div>
-          </div>
-          <div style={{ flex: 1, minWidth: 0, padding: '14px 16px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, direction: 'ltr' }}>
-              <span style={{ background: NAVY, color: '#fff', fontSize: 8.5, fontWeight: 800, letterSpacing: 1, padding: '3px 9px', borderRadius: 20 }}>{badge}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 800, color: okColor }}><span style={{ width: 7, height: 7, borderRadius: 4, background: expired ? '#ef4444' : '#10b981' }} />{expired ? 'EXPIRED' : 'VALID'}</span>
-            </div>
-            <div>
-              <div dir="auto" style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.15, color: NAVY, textAlign: 'start' }}>{data.name || '—'}</div>
-              <div style={{ fontSize: 10, color: MUTE, direction: 'ltr', textAlign: 'left', marginTop: 2 }}>ID <b style={{ color: INK, letterSpacing: 0.5 }}>{data.nationalId || '—'}</b></div>
-            </div>
-            <div style={{ height: 1, background: 'linear-gradient(90deg, #e2e8f0, transparent)' }} />
-            {kind === 'coater' && data.scope && data.scope.length > 0 ? (
-              <div style={{ display: 'grid', gap: 4, direction: 'ltr' }}><div style={lab}>Qualified for</div><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{data.scope.map((s) => <span key={s} style={{ fontSize: 9.5, fontWeight: 700, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 20 }}>{s}</span>)}</div></div>
-            ) : null}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', direction: 'ltr' }}>{facts.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div></div>)}</div>
-            <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', direction: 'ltr' }}>
-              <div><div style={lab}>Card validity</div><div style={{ ...val, color: okColor }}>{data.validityRaw ? (open ? 'End of project' : data.validity) : '—'}</div></div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ background: '#fff', padding: 3, borderRadius: 6, border: '1px solid #e2e8f0', lineHeight: 0 }}><QRCodeSVG value={payload} size={66} level="M" marginSize={0} fgColor="#000000" bgColor="#ffffff" /></div>
-                <div style={{ fontSize: 6.5, letterSpacing: 0.8, color: MUTE, marginTop: 2 }}>SCAN TO VERIFY</div>
-              </div>
-            </div>
-          </div>
+  const frontFace = (r?: React.Ref<HTMLDivElement>) => (
+    <div ref={r} style={card}>
+      <div style={{ width: 138, flex: 'none', background: `linear-gradient(160deg, ${NAVY} 0%, ${NAVY2} 100%)`, color: '#fff', padding: '14px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 8, letterSpacing: 0.8, opacity: 0.75, textAlign: 'center', lineHeight: 1.4 }}>{projectName}</div>
+        <div style={{ width: 104, height: 132, borderRadius: 14, overflow: 'hidden', border: `3px solid ${AMBER}`, background: '#1e3a5f', boxShadow: '0 4px 12px rgba(0,0,0,.35)' }}>
+          {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontSize: 10, opacity: 0.6 }}>PHOTO</div>}
         </div>
-        {/* ── back */}
-        <div ref={back} style={{ ...card, flexDirection: 'column' }}>
-          <div style={{ background: `linear-gradient(90deg, ${NAVY}, ${NAVY2})`, color: '#fff', padding: '9px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'ltr' }}>
-            <div><div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4 }}>{data.title}</div><div style={{ fontSize: 8.5, opacity: 0.8 }}>{projectName}</div></div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: AMBER, letterSpacing: 1 }}>{data.stamp}</div>
+        <div style={{ textAlign: 'center', lineHeight: 1.1 }}><div style={{ fontSize: 8, letterSpacing: 1.2, opacity: 0.75 }}>STAMP</div><div style={{ fontSize: 26, fontWeight: 800, color: AMBER, direction: 'ltr' }}>{data.stamp}</div></div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0, padding: '14px 16px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, direction: 'ltr' }}>
+          <span style={{ background: NAVY, color: '#fff', fontSize: 8.5, fontWeight: 800, letterSpacing: 1, padding: '3px 9px', borderRadius: 20 }}>{badge}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 800, color: okColor }}><span style={{ width: 7, height: 7, borderRadius: 4, background: expired ? '#ef4444' : '#10b981' }} />{expired ? 'EXPIRED' : 'VALID'}</span>
+        </div>
+        <div>
+          <div dir="auto" style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.15, color: NAVY, textAlign: 'start' }}>{data.name || '—'}</div>
+          <div style={{ fontSize: 10, color: MUTE, direction: 'ltr', textAlign: 'left', marginTop: 2 }}>ID <b style={{ color: INK, letterSpacing: 0.5 }}>{data.nationalId || '—'}</b></div>
+        </div>
+        <div style={{ height: 1, background: 'linear-gradient(90deg, #e2e8f0, transparent)' }} />
+        {kind === 'coater' && data.scope && data.scope.length > 0 ? (
+          <div style={{ display: 'grid', gap: 4, direction: 'ltr' }}><div style={lab}>Qualified for</div><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{data.scope.map((s) => <span key={s} style={{ fontSize: 9.5, fontWeight: 700, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 20 }}>{s}</span>)}</div></div>
+        ) : null}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', direction: 'ltr' }}>{facts.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div></div>)}</div>
+        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', direction: 'ltr' }}>
+          <div><div style={lab}>Card validity</div><div style={{ ...val, color: okColor }}>{data.validityRaw ? (open ? 'End of project' : data.validity) : '—'}</div></div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ background: '#fff', padding: 3, borderRadius: 6, border: '1px solid #e2e8f0', lineHeight: 0 }}><QRCodeSVG value={payload} size={66} level="M" marginSize={0} fgColor="#000000" bgColor="#ffffff" /></div>
+            <div style={{ fontSize: 6.5, letterSpacing: 0.8, color: MUTE, marginTop: 2 }}>SCAN TO VERIFY</div>
           </div>
-          <div style={{ padding: '10px 16px', display: 'grid', gap: 8, flex: 1, alignContent: 'start', direction: 'ltr' }}>
-            {data.table && data.table.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(data.table.length, 4)}, 1fr)`, gap: 0, border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
-                {data.table.map(([h, v], i) => <div key={h} style={{ padding: '5px 8px', borderInlineStart: i % 4 ? '1px solid #e2e8f0' : 'none', borderTop: i >= 4 ? '1px solid #e2e8f0' : 'none', gridColumn: data.table!.length === 1 ? '1 / -1' : undefined, background: i % 2 ? '#fff' : '#f8fafc' }}><div style={lab}>{h}</div><div style={{ ...val, fontSize: 10.5 }}>{v}</div></div>)}
-              </div>
-            )}
-            {kind === 'coater' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>{data.rows.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5 }}>{v}</div></div>)}</div>}
-            {data.dirs && (data.dirs.fill || data.dirs.root) && <div style={{ display: 'flex', gap: 18, fontSize: 9.5 }}>{[['Root & Hot', data.dirs.root], ['Filling & Cap', data.dirs.fill]].map(([k, d]) => <div key={k}><b>{k}:</b> {d === 'up' ? '☑' : '☐'} Up Hill &nbsp; {d === 'down' ? '☑' : '☐'} Down Hill</div>)}</div>}
-            <div style={{ display: 'flex', gap: 18, marginTop: 4, direction: 'rtl' }}>{sign(labelA, sigA)}{sign(labelB, sigB)}</div>
-          </div>
-          <div style={{ padding: '5px 16px 8px', fontSize: 8, color: MUTE, textAlign: 'center', direction: 'rtl' }}>اعتبار این کارت با اسکن QR و تطبیق با رجیستر پروژه کنترل می‌شود · در صورت یافتن به دفتر فنی پروژه تحویل شود.</div>
         </div>
       </div>
+    </div>
+  )
+  const backFace = (r?: React.Ref<HTMLDivElement>) => (
+    <div ref={r} style={{ ...card, flexDirection: 'column' }}>
+      <div style={{ background: `linear-gradient(90deg, ${NAVY}, ${NAVY2})`, color: '#fff', padding: '9px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'ltr' }}>
+        <div><div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4 }}>{data.title}</div><div style={{ fontSize: 8.5, opacity: 0.8 }}>{projectName}</div></div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: AMBER, letterSpacing: 1 }}>{data.stamp}</div>
+      </div>
+      <div style={{ padding: '10px 16px', display: 'grid', gap: 8, flex: 1, alignContent: 'start', direction: 'ltr' }}>
+        {data.table && data.table.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(data.table.length, 4)}, 1fr)`, gap: 0, border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
+            {data.table.map(([h, v], i) => <div key={h} style={{ padding: '5px 8px', borderInlineStart: i % 4 ? '1px solid #e2e8f0' : 'none', borderTop: i >= 4 ? '1px solid #e2e8f0' : 'none', gridColumn: data.table!.length === 1 ? '1 / -1' : undefined, background: i % 2 ? '#fff' : '#f8fafc' }}><div style={lab}>{h}</div><div style={{ ...val, fontSize: 10.5 }}>{v}</div></div>)}
+          </div>
+        )}
+        {kind === 'coater' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>{data.rows.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5 }}>{v}</div></div>)}</div>}
+        {data.dirs && (data.dirs.fill || data.dirs.root) && <div style={{ display: 'flex', gap: 18, fontSize: 9.5 }}>{[['Root & Hot', data.dirs.root], ['Filling & Cap', data.dirs.fill]].map(([k, d]) => <div key={k}><b>{k}:</b> {d === 'up' ? '☑' : '☐'} Up Hill &nbsp; {d === 'down' ? '☑' : '☐'} Down Hill</div>)}</div>}
+        <div style={{ display: 'flex', gap: 18, marginTop: 4, direction: 'rtl' }}>{sign(labelA, sigA)}{sign(labelB, sigB)}</div>
+      </div>
+      <div style={{ padding: '5px 16px 8px', fontSize: 8, color: MUTE, textAlign: 'center', direction: 'rtl' }}>اعتبار این کارت با اسکن QR و تطبیق با رجیستر پروژه کنترل می‌شود · در صورت یافتن به دفتر فنی پروژه تحویل شود.</div>
+    </div>
+  )
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {/* one card on screen: click turns it over; the export copies stay flat and off-screen */}
+      <div style={{ perspective: 1200, width: 454, maxWidth: '100%' }}>
+        <button type="button" onClick={() => setFlipped((x) => !x)} aria-label={flipped ? 'نمایش روی کارت' : 'نمایش پشت کارت'} title="برای برگرداندن کارت کلیک کنید" style={{ all: 'unset', cursor: 'pointer', display: 'block', width: 454, height: 286, position: 'relative', transformStyle: 'preserve-3d', transition: 'transform 420ms cubic-bezier(0.77, 0, 0.175, 1)', transform: flipped ? 'rotateY(180deg)' : 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>{frontFace()}</div>
+          <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>{backFace()}</div>
+        </button>
+      </div>
+      <div className="sub" style={{ fontSize: 11 }}>روی کارت کلیک کنید تا {flipped ? 'روی' : 'پشت'} آن نمایش داده شود.</div>
+      <div aria-hidden style={{ position: 'fixed', left: -10000, top: 0, display: 'grid', gap: 10, pointerEvents: 'none' }}>{frontFace(front)}{backFace(back)}</div>
       <div className="no-print" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className="im-btn im-btn-primary im-btn-sm" onClick={printBoth}><Printer size={13} /> چاپ کارت</button>
         <button className="im-btn im-btn-sm" disabled={busy} onClick={() => void save('pdf')}><Download size={13} /> ذخیره PDF</button>
