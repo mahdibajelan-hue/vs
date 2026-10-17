@@ -1,16 +1,31 @@
 import { Fragment, useEffect, useState } from 'react'
-import { ChevronDown, ChevronLeft } from 'lucide-react'
+import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Cog, FileText, FlaskConical, FolderTree, Gauge, MessageSquare, PenLine, Send, ShieldAlert, Workflow, Zap, type LucideIcon } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { supabase } from '../../../lib/supabaseClient'
 import { jalaliText } from '../../execution/lib/periods'
 import type { EpcModel } from '../../execution/lib/useEpcModel'
 import { ENG_STATUS_LABEL_FA, type EngDocRow, type EngStatus } from '../../execution/epcTypes'
-import { Chip } from '../../finance/components/fn'
-import { Bar, fa, pct } from '../../execution/components/common'
+import { fa, pct } from '../../execution/components/common'
 import { COURT_COLOR, COURT_LABEL_FA, courtOf, type EngLens } from '../lib/roles'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
-const TONE: Partial<Record<EngStatus, 'good' | 'warn' | 'bad'>> = { approved: 'good', restricted: 'warn' }
+const ST_UI: Record<EngStatus, { icon: LucideIcon; color: string }> = {
+  required: { icon: CircleDashed, color: '#94a3b8' }, in_preparation: { icon: PenLine, color: '#f97316' }, issued: { icon: Send, color: '#0ea5e9' },
+  pending_approval: { icon: Send, color: '#0ea5e9' }, approved: { icon: CheckCircle2, color: '#22c55e' }, restricted: { icon: ShieldAlert, color: '#eab308' }, superseded: { icon: FileText, color: '#94a3b8' },
+}
+const DISC_UI: [RegExp, LucideIcon, string][] = [[/civil|عمران|ساز/i, Building2, '#f59e0b'], [/mech|مکانیک/i, Cog, '#0ea5e9'], [/elec|برق/i, Zap, '#eab308'], [/instr|ابزار|کنترل/i, Gauge, '#8b5cf6'], [/pip|لوله/i, Workflow, '#14b8a6'], [/proc|فرآیند|process/i, FlaskConical, '#ec4899']]
+const discUi = (n: string): [LucideIcon, string] => { const f = DISC_UI.find(([r]) => r.test(n)); return f ? [f[1], f[2]] : [FolderTree, '#64748b'] }
+const CSS = `.dt{display:grid;gap:8px}.dt-g{border:1px solid var(--im-line,rgba(148,163,184,.25));border-radius:12px;overflow:hidden;background:var(--im-surface,transparent)}
+.dt-h{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-inline-start:3px solid var(--c);background:linear-gradient(90deg,color-mix(in srgb,var(--c) 10%,transparent),transparent)}
+.dt-h b{font-size:13px}.dt-ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}
+.dt-bar{height:5px;border-radius:3px;background:rgba(148,163,184,.25);overflow:hidden;width:90px}.dt-bar i{display:block;height:100%;background:var(--c)}
+.dt-r{display:grid;grid-template-columns:minmax(96px,150px) 1fr 44px 92px 112px 84px;gap:8px;align-items:center;padding:4px 10px;font-size:12px;border-top:1px solid var(--im-line,rgba(148,163,184,.15))}
+.dt-r:hover{background:rgba(148,163,184,.08)}.dt-r.dt-top{font-size:10.5px;color:var(--im-muted,#94a3b8);padding:3px 10px;border-top:0}
+.dt-t{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.dt-t:hover{color:var(--im-accent,#0ea5e9)}
+.dt-code{font-family:ui-monospace,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dt-n{text-align:end;font-variant-numeric:tabular-nums}
+.dt-st{display:inline-flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap}.dt-d{padding:8px 12px;background:rgba(148,163,184,.07);border-top:1px solid var(--im-line,rgba(148,163,184,.15))}
+@media(max-width:760px){.dt-r{grid-template-columns:1fr auto;grid-auto-rows:auto}.dt-r>.dt-hide{display:none}}`
+
 const STATUS_OPTS = (Object.entries(ENG_STATUS_LABEL_FA) as [EngStatus, string][]).filter(([k]) => k !== 'pending_approval')
 const money = (v: number | null) => (v == null ? '—' : fa(Math.round(v)))
 interface Comment { id: string; author_name: string; author_role: string; body: string; created_at: string }
@@ -26,36 +41,42 @@ export function DocTable({ docs, all, m, can, lens, projectId, total, upd }: { d
   const groups = [...docs.reduce((g, x) => { const k = x.discipline || 'بدون رشته'; g.set(k, [...(g.get(k) ?? []), x]); return g }, new Map<string, EngDocRow[]>())].sort((a, b) => a[0].localeCompare(b[0]))
   const toggle = (k: string) => setShut((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   return (
-    <div className="im-card" style={{ padding: 0 }}><div className="fn-tbl-wrap" style={{ maxHeight: 620 }}>
-      <table className="ex-lines"><thead><tr><th>شناسه</th><th>عنوان</th><th className="num">وزن</th><th className="num">هزینه (ریال)</th><th>وضعیت</th><th>توپ دست</th></tr></thead>
-        <tbody>{groups.map(([disc, rows]) => {
-          const w = rows.filter(live).reduce((a, x) => a + x.weight, 0), done = rows.filter((x) => x.status === 'approved').reduce((a, x) => a + x.weight, 0)
-          const closed = shut.has(disc)
-          return (
-            <Fragment key={disc}>
-              <tr onClick={() => toggle(disc)} style={{ cursor: 'pointer', background: 'rgba(14,165,233,.10)' }}>
-                <td colSpan={2}><b>{closed ? <ChevronLeft size={14} style={{ verticalAlign: -2 }} /> : <ChevronDown size={14} style={{ verticalAlign: -2 }} />} {disc}</b> <small className="sub">{fa(rows.length)} مدرک</small></td>
-                <td className="num"><b>{fa(w, 2)}</b><small className="sub" style={{ display: 'block' }}>{sumW ? pct(w / sumW, 1) : '—'} کل</small></td>
-                <td className="num"><b>{money(sumW > 0 && total > 0 ? (w / sumW) * total : null)}</b></td>
-                <td colSpan={2} style={{ minWidth: 150 }}><Bar value={w ? done / w : 0} /><small className="sub">پیشرفت وزنی {pct(w ? done / w : 0, 0)}</small></td>
-              </tr>
-              {!closed && rows.map((x) => {
-                const c = courtOf(x.status), fc = m.docFc.get(x.id), isOpen = open === x.id
+    <div className="dt"><style>{CSS}</style>
+      {groups.map(([disc, rows]) => {
+        const w = rows.filter(live).reduce((a, x) => a + x.weight, 0), done = rows.filter((x) => x.status === 'approved').reduce((a, x) => a + x.weight, 0)
+        const closed = shut.has(disc), [Icon, color] = discUi(disc), prog = w ? done / w : 0
+        return (
+          <div key={disc} className="dt-g" style={{ ['--c' as string]: color }}>
+            <div className="dt-h" onClick={() => toggle(disc)} role="button" aria-expanded={!closed}>
+              <span className="dt-ic"><Icon size={14} /></span><b>{disc}</b><small className="sub">{fa(rows.length)} مدرک</small>
+              <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 12, alignItems: 'center', fontSize: 11.5 }}>
+                <span title="جمع وزن رشته و سهم آن از کل">وزن <b>{fa(w, 2)}</b> <small className="sub">({sumW ? pct(w / sumW, 1) : '—'})</small></span>
+                <span title="سهم از مبلغ کل مهندسی (ریال)" className="dt-hide">{sumW > 0 && total > 0 ? <b>{money((w / sumW) * total)}</b> : <small className="sub">—</small>}</span>
+                <span title={`پیشرفت وزنی ${pct(prog, 0)}`} style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span className="dt-bar"><i style={{ width: `${prog * 100}%` }} /></span><b>{pct(prog, 0)}</b></span>
+                {closed ? <ChevronLeft size={15} /> : <ChevronDown size={15} />}
+              </span>
+            </div>
+            {!closed && <>
+              <div className="dt-r dt-top"><span>شناسه</span><span>عنوان</span><span className="dt-n">وزن</span><span className="dt-n dt-hide">هزینه (ریال)</span><span>وضعیت</span><span className="dt-hide">توپ دست</span></div>
+              {rows.map((x) => {
+                const c = courtOf(x.status), fc = m.docFc.get(x.id), isOpen = open === x.id, ui = ST_UI[x.status], SI = ui.icon
                 return (
                   <Fragment key={x.id}>
-                    <tr className={x.status === 'approved' ? 'locked' : undefined}>
-                      <td className="fn-code">{x.docNo}{x.critical && <Chip tone="bad">بحرانی</Chip>}</td>
-                      <td style={{ minWidth: 220, whiteSpace: 'normal' }}><button type="button" onClick={() => setOpen(isOpen ? '' : x.id)} aria-expanded={isOpen} style={{ all: 'unset', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline dotted' }}>{x.title || x.docNo}</button>{fc?.overdue && <small className="ex-bad" style={{ display: 'block' }}>{fa(fc.overdueDays)} روز دیرکرد</small>}</td>
-                      <td className="num">{fa(x.weight, 2)}</td><td className="num">{money(cost(x))}</td>
-                      <td>{TONE[x.status] ? <Chip tone={TONE[x.status]!}>{ENG_STATUS_LABEL_FA[x.status]}</Chip> : <span className="sub">{ENG_STATUS_LABEL_FA[x.status]}</span>}</td>
-                      <td>{c === 'done' ? <span className="sub">—</span> : <span style={{ color: COURT_COLOR[c], fontWeight: 700 }}>{COURT_LABEL_FA[c]}</span>}</td>
-                    </tr>
-                    {isOpen && <tr><td colSpan={6} style={{ background: 'rgba(148,163,184,.08)', whiteSpace: 'normal' }}><Detail x={x} can={can} lens={lens} projectId={projectId} upd={upd} /></td></tr>}
+                    <div className="dt-r" style={x.status === 'approved' ? { opacity: 0.75 } : undefined}>
+                      <span className="dt-code" title={x.docNo} dir="ltr">{x.critical && <AlertTriangle size={11} color="#ef4444" style={{ marginInlineEnd: 3, verticalAlign: -1 }} />}{x.docNo}</span>
+                      <span style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}><button type="button" className="dt-t" onClick={() => setOpen(isOpen ? '' : x.id)} aria-expanded={isOpen} title={x.title}>{x.title || x.docNo}</button>{fc?.overdue && <small className="ex-bad" style={{ whiteSpace: 'nowrap' }}>{fa(fc.overdueDays)}ر دیرکرد</small>}</span>
+                      <span className="dt-n">{fa(x.weight, 2)}</span><span className="dt-n dt-hide">{money(cost(x))}</span>
+                      <span className="dt-st" style={{ color: ui.color }}><SI size={13} />{ENG_STATUS_LABEL_FA[x.status].replace('تأیید با محدودیت اجرایی', 'با محدودیت').replace('تهیه‌شده/صادرشده', 'تهیه‌شده')}</span>
+                      <span className="dt-hide" style={{ color: c === 'done' ? undefined : COURT_COLOR[c], fontWeight: 600 }}>{c === 'done' ? '—' : COURT_LABEL_FA[c].replace(' / طراح', '').replace(' نظارت', '')}</span>
+                    </div>
+                    {isOpen && <div className="dt-d"><Detail x={x} can={can} lens={lens} projectId={projectId} upd={upd} /></div>}
                   </Fragment>)
               })}
-            </Fragment>)
-        })}
-          {!groups.length && <tr><td colSpan={6} className="sub">مدرکی با این فیلترها نیست.</td></tr>}</tbody></table></div></div>
+            </>}
+          </div>)
+      })}
+      {!groups.length && <div className="im-card im-empty" style={{ padding: 20 }}>مدرکی با این فیلترها نیست.</div>}
+    </div>
   )
 }
 
@@ -82,7 +103,7 @@ function Detail({ x, can, lens, upd }: { x: EngDocRow; can: boolean; lens: EngLe
       {x.status === 'restricted' && (can ? <label className="ex-lab">محدودیت اجرایی<input defaultValue={x.restrictionNote} dir="auto" onBlur={(e) => e.target.value !== x.restrictionNote && upd(x, { restrictionNote: e.target.value })} /></label> : x.restrictionNote && <p className="im-helper" style={{ margin: 0 }}>محدودیت: {x.restrictionNote}</p>)}
       <label className="ex-lab">توضیح مدیریتی{can ? <input defaultValue={x.note} dir="auto" onBlur={(e) => e.target.value !== x.note && upd(x, { note: e.target.value })} /> : <span>{x.note || '—'}</span>}</label>
       <div style={{ display: 'grid', gap: 6 }}>
-        <b style={{ fontSize: 12 }}>کامنت‌ها</b>
+        <b style={{ fontSize: 12 }}><MessageSquare size={13} style={{ verticalAlign: -2 }} /> کامنت‌ها</b>
         {list.length === 0 && <span className="sub">کامنتی ثبت نشده است.</span>}
         {list.map((c) => <div key={c.id} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, background: c.author_role === 'employer' ? 'rgba(139,92,246,.12)' : 'rgba(14,165,233,.10)' }}><b>{c.author_name || '—'}</b> <span className="sub">({ROLE_FA[c.author_role] ?? c.author_role}) · {jalaliText(c.created_at.slice(0, 10))}</span><div dir="auto" style={{ whiteSpace: 'pre-wrap' }}>{c.body}</div></div>)}
         {(lens === 'employer' || lens === 'consultant' || lens === 'manager') && (

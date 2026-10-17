@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Plus, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, Coins, Plus, Search, Trash2, Upload } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { supabase } from '../../../lib/supabaseClient'
 import { useEpcModel, type EpcModel } from '../../execution/lib/useEpcModel'
@@ -52,6 +52,8 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
   const sumPrice = docs.reduce((a, x) => a + x.price, 0)
   const total = settingsAmount > 0 ? settingsAmount : sumPrice
   const [msg, setMsg] = useState('')
+  const [panel, setPanel] = useState<'' | 'add' | 'filter' | 'amount'>('')
+  const nFlt = Object.values(flt).filter(Boolean).length
   const discs = [...new Set(docs.map((x) => x.discipline).filter(Boolean))]
   const phases = [...new Set(docs.map((x) => x.phase).filter(Boolean))], cats = [...new Set(docs.map((x) => x.category).filter(Boolean))].sort()
   const qn = flt.q.trim().toLowerCase()
@@ -76,8 +78,14 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
   }
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <p className="im-helper" style={{ margin: 0 }}>این فهرست فقط شناسه، وزن، تاریخ‌ها و وضعیت مدارک را پایش می‌کند؛ فایل نقشه‌ها، نسخه‌های فنی و مکاتبات در سامانهٔ مدیریت مدارک پروژه می‌مانند. تاریخ‌های واقعی با رسیدن به وضعیت «تهیه‌شده» و «تأییدشده» خودکار پر می‌شوند و قابل اصلاح‌اند.</p>
-      {can && <div className="im-card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className={`im-btn im-btn-sm${panel === 'filter' || nFlt ? ' im-btn-primary' : ''}`} onClick={() => setPanel(panel === 'filter' ? '' : 'filter')}><Search size={13} /> جست‌وجو و فیلتر{nFlt ? ` (${fa(nFlt)})` : ''}</button>
+        {can && <button className={`im-btn im-btn-sm${panel === 'add' ? ' im-btn-primary' : ''}`} onClick={() => setPanel(panel === 'add' ? '' : 'add')}><Plus size={13} /> مدرک جدید</button>}
+        {can && <button className="im-btn im-btn-sm" onClick={() => ref.current?.click()}><Upload size={13} /> ورود از اکسل</button>}
+        <button className={`im-btn im-btn-sm${panel === 'amount' ? ' im-btn-primary' : ''}`} onClick={() => setPanel(panel === 'amount' ? '' : 'amount')} title="هزینهٔ هر مدرک = سهم وزن آن از مبلغ کل"><Coins size={13} /> مبلغ کل{total > 0 ? `: ${fa(Math.round(total / 1e6))} م.ر` : ''}</button>
+        <span className="im-helper" style={{ margin: 0, marginInlineStart: 'auto' }} title="این فهرست فقط شناسه، وزن، تاریخ‌ها و وضعیت مدارک را پایش می‌کند؛ فایل‌ها و مکاتبات در سامانهٔ مدیریت مدارک می‌مانند. گردش فقط بین پیمانکار و مشاور نظارت است؛ کارفرما می‌تواند کامنت بگذارد.">{fa(shown.length)} مدرک · وزن کل {fa(docs.reduce((a, x) => a + (x.status === 'superseded' ? 0 : x.weight), 0), 1)}</span>
+      </div>
+      {can && panel === 'add' && <div className="im-card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label className="ex-lab">شناسه *<input value={f.docNo} onChange={(e) => setF({ ...f, docNo: e.target.value })} dir="ltr" style={{ width: 120 }} /></label>
         <label className="ex-lab">Rev<input value={f.rev} onChange={(e) => setF({ ...f, rev: e.target.value })} dir="ltr" style={{ width: 50 }} /></label>
         <label className="ex-lab">عنوان<input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} dir="auto" style={{ width: 200 }} /></label>
@@ -90,8 +98,8 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         <label className="ex-lab">تأیید (برنامه)<JalaliDateInput value={f.plannedApproved} onChange={(x) => setF({ ...f, plannedApproved: x })} /></label>
         <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12 }}><input type="checkbox" checked={f.critical} onChange={(e) => setF({ ...f, critical: e.target.checked })} /> بحرانی</label>
         <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.docNo.trim()} onClick={() => void epc.saveEngDoc({ projectId, ...f, plannedPrepared: f.plannedPrepared || null, plannedApproved: f.plannedApproved || null }).then((ok) => ok && setF(EMPTY))}><Plus size={13} /> مدرک</button>
-        <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const x = e.target.files?.[0]; if (x) void importFile(x); e.target.value = '' }} /><button className="im-btn im-btn-sm" onClick={() => ref.current?.click()}><Upload size={13} /> ورود از اکسل</button>
       </div>}
+      <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const x = e.target.files?.[0]; if (x) void importFile(x); e.target.value = '' }} />
       {mdl && (
         <div className="im-card" style={{ padding: 12, display: 'grid', gap: 6 }}>
           <b>فهرست MDL شناسایی شد — {mdl.file}</b>
@@ -101,19 +109,18 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         </div>
       )}
       {msg && <div className="im-card" style={{ padding: 10 }}>{msg}</div>}
-      <div className="im-card" style={{ padding: 10, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+      {panel === 'amount' && <div className="im-card" style={{ padding: 10, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <label className="ex-lab">مبلغ کل مهندسی (ریال)<NumInput value={settingsAmount} label="مبلغ کل مهندسی" decimals={0} onCommit={(n) => can && void ex.saveSettings(projectId, { engAmount: n })} /></label>
-        <span className="im-helper" style={{ margin: 0 }}>هزینهٔ هر مدرک = سهم وزن آن از مبلغ کل{settingsAmount > 0 ? '' : sumPrice > 0 ? ' (مبلغ کل از جمع مبلغ مدارک MDL برداشته شد)' : ' — برای نمایش هزینه، مبلغ را وارد کنید'}. گردش مدارک فقط بین پیمانکار و مشاور نظارت است؛ کارفرما می‌تواند کامنت بگذارد.</span>
-      </div>
-      <div className="mt-filters" style={{ flexWrap: 'wrap' }}>
+        <span className="im-helper" style={{ margin: 0 }}>هزینهٔ هر مدرک = سهم وزن آن از مبلغ کل{settingsAmount > 0 ? '' : sumPrice > 0 ? ' (مبلغ کل از جمع مبلغ مدارک MDL برداشته شد)' : ' — برای نمایش هزینه، مبلغ را وارد کنید'}.</span>
+      </div>}
+      {panel === 'filter' && <div className="mt-filters" style={{ flexWrap: 'wrap' }}>
         <input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="جست‌وجوی شماره یا عنوان…" dir="auto" aria-label="جست‌وجو" style={{ minWidth: 180 }} />
         <select value={flt.disc} onChange={(e) => setFlt({ ...flt, disc: e.target.value })} aria-label="رشته"><option value="">همهٔ رشته‌ها</option>{discs.map((x) => <option key={x}>{x}</option>)}</select>
         {phases.length > 0 && <select value={flt.phase} onChange={(e) => setFlt({ ...flt, phase: e.target.value })} aria-label="مرحله"><option value="">همهٔ مراحل</option>{phases.map((x) => <option key={x}>{x}</option>)}</select>}
         {cats.length > 0 && <select value={flt.cat} onChange={(e) => setFlt({ ...flt, cat: e.target.value })} aria-label="نوع مدرک"><option value="">همهٔ انواع</option>{cats.map((x) => <option key={x}>{x}</option>)}</select>}
         <select value={flt.st} onChange={(e) => setFlt({ ...flt, st: e.target.value })} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(ENG_STATUS_LABEL_FA).filter(([k]) => k !== 'pending_approval').map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         <select value={flt.court} onChange={(e) => setFlt({ ...flt, court: e.target.value })} aria-label="توپ دست"><option value="">همهٔ طرف‌ها</option>{(['contractor', 'consultant', 'done'] as const).map((c) => <option key={c} value={c}>{COURT_LABEL_FA[c]}</option>)}</select>
-        <span className="im-helper" style={{ margin: 0 }}>{fa(shown.length)} مدرک</span>
-      </div>
+      </div>}
       <DocTable docs={shown} all={docs} m={m} can={can} lens={lens} projectId={projectId} total={total} upd={upd} />
     </div>
   )
