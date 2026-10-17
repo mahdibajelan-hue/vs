@@ -29,7 +29,7 @@ export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; n
   const st = usePersonnelStore()
   // the register opens at once: the project list is a tiny query of its own and the people load starts in parallel (the heavy master-data load — organisations, team, profiles — is deferred)
   const [light, setLight] = useState<{ id: string; officialName: string }[]>([])
-  const [projectId, setProjectId] = useState<string>(ctx ?? '')
+  const started = useRef(false)
   useEffect(() => {
     let live = true
     void supabase.from('master_projects').select('id, official_name').order('created_at', { ascending: false }).then(({ data }) => { if (live && data) setLight(data.map((r) => ({ id: r.id as string, officialName: r.official_name as string }))) })
@@ -37,18 +37,16 @@ export function PersonnelPage({ onExitToHub, nav }: { onExitToHub: () => void; n
     return () => { live = false; window.clearTimeout(t) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const projects = mdLoaded ? mdProjects : light
-  useEffect(() => { if (projects.length && !projects.some((p) => p.id === projectId)) setProjectId(ctx && projects.some((p) => p.id === ctx) ? ctx : projects[0].id) }, [projects, ctx, projectId])
-  useEffect(() => { if (projectId && st.projectId !== projectId) void st.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
-  const projectName = projects.find((p) => p.id === projectId)?.officialName ?? ''
+  const home = ctx && (!projects.length || projects.some((p) => p.id === ctx)) ? ctx : projects[0]?.id ?? ''
+  useEffect(() => { if (home && !started.current) { started.current = true; void st.load(home) } }, [home]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <CompetencySidebarShell active="personnel" nav={nav} title="صلاحیت جوشکاران و عایق‌کاران" onExitToHub={onExitToHub}
-      headerRight={<select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="پروژه" className="im-select-pill">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>}>
-      {!projectId ? (projects.length || mdLoaded ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <div className="im-skeleton" style={{ height: 160 }} />) : <Body projectName={projectName} />}
+    <CompetencySidebarShell active="personnel" nav={nav} title="صلاحیت جوشکاران و عایق‌کاران" onExitToHub={onExitToHub}>
+      {!home ? (mdLoaded ? <div className="im-card im-empty" style={{ padding: 26 }}>پروژه‌ای تعریف نشده است.</div> : <div className="im-skeleton" style={{ height: 160 }} />) : <Body projects={projects} />}
     </CompetencySidebarShell>
   )
 }
 
-function Body({ projectName }: { projectName: string }) {
+function Body({ projects }: { projects: { id: string; officialName: string }[] }) {
   const st = usePersonnelStore()
   const { caps } = st
   const can = caps.register
@@ -57,8 +55,12 @@ function Body({ projectName }: { projectName: string }) {
   const [adding, setAdding] = useState(false)
   const [nw, setNw] = useState({ raw: '', fullName: '', nationalId: '' })
   const [q, setQ] = useState('')
+  const [fp, setFp] = useState('') // project filter: '' = every project
+  const [np, setNp] = useState(st.projectId ?? '') // project of a person being added
+  const pname = (id: string) => projects.find((p) => p.id === id)?.officialName ?? '—'
+  const pick = (w: Welder) => { setSel(w.id); void st.setProject(w.projectId) }
   const all = st.welders
-  const list = useMemo(() => all.filter((w) => w.kind === kind && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q])
+  const list = useMemo(() => all.filter((w) => w.kind === kind && (!fp || w.projectId === fp) && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q, fp])
   const testsOf = (id: string) => st.quals.filter((x) => x.welderId === id)
   const qualifying = (id: string) => testsOf(id).some((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid')
   const on = today()
@@ -69,46 +71,48 @@ function Body({ projectName }: { projectName: string }) {
     return 'valid'
   }
   const cur = all.find((w) => w.id === sel)
-  const add = async () => { const id = await st.saveWelder({ kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId }); if (id) { setNw({ raw: '', fullName: '', nationalId: '' }); setAdding(false); setSel(id) } }
+  const add = async () => { await st.setProject(np); const id = await st.saveWelder({ kind, raw: nw.raw, fullName: nw.fullName, nationalId: nw.nationalId }); if (id) { setNw({ raw: '', fullName: '', nationalId: '' }); setAdding(false); setFp(''); setSel(id) } }
   const testChip = (w: Welder) => { const t = testsOf(w.id); if (!t.length) return <Chip tone="bad">ثبت نشده</Chip>; if (qualifying(w.id)) return <Chip tone="good">واجد صلاحیت</Chip>; if (t.some((x) => x.wqtStatus === 'confirmed')) return <Chip tone="bad">فاقد صلاحیت</Chip>; return <Chip tone="warn">در انتظار امضا</Chip> }
-  if (st.loading) return <div className="im-skeleton" style={{ height: 200 }} />
+  if (st.loading || !st.projectId) return <div className="im-skeleton" style={{ height: 200 }} />
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        {(['welder', 'coater'] as PersonKind[]).map((k) => <button key={k} className={`im-btn im-btn-sm${kind === k ? ' im-btn-primary' : ''}`} onClick={() => { setKind(k); setSel('') }}>{KIND_FA[k]}ان ({fa(all.filter((w) => w.kind === k).length)})</button>)}
+        <select value={fp} onChange={(e) => { setFp(e.target.value); setSel('') }} aria-label="فیلتر پروژه" className="im-select-pill"><option value="">همهٔ پروژه‌ها</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>
+        {(['welder', 'coater'] as PersonKind[]).map((k) => <button key={k} className={`im-btn im-btn-sm${kind === k ? ' im-btn-primary' : ''}`} onClick={() => { setKind(k); setSel('') }}>{KIND_FA[k]}ان ({fa(all.filter((w) => w.kind === k && (!fp || w.projectId === fp)).length)})</button>)}
         <input placeholder="جست‌وجوی نشانه، نام یا کد ملی…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220, marginInlineStart: 'auto' }} aria-label="جست‌وجو" />
-        {can && <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setAdding((x) => !x)}>{adding ? 'انصراف' : `+ ${KIND_FA[kind]} جدید`}</button>}
+        <button className="im-btn im-btn-primary im-btn-sm" onClick={() => { setAdding((x) => !x); if (!np && st.projectId) setNp(st.projectId) }}>{adding ? 'انصراف' : `+ ${KIND_FA[kind]} جدید`}</button>
       </div>
-      {!can && <p className="im-helper" style={{ margin: 0 }}>در این پروژه دسترسی ثبت ندارید؛ فقط مشاهده می‌کنید.</p>}
+      {adding && !can && <p className="im-helper" style={{ margin: 0 }}>در پروژهٔ انتخاب‌شده دسترسی ثبت ندارید.</p>}
       {adding && (
         <Section title={`${KIND_FA[kind]} جدید`} hint="فقط سه مورد؛ بقیه (عکس، آزمون، کارت) در مراحل بعد در پروندهٔ همین فرد می‌آید.">
           <div className="ex-sheet-grid">
+            <label>پروژه *<select value={np} onChange={(e) => { setNp(e.target.value); void st.setProject(e.target.value) }}>{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select></label>
             <label>شمارهٔ نشانه / پلاک *<input dir="ltr" value={nw.raw} onChange={(e) => setNw({ ...nw, raw: e.target.value })} placeholder="همان که در فرم‌ها نوشته می‌شود، مثلاً 35" /></label>
             <label>نام و نام‌خانوادگی *<input dir="auto" value={nw.fullName} onChange={(e) => setNw({ ...nw, fullName: e.target.value })} /></label>
             <label>کد ملی (Welder ID) *<input dir="ltr" value={nw.nationalId} onChange={(e) => setNw({ ...nw, nationalId: e.target.value })} /></label>
           </div>
-          <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!nw.raw.trim() || !nw.fullName.trim() || !nw.nationalId.trim()} onClick={() => void add()}>ثبت و ادامه</button></div>
+          <div style={{ marginTop: 8 }}><button className="im-btn im-btn-primary im-btn-sm" disabled={!can || !np || !nw.raw.trim() || !nw.fullName.trim() || !nw.nationalId.trim()} onClick={() => void add()}>ثبت و ادامه</button></div>
         </Section>
       )}
       {list.length === 0 ? <div className="im-card im-empty" style={{ padding: 20 }}>هنوز {KIND_FA[kind]}ی برای این پروژه ثبت نشده است.</div> : (
-        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>نام</th><th>کد ملی</th><th>آزمون</th><th>کارت</th><th>وضعیت</th></tr></thead>
+        <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>پروژه</th><th>نام</th><th>کد ملی</th><th>آزمون</th><th>کارت</th><th>وضعیت</th></tr></thead>
           <tbody>{list.map((w) => { const s = stateOf(w); return (
-            <tr key={w.id} onClick={() => setSel(w.id)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
-              <td dir="ltr"><b>{w.raw}</b></td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td><td>{testChip(w)}</td>
+            <tr key={w.id} onClick={() => pick(w)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
+              <td dir="ltr"><b>{w.raw}</b></td><td>{pname(w.projectId)}</td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td><td>{testChip(w)}</td>
               <td><Chip tone={ST_CHIP[s].tone}>{ST_CHIP[s].label}</Chip></td>
               <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>
       )}
       {cur ? (
         <>
-          {cur.cardStatus === 'issued' && <IssuedCard key={`c${cur.id}`} w={cur} tests={testsOf(cur.id)} projectName={projectName} />}
+          {cur.cardStatus === 'issued' && <IssuedCard key={`c${cur.id}`} w={cur} tests={testsOf(cur.id)} projectName={pname(cur.projectId)} />}
           <details open={cur.cardStatus !== 'issued'} key={`d${cur.id}${cur.cardStatus === 'issued'}`} className="im-card" style={{ padding: '10px 14px' }}>
             <summary style={{ cursor: 'pointer', fontWeight: 800 }}>اطلاعات تفصیلی{cur.cardStatus !== 'issued' ? ' (کارت هنوز صادر نشده)' : ''}</summary>
             <div style={{ marginTop: 10 }}><WelderProfile w={cur} tests={testsOf(cur.id)} /></div>
           </details>
         </>
       ) : list.length > 0 && <p className="im-helper" style={{ margin: 0 }}>یک ردیف را انتخاب کنید تا پرونده‌اش باز شود.</p>}
-      <ScanBox people={all} onFound={(w) => { setKind(w.kind); setSel(w.id) }} stateOf={stateOf} />
-      {caps.admin && <SignerSettings />}
+      <ScanBox people={all} onFound={(w) => { setKind(w.kind); pick(w) }} stateOf={stateOf} />
+      {caps.admin && <SignerSettings projectName={pname(st.projectId ?? '')} />}
     </div>
   )
 }
@@ -160,13 +164,13 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
 /** who signs the test and the card (per project); a slot left empty may be signed by any reviewer */
 
 /** who signs the tests and the cards of this project (a slot left empty may be signed by any reviewer) */
-function SignerSettings() {
+function SignerSettings({ projectName }: { projectName: string }) {
   const st = usePersonnelStore()
   const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === st.projectId && t.userId)
   const cur = st.caps.signers
   const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون جوشکار)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون جوشکار)'], ['coat_supervisor', 'ناظر (آزمون عایق‌کار)'], ['coat_contractor', 'نماینده پیمانکار (آزمون عایق‌کار)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
   return (
-    <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت این پروژه</summary>
+    <details><summary className="im-helper">تعیین امضاکنندگان فرم آزمون و کارت پروژهٔ «{projectName}»</summary>
       <div className="ex-sheet-grid" style={{ marginTop: 8 }}>{slots.map(([k, l]) => (
         <label key={k}>{l}<select value={cur[k] ?? ''} onChange={(e) => void st.setSigners({ ...cur, [k]: e.target.value })}><option value="">هر بررسی‌کننده</option>{team.map((t) => <option key={t.id} value={t.userId!}>{t.personName || '—'}</option>)}</select></label>
       ))}</div>

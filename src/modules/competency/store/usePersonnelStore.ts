@@ -17,6 +17,8 @@ const norm = (v: string) => v.trim().toUpperCase().replace(/\s+/g, ' ')
 interface State {
   projectId: string | null; loading: boolean; welders: Welder[]; quals: WelderQual[]; caps: Caps
   load: (projectId: string) => Promise<void>
+  /** switch the project that permissions / signers / new people refer to (the register itself lists every project) */
+  setProject: (projectId: string) => Promise<void>
   refresh: () => Promise<void>
   loadImages: (id: string) => Promise<void>
   saveWelder: (w: Partial<Welder> & { raw: string; kind?: PersonKind }) => Promise<string | null>
@@ -30,13 +32,19 @@ const NO_CAPS: Caps = { me: null, admin: false, register: false, review: false, 
 export const usePersonnelStore = create<State>((set, get) => ({
   projectId: null, loading: false, welders: [], quals: [], caps: NO_CAPS,
   load: async (projectId) => {
-    set({ projectId, loading: true, welders: [], quals: [], caps: NO_CAPS })
+    set({ projectId, loading: true, caps: NO_CAPS })
     await get().refresh()
     set({ loading: false })
   },
+  setProject: async (projectId) => {
+    if (get().projectId === projectId) return
+    set({ projectId, caps: NO_CAPS })
+    const { data, error } = await supabase.rpc('ex_personnel_caps', { p_project: projectId })
+    if (get().projectId === projectId && !error && data) set({ caps: data as Caps })
+  },
   refresh: async () => {
     const pid = get().projectId; if (!pid) return
-    const [rw, rq, caps] = await Promise.all([supabase.from('ex_welders').select(WELDER_COLS).eq('project_id', pid), supabase.from('ex_welder_quals').select(QUAL_COLS).eq('project_id', pid), supabase.rpc('ex_personnel_caps', { p_project: pid })])
+    const [rw, rq, caps] = await Promise.all([supabase.from('ex_welders').select(WELDER_COLS), supabase.from('ex_welder_quals').select(QUAL_COLS), supabase.rpc('ex_personnel_caps', { p_project: pid })])
     if (get().projectId !== pid) return // another project was opened meanwhile
     if (!rw.error) { const old = new Map(get().welders.map((x) => [x.id, x])); set({ welders: ((rw.data ?? []) as unknown as Row[]).map((r) => mapWelder(r, old.get(r.id))) }) }
     if (!rq.error) set({ quals: ((rq.data ?? []) as unknown as Row[]).map(mapQual) })
@@ -67,7 +75,8 @@ export const usePersonnelStore = create<State>((set, get) => ({
     const projectId = get().projectId; if (!projectId) return null
     const nz = (v: string | undefined) => { const x = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(x) ? x : null }
     const t = q.wqt ?? {}
-    const row = { project_id: projectId, welder_id: q.welderId, wqt: t, wqt_no: t.wqtNo ?? '', process: t.process ?? t.sys ?? '', position: t.position ?? '', material_group: t.baseMat ?? '', thk_min: nz(t.thkMin), thk_max: nz(t.thkMax), issue_date: t.testDate || null }
+    const owner = get().welders.find((x) => x.id === q.welderId)?.projectId ?? projectId
+    const row = { project_id: owner, welder_id: q.welderId, wqt: t, wqt_no: t.wqtNo ?? '', process: t.process ?? t.sys ?? '', position: t.position ?? '', material_group: t.baseMat ?? '', thk_min: nz(t.thkMin), thk_max: nz(t.thkMax), issue_date: t.testDate || null }
     const res = q.id ? await supabase.from('ex_welder_quals').update(row).eq('id', q.id).select('id').single() : await supabase.from('ex_welder_quals').insert(row).select('id').single()
     if (fail('ثبت آزمون', res.error)) return null
     await get().refresh(); return (res.data as { id: string }).id
