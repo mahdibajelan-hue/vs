@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { KIND_FA, type CardData, type PersonKind } from '../../lib/personnelForms'
@@ -6,7 +6,7 @@ import type { PersonSig } from '../../lib/personnel'
 import { jdLatin } from './util'
 
 const NAVY = '#0b2545', NAVY2 = '#14407a', AMBER = '#f59e0b', INK = '#0f172a', MUTE = '#64748b'
-/** on-screen size relative to the real card (print and export stay full size) */
+/** on-screen size relative to the real card (print and export stay full size): 60% on a desktop, the full width of the screen on a phone */
 const VIEW = 0.6
 const FONT = 'Vazirmatn, Tahoma, sans-serif'
 const card: React.CSSProperties = { width: 454, height: 286, boxSizing: 'border-box', borderRadius: 16, background: '#fff', color: INK, overflow: 'hidden', position: 'relative', fontFamily: FONT, border: '1px solid #cbd5e1', boxShadow: '0 6px 18px rgba(15,23,42,.12)', display: 'flex', direction: 'ltr' }
@@ -21,6 +21,13 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
   const front = useRef<HTMLDivElement>(null), back = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
   const [flipped, setFlipped] = useState(false)
+  const holder = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState(VIEW)
+  useEffect(() => {
+    const el = holder.current; if (!el) return
+    const fit = () => { const w = el.clientWidth; setView(window.innerWidth < 640 && w > 0 ? Math.min(1, w / 454) : Math.min(VIEW, w > 0 ? w / 454 : VIEW)) }
+    fit(); const ro = new ResizeObserver(fit); ro.observe(el); return () => ro.disconnect()
+  }, [])
   const today = new Date().toISOString().slice(0, 10)
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(data.validityRaw) ? data.validityRaw : ''
   const open = data.validityRaw === 'END'
@@ -114,7 +121,7 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       {/* one card on screen: click turns it over; the export copies stay flat and off-screen */}
-      <div style={{ width: 454 * VIEW, height: 286 * VIEW, position: 'relative', direction: 'ltr' }}><div style={{ perspective: 1200, width: 454, height: 286, transform: `scale(${VIEW})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
+      <div ref={holder} style={{ width: '100%', height: 286 * view, position: 'relative', direction: 'ltr' }}><div style={{ perspective: 1200, width: 454, height: 286, transform: `scale(${view})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
         <button type="button" onClick={() => setFlipped((x) => !x)} aria-label={flipped ? 'نمایش روی کارت' : 'نمایش پشت کارت'} title="برای برگرداندن کارت کلیک کنید" style={{ all: 'unset', cursor: 'pointer', display: 'block', width: 454, height: 286, position: 'relative', transformStyle: 'preserve-3d', transition: 'transform 420ms cubic-bezier(0.77, 0, 0.175, 1)', transform: flipped ? 'rotateY(180deg)' : 'none' }}>
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>{frontFace()}</div>
           <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>{backFace()}</div>
