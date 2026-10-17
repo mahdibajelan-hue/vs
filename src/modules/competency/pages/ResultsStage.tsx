@@ -53,6 +53,7 @@ import { formatJalali } from '../../../lib/jalali'
 import { CompetencyRadarChart } from '../components/CompetencyRadarChart'
 import { CompetencyPrintReport, type PrintPersonality } from '../components/CompetencyPrintReport'
 import { ApprovalMedal } from '../components/ApprovalMedal'
+import { ResultsGlossary } from '../components/ResultsGlossary'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
 import { computeEvaluationStages } from '../lib/evaluationStages'
 import { generatePersonalityProfile } from '../lib/personalityAnalysis'
@@ -487,6 +488,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
       <div className="fx fx-remap space-y-4">
         {/* Toolbar */}
         <div className="no-print flex flex-wrap items-center justify-end gap-2">
+          <ResultsGlossary />
           <button onClick={handlePrint} className={btnGhost} title="در پنجره چاپ، «ذخیره به‌صورت PDF» را انتخاب کنید — متن قابل انتخاب و کیفیت برداری">
             <Printer size={14} /> چاپ / ذخیره PDF گزارش کامل
           </button>
