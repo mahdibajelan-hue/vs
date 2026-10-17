@@ -525,7 +525,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
       </Section>
 
       {/* ================= CATEGORY — شخصیت و رفتاری ================= */}
-      <CategoryBanner title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، تطابق شغلی (Role Alignment) و اعتبار پاسخ‌ها (Validity)" color="#be185d" />
+      <CategoryBanner title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، اعتبار پاسخ‌ها (Validity)" color="#be185d" />
 
       {/* 5. Personality */}
       <Section n={next()} title="اثرانگشت رفتاری — Behavioral Fingerprint" breakable>
@@ -534,7 +534,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
         ) : !personality.snapshot ? (
           <Empty>ارزیابی شخصیت هنوز امتیازدهی نشده است (وضعیت فعلی: {personality.statusLabel}).</Empty>
         ) : (
-          <PersonalityBlock snap={personality.snapshot} roleLabel={roleLabel} />
+          <PersonalityBlock snap={personality.snapshot} />
         )}
       </Section>
 
@@ -835,7 +835,7 @@ function Note({ color, title, text }: { color: string; title: string; text: stri
   )
 }
 
-function PersonalityBlock({ snap, roleLabel }: { snap: FingerprintSnapshot; roleLabel: string }) {
+function PersonalityBlock({ snap }: { snap: FingerprintSnapshot }) {
   const v = snap.validity
   const validityTone = !v ? SUB : v.overallStatus === 'VALID' ? PRINT_TONE.good : v.overallStatus === 'ACCEPTABLE' ? PRINT_TONE.info : v.overallStatus === 'REVIEW_REQUIRED' ? PRINT_TONE.warn : PRINT_TONE.bad
   const pct = (x: number) => `٪${fa(Math.round(x * 100))}`
@@ -861,21 +861,6 @@ function PersonalityBlock({ snap, roleLabel }: { snap: FingerprintSnapshot; role
                 .filter(Boolean)
                 .join('، ')}
             </p>
-          )}
-        </div>
-        <div style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: '6px 10px' }}>
-          <p style={{ margin: 0, fontSize: 9.5, color: SUB }}>تطابق با الزامات رفتاری «{roleLabel}»</p>
-          {!snap.hasJobProfile ? (
-            <p style={{ margin: 0, fontSize: 10, color: MUTED }}>نیم‌رخ رفتاری این شغل تعریف نشده است.</p>
-          ) : (
-            <>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: snap.alignment.criticalGapCount > 0 ? PRINT_TONE.bad : ACCENT }}>
-                {snap.alignment.overallAlignmentPercent != null ? `٪${fa(snap.alignment.overallAlignmentPercent)}` : '—'}
-              </p>
-              <p style={{ margin: 0, fontSize: 9, color: SUB }}>
-                {snap.alignment.criticalGapCount > 0 ? `${fa(snap.alignment.criticalGapCount)} الزام حیاتی برآورده نشده` : 'الزامات حیاتی برآورده شده‌اند'}
-              </p>
-            </>
           )}
         </div>
       </div>

@@ -1,5 +1,4 @@
 import { formatJalali } from '../../../lib/jalali'
-import { computeRoleAlignment } from '../lib/roleAlignment'
 import { bilingual } from '../lib/bilingual'
 import { REPORT_WIDTH_PX } from '../../competency/lib/reportExport'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA } from '../types'
@@ -73,7 +72,6 @@ export function PersonalityPrintReport({
   if (validityResult?.extremeResponseRate != null && validityResult.extremeResponseRate >= 0.4)
     validityReasons.push(`نرخ پاسخ‌های حدی: ٪${Math.round(validityResult.extremeResponseRate * 100).toLocaleString('fa-IR')}`)
 
-  const alignment = computeRoleAlignment(jobRequirements, behavioralScores, dimensions)
 
   return (
     <div style={{ background: '#ffffff', color: ink, width: REPORT_WIDTH_PX, padding: '30px 32px', fontFamily: '"Vazirmatn", "Segoe UI", sans-serif', direction: 'rtl' }}>
@@ -127,24 +125,6 @@ export function PersonalityPrintReport({
           )}
         </div>
       </div>
-
-      {jobRequirements.length > 0 && (
-        <div style={{ marginBottom: 20, border: `1px solid ${line}`, borderRadius: 10, padding: '12px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800 }}>تطابق با الزامات رفتاری شغل «{jobRoleLabel}»</p>
-            {alignment.overallAlignmentPercent != null && (
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: alignment.criticalGapCount > 0 ? '#dc2626' : accent }}>
-                ٪{alignment.overallAlignmentPercent.toLocaleString('fa-IR')}
-              </p>
-            )}
-          </div>
-          <p style={{ margin: 0, fontSize: 10.5, color: sub }}>
-            {alignment.criticalGapCount > 0
-              ? `${alignment.criticalGapCount.toLocaleString('fa-IR')} مورد از الزامات حیاتی این شغل هنوز برآورده نشده است.`
-              : 'الزامات حیاتی این شغل بر اساس شواهد ثبت‌شده برآورده شده‌اند.'}
-          </p>
-        </div>
-      )}
 
       {traitScores.length > 0 && (
         <div style={{ marginBottom: 20 }}>

@@ -810,7 +810,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
         {/* ================= CATEGORY 2 — شخصیت و رفتاری ================= */}
         <div id="r-behavior" className="fx-category scroll-mt-20" style={tone('#ec4899')}>
-          <CategoryHeading icon={Fingerprint} color="#ec4899" title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، تطابق شغلی (Role Alignment) و اعتبار پاسخ‌ها (Validity)" />
+          <CategoryHeading icon={Fingerprint} color="#ec4899" title="شخصیت و رفتاری" subtitle="Big Five، ابعاد رفتاری حرفه‌ای، اعتبار پاسخ‌ها (Validity)" />
           {!assessment.needsPersonalityAssessment ? (
             <EmptyNote>ارزیابی شخصیت و رفتاری در طرح ارزیابی این متقاضی قرار ندارد.</EmptyNote>
           ) : showPersonalityFingerprint && personalityAssessment ? (

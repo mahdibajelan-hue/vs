@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { AlertTriangle, ArrowLeft, Compass, Fingerprint, Gauge, Loader2, Printer, ShieldCheck, ShieldQuestion, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Fingerprint, Gauge, Loader2, Printer, ShieldCheck, ShieldQuestion, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { usePersonalityStore } from '../store/usePersonalityStore'
 import { useCompetencyStore } from '../../competency/store/useCompetencyStore'
@@ -7,11 +7,10 @@ import { jobRoleLabel } from '../../competency/lib/competencyData'
 import { tone } from '../../competency/lib/tone'
 import { printReportNode } from '../../competency/lib/reportExport'
 import { PersonalityPrintReport } from './PersonalityPrintReport'
-import { RoleAlignmentCard, ThresholdBar } from './RoleAlignmentCard'
+import { ThresholdBar } from './RoleAlignmentCard'
 import { BehaviorOverview } from './BehaviorRadar'
 import { RingChart } from '../../competency/components/DonutChart'
 import { buildFingerprintSnapshot, scoreBandFa, type FingerprintDimensionRow, type FingerprintTraitRow } from '../lib/fingerprintModel'
-import { overallVerdict } from '../lib/roleAlignment'
 import { PERSONALITY_VALIDITY_STATUS_LABEL_FA, type PersonalityValidityResult, type PersonalityValidityStatus } from '../types'
 import '../../competency/styles/farinTheme.css'
 
@@ -99,7 +98,6 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
 
   const roleLabel = jobRoleLabel(jobRoleConfigs, assessment.jobRole)
   const families = [...new Set(snapshot.dimensions.map((d) => d.familyKey))]
-  const verdict = overallVerdict(snapshot.alignment.overallAlignmentPercent, snapshot.alignment.criticalGapCount)
   const watchTexts = [...snapshot.watchDimensions.map((d) => `${d.label.en} (${d.label.fa})${d.minThreshold != null && d.score != null && d.score < d.minThreshold ? ' — زیر حداقل الزام' : ''}`), ...snapshot.watchpoints]
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .slice(0, 4)
@@ -144,13 +142,7 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
         {snapshot.verdict && (
           <p className="fx-sub mb-3 rounded-xl p-3 text-[12px] font-bold leading-7 text-primary">{snapshot.verdict}</p>
         )}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <HeroTile color={verdict.color} icon={Gauge} title="Role Fit (تطابق شغلی)">
-            <p className="num fx-tone-text text-3xl font-black leading-9">
-              {snapshot.alignment.overallAlignmentPercent != null ? `٪${snapshot.alignment.overallAlignmentPercent.toLocaleString('fa-IR')}` : '—'}
-            </p>
-            <p className="fx-text-2 text-[11.5px] leading-5">{snapshot.hasJobProfile ? verdict.label : `نیم‌رخ رفتاری «${roleLabel}» تعریف نشده`}</p>
-          </HeroTile>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <HeroTile
             color={validityResult ? VALIDITY_TONE[validityResult.overallStatus] : '#94a3b8'}
             icon={validityResult && (validityResult.overallStatus === 'VALID' || validityResult.overallStatus === 'ACCEPTABLE') ? ShieldCheck : ShieldQuestion}
@@ -261,9 +253,6 @@ export function PersonalityFingerprintPanel({ personalityAssessmentId, candidate
           )}
         </div>
       )}
-
-      <SectionHeading icon={Compass} color="#10b981" en="Role Alignment" fa="ترکیب شایستگی‌های شغلی و تطابق با شغل" />
-      <RoleAlignmentCard jobRole={assessment.jobRole} hasProfile={assessment.jobProfileId != null} alignment={snapshot.alignment} />
 
       {onContinue && (
         <div className="no-print flex justify-end">

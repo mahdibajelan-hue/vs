@@ -113,7 +113,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
         >
           <div className="flex items-start justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-bold">
-              <Target size={14} style={{ color: summary.fitColor }} /> آمادگی برای الزامات شغل
+              <Target size={14} style={{ color: summary.fitColor }} /> آمادگی برای شغل
             </p>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-muted" title="برآوردی مشتق‌شده از امتیازهای موتور شایستگی — نه یک امتیاز مستقل">
               شاخص مشتق‌شده
@@ -126,8 +126,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
             {summary.fitLabel}
           </p>
           <p className="text-[9.5px] leading-5 text-muted">
-            میانگین وزنی نسبت سطح واقعی به سطح الزامی (شایستگی‌های حیاتی با وزن دوبرابر)، فقط روی شایستگی‌های دارای شواهد — بر پایه{' '}
-            {formatPercent(summary.readinessBasisShare)} از وزن الزامات این شغل.
+            تنها شاخص نهایی تناسب با شغل: میزان تحقق سطح الزامی هر شایستگی (حیاتی‌ها دوبرابر)، با اعمال اطمینان شواهد و کسر بخش‌های سنجیده‌نشده؛ ۱۰۰ فقط وقتی که همهٔ الزامات سنجیده، برآورده و با شواهد قوی تأیید شده باشند. شکاف حیاتی سقف ۵۹ می‌گذارد.
           </p>
         </div>
 

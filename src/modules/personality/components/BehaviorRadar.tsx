@@ -18,7 +18,7 @@ function wedge(cx: number, cy: number, r0: number, r1: number, a0: number, a1: n
  * Each spoke shows the candidate's calibrated score as the bar, the job's preferred band as a green track behind it and the job minimum as a tick.
  * Bar colour = fit with the job (red below minimum, amber below preferred, green meets, blue above); a dashed outline marks a score that rests on a single item.
  */
-export function BehaviorRadar({ axes, alignmentPercent, hasJobProfile }: { axes: RadarAxis[]; alignmentPercent: number | null; hasJobProfile: boolean }) {
+export function BehaviorRadar({ axes }: { axes: RadarAxis[] }) {
   const W = 760, H = 540, cx = W / 2, cy = H / 2, R0 = 44, R1 = 196
   const n = axes.length, step = 360 / Math.max(1, n), half = step * 0.4
   const rr = (v: number) => R0 + ((R1 - R0) * Math.max(0, Math.min(100, v))) / 100
@@ -50,8 +50,7 @@ export function BehaviorRadar({ axes, alignmentPercent, hasJobProfile }: { axes:
         )
       })}
       <circle cx={cx} cy={cy} r={R0 - 4} fill="var(--fx-ring-hole)" stroke="var(--fx-border)" />
-      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="22" fontWeight="900" fill="var(--text-primary)">{hasJobProfile && alignmentPercent != null ? `٪${fa(alignmentPercent)}` : '—'}</text>
-      <text x={cx} y={cy + 14} textAnchor="middle" fontSize="9.5" fill="var(--fx-chart-muted)">{hasJobProfile ? 'تطابق شغلی' : 'بدون نیم‌رخ شغل'}</text>
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11" fontWeight="800" fill="var(--text-primary)">نیم‌رخ رفتاری</text>
     </svg>
   )
 }
@@ -68,7 +67,7 @@ export function BehaviorOverview({ rows, alignment, hasJobProfile, validityFacto
     <div className="fx-card space-y-4 p-4 sm:p-5">
       <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div>
-          <BehaviorRadar axes={axes} alignmentPercent={alignment.overallAlignmentPercent} hasJobProfile={hasJobProfile} />
+          <BehaviorRadar axes={axes} />
           <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10.5px] fx-muted">
             <Legend color="#10b981" label="برآورده" /><Legend color="#f59e0b" label="زیر بازهٔ ترجیحی" /><Legend color="#ef4444" label="زیر حداقل شغل" /><Legend color="#38bdf8" label="بالاتر از بازه" />
             <span className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-4 rounded-sm" style={{ background: '#10b981', opacity: 0.25, outline: '1px solid #10b98188' }} /> بازهٔ موردنیاز شغل</span>

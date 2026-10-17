@@ -122,8 +122,7 @@ export interface GapSummary {
   developmentGaps: number
   criticalGaps: number
   insufficientEvidence: number
-  /** Derived: criticality-weighted attainment (min(actual/required, 1)) over competencies WITH
-   * evidence only, 0-100. null when no competency has evidence. */
+  /** Derived headline «آمادگی برای شغل» 0-100 — see computeReadiness (coverage-penalised, confidence-weighted, capped by critical gaps). null when no competency has evidence. */
   readinessPercent: number | null
   /** Share of the criticality-weighted requirement set that readinessPercent actually rests on. */
   readinessBasisShare: number
@@ -136,18 +135,31 @@ export interface GapSummary {
   evidenceCoverageShare: number
 }
 
+/** how far a piece of evidence may be trusted when it sets the headline number */
+const CONFIDENCE_FACTOR: Record<CompCompetencyConfidence, number> = { HIGH: 1, MEDIUM: 0.9, LOW: 0.75, NONE: 0.6 }
+
+/**
+ * THE single «آمادگی برای شغل» number (0-100). A plain «met the required level» average gave many candidates 100, so it is now earned:
+ *  - attainment per competency = min(actual / required, 1), trusted by its evidence confidence (HIGH 1 · MEDIUM 0.9 · LOW 0.75);
+ *  - what has not been measured is not ignored: the result is scaled by 0.4 + 0.6 × (share of requirement weight that has evidence);
+ *  - any critical gap caps it at 59.
+ * So 100 needs every requirement measured, met, and backed by high-confidence evidence.
+ */
+export function computeReadiness(scores: CompCompetencyScore[]): number | null {
+  const evidenced = scores.filter((s) => s.status !== 'INSUFFICIENT_EVIDENCE' && s.actualLevel != null)
+  const total = scores.reduce((a, s) => a + summaryWeight(s), 0), evW = evidenced.reduce((a, s) => a + summaryWeight(s), 0)
+  if (evW <= 0 || total <= 0) return null
+  const attain = evidenced.reduce((a, s) => a + Math.min((s.actualLevel as number) / Math.max(s.requiredLevel, 0.0001), 1) * (CONFIDENCE_FACTOR[s.confidence] ?? 0.6) * summaryWeight(s), 0) / evW
+  const raw = attain * (0.4 + 0.6 * (evW / total)) * 100
+  return Math.round(scores.some(isCriticalGap) ? Math.min(raw, 59) : raw)
+}
+
 export function summarizeGapAnalysis(scores: CompCompetencyScore[], assessment: CompetencyAssessment): GapSummary {
   const evidenced = scores.filter((s) => s.status !== 'INSUFFICIENT_EVIDENCE' && s.actualLevel != null)
   const totalWeight = scores.reduce((sum, s) => sum + summaryWeight(s), 0)
   const evidencedWeight = evidenced.reduce((sum, s) => sum + summaryWeight(s), 0)
-  const readinessPercent =
-    evidencedWeight > 0
-      ? Math.round(
-          (evidenced.reduce((sum, s) => sum + Math.min((s.actualLevel as number) / Math.max(s.requiredLevel, 0.0001), 1) * summaryWeight(s), 0) / evidencedWeight) * 100,
-        )
-      : null
-
   const criticalGaps = scores.filter(isCriticalGap).length
+  const readinessPercent = computeReadiness(scores)
   const confidenceRank = totalWeight > 0 ? scores.reduce((sum, s) => sum + GAP_CONFIDENCE_META[s.confidence].rank * summaryWeight(s), 0) / totalWeight : 0
   const overallConfidence: CompCompetencyConfidence = confidenceRank >= 2.5 ? 'HIGH' : confidenceRank >= 1.5 ? 'MEDIUM' : confidenceRank > 0 ? 'LOW' : 'NONE'
 
