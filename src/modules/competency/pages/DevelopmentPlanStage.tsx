@@ -140,7 +140,7 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
       active="idp"
       nav={nav}
       title={`برنامه توسعه فردی — ${assessment.candidateName}`}
-      stageStrip={stageStrip}
+      stageStrip={stageStrip} assessment={assessment}
       onExitToHub={onExitToHub}
       headerRight={<AssessmentChainNav assessment={assessment} onOpen={(id) => onOpenAssessment(id, 'idp')} />}
     >

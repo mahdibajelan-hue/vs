@@ -324,7 +324,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       active={activeStage}
       nav={nav}
       title={`${SECTION_TITLE[activeStage]} — ${assessment.candidateName}`}
-      stageStrip={evalStages}
+      stageStrip={evalStages} assessment={assessment}
       onExitToHub={onExitToHub}
       headerRight={headerRight}
     >

@@ -38,6 +38,7 @@ import {
   User,
   Users,
   Wrench,
+  Lock,
 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCompetencyStore } from '../store/useCompetencyStore'
@@ -468,8 +469,21 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
 
   const btnGhost = 'fx-sub flex min-h-10 items-center gap-1.5 px-3.5 py-2 text-xs font-bold transition-colors hover:brightness-110 disabled:opacity-50'
 
+  // Nothing of the result is shown until the interview is over (every designed question answered and every panelist's sheet submitted): a partial number would sway the people still scoring.
+  const interviewOver = assessment.status === 'completed' || (stages[2].done && stages[3].done)
+  if (!interviewOver) {
+    return (
+      <CompetencySidebarShell active="results" nav={nav} title={`نتیجه ارزیابی — ${assessment.candidateName}`} stageStrip={stages} assessment={assessment} onExitToHub={onExitToHub} headerRight={headerRight}>
+        <div className="im-card im-empty" style={{ padding: 34, display: 'grid', gap: 8, justifyItems: 'center', textAlign: 'center' }}>
+          <Lock size={26} style={{ opacity: 0.7 }} />
+          <b>نتیجه پس از پایان مصاحبه نمایش داده می‌شود</b>
+          <span className="im-helper" style={{ margin: 0 }}>تا وقتی همهٔ سؤالات پاسخ داده نشده و همهٔ داوران برگهٔ خود را نهایی نکرده‌اند، هیچ نتیجه‌ای (حتی جزئی) نمایش داده نمی‌شود تا داوری را تحت تأثیر قرار ندهد.</span>
+        </div>
+      </CompetencySidebarShell>
+    )
+  }
   return (
-    <CompetencySidebarShell active="results" nav={nav} title={`نتیجه ارزیابی — ${assessment.candidateName}`} stageStrip={stages} onExitToHub={onExitToHub} headerRight={headerRight}>
+    <CompetencySidebarShell active="results" nav={nav} title={`نتیجه ارزیابی — ${assessment.candidateName}`} stageStrip={stages} assessment={assessment} onExitToHub={onExitToHub} headerRight={headerRight}>
       <div className="fx fx-remap space-y-4">
         {/* Toolbar */}
         <div className="no-print flex flex-wrap items-center justify-end gap-2">

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Award, BadgeCheck, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
+import { Award, BadgeCheck, CheckCircle2, BookOpen, Gavel, HardHat, ListTodo, Radar, BrainCircuit, FileBarChart2, FileUp, LayoutDashboard, LineChart, ListChecks, ListTree, Lock, Settings, Sparkles, Sprout, User, Users } from 'lucide-react'
 import { StorageErrorBanner } from '../../../components/Layout/StorageErrorBanner'
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary'
 import { ModuleHeaderActions } from '../../../components/common/ModuleHeaderActions'
@@ -8,6 +8,8 @@ import '../styles/farinTheme.css'
 import '../../issues/issues.css'
 import '../styles/competency-im.css'
 import type { EvaluationStage } from '../lib/evaluationStages'
+import type { CompetencyAssessment } from '../types'
+import { useDoneSections } from '../lib/useDoneSections'
 
 export type CompetencySection =
   | 'dashboard'
@@ -78,6 +80,8 @@ interface CompetencySidebarShellProps {
   /** A very compact dot-and-line strip shown right next to the title — the evaluation milestones
    * for whichever candidate is open. Omitted on module-wide pages. */
   stageStrip?: EvaluationStage[]
+  /** the open candidate: lets the step links show a check mark once that step is complete */
+  assessment?: CompetencyAssessment
   /** Leaves the module entirely, back to the FARIN module hub. */
   onExitToHub: () => void
   /** Extra controls at the end of the top bar (e.g. a "New" button, export/print actions). */
@@ -91,10 +95,11 @@ interface CompetencySidebarShellProps {
  * one row of module tabs, and — while a candidate is open — a second row with that candidate's
  * assessment stages. Every page shares it so a user always sees the same destinations.
  */
-export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitToHub, headerRight, children }: CompetencySidebarShellProps) {
+export function CompetencySidebarShell({ active, nav, title, stageStrip, assessment, onExitToHub, headerRight, children }: CompetencySidebarShellProps) {
   // `color-scheme` must follow the real theme (a hard-coded 'dark' made light-theme colours unreadable).
   const theme = useThemeAttributeSync()
   const inCandidate = CANDIDATE_SECTIONS.includes(active)
+  const done = useDoneSections(assessment, stageStrip)
   return (
     <div className="comp-shell comp-im im-root fixed inset-0 z-30" dir="rtl" style={{ colorScheme: theme }}>
       <header className="im-head no-print">
@@ -129,7 +134,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
         <div className="im-page" style={{ display: 'grid', gap: 14 }}>
           {(inCandidate || stageStrip) && (
             <div className="comp-stagebar no-print">
-              <div className="comp-stagebar-title"><Sparkles size={15} aria-hidden style={{ color: COMPETENCY_ACCENT }} /><b>{title}</b>{stageStrip && <StageStrip stages={stageStrip} />}</div>
+              <div className="comp-stagebar-title"><Sparkles size={15} aria-hidden style={{ color: COMPETENCY_ACCENT }} /><b>{title}</b></div>
               <div className="comp-stagebar-nav" role="tablist" aria-label="مراحل ارزیابی این داوطلب">
                 {CANDIDATE_SECTIONS.map((section) => {
                   const meta = SECTION_META[section]
@@ -137,7 +142,7 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
                   const isActive = section === active
                   return (
                     <button key={section} role="tab" aria-selected={isActive} disabled={!isActive && !handler} onClick={handler} className={isActive ? 'on' : ''}>
-                      <meta.icon size={13} aria-hidden />{meta.label}{!isActive && !handler && <Lock size={10} aria-hidden style={{ opacity: 0.55 }} />}
+                      <meta.icon size={13} aria-hidden />{meta.label}{done[section] && <CheckCircle2 size={12} aria-label="تکمیل شده" style={{ color: '#34d399', flex: 'none' }} />}{!isActive && !handler && <Lock size={10} aria-hidden style={{ opacity: 0.55 }} />}
                     </button>
                   )
                 })}
@@ -152,42 +157,6 @@ export function CompetencySidebarShell({ active, nav, title, stageStrip, onExitT
           </ErrorBoundary>
         </div>
       </main>
-    </div>
-  )
-}
-
-/** A compact but always-legible evaluation-progress pill — dots joined by lines (green once done,
- * a highlighted ring on whichever one is current) plus the current stage's name written out in
- * text, so anyone glancing at the header can see exactly where the candidate stands right now
- * without having to hover over anything. */
-function StageStrip({ stages }: { stages: EvaluationStage[] }) {
-  const doneCount = stages.filter((s) => s.done).length
-  const currentIndex = stages.findIndex((s) => !s.done)
-  const finished = currentIndex === -1
-  const currentLabel = finished ? 'تکمیل‌شده' : stages[currentIndex].label
-
-  return (
-    <div
-      className="flex shrink-0 items-center gap-2 rounded-full border border-purple-400/25 bg-purple-500/10 py-1 pl-2.5 pr-1.5"
-      title="مراحل ارزیابی"
-    >
-      <div className="flex items-center gap-0.5">
-        {stages.map((s, i) => (
-          <span key={s.label} className="flex items-center">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                s.done ? 'bg-emerald-400' : i === currentIndex ? 'bg-purple-300 ring-2 ring-purple-300/30' : 'bg-white/15'
-              }`}
-              title={s.label}
-            />
-            {i < stages.length - 1 && <span className={`h-px w-2.5 ${s.done && stages[i + 1].done ? 'bg-emerald-400/50' : 'bg-white/10'}`} />}
-          </span>
-        ))}
-      </div>
-      <span className={`text-[10.5px] font-bold ${finished ? 'text-emerald-300' : 'text-purple-200'}`}>{currentLabel}</span>
-      <span className="num text-[9.5px] text-muted">
-        ({doneCount.toLocaleString('fa-IR')}/{stages.length.toLocaleString('fa-IR')})
-      </span>
     </div>
   )
 }

@@ -99,7 +99,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
       active="aiAnalysis"
       nav={nav}
       title={`تحلیل جامع هوش مصنوعی — ${assessment.candidateName}`}
-      stageStrip={stageStrip}
+      stageStrip={stageStrip} assessment={assessment}
       onExitToHub={onExitToHub}
     >
       <div className="glass-panel rounded-2xl border border-indigo-400/20 p-4">
