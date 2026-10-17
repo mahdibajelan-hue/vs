@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useState } from 'react'
-import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronLeft, CircleDashed, Cog, FileText, FlaskConical, FolderTree, Gauge, MessageSquare, PenLine, Send, ShieldAlert, Workflow, Zap, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, CircleDashed, Cog, FileText, FlaskConical, FolderTree, Gauge, MessageSquare, PenLine, Send, ShieldAlert, Workflow, Zap, type LucideIcon } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { supabase } from '../../../lib/supabaseClient'
 import { jalaliText } from '../../execution/lib/periods'
 import type { EpcModel } from '../../execution/lib/useEpcModel'
 import { ENG_STATUS_LABEL_FA, type EngDocRow, type EngStatus } from '../../execution/epcTypes'
 import { fa, pct } from '../../execution/components/common'
+import { canonDiscipline } from '../lib/disciplines'
 import { COURT_COLOR, COURT_LABEL_FA, courtOf, type EngLens } from '../lib/roles'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
@@ -19,12 +20,12 @@ const CSS = `.dt{display:grid;gap:8px}.dt-g{border:1px solid var(--im-line,rgba(
 .dt-h{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-inline-start:3px solid var(--c);background:linear-gradient(90deg,color-mix(in srgb,var(--c) 10%,transparent),transparent)}
 .dt-h b{font-size:13px}.dt-ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}
 .dt-bar{height:5px;border-radius:3px;background:rgba(148,163,184,.25);overflow:hidden;width:90px}.dt-bar i{display:block;height:100%;background:var(--c)}
-.dt-r{display:grid;grid-template-columns:minmax(96px,150px) 1fr 44px 92px 112px 84px;gap:8px;align-items:center;padding:4px 10px;font-size:12px;border-top:1px solid var(--im-line,rgba(148,163,184,.15))}
+.dt-r{display:grid;grid-template-columns:24px minmax(96px,150px) 1fr 50px 92px 112px 84px;gap:8px;align-items:center;padding:4px 10px;font-size:12px;border-top:1px solid var(--im-line,rgba(148,163,184,.15))}
 .dt-r:hover{background:rgba(148,163,184,.08)}.dt-r.dt-top{font-size:10.5px;color:var(--im-muted,#94a3b8);padding:3px 10px;border-top:0}
 .dt-t{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.dt-t:hover{color:var(--im-accent,#0ea5e9)}
 .dt-code{font-family:ui-monospace,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dt-n{text-align:end;font-variant-numeric:tabular-nums}
 .dt-st{display:inline-flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap}.dt-d{padding:8px 12px;background:rgba(148,163,184,.07);border-top:1px solid var(--im-line,rgba(148,163,184,.15))}
-@media(max-width:760px){.dt-r{grid-template-columns:1fr auto;grid-auto-rows:auto}.dt-r>.dt-hide{display:none}}`
+@media(max-width:760px){.dt-r{grid-template-columns:22px 1fr auto;grid-auto-rows:auto}.dt-code{display:none}.dt-r>.dt-hide{display:none}}`
 
 const STATUS_OPTS = (Object.entries(ENG_STATUS_LABEL_FA) as [EngStatus, string][]).filter(([k]) => k !== 'pending_approval')
 const money = (v: number | null) => (v == null ? '—' : fa(Math.round(v)))
@@ -38,10 +39,11 @@ export function DocTable({ docs, all, m, can, lens, projectId, total, upd }: { d
   const live = (x: EngDocRow) => x.status !== 'superseded'
   const sumW = all.filter(live).reduce((a, x) => a + x.weight, 0)
   const cost = (x: EngDocRow) => (sumW > 0 && total > 0 ? (x.weight / sumW) * total : null)
-  const groups = [...docs.reduce((g, x) => { const k = x.discipline || 'بدون رشته'; g.set(k, [...(g.get(k) ?? []), x]); return g }, new Map<string, EngDocRow[]>())].sort((a, b) => a[0].localeCompare(b[0]))
+  const groups = [...docs.reduce((g, x) => { const k = canonDiscipline(x.discipline, x.docNo) || 'بدون رشته'; g.set(k, [...(g.get(k) ?? []), x]); return g }, new Map<string, EngDocRow[]>())].sort((a, b) => a[0].localeCompare(b[0]))
   const toggle = (k: string) => setShut((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   return (
     <div className="dt"><style>{CSS}</style>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="button" className="im-btn im-btn-sm" onClick={() => setShut(shut.size >= groups.length ? new Set() : new Set(groups.map(([k]) => k)))}>{shut.size >= groups.length ? <><ChevronsUpDown size={13} /> باز کردن همه</> : <><ChevronsDownUp size={13} /> جمع کردن همه</>}</button></div>
       {groups.map(([disc, rows]) => {
         const w = rows.filter(live).reduce((a, x) => a + x.weight, 0), done = rows.filter((x) => x.status === 'approved').reduce((a, x) => a + x.weight, 0)
         const closed = shut.has(disc), [Icon, color] = discUi(disc), prog = w ? done / w : 0
@@ -50,22 +52,23 @@ export function DocTable({ docs, all, m, can, lens, projectId, total, upd }: { d
             <div className="dt-h" onClick={() => toggle(disc)} role="button" aria-expanded={!closed}>
               <span className="dt-ic"><Icon size={14} /></span><b>{disc}</b><small className="sub">{fa(rows.length)} مدرک</small>
               <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 12, alignItems: 'center', fontSize: 11.5 }}>
-                <span title="جمع وزن رشته و سهم آن از کل">وزن <b>{fa(w, 2)}</b> <small className="sub">({sumW ? pct(w / sumW, 1) : '—'})</small></span>
+                <span title="جمع وزن رشته و سهم آن از کل">وزن <b>{fa(w, 3)}</b> <small className="sub">({sumW ? pct(w / sumW, 1) : '—'})</small></span>
                 <span title="سهم از مبلغ کل مهندسی (ریال)" className="dt-hide">{sumW > 0 && total > 0 ? <b>{money((w / sumW) * total)}</b> : <small className="sub">—</small>}</span>
                 <span title={`پیشرفت وزنی ${pct(prog, 0)}`} style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span className="dt-bar"><i style={{ width: `${prog * 100}%` }} /></span><b>{pct(prog, 0)}</b></span>
                 {closed ? <ChevronLeft size={15} /> : <ChevronDown size={15} />}
               </span>
             </div>
             {!closed && <>
-              <div className="dt-r dt-top"><span>شناسه</span><span>عنوان</span><span className="dt-n">وزن</span><span className="dt-n dt-hide">هزینه (ریال)</span><span>وضعیت</span><span className="dt-hide">توپ دست</span></div>
-              {rows.map((x) => {
+              <div className="dt-r dt-top"><span>#</span><span>شناسه</span><span>عنوان</span><span className="dt-n">وزن</span><span className="dt-n dt-hide">هزینه (ریال)</span><span>وضعیت</span><span className="dt-hide">توپ دست</span></div>
+              {rows.map((x, ri) => {
                 const c = courtOf(x.status), fc = m.docFc.get(x.id), isOpen = open === x.id, ui = ST_UI[x.status], SI = ui.icon
                 return (
                   <Fragment key={x.id}>
                     <div className="dt-r" style={x.status === 'approved' ? { opacity: 0.75 } : undefined}>
+                      <span className="sub" style={{ fontSize: 10.5 }}>{fa(ri + 1)}</span>
                       <span className="dt-code" title={x.docNo} dir="ltr">{x.critical && <AlertTriangle size={11} color="#ef4444" style={{ marginInlineEnd: 3, verticalAlign: -1 }} />}{x.docNo}</span>
                       <span style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}><button type="button" className="dt-t" onClick={() => setOpen(isOpen ? '' : x.id)} aria-expanded={isOpen} title={x.title}>{x.title || x.docNo}</button>{fc?.overdue && <small className="ex-bad" style={{ whiteSpace: 'nowrap' }}>{fa(fc.overdueDays)}ر دیرکرد</small>}</span>
-                      <span className="dt-n">{fa(x.weight, 2)}</span><span className="dt-n dt-hide">{money(cost(x))}</span>
+                      <span className="dt-n">{fa(x.weight, 3)}</span><span className="dt-n dt-hide">{money(cost(x))}</span>
                       <span className="dt-st" style={{ color: ui.color }}><SI size={13} />{ENG_STATUS_LABEL_FA[x.status].replace('تأیید با محدودیت اجرایی', 'با محدودیت').replace('تهیه‌شده/صادرشده', 'تهیه‌شده')}</span>
                       <span className="dt-hide" style={{ color: c === 'done' ? undefined : COURT_COLOR[c], fontWeight: 600 }}>{c === 'done' ? '—' : COURT_LABEL_FA[c].replace(' / طراح', '').replace(' نظارت', '')}</span>
                     </div>

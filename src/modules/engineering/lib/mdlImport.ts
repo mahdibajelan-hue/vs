@@ -4,7 +4,7 @@ export interface MdlResult { docs: MdlDoc[]; duplicates: string[]; sections: num
 
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
 const key = (v: unknown) => norm(v).toLowerCase().replace(/[^a-z0-9.]/g, '')
-const DISC: Record<string, string> = { mechanic: 'Mechanical' }
+import { canonDiscipline } from './disciplines'
 
 export function isMdlLayout(rows: unknown[][]): boolean {
   return rows.slice(0, 12).some((r) => r.some((c) => key(c) === 'documentno.') && r.some((c) => key(c) === 'documenttitle'))
@@ -26,7 +26,7 @@ export function parseMdl(rows: unknown[][]): MdlResult {
     seen.add(no)
     const disc = norm(r[c.disc]), price = Number(r[c.price]) || 0, wf = Number(r[c.wf]) || 0
     const parts = no.split('-')
-    out.docs.push({ docNo: no, title: norm(r[c.title]), discipline: DISC[disc.toLowerCase()] ?? disc, category: c.cat >= 0 && norm(r[c.cat]) ? norm(r[c.cat]) : parts[parts.length - 2] ?? '', phase: norm(r[c.phase]) || parts[1] || '', targetIssue: norm(r[c.tgt]), price, weight: Math.round(wf * 100 * 1e6) / 1e6, line: i + 1 })
+    out.docs.push({ docNo: no, title: norm(r[c.title]), discipline: canonDiscipline(disc, no), category: c.cat >= 0 && norm(r[c.cat]) ? norm(r[c.cat]) : parts[parts.length - 2] ?? '', phase: norm(r[c.phase]) || parts[1] || '', targetIssue: norm(r[c.tgt]), price, weight: Math.round(wf * 100 * 1e6) / 1e6, line: i + 1 })
     out.weightSum += wf * 100; out.priceSum += price
   }
   if (out.docs.length && Math.abs(out.weightSum - 100) > 5) out.warnings.push(`مجموع وزن‌ها ${out.weightSum.toFixed(2)}٪ است (تکرارها کنار گذاشته شدند)؛ در محاسبه نرمال می‌شود.`)

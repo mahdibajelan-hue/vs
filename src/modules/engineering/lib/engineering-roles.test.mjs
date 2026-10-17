@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { courtOf, lensOf, nextMoves, buildEngTasks, courtCounts } from './roles.ts'
+import { canonDiscipline } from './disciplines.ts'
 import { parseMdl, isMdlLayout } from './mdlImport.ts'
 
 assert.equal(courtOf('required'), 'contractor'); assert.equal(courtOf('issued'), 'consultant'); assert.equal(courtOf('pending_approval'), 'consultant'); assert.equal(courtOf('restricted'), 'consultant'); assert.equal(courtOf('approved'), 'done')
@@ -26,4 +27,6 @@ const r = parseMdl(rows)
 assert.equal(r.docs.length, 2); assert.equal(r.duplicates.length, 1); assert.equal(r.sections, 1)
 assert.equal(r.docs[0].discipline, 'Mechanical'); assert.equal(r.docs[0].title, 'Data Sheets'); assert.equal(r.docs[0].weight, 25); assert.equal(r.docs[0].targetIssue, 'IFA'); assert.equal(r.docs[0].category, 'DSH'); assert.equal(r.docs[0].phase, 'DP1')
 assert.equal(Math.round(r.weightSum), 100)
+assert.equal(canonDiscipline('civil'), 'Civil'); assert.equal(canonDiscipline(' Civil '), 'Civil'); assert.equal(canonDiscipline('Mechanic'), 'Mechanical'); assert.equal(canonDiscipline('cathodic'), 'Cathodic Protection'); assert.equal(canonDiscipline('geotech'), 'Geotechnical'); assert.equal(canonDiscipline('عمران'), 'Civil'); assert.equal(canonDiscipline('ابزار دقیق'), 'Instrument')
+assert.equal(canonDiscipline('', '791355-DP1-PLN-CV-DWG-0001'), 'Civil'); assert.equal(canonDiscipline('', 'KS-EL-001'), 'Electrical'); assert.equal(canonDiscipline('Fire Fighting'), 'Fire Fighting')
 console.log('engineering roles/mdl: all assertions passed')

@@ -18,6 +18,7 @@ import { EngMyTasks } from './EngMyTasks'
 import { isMdlLayout, parseMdl, type MdlResult } from '../lib/mdlImport'
 import { readSheetRows } from '../lib/readRows'
 import { COURT_LABEL_FA, courtOf } from '../lib/roles'
+import { canonDiscipline } from '../lib/disciplines'
 import { DocTable } from '../components/DocTable'
 import { useLens } from '../components/LensBar'
 import { ENG_STATUS_LABEL_FA, type EngDocRow } from '../../execution/epcTypes'
@@ -54,10 +55,10 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
   const [msg, setMsg] = useState('')
   const [panel, setPanel] = useState<'' | 'add' | 'filter' | 'amount'>('')
   const nFlt = Object.values(flt).filter(Boolean).length
-  const discs = [...new Set(docs.map((x) => x.discipline).filter(Boolean))]
+  const discs = [...new Set(docs.map((x) => canonDiscipline(x.discipline, x.docNo)).filter(Boolean))].sort()
   const phases = [...new Set(docs.map((x) => x.phase).filter(Boolean))], cats = [...new Set(docs.map((x) => x.category).filter(Boolean))].sort()
   const qn = flt.q.trim().toLowerCase()
-  const shown = docs.filter((x) => (!flt.disc || x.discipline === flt.disc) && (!flt.st || x.status === flt.st) && (!flt.phase || x.phase === flt.phase) && (!flt.cat || x.category === flt.cat) && (!flt.court || courtOf(x.status) === flt.court) && (!qn || `${x.docNo} ${x.title}`.toLowerCase().includes(qn)))
+  const shown = docs.filter((x) => (!flt.disc || canonDiscipline(x.discipline, x.docNo) === flt.disc) && (!flt.st || x.status === flt.st) && (!flt.phase || x.phase === flt.phase) && (!flt.cat || x.category === flt.cat) && (!flt.court || courtOf(x.status) === flt.court) && (!qn || `${x.docNo} ${x.title}`.toLowerCase().includes(qn)))
   const upd = (x: EngDocRow, p: Partial<EngDocRow>) => void epc.saveEngDoc({ ...x, ...p })
   const importFile = async (file: File) => {
     const raw = await readSheetRows(file)
@@ -66,7 +67,7 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
     let ok = 0
     for (const r of rows) {
       const no = String(pick(r, 'شناسه', 'شماره مدرک', 'doc_no', 'document no', 'کد')).trim(); if (!no) continue
-      const okSave = await epc.saveEngDoc({ projectId, docNo: no, rev: String(pick(r, 'rev', 'ویرایش')), title: String(pick(r, 'عنوان', 'title')), discipline: String(pick(r, 'رشته', 'discipline')), contract: String(pick(r, 'پیمان', 'contract')), preparer: String(pick(r, 'مسئول تهیه', 'preparer')), approver: String(pick(r, 'مسئول تأیید', 'approver')), weight: Number(pick(r, 'وزن', 'weight')) || 1 })
+      const okSave = await epc.saveEngDoc({ projectId, docNo: no, rev: String(pick(r, 'rev', 'ویرایش')), title: String(pick(r, 'عنوان', 'title')), discipline: canonDiscipline(String(pick(r, 'رشته', 'discipline', 'دیسیپلین', 'دسته', 'دسته‌بندی', 'category')), no), contract: String(pick(r, 'پیمان', 'contract')), preparer: String(pick(r, 'مسئول تهیه', 'preparer')), approver: String(pick(r, 'مسئول تأیید', 'approver')), weight: Number(pick(r, 'وزن', 'weight')) || 1 })
       if (okSave) ok++; else break
     }
     setMsg(`${fa(ok)} مدرک وارد شد.`)
@@ -89,7 +90,7 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         <label className="ex-lab">شناسه *<input value={f.docNo} onChange={(e) => setF({ ...f, docNo: e.target.value })} dir="ltr" style={{ width: 120 }} /></label>
         <label className="ex-lab">Rev<input value={f.rev} onChange={(e) => setF({ ...f, rev: e.target.value })} dir="ltr" style={{ width: 50 }} /></label>
         <label className="ex-lab">عنوان<input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} dir="auto" style={{ width: 200 }} /></label>
-        <label className="ex-lab">رشته<input list="eng-disc" value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })} dir="auto" style={{ width: 110 }} /></label><datalist id="eng-disc">{discs.map((x) => <option key={x} value={x} />)}</datalist>
+        <label className="ex-lab">رشته<input list="eng-disc" value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })} onBlur={(e) => setF((v) => ({ ...v, discipline: canonDiscipline(e.target.value, v.docNo) }))} dir="auto" style={{ width: 110 }} /></label><datalist id="eng-disc">{discs.map((x) => <option key={x} value={x} />)}</datalist>
         <label className="ex-lab">پیمان<input value={f.contract} onChange={(e) => setF({ ...f, contract: e.target.value })} dir="auto" style={{ width: 100 }} /></label>
         <label className="ex-lab">مسئول تهیه<input value={f.preparer} onChange={(e) => setF({ ...f, preparer: e.target.value })} dir="auto" style={{ width: 110 }} /></label>
         <label className="ex-lab">مسئول تأیید<input value={f.approver} onChange={(e) => setF({ ...f, approver: e.target.value })} dir="auto" style={{ width: 110 }} /></label>
@@ -97,7 +98,7 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         <label className="ex-lab">تهیه (برنامه)<JalaliDateInput value={f.plannedPrepared} onChange={(x) => setF({ ...f, plannedPrepared: x })} /></label>
         <label className="ex-lab">تأیید (برنامه)<JalaliDateInput value={f.plannedApproved} onChange={(x) => setF({ ...f, plannedApproved: x })} /></label>
         <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12 }}><input type="checkbox" checked={f.critical} onChange={(e) => setF({ ...f, critical: e.target.checked })} /> بحرانی</label>
-        <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.docNo.trim()} onClick={() => void epc.saveEngDoc({ projectId, ...f, plannedPrepared: f.plannedPrepared || null, plannedApproved: f.plannedApproved || null }).then((ok) => ok && setF(EMPTY))}><Plus size={13} /> مدرک</button>
+        <button className="im-btn im-btn-primary im-btn-sm" disabled={!f.docNo.trim()} onClick={() => void epc.saveEngDoc({ projectId, ...f, discipline: canonDiscipline(f.discipline, f.docNo), plannedPrepared: f.plannedPrepared || null, plannedApproved: f.plannedApproved || null }).then((ok) => ok && setF(EMPTY))}><Plus size={13} /> مدرک</button>
       </div>}
       <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const x = e.target.files?.[0]; if (x) void importFile(x); e.target.value = '' }} />
       {mdl && (
