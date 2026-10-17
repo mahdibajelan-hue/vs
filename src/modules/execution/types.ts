@@ -72,6 +72,8 @@ export interface ExSettings {
   enabledForms: string[]
   /** relative weight of each weighting basis in the overall progress (default: equal) */
   groupWeights?: Record<string, number>
+  /** total engineering contract amount (rial): a document's cost is its weight share of it */
+  engAmount?: number
   rolePerms?: Partial<Record<ExRole, string[]>>
 }
 export const DEFAULT_EX_SETTINGS: ExSettings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, delayNoticeDays: 14, expectedFronts: [], projectStart: '', enabledForms: [] }

@@ -50,18 +50,18 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
       <KpiCard key="a" i={0} label="با پیمانکار / طراح" value={fa(courts.contractor.n)} sub={`${pct(courts.contractor.w / totalW, 0)} وزن`} tone={courts.contractor.n ? 'warn' : 'good'} />,
       <KpiCard key="b" i={1} label="معوق تهیه" value={fa(byCourtOverdue('contractor'))} tone={byCourtOverdue('contractor') ? 'bad' : 'good'} sub="از موعد برنامه‌ای گذشته" />,
       <KpiCard key="c" i={2} label="مسدودکنندهٔ اجرا" value={fa(blocking.size)} tone={blocking.size ? 'bad' : 'good'} sub="مدرک مانع شروع/ادامهٔ فعالیت" />,
-      <KpiCard key="d" i={3} label="برگشتی از مشاور/کارفرما" value={fa(live.filter((x) => x.status === 'in_preparation' && x.actualPrepared).length)} sub="در حال اصلاح" />,
+      <KpiCard key="d" i={3} label="برگشتی از مشاور" value={fa(live.filter((x) => x.status === 'in_preparation' && x.actualPrepared).length)} sub="در حال اصلاح" />,
     ]
     if (l === 'consultant') return [
       <KpiCard key="a" i={0} label="در صف بررسی مشاور" value={fa(courts.consultant.n)} tone={courts.consultant.n ? 'warn' : 'good'} sub={`${pct(courts.consultant.w / totalW, 0)} وزن`} />,
       <KpiCard key="b" i={1} label="بررسی معوق" value={fa(byCourtOverdue('consultant'))} tone={byCourtOverdue('consultant') ? 'bad' : 'good'} />,
       <KpiCard key="c" i={2} label="بحرانی در صف" value={fa(live.filter((x) => x.critical && courtOf(x.status) === 'consultant').length)} tone="warn" />,
-      <KpiCard key="d" i={3} label="ارسال‌شده به کارفرما" value={fa(courts.employer.n)} sub="پس از تأیید مشاور" />,
+      <KpiCard key="d" i={3} label="تأیید با محدودیت" value={fa(live.filter((x) => x.status === 'restricted').length)} sub="نیازمند رفع محدودیت" />,
     ]
     if (l === 'employer') return [
-      <KpiCard key="a" i={0} label="در انتظار تأیید کارفرما" value={fa(live.filter((x) => x.status === 'pending_approval').length)} tone="warn" sub={`${pct(courts.employer.w / totalW, 0)} وزن`} />,
-      <KpiCard key="b" i={1} label="تأیید با محدودیت" value={fa(live.filter((x) => x.status === 'restricted').length)} tone="warn" sub="نیازمند رفع محدودیت" />,
-      <KpiCard key="c" i={2} label="تأیید معوق" value={fa(byCourtOverdue('employer'))} tone={byCourtOverdue('employer') ? 'bad' : 'good'} />,
+      <KpiCard key="a" i={0} label="تأییدشده" value={fa(courts.done.n)} tone="good" sub={`${pct(courts.done.w / totalW, 0)} وزن`} />,
+      <KpiCard key="b" i={1} label="در بررسی مشاور" value={fa(courts.consultant.n)} tone={courts.consultant.n ? 'warn' : 'good'} sub={`${pct(courts.consultant.w / totalW, 0)} وزن`} />,
+      <KpiCard key="c" i={2} label="با پیمانکار" value={fa(courts.contractor.n)} sub="در حال تهیه" />,
       <KpiCard key="d" i={3} label="بیشترین اثر بر تکمیل" value={eng.slipMax == null ? 'نامشخص' : `${fa(eng.slipMax)} روز`} tone={eng.slipMax ? 'bad' : 'neutral'} />,
     ]
     return [
@@ -80,7 +80,7 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
     { key: 'p', label: 'موعد', render: ({ r }) => d(courtOf(r.status) === 'contractor' ? r.plannedPrepared : r.plannedApproved) },
     { key: 'x', label: 'تأخیر', num: true, sort: (x) => x.days, render: (x) => <b className="ex-bad">{fa(x.days)} روز</b> },
   ]
-  const top = overdueRows.filter((x) => lens === 'manager' || courtOf(x.r.status) === lens).sort((a, b) => Number(blocking.has(b.r.id)) - Number(blocking.has(a.r.id)) || b.days - a.days).slice(0, 12)
+  const top = overdueRows.filter((x) => lens === 'manager' || lens === 'employer' || courtOf(x.r.status) === lens).sort((a, b) => Number(blocking.has(b.r.id)) - Number(blocking.has(a.r.id)) || b.days - a.days).slice(0, 12)
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -107,7 +107,7 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
         <Tile title="تکمیل بر حسب نوع مدرک" hint="درصد تأییدشده از هر نوع (تعداد در پرانتز)"><HBars data={typeBars} fmt={(v) => `${fa(v, 0)}٪`} /></Tile>
         <Tile title="پیشرفت وزنی به‌تفکیک رشته" hint="سبز: مطابق برنامه · زرد: کمی عقب · قرمز: عقب" span={3}><HBars data={disc} fmt={(v) => `${fa(v, 1)}٪`} h={Math.max(160, disc.length * 34 + 20)} /></Tile>
       </div>
-      <Section title={lens === 'manager' ? 'مدارک معوق (همهٔ طرف‌ها)' : `مدارک معوق نزد ${COURT_LABEL_FA[lens]}`} hint="مدارک مانع اجرا و بحرانی در صدر" flush>
+      <Section title={lens === 'manager' ? 'مدارک معوق (همهٔ طرف‌ها)' : `مدارک معوق نزد ${lens === 'employer' ? 'مشاور' : COURT_LABEL_FA[lens]}`} hint="مدارک مانع اجرا و بحرانی در صدر" flush>
         <DataTable cols={lateCols} rows={top} rowKey={(x) => x.r.id} empty="مدرک معوقی نزد این نقش نیست." />
       </Section>
       {impacted.length > 0 && (

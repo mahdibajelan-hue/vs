@@ -9,6 +9,7 @@ import { readXlsx } from '../../material/lib/control/xlsx'
 import { jalaliText } from '../../execution/lib/periods'
 import type { Impact } from '../../execution/lib/engine/engineering'
 import { Chip, Section } from '../../finance/components/fn'
+import { NumInput } from '../../finance/components/fn'
 import { Empty, fa } from '../../execution/components/common'
 import { EpcGate } from '../../execution/components/epc/EpcBanner'
 import { ActivityPicker } from '../components/ActivityPicker'
@@ -16,8 +17,10 @@ import { EngDash } from './EngDash'
 import { EngMyTasks } from './EngMyTasks'
 import { isMdlLayout, parseMdl, type MdlResult } from '../lib/mdlImport'
 import { readSheetRows } from '../lib/readRows'
-import { COURT_COLOR, COURT_LABEL_FA, courtOf } from '../lib/roles'
-import { ENG_STATUS_LABEL_FA, type EngDocRow, type EngStatus } from '../../execution/epcTypes'
+import { COURT_LABEL_FA, courtOf } from '../lib/roles'
+import { DocTable } from '../components/DocTable'
+import { useLens } from '../components/LensBar'
+import { ENG_STATUS_LABEL_FA, type EngDocRow } from '../../execution/epcTypes'
 
 const READY_FA = { ready: 'آماده', ready_with_restrictions: 'آماده با محدودیت', not_ready: 'غیرآماده' } as const
 const READY_TONE = { ready: 'good', ready_with_restrictions: 'warn', not_ready: 'bad' } as const
@@ -43,6 +46,11 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
   const [flt, setFlt] = useState({ disc: '', st: '', phase: '', cat: '', court: '', q: '' })
   const [mdl, setMdl] = useState<{ res: MdlResult; file: string } | null>(null)
   const ref = useRef<HTMLInputElement>(null)
+  const ex = useExecutionStore()
+  const { lens } = useLens(projectId)
+  const settingsAmount = ex.settings(projectId).engAmount ?? 0
+  const sumPrice = docs.reduce((a, x) => a + x.price, 0)
+  const total = settingsAmount > 0 ? settingsAmount : sumPrice
   const [msg, setMsg] = useState('')
   const discs = [...new Set(docs.map((x) => x.discipline).filter(Boolean))]
   const phases = [...new Set(docs.map((x) => x.phase).filter(Boolean))], cats = [...new Set(docs.map((x) => x.category).filter(Boolean))].sort()
@@ -93,28 +101,20 @@ function Register({ m, projectId, can }: { m: EpcModel; projectId: string; can: 
         </div>
       )}
       {msg && <div className="im-card" style={{ padding: 10 }}>{msg}</div>}
+      <div className="im-card" style={{ padding: 10, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <label className="ex-lab">مبلغ کل مهندسی (ریال)<NumInput value={settingsAmount} label="مبلغ کل مهندسی" decimals={0} onCommit={(n) => can && void ex.saveSettings(projectId, { engAmount: n })} /></label>
+        <span className="im-helper" style={{ margin: 0 }}>هزینهٔ هر مدرک = سهم وزن آن از مبلغ کل{settingsAmount > 0 ? '' : sumPrice > 0 ? ' (مبلغ کل از جمع مبلغ مدارک MDL برداشته شد)' : ' — برای نمایش هزینه، مبلغ را وارد کنید'}. گردش مدارک فقط بین پیمانکار و مشاور نظارت است؛ کارفرما می‌تواند کامنت بگذارد.</span>
+      </div>
       <div className="mt-filters" style={{ flexWrap: 'wrap' }}>
         <input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="جست‌وجوی شماره یا عنوان…" dir="auto" aria-label="جست‌وجو" style={{ minWidth: 180 }} />
         <select value={flt.disc} onChange={(e) => setFlt({ ...flt, disc: e.target.value })} aria-label="رشته"><option value="">همهٔ رشته‌ها</option>{discs.map((x) => <option key={x}>{x}</option>)}</select>
         {phases.length > 0 && <select value={flt.phase} onChange={(e) => setFlt({ ...flt, phase: e.target.value })} aria-label="مرحله"><option value="">همهٔ مراحل</option>{phases.map((x) => <option key={x}>{x}</option>)}</select>}
         {cats.length > 0 && <select value={flt.cat} onChange={(e) => setFlt({ ...flt, cat: e.target.value })} aria-label="نوع مدرک"><option value="">همهٔ انواع</option>{cats.map((x) => <option key={x}>{x}</option>)}</select>}
-        <select value={flt.st} onChange={(e) => setFlt({ ...flt, st: e.target.value })} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(ENG_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <select value={flt.court} onChange={(e) => setFlt({ ...flt, court: e.target.value })} aria-label="توپ دست"><option value="">همهٔ طرف‌ها</option>{(['contractor', 'consultant', 'employer', 'done'] as const).map((c) => <option key={c} value={c}>{COURT_LABEL_FA[c]}</option>)}</select>
+        <select value={flt.st} onChange={(e) => setFlt({ ...flt, st: e.target.value })} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(ENG_STATUS_LABEL_FA).filter(([k]) => k !== 'pending_approval').map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <select value={flt.court} onChange={(e) => setFlt({ ...flt, court: e.target.value })} aria-label="توپ دست"><option value="">همهٔ طرف‌ها</option>{(['contractor', 'consultant', 'done'] as const).map((c) => <option key={c} value={c}>{COURT_LABEL_FA[c]}</option>)}</select>
         <span className="im-helper" style={{ margin: 0 }}>{fa(shown.length)} مدرک</span>
       </div>
-      <div className="im-card" style={{ padding: 0 }}><div className="fn-tbl-wrap" style={{ maxHeight: 520 }}><table className="ex-lines"><thead><tr><th>شناسه</th><th>عنوان / رشته</th><th>مسئولان</th><th className="num">وزن</th><th>تهیه (برنامه / واقعی)</th><th>تأیید (برنامه / واقعی)</th><th>وضعیت</th><th>توضیح مدیریتی</th><th /></tr></thead>
-        <tbody>{shown.slice(0, 400).map((x) => { const fc = m.docFc.get(x.id); return (
-          <tr key={x.id} className={x.status === 'approved' ? 'locked' : undefined}>
-            <td className="fn-code">{x.docNo}{x.rev && <small> Rev {x.rev}</small>}{x.critical && <Chip tone="bad">بحرانی</Chip>}</td>
-            <td style={{ minWidth: 220, whiteSpace: 'normal' }}>{x.title}<span className="sub">{x.discipline}{x.category ? ` · ${x.category}` : ''}{x.phase ? ` · ${x.phase}` : ''}{x.targetIssue ? ` · ${x.targetIssue}` : ''}{x.contract ? ` · ${x.contract}` : ''}</span></td>
-            <td className="sub">{x.preparer || '—'} / {x.approver || '—'}{courtOf(x.status) !== 'done' && x.status !== 'superseded' && <span style={{ display: 'block', color: COURT_COLOR[courtOf(x.status)], fontWeight: 700 }}>توپ دست: {COURT_LABEL_FA[courtOf(x.status)]}</span>}</td>
-            <td className="num">{can ? <input type="number" min={0} step="0.5" defaultValue={x.weight} onBlur={(e) => Number(e.target.value) !== x.weight && upd(x, { weight: Number(e.target.value) || 0 })} style={{ width: 60 }} aria-label="وزن" /> : fa(x.weight, 1)}</td>
-            <td>{d(x.plannedPrepared)} / {can ? <JalaliDateInput value={x.actualPrepared ?? ''} onChange={(v) => upd(x, { actualPrepared: v || null })} /> : d(x.actualPrepared)}</td>
-            <td>{d(x.plannedApproved)} / {can ? <JalaliDateInput value={x.actualApproved ?? ''} onChange={(v) => upd(x, { actualApproved: v || null })} /> : d(x.actualApproved)}{fc?.overdue && <small className="ex-bad" style={{ display: 'block' }}>{fa(fc.overdueDays)} روز دیرکرد</small>}</td>
-            <td>{can ? <select value={x.status} onChange={(e) => upd(x, { status: e.target.value as EngStatus })} aria-label="وضعیت">{Object.entries(ENG_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select> : ENG_STATUS_LABEL_FA[x.status]}{x.status === 'restricted' && can && <input defaultValue={x.restrictionNote} placeholder="محدودیت اجرایی" dir="auto" onBlur={(e) => e.target.value !== x.restrictionNote && upd(x, { restrictionNote: e.target.value })} />}</td>
-            <td style={{ minWidth: 170 }}>{can ? <input defaultValue={x.note} dir="auto" onBlur={(e) => e.target.value !== x.note && upd(x, { note: e.target.value })} aria-label="توضیح" /> : x.note}</td>
-            <td>{can && <label title="مدرک بحرانی" style={{ fontSize: 11 }}><input type="checkbox" checked={x.critical} onChange={(e) => upd(x, { critical: e.target.checked })} /></label>}</td>
-          </tr>) })}</tbody></table></div></div>
+      <DocTable docs={shown} all={docs} m={m} can={can} lens={lens} projectId={projectId} total={total} upd={upd} />
     </div>
   )
 }
