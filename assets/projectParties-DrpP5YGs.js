@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;function e(e,t){let n=e=>{let n=e?t.find(t=>t.id===e):void 0;return n?{id:n.id,name:n.name}:null};return{employer:n(e?.employerOrgId),consultant:n(e?.consultantOrgId),contractor:n(e?.contractorOrgId)??n(e?.partnerOrgId)}}export{e as t};
