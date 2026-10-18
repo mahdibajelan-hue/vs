@@ -1,0 +1,2 @@
+-- Rolls back 003_delay_contract.sql (removes contract terms, milestones and the delay-event register — export them first).
+-- tables sch_delay_events, sch_milestones, sch_contract; function sch_delay_guard()

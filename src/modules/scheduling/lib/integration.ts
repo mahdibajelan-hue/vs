@@ -3,13 +3,19 @@ import { computeSchedule, type ScheduleInput, type ScheduleResult } from './sche
 import type { LinkTarget, SchLink } from './types'
 
 /** Plain facts read from the other modules (the adapters in the store build these; this file never touches a store). */
-export interface ExecInfo { id: string; title: string; approvedPct: number | null; reportedPct: number | null; rejectedQty: number }
-export interface DocInfo { id: string; docNo: string; title: string; status: string; plannedApproved: string | null; actualApproved: string | null; expectedApproval: string | null; critical: boolean }
+export interface ExecInfo { id: string; title: string; approvedPct: number | null; reportedPct: number | null; rejectedQty: number; /** first / last report date with supervision-approved work */ firstDate?: string | null; lastDate?: string | null }
+export interface DocInfo { id: string; docNo: string; title: string; status: string; plannedApproved: string | null; actualApproved: string | null; expectedApproval: string | null; critical: boolean; issuedDate?: string | null }
 export interface PackageInfo { id: string; code: string; title: string; status: string; delivery: 'delivered' | 'partial' | 'pending'; expectedDelivery: string | null; plannedDelivery: string | null }
 export interface RiskInfo { id: string; code: string; title: string; open: boolean }
 export interface IssueInfo { id: string; title: string; open: boolean }
 export interface LinkSources {
   exec: Map<string, ExecInfo>; docs: Map<string, DocInfo>; packages: Map<string, PackageInfo>; risks: Map<string, RiskInfo>; issues: Map<string, IssueInfo>
+  /** newest report date with approved work in the project (the data date of the live status) */
+  execLastDate?: string | null
+  /** stoppages of the daily reports with their responsibility / critical / notice assessment (delay register of the execution module) */
+  stoppages?: { id: string; date: string; hours: number; category: string; responsibility: string; critical: boolean; noticeDate: string | null }[]
+  /** the execution settings' contractual notice period (days) */
+  execNoticeDays?: number | null
 }
 export const emptySources = (): LinkSources => ({ exec: new Map(), docs: new Map(), packages: new Map(), risks: new Map(), issues: new Map() })
 

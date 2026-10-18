@@ -55,8 +55,22 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
     const reg = new Map(ex.registered.rows.map((r) => [r.activity.id, r.pct * 100]))
     const rejected = new Map<string, number>()
     for (const l of ex.lines) if (l.activityId && l.status === 'rejected') rejected.set(l.activityId, (rejected.get(l.activityId) ?? 0) + l.qty)
-    for (const r of ex.approved.rows) s.exec.set(r.activity.id, { id: r.activity.id, title: r.activity.title, approvedPct: r.pct * 100, reportedPct: reg.get(r.activity.id) ?? r.pct * 100, rejectedQty: rejected.get(r.activity.id) ?? 0 } satisfies ExecInfo)
-    for (const d of engDocs.filter((x) => x.projectId === projectId)) s.docs.set(d.id, { id: d.id, docNo: d.docNo, title: d.title, status: d.status, plannedApproved: d.plannedApproved, actualApproved: d.actualApproved, expectedApproval: epcM.docFc.get(d.id)?.expectedApproval ?? null, critical: d.critical } satisfies DocInfo)
+    const dateOf = new Map(ex.reports.map((r) => [r.id, r.reportDate]))
+    const span = new Map<string, { first: string; last: string }>()
+    let lastAll: string | null = null
+    for (const l of ex.lines) {
+      if (l.status !== 'approved' || !l.activityId) continue
+      const d = dateOf.get(l.reportId); if (!d) continue
+      const x = span.get(l.activityId)
+      span.set(l.activityId, x ? { first: d < x.first ? d : x.first, last: d > x.last ? d : x.last } : { first: d, last: d })
+      if (!lastAll || d > lastAll) lastAll = d
+    }
+    s.execLastDate = lastAll
+    for (const r of ex.approved.rows) s.exec.set(r.activity.id, { id: r.activity.id, title: r.activity.title, approvedPct: r.pct * 100, reportedPct: reg.get(r.activity.id) ?? r.pct * 100, rejectedQty: rejected.get(r.activity.id) ?? 0, firstDate: span.get(r.activity.id)?.first ?? null, lastDate: span.get(r.activity.id)?.last ?? null } satisfies ExecInfo)
+    const repDate = new Map(ex.reports.map((r) => [r.id, r]))
+    s.stoppages = ex.stoppages.map((x) => ({ id: x.id, date: repDate.get(x.reportId)?.reportDate ?? '', hours: x.hours, category: x.category, responsibility: x.responsibility, critical: x.critical, noticeDate: x.noticeDate })).filter((x) => x.date && x.hours > 0)
+    s.execNoticeDays = ex.settings.delayNoticeDays ?? null
+    for (const d of engDocs.filter((x) => x.projectId === projectId)) s.docs.set(d.id, { id: d.id, docNo: d.docNo, title: d.title, status: d.status, plannedApproved: d.plannedApproved, actualApproved: d.actualApproved, issuedDate: d.issuedDate, expectedApproval: epcM.docFc.get(d.id)?.expectedApproval ?? null, critical: d.critical } satisfies DocInfo)
     const itemsOf = new Map<string, typeof items>()
     for (const it of items) itemsOf.set(it.packageId, [...(itemsOf.get(it.packageId) ?? []), it])
     const stagesOf = new Map<string, typeof stages>()
@@ -73,6 +87,6 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
     for (const r of ri.risks) s.risks.set(r.id, r)
     for (const i of ri.issues) s.issues.set(i.id, i)
     return s
-  }, [ex.approved, ex.registered, ex.lines, engDocs, epcM.docFc, packages, items, stages, ri.risks, ri.issues, projectId])
+  }, [ex.approved, ex.registered, ex.lines, ex.reports, ex.stoppages, ex.settings, engDocs, epcM.docFc, packages, items, stages, ri.risks, ri.issues, projectId])
   return { sources, ready: csLoaded && ri.loaded }
 }

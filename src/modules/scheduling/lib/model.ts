@@ -1,17 +1,26 @@
 import { pickCalendar, calendarMap, computeSchedule, type ScheduleResult } from './schedule'
 import { integrateActivity, supplyDelayImpact, type ActivityIntegration, type LinkSources } from './integration'
 import { activitySlips, finishVariance, lookahead, overdueActivities, progressAt, type ActualPct } from './variance'
+import { applyLiveStatus } from './live'
 import type { SchActivity, SchCalendar, SchLink, SchRelation, SchVersion } from './types'
 
 export interface VersionBundleLite { activities: SchActivity[]; relations: SchRelation[]; calendars: SchCalendar[] }
-export interface ModelInput { projectId: string; today: string; currentV: SchVersion; baselineV?: SchVersion; cur: VersionBundleLite; base: VersionBundleLite | null; links: SchLink[]; sources: LinkSources }
+export interface ModelInput { projectId: string; today: string; currentV: SchVersion; baselineV?: SchVersion; cur: VersionBundleLite; base: VersionBundleLite | null; links: SchLink[]; sources: LinkSources; /** take the actuals from the approved work of the execution module */ live?: boolean }
 
 /** Every derived figure of one project's schedule (pure; the hook only feeds it). Nothing derived is stored. */
 export function buildLiveModel(i: ModelInput) {
-  const { today, currentV, baselineV, cur, base, sources } = i
+  const { today, currentV, baselineV, base, sources } = i
+  let cur = i.cur
+  let liveInfo: { changed: string[]; unlinkedStarted: number; dataDate: string | null } | null = null
+  if (i.live) {
+    const facts = new Map([...sources.exec].map(([id, e]) => [id, { approvedPct: e.approvedPct, firstDate: e.firstDate ?? null, lastDate: e.lastDate ?? null }]))
+    const lv = applyLiveStatus(cur.activities, i.links.filter((l) => l.projectId === i.projectId), facts, sources.execLastDate ?? null)
+    cur = { ...cur, activities: lv.activities }
+    liveInfo = { changed: lv.changed, unlinkedStarted: lv.unlinkedStarted, dataDate: lv.dataDate }
+  }
   const calendar = pickCalendar(cur.calendars)
   const calendars = calendarMap(cur.calendars)
-  const dataDate = currentV.dataDate ?? today
+  const dataDate = liveInfo?.dataDate ?? currentV.dataDate ?? today
   const plan = computeSchedule({ activities: cur.activities, relations: cur.relations, calendar, calendars, mode: 'plan' })
   const links = i.links.filter((l) => l.projectId === i.projectId)
   const idOfUid = new Map(cur.activities.map((a) => [a.uid, a.id])), codeOf = new Map(cur.activities.map((a) => [a.id, a.code]))
@@ -41,5 +50,5 @@ export function buildLiveModel(i: ModelInput) {
   const slips = activitySlips(baselineActs, cur.activities, forecast)
   const look = lookahead(cur.activities, forecast, dataDate, 3)
   const blocked = [...integration.values()].filter((x) => x.readiness === 'blocked').length
-  return { today, baselineV, currentV, base, cur, calendar, calendars, dataDate, plan, forecast, baselineSched, links, integration, impact, progress, finish, overdue, slips, look, blocked, idOfUid, codeOf, sources }
+  return { today, liveInfo, baselineV, currentV, base, cur, calendar, calendars, dataDate, plan, forecast, baselineSched, links, integration, impact, progress, finish, overdue, slips, look, blocked, idOfUid, codeOf, sources }
 }
