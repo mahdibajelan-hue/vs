@@ -9,6 +9,7 @@ import { SchAnalysis } from './SchAnalysis'
 import { SchLinks } from './SchLinks'
 import { SchRiskLink } from './SchRiskLink'
 import { SchHelp } from './SchHelp'
+import { SchEdit } from './SchEdit'
 
 export function SchPage(p: { projectId: string; tab: SchTab; go: (t: SchTab) => void }) { return <EpcGate><Inner {...p} /></EpcGate> }
 function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t: SchTab) => void }) {
@@ -16,6 +17,7 @@ function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t:
   if (tab === 'help') return <SchHelp />
   if (tab === 'import') return <SchImport projectId={projectId} m={m} go={go} />
   if (tab === 'versions') return <SchVersions projectId={projectId} m={m} go={go} />
+  if (tab === 'edit') return <SchEdit projectId={projectId} m={m} />
   if (m.st.loading && m.st.versions.length === 0) return <div className="im-skeleton" style={{ height: 240 }} />
   if (m.empty) return <NoSchedule go={go} loading={m.st.loading} />
   if (tab === 'gantt') return <SchGantt projectId={projectId} m={m} go={go} />

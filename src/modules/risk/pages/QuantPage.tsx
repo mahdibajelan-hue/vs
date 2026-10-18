@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts'
 import { CalendarClock, Dices, Plus, Trash2 } from 'lucide-react'
 import { jalaliText } from '../../execution/lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { HBars, PB, Tile, axisProps, gridProps } from '../../finance/components/charts'
 import { fa } from '../../execution/components/common'
-import { runMonteCarlo, type McResult, type RiskEvent } from '../../scheduling/lib/monteCarlo'
+import { runMonteCarlo, type CostParams, type McResult, type RiskEvent } from '../../scheduling/lib/monteCarlo'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { QuantPortfolio } from './QuantPortfolio'
 import { useSchedulingStore } from '../../scheduling/store/useSchedulingStore'
 import { useScheduleModel, type LiveModel } from '../../scheduling/store/useScheduleModel'
 import { Hint } from '../../scheduling/components/Hint'
@@ -46,6 +48,7 @@ function QuantLoader() {
   const clearPending = useQuantNavStore((s) => s.clear)
   const [maps, setMaps] = useState<{ master: string; source: string }[] | null>(null)
   const [masterId, setMasterId] = useState('')
+  const [mode, setMode] = useState<'project' | 'portfolio'>('project')
   useEffect(() => { if (!mdLoaded) fetchMd(); if (!exLoaded) void fetchEx(); if (!matLoaded) fetchMat() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     void supabase.from('rasta_project_mappings').select('master_project_id, source_project_id').eq('source_module', 'risk').eq('status', 'confirmed')
@@ -70,9 +73,12 @@ function QuantLoader() {
           ? <select className="im-select-pill" value={masterId} onChange={(e) => setMasterId(e.target.value)} aria-label="پروژه" style={{ width: 'auto' }}>{candidates.map((c) => <option key={c.master} value={c.master}>{name(c.master)}</option>)}</select>
           : <span className="im-helper" style={{ margin: 0 }}>{name(candidates[0].master)}</span>}
         <span style={{ flex: 1 }} />
+        <div role="tablist" aria-label="سطح تحلیل" style={{ display: 'inline-flex', gap: 4 }}>
+          {([['project', 'پروژه'], ['portfolio', 'سبد پروژه‌ها']] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} className={`im-btn im-btn-sm${mode === k ? ' im-btn-primary' : ''}`} onClick={() => setMode(k)}>{l}</button>)}
+        </div>
         <button className="im-btn im-btn-sm" onClick={() => useModuleStore.getState().enterModule('scheduling')}><CalendarClock size={14} /> برنامه‌ریزی و کنترل زمان</button>
       </div>
-      {masterId && <QuantModel projectId={masterId} />}
+      {mode === 'portfolio' ? <QuantPortfolio names={Object.fromEntries(candidates.map((c) => [c.master, name(c.master)]))} /> : masterId && <QuantModel projectId={masterId} />}
     </div>
   )
 }
@@ -100,6 +106,9 @@ function QuantBody({ m }: { m: LiveModel }) {
   const [drUid, setDrUid] = useState(''), [dr, setDr] = useState({ min: 0, likely: 0, max: 0 }), [drQ, setDrQ] = useState('')
   const [ev, setEv] = useState(EMPTY_EVENT), [evQ, setEvQ] = useState('')
   const can = st.canEdit
+  const [cp, setCp] = useState<CostParams>(st.costParams ?? { variableShare: 0, indirectPerDay: 0, targetFinish: null, targetCost: null })
+  const [cpDirty, setCpDirty] = useState(false)
+  const editCp = (patch: Partial<CostParams>) => { setCp({ ...cp, ...patch }); setCpDirty(true) }
 
   const options = useMemo(() => { const n = drQ.trim().toLowerCase(); return acts.filter((a) => !n || `${a.code} ${a.name}`.toLowerCase().includes(n)).slice(0, 80) }, [acts, drQ])
   const evOptions = useMemo(() => { const n = evQ.trim().toLowerCase(); return acts.filter((a) => !n || `${a.code} ${a.name}`.toLowerCase().includes(n)).slice(0, 80) }, [acts, evQ])
@@ -110,11 +119,11 @@ function QuantBody({ m }: { m: LiveModel }) {
   const run = () => {
     setBusy(true)
     setTimeout(() => {
-      const r = runMonteCarlo({ schedule: { activities: m.cur!.activities, relations: m.cur!.relations, calendar: m.calendar, mode: 'forecast', dataDate: m.dataDate }, durationRisks: st.durationRisks, events: st.riskEvents, iterations, seed })
+      const r = runMonteCarlo({ schedule: { activities: m.cur!.activities, relations: m.cur!.relations, calendar: m.calendar, calendars: m.calendars, mode: 'forecast', dataDate: m.dataDate }, durationRisks: st.durationRisks, events: st.riskEvents, iterations, seed, costParams: cp })
       setRes(r); setBusy(false)
     }, 30)
   }
-  const save = async () => { if (res?.ok) await st.saveSimulation(m.currentV!.id, res.seed, res.iterations, { durationRisks: st.durationRisks.length, events: st.riskEvents.length, dataDate: m.dataDate }, res as unknown as Record<string, unknown>) }
+  const save = async () => { if (res?.ok) await st.saveSimulation(m.currentV!.id, res.seed, res.iterations, { durationRisks: st.durationRisks.length, events: st.riskEvents.length, dataDate: m.dataDate, costParams: cp }, res as unknown as Record<string, unknown>) }
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -160,6 +169,17 @@ function QuantBody({ m }: { m: LiveModel }) {
         )}
       </Section>
 
+      <Section title={<span>همبستگی هزینه با زمان <Hint id="mc-costtime" /></span>} hint="بخشی از هزینه که با طولانی‌شدن فعالیت بالا می‌رود + سربار روزانهٔ پروژه + اهداف">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="ex-lab">سهم هزینهٔ وابسته به مدت (٪) <Hint id="mc-var" /><input type="number" min={0} max={100} step="5" disabled={!can} value={Math.round(cp.variableShare * 100)} onChange={(e) => editCp({ variableShare: Math.min(1, Math.max(0, Number(e.target.value) / 100)) })} style={{ width: 90 }} /></label>
+          <label className="ex-lab">سربار هر روز کاری (ریال) <Hint id="mc-indirect" /><input type="number" min={0} disabled={!can} value={cp.indirectPerDay} onChange={(e) => editCp({ indirectPerDay: Math.max(0, Number(e.target.value)) })} style={{ width: 150 }} /></label>
+          <label className="ex-lab">تاریخ هدف پایان<JalaliDateInput value={cp.targetFinish ?? ''} onChange={(v) => editCp({ targetFinish: v || null })} /></label>
+          <label className="ex-lab">بودجهٔ هدف (ریال)<input type="number" min={0} disabled={!can} value={cp.targetCost ?? ''} onChange={(e) => editCp({ targetCost: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} style={{ width: 170 }} /></label>
+          {can && <button className="im-btn im-btn-sm" disabled={!cpDirty} onClick={() => void st.saveCostParams(cp).then((ok) => ok && setCpDirty(false))}>ذخیرهٔ پارامترها</button>}
+        </div>
+        <p className="im-helper" style={{ margin: '6px 0 0' }}>با مقدار صفر برای هر دو، هزینه به زمان وابسته نیست (مدل ساده). این اعداد را خودتان تعیین می‌کنید؛ سامانه چیزی حدس نمی‌زند.</p>
+      </Section>
+
       <Section title="اجرای شبیه‌سازی">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label className="ex-lab">تعداد تکرار<select value={iterations} onChange={(e) => setIterations(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{fa(n)}</option>)}</select></label>
@@ -186,6 +206,28 @@ function QuantBody({ m }: { m: LiveModel }) {
                   <KpiCard i={1} label="هزینه P50" value={money(res.cost.p50)} />
                   <KpiCard i={2} label="هزینه P80" value={money(res.cost.p80)} sub={`ذخیره ${money(res.cost.reserveP80)}`} tone="warn" />
                   <KpiCard i={3} label="هزینه P90" value={money(res.cost.p90)} tone="bad" />
+                </div>
+              )}
+              {res.costTime && (
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+                  <Tile title={<span>پراکندگی هزینه–تاریخ پایان <Hint id="mc-costtime" /></span>} hint={`همبستگی ${fa(res.costTime.correlation, 2)}`}>
+                    <div style={{ height: 230 }} dir="ltr"><ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid {...gridProps} />
+                      <XAxis type="number" dataKey="x" name="پایان" domain={['dataMin', 'dataMax']} tickFormatter={(v) => jalaliText(new Date(Number(v) * 86400000).toISOString().slice(0, 10))} {...axisProps} />
+                      <YAxis type="number" dataKey="y" name="هزینه" tickFormatter={(v) => fa(Math.round(Number(v) / 1e9)) + 'م'} {...axisProps} width={50} />
+                      <Tooltip formatter={(v, n) => [n === 'پایان' ? jalaliText(new Date(Number(v) * 86400000).toISOString().slice(0, 10)) : money(Number(v)), String(n)]} />
+                      <Scatter data={res.costTime.scatter.map((p) => ({ x: Date.parse(p.date) / 86400000, y: p.cost }))} fill={PB.violet ?? PB.blue} isAnimationActive={false} />
+                    </ScatterChart></ResponsiveContainer></div>
+                  </Tile>
+                  <Tile title={<span>احتمال رسیدن به اهداف <Hint id="mc-joint" /></span>} hint="تاریخ هدف و بودجهٔ هدف را در بخش بالا وارد کنید">
+                    {res.costTime.pFinish == null && res.costTime.pCost == null ? <p className="im-helper" style={{ margin: 0 }}>هدفی وارد نشده است.</p> : (
+                      <div className="fn-kpis">
+                        {res.costTime.pFinish != null && <KpiCard i={0} label="تا تاریخ هدف" value={`${fa(res.costTime.pFinish * 100, 0)}٪`} tone={res.costTime.pFinish >= 0.8 ? 'good' : res.costTime.pFinish >= 0.5 ? 'warn' : 'bad'} />}
+                        {res.costTime.pCost != null && <KpiCard i={1} label="در بودجهٔ هدف" value={`${fa(res.costTime.pCost * 100, 0)}٪`} tone={res.costTime.pCost >= 0.8 ? 'good' : res.costTime.pCost >= 0.5 ? 'warn' : 'bad'} />}
+                        {res.costTime.pJoint != null && <KpiCard i={2} label="هر دو با هم" value={`${fa(res.costTime.pJoint * 100, 0)}٪`} tone={res.costTime.pJoint >= 0.8 ? 'good' : res.costTime.pJoint >= 0.5 ? 'warn' : 'bad'} sub="هم‌زمان در تاریخ و بودجه" />}
+                      </div>
+                    )}
+                  </Tile>
                 </div>
               )}
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>

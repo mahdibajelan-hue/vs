@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { BookOpen, ChartGantt, CalendarClock, Dices, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload } from 'lucide-react'
+import { BookOpen, ChartGantt, CalendarClock, Dices, PencilRuler, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -14,7 +14,7 @@ import { useExecutionStore } from '../execution/store/useExecutionStore'
 import { useMaterialStore } from '../material/store/useMaterialStore'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
-export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'risk' | 'help'
+export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'edit' | 'risk' | 'help'
 const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد برنامه', icon: Gauge, color: '#0ea5a4' },
   { id: 'import', label: 'ورود برنامه', icon: Upload, color: '#6366f1' },
@@ -22,6 +22,7 @@ const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'gantt', label: 'گانت', icon: ChartGantt, color: '#0ea5e9' },
   { id: 'analysis', label: 'تحلیل انحراف', icon: TrendingUp, color: '#f97316' },
   { id: 'links', label: 'اتصال‌ها و آمادگی', icon: Link2, color: '#14b8a6' },
+  { id: 'edit', label: 'ویرایش برنامه', icon: PencilRuler, color: '#f59e0b' },
   { id: 'risk', label: 'تحلیل کمی (ماژول ریسک)', icon: Dices, color: '#ec4899' },
   { id: 'help', label: 'راهنمای ماژول', icon: BookOpen, color: '#64748b' },
 ]

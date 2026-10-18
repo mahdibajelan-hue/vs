@@ -1,0 +1,2 @@
+-- Rolls back 002_edit_cost_portfolio.sql (run only with explicit approval; it removes cost parameters and portfolio drivers).
+-- function sch_copy_version(uuid, text, text); tables sch_portfolio_drivers, sch_cost_params
