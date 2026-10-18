@@ -7,7 +7,7 @@ import { SchVersions } from './SchVersions'
 import { SchGantt } from './SchGantt'
 import { SchAnalysis } from './SchAnalysis'
 import { SchLinks } from './SchLinks'
-import { SchRisk } from './SchRisk'
+import { SchRiskLink } from './SchRiskLink'
 import { SchHelp } from './SchHelp'
 
 export function SchPage(p: { projectId: string; tab: SchTab; go: (t: SchTab) => void }) { return <EpcGate><Inner {...p} /></EpcGate> }
@@ -21,7 +21,7 @@ function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t:
   if (tab === 'gantt') return <SchGantt projectId={projectId} m={m} go={go} />
   if (tab === 'analysis') return <SchAnalysis projectId={projectId} m={m} />
   if (tab === 'links') return <SchLinks projectId={projectId} m={m} />
-  if (tab === 'risk') return <SchRisk projectId={projectId} m={m} />
+  if (tab === 'risk') return <SchRiskLink projectId={projectId} m={m} />
   return <SchDash projectId={projectId} m={m} go={go} />
 }
 

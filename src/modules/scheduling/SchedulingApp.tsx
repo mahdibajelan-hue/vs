@@ -22,7 +22,7 @@ const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'gantt', label: 'گانت', icon: ChartGantt, color: '#0ea5e9' },
   { id: 'analysis', label: 'تحلیل انحراف', icon: TrendingUp, color: '#f97316' },
   { id: 'links', label: 'اتصال‌ها و آمادگی', icon: Link2, color: '#14b8a6' },
-  { id: 'risk', label: 'تحلیل کمی ریسک', icon: Dices, color: '#ec4899' },
+  { id: 'risk', label: 'تحلیل کمی (ماژول ریسک)', icon: Dices, color: '#ec4899' },
   { id: 'help', label: 'راهنمای ماژول', icon: BookOpen, color: '#64748b' },
 ]
 const SchPage = lazy(() => import('./pages/SchPage').then((m) => ({ default: m.SchPage })))

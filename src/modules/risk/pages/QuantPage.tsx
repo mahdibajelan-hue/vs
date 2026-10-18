@@ -1,21 +1,96 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Dices, Plus, Trash2 } from 'lucide-react'
+import { CalendarClock, Dices, Plus, Trash2 } from 'lucide-react'
 import { jalaliText } from '../../execution/lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { HBars, PB, Tile, axisProps, gridProps } from '../../finance/components/charts'
 import { fa } from '../../execution/components/common'
-import { runMonteCarlo, type McResult, type RiskEvent } from '../lib/monteCarlo'
-import { useSchedulingStore } from '../store/useSchedulingStore'
-import type { LiveModel } from '../store/useScheduleModel'
-import { Hint } from '../components/Hint'
+import { runMonteCarlo, type McResult, type RiskEvent } from '../../scheduling/lib/monteCarlo'
+import { useSchedulingStore } from '../../scheduling/store/useSchedulingStore'
+import { useScheduleModel, type LiveModel } from '../../scheduling/store/useScheduleModel'
+import { Hint } from '../../scheduling/components/Hint'
+import { EpcGate } from '../../execution/components/epc/EpcBanner'
+import { useExecutionStore } from '../../execution/store/useExecutionStore'
+import { useMaterialStore } from '../../material/store/useMaterialStore'
+import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useModuleStore } from '../../../store/useModuleStore'
+import { supabase } from '../../../lib/supabaseClient'
+import { useRiskStore } from '../store/useRiskStore'
+import { useQuantNavStore } from '../store/useQuantNavStore'
+import '../../finance/finance-dashboard.css'
+import '../../material/material-control.css'
+import '../../execution/execution.css'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
 const money = (v: number) => fa(Math.round(v))
 const EMPTY_EVENT = { title: '', probability: 0.3, dMin: 1, dLikely: 3, dMax: 7, cMin: 0, cLikely: 0, cMax: 0, uids: [] as string[] }
 
-/** Quantitative schedule/cost risk analysis: inputs are the planner's own (activity duration ranges, risk events with probability); the engine is Monte Carlo over the real network (see monteCarlo.ts). */
-export function SchRisk({ m }: { projectId: string; m: LiveModel }) {
+/**
+ * «تحلیل کمی زمان و هزینه» in the Risk module. The schedule it simulates (versions, activities, relations, calendar, data date) is read from the Scheduling module;
+ * the duration ranges, risk events and saved results are stored in the sch_* tables of the same project, so both modules see the same analysis.
+ */
+export function QuantPage() {
+  return <EpcGate><QuantLoader /></EpcGate>
+}
+
+function QuantLoader() {
+  const scope = useRiskStore((s) => s.scopeProjectId)
+  const projects = useMasterDataStore((s) => s.projects)
+  const mdLoaded = useMasterDataStore((s) => s.loaded)
+  const fetchMd = useMasterDataStore((s) => s.fetchAll)
+  const exLoaded = useExecutionStore((s) => s.loaded)
+  const fetchEx = useExecutionStore((s) => s.fetchAll)
+  const matLoaded = useMaterialStore((s) => s.loaded)
+  const fetchMat = useMaterialStore((s) => s.fetchAll)
+  const pending = useQuantNavStore((s) => s.pendingMasterId)
+  const clearPending = useQuantNavStore((s) => s.clear)
+  const [maps, setMaps] = useState<{ master: string; source: string }[] | null>(null)
+  const [masterId, setMasterId] = useState('')
+  useEffect(() => { if (!mdLoaded) fetchMd(); if (!exLoaded) void fetchEx(); if (!matLoaded) fetchMat() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void supabase.from('rasta_project_mappings').select('master_project_id, source_project_id').eq('source_module', 'risk').eq('status', 'confirmed')
+      .then((r) => setMaps(((r.data ?? []) as { master_project_id: string; source_project_id: string }[]).map((x) => ({ master: x.master_project_id, source: x.source_project_id }))))
+  }, [])
+  const candidates = useMemo(() => (maps ?? []).filter((x) => scope === 'all' || x.source === scope), [maps, scope])
+  useEffect(() => {
+    if (!candidates.length) return
+    if (pending && candidates.some((c) => c.master === pending)) { setMasterId(pending); clearPending(); return }
+    if (!candidates.some((c) => c.master === masterId)) setMasterId(candidates[0].master)
+  }, [candidates, pending]) // eslint-disable-line react-hooks/exhaustive-deps
+  const name = (id: string) => projects.find((p) => p.id === id)?.officialName ?? id
+
+  if (maps === null || !mdLoaded || !exLoaded) return <div className="im-page"><div className="im-skeleton" style={{ height: 240 }} /></div>
+  if (!candidates.length) return <div className="im-page"><div className="im-card im-empty" style={{ padding: 24 }}>این پروژهٔ ریسک هنوز به یک پروژهٔ مادر در «اطلاعات پایه» نگاشت نشده است؛ تحلیل کمی از برنامهٔ زمان‌بندی همان پروژه استفاده می‌کند.</div></div>
+  return (
+    <div className="im-page fn-root mt-root ex-root" style={{ ['--im-accent' as string]: '#ec4899', display: 'grid', gap: 12, background: 'transparent' }}>
+      <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Dices size={18} aria-hidden />
+        <b>تحلیل کمی زمان و هزینه</b>
+        {candidates.length > 1
+          ? <select className="im-select-pill" value={masterId} onChange={(e) => setMasterId(e.target.value)} aria-label="پروژه" style={{ width: 'auto' }}>{candidates.map((c) => <option key={c.master} value={c.master}>{name(c.master)}</option>)}</select>
+          : <span className="im-helper" style={{ margin: 0 }}>{name(candidates[0].master)}</span>}
+        <span style={{ flex: 1 }} />
+        <button className="im-btn im-btn-sm" onClick={() => useModuleStore.getState().enterModule('scheduling')}><CalendarClock size={14} /> برنامه‌ریزی و کنترل زمان</button>
+      </div>
+      {masterId && <QuantModel projectId={masterId} />}
+    </div>
+  )
+}
+
+function QuantModel({ projectId }: { projectId: string }) {
+  const m = useScheduleModel(projectId)
+  if (m.st.loading && m.st.versions.length === 0) return <div className="im-skeleton" style={{ height: 240 }} />
+  if (m.empty) return (
+    <div className="im-card im-empty" style={{ padding: 28, display: 'grid', gap: 8, justifyItems: 'center', textAlign: 'center' }}>
+      <b>برای این پروژه برنامهٔ زمان‌بندی ثبت نشده است.</b>
+      <span className="im-helper" style={{ margin: 0 }}>شبیه‌سازی روی شبکهٔ واقعی برنامه انجام می‌شود؛ ابتدا برنامه را در ماژول «برنامه‌ریزی و کنترل زمان» وارد و تأیید کنید.</span>
+      <button className="im-btn im-btn-primary" onClick={() => useModuleStore.getState().enterModule('scheduling')}>رفتن به برنامه‌ریزی</button>
+    </div>
+  )
+  return <QuantBody m={m} />
+}
+
+function QuantBody({ m }: { m: LiveModel }) {
   const st = useSchedulingStore()
   const acts = m.cur!.activities.filter((a) => a.type === 'task' && (m.forecast.byId.get(a.id)?.status ?? 'not_started') !== 'complete')
   const byUid = useMemo(() => new Map(m.cur!.activities.map((a) => [a.uid, a])), [m.cur])

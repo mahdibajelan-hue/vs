@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Activity, Bell, Bot, CircleHelp, FileBarChart, Gauge, Home, Layers, Loader2, Network, Plus, ScanSearch, Settings2, ShieldAlert, ShieldCheck, TrendingUp, ArrowLeftRight } from 'lucide-react'
+import { Activity, Bell, Bot, CircleHelp, FileBarChart, Gauge, Home, Layers, Loader2, Network, Plus, ScanSearch, Settings2, ShieldAlert, ShieldCheck, TrendingUp, ArrowLeftRight, Dices } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -15,6 +15,7 @@ import { useRiskRole } from './lib/useRiskData'
 import { RK_HELP } from './lib/help'
 import { RiskDrawer, type RiskTabId } from './components/RiskDrawer'
 import { RiskFormModal } from './components/RiskFormModal'
+import { useQuantNavStore } from './store/useQuantNavStore'
 import { HubPage } from './pages/HubPage'
 
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
@@ -29,15 +30,17 @@ const KpiPage = lazy(() => import('./pages/KpiPage').then((m) => ({ default: m.K
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const AlertsPage = lazy(() => import('./pages/AlertsPage').then((m) => ({ default: m.AlertsPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const QuantPage = lazy(() => import('./pages/QuantPage').then((m) => ({ default: m.QuantPage })))
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })))
 
-export type RiskTab = 'home' | 'register' | 'assessment' | 'response' | 'monitoring' | 'dashboard' | 'portfolio' | 'assistant' | 'integration' | 'kpi' | 'reports' | 'alerts' | 'settings' | 'help'
+export type RiskTab = 'home' | 'register' | 'assessment' | 'quant' | 'response' | 'monitoring' | 'dashboard' | 'portfolio' | 'assistant' | 'integration' | 'kpi' | 'reports' | 'alerts' | 'settings' | 'help'
 export interface PageProps { onOpenRisk: (id: string, tab?: RiskTabId) => void; onNew: () => void; onGo: (tab: RiskTab) => void }
 
 const NAV: { id: RiskTab; label: string; icon: LucideIcon; color: string; help: keyof typeof RK_HELP }[] = [
   { id: 'home', label: 'خانه', icon: Home, color: '#f59e0b', help: 'hub' },
   { id: 'register', label: 'شناسایی و ثبت', icon: ScanSearch, color: '#0ea5e9', help: 'register' },
   { id: 'assessment', label: 'ارزیابی', icon: TrendingUp, color: '#f59e0b', help: 'assessment' },
+  { id: 'quant', label: 'تحلیل کمی زمان و هزینه', icon: Dices, color: '#ec4899', help: 'assessment' },
   { id: 'response', label: 'پاسخ و اقدام', icon: ShieldCheck, color: '#22c55e', help: 'response' },
   { id: 'monitoring', label: 'پایش و اثربخشی', icon: Activity, color: '#8b5cf6', help: 'monitoring' },
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1', help: 'dashboard' },
@@ -90,6 +93,10 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
     if (!loading && pendingLink?.module === 'risk') { setOpenRisk({ id: pendingLink.recordId, tab: 'overview' }); clearLink() }
   }, [loading, pendingLink, clearLink])
 
+  // The Scheduling module asked to open the quantitative analysis of a project.
+  const quantPending = useQuantNavStore((x) => x.pendingMasterId)
+  useEffect(() => { if (quantPending) setTab('quant') }, [quantPending])
+
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab])
   const page: PageProps = { onOpenRisk: (id, t = 'overview') => setOpenRisk({ id, tab: t }), onNew: () => setNewOpen(true), onGo: setTab }
@@ -141,6 +148,7 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
               {tab === 'home' && <HubPage onGo={setTab} />}
               {tab === 'register' && <RegisterPage {...page} />}
               {tab === 'assessment' && <AssessmentPage {...page} />}
+              {tab === 'quant' && <QuantPage />}
               {tab === 'response' && <ResponsePage {...page} />}
               {tab === 'monitoring' && <MonitoringPage {...page} />}
               {tab === 'dashboard' && <DashboardPage {...page} />}
