@@ -29,7 +29,7 @@ export function NumInput({ value, onCommit, label, className = 'fn-cell-input', 
   return <input key={shown} className={className} inputMode="decimal" dir="ltr" defaultValue={shown} aria-label={label} onBlur={(e) => { const n = parseNum(e.target.value); if (n !== value) onCommit(n); else e.target.value = shown }} />
 }
 
-export function KpiCard({ label, value, unit, sub, tone = 'neutral', hint, onClick, i = 0, spark, sparkColor }: { label: string; value: ReactNode; unit?: string; sub?: ReactNode; tone?: Tone; hint?: string; onClick?: () => void; i?: number; spark?: number[]; sparkColor?: string }) {
+export function KpiCard({ label, value, unit, sub, tone = 'neutral', hint, onClick, i = 0, spark, sparkColor }: { label: ReactNode; value: ReactNode; unit?: string; sub?: ReactNode; tone?: Tone; hint?: string; onClick?: () => void; i?: number; spark?: number[]; sparkColor?: string }) {
   const body = (
     <>
       <span className="l">{label}{hint && <span className="fn-hint" title={hint} aria-label={hint}><Info size={12} /></span>}</span>

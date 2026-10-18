@@ -17,5 +17,6 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'material', fa: 'کنترل و تأمین کالا', en: 'Material Control', words: 'متریال کالا انبار حواله MTO سفارش بسته' },
   { key: 'execution', fa: 'مدیریت اجرا', en: 'Execution', words: 'اجرا گزارش روزانه کارکرد فهرست بها نیروی انسانی ماشین‌آلات' },
   { key: 'engineering', fa: 'پیشرفت مهندسی و آمادگی اجرا', en: 'Engineering Readiness', words: 'مهندسی مدارک نقشه آمادگی پیش‌نیاز تأخیر مدرک رشته وزن' },
+  { key: 'scheduling', fa: 'برنامه‌ریزی و کنترل زمان پروژه', en: 'Project Scheduling & Time Control', words: 'برنامه زمان‌بندی گانت مسیر بحرانی خط مبنا پریمارا P6 اکسل انحراف پیش‌بینی شناوری مونت‌کارلو' },
   { key: 'admin', fa: 'مدیریت کاربران و داده‌های پایه', en: 'Users & Master Data', words: 'کاربر دسترسی نقش پروژه سازمان داده پایه' },
 ]

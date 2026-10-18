@@ -1,0 +1,7 @@
+-- Removes the scheduling module (all versions, links and simulation results are lost — export them first).
+-- Run table by table, deepest first, after reading what each one holds:
+--   sch_history, sch_simulations, sch_risk_events, sch_duration_risk, sch_imports, sch_links,
+--   sch_relations, sch_activities, sch_calendars, sch_versions
+-- then the functions sch_log, sch_set_current, sch_set_baseline, sch_approve, sch_child_guard, sch_version_guard, sch_can_approve, sch_can_edit
+-- and the row ('scheduling') in rasta_modules.
+-- Nothing in the other modules depends on these objects; they only ever read from execution / engineering / material / risk / issues.
