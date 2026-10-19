@@ -7,7 +7,7 @@ import type { SchVersion } from '../lib/types'
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
 /** One project's schedule with every derived figure — computed once from the stored versions and the facts read from the other modules; nothing derived is stored. */
-export function useScheduleModel(projectId: string, opts: { live?: boolean; baselineId?: string | null } = {}) {
+export function useScheduleModel(projectId: string, opts: { live?: boolean; baselineId?: string | null; progressMode?: 'retained' | 'override' } = {}) {
   const st = useSchedulingStore()
   const { sources, ready } = useLinkSources(projectId)
   useEffect(() => { if (st.projectId !== projectId) void st.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -21,8 +21,8 @@ export function useScheduleModel(projectId: string, opts: { live?: boolean; base
   return useMemo(() => {
     const today = todayIso()
     if (!currentV || !cur) return { st, ready, today, baselineV, currentV, base, cur, empty: true as const }
-    return { st, ready, empty: false as const, ...buildLiveModel({ projectId, today, currentV, baselineV, cur, base, links: st.links, sources, live: !!opts.live }) }
-  }, [st, ready, sources, currentV, baselineV, cur, base, projectId, opts.live])
+    return { st, ready, empty: false as const, ...buildLiveModel({ projectId, today, currentV, baselineV, cur, base, links: st.links, sources, live: !!opts.live, progressMode: opts.progressMode }) }
+  }, [st, ready, sources, currentV, baselineV, cur, base, projectId, opts.live, opts.progressMode])
 }
 export type ScheduleModel = ReturnType<typeof useScheduleModel>
 export type LiveModel = Extract<ScheduleModel, { empty: false }>

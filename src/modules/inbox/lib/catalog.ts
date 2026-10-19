@@ -115,6 +115,18 @@ export const KINDS: Record<InboxKind, KindDef> = {
   ] },
   fin_guarantee: { ...M.fin_guarantee, ask: 'ضمانت‌نامه به پایان اعتبار نزدیک است. تمدید یا آزادسازی آن را در ماژول مالی ثبت کنید.', actions: () => [] },
   fin_pay: { ...M.fin_pay, ask: 'بیش از ۳۰ روز از تأیید این صورت‌وضعیت گذشته و پرداخت کامل نشده است. پرداخت را در ماژول مالی ثبت کنید.', actions: () => [] },
+  sch_review: { ...M.sch_review, ask: 'پیمانکار به‌روزرسانی برنامه را برای بررسی فرستاده است. نسخه را در «برنامه‌ریزی ← نسخه‌ها» ببینید؛ پس از تأیید شما، کارفرما می‌تواند آن را تأیید نهایی کند.', actions: () => [
+    A('endorse', 'تأیید مشاور', 'good', 'opt', (i, x) => rpc('sch_review_version', { p_version: i.refId, p_decision: 'endorse', p_note: x.note })),
+    A('return', 'بازگرداندن برای اصلاح', 'warn', 'req', (i, x) => rpc('sch_review_version', { p_version: i.refId, p_decision: 'return', p_note: x.note })),
+  ] },
+  sch_approve: { ...M.sch_approve, ask: 'نسخهٔ برنامه آمادهٔ تأیید نهایی است. با تأیید، نسخه قفل می‌شود و دیگر قابل ویرایش نیست.', actions: () => [
+    A('approve', 'تأیید نهایی و قفل', 'good', 'none', (i) => rpc('sch_approve', { p_version: i.refId })),
+  ] },
+  sch_fix: { ...M.sch_fix, ask: 'مشاور نسخه را برگردانده است. دلیل را بخوانید، پیش‌نویس را اصلاح کنید و دوباره ارسال کنید.', actions: () => [] },
+  sch_eot: { ...M.sch_eot, ask: 'پیمانکار تمدید زمان ادعا کرده و رویداد ارزیابی شده است. تعداد روز مصوب (پیش‌فرض: همان ادعا) را بپذیرید یا با ثبت دلیل رد کنید. جزئیات در «برنامه‌ریزی ← تحلیل تاخیرات».', actions: () => [
+    A('approve', 'تأیید به‌اندازهٔ ادعا', 'good', 'opt', (i, x) => upd('sch_delay_events', i.refId, { status: 'approved', approved_days: num(i.extra.days), note: x.note || undefined })),
+    A('reject', 'رد تمدید', 'bad', 'req', (i, x) => upd('sch_delay_events', i.refId, { status: 'rejected', approved_days: 0, note: x.note })),
+  ] },
   mission_mine: { ...M.mission_mine, ask: 'مأموریت شما منتظر اقدام شماست؛ ادامهٔ کار در ماژول مأموریت‌ها است.', actions: () => [] },
 }
 

@@ -22,6 +22,10 @@ export function openInModule(item: InboxItem): void {
   } else if (item.source === 'change') {
     const id = idOf(e.requestId)
     if (id) link({ module: 'change', recordId: id, masterProjectId: item.projectId ?? undefined })
+  } else if (item.source === 'scheduling') {
+    if (item.kind === 'sch_eot') window.sessionStorage.setItem('sch.openTab', 'delay')
+    else window.sessionStorage.setItem('sch.openTab', 'versions')
+    if (item.projectId) window.sessionStorage.setItem('sch.openProject', item.projectId)
   } else if (item.source === 'missions') link({ module: 'missions', recordId: item.refId })
   useModuleStore.getState().enterModule(SOURCE_MODULE[item.source])
 }

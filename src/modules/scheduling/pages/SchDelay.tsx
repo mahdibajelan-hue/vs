@@ -4,7 +4,7 @@ import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { jalaliText } from '../../execution/lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { fa } from '../../execution/components/common'
-import { CAUSES, CAUSE_FA, CLASS_FA, CLASS_TONE, PARTY_FA, measureImpact, milestoneRows, noticeState, suggestFromDocs, suggestFromStoppages, windowsAnalysis, type Contract, type DelayEvent, type Party, type Suggestion, type VersionSnapshot } from '../lib/delay'
+import { CAUSES, CAUSE_FA, CLASS_FA, CLASS_TONE, PARTY_FA, measureImpact, milestoneRows, noticeState, suggestFromChanges, suggestFromDocs, suggestFromStoppages, windowsAnalysis, type Contract, type DelayEvent, type Party, type Suggestion, type VersionSnapshot } from '../lib/delay'
 import { downloadWorkbook } from '../lib/exportXlsx'
 import { calendarMap, computeSchedule, pickCalendar } from '../lib/schedule'
 import { useDelayAnalysis } from '../store/useDelayAnalysis'
@@ -34,7 +34,10 @@ export function SchDelay({ projectId, m }: { projectId: string; m: LiveModel }) 
     for (const l of m.links) if (l.targetType === 'eng_doc') linksOf.set(l.targetId, [...(linksOf.get(l.targetId) ?? []), l.activityUid])
     const docs = [...m.sources.docs.values()].map((x) => ({ id: x.id, docNo: x.docNo, title: x.title, issuedDate: x.issuedDate ?? null, actualApproved: x.actualApproved, status: x.status, activityUids: linksOf.get(x.id) ?? [] }))
     const s2 = suggestFromDocs(docs, c.docReviewDays, m.today).filter((x) => !known.has(`${x.sourceType}:${x.sourceRef}`)).slice(0, 15)
-    return [...s1, ...s2]
+    const chOf = new Map<string, string[]>()
+    for (const l of m.links) if (l.targetType === 'change_request') chOf.set(l.targetId, [...(chOf.get(l.targetId) ?? []), l.activityUid])
+    const s3 = suggestFromChanges([...(m.sources.changes?.values() ?? [])].map((x) => ({ id: x.id, crNumber: x.crNumber, title: x.title, status: x.status, approvedDays: x.approvedDays, approvedAt: x.approvedAt ?? null, activityUids: chOf.get(x.id) ?? [] }))).filter((x) => !known.has(`${x.sourceType}:${x.sourceRef}`))
+    return [...s1, ...s2, ...s3]
   }, [ds.events, m.sources, m.links, c.docReviewDays, m.today])
 
   // windows analysis between the approved updates
@@ -44,11 +47,11 @@ export function SchDelay({ projectId, m }: { projectId: string; m: LiveModel }) 
     const snaps: VersionSnapshot[] = []
     for (const v of approved) {
       const b = st.bundles.get(v.id); if (!b) continue
-      const f = computeSchedule({ activities: b.activities, relations: b.relations, calendar: pickCalendar(b.calendars), calendars: calendarMap(b.calendars), mode: 'forecast', dataDate: v.dataDate ?? undefined })
+      const f = computeSchedule({ activities: b.activities, relations: b.relations, calendar: pickCalendar(b.calendars), calendars: calendarMap(b.calendars), mode: 'forecast', dataDate: v.dataDate ?? undefined, progressMode: m.progressMode })
       snaps.push({ label: v.label, dataDate: v.dataDate, finish: f.projectFinish, acts: new Map(b.activities.map((a) => [a.uid, { code: a.code, name: a.name, finish: f.byId.get(a.id)?.finish ?? null, critical: !!f.byId.get(a.id)?.critical }])) })
     }
     return windowsAnalysis(snaps)
-  }, [approved, st.bundles])
+  }, [approved, st.bundles, m.progressMode])
 
   const msRows = useMemo(() => milestoneRows(ds.milestones, (uid) => { const a = byUid.get(uid); return a ? m.forecast.byId.get(a.id)?.finish ?? null : null }), [ds.milestones, byUid, m.forecast])
   const can = st.canEdit, canApprove = st.canApprove
@@ -93,6 +96,7 @@ export function SchDelay({ projectId, m }: { projectId: string; m: LiveModel }) 
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
           <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" style={{ width: 'auto' }} disabled={!can} checked={cDraft.forceMajeureNotice} onChange={(e) => setCDraft({ ...cDraft, forceMajeureNotice: e.target.checked })} /> اخطار برای فورس‌ماژور هم لازم است</label>
+          <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" style={{ width: 'auto' }} disabled={!can} checked={!!cDraft.requireReview} onChange={(e) => setCDraft({ ...cDraft, requireReview: e.target.checked })} /> تأیید نهایی به‌روزرسانی فقط پس از تأیید مشاور <Hint id="sch-workflow" /></label>
           <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" style={{ width: 'auto' }} disabled={!can} checked={cDraft.concurrentCompensable} onChange={(e) => setCDraft({ ...cDraft, concurrentCompensable: e.target.checked })} /> تأخیر هم‌زمان خسارت دارد</label>
           {can && <button className="im-btn im-btn-primary im-btn-sm" disabled={!cDirty} onClick={() => void ds.saveContract(cDraft)}>ذخیرهٔ شرایط</button>}
           <button className="im-btn im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={exportAll}><Download size={13} /> خروجی Excel</button>

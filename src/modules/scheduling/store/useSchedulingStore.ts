@@ -11,6 +11,7 @@ type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-expl
 const ERR: Record<string, string> = {
   version_locked: 'این نسخه تأیید شده و قابل تغییر نیست؛ نسخهٔ جدید بسازید.', use_rpc: 'این تغییر فقط از مسیر مجاز (تأیید/خط مبنا/جاری) انجام می‌شود.', not_allowed: 'اجازهٔ این کار را ندارید.',
   already_approved: 'این نسخه قبلاً تأیید شده است.', approve_first: 'ابتدا نسخه را تأیید کنید، سپس به‌عنوان خط مبنا تعیین کنید.', empty_version: 'نسخهٔ خالی را نمی‌توان تأیید کرد.',
+  in_review: 'نسخه در جریان بررسی است و تا بازگشت یا تأیید قابل ویرایش نیست.', review_required: 'طبق شرایط قرارداد، تأیید نهایی فقط پس از تأیید مشاور ممکن است.', not_submitted: 'نسخه هنوز برای بررسی ارسال نشده است.', note_required: 'برای بازگرداندن، توضیح لازم است.', already_raised: 'برای این هشدار قبلاً مسئله ثبت شده است.', no_issue_mapping: 'پروژه به ماژول مسائل نگاشت نشده است.',
 }
 const explain = (m: string) => { for (const k of Object.keys(ERR)) if (m.includes(k)) return ERR[k]; if (m.includes('23505')) return 'این برچسب یا کد قبلاً ثبت شده است.'; return m }
 const fail = (what: string, error: { message: string } | null): boolean => {
@@ -21,7 +22,7 @@ const fail = (what: string, error: { message: string } | null): boolean => {
 const uuid = (): string => globalThis.crypto.randomUUID()
 const chunk = <T,>(a: T[], n: number): T[][] => { const out: T[][] = []; for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out }
 
-export const mapVersion = (r: Row): SchVersion => ({ id: r.id, projectId: r.project_id, label: r.label, kind: r.kind, source: r.source, fileName: r.file_name ?? '', fileHash: r.file_hash ?? '', dataDate: r.data_date, projectStart: r.project_start, projectFinish: r.project_finish, status: r.status, isBaseline: !!r.is_baseline, isCurrent: !!r.is_current, parentVersionId: r.parent_version_id, approvedBy: r.approved_by, approvedAt: r.approved_at, mapping: r.mapping ?? {}, summary: r.summary ?? {}, warnings: r.warnings ?? [], note: r.note ?? '', createdBy: r.created_by, createdAt: r.created_at })
+export const mapVersion = (r: Row): SchVersion => ({ id: r.id, projectId: r.project_id, label: r.label, kind: r.kind, source: r.source, fileName: r.file_name ?? '', fileHash: r.file_hash ?? '', dataDate: r.data_date, projectStart: r.project_start, projectFinish: r.project_finish, status: r.status, isBaseline: !!r.is_baseline, isCurrent: !!r.is_current, parentVersionId: r.parent_version_id, reviewStatus: (r.review_status ?? 'none') as SchVersion['reviewStatus'], approvedBy: r.approved_by, approvedAt: r.approved_at, mapping: r.mapping ?? {}, summary: r.summary ?? {}, warnings: r.warnings ?? [], note: r.note ?? '', createdBy: r.created_by, createdAt: r.created_at })
 export const mapCal = (r: Row): SchCalendar => ({ id: r.id, code: r.code, name: r.name, workDays: r.work_days ?? [], hoursPerDay: Number(r.hours_per_day ?? 8), holidays: r.holidays ?? [], isDefault: !!r.is_default, sourceId: r.source_id ?? '' })
 export const mapAct = (r: Row): SchActivity => ({ id: r.id, uid: r.uid, versionId: r.version_id, code: r.code, sourceId: r.source_id ?? '', name: r.name ?? '', wbsCode: r.wbs_code ?? '', wbsPath: r.wbs_path ?? '', type: r.activity_type as ActType, calendarId: r.calendar_id, origDuration: Number(r.orig_duration ?? 0), remDuration: r.rem_duration == null ? null : Number(r.rem_duration), plannedStart: r.planned_start, plannedFinish: r.planned_finish, actualStart: r.actual_start, actualFinish: r.actual_finish, pctComplete: r.pct_complete == null ? null : Number(r.pct_complete), constraintType: r.constraint_type ?? '', constraintDate: r.constraint_date, budgetCost: Number(r.budget_cost ?? 0), owner: r.owner ?? '', sort: r.sort ?? 0 })
 export const mapRel = (r: Row): SchRelation => ({ id: r.id, versionId: r.version_id, predId: r.pred_id, succId: r.succ_id, type: r.rel_type as RelType, lag: Number(r.lag_days ?? 0) })
@@ -31,6 +32,7 @@ export const mapCost = (r: Row): CostParams => ({ variableShare: Number(r.variab
 export const actRow = (a: SchActivity, projectId: string) => ({ id: a.id, project_id: projectId, version_id: a.versionId, uid: a.uid, code: a.code, source_id: a.sourceId, name: a.name, wbs_code: a.wbsCode, wbs_path: a.wbsPath, activity_type: a.type, calendar_id: a.calendarId, orig_duration: a.origDuration, rem_duration: a.remDuration, planned_start: a.plannedStart, planned_finish: a.plannedFinish, actual_start: a.actualStart, actual_finish: a.actualFinish, pct_complete: a.pctComplete, constraint_type: a.constraintType, constraint_date: a.constraintDate, budget_cost: a.budgetCost, owner: a.owner, sort: a.sort })
 
 export interface VersionBundle { activities: SchActivity[]; relations: SchRelation[]; calendars: SchCalendar[] }
+export interface SchReview { id: string; versionId: string; step: 'submit' | 'endorse' | 'return' | 'approve'; note: string; actor: string | null; at: string }
 export interface SchSimulation { id: string; versionId: string | null; seed: number; iterations: number; params: Record<string, unknown>; result: Record<string, unknown>; createdAt: string }
 export interface ImportRequest {
   projectId: string; parsed: ParsedSchedule; label: string; kind: VersionKind; source: VersionSource; fileName: string; fileHash: string
@@ -51,6 +53,12 @@ interface State {
   costParams: CostParams | null
   canEdit: boolean
   canApprove: boolean
+  canReview: boolean
+  reviews: SchReview[]
+  raised: Map<string, string>
+  submitVersion: (versionId: string, note: string) => Promise<boolean>
+  reviewVersion: (versionId: string, decision: 'endorse' | 'return', note: string) => Promise<boolean>
+  raiseIssue: (key: string, title: string, description: string, severity: 'low' | 'medium' | 'high' | 'critical', impactDays: number) => Promise<boolean>
   load: (projectId: string) => Promise<void>
   loadBundle: (versionId: string) => Promise<VersionBundle | null>
   importVersion: (req: ImportRequest, force?: boolean) => Promise<ImportOutcome>
@@ -80,7 +88,7 @@ interface State {
   saveSimulation: (versionId: string | null, seed: number, iterations: number, params: Record<string, unknown>, result: Record<string, unknown>) => Promise<boolean>
 }
 
-export const BASE_COLS = 'id, project_id, label, kind, source, file_name, file_hash, data_date, project_start, project_finish, status, is_baseline, is_current, parent_version_id, approved_by, approved_at, mapping, summary, warnings, note, created_by, created_at'
+export const BASE_COLS = 'id, project_id, label, kind, source, file_name, file_hash, data_date, project_start, project_finish, status, review_status, is_baseline, is_current, parent_version_id, approved_by, approved_at, mapping, summary, warnings, note, created_by, created_at'
 export const ACT_COLS = 'id, version_id, uid, code, source_id, name, wbs_code, wbs_path, activity_type, calendar_id, orig_duration, rem_duration, planned_start, planned_finish, actual_start, actual_finish, pct_complete, constraint_type, constraint_date, budget_cost, owner, sort'
 
 export async function fetchAllRows(table: string, cols: string, versionId: string): Promise<Row[]> {
@@ -97,11 +105,11 @@ export async function fetchAllRows(table: string, cols: string, versionId: strin
 export const useSchedulingStore = create<State>((set, get) => {
   const patchBundle = (versionId: string, fn: (b: VersionBundle) => VersionBundle) => { const b = get().bundles.get(versionId); if (b) set({ bundles: new Map(get().bundles).set(versionId, fn(b)) }) }
   return {
-  projectId: null, loading: false, versions: [], bundles: new Map(), links: [], durationRisks: [], riskEvents: [], simulations: [], history: [], costParams: null, canEdit: false, canApprove: false,
+  projectId: null, loading: false, versions: [], bundles: new Map(), links: [], durationRisks: [], riskEvents: [], simulations: [], history: [], costParams: null, canEdit: false, canApprove: false, canReview: false, reviews: [], raised: new Map(),
 
   load: async (projectId) => {
-    set({ projectId, loading: true, versions: [], bundles: new Map(), links: [], durationRisks: [], riskEvents: [], simulations: [], history: [], costParams: null })
-    const [v, l, d, e, s, h, ce, ca, cpq] = await Promise.all([
+    set({ projectId, loading: true, versions: [], bundles: new Map(), links: [], durationRisks: [], riskEvents: [], simulations: [], history: [], costParams: null, reviews: [], raised: new Map() })
+    const [v, l, d, e, s, h, ce, ca, cpq, cr, rv, rs] = await Promise.all([
       supabase.from('sch_versions').select(BASE_COLS).eq('project_id', projectId).order('created_at'),
       supabase.from('sch_links').select('*').eq('project_id', projectId),
       supabase.from('sch_duration_risk').select('*').eq('project_id', projectId),
@@ -110,6 +118,9 @@ export const useSchedulingStore = create<State>((set, get) => {
       supabase.from('sch_history').select('id, version_id, action, detail, at, actor').eq('project_id', projectId).order('at', { ascending: false }).limit(60),
       supabase.rpc('sch_can_edit', { p_project: projectId }), supabase.rpc('sch_can_approve', { p_project: projectId }),
       supabase.from('sch_cost_params').select('*').eq('project_id', projectId).maybeSingle(),
+      supabase.rpc('sch_can_review', { p_project: projectId }),
+      supabase.from('sch_version_reviews').select('id, version_id, step, note, actor, at').eq('project_id', projectId).order('at', { ascending: false }).limit(80),
+      supabase.from('sch_raised').select('alert_key, issue_id').eq('project_id', projectId),
     ])
     if (get().projectId !== projectId) return
     if (fail('بارگذاری برنامهٔ زمان‌بندی', v.error ?? l.error ?? d.error ?? e.error)) { set({ loading: false }); return }
@@ -119,7 +130,9 @@ export const useSchedulingStore = create<State>((set, get) => {
       riskEvents: ((e.data ?? []) as unknown as Row[]).map((r): RiskEvent => ({ id: r.id, title: r.title, probability: Number(r.probability), days: { min: Number(r.days_min), likely: Number(r.days_likely), max: Number(r.days_max) }, cost: { min: Number(r.cost_min), likely: Number(r.cost_likely), max: Number(r.cost_max) }, activityUids: r.activity_uids ?? [], active: !!r.active })),
       simulations: ((s.data ?? []) as unknown as Row[]).map((r) => ({ id: r.id, versionId: r.version_id, seed: r.seed, iterations: r.iterations, params: r.params ?? {}, result: r.result ?? {}, createdAt: r.created_at })),
       history: ((h.data ?? []) as unknown as Row[]).map((r) => ({ id: r.id, versionId: r.version_id, action: r.action, detail: r.detail ?? {}, at: r.at, actor: r.actor })),
-      costParams: cpq.data ? mapCost(cpq.data as Row) : null, canEdit: !!ce.data, canApprove: !!ca.data, loading: false,
+      costParams: cpq.data ? mapCost(cpq.data as Row) : null, canEdit: !!ce.data, canApprove: !!ca.data, canReview: !!cr.data, loading: false,
+      reviews: ((rv.data ?? []) as unknown as Row[]).map((r): SchReview => ({ id: r.id, versionId: r.version_id, step: r.step, note: r.note ?? '', actor: r.actor, at: r.at })),
+      raised: new Map(((rs.data ?? []) as unknown as Row[]).map((r) => [r.alert_key as string, r.issue_id as string])),
     })
   },
 
@@ -195,6 +208,14 @@ export const useSchedulingStore = create<State>((set, get) => {
     return { versionId, counts: { activities: actRows.length, relations: relRows.length, matched: inherited, created: actRows.length - inherited } }
   },
 
+  submitVersion: async (versionId, note) => { const { error } = await supabase.rpc('sch_submit_version', { p_version: versionId, p_note: note }); if (fail('ارسال نسخه برای بررسی', error)) return false; await get().load(get().projectId!); return true },
+  reviewVersion: async (versionId, decision, note) => { const { error } = await supabase.rpc('sch_review_version', { p_version: versionId, p_decision: decision, p_note: note }); if (fail(decision === 'endorse' ? 'تأیید مشاور' : 'بازگرداندن نسخه', error)) return false; await get().load(get().projectId!); return true },
+  raiseIssue: async (key, title, description, severity, impactDays) => {
+    const projectId = get().projectId!
+    const { data, error } = await supabase.rpc('sch_raise_issue', { p_project: projectId, p_key: key, p_title: title, p_description: description, p_severity: severity, p_impact_days: Math.round(impactDays) })
+    if (fail('ثبت مسئله از هشدار', error)) return false
+    set({ raised: new Map(get().raised).set(key, String((data as { id: string }).id)) }); return true
+  },
   approve: async (versionId) => { const { error } = await supabase.rpc('sch_approve', { p_version: versionId }); if (fail('تأیید نسخه', error)) return false; await get().load(get().projectId!); return true },
   setBaseline: async (versionId) => { const { error } = await supabase.rpc('sch_set_baseline', { p_version: versionId }); if (fail('تعیین خط مبنا', error)) return false; await get().load(get().projectId!); return true },
   setCurrent: async (versionId) => { const { error } = await supabase.rpc('sch_set_current', { p_version: versionId }); if (fail('تعیین برنامهٔ جاری', error)) return false; await get().load(get().projectId!); return true },

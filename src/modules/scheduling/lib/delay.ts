@@ -32,9 +32,9 @@ export const CAUSE_FA = Object.fromEntries(CAUSES.map((c) => [c.key, c.label])) 
 export interface Contract {
   contractStart: string | null; contractFinish: string | null; contractValue: number
   ldPerDay: number; ldCapPct: number; noticeDays: number; docReviewDays: number; toleranceDays: number
-  concurrentCompensable: boolean; forceMajeureNotice: boolean
+  concurrentCompensable: boolean; forceMajeureNotice: boolean; /** an update must be submitted and endorsed by the consultant before the employer can approve it */ requireReview?: boolean
 }
-export const DEFAULT_CONTRACT: Contract = { contractStart: null, contractFinish: null, contractValue: 0, ldPerDay: 0, ldCapPct: 10, noticeDays: 14, docReviewDays: 14, toleranceDays: 0, concurrentCompensable: false, forceMajeureNotice: true }
+export const DEFAULT_CONTRACT: Contract = { contractStart: null, contractFinish: null, contractValue: 0, ldPerDay: 0, ldCapPct: 10, noticeDays: 14, docReviewDays: 14, toleranceDays: 0, concurrentCompensable: false, forceMajeureNotice: true, requireReview: false }
 
 export type EventStatus = 'draft' | 'assessed' | 'approved' | 'rejected'
 export interface DelayEvent {
@@ -216,4 +216,12 @@ export function suggestFromDocs(docs: { id: string; docNo: string; title: string
     out.push({ key: `doc:${d.id}`, title: `تأخیر در بررسی مدرک ${d.docNo}`, cause: 'drawing_approval', party: 'employer', eventStart: due, eventEnd: end, noticeDate: null, claimedDays: days, critical: null, sourceType: 'doc', sourceRef: d.id, note: `${d.title} — صدور ${d.issuedDate}، مهلت بررسی ${reviewDays} روز`, activityUids: d.activityUids })
   }
   return out.sort((a, b) => b.claimedDays - a.claimedDays)
+}
+
+/** approved change requests with a time effect that no delay event refers to yet */
+export function suggestFromChanges(changes: { id: string; crNumber: string; title: string; status: string; approvedDays: number | null; approvedAt: string | null; activityUids: string[] }[]): Suggestion[] {
+  return changes.filter((c) => ['approved', 'implementing', 'implemented', 'closed'].includes(c.status) && (c.approvedDays ?? 0) > 0 && c.approvedAt).map((c) => ({
+    key: `change:${c.id}`, title: `تغییر ${c.crNumber} — ${c.title}`.slice(0, 120), cause: 'change_order', party: 'employer' as Party, eventStart: c.approvedAt!.slice(0, 10), eventEnd: null, noticeDate: c.approvedAt!.slice(0, 10),
+    claimedDays: c.approvedDays!, critical: null, sourceType: 'change', sourceRef: c.id, note: 'درخواست تغییر تأییدشده با اثر زمانی', activityUids: c.activityUids,
+  }))
 }

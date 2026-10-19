@@ -58,7 +58,7 @@ export const CONSTRAINT_TYPES: ConsType[] = ['SNET', 'SNLT', 'FNET', 'FNLT', 'MS
 export const CONSTRAINT_LABEL_FA: Record<ConsType, string> = {
   SNET: 'شروع نه زودتر از', SNLT: 'شروع نه دیرتر از', FNET: 'پایان نه زودتر از', FNLT: 'پایان نه دیرتر از', MSO: 'باید شروع شود در', MFO: 'باید پایان یابد در',
 }
-export interface Task2 { id: string; dur: number; cal: DayCal; /** earliest start (day number) */ lower: number | null; cons: { type: ConsType; day: number } | null }
+export interface Task2 { id: string; dur: number; cal: DayCal; /** earliest start (day number) */ lower: number | null; cons: { type: ConsType; day: number } | null; /** «as late as possible»: start moved to the latest day that does not delay any successor */ alap?: boolean }
 export interface Dep2 { from: string; to: string; type: RelType; lag: number }
 export interface Net2 {
   tasks: Task2[]; deps: Dep2[]; def: DayCal
@@ -127,6 +127,22 @@ export function run2(net: Net2, durs?: ArrayLike<number>): Run2 {
     }
     if (d > 0) { ls[i] = Math.min(lsC, startFromFinish(t, lfC, d)); lf[i] = finishOf(t, ls[i], d) }
     else { ls[i] = lf[i] = t.cal.prevWork(Math.min(lsC, lfC)) }
+  }
+  // ALAP: push the task to the latest start that keeps every successor's EARLY dates (processed from the end so chains of ALAP tasks move together)
+  for (let k = n - 1; k >= 0; k--) {
+    const i = order[k], t = tasks[i]
+    if (!t.alap) continue
+    const d = dur(i)
+    let lfC = out[i].length ? Infinity : finish, lsC = Infinity
+    for (const e of out[i]) {
+      const s = e.s
+      if (e.type === 'FS') { const m = t.cal.prevWork(d > 0 ? es[s] - 1 : es[s]); lfC = Math.min(lfC, t.cal.dayOf(t.cal.idxBefore(m) - e.lag)) }
+      else if (e.type === 'SS') { const m = t.cal.prevWork(es[s]); lsC = Math.min(lsC, t.cal.dayOf(t.cal.idxBefore(m) - e.lag)) }
+      else if (e.type === 'FF') { const m = t.cal.prevWork(ef[s]); lfC = Math.min(lfC, t.cal.dayOf(t.cal.idxBefore(m) - e.lag)) }
+      else { const m = t.cal.prevWork(ef[s]); lsC = Math.min(lsC, t.cal.dayOf(t.cal.idxBefore(m) - e.lag)) }
+    }
+    const latest = d > 0 ? Math.min(lsC, Number.isFinite(lfC) ? startFromFinish(t, lfC, d) : Infinity) : t.cal.prevWork(Math.min(lsC, lfC))
+    if (Number.isFinite(latest) && latest > es[i]) { es[i] = latest; ef[i] = finishOf(t, latest, d) }
   }
   return { es, ef, ls, lf, finish }
 }

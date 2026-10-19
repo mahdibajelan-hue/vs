@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Download, FileDown } from 'lucide-react'
 import { jalaliText } from '../../execution/lib/periods'
@@ -11,6 +11,8 @@ import { qualityChecks, qualityScore } from '../lib/quality'
 import { wbsRollup } from '../lib/rollup'
 import { exportXer } from '../lib/xerExport'
 import { useSchedulingStore } from '../store/useSchedulingStore'
+import { useResourceStore, type CostSource } from '../store/useResourceStore'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import type { LiveModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
 
@@ -24,7 +26,12 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
   const checks = useMemo(() => qualityChecks(m.cur!.activities, m.cur!.relations, m.forecast, m.dataDate), [m.cur, m.forecast, m.dataDate])
   const score = qualityScore(checks)
   const baseActs = m.base?.activities ?? m.cur!.activities
-  const ev = useMemo(() => sCurve({ baseline: baseActs, current: m.cur!.activities, forecast: m.forecast, dataDate: m.dataDate }), [baseActs, m.cur, m.forecast, m.dataDate])
+  const rs = useResourceStore()
+  useEffect(() => { if (rs.projectId !== projectId) void rs.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [src, setSrc] = useState<CostSource>('manual')
+  const [cDate, setCDate] = useState(''), [cAmt, setCAmt] = useState(0), [cNote, setCNote] = useState('')
+  const costs = useMemo(() => (src === 'finance' ? rs.financeCosts : rs.costs.map((c) => ({ date: c.date, amount: c.amount }))), [src, rs.financeCosts, rs.costs])
+  const ev = useMemo(() => sCurve({ baseline: baseActs, current: m.cur!.activities, forecast: m.forecast, dataDate: m.dataDate, costs }), [baseActs, m.cur, m.forecast, m.dataDate, costs])
   const roll = useMemo(() => wbsRollup({ baseline: baseActs, current: m.cur!.activities, forecast: m.forecast, rows: m.progress.rows, dataDate: m.dataDate, depth }), [baseActs, m.cur, m.forecast, m.progress.rows, m.dataDate, depth])
   const tone = (s: string) => (s === 'good' ? 'good' : s === 'warn' ? 'warn' : 'bad') as 'good' | 'warn' | 'bad'
   const money = (v: number | null) => (v == null ? '—' : fa(Math.round(v)))
@@ -51,17 +58,38 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
 
       {ev && (
         <Tile title={<span>منحنی S: برنامه‌ای، واقعی و پیش‌بینی <Hint id="scurve" /></span>} hint={`تاریخ وضعیت ${d(m.dataDate)} · وزن بر پایهٔ ${ev.byBudget ? 'بودجه' : 'مدت'}`}>
-          <div style={{ height: 280 }} dir="ltr"><ResponsiveContainer width="100%" height="100%"><LineChart data={ev.points.map((p) => ({ x: jalaliText(p.date), date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <div style={{ height: 280 }} dir="ltr"><ResponsiveContainer width="100%" height="100%"><LineChart data={ev.points.map((p) => ({ x: jalaliText(p.date), date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast, cost: p.cost ?? null }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid {...gridProps} /><XAxis dataKey="x" {...axisProps} interval="preserveStartEnd" /><YAxis {...axisProps} width={36} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-            <Tooltip formatter={(v, n) => [`${fa(Number(v), 1)}٪`, n === 'planned' ? 'برنامه‌ای (خط مبنا)' : n === 'actual' ? 'واقعی' : 'پیش‌بینی']} />
+            <Tooltip formatter={(v, n) => [`${fa(Number(v), 1)}٪`, n === 'planned' ? 'برنامه‌ای (خط مبنا)' : n === 'actual' ? 'پیشرفت واقعی' : n === 'cost' ? 'هزینهٔ واقعی (٪ بودجه)' : 'پیش‌بینی']} />
             <ReferenceLine x={jalaliText(m.dataDate)} stroke={PB.slate} strokeDasharray="4 3" label={{ value: 'وضعیت', fontSize: 10, fill: PB.slate }} />
             <Line type="monotone" dataKey="planned" stroke={PB.blue} dot={false} strokeWidth={2} isAnimationActive={false} />
             <Line type="monotone" dataKey="forecast" stroke={PB.coral} strokeDasharray="5 4" dot={false} strokeWidth={2} isAnimationActive={false} connectNulls />
+            <Line type="monotone" dataKey="cost" stroke={PB.violet} strokeDasharray="2 3" dot={false} strokeWidth={2} isAnimationActive={false} connectNulls />
             <Line type="monotone" dataKey="actual" stroke={PB.teal} dot={false} strokeWidth={2.5} isAnimationActive={false} connectNulls />
           </LineChart></ResponsiveContainer></div>
-          <p className="im-helper" style={{ margin: '6px 0 0' }}>هزینهٔ واقعی (AC) در این ماژول نیست و از ماژول مالی خوانده نمی‌شود؛ بنابراین CPI محاسبه نمی‌شود. EV بر پایهٔ پیشرفت و بودجهٔ هر فعالیت است.</p>
+          <p className="im-helper" style={{ margin: '6px 0 0' }}>EV بر پایهٔ پیشرفت وزنی (بودجهٔ فعالیت‌ها) است. CPI = EV ÷ AC فقط با بودجهٔ همهٔ فعالیت‌ها و ثبت هزینهٔ واقعی محاسبه می‌شود.</p>
         </Tile>
       )}
+
+      <Section title={<span>هزینهٔ واقعی و شاخص عملکرد هزینه (CPI) <Hint id="cpi" /></span>} hint="منبع هزینهٔ واقعی را انتخاب کنید؛ هیچ داده‌ای از ماژول مالی کپی نمی‌شود">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label className="ex-lab">منبع هزینهٔ واقعی<select value={src} onChange={(e) => setSrc(e.target.value as CostSource)}><option value="manual">ثبت دستی در این ماژول</option><option value="finance">صورت‌وضعیت‌های کارکرد (ماژول مالی)</option></select></label>
+          {src === 'manual' && st.canEdit && <>
+            <label className="ex-lab">تاریخ<JalaliDateInput value={cDate} onChange={setCDate} /></label>
+            <label className="ex-lab">مبلغ (ریال)<input type="number" value={cAmt || ''} onChange={(e) => setCAmt(Number(e.target.value))} /></label>
+            <label className="ex-lab" style={{ flex: '1 1 160px' }}>یادداشت<input value={cNote} onChange={(e) => setCNote(e.target.value)} dir="auto" /></label>
+            <button className="im-btn im-btn-primary im-btn-sm" disabled={!cDate || !cAmt} onClick={() => void rs.addCost(cDate, cAmt, cNote).then((ok) => { if (ok) { setCAmt(0); setCNote('') } })}>ثبت هزینه</button>
+          </>}
+        </div>
+        {src === 'finance' && <p className="im-helper" style={{ margin: '6px 0 0' }}>مبلغ تأییدشدهٔ (در نبود آن، ناخالص) صورت‌وضعیت‌های «کارکرد» غیر از پیش‌نویس و ردشده، به تاریخ هر صورت‌وضعیت. {rs.financeCosts.length === 0 ? 'صورت‌وضعیتی برای این پروژه پیدا نشد.' : `${fa(rs.financeCosts.length)} صورت‌وضعیت.`}</p>}
+        <div className="fn-kpis" style={{ marginTop: 8 }}>
+          <KpiCard i={0} label="AC تا تاریخ وضعیت (ریال)" value={money(ev?.ac ?? null)} sub={costs.length ? `${fa(costs.length)} ردیف` : 'هزینه‌ای ثبت نشده'} />
+          <KpiCard i={1} label="CPI" value={ev?.cpi == null ? '—' : fa(ev.cpi, 2)} tone={ev?.cpi == null ? undefined : ev.cpi >= 1 ? 'good' : ev.cpi >= 0.9 ? 'warn' : 'bad'} sub={ev?.cpi == null ? 'به بودجهٔ همهٔ فعالیت‌ها و هزینهٔ واقعی نیاز است' : ev.cpi >= 1 ? 'هزینه کمتر از ارزش کسب‌شده' : 'هزینه بیش از ارزش کسب‌شده'} />
+          <KpiCard i={2} label="EAC = BAC ÷ CPI (ریال)" value={money(ev?.eac ?? null)} sub={ev?.bac != null ? `BAC ${money(ev.bac)}` : undefined} />
+          <KpiCard i={3} label="VAC = BAC − EAC (ریال)" value={money(ev?.vac ?? null)} tone={ev?.vac == null ? undefined : ev.vac >= 0 ? 'good' : 'bad'} />
+        </div>
+        {src === 'manual' && rs.costs.length > 0 && <div className="fn-tbl-wrap" style={{ maxHeight: 180, marginTop: 8 }}><table className="ex-lines"><tbody>{[...rs.costs].reverse().slice(0, 30).map((c) => <tr key={c.id}><td>{d(c.date)}</td><td className="num">{fa(Math.round(c.amount))}</td><td style={{ whiteSpace: 'normal' }}>{c.note}</td><td>{st.canEdit && <button className="im-btn im-btn-sm im-btn-danger" aria-label="حذف" onClick={() => void rs.removeCost(c.id)}>×</button>}</td></tr>)}</tbody></table></div>}
+      </Section>
 
       <Section title="پیشرفت و تاخیر به تفکیک WBS" hint="بخش یا شیرخانه‌ای که بیشترین تاخیر را دارد بالاتر است" flush>
         <div style={{ padding: '6px 12px', display: 'flex', gap: 8, alignItems: 'center' }}><span className="sub">سطح:</span>{[1, 2, 3].map((n) => <button key={n} className={`im-btn im-btn-sm${depth === n ? ' im-btn-primary' : ''}`} onClick={() => setDepth(n)}>{fa(n)}</button>)}

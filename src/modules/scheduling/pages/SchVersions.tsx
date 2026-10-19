@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Flag, GitCompare, Lock, Star, Trash2 } from 'lucide-react'
+import { CheckCircle2, Flag, GitCompare, Lock, Send, Star, Trash2, Undo2 } from 'lucide-react'
 import { jalaliText } from '../../execution/lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../../execution/components/common'
@@ -7,6 +7,7 @@ import { pickCalendar } from '../lib/schedule'
 import { compareVersions, type VersionDiff } from '../lib/compare'
 import { KIND_LABEL_FA, SOURCE_LABEL_FA, type SchVersion } from '../lib/types'
 import { useSchedulingStore } from '../store/useSchedulingStore'
+import { useDelayStore } from '../store/useDelayStore'
 import type { ScheduleModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
 import type { SchTab } from '../SchedulingApp'
@@ -14,8 +15,11 @@ import type { SchTab } from '../SchedulingApp'
 const ACTION_FA: Record<string, string> = { import: 'ورود نسخه', approve: 'تأیید نسخه', set_baseline: 'تعیین خط مبنا', set_current: 'تعیین برنامهٔ جاری' }
 
 /** versions, the approved baseline, the current schedule and the comparison of any two versions */
-export function SchVersions({ m, go }: { projectId: string; m: ScheduleModel; go: (t: SchTab) => void }) {
+export function SchVersions({ projectId, m, go }: { projectId: string; m: ScheduleModel; go: (t: SchTab) => void }) {
   const st = useSchedulingStore()
+  const ds = useDelayStore()
+  useEffect(() => { if (ds.projectId !== projectId) void ds.load(projectId) }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const requireReview = !!ds.contract.requireReview
   const versions = [...st.versions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const [busy, setBusy] = useState('')
   const [a, setA] = useState(''), [b, setB] = useState('')
@@ -45,9 +49,11 @@ export function SchVersions({ m, go }: { projectId: string; m: ScheduleModel; go
               <td>{KIND_LABEL_FA[v.kind]} · {SOURCE_LABEL_FA[v.source]}</td>
               <td>{v.dataDate ? jalaliText(v.dataDate) : '—'}</td>
               <td className="num">{fa(Number((v.summary as { activities?: number }).activities ?? 0))}{(v.warnings?.length ?? 0) > 0 && <div className="sub">{fa(v.warnings.length)} هشدار</div>}</td>
-              <td>{v.status === 'draft' ? <Chip tone="warn">پیش‌نویس</Chip> : <Chip tone="good"><Lock size={11} style={{ verticalAlign: -1 }} /> تأییدشده</Chip>}</td>
+              <td>{v.status === 'draft' ? <><Chip tone="warn">پیش‌نویس</Chip>{v.reviewStatus === 'submitted' && <Chip tone="neutral">در بررسی مشاور</Chip>}{v.reviewStatus === 'endorsed' && <Chip tone="good">تأیید مشاور</Chip>}{v.reviewStatus === 'returned' && <Chip tone="bad">بازگشت‌خورده</Chip>}</> : <Chip tone="good"><Lock size={11} style={{ verticalAlign: -1 }} /> تأییدشده</Chip>}</td>
               <td style={{ whiteSpace: 'nowrap' }}>
-                {v.status === 'draft' && st.canApprove && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy === v.id} title="قفل‌کردن نسخه؛ برگشت‌پذیر نیست" onClick={() => { if (window.confirm(`نسخهٔ «${v.label}» تأیید و قفل شود؟ پس از آن قابل ویرایش نیست.`)) void act(v.id, () => st.approve(v.id)) }}><CheckCircle2 size={12} /> تأیید</button>}{' '}
+                {v.status === 'draft' && st.canEdit && (v.reviewStatus === 'none' || v.reviewStatus === 'returned') && <button className="im-btn im-btn-sm" disabled={busy === v.id} title="ارسال برای بررسی مشاور؛ تا پایان بررسی ویرایش‌پذیر نیست" onClick={() => { const note = window.prompt('توضیح برای بررسی‌کننده (اختیاری):', '') ; if (note !== null) void act(v.id, () => st.submitVersion(v.id, note)) }}><Send size={12} /> ارسال برای بررسی</button>}{' '}
+                {v.status === 'draft' && v.reviewStatus === 'submitted' && st.canReview && <><button className="im-btn im-btn-sm im-btn-primary" disabled={busy === v.id} onClick={() => void act(v.id, () => st.reviewVersion(v.id, 'endorse', ''))}><CheckCircle2 size={12} /> تأیید مشاور</button>{' '}<button className="im-btn im-btn-sm im-btn-danger" disabled={busy === v.id} onClick={() => { const note = window.prompt('دلیل بازگرداندن (الزامی):', ''); if (note && note.trim()) void act(v.id, () => st.reviewVersion(v.id, 'return', note.trim())) }}><Undo2 size={12} /> بازگرداندن</button></>}{' '}
+                {v.status === 'draft' && st.canApprove && (v.reviewStatus === 'endorsed' || !requireReview) && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy === v.id} title="قفل‌کردن نسخه؛ برگشت‌پذیر نیست" onClick={() => { if (window.confirm(`نسخهٔ «${v.label}» تأیید و قفل شود؟ پس از آن قابل ویرایش نیست.`)) void act(v.id, () => st.approve(v.id)) }}><CheckCircle2 size={12} /> تأیید نهایی</button>}{' '}
                 {v.status === 'approved' && !v.isBaseline && st.canApprove && <button className="im-btn im-btn-sm" disabled={busy === v.id} onClick={() => { if (window.confirm(`«${v.label}» خط مبنای پروژه شود؟ خط مبنای فعلی کنار گذاشته می‌شود (برای مقایسه می‌ماند).`)) void act(v.id, () => st.setBaseline(v.id)) }}><Star size={12} /> خط مبنا</button>}{' '}
                 {!v.isCurrent && st.canEdit && <button className="im-btn im-btn-sm" disabled={busy === v.id} onClick={() => void act(v.id, () => st.setCurrent(v.id))}><Flag size={12} /> برنامهٔ جاری</button>}{' '}
                 {v.status === 'draft' && st.canEdit && <button className="im-btn im-btn-sm im-btn-danger" aria-label="حذف پیش‌نویس" disabled={busy === v.id} onClick={() => { if (window.confirm(`پیش‌نویس «${v.label}» حذف شود؟`)) void act(v.id, () => st.deleteDraft(v.id)) }}><Trash2 size={12} /></button>}
@@ -110,6 +116,14 @@ export function SchVersions({ m, go }: { projectId: string; m: ScheduleModel; go
           )}
           {diff.counts.added + diff.counts.removed + diff.counts.changed + diff.counts.relationsAdded + diff.counts.relationsRemoved + diff.counts.relationsChanged === 0 && <p className="im-helper">دو نسخه از نظر فعالیت‌ها، تاریخ‌ها، مدت‌ها و روابط یکسان‌اند.</p>}
         </>
+      )}
+
+      {st.reviews.length > 0 && (
+        <Section title={<span>گردش‌کار بررسی و تأیید <Hint id="sch-workflow" /></span>} flush>
+          <div className="fn-tbl-wrap" style={{ maxHeight: 220 }}><table className="ex-lines"><tbody>
+            {st.reviews.slice(0, 30).map((r) => <tr key={r.id}><td>{{ submit: 'ارسال برای بررسی', endorse: 'تأیید مشاور', return: 'بازگشت برای اصلاح', approve: 'تأیید نهایی کارفرما' }[r.step]}</td><td>{nameOf(r.versionId)}</td><td style={{ whiteSpace: 'normal' }}>{r.note || '—'}</td><td className="sub">{new Date(r.at).toLocaleString('fa-IR')}</td></tr>)}
+          </tbody></table></div>
+        </Section>
       )}
 
       {st.history.length > 0 && (

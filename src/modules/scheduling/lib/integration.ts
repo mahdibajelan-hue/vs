@@ -8,8 +8,16 @@ export interface DocInfo { id: string; docNo: string; title: string; status: str
 export interface PackageInfo { id: string; code: string; title: string; status: string; delivery: 'delivered' | 'partial' | 'pending'; expectedDelivery: string | null; plannedDelivery: string | null }
 export interface RiskInfo { id: string; code: string; title: string; open: boolean }
 export interface IssueInfo { id: string; title: string; open: boolean }
+/** a parcel is «released» for construction when its handover-of-documents stage of the land module is done */
+export interface ParcelInfo { id: string; code: string; title: string; released: boolean; plannedRelease: string | null; actualRelease: string | null }
+export interface ChangeInfo { id: string; crNumber: string; title: string; status: string; proposedDays: number; approvedDays: number | null; approvedAt?: string | null }
+const CHANGE_PENDING = new Set(['submitted', 'evaluating', 'awaiting_approval', 'returned'])
+const CHANGE_APPROVED = new Set(['approved', 'implementing', 'implemented', 'closed'])
 export interface LinkSources {
   exec: Map<string, ExecInfo>; docs: Map<string, DocInfo>; packages: Map<string, PackageInfo>; risks: Map<string, RiskInfo>; issues: Map<string, IssueInfo>
+  parcels?: Map<string, ParcelInfo>; changes?: Map<string, ChangeInfo>
+  /** man / equipment counts of the submitted daily work reports (actual resource use) */
+  execUsage?: { date: string; kind: 'man' | 'equip'; name: string; qty: number }[]
   /** newest report date with approved work in the project (the data date of the live status) */
   execLastDate?: string | null
   /** stoppages of the daily reports with their responsibility / critical / notice assessment (delay register of the execution module) */
@@ -17,7 +25,7 @@ export interface LinkSources {
   /** the execution settings' contractual notice period (days) */
   execNoticeDays?: number | null
 }
-export const emptySources = (): LinkSources => ({ exec: new Map(), docs: new Map(), packages: new Map(), risks: new Map(), issues: new Map() })
+export const emptySources = (): LinkSources => ({ exec: new Map(), docs: new Map(), packages: new Map(), risks: new Map(), issues: new Map(), parcels: new Map(), changes: new Map() })
 
 export type Severity = 'high' | 'medium' | 'low'
 export interface Blocker { kind: LinkTarget; refId: string; severity: Severity; text: string; /** date by which it was needed */ needDate: string | null }
@@ -78,6 +86,20 @@ export function integrateActivity(uid: string, links: SchLink[], src: LinkSource
         res.blockers.push({ kind: 'mtl_package', refId: p.id, severity: need < o.today ? 'high' : 'medium', needDate: need, text: `تحویل بستهٔ ${p.code} برای ${expected} پیش‌بینی شده، بعد از تاریخ نیاز (${need}).` })
         res.startNoEarlier = !res.startNoEarlier || expected > res.startNoEarlier ? expected : res.startNoEarlier
       } else if (!expected && need && daysBetween(o.today, need) <= horizon) res.blockers.push({ kind: 'mtl_package', refId: p.id, severity: 'low', needDate: need, text: `برای بستهٔ ${p.code} تاریخ تحویل پیش‌بینی ثبت نشده و تاریخ نیاز نزدیک است.` })
+    } else if (l.targetType === 'land_parcel') {
+      const p = src.parcels?.get(l.targetId); if (!p) continue
+      res.supplyTotal++
+      if (p.released) { res.supplyDelivered++; continue }
+      const expected = p.plannedRelease
+      if (need && need < o.today && !expected) res.blockers.push({ kind: 'land_parcel', refId: p.id, severity: 'high', needDate: need, text: `قطعهٔ ${p.code} هنوز برای اجرا آزاد نشده و تاریخ نیاز (${need}) گذشته است.` })
+      else if (need && expected && expected > need) {
+        res.blockers.push({ kind: 'land_parcel', refId: p.id, severity: need < o.today ? 'high' : 'medium', needDate: need, text: `آزادسازی قطعهٔ ${p.code} برای ${expected} برنامه‌ریزی شده، بعد از تاریخ نیاز (${need}).` })
+        res.startNoEarlier = !res.startNoEarlier || expected > res.startNoEarlier ? expected : res.startNoEarlier
+      } else if (!expected && need && daysBetween(o.today, need) <= horizon) res.blockers.push({ kind: 'land_parcel', refId: p.id, severity: 'low', needDate: need, text: `برای قطعهٔ ${p.code} تاریخ آزادسازی ثبت نشده و تاریخ نیاز نزدیک است.` })
+    } else if (l.targetType === 'change_request') {
+      const c = src.changes?.get(l.targetId); if (!c) continue
+      if (CHANGE_PENDING.has(c.status) && c.proposedDays > 0) res.blockers.push({ kind: 'change_request', refId: c.id, severity: 'medium', needDate: null, text: `درخواست تغییر ${c.crNumber} با اثر پیشنهادی ${c.proposedDays} روز هنوز تصمیم‌گیری نشده است.` })
+      else if (CHANGE_APPROVED.has(c.status) && (c.approvedDays ?? 0) > 0) res.blockers.push({ kind: 'change_request', refId: c.id, severity: 'low', needDate: null, text: `تغییر ${c.crNumber} با ${c.approvedDays} روز اثر زمانی تأیید شده؛ در تحلیل تاخیرات ثبت کنید.` })
     } else if (l.targetType === 'risk') { if (src.risks.get(l.targetId)?.open) res.openRisks++ }
     else if (l.targetType === 'issue') { if (src.issues.get(l.targetId)?.open) res.openIssues++ }
   }

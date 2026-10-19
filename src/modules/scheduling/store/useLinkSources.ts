@@ -4,7 +4,7 @@ import { useEpcStore } from '../../execution/store/useEpcStore'
 import { useEpcModel } from '../../execution/lib/useEpcModel'
 import { useExecutionModel } from '../../execution/lib/useExecutionModel'
 import { useMaterialControlStore } from '../../material/store/useMaterialControlStore'
-import { emptySources, type DocInfo, type ExecInfo, type IssueInfo, type LinkSources, type PackageInfo, type RiskInfo } from '../lib/integration'
+import { emptySources, type ChangeInfo, type ParcelInfo, type DocInfo, type ExecInfo, type IssueInfo, type LinkSources, type PackageInfo, type RiskInfo } from '../lib/integration'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const OPEN_ISSUE = new Set(['open', 'in_progress', 'pending_approval'])
@@ -34,6 +34,34 @@ export function useRiskIssueSources(projectId: string) {
   return state
 }
 
+/** Land parcels (released for construction = «docs_handover» stage done) and change requests of the project. */
+export function useParcelChangeSources(projectId: string) {
+  const [state, setState] = useState<{ parcels: ParcelInfo[]; changes: ChangeInfo[] }>({ parcels: [], changes: [] })
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      const [p, c] = await Promise.all([
+        supabase.from('la_parcels').select('id, code, title').eq('master_project_id', projectId).order('km_start').limit(2000),
+        supabase.from('chg_change_requests').select('id, cr_number, title, status, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at').eq('master_project_id', projectId).order('created_at').limit(1000),
+      ])
+      const parcels = (p.data ?? []) as unknown as Row[]
+      const st: Row[] = []
+      for (let i = 0; i < parcels.length; i += 200) {
+        const { data } = await supabase.from('la_stages').select('parcel_id, status, planned_date, actual_date').eq('stage_key', 'docs_handover').in('parcel_id', parcels.slice(i, i + 200).map((x) => x.id))
+        st.push(...((data ?? []) as unknown as Row[]))
+      }
+      if (!live) return
+      const sOf = new Map(st.map((x) => [x.parcel_id, x]))
+      setState({
+        parcels: parcels.map((x): ParcelInfo => { const s = sOf.get(x.id); return { id: x.id, code: x.code ?? '', title: x.title ?? '', released: s?.status === 'done', plannedRelease: s?.planned_date ?? null, actualRelease: s?.status === 'done' ? s?.actual_date ?? null : null } }),
+        changes: ((c.data ?? []) as unknown as Row[]).map((x): ChangeInfo => ({ id: x.id, crNumber: x.cr_number ?? '', title: x.title ?? '', status: x.status ?? '', proposedDays: Number(x.proposed_schedule_impact_days ?? 0), approvedDays: x.approved_schedule_impact_days == null ? null : Number(x.approved_schedule_impact_days), approvedAt: x.approved_at ?? null })),
+      })
+    })()
+    return () => { live = false }
+  }, [projectId])
+  return state
+}
+
 /**
  * Everything the schedule reads from the other modules, as plain facts (see integration.ts): execution progress (approved / reported / rejected quantity), engineering documents with their
  * status and dates, supply packages with delivery status, and the project's risks and issues. Nothing is copied into the scheduling tables — links only hold ids.
@@ -48,6 +76,7 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
   const items = useMaterialControlStore((s) => s.items)
   const stages = useMaterialControlStore((s) => s.stages)
   const ri = useRiskIssueSources(projectId)
+  const pc = useParcelChangeSources(projectId)
   useEffect(() => { if (!csLoaded) void fetchControl() }, [csLoaded, fetchControl])
 
   const sources = useMemo(() => {
@@ -84,9 +113,13 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
       const planned = its.map((it) => it.plannedDelivery).filter((x): x is string => !!x).sort().pop() ?? p.plannedEnd
       s.packages.set(p.id, { id: p.id, code: p.code, title: p.title, status: p.status, delivery, expectedDelivery: open.length ? open[open.length - 1] : null, plannedDelivery: planned } satisfies PackageInfo)
     }
+    s.parcels = new Map(pc.parcels.map((x) => [x.id, x]))
+    s.changes = new Map(pc.changes.map((x) => [x.id, x]))
+    const wk = new Map(ex.reports.filter((r) => r.formKey === 'work' && r.status !== 'draft' && r.status !== 'rejected').map((r) => [r.id, r.reportDate]))
+    s.execUsage = ex.resources.filter((x) => wk.has(x.reportId) && x.activeQty > 0).map((x) => ({ date: wk.get(x.reportId) as string, kind: x.kind, name: x.name, qty: x.activeQty }))
     for (const r of ri.risks) s.risks.set(r.id, r)
     for (const i of ri.issues) s.issues.set(i.id, i)
     return s
-  }, [ex.approved, ex.registered, ex.lines, ex.reports, ex.stoppages, ex.settings, engDocs, epcM.docFc, packages, items, stages, ri.risks, ri.issues, projectId])
+  }, [ex.approved, ex.registered, ex.lines, ex.reports, ex.stoppages, ex.resources, ex.settings, engDocs, epcM.docFc, packages, items, stages, ri.risks, ri.issues, pc, projectId])
   return { sources, ready: csLoaded && ri.loaded }
 }

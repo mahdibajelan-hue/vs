@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
+import { ScheduleBacklink } from '../../scheduling/components/ScheduleBacklink'
 import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, CircleDashed, Cog, FileText, FlaskConical, FolderTree, Gauge, MessageSquare, PenLine, Send, ShieldAlert, Workflow, Zap, type LucideIcon } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { supabase } from '../../../lib/supabaseClient'
@@ -83,7 +84,7 @@ export function DocTable({ docs, all, m, can, lens, projectId, total, upd }: { d
   )
 }
 
-function Detail({ x, can, lens, upd }: { x: EngDocRow; can: boolean; lens: EngLens; projectId: string; upd: (x: EngDocRow, p: Partial<EngDocRow>) => void }) {
+function Detail({ x, can, lens, projectId, upd }: { x: EngDocRow; can: boolean; lens: EngLens; projectId: string; upd: (x: EngDocRow, p: Partial<EngDocRow>) => void }) {
   const [list, setList] = useState<Comment[]>([])
   const [text, setText] = useState('')
   const [err, setErr] = useState('')
@@ -93,6 +94,7 @@ function Detail({ x, can, lens, upd }: { x: EngDocRow; can: boolean; lens: EngLe
   const facts: [string, string][] = [['Rev', x.rev], ['نوع مدرک', x.category], ['مرحله', x.phase], ['هدف صدور', x.targetIssue], ['پیمان', x.contract], ['مسئول تهیه', x.preparer], ['مسئول تأیید', x.approver]]
   return (
     <div style={{ display: 'grid', gap: 10, padding: '6px 4px' }}>
+      <div><ScheduleBacklink projectId={projectId} kind="eng_doc" id={x.id} /></div>
       <div style={{ display: 'flex', gap: '6px 18px', flexWrap: 'wrap', fontSize: 12 }}>{facts.filter(([, v]) => v).map(([k, v]) => <span key={k}><span className="sub">{k}: </span><b dir="auto">{v}</b></span>)}</div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label className="ex-lab">وضعیت{can ? <select value={x.status} onChange={(e) => upd(x, { status: e.target.value as EngStatus })}>{STATUS_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select> : <b>{ENG_STATUS_LABEL_FA[x.status]}</b>}</label>

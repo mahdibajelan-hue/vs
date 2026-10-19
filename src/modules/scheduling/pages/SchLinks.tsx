@@ -11,7 +11,7 @@ import { Hint } from '../components/Hint'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
 const READY = { ready: ['good', 'آماده'], at_risk: ['warn', 'در خطر'], blocked: ['bad', 'مانع'], unknown: ['neutral', 'نامشخص'] } as const
-const HINT: Record<LinkTarget, string> = { exec_activity: 'link-exec', eng_doc: 'link-doc', mtl_package: 'link-package', risk: 'link-risk', issue: 'link-risk' }
+const HINT: Record<LinkTarget, string> = { exec_activity: 'link-exec', eng_doc: 'link-doc', mtl_package: 'link-package', risk: 'link-risk', issue: 'link-risk', land_parcel: 'link-parcel', change_request: 'link-change' }
 
 /** Links of a schedule activity to execution activities, engineering documents, supply packages, risks and issues (many-to-many, by stable ids) and the readiness they imply. */
 export function SchLinks({ projectId, m }: { projectId: string; m: LiveModel }) {
@@ -34,6 +34,8 @@ export function SchLinks({ projectId, m }: { projectId: string; m: LiveModel }) 
     if (l.targetType === 'eng_doc') { const x = src.docs.get(l.targetId); return x ? `${x.docNo} — ${x.title}` : 'مدرک (نامعتبر)' }
     if (l.targetType === 'mtl_package') { const x = src.packages.get(l.targetId); return x ? `${x.code} — ${x.title}` : 'بسته (نامعتبر)' }
     if (l.targetType === 'risk') { const x = src.risks.get(l.targetId); return x ? `${x.code} — ${x.title}` : 'ریسک (نامعتبر)' }
+    if (l.targetType === 'land_parcel') { const x = src.parcels?.get(l.targetId); return x ? `${x.code} — ${x.title}` : 'قطعه (نامعتبر)' }
+    if (l.targetType === 'change_request') { const x = src.changes?.get(l.targetId); return x ? `${x.crNumber} — ${x.title}` : 'درخواست تغییر (نامعتبر)' }
     const x = src.issues.get(l.targetId); return x ? x.title : 'مسئله (نامعتبر)'
   }
   const options = useMemo(() => {
@@ -43,10 +45,12 @@ export function SchLinks({ projectId, m }: { projectId: string; m: LiveModel }) 
       : type === 'eng_doc' ? [...src.docs.values()].map((x) => ({ id: x.id, text: `${x.docNo} — ${x.title}` }))
       : type === 'mtl_package' ? [...src.packages.values()].map((x) => ({ id: x.id, text: `${x.code} — ${x.title}` }))
       : type === 'risk' ? [...src.risks.values()].map((x) => ({ id: x.id, text: `${x.code} — ${x.title}` }))
+      : type === 'land_parcel' ? [...(src.parcels?.values() ?? [])].map((x) => ({ id: x.id, text: `${x.code} — ${x.title}` }))
+      : type === 'change_request' ? [...(src.changes?.values() ?? [])].map((x) => ({ id: x.id, text: `${x.crNumber} — ${x.title}` }))
       : [...src.issues.values()].map((x) => ({ id: x.id, text: x.title }))
     return all.filter((o) => !n || o.text.toLowerCase().includes(n)).slice(0, 120)
   }, [type, tq, src])
-  const needs = type === 'eng_doc' || type === 'mtl_package'
+  const needs = type === 'eng_doc' || type === 'mtl_package' || type === 'land_parcel'
   const add = async () => {
     if (!sel || !target) return
     setBusy(true)

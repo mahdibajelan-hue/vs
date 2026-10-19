@@ -18,6 +18,8 @@ import { fetchProjectIntelligence } from '../../../modules/reporting/lib/dataAda
 import { currentState, riskLevel } from '../../../modules/risk/lib/riskScore'
 import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
 import type { ImIssue } from '../../../modules/issues/types'
+import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
+import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
 
 import {
   actionFromRow, activityFromRow, gateFromRow, healthFromRow, lifecycleFromRow, milestoneFromRow,
@@ -324,6 +326,27 @@ async function applyRiskIssueSection(base: RadarData, masterProjectId: string): 
   }
 }
 
+/** Replaces the mock «delay» signals with the real schedule picture: slip against the baseline and the contract, overdue critical work, lost delay notices, liquidated damages. */
+function applyScheduleSection(base: RadarData, s: ScheduleSummary): RadarData {
+  const fmt = (n: number) => new Intl.NumberFormat('fa-IR').format(Math.round(n))
+  type Draft = { severity: SignalSeverity; title: string; titleEn: string; subject: string; detail: string; impact: string; rootCause: string; action: string }
+  const drafts: Draft[] = []
+  if (s.contractorDelay != null && s.contractorDelay > 0) drafts.push({ severity: s.contractorDelay > 30 ? 'critical' : 'high', title: 'پایان پیش‌بینی بعد از تاریخ قرارداد', titleEn: 'Forecast finish past contract date', subject: `${fmt(s.contractorDelay)} روز پس از تاریخ اصلاح‌شده`, detail: `+${fmt(s.contractorDelay)} روز`, impact: s.ldAmount > 0 ? `جریمهٔ تأخیر برآوردی ${fmt(s.ldAmount)} ریال` : 'احتمال جریمهٔ تأخیر قراردادی', rootCause: 'پیشرفت کمتر از برنامه و یا تأخیر غیرقابل‌تمدید', action: 'بازنگری برنامهٔ بازیابی و بررسی ادعاهای تمدید در «برنامه‌ریزی ← تحلیل تاخیرات»' })
+  else if (s.baselineSlip != null && s.baselineSlip > 7) drafts.push({ severity: s.baselineSlip > 45 ? 'high' : 'medium', title: 'انحراف پایان از خط مبنا', titleEn: 'Finish slipped vs baseline', subject: `${fmt(s.baselineSlip)} روز تقویمی`, detail: `+${fmt(s.baselineSlip)} روز`, impact: 'تمدیدهای مصوب این انحراف را پوشش می‌دهد یا باید تعیین تکلیف شود', rootCause: 'مقایسهٔ پیش‌بینی با خط مبنای تأییدشده', action: 'بررسی مسیر بحرانی و فعالیت‌های عقب‌افتاده' })
+  if (s.criticalOverdue > 0) drafts.push({ severity: s.criticalOverdue > 5 ? 'critical' : 'high', title: 'فعالیت بحرانی عقب‌افتاده', titleEn: 'Critical activities overdue', subject: `${fmt(s.criticalOverdue)} فعالیت بحرانی`, detail: `${fmt(s.criticalOverdue)} مورد`, impact: 'هر روز تأخیر روی مسیر بحرانی مستقیم به پایان پروژه منتقل می‌شود', rootCause: 'فعالیت‌هایی که طبق برنامه باید تمام می‌شدند', action: 'اولویت منابع و رفع موانع این فعالیت‌ها' })
+  if (s.noticesLost > 0) drafts.push({ severity: 'high', title: 'مهلت اخطار تأخیر از دست رفته', titleEn: 'Delay-notice deadline missed', subject: `${fmt(s.noticesLost)} رویداد`, detail: `${fmt(s.noticesLost)} رویداد`, impact: 'حق ادعای تمدید زمان یا هزینه در خطر است', rootCause: 'اخطار کتبی در مهلت قراردادی ارسال نشده', action: 'ثبت اخطار یا ارزیابی اثر حقوقی در ماژول اجرا و برنامه‌ریزی' })
+  if (s.pendingEvents > 0) drafts.push({ severity: 'low', title: 'رویدادهای تأخیر ارزیابی‌نشده', titleEn: 'Delay events not yet assessed', subject: `${fmt(s.pendingEvents)} رویداد`, detail: `${fmt(s.pendingEvents)} مورد`, impact: 'اثر زمانی هنوز اندازه‌گیری نشده است', rootCause: 'رویدادها بدون فعالیت متأثر ثبت شده‌اند', action: 'انتخاب فعالیت‌های متأثر و اندازه‌گیری اثر' })
+  const others = base.signals.filter((x) => x.category !== 'delay')
+  if (!drafts.length) return { ...base, signals: others }
+  const bands: Record<SignalSeverity, [number, number]> = SEVERITY_RADIUS_RANGE
+  const signals: RadarSignal[] = drafts.map((d, i) => ({
+    id: `sch-${i}`, category: 'delay', severity: d.severity, title: d.title, subject: d.subject, detail: d.detail, impact: d.impact, rootCause: d.rootCause, recommendedAction: d.action,
+    titleEn: d.titleEn, subjectEn: d.subject, detailEn: d.detail, impactEn: d.impact, rootCauseEn: d.rootCause, recommendedActionEn: d.action,
+    angle: Math.round((i / drafts.length) * 360) + 40, radius: bands[d.severity][0] + (bands[d.severity][1] - bands[d.severity][0]) * ((i * 0.618) % 1),
+  }))
+  return { ...base, status: escalateStatus(base.status, signals), signals: [...others, ...signals] }
+}
+
 /**
  * Builds the Radar picture for a master project: starts from the deterministic mock (so nothing
  * flashes blank while the live fetches are in flight or a section has no data yet), then replaces
@@ -377,6 +400,14 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     if (contract) result = { ...result, contract }
   } catch (err) {
     console.warn('[radar] live contract fetch failed, showing mock contract instead', err)
+  }
+
+  // --- Schedule (time control) -----------------------------------------------
+  try {
+    const sum = await loadScheduleSummary(masterProjectId)
+    if (sum) result = applyScheduleSection(result, sum)
+  } catch (err) {
+    console.warn('[radar] live schedule fetch failed, showing mock delay signals instead', err)
   }
 
   return result

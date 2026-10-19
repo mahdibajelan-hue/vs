@@ -67,3 +67,27 @@ import('./monteCarlo.ts').then(({ runMonteCarlo }) => {
   assert.ok(mc.warnings.some((w) => w.includes('تقویم')))
   console.log('engine2: all assertions passed')
 })
+
+// ── ALAP and progress override
+import('./schedule.ts').then(({ computeSchedule: cs }) => {
+  const mk = (code, dur, o = {}) => ({ id: code, uid: code, versionId: 'v', code, sourceId: code, name: code, wbsCode: '', wbsPath: '', type: dur === 0 ? 'milestone' : 'task', calendarId: null, origDuration: dur, remDuration: null, plannedStart: '2026-01-03', plannedFinish: null, actualStart: null, actualFinish: null, pctComplete: null, constraintType: '', constraintDate: null, budgetCost: 0, owner: '', sort: 0, ...o })
+  const r = (p, s, type = 'FS', lag = 0) => ({ id: p + s, versionId: 'v', predId: p, succId: s, type, lag })
+  // main path A(10)→C(2); side task B(3) → C: ALAP moves B to finish right before C
+  const acts = [mk('A', 10), mk('B', 3), mk('C', 2)]
+  const early = cs({ activities: acts, relations: [r('A', 'C'), r('B', 'C')], calendar: CAL, mode: 'plan' })
+  const alap = cs({ activities: [acts[0], { ...acts[1], constraintType: 'ALAP' }, acts[2]], relations: [r('A', 'C'), r('B', 'C')], calendar: CAL, mode: 'plan' })
+  assert.equal(early.byId.get('B').start, '2026-01-03'); assert.ok(alap.byId.get('B').start > early.byId.get('B').start)
+  assert.equal(alap.projectFinish, early.projectFinish)                       // no successor is delayed
+  assert.equal(alap.byId.get('B').finish, alap.byId.get('A').finish)           // B ends the day A ends
+  assert.equal(alap.warnings.filter((w) => w.includes('ALAP')).length, 0)
+  // retained logic vs progress override: B has started but its predecessor A has not even begun
+  const prog = [mk('A', 10), mk('B', 10, { actualStart: '2026-01-03', pctComplete: 50, remDuration: 5 })]
+  const inp = { activities: prog, relations: [r('A', 'B')], calendar: CAL, mode: 'forecast', dataDate: '2026-01-10' }
+  const ret = cs(inp), ovr = cs({ ...inp, progressMode: 'override' })
+  assert.ok(ret.byId.get('B').finish > ovr.byId.get('B').finish)               // retained: remaining work waits for A
+  assert.equal(ovr.byId.get('B').finish, '2026-01-17')                          // override: 5 working days from the data date (Jan 11 is a holiday)
+  const retAdv = cs({ ...inp, calendars: new Map([['x', { ...CAL, workDays: [0, 1, 2, 3, 4, 5, 6] }]]), activities: [{ ...prog[0], calendarId: 'x' }, prog[1]] })
+  const ovrAdv = cs({ ...inp, progressMode: 'override', calendars: new Map([['x', { ...CAL, workDays: [0, 1, 2, 3, 4, 5, 6] }]]), activities: [{ ...prog[0], calendarId: 'x' }, prog[1]] })
+  assert.ok(retAdv.byId.get('B').finish > ovrAdv.byId.get('B').finish)
+  console.log('engine2 alap/override: ok')
+})

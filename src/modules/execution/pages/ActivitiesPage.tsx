@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { ScheduleBacklink } from '../../scheduling/components/ScheduleBacklink'
 import { Check, Copy, Download, FilePlus2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -83,6 +84,7 @@ function ActivitiesView({ projectId }: { projectId: string }) {
     { key: 'i', label: 'کد فهرست', render: (a) => <span className="strong fn-code">{a.itemNo}</span>, sort: (a) => a.itemNo },
     { key: 't', label: 'شرح فعالیت', render: (a) => <><span className="strong">{a.title}</span><span className="sub">{[a.area, a.front, a.station, a.kmFrom != null ? `km ${a.kmFrom}–${a.kmTo ?? ''}` : '', a.remark].filter(Boolean).join(' · ')}</span>{a.parentActivityId && <Chip tone="warn">اضافه‌بها{a.surchargePct ? ` ${fa(a.surchargePct, 1)}٪` : ''} — به ردیف {m.actById.get(a.parentActivityId)?.rowNo || m.actById.get(a.parentActivityId)?.itemNo}</Chip>}</> },
     { key: 'u', label: 'واحد', render: (a) => a.unit },
+    { key: 'sch', label: 'برنامه', render: (a) => <ScheduleBacklink projectId={projectId} kind="exec_activity" id={a.id} /> },
     { key: 'k', label: 'نوع', render: (a) => (a.kind === 'standard' ? <Chip>ردیف</Chip> : <Chip tone="warn">{a.kind === 'starred' ? 'ستاره‌دار' : 'خاص'}</Chip>) },
     { key: 'b', label: 'مقدار مبنا', num: true, render: (a) => fa(a.baseQty, 2), sort: (a) => a.baseQty },
     { key: 'p', label: 'بهای واحد', num: true, render: (a) => fa(a.unitPrice) },

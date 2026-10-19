@@ -23,11 +23,11 @@ export interface SchVersion {
   id: string; projectId: string; label: string; kind: VersionKind; source: VersionSource; fileName: string; fileHash: string
   dataDate: string | null; projectStart: string | null; projectFinish: string | null
   status: 'draft' | 'approved' | 'superseded'; isBaseline: boolean; isCurrent: boolean; parentVersionId: string | null
-  approvedBy: string | null; approvedAt: string | null; mapping: Record<string, string>; summary: Record<string, unknown>; warnings: ImportIssue[]; note: string; createdBy: string | null; createdAt: string
+  reviewStatus: 'none' | 'submitted' | 'endorsed' | 'returned'; approvedBy: string | null; approvedAt: string | null; mapping: Record<string, string>; summary: Record<string, unknown>; warnings: ImportIssue[]; note: string; createdBy: string | null; createdAt: string
 }
 
-export type LinkTarget = 'exec_activity' | 'eng_doc' | 'mtl_package' | 'risk' | 'issue'
-export const LINK_LABEL_FA: Record<LinkTarget, string> = { exec_activity: 'فعالیت اجرایی', eng_doc: 'مدرک مهندسی', mtl_package: 'بستهٔ تأمین کالا', risk: 'ریسک', issue: 'مسئله' }
+export type LinkTarget = 'exec_activity' | 'eng_doc' | 'mtl_package' | 'risk' | 'issue' | 'land_parcel' | 'change_request'
+export const LINK_LABEL_FA: Record<LinkTarget, string> = { exec_activity: 'فعالیت اجرایی', eng_doc: 'مدرک مهندسی', mtl_package: 'بستهٔ تأمین کالا', risk: 'ریسک', issue: 'مسئله', land_parcel: 'قطعهٔ زمین (تحصیل اراضی)', change_request: 'درخواست تغییر' }
 export interface SchLink { id: string; projectId: string; activityUid: string; targetType: LinkTarget; targetId: string; needKind: 'start' | 'continue' | 'finish'; needDate: string | null; note: string }
 
 export interface ImportIssue { level: 'error' | 'warning' | 'info'; row?: number; code?: string; message: string }

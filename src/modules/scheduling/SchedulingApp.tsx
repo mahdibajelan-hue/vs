@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { BookOpen, ChartGantt, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload } from 'lucide-react'
+import { BookOpen, ChartGantt, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -14,7 +14,7 @@ import { useExecutionStore } from '../execution/store/useExecutionStore'
 import { useMaterialStore } from '../material/store/useMaterialStore'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
-export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'edit' | 'risk' | 'help'
+export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
 const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد برنامه', icon: Gauge, color: '#0ea5a4' },
   { id: 'import', label: 'ورود برنامه', icon: Upload, color: '#6366f1' },
@@ -24,6 +24,7 @@ const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'links', label: 'اتصال‌ها و آمادگی', icon: Link2, color: '#14b8a6' },
   { id: 'delay', label: 'تحلیل تاخیرات', icon: Scale, color: '#ef4444' },
   { id: 'health', label: 'سلامت و منحنی S', icon: Stethoscope, color: '#22c55e' },
+  { id: 'resources', label: 'منابع و هیستوگرام', icon: Users, color: '#06b6d4' },
   { id: 'edit', label: 'ویرایش برنامه', icon: PencilRuler, color: '#f59e0b' },
   { id: 'risk', label: 'تحلیل کمی (ماژول ریسک)', icon: Dices, color: '#ec4899' },
   { id: 'help', label: 'راهنمای ماژول', icon: BookOpen, color: '#64748b' },
@@ -44,7 +45,9 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
   const matLoaded = useMaterialStore((s) => s.loaded)
   const fetchMaterial = useMaterialStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<SchTab>('dash')
+  // the shared inbox opens a waiting item here: it leaves the target tab / project in sessionStorage (read once)
+  const [opened] = useState(() => { try { const t = sessionStorage.getItem('sch.openTab'), p = sessionStorage.getItem('sch.openProject'); sessionStorage.removeItem('sch.openTab'); sessionStorage.removeItem('sch.openProject'); return { tab: t as SchTab | null, project: p } } catch { return { tab: null, project: null } } })
+  const [tab, setTab] = useState<SchTab>(opened.tab && NAV.some((n) => n.id === opened.tab) ? opened.tab : 'dash')
   const [projectId, setProjectId] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
 
@@ -56,7 +59,8 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
   }, [])
   useEffect(() => {
     if (!projects.length || projectId) return
-    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
+    if (opened.project && projects.some((p) => p.id === opened.project)) setProjectId(opened.project)
+    else if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   const loading = !mdLoaded || !exLoaded
 

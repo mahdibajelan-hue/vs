@@ -8,7 +8,7 @@ import { compile2, DayCal, dayOfIso, floats2, isoOfDay, run2, startFromFinish2, 
  *  - 'plan'     : every activity with its ORIGINAL duration from the project start — the schedule as the logic alone would produce it;
  *  - 'forecast' : status at the data date — finished activities are fixed facts, running ones continue with their remaining duration from the data date,
  *                 and not-started ones start no earlier than the data date (the logic of the unfinished work decides the forecast completion).
- * Activities may run on their own calendars and carry SNET/SNLT/FNET/FNLT/MSO/MFO constraints — such networks use the calendar-day engine (engine2.ts); ALAP is reported as not applied.
+ * Activities may run on their own calendars and carry SNET/SNLT/FNET/FNLT/MSO/MFO constraints — such networks use the calendar-day engine (engine2.ts); ALAP is applied (start moved to the latest day that delays no successor).
  */
 export type ScheduleMode = 'plan' | 'forecast'
 export interface ActivityResult {
@@ -43,6 +43,8 @@ export interface ScheduleInput {
   calendars?: Map<string, CalendarDef>
   dataDate?: string | null
   mode: ScheduleMode
+  /** forecast: how started activities treat unfinished predecessors — 'retained' (remaining work still waits for them, the default) or 'override' (it continues from the data date regardless) */
+  progressMode?: 'retained' | 'override'
   /** total float (working days) up to which an activity counts as near-critical */
   nearCriticalDays?: number
   /** activity id → ISO date before which it cannot start (e.g. the expected delivery of a material it needs) */
@@ -120,6 +122,7 @@ export function buildNetwork(inp: ScheduleInput): Network {
     const pred = byId.get(r.predId), succ = byId.get(r.succId)
     if (!pred || !succ || !live.has(r.succId)) continue
     if (live.has(r.predId)) {
+      if (forecast && inp.progressMode === 'override' && status.get(r.succId) === 'in_progress') continue
       if (forecast && status.get(r.predId) === 'in_progress' && (r.type === 'SS' || r.type === 'SF') && pred.actualStart) {
         const b = boundOf(r, pred, durOf.get(r.succId) ?? 0); if (b != null) notBefore.set(r.succId, Math.max(notBefore.get(r.succId) ?? 0, b))
         continue
@@ -140,6 +143,7 @@ export function buildNetwork(inp: ScheduleInput): Network {
 export function needsAdvanced(inp: ScheduleInput): boolean {
   const acts = inp.activities.filter(isSchedulable)
   if (acts.some((a) => CONSTRAINT_TYPES.includes(a.constraintType as ConsType) && a.constraintType !== 'SNET' && a.constraintDate)) return true
+  if (acts.some((a) => a.constraintType === 'ALAP')) return true
   if (!inp.calendars?.size) return false
   const def = JSON.stringify(inp.calendar ?? DEFAULT_CALENDAR)
   return acts.some((a) => { const c = a.calendarId ? inp.calendars!.get(a.calendarId) : undefined; return !!c && JSON.stringify(c) !== def })
@@ -186,11 +190,10 @@ export function buildNetwork2(inp: ScheduleInput): Network2 {
     let cons: Task2['cons'] = null
     if (a.constraintDate && CONSTRAINT_TYPES.includes(a.constraintType as ConsType)) cons = { type: a.constraintType as ConsType, day: dayOfIso(a.constraintDate) }
     else if (a.constraintType && a.constraintType !== 'ALAP') warnings.push(`قید «${a.constraintType}» فعالیت ${a.code} شناخته نشد و اعمال نشد.`)
-    else if (a.constraintType === 'ALAP') warnings.push(`قید ALAP فعالیت ${a.code} در محاسبات اعمال نشد.`)
     let lo = forecast ? dataDay : startDay
     const sne = inp.startNoEarlier?.get(a.id); if (sne) lo = Math.max(lo, dayOfIso(sne))
     lower.set(a.id, lo)
-    tasks.push({ id: a.id, dur, cal: calFor(a), lower: lo, cons })
+    tasks.push({ id: a.id, dur, cal: calFor(a), lower: lo, cons, alap: a.constraintType === 'ALAP' })
   }
   const live = new Set(tasks.map((t) => t.id))
   const taskOf = new Map(tasks.map((t) => [t.id, t]))
@@ -209,6 +212,7 @@ export function buildNetwork2(inp: ScheduleInput): Network2 {
       return null
     }
     if (live.has(r.predId)) {
+      if (forecast && inp.progressMode === 'override' && status.get(r.succId) === 'in_progress') continue
       if (forecast && status.get(r.predId) === 'in_progress' && (r.type === 'SS' || r.type === 'SF') && pred.actualStart) { const b = actualBound(); if (b != null) raise(b); continue }
       deps.push({ from: r.predId, to: r.succId, type: r.type, lag: r.lag })
     } else if (forecast) {

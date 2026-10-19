@@ -1,0 +1,1 @@
+-- Rolls back 004: restore inbox_my_items (drop the wrapper, rename inbox_my_items_base back), restore sch_approve / guards from 001, drop tables sch_raised, sch_version_reviews, sch_actual_costs, sch_assignments, sch_resources and the columns review_status / require_review. Review with care before running.

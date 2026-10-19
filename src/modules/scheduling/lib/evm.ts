@@ -4,7 +4,7 @@ import { weightsOf } from './variance'
 import type { SchActivity } from './types'
 
 /** S-curves (planned = baseline, actual up to the data date, forecast after it) and the earned-value / earned-schedule figures. Weights: budget when every task has one, else original duration. */
-export interface CurvePoint { date: string; planned: number; actual: number | null; forecast: number | null }
+export interface CurvePoint { date: string; planned: number; actual: number | null; forecast: number | null; /** cumulative actual cost as % of the budget at completion */ cost?: number | null }
 export interface EvmResult {
   points: CurvePoint[]
   plannedAtDD: number; actualAtDD: number
@@ -13,6 +13,8 @@ export interface EvmResult {
   /** earned schedule: the date at which the baseline had earned what is earned now, and the time-based SPI */
   earnedScheduleDate: string | null; spiT: number | null
   byBudget: boolean
+  /** actual cost to the data date, cost performance index, estimate at completion and variance at completion (only with actual cost entries and budgets) */
+  ac: number | null; cpi: number | null; eac: number | null; vac: number | null
 }
 
 const lin = (date: string, s: string, f: string): number => {
@@ -21,7 +23,7 @@ const lin = (date: string, s: string, f: string): number => {
   return (daysBetween(s, date) / Math.max(1, daysBetween(s, f))) * 100
 }
 
-export function sCurve(o: { baseline: SchActivity[]; current: SchActivity[]; forecast: ScheduleResult; dataDate: string; points?: number }): EvmResult | null {
+export function sCurve(o: { baseline: SchActivity[]; current: SchActivity[]; forecast: ScheduleResult; dataDate: string; points?: number; costs?: { date: string; amount: number }[] }): EvmResult | null {
   const tasks = o.baseline.filter((a) => a.type === 'task' && a.plannedStart && a.plannedFinish)
   if (!tasks.length) return null
   const w = weightsOf(o.baseline), total = tasks.reduce((s, a) => s + (w.get(a.id) ?? 0), 0)
@@ -55,7 +57,10 @@ export function sCurve(o: { baseline: SchActivity[]; current: SchActivity[]; for
     return s + (w.get(a.id) ?? 0) * Math.min(100, v)
   }, 0) / total
 
-  const points: CurvePoint[] = sorted.map((d) => ({ date: d, planned: plannedAt(d), actual: d <= o.dataDate ? actualAt(d) : null, forecast: d >= o.dataDate ? forecastAt(d) : null }))
+  const costSorted = [...(o.costs ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+  const acAt = (d: string) => costSorted.filter((c) => c.date <= d).reduce((s, c) => s + c.amount, 0)
+  const budgetTotal = tasks.every((a) => a.budgetCost > 0) ? total : null
+  const points: CurvePoint[] = sorted.map((d) => ({ date: d, planned: plannedAt(d), actual: d <= o.dataDate ? actualAt(d) : null, forecast: d >= o.dataDate ? forecastAt(d) : null, cost: costSorted.length && budgetTotal && d <= o.dataDate ? (acAt(d) / budgetTotal) * 100 : null }))
   const plannedAtDD = plannedAt(o.dataDate), actualAtDD = actualAt(o.dataDate)
   // earned schedule: walk the planned curve to the date where it equals the actual %
   let esDate: string | null = null
@@ -69,7 +74,11 @@ export function sCurve(o: { baseline: SchActivity[]; current: SchActivity[]; for
   const at = daysBetween(start, o.dataDate)
   const byBudget = tasks.every((a) => a.budgetCost > 0)
   const bac = byBudget ? total : null
+  const acDD = costSorted.length && bac != null ? acAt(o.dataDate) : null
+  const evMoney = bac != null ? (bac * actualAtDD) / 100 : null
+  const cpi = acDD != null && acDD > 0 && evMoney != null ? evMoney / acDD : null
   return {
+    ac: acDD, cpi, eac: cpi && bac != null ? bac / cpi : null, vac: cpi && bac != null ? bac - bac / cpi : null,
     points, plannedAtDD, actualAtDD, byBudget,
     pv: bac != null ? (bac * plannedAtDD) / 100 : null, ev: bac != null ? (bac * actualAtDD) / 100 : null, bac,
     sv: bac != null ? (bac * (actualAtDD - plannedAtDD)) / 100 : null,

@@ -19,10 +19,12 @@ import { SchHelp } from './SchHelp'
 import { SchEdit } from './SchEdit'
 import { SchDelay } from './SchDelay'
 import { SchHealth } from './SchHealth'
+import { SchResources } from './SchResources'
 
 export function SchPage(p: { projectId: string; tab: SchTab; go: (t: SchTab) => void }) { return <EpcGate><Inner {...p} /></EpcGate> }
 const KEY = 'sch.view'
-const readView = (): { live: boolean; baselineId: string | null } => { try { const x = JSON.parse(localStorage.getItem(KEY) ?? '{}'); return { live: !!x.live, baselineId: x.baselineId ?? null } } catch { return { live: false, baselineId: null } } }
+type View = { live: boolean; baselineId: string | null; progressMode: 'retained' | 'override' }
+const readView = (): View => { try { const x = JSON.parse(localStorage.getItem(KEY) ?? '{}'); return { live: !!x.live, baselineId: x.baselineId ?? null, progressMode: x.progressMode === 'override' ? 'override' : 'retained' } } catch { return { live: false, baselineId: null, progressMode: 'retained' } } }
 function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t: SchTab) => void }) {
   const [view, setView] = useState(readView)
   const setV = (v: Partial<typeof view>) => { const n = { ...view, ...v }; setView(n); try { localStorage.setItem(KEY, JSON.stringify(n)) } catch { /* private mode */ } }
@@ -38,19 +40,22 @@ function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t:
     : tab === 'links' ? <SchLinks projectId={projectId} m={m} />
     : tab === 'delay' ? <SchDelay projectId={projectId} m={m} />
     : tab === 'health' ? <SchHealth projectId={projectId} m={m} />
+    : tab === 'resources' ? <SchResources projectId={projectId} m={m} />
     : tab === 'risk' ? <SchRiskLink projectId={projectId} m={m} />
     : <><Alerts projectId={projectId} m={m} go={go} /><SchDash projectId={projectId} m={m} go={go} /></>
   return <div style={{ display: 'grid', gap: 12 }}><ViewBar m={m} view={view} setV={setV} />{body}</div>
 }
 
 /** live status (actuals from approved site work) and the version the deviations are measured against */
-function ViewBar({ m, view, setV }: { m: LiveModel; view: { live: boolean; baselineId: string | null }; setV: (v: { live?: boolean; baselineId?: string | null }) => void }) {
+function ViewBar({ m, view, setV }: { m: LiveModel; view: View; setV: (v: Partial<View>) => void }) {
   const st = useSchedulingStore()
   const bases = st.versions.filter((v) => v.status !== 'draft')
   return (
     <div className="im-card" style={{ padding: '8px 12px', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', fontSize: 12.5 }}>
       <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto' }} checked={view.live} onChange={(e) => setV({ live: e.target.checked })} /><Radio size={14} aria-hidden /> وضعیت زنده از اجرا <Hint id="live-status" /></label>
       {view.live && m.liveInfo && <span className="sub">تاریخ وضعیت {m.liveInfo.dataDate ?? '—'} · {m.liveInfo.changed.length} فعالیت از کار تأییدشده به‌روز شد{m.liveInfo.unlinkedStarted ? ` · ${m.liveInfo.unlinkedStarted} فعالیت شروع‌شده بدون اتصال` : ''}</span>}
+      <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>منطق فعالیت‌های در جریان <Hint id="progress-mode" />
+        <select value={view.progressMode} onChange={(e) => setV({ progressMode: e.target.value as View['progressMode'] })} style={{ width: 'auto' }}><option value="retained">Retained Logic (حفظ منطق)</option><option value="override">Progress Override (نادیده‌گرفتن پیش‌نیازهای ناتمام)</option></select></label>
       <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginInlineStart: 'auto' }}>مبنای مقایسه
         <select value={view.baselineId ?? ''} onChange={(e) => setV({ baselineId: e.target.value || null })} style={{ width: 'auto' }}><option value="">خط مبنای پروژه</option>{bases.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
     </div>
@@ -58,6 +63,8 @@ function ViewBar({ m, view, setV }: { m: LiveModel; view: { live: boolean; basel
 }
 
 function Alerts({ projectId, m, go }: { projectId: string; m: LiveModel; go: (t: SchTab) => void }) {
+  const st = useSchedulingStore()
+  const [busy, setBusy] = useState('')
   const { classified, recon } = useDelayAnalysis(projectId, m)
   const q = qualityChecks(m.cur!.activities, m.cur!.relations, m.forecast, m.dataDate)
   const list = buildAlerts({ today: m.today, recon, classified, criticalOverdue: m.overdue.filter((o) => o.critical).length, negativeFloat: [...m.forecast.byId.values()].filter((x) => (x.totalFloat ?? 0) < 0).length, unlinkedStarted: m.liveInfo?.unlinkedStarted ?? 0, live: !!m.liveInfo, qualityBad: q.filter((c) => c.status === 'bad').length })
@@ -65,7 +72,11 @@ function Alerts({ projectId, m, go }: { projectId: string; m: LiveModel; go: (t:
   return (
     <div className="im-card" style={{ padding: '8px 12px', display: 'grid', gap: 4 }}>
       <b style={{ fontSize: 12.5 }}>نیاز به توجه</b>
-      {list.slice(0, 8).map((a, i) => <button key={i} type="button" onClick={() => go(a.tab)} style={{ all: 'unset', cursor: 'pointer', fontSize: 12.5, color: a.level === 'bad' ? '#dc2626' : a.level === 'warn' ? '#b45309' : undefined }}>{a.level === 'bad' ? '● ' : a.level === 'warn' ? '◐ ' : '○ '}{a.text}</button>)}
+      {list.slice(0, 8).map((a) => { const issue = st.raised.get(a.key); return (
+        <div key={a.key} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+          <button type="button" onClick={() => go(a.tab)} style={{ all: 'unset', cursor: 'pointer', flex: 1, color: a.level === 'bad' ? '#dc2626' : a.level === 'warn' ? '#b45309' : undefined }}>{a.level === 'bad' ? '● ' : a.level === 'warn' ? '◐ ' : '○ '}{a.text}</button>
+          {a.level !== 'info' && (issue ? <span className="sub" title="در ماژول مسائل ثبت شده است">مسئله ثبت شد ✓</span> : st.canEdit && <button className="im-btn im-btn-sm" disabled={busy === a.key} title="ثبت این هشدار به‌عنوان مسئله در ماژول مسائل (برای پیگیری و مسئول‌دار شدن)" onClick={() => { setBusy(a.key); void st.raiseIssue(a.key, `برنامه زمان‌بندی: ${a.text.slice(0, 110)}`, a.text, a.level === 'bad' ? 'high' : 'medium', a.days ?? 0).finally(() => setBusy('')) }}>تبدیل به مسئله</button>)}
+        </div>) })}
     </div>
   )
 }

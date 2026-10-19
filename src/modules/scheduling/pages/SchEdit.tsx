@@ -139,9 +139,9 @@ function Activities({ vid, bundle, draft, plan }: { vid: string; bundle: Version
                   <td className="num">{a.type === 'milestone' ? '۰' : <NumCell value={a.origDuration} disabled={!draft} onCommit={(x) => upd(a.id, { origDuration: x ?? 0 })} />}</td>
                   <td><select value={a.calendarId ?? ''} disabled={!draft} onChange={(e) => upd(a.id, { calendarId: e.target.value || null })} style={{ width: 'auto' }}>{bundle.calendars.map((c) => <option key={c.id} value={c.id}>{c.name || c.code}</option>)}</select></td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <select value={a.constraintType} disabled={!draft} onChange={(e) => upd(a.id, { constraintType: e.target.value, constraintDate: e.target.value ? a.constraintDate : null })} style={{ width: 'auto' }}><option value="">بدون قید</option>{CONSTRAINT_TYPES.map((c) => <option key={c} value={c}>{CONSTRAINT_LABEL_FA[c]}</option>)}</select>
-                    {a.constraintType && <JalaliDateInput value={a.constraintDate ?? ''} onChange={(x) => draft && upd(a.id, { constraintDate: x || null })} />}
-                    {a.constraintType && !a.constraintDate && <Chip tone="warn">تاریخ؟</Chip>}
+                    <select value={a.constraintType} disabled={!draft} onChange={(e) => upd(a.id, { constraintType: e.target.value, constraintDate: e.target.value ? a.constraintDate : null })} style={{ width: 'auto' }}><option value="">بدون قید</option><option value="ALAP">در دیرترین زمان ممکن (ALAP)</option>{CONSTRAINT_TYPES.map((c) => <option key={c} value={c}>{CONSTRAINT_LABEL_FA[c]}</option>)}</select>
+                    {a.constraintType && a.constraintType !== 'ALAP' && <JalaliDateInput value={a.constraintDate ?? ''} onChange={(x) => draft && upd(a.id, { constraintDate: x || null })} />}
+                    {a.constraintType && a.constraintType !== 'ALAP' && !a.constraintDate && <Chip tone="warn">تاریخ؟</Chip>}
                   </td>
                   <td className="sub">{r ? <>{d(r.start)} → {d(r.finish)}{r.totalFloat != null && r.totalFloat < 0 && <Chip tone="bad">شناوری {fa(r.totalFloat)}</Chip>}{r.critical && r.totalFloat != null && r.totalFloat >= 0 && <Chip tone="bad">بحرانی</Chip>}</> : '—'}</td>
                   <td>{draft && <button className="im-btn im-btn-sm im-btn-danger" aria-label="حذف فعالیت" onClick={() => { if (window.confirm(`فعالیت ${a.code} و رابطه‌هایش حذف شود؟`)) void st.deleteActivity(vid, a.id) }}><Trash2 size={12} /></button>}</td>

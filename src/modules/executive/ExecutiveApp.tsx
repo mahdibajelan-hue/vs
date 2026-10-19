@@ -3,6 +3,7 @@ import { Briefcase, Loader2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { ScheduleStatusCard } from './ScheduleStatusCard'
 import { PortfolioDashboardPage } from '../reporting/pages/PortfolioDashboardPage'
 
 const MODULE_ACCENT = '#6366f1'
@@ -51,6 +52,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
+        <ScheduleStatusCard />
         <PortfolioDashboardPage />
       </div>
     </div>
