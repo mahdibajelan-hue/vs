@@ -1,4 +1,5 @@
-import { Fragment, lazy, Suspense } from 'react'
+import { Fragment, lazy, Suspense, useEffect } from 'react'
+import { useMasterDataStore } from './modules/masterdata/store/useMasterDataStore'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAppThemeSync } from './components/common/useAppTheme'
 import { useModuleStore } from './store/useModuleStore'
@@ -7,24 +8,6 @@ import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessSt
 import { ModuleHub } from './components/Auth/ModuleHub'
 import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { ProfileForm } from './components/Auth/ProfileForm'
-import App from './App'
-import { RiskApp } from './modules/risk/RiskApp'
-import { ChangeApp } from './modules/changeManagement/ChangeApp'
-import { IssuesApp } from './modules/issues/IssuesApp'
-import { AdminApp } from './pages/AdminApp'
-import { ReportingApp } from './modules/reporting/ReportingApp'
-import { ExecutiveApp } from './modules/executive/ExecutiveApp'
-import { FinanceApp } from './modules/finance/FinanceApp'
-import { MaterialApp } from './modules/material/MaterialApp'
-import { ExecutionApp } from './modules/execution/ExecutionApp'
-import { EngineeringApp } from './modules/engineering/EngineeringApp'
-import { SchedulingApp } from './modules/scheduling/SchedulingApp'
-import { CompetencyApp } from './modules/competency/CompetencyApp'
-import { EstimatorApp } from './modules/estimator/EstimatorApp'
-import { LifecycleApp } from './modules/lifecycle/LifecycleApp'
-import { MissionsApp } from './modules/missions/MissionsApp'
-import { LandAcqApp } from './modules/landacq/LandAcqApp'
-import { StageGateApp } from './modules/stagegate/StageGateApp'
 import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
 import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
@@ -32,6 +15,54 @@ import { PersonalityCandidatePage } from './modules/personality/pages/Personalit
 import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
 import { InboxOverlay } from './modules/inbox/components/InboxOverlay'
 import { GlobalSearch } from './components/search/GlobalSearch'
+
+// Every module is its own chunk: the hub opens without parsing them all, and each is warmed in the background once the hub is idle.
+const moduleLoaders = {
+  RiskApp: () => import('./modules/risk/RiskApp').then((m) => ({ default: m.RiskApp })),
+  ChangeApp: () => import('./modules/changeManagement/ChangeApp').then((m) => ({ default: m.ChangeApp })),
+  IssuesApp: () => import('./modules/issues/IssuesApp').then((m) => ({ default: m.IssuesApp })),
+  ReportingApp: () => import('./modules/reporting/ReportingApp').then((m) => ({ default: m.ReportingApp })),
+  ExecutiveApp: () => import('./modules/executive/ExecutiveApp').then((m) => ({ default: m.ExecutiveApp })),
+  FinanceApp: () => import('./modules/finance/FinanceApp').then((m) => ({ default: m.FinanceApp })),
+  MaterialApp: () => import('./modules/material/MaterialApp').then((m) => ({ default: m.MaterialApp })),
+  ExecutionApp: () => import('./modules/execution/ExecutionApp').then((m) => ({ default: m.ExecutionApp })),
+  EngineeringApp: () => import('./modules/engineering/EngineeringApp').then((m) => ({ default: m.EngineeringApp })),
+  SchedulingApp: () => import('./modules/scheduling/SchedulingApp').then((m) => ({ default: m.SchedulingApp })),
+  CompetencyApp: () => import('./modules/competency/CompetencyApp').then((m) => ({ default: m.CompetencyApp })),
+  EstimatorApp: () => import('./modules/estimator/EstimatorApp').then((m) => ({ default: m.EstimatorApp })),
+  LifecycleApp: () => import('./modules/lifecycle/LifecycleApp').then((m) => ({ default: m.LifecycleApp })),
+  MissionsApp: () => import('./modules/missions/MissionsApp').then((m) => ({ default: m.MissionsApp })),
+  LandAcqApp: () => import('./modules/landacq/LandAcqApp').then((m) => ({ default: m.LandAcqApp })),
+  StageGateApp: () => import('./modules/stagegate/StageGateApp').then((m) => ({ default: m.StageGateApp })),
+  AdminApp: () => import('./pages/AdminApp').then((m) => ({ default: m.AdminApp })),
+  App: () => import('./App').then((m) => ({ default: m.default })),
+}
+const App = lazy(moduleLoaders.App)
+const RiskApp = lazy(moduleLoaders.RiskApp)
+const ChangeApp = lazy(moduleLoaders.ChangeApp)
+const IssuesApp = lazy(moduleLoaders.IssuesApp)
+const ReportingApp = lazy(moduleLoaders.ReportingApp)
+const ExecutiveApp = lazy(moduleLoaders.ExecutiveApp)
+const FinanceApp = lazy(moduleLoaders.FinanceApp)
+const MaterialApp = lazy(moduleLoaders.MaterialApp)
+const ExecutionApp = lazy(moduleLoaders.ExecutionApp)
+const EngineeringApp = lazy(moduleLoaders.EngineeringApp)
+const SchedulingApp = lazy(moduleLoaders.SchedulingApp)
+const CompetencyApp = lazy(moduleLoaders.CompetencyApp)
+const EstimatorApp = lazy(moduleLoaders.EstimatorApp)
+const LifecycleApp = lazy(moduleLoaders.LifecycleApp)
+const MissionsApp = lazy(moduleLoaders.MissionsApp)
+const LandAcqApp = lazy(moduleLoaders.LandAcqApp)
+const StageGateApp = lazy(moduleLoaders.StageGateApp)
+const AdminApp = lazy(moduleLoaders.AdminApp)
+/** warm the module chunks one by one while the hub is idle, so a click finds its code already downloaded */
+function warmModules() {
+  const names = Object.keys(moduleLoaders) as (keyof typeof moduleLoaders)[]
+  let i = 0
+  const next = () => { if (i >= names.length) return; void moduleLoaders[names[i++]]().catch(() => undefined).finally(() => setTimeout(next, 150)) }
+  const idle = (window as unknown as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback
+  if (idle) idle(next); else setTimeout(next, 1500)
+}
 
 // One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
 const landRepo = createLandRepo()
@@ -59,6 +90,15 @@ export function RootApp() {
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const backToRadar = useModuleStore((s) => s.backToRadar)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
+
+  // right after sign-in: load the shared project list (most modules wait for it) and warm the module code in the background
+  const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
+  const masterLoaded = useMasterDataStore((s) => s.loaded)
+  useEffect(() => {
+    if (!isAuthed) return
+    if (!masterLoaded) void fetchMasterData()
+    warmModules()
+  }, [isAuthed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Candidate self-service link (?candidate=<token>) — a public, unauthenticated page reached
   // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
@@ -184,7 +224,9 @@ export function RootApp() {
   // «صفحهٔ اول ماژول» bumps moduleResetKey, which remounts the active module at its first page.
   return (
     <>
-      <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
+      <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}><Loader2 size={26} className="animate-spin text-brand-400" /></div>}>
+        <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
+      </Suspense>
       <InboxOverlay />
       <GlobalSearch />
     </>

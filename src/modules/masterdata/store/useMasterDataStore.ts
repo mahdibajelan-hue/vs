@@ -83,6 +83,8 @@ interface MasterDataState {
   deleteDependency: (id: string) => Promise<void>
 }
 
+let inflight: Promise<void> | null = null
+
 export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
   organizations: [],
   portfolios: [],
@@ -97,40 +99,42 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
   loaded: false,
 
   fetchAll: async () => {
+    // callers on every module entry share one in-flight load instead of each starting their own
+    if (inflight) return inflight
     set({ loading: true })
-    const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }] =
-      await Promise.all([
-        supabase.from('organizations').select('*').order('name'),
-        supabase.from('portfolios').select('*').order('name'),
-        supabase.from('programs').select('*').order('name'),
-        supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id, email, full_name').order('email'),
-      ])
-    if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5)) {
-      set({ loading: false })
-      return
-    }
-    // Fetched separately and never allowed to block the rest of master data: this table is new
-    // (Portfolio Dashboard's dependency widget) and a deployment that hasn't run that migration
-    // yet must not lose Organizations/Portfolios/Programs/Projects just because this one query
-    // 404s — it simply comes back empty until the migration is applied.
-    const { data: deps, error: e6 } = await supabase.from('master_project_dependencies').select('*')
-    if (e6) console.warn('[masterdata] master_project_dependencies unavailable (migration not yet applied?):', e6.message)
-    // new in this release: fetched on their own so a database that has not run the migration still loads everything else
-    const [{ data: parties, error: e7 }, { data: team, error: e8 }] = await Promise.all([supabase.from('master_project_parties').select('*'), supabase.from('master_project_team').select('*').order('sort')])
-    if (e7 || e8) console.warn('[masterdata] parties/team unavailable (migration not yet applied?):', (e7 ?? e8)?.message)
-    set({
-      parties: e7 ? [] : (parties ?? []).map(projectPartyFromRow),
-      team: e8 ? [] : (team ?? []).map(teamMemberFromRow),
-      organizations: (orgs ?? []).map(organizationFromRow),
-      portfolios: (pf ?? []).map(portfolioFromRow),
-      programs: (pg ?? []).map(programFromRow),
-      projects: (pj ?? []).map(masterProjectFromRow),
-      users: (users ?? []).map((u) => ({ id: u.id, email: u.email, fullName: u.full_name })),
-      dependencies: e6 ? [] : (deps ?? []).map(projectDependencyFromRow),
-      loading: false,
-      loaded: true,
-    })
+    inflight = (async () => {
+      // everything in one parallel wave; the tables added by later migrations may be missing and must never block the rest
+      const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }, { data: deps, error: e6 }, { data: parties, error: e7 }, { data: team, error: e8 }] =
+        await Promise.all([
+          supabase.from('organizations').select('*').order('name'),
+          supabase.from('portfolios').select('*').order('name'),
+          supabase.from('programs').select('*').order('name'),
+          supabase.from('master_projects').select('*').order('created_at', { ascending: false }),
+          supabase.from('profiles').select('id, email, full_name').order('email'),
+          supabase.from('master_project_dependencies').select('*'),
+          supabase.from('master_project_parties').select('*'),
+          supabase.from('master_project_team').select('*').order('sort'),
+        ])
+      if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5)) {
+        set({ loading: false })
+        return
+      }
+      if (e6) console.warn('[masterdata] master_project_dependencies unavailable (migration not yet applied?):', e6.message)
+      if (e7 || e8) console.warn('[masterdata] parties/team unavailable (migration not yet applied?):', (e7 ?? e8)?.message)
+      set({
+        parties: e7 ? [] : (parties ?? []).map(projectPartyFromRow),
+        team: e8 ? [] : (team ?? []).map(teamMemberFromRow),
+        organizations: (orgs ?? []).map(organizationFromRow),
+        portfolios: (pf ?? []).map(portfolioFromRow),
+        programs: (pg ?? []).map(programFromRow),
+        projects: (pj ?? []).map(masterProjectFromRow),
+        users: (users ?? []).map((u) => ({ id: u.id, email: u.email, fullName: u.full_name })),
+        dependencies: e6 ? [] : (deps ?? []).map(projectDependencyFromRow),
+        loading: false,
+        loaded: true,
+      })
+    })().finally(() => { inflight = null })
+    return inflight
   },
 
   createOrganization: async (data) => {
