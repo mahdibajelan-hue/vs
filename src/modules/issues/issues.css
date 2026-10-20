@@ -36,10 +36,12 @@
   background: var(--im-bg);
   color: var(--im-text);
   height: 100vh;
+  height: 100dvh; /* phones: fit the visible area so the body's last rows are reachable */
   width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow: clip; /* unlike hidden, clip can't be scrolled from script, so the shell never slides sideways */
   position: relative;
 }
 :root[data-theme='light'] .im-root {

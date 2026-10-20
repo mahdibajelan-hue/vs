@@ -17,6 +17,7 @@ import { RiskDrawer, type RiskTabId } from './components/RiskDrawer'
 import { RiskFormModal } from './components/RiskFormModal'
 import { useQuantNavStore } from './store/useQuantNavStore'
 import { HubPage } from './pages/HubPage'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 const AssessmentPage = lazy(() => import('./pages/AssessmentPage').then((m) => ({ default: m.AssessmentPage })))
@@ -98,7 +99,7 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
   useEffect(() => { if (quantPending) setTab('quant') }, [quantPending])
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab])
   const page: PageProps = { onOpenRisk: (id, t = 'overview') => setOpenRisk({ id, tab: t }), onNew: () => setNewOpen(true), onGo: setTab }
 
   return (

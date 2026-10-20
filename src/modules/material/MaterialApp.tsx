@@ -14,6 +14,7 @@ import { useMaterialModel } from './lib/control/useMaterialModel'
 import { Term } from './components/control/Term'
 import { useMyTasks } from './lib/control/useMyTasks'
 import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 export const MATERIAL_ACCENT = '#f59e0b'
 
@@ -82,7 +83,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
     if (!projects.length || projectId) return
     if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab, subs])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''

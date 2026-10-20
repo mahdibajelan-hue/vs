@@ -15,6 +15,7 @@ import { CM_HELP } from './lib/help'
 import { RequestDrawer, type DrawerTab } from './components/RequestDrawer'
 import { RequestFormModal } from './components/RequestFormModal'
 import { DashboardPage } from './pages/DashboardPage'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -59,7 +60,7 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   useEffect(() => { if (loaded && pendingLink?.module === 'change') { setOpen({ id: pendingLink.recordId, tab: 'flow' }); clearLink() } }, [loaded, pendingLink, clearLink])
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab])
   const canNew = useMemo(() => (scope === 'all' ? projects.some((p) => canSubmit(ctx.perms(p.id))) || ctx.perms(null).isAdmin : canSubmit(ctx.perms(scope))), [scope, projects, ctx])
   const page: PageProps = { onOpen: (id, t = 'flow') => setOpen({ id, tab: t }), onNew: () => setNewOpen(true) }
 

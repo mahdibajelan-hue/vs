@@ -24,6 +24,7 @@ import { ReportsPage } from './pages/ReportsPage'
 import { HelpButton } from './components/Help'
 import type { HelpKey } from './lib/help'
 import { faNum } from './lib/fa'
+import { revealTab } from '../../lib/revealTab'
 
 interface Props {
   repo: LandRepo
@@ -78,7 +79,7 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
   }, [init, repo])
   // keep the selected tab in view when the row of tabs is wider than the screen
   useEffect(() => {
-    document.querySelector('.la-head .la-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' })
+    revealTab('.la-head .la-tab[aria-selected="true"]')
   }, [tab])
 
   const badge = (k: TabKey) => (k === 'mytasks' ? myCount : k === 'actions' ? kpis.actionRequired + kpis.overdueActions + kpis.legalOverdue : k === 'crossings' ? crossings.filter((x) => x.st.status === 'critical').length : k === 'finance' ? (data?.parcels.filter((p) => p.priceException?.status === 'requested').length ?? 0) + (data?.route && !data.route.settings.budgetAmount ? 1 : 0) : 0)

@@ -9,6 +9,7 @@ import '../issues/issues.css'
 import './finance-dashboard.css'
 import { useFinanceStore } from './store/useFinanceStore'
 import { useFinanceControlStore } from './store/useFinanceControlStore'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
 export const FINANCE_ACCENT = '#059669'
@@ -70,7 +71,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     if (!projects.length || projectId) return
     setProjectId(contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id)
   }, [projects, projectId, contextProjectId])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab, subs])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''

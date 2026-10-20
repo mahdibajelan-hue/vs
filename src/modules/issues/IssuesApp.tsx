@@ -33,6 +33,7 @@ import { HelpButton } from './components/Help'
 import type { HelpKey } from './lib/help'
 import type { IssueFilter } from './lib/imRegister'
 import './issues.css'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 const TaskIssueApp = lazy(() => import('../taskissue/TaskIssueApp').then((m) => ({ default: m.TaskIssueApp })))
 
@@ -111,7 +112,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   }, [loading, pendingLink, clearLink])
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab])
 
   const go = (t: Tab) => setTab(t)
 

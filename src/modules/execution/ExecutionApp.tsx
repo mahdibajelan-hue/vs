@@ -15,6 +15,7 @@ import { useMaterialControlStore } from '../material/store/useMaterialControlSto
 import { useMaterialStore } from '../material/store/useMaterialStore'
 import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
+import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 export const EXECUTION_ACCENT = '#f97316'
 export type ExTab = 'dashboard' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
@@ -77,7 +78,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     if (!projects.length || projectId) return
     if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
-  useEffect(() => { document.getElementById('im-main')?.scrollTo({ top: 0 }); document.querySelector('.im-nav-tab[aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [tab, subs])
+  useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 
   const todayOn = useExecutionStore((s) => !!(s.settingsByProject.get(projectId ?? '') as unknown as { flags?: { today?: boolean } } | undefined)?.flags?.today)
   const cur0 = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
