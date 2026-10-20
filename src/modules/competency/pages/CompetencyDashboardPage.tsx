@@ -494,10 +494,12 @@ function TalentPoolRow({
       </button>
       <button
         onClick={onDelete}
-        title="حذف"
-        className="shrink-0 rounded-lg p-1.5 text-muted opacity-0 hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100"
+        title="حذف متقاضی"
+        aria-label={`حذف متقاضی ${a.candidateName}`}
+        // always visible on touch screens (no hover there); on mouse devices it shows when the row is hovered or focused
+        className="shrink-0 rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-300 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
       >
-        <Trash2 size={12} />
+        <Trash2 size={14} />
       </button>
     </div>
   )

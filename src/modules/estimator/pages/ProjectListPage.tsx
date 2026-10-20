@@ -122,7 +122,7 @@ export function ProjectListPage() {
                   e.stopPropagation()
                   if (confirm(`پروژه «${p.name}» و همه تاریخچه محاسبات آن حذف شود؟`)) deleteProject(p.id)
                 }}
-                className="absolute left-3 top-3 rounded-md p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute left-3 top-3 rounded-md p-2 transition-opacity focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                 style={{ color: MUTED_FG }}
                 title="حذف پروژه"
               >
