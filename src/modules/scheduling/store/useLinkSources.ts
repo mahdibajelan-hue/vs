@@ -4,7 +4,6 @@ import { useEpcStore } from '../../execution/store/useEpcStore'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
 import { useEpcModel } from '../../execution/lib/useEpcModel'
 import { useExecutionModel } from '../../execution/lib/useExecutionModel'
-import { useMaterialControlStore } from '../../material/store/useMaterialControlStore'
 import { emptySources, type ChangeInfo, type ParcelInfo, type DocInfo, type ExecInfo, type IssueInfo, type LinkSources, type PackageInfo, type RiskInfo } from '../lib/integration'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -29,6 +28,36 @@ export function useRiskIssueSources(projectId: string) {
         issues: ((i.data ?? []) as unknown as Row[]).map((x): IssueInfo => ({ id: x.id, title: x.title ?? '', open: OPEN_ISSUE.has(x.status) })),
         loaded: true,
       })
+    })()
+    return () => { live = false }
+  }, [projectId])
+  return state
+}
+
+interface PkgRow { id: string; code: string; title: string; status: string; plannedEnd: string | null }
+interface ItemRow { id: string; packageId: string; plannedDelivery: string | null }
+interface StageRow { itemId: string; applicable: boolean; status: string; plannedDate: string | null }
+/** The project's supply packages with their items and site-receipt stages — three small filtered queries instead of the whole material-control store. */
+export function usePackageSources(projectId: string) {
+  const [state, setState] = useState<{ packages: PkgRow[]; items: ItemRow[]; stages: StageRow[]; loaded: boolean }>({ packages: [], items: [], stages: [], loaded: false })
+  useEffect(() => {
+    let live = true
+    setState({ packages: [], items: [], stages: [], loaded: false })
+    void (async () => {
+      const p = await supabase.from('mtl_packages').select('id, code, title, status, planned_end').eq('master_project_id', projectId).neq('status', 'cancelled')
+      const packages = ((p.data ?? []) as unknown as Row[]).map((r): PkgRow => ({ id: r.id, code: r.code ?? '', title: r.title ?? '', status: r.status, plannedEnd: r.planned_end ?? null }))
+      const items: ItemRow[] = [], stages: StageRow[] = []
+      const ids = packages.map((x) => x.id)
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data } = await supabase.from('mtl_package_items').select('id, package_id, planned_delivery').in('package_id', ids.slice(i, i + 100))
+        for (const r of (data ?? []) as unknown as Row[]) items.push({ id: r.id, packageId: r.package_id, plannedDelivery: r.planned_delivery ?? null })
+      }
+      const iids = items.map((x) => x.id)
+      for (let i = 0; i < iids.length; i += 100) {
+        const { data } = await supabase.from('mtl_item_stages').select('item_id, applicable, status, planned_date').eq('stage_key', 'site_receipt').in('item_id', iids.slice(i, i + 100))
+        for (const r of (data ?? []) as unknown as Row[]) stages.push({ itemId: r.item_id, applicable: !!r.applicable, status: r.status, plannedDate: r.planned_date ?? null })
+      }
+      if (live) setState({ packages, items, stages, loaded: true })
     })()
     return () => { live = false }
   }, [projectId])
@@ -71,15 +100,12 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
   const ex = useExecutionModel(projectId)
   const epcM = useEpcModel(projectId)
   const engDocs = useEpcStore((s) => s.engDocs)
-  const csLoaded = useMaterialControlStore((s) => s.loaded)
-  const fetchControl = useMaterialControlStore((s) => s.fetchAll)
-  const packages = useMaterialControlStore((s) => s.packages)
-  const items = useMaterialControlStore((s) => s.items)
-  const stages = useMaterialControlStore((s) => s.stages)
-  const exLoaded = useExecutionStore((x) => x.loaded)
+  const pk = usePackageSources(projectId)
+  const csLoaded = pk.loaded
+  const { packages, items, stages } = pk
+  const exLoaded = useExecutionStore((x) => x.coreLoaded)
   const ri = useRiskIssueSources(projectId)
   const pc = useParcelChangeSources(projectId)
-  useEffect(() => { if (!csLoaded) void fetchControl() }, [csLoaded, fetchControl])
 
   const sources = useMemo(() => {
     const s = emptySources()
@@ -106,9 +132,9 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
     for (const it of items) itemsOf.set(it.packageId, [...(itemsOf.get(it.packageId) ?? []), it])
     const stagesOf = new Map<string, typeof stages>()
     for (const st of stages) stagesOf.set(st.itemId, [...(stagesOf.get(st.itemId) ?? []), st])
-    for (const p of packages.filter((x) => x.masterProjectId === projectId && x.status !== 'cancelled')) {
+    for (const p of packages) {
       const its = itemsOf.get(p.id) ?? []
-      const receipt = its.flatMap((it) => (stagesOf.get(it.id) ?? []).filter((st) => st.stageKey === 'site_receipt' && st.applicable))
+      const receipt = its.flatMap((it) => (stagesOf.get(it.id) ?? []).filter((st) => st.applicable))
       const done = receipt.filter((st) => st.status === 'approved').length
       const delivery: PackageInfo['delivery'] = receipt.length === 0 ? (p.status === 'closed' ? 'delivered' : 'pending') : done === receipt.length ? 'delivered' : done > 0 ? 'partial' : 'pending'
       const open = receipt.filter((st) => st.status !== 'approved').map((st) => st.plannedDate).filter((x): x is string => !!x).sort()

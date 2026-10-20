@@ -28,6 +28,8 @@ export interface ReviewDecision { lineId: string; decision: 'approved' | 'reject
 
 interface State {
   loaded: boolean; loading: boolean
+  /** the data the schedule needs (activities, baselines, reports, lines, resources, stoppages, maps) is in; the price list, report history, gaps and people names may still be missing */
+  coreLoaded: boolean
   roles: ExProjectRole[]; settingsByProject: Map<string, ExSettings>
   books: PriceBook[]; priceItems: PriceItem[]; activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]
   reports: Report[]; lines: ReportLine[]; resources: ReportResource[]; stoppages: Stoppage[]; history: ReportHistory[]; maps: FormMap[]; gaps: Gap[]
@@ -37,7 +39,8 @@ interface State {
   /** which page should show the focused report (set when something outside the module — the inbox — opens it) */
   focusTab: 'review' | 'daily' | 'gaps' | 'delays' | null
   setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps' | 'delays') => void
-  fetchAll: () => Promise<void>
+  /** lite: only what other modules (the schedule) read — skips the price list, report history, gap items and people names; `loaded` stays false so the execution module itself still loads everything */
+  fetchAll: (opts?: { lite?: boolean }) => Promise<void>
   myRoles: (projectId: string) => ExRole[]
   can: (projectId: string, action: string) => boolean
   settings: (projectId: string) => ExSettings
@@ -79,7 +82,7 @@ async function archiveIfDone(r: { id: string; formKey: string; status: string } 
   const { useEpcStore } = await import('./useEpcStore')
   await useEpcStore.getState().archiveReport(r.id, true)
 }
-const initial = { loaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
+const initial = { loaded: false, coreLoaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
 export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
@@ -89,13 +92,15 @@ export const useExecutionStore = create<State>((set, get) => ({
   ...initial,
 
   setFocus: (id, tab) => set({ focusReportId: id, focusTab: id ? tab ?? null : null }),
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    const lite = opts?.lite === true
     set({ loading: true })
     const t = (name: string) => supabase.from(name).select('*')
+    const none = Promise.resolve({ data: [] as Row[], error: null })
     const [roles, sets, books, items, acts, bases, blines, reps, lns, res, stp, his, maps, gaps, profs] = await Promise.all([
-      t('ex_project_roles'), t('ex_settings'), t('ex_price_books').order('created_at'), t('ex_price_items'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), t('ex_baseline_lines'),
-      t('ex_reports').order('report_date', { ascending: false }), t('ex_report_lines').order('line_no'), t('ex_report_resources'), t('ex_report_stoppages'), t('ex_report_history').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), t('ex_gap_items'),
-      supabase.from('profiles').select('id, full_name'),
+      t('ex_project_roles'), t('ex_settings'), lite ? none : t('ex_price_books').order('created_at'), lite ? none : t('ex_price_items'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), t('ex_baseline_lines'),
+      t('ex_reports').order('report_date', { ascending: false }), t('ex_report_lines').order('line_no'), t('ex_report_resources'), t('ex_report_stoppages'), lite ? none : t('ex_report_history').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
+      lite ? none : supabase.from('profiles').select('id, full_name'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
@@ -104,8 +109,6 @@ export const useExecutionStore = create<State>((set, get) => ({
     set({
       roles: ok<Row>(roles).map((r): ExProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
       settingsByProject: sm,
-      books: ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' })),
-      priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) })),
       activities: ok<Row>(acts).map(actRow),
       baselines: ok<Row>(bases).map((r): Baseline => ({ id: r.id, projectId: r.project_id, version: r.version, status: r.status, reason: r.reason ?? '', effectiveDate: r.effective_date, createdAt: r.created_at, approvedAt: r.approved_at })),
       blines: ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active })),
@@ -113,11 +116,15 @@ export const useExecutionStore = create<State>((set, get) => ({
       lines: ok<Row>(lns).map(lineRow),
       resources: ok<Row>(res).map((r): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })),
       stoppages: ok<Row>(stp).map((r): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref, responsibility: r.responsibility ?? '', critical: !!r.critical, noticeDate: r.notice_date ?? null, noticeRef: r.notice_ref ?? '', assessNote: r.assess_note ?? '' })),
-      history: ok<Row>(his).map((r): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })),
       maps: ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })),
+      ...(lite ? {} : {
+      books: ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' })),
+      priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) })),
+      history: ok<Row>(his).map((r): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })),
       gaps: ok<Row>(gaps).map((r): Gap => ({ id: r.id, projectId: r.project_id, fingerprint: r.fingerprint, kind: r.kind, formKey: r.form_key ?? '', periodKey: r.period_key ?? '', front: r.front ?? '', subject: r.subject ?? '', existing: r.existing ?? {}, missing: Array.isArray(r.missing) ? r.missing : [], responsible: r.responsible, dueDate: r.due_date, status: r.status, note: r.note ?? '', generatedReportId: r.generated_report_id })),
       people: new Map(ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'])),
-      loaded: true, loading: false,
+      }),
+      loaded: lite ? get().loaded : true, coreLoaded: true, loading: false,
     })
   },
 

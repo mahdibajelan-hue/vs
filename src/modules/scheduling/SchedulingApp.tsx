@@ -11,7 +11,6 @@ import '../finance/finance-dashboard.css'
 import '../material/material-control.css'
 import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
-import { useMaterialStore } from '../material/store/useMaterialStore'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
 export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
@@ -40,10 +39,8 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
   const projects = useMasterDataStore((s) => s.projects)
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
-  const exLoaded = useExecutionStore((s) => s.loaded)
+  const exLoaded = useExecutionStore((s) => s.coreLoaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
-  const matLoaded = useMaterialStore((s) => s.loaded)
-  const fetchMaterial = useMaterialStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   // the shared inbox opens a waiting item here: it leaves the target tab / project in sessionStorage (read once)
   const [opened] = useState(() => { try { const t = sessionStorage.getItem('sch.openTab'), p = sessionStorage.getItem('sch.openProject'); sessionStorage.removeItem('sch.openTab'); sessionStorage.removeItem('sch.openProject'); return { tab: t as SchTab | null, project: p } } catch { return { tab: null, project: null } } })
@@ -53,8 +50,7 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
-    if (!exLoaded) void fetchEx()
-    if (!matLoaded) fetchMaterial()
+    if (!exLoaded) void fetchEx({ lite: true }) // the schedule reads only progress, stoppages and resources from execution
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
