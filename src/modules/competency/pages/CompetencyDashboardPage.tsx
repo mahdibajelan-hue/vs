@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ModalPortal } from '../../../components/common/ModalPortal'
 import { ChevronLeft, ClipboardList, Plus, Search, Trash2, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
 import { approvalLevel, computeDomainScores, computeOverallPercent, CONDITIONAL_COLOR, isConditionalScore, isNotQualified, maturityBand } from '../lib/competencyModel'
@@ -415,26 +416,20 @@ export function CompetencyDashboardPage({ onOpen, onNew, onExitToHub, nav, mode 
       </div>
 
       {confirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmId(null)}>
-          <div className="fx-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-bold">حذف این ارزیابی؟</p>
-            <p className="fx-muted mt-1 text-xs">این عمل قابل بازگشت نیست.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setConfirmId(null)} className="rounded-lg border border-white/10 px-3.5 py-1.5 text-xs">
-                انصراف
-              </button>
-              <button
-                onClick={() => {
-                  deleteAssessment(confirmId)
-                  setConfirmId(null)
-                }}
-                className="rounded-lg bg-red-500 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-red-400"
-              >
-                حذف
-              </button>
+        <ModalPortal>
+          <div className="im-overlay" onClick={() => setConfirmId(null)}>
+            <div className="im-modal" style={{ maxWidth: 400 }} role="alertdialog" aria-modal="true" aria-labelledby="comp-del-title" onClick={(e) => e.stopPropagation()}>
+              <div className="im-modal-head"><div className="im-modal-title" id="comp-del-title">حذف این متقاضی؟</div></div>
+              <p style={{ margin: 0, fontSize: 13 }}>
+                ارزیابی «{assessments.find((x) => x.id === confirmId)?.candidateName ?? ''}» با همهٔ اطلاعات و نتایجش حذف می‌شود. این عمل قابل بازگشت نیست.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+                <button className="im-btn" autoFocus onClick={() => setConfirmId(null)}>انصراف</button>
+                <button className="im-btn" style={{ fontWeight: 800, background: '#dc2626', color: '#fff' }} onClick={() => { deleteAssessment(confirmId); setConfirmId(null) }}>بله، حذف شود</button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </CompetencySidebarShell>
   )

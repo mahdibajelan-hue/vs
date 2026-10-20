@@ -96,7 +96,7 @@
 @media (hover: hover) and (pointer: fine) { .im-nav-tab:hover { background: color-mix(in srgb, var(--c) 8%, transparent); color: var(--im-text); } .im-nav-tab:hover svg { transform: scale(1.12); } }
 
 .im-main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 18px 56px; }
-.im-main > .im-page { max-width: 1480px; margin: 0 auto; animation: im-rise 260ms var(--im-ease) both; }
+.im-main > .im-page { max-width: 1480px; margin: 0 auto; animation: im-rise 260ms var(--im-ease) backwards; /* backwards, not both: a kept transform would turn every position:fixed dialog inside the page into one positioned against the page instead of the window */ }
 @keyframes im-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes im-fade { from { opacity: 0; } to { opacity: 1; } }
 
