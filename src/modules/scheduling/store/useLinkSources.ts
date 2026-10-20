@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useEpcStore } from '../../execution/store/useEpcStore'
+import { useExecutionStore } from '../../execution/store/useExecutionStore'
 import { useEpcModel } from '../../execution/lib/useEpcModel'
 import { useExecutionModel } from '../../execution/lib/useExecutionModel'
 import { useMaterialControlStore } from '../../material/store/useMaterialControlStore'
@@ -75,6 +76,7 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
   const packages = useMaterialControlStore((s) => s.packages)
   const items = useMaterialControlStore((s) => s.items)
   const stages = useMaterialControlStore((s) => s.stages)
+  const exLoaded = useExecutionStore((x) => x.loaded)
   const ri = useRiskIssueSources(projectId)
   const pc = useParcelChangeSources(projectId)
   useEffect(() => { if (!csLoaded) void fetchControl() }, [csLoaded, fetchControl])
@@ -121,5 +123,5 @@ export function useLinkSources(projectId: string): { sources: LinkSources; ready
     for (const i of ri.issues) s.issues.set(i.id, i)
     return s
   }, [ex.approved, ex.registered, ex.lines, ex.reports, ex.stoppages, ex.resources, ex.settings, engDocs, epcM.docFc, packages, items, stages, ri.risks, ri.issues, pc, projectId])
-  return { sources, ready: csLoaded && ri.loaded }
+  return { sources, ready: csLoaded && ri.loaded && exLoaded }
 }

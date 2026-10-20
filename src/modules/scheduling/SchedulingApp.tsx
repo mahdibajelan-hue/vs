@@ -62,7 +62,8 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
     if (opened.project && projects.some((p) => p.id === opened.project)) setProjectId(opened.project)
     else if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
-  const loading = !mdLoaded || !exLoaded
+  // only the project list gates the page; the other modules' data keeps loading in the background (the page says so while it is incomplete)
+  const loading = !mdLoaded
 
   return (
     <div className="im-root fn-root mt-root ex-root" dir="rtl" style={{ ['--im-accent' as string]: SCHEDULING_ACCENT }}>
