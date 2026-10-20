@@ -29,11 +29,31 @@ interface IssuesMembersState {
   membersByProject: Record<string, ImProjectMember[]>
   loading: Record<string, boolean>
   fetchForProject: (projectId: string) => Promise<void>
+  /** several projects at once: the legacy-role table is read with one query for all of them (the people directory is a per-project RPC) */
+  fetchMany: (projectIds: string[]) => Promise<void>
 }
 
-export const useIssuesMembersStore = create<IssuesMembersState>()((set) => ({
+export const useIssuesMembersStore = create<IssuesMembersState>()((set, get) => ({
   membersByProject: {},
   loading: {},
+
+  fetchMany: async (projectIds) => {
+    const ids = projectIds.filter((id) => !get().loading[id])
+    if (!ids.length) return
+    set((s) => ({ loading: { ...s.loading, ...Object.fromEntries(ids.map((id) => [id, true])) } }))
+    const [legacy, ...people] = await Promise.all([
+      supabase.from('im_project_members').select('project_id, user_id, role').in('project_id', ids),
+      ...ids.map((id) => supabase.rpc('im_people', { p_project: id })),
+    ])
+    const rolesBy = new Map<string, Map<string, ImUserRole>>()
+    for (const r of (legacy.data ?? []) as { project_id: string; user_id: string; role: ImUserRole }[]) { const m = rolesBy.get(r.project_id) ?? new Map(); m.set(r.user_id, r.role); rolesBy.set(r.project_id, m) }
+    const next: Record<string, ImProjectMember[]> = {}
+    ids.forEach((id, i) => {
+      const lr = rolesBy.get(id)
+      next[id] = ((people[i].data ?? []) as PeopleRow[]).map((p) => ({ userId: p.id, email: p.email ?? '', fullName: p.full_name ?? '', position: p.position_title ?? '', organization: p.organization ?? '', projectRoles: p.project_roles ?? [], role: p.is_admin ? 'admin' : lr?.get(p.id) ?? 'pursuer' }))
+    })
+    set((s) => ({ membersByProject: { ...s.membersByProject, ...next }, loading: { ...s.loading, ...Object.fromEntries(ids.map((id) => [id, false])) } }))
+  },
 
   fetchForProject: async (projectId) => {
     set((s) => ({ loading: { ...s.loading, [projectId]: true } }))

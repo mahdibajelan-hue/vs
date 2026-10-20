@@ -9,7 +9,18 @@ export type RastaSourceModule = 'risk' | 'issues' | 'pipepulse'
  * hierarchy rests on (no module redefines or duplicates this structure; see supabase/schema.sql
  * around "rasta_project_mappings"). Returns masterProjectId -> sourceProjectId.
  */
-export async function fetchModuleProjectMappings(sourceModule: RastaSourceModule): Promise<Map<string, string>> {
+const mappingCache = new Map<string, { at: number; p: Promise<Map<string, string>> }>()
+/** one shared request per module for 20 seconds — callers that ask for the same mapping at once (one per project in a list) no longer each hit the database */
+export function fetchModuleProjectMappings(sourceModule: RastaSourceModule): Promise<Map<string, string>> {
+  const hit = mappingCache.get(sourceModule)
+  if (hit && Date.now() - hit.at < 20000) return hit.p
+  const p = loadModuleProjectMappings(sourceModule)
+  mappingCache.set(sourceModule, { at: Date.now(), p })
+  p.catch(() => mappingCache.delete(sourceModule))
+  return p
+}
+
+async function loadModuleProjectMappings(sourceModule: RastaSourceModule): Promise<Map<string, string>> {
   const { data } = await supabase
     .from('rasta_project_mappings')
     .select('master_project_id, source_project_id')

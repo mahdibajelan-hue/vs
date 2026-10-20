@@ -11,8 +11,6 @@ import '../finance/finance-dashboard.css'
 import '../material/material-control.css'
 import './execution.css'
 import { useExecutionStore } from './store/useExecutionStore'
-import { useMaterialControlStore } from '../material/store/useMaterialControlStore'
-import { useMaterialStore } from '../material/store/useMaterialStore'
 import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
@@ -57,10 +55,6 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
-  const csLoaded = useMaterialControlStore((s) => s.loaded)
-  const fetchControl = useMaterialControlStore((s) => s.fetchAll)
-  const matLoaded = useMaterialStore((s) => s.loaded)
-  const fetchMaterial = useMaterialStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   const [tab, setTab] = useState<ExTab>('dashboard')
   const [subs, setSubs] = useState<Partial<Record<ExTab, string>>>({})
@@ -70,8 +64,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
     if (!exLoaded) void fetchEx()
-    if (!matLoaded) fetchMaterial()
-    if (!csLoaded) void fetchControl() // shared lists (fronts, stations) and materials live in the material module
+    // the material module's data (fronts list, warehouse receipts) is loaded by the two pages that read it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {

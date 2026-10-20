@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
 import { useMaterialStore } from '../../material/store/useMaterialStore'
@@ -12,6 +12,8 @@ export function MrsReport({ projectId }: { projectId: string }) {
   const pipesAll = useEpcStore((s) => s.pipes)
   const welds = useEpcStore((s) => s.welds)
   const receipts = useMaterialStore((s) => s.warehouseReceipts)
+  const matLoaded = useMaterialStore((s) => s.loaded), fetchMaterial = useMaterialStore((s) => s.fetchAll)
+  useEffect(() => { if (!matLoaded) void fetchMaterial() }, [matLoaded, fetchMaterial])
   const [open, setOpen] = useState('')
   const pipes = useMemo(() => pipesAll.filter((p) => p.projectId === projectId), [pipesAll, projectId])
   const progress = useMemo(() => {

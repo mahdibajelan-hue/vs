@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pencil, Plus } from 'lucide-react'
 import { useMaterialControlStore } from '../../material/store/useMaterialControlStore'
 import { Chip, Section } from '../../finance/components/fn'
@@ -6,6 +6,8 @@ import { Chip, Section } from '../../finance/components/fn'
 /** The project's work fronts: defined here once, then offered in every daily report and technical form (the same list the material module uses). Nothing is built in. A rename updates the material module's records only — reports already saved here keep the old name; a front that is no longer used is switched off, not deleted, so old reports keep their value. */
 export function FrontsEditor({ projectId, can }: { projectId: string; can: boolean }) {
   const lookups = useMaterialControlStore((s) => s.lookups), add = useMaterialControlStore((s) => s.addLookups), setActive = useMaterialControlStore((s) => s.setLookupActive), rename = useMaterialControlStore((s) => s.renameLookup)
+  const csLoaded = useMaterialControlStore((s) => s.loaded), fetchControl = useMaterialControlStore((s) => s.fetchLookups)
+  useEffect(() => { if (!csLoaded && lookups.length === 0) void fetchControl() }, [csLoaded, lookups.length, fetchControl])
   const [text, setText] = useState(''), [busy, setBusy] = useState(false)
   const rows = lookups.filter((l) => l.masterProjectId === projectId && l.kind === 'front').sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label, 'fa'))
   const submit = async () => {

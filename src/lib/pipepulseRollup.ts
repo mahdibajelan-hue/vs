@@ -18,19 +18,23 @@ export function fetchPipePulseProjectMappings(): Promise<Map<string, string>> {
 /** Fetches full project detail (lines + daily logs, needed by computeProjectSchedule) for a set of PipePulse projects — the same 3-query shape `selectProject` already uses per project, just batched across every mapped project. */
 export async function fetchPipePulseProjects(projectIds: string[]): Promise<Map<string, Project>> {
   const map = new Map<string, Project>()
-  await Promise.all(
-    projectIds.map(async (id) => {
-      const [{ data: projectRow }, { data: lineRows }, { data: logRows }] = await Promise.all([
-        supabase.from('projects').select('*').eq('id', id).single(),
-        supabase.from('lines').select('*').eq('project_id', id).order('created_at'),
-        supabase.from('daily_logs').select('*').eq('project_id', id).order('date', { ascending: false }),
-      ])
-      if (projectRow) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        map.set(id, projectFromRow(projectRow as any, (lineRows ?? []) as any, (logRows ?? []) as any))
-      }
-    }),
-  )
+  if (!projectIds.length) return map
+  // three queries for the whole set (rows paged past the 1000-row limit) instead of three per project
+  const pageAll = async (table: string, order: string, asc: boolean, col: string): Promise<Record<string, unknown>[]> => {
+    const out: Record<string, unknown>[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data } = await supabase.from(table).select('*').in(col, projectIds).order(order, { ascending: asc }).order('id').range(from, from + 999)
+      out.push(...((data ?? []) as Record<string, unknown>[]))
+      if (!data || data.length < 1000) break
+    }
+    return out
+  }
+  const [projectRows, lineRows, logRows] = await Promise.all([pageAll('projects', 'created_at', true, 'id'), pageAll('lines', 'created_at', true, 'project_id'), pageAll('daily_logs', 'date', false, 'project_id')])
+  for (const row of projectRows) {
+    const id = row.id as string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    map.set(id, projectFromRow(row as any, lineRows.filter((l) => l.project_id === id) as any, logRows.filter((l) => l.project_id === id) as any))
+  }
   return map
 }
 

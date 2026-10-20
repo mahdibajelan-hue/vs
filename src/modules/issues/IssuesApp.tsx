@@ -69,7 +69,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const fetchAll = useIssuesStore((s) => s.fetchAll)
   const issuesCount = useIssuesStore((s) => s.issues.length)
   const membersByProject = useIssuesMembersStore((s) => s.membersByProject)
-  const fetchMembersForProject = useIssuesMembersStore((s) => s.fetchForProject)
+  const fetchMembersMany = useIssuesMembersStore((s) => s.fetchMany)
   const fetchWork = useIssueWorkStore((s) => s.fetchAll)
   const cfgLoaded = useIssueConfigStore((s) => s.loaded)
   const fetchCfg = useIssueConfigStore((s) => s.fetch)
@@ -88,7 +88,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   useEffect(() => { fetchAll() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
   useEffect(() => { if (!loading) { fetchWork(); fetchDecisions() } }, [loading, issuesCount, fetchWork, fetchDecisions])
-  useEffect(() => { for (const p of projects) if (!(p.id in membersByProject)) fetchMembersForProject(p.id) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projects])
+  useEffect(() => { void fetchMembersMany(projects.filter((p) => !(p.id in membersByProject)).map((p) => p.id)) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projects])
 
   // Arrived from Project Radar with a project in context: the whole module is scoped to that project (and the picker is hidden).
   const contextProjectId = useProjectContextStore((s) => s.projectId)

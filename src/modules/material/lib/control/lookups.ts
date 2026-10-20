@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import type { LookupKind, MtlLookup } from '../../types'
 
@@ -12,6 +12,9 @@ export function lookupOptions(list: MtlLookup[], projectId: string, kind: Lookup
 
 export function useLookupOptions(projectId: string, kind: LookupKind, current?: string | null) {
   const list = useMaterialControlStore((s) => s.lookups)
+  const loaded = useMaterialControlStore((s) => s.loaded), fetchLookups = useMaterialControlStore((s) => s.fetchLookups)
+  // a module that only needs the pick-lists (execution forms) gets them with one small query
+  useEffect(() => { if (!loaded && list.length === 0) void fetchLookups() }, [loaded, list.length, fetchLookups])
   return useMemo(() => lookupOptions(list, projectId, kind, current), [list, projectId, kind, current])
 }
 

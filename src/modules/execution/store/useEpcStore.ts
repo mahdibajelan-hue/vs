@@ -122,36 +122,60 @@ export const useEpcStore = create<State>((set, get) => ({
 
   fetchAll: async () => {
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
-    const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), supabase.from('ex_report_links').select('*')])
-    if (!tpl.error) set({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
-    if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
-    const [rq, ma] = await Promise.all([supabase.from('ex_required_forms').select('*'), supabase.from('ex_form_mapping_approvals').select('*')])
-    if (!rq.error) set({ requiredForms: ((rq.data ?? []) as Row[]).map((r): RequiredFormRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, formKey: r.form_key, note: r.note ?? '' })) })
-    if (!ma.error) set({ mappingApprovals: ((ma.data ?? []) as Row[]).map((r): MappingApprovalRow => ({ id: r.id, templateId: r.template_id, approvedAt: r.approved_at, note: r.note ?? '', revokedAt: r.revoked_at })) })
-    const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
-    if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
-    const [wl, lw, wc, ws, wm, nc, ne, nl] = await Promise.all([supabase.from('ex_welds').select('*'), supabase.from('ex_line_welds').select('line_id, weld_id, project_id, raw_pipe'), supabase.from('ex_weld_conflicts').select('*').eq('status', 'open'), supabase.from('ex_weld_suspects').select('*'), supabase.from('ex_weld_merges').select('*').is('undone_at', null), supabase.from('ex_ncr').select('*').order('seq', { ascending: false }), supabase.from('ex_ncr_events').select('*').order('at'), supabase.from('ex_ncr_links').select('*')])
-    if (!wl.error) set({ welds: ((wl.data ?? []) as Row[]).map((r): WeldRow => ({ id: r.id, projectId: r.project_id, sectionKey: r.section_key, weldKey: r.weld_key, sectionRaw: r.section_raw, weldRaw: r.weld_raw, pipeNo: r.pipe_no, status: r.status, mergedInto: r.merged_into, central: Object.fromEntries(([['pipe', r.c_pipe], ['size', r.c_size], ['thk', r.c_thk], ['length', r.c_length], ['bend', r.c_bend]] as [string, string | null][]).filter(([, v]) => v != null && v !== '')) })) })
-    if (!lw.error) set({ lineWelds: ((lw.data ?? []) as Row[]).map((r): LineWeldRow => ({ lineId: r.line_id, weldId: r.weld_id, projectId: r.project_id, rawPipe: r.raw_pipe })) })
-    if (!wc.error) set({ weldConflicts: ((wc.data ?? []) as Row[]).map((r): WeldConflictRow => ({ id: r.id, projectId: r.project_id, weldId: r.weld_id, kind: r.kind, detail: r.detail, status: r.status })) })
-    if (!ws.error) set({ weldSuspects: ((ws.data ?? []) as Row[]).map((r): WeldSuspectRow => ({ projectId: r.project_id, n2: r.n2, weldIds: r.weld_ids, raws: r.raws })) })
-    if (!wm.error) set({ weldMerges: ((wm.data ?? []) as Row[]).map((r): WeldMergeRow => ({ id: r.id, projectId: r.project_id, fromWeld: r.from_weld, intoWeld: r.into_weld, reason: r.reason, undoneAt: r.undone_at })) })
-    if (!nc.error) set({ ncrs: ((nc.data ?? []) as Row[]).map((r): NcrRow => ({ id: r.id, projectId: r.project_id, code: r.code, findingId: r.finding_id, weldId: r.weld_id, weldRef: r.weld_ref ?? '', techReportId: r.tech_report_id, kind: r.kind, severity: r.severity, description: r.description ?? '', disposition: r.disposition, status: r.status, ownerId: r.owner_id, dueDate: r.due_date, rcaRequired: !!r.rca_required, createdAt: r.created_at, closedAt: r.closed_at })) })
-    if (!ne.error) set({ ncrEvents: ((ne.data ?? []) as Row[]).map((r): NcrEventRow => ({ id: r.id, ncrId: r.ncr_id, at: r.at, by: r.by, kind: r.kind, fromStatus: r.from_status, toStatus: r.to_status, note: r.note ?? '' })) })
-    if (!nl.error) set({ ncrLinks: ((nl.data ?? []) as Row[]).map((r): NcrLinkRow => ({ id: r.id, ncrId: r.ncr_id, targetType: r.target_type, targetId: r.target_id, status: r.status, error: r.error ?? '' })) })
-    await get().refreshRegisters()
-    const arc = await supabase.from('ex_report_archive').select('id, project_id, report_id, version, form_key, form_title, category, report_no, report_date, status, note, created_at').order('report_date', { ascending: false }).limit(2000)
-    if (!arc.error) set({ archive: ((arc.data ?? []) as Row[]).map((r): ArchiveRow => ({ id: r.id, projectId: r.project_id, reportId: r.report_id, version: r.version, formKey: r.form_key, formTitle: r.form_title ?? '', category: r.category ?? '', reportNo: r.report_no ?? '', reportDate: r.report_date, status: r.status, note: r.note ?? '', createdAt: r.created_at })) })
-    const [wa, ar] = await Promise.all([supabase.from('ex_work_actions').select('*').order('sort'), supabase.from('ex_action_map').select('*')])
-    if (!wa.error) set({ workActions: ((wa.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, key: r.key, title: r.title, unit: r.unit ?? '', group: r.group_label ?? '', fields: (r.fields ?? []) as ActionField[], sort: r.sort ?? 0, active: !!r.active, billable: r.billable !== false })) })
-    if (!ar.error) set({ actionRules: ((ar.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, actionKey: r.action_key, activityId: r.activity_id, factor: Number(r.factor) || 1, whenField: r.when_field ?? '', whenValue: r.when_value ?? '', note: r.note ?? '', multFields: r.mult_fields ?? '' })) })
-    const [sts, stl] = await Promise.all([supabase.from('ex_statements').select('*').order('no'), supabase.from('ex_statement_rows').select('*')])
-    if (!sts.error) set({ statements: ((sts.data ?? []) as Row[]).map((r): StatementRow0 => ({ id: r.id, projectId: r.project_id, no: r.no, periodFrom: r.period_from, periodTo: r.period_to, status: r.status, note: r.note ?? '', finalizedAt: r.finalized_at })) })
-    if (!stl.error) set({ statementLines: ((stl.data ?? []) as Row[]).map((r): StatementLine => ({ id: r.id, statementId: r.statement_id, activityId: r.activity_id, unitPrice: Number(r.unit_price) || 0, baseQty: Number(r.base_qty) || 0, sys: Number(r.sys_cum) || 0, req: r.req_cum == null ? null : Number(r.req_cum), con: r.con_cum == null ? null : Number(r.con_cum), reqEdited: !!r.req_edited, prevSys: Number(r.prev_sys) || 0, prevReq: Number(r.prev_req) || 0, prevCon: Number(r.prev_con) || 0 })) })
-    const sl = await supabase.from('ex_sign_slots').select('*').order('sort')
-    if (!sl.error) set({ signSlots: ((sl.data ?? []) as Row[]).map((r): SignSlot => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, slotKey: r.slot_key, label: r.label, party: r.party, userId: r.user_id, sort: r.sort ?? 0, required: !!r.required, active: !!r.active })) })
-    const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
-    if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
+    // independent groups of tables: one parallel wave instead of ten sequential round trips
+    const groups: (() => Promise<void>)[] = [
+      async () => {
+      const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), supabase.from('ex_report_links').select('*')])
+      if (!tpl.error) set({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
+      if (!lnk.error) set({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
+      },
+      async () => {
+      const [rq, ma] = await Promise.all([supabase.from('ex_required_forms').select('*'), supabase.from('ex_form_mapping_approvals').select('*')])
+      if (!rq.error) set({ requiredForms: ((rq.data ?? []) as Row[]).map((r): RequiredFormRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, formKey: r.form_key, note: r.note ?? '' })) })
+      if (!ma.error) set({ mappingApprovals: ((ma.data ?? []) as Row[]).map((r): MappingApprovalRow => ({ id: r.id, templateId: r.template_id, approvedAt: r.approved_at, note: r.note ?? '', revokedAt: r.revoked_at })) })
+      },
+      async () => {
+      const fnd = await supabase.from('ex_qc_findings').select('*').order('created_at', { ascending: false })
+      if (!fnd.error) set({ findings: ((fnd.data ?? []) as Row[]).map((r): QcFindingRow => ({ id: r.id, projectId: r.project_id, techReportId: r.tech_report_id, lineId: r.line_id, kind: r.kind, severity: r.severity, status: r.status, weldRef: r.weld_ref ?? '', note: r.note ?? '', createdAt: r.created_at, closedAt: r.closed_at })) })
+      },
+      async () => {
+      const [wl, lw, wc, ws, wm, nc, ne, nl] = await Promise.all([supabase.from('ex_welds').select('*'), supabase.from('ex_line_welds').select('line_id, weld_id, project_id, raw_pipe'), supabase.from('ex_weld_conflicts').select('*').eq('status', 'open'), supabase.from('ex_weld_suspects').select('*'), supabase.from('ex_weld_merges').select('*').is('undone_at', null), supabase.from('ex_ncr').select('*').order('seq', { ascending: false }), supabase.from('ex_ncr_events').select('*').order('at'), supabase.from('ex_ncr_links').select('*')])
+      if (!wl.error) set({ welds: ((wl.data ?? []) as Row[]).map((r): WeldRow => ({ id: r.id, projectId: r.project_id, sectionKey: r.section_key, weldKey: r.weld_key, sectionRaw: r.section_raw, weldRaw: r.weld_raw, pipeNo: r.pipe_no, status: r.status, mergedInto: r.merged_into, central: Object.fromEntries(([['pipe', r.c_pipe], ['size', r.c_size], ['thk', r.c_thk], ['length', r.c_length], ['bend', r.c_bend]] as [string, string | null][]).filter(([, v]) => v != null && v !== '')) })) })
+      if (!lw.error) set({ lineWelds: ((lw.data ?? []) as Row[]).map((r): LineWeldRow => ({ lineId: r.line_id, weldId: r.weld_id, projectId: r.project_id, rawPipe: r.raw_pipe })) })
+      if (!wc.error) set({ weldConflicts: ((wc.data ?? []) as Row[]).map((r): WeldConflictRow => ({ id: r.id, projectId: r.project_id, weldId: r.weld_id, kind: r.kind, detail: r.detail, status: r.status })) })
+      if (!ws.error) set({ weldSuspects: ((ws.data ?? []) as Row[]).map((r): WeldSuspectRow => ({ projectId: r.project_id, n2: r.n2, weldIds: r.weld_ids, raws: r.raws })) })
+      if (!wm.error) set({ weldMerges: ((wm.data ?? []) as Row[]).map((r): WeldMergeRow => ({ id: r.id, projectId: r.project_id, fromWeld: r.from_weld, intoWeld: r.into_weld, reason: r.reason, undoneAt: r.undone_at })) })
+      if (!nc.error) set({ ncrs: ((nc.data ?? []) as Row[]).map((r): NcrRow => ({ id: r.id, projectId: r.project_id, code: r.code, findingId: r.finding_id, weldId: r.weld_id, weldRef: r.weld_ref ?? '', techReportId: r.tech_report_id, kind: r.kind, severity: r.severity, description: r.description ?? '', disposition: r.disposition, status: r.status, ownerId: r.owner_id, dueDate: r.due_date, rcaRequired: !!r.rca_required, createdAt: r.created_at, closedAt: r.closed_at })) })
+      if (!ne.error) set({ ncrEvents: ((ne.data ?? []) as Row[]).map((r): NcrEventRow => ({ id: r.id, ncrId: r.ncr_id, at: r.at, by: r.by, kind: r.kind, fromStatus: r.from_status, toStatus: r.to_status, note: r.note ?? '' })) })
+      if (!nl.error) set({ ncrLinks: ((nl.data ?? []) as Row[]).map((r): NcrLinkRow => ({ id: r.id, ncrId: r.ncr_id, targetType: r.target_type, targetId: r.target_id, status: r.status, error: r.error ?? '' })) })
+      },
+      async () => {
+      await get().refreshRegisters()
+      },
+      async () => {
+      const arc = await supabase.from('ex_report_archive').select('id, project_id, report_id, version, form_key, form_title, category, report_no, report_date, status, note, created_at').order('report_date', { ascending: false }).limit(2000)
+      if (!arc.error) set({ archive: ((arc.data ?? []) as Row[]).map((r): ArchiveRow => ({ id: r.id, projectId: r.project_id, reportId: r.report_id, version: r.version, formKey: r.form_key, formTitle: r.form_title ?? '', category: r.category ?? '', reportNo: r.report_no ?? '', reportDate: r.report_date, status: r.status, note: r.note ?? '', createdAt: r.created_at })) })
+      },
+      async () => {
+      const [wa, ar] = await Promise.all([supabase.from('ex_work_actions').select('*').order('sort'), supabase.from('ex_action_map').select('*')])
+      if (!wa.error) set({ workActions: ((wa.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, key: r.key, title: r.title, unit: r.unit ?? '', group: r.group_label ?? '', fields: (r.fields ?? []) as ActionField[], sort: r.sort ?? 0, active: !!r.active, billable: r.billable !== false })) })
+      if (!ar.error) set({ actionRules: ((ar.data ?? []) as Row[]).map((r) => ({ id: r.id, projectId: r.project_id, actionKey: r.action_key, activityId: r.activity_id, factor: Number(r.factor) || 1, whenField: r.when_field ?? '', whenValue: r.when_value ?? '', note: r.note ?? '', multFields: r.mult_fields ?? '' })) })
+      },
+      async () => {
+      const [sts, stl] = await Promise.all([supabase.from('ex_statements').select('*').order('no'), supabase.from('ex_statement_rows').select('*')])
+      if (!sts.error) set({ statements: ((sts.data ?? []) as Row[]).map((r): StatementRow0 => ({ id: r.id, projectId: r.project_id, no: r.no, periodFrom: r.period_from, periodTo: r.period_to, status: r.status, note: r.note ?? '', finalizedAt: r.finalized_at })) })
+      if (!stl.error) set({ statementLines: ((stl.data ?? []) as Row[]).map((r): StatementLine => ({ id: r.id, statementId: r.statement_id, activityId: r.activity_id, unitPrice: Number(r.unit_price) || 0, baseQty: Number(r.base_qty) || 0, sys: Number(r.sys_cum) || 0, req: r.req_cum == null ? null : Number(r.req_cum), con: r.con_cum == null ? null : Number(r.con_cum), reqEdited: !!r.req_edited, prevSys: Number(r.prev_sys) || 0, prevReq: Number(r.prev_req) || 0, prevCon: Number(r.prev_con) || 0 })) })
+      },
+      async () => {
+      const sl = await supabase.from('ex_sign_slots').select('*').order('sort')
+      if (!sl.error) set({ signSlots: ((sl.data ?? []) as Row[]).map((r): SignSlot => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, slotKey: r.slot_key, label: r.label, party: r.party, userId: r.user_id, sort: r.sort ?? 0, required: !!r.required, active: !!r.active })) })
+      },
+      async () => {
+      const ent = await supabase.from('ex_form_entries').select('*').order('created_at', { ascending: false })
+      if (!ent.error) set({ entries: ((ent.data ?? []) as Row[]).map((r): FormEntryRow => ({ id: r.id, projectId: r.project_id, templateId: r.template_id, entryDate: r.entry_date, header: r.header ?? [], rows: r.rows ?? [], createdAt: r.created_at })) })
+      },
+    ]
+    await Promise.all(groups.map((run) => run()))
     const t = (name: string) => supabase.from(name).select('*')
     const [crew, docs, dlinks, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once

@@ -41,6 +41,8 @@ interface State {
   linkTargets: Map<string, LinkTarget>
   roles: ProjectRole[]
   lookups: MtlLookup[]
+  /** only the shared pick-lists (fronts, stations…) — for modules that need the lists but not the whole material-control data */
+  fetchLookups: () => Promise<void>
   weldSets: WeldSet[]
   weldLines: WeldLine[]
   requisitions: Requisition[]
@@ -106,11 +108,21 @@ interface State {
   renameLookup: (projectId: string, kind: MtlLookup['kind'], oldLabel: string, newLabel: string) => Promise<number | null>
 }
 
+let lookupsPromise: Promise<void> | null = null
 const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], lookups: [], weldSets: [], weldLines: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
 
 export const useMaterialControlStore = create<State>((set, get) => ({
   ...initial,
 
+  fetchLookups: async () => {
+    if (lookupsPromise) return lookupsPromise
+    lookupsPromise = (async () => {
+      const r = await supabase.from('mtl_lookups').select('*').order('sort')
+      if (r.error) return
+      set({ lookups: ((r.data ?? []) as Row[]).map((x): MtlLookup => ({ id: x.id, masterProjectId: x.master_project_id, kind: x.kind, label: x.label, active: !!x.active, sort: x.sort ?? 0 })) })
+    })().finally(() => { lookupsPromise = null })
+    return lookupsPromise
+  },
   fetchAll: async () => {
     set({ loading: true })
     const t = (name: string) => supabase.from(name).select('*')

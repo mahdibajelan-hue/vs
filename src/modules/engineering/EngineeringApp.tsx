@@ -10,8 +10,6 @@ import '../finance/finance-dashboard.css'
 import '../material/material-control.css'
 import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
-import { useMaterialControlStore } from '../material/store/useMaterialControlStore'
-import { useMaterialStore } from '../material/store/useMaterialStore'
 import { useEpcStore } from '../execution/store/useEpcStore'
 import { buildEngTasks, lensOf } from './lib/roles'
 import { ErrorBoundary } from '../../components/common/ErrorBoundary'
@@ -39,10 +37,6 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
-  const csLoaded = useMaterialControlStore((s) => s.loaded)
-  const fetchControl = useMaterialControlStore((s) => s.fetchAll)
-  const matLoaded = useMaterialStore((s) => s.loaded)
-  const fetchMaterial = useMaterialStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   const [tab, setTab] = useState<Tab>('dash')
   const [projectId, setProjectId] = useState<string | null>(null)
@@ -51,8 +45,6 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
     if (!exLoaded) void fetchEx()
-    if (!matLoaded) fetchMaterial()
-    if (!csLoaded) void fetchControl()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
