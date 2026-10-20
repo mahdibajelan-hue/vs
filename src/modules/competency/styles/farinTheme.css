@@ -10,7 +10,7 @@
    targets, and prefers-reduced-motion respected.
    ========================================================================== */
 
-.fx {
+.fx, .comp-shell {
   --fx-surface: color-mix(in srgb, var(--bg-panel-solid) 82%, transparent);
   --fx-surface-2: rgba(255, 255, 255, 0.035);
   --fx-surface-3: rgba(255, 255, 255, 0.065);
@@ -31,7 +31,7 @@
   color: var(--text-primary);
 }
 
-:root[data-theme='light'] .fx {
+:root[data-theme='light'] .fx, :root[data-theme='light'] .comp-shell {
   --fx-surface: rgba(255, 255, 255, 0.9);
   --fx-surface-2: rgba(15, 23, 42, 0.03);
   --fx-surface-3: rgba(15, 23, 42, 0.06);
