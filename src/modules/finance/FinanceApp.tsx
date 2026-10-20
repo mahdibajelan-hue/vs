@@ -33,13 +33,14 @@ const DashboardPage = lazy(() => import('./pages/v2/DashboardPage').then((m) => 
 const ContractsRegister = lazy(() => import('./pages/v2/ContractsPage').then((m) => ({ default: m.ContractsRegister })))
 const BudgetPlanPage = L(() => import('./pages/v2/BudgetPage'), 'BudgetPlanPage')
 const CashPage = L(() => import('./pages/v2/CashPage'), 'CashPage')
+const ContractDocsPage = lazy(() => import('./pages/v3/ContractDocsPage').then((m) => ({ default: m.ContractDocsPage })))
 const CashFlowForecastPage = lazy(() => import('./pages/CashFlowForecastPage').then((m) => ({ default: m.CashFlowForecastPage })))
 
 export type FinTab = 'dashboard' | 'contracts' | 'billing' | 'budget' | 'cash' | 'attention' | 'admin'
 type Sub = { id: string; label: string }
 const NAV: { id: FinTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; project?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1' },
-  { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'فهرست و پرونده' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه و مفاصاحساب' }, { id: 'claims', label: 'ادعا و حسن انجام کار' }, { id: 'manage', label: 'ثبت و ویرایش' }] },
+  { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'فهرست و پرونده' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه و مفاصاحساب' }, { id: 'claims', label: 'ادعا و حسن انجام کار' }, { id: 'manage', label: 'ثبت و ویرایش' }, { id: 'docs', label: 'متن قرارداد و پرسش' }] },
   { id: 'budget', label: 'بودجه و هزینه', icon: Wallet, color: '#f59e0b', project: true, subs: [{ id: 'plan', label: 'ردیف‌ها و مصرف' }, { id: 'cost', label: 'هزینهٔ نهایی' }, { id: 'land', label: 'تملک اراضی' }, { id: 'annual', label: 'بودجهٔ کل و سالانه' }] },
   { id: 'cash', label: 'نقدینگی', icon: LineChart, color: '#14b8a6', project: true, subs: [{ id: 'project', label: 'پروژه: کارفرما و پیمانکار' }, { id: 'portfolio', label: 'سبد پروژه‌ها' }] },
   { id: 'billing', label: 'صورت‌وضعیت و پرداخت', icon: Receipt, color: '#0ea5e9', project: true, subs: [{ id: 'pipeline', label: 'گردش' }, { id: 'certificates', label: 'ثبت صورت‌وضعیت' }, { id: 'payments', label: 'ثبت پرداخت' }] },
@@ -83,7 +84,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     if (cur.project && !pid) return <div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div>
     const p = pid as string
     switch (tab) {
-      case 'contracts': return sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesManage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsManage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionManage masterProjectId={p} /></> : sub === 'manage' ? <ContractsManage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
+      case 'contracts': return sub === 'docs' ? <ContractDocsPage masterProjectId={p} /> : sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesManage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsManage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionManage masterProjectId={p} /></> : sub === 'manage' ? <ContractsManage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
       case 'billing': return sub === 'certificates' ? <BillingManage masterProjectId={p} view="certificates" /> : sub === 'payments' ? <BillingManage masterProjectId={p} view="payments" /> : <PipelinePage masterProjectId={p} />
       case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : sub === 'annual' ? <BudgetPage masterProjectId={p} /> : <BudgetPlanPage masterProjectId={p} />
       case 'cash': return sub === 'portfolio' ? <CashFlowForecastPage /> : <CashPage masterProjectId={p} />
