@@ -16,12 +16,15 @@ export interface Chunk {
 const MAX = 1100
 const ART = /^(?:ماده|article)\s*(\d+(?:[-–.]\d+)*|واحده)\s*[-–:.)]*\s*(.*)$/i
 const NUM = /^(\d+(?:[-–.]\d+)+|\d{1,3})\s*[-–.):]\s*(\S.*)$/
+const CHAP = /^(?:فصل|بخش|chapter|part)\s*(\d+|[آ-ی]+)\s*[-–:.)]*\s*(.*)$/i
 const SUB = /^(?:بند|تبصره|الف|ب|ج|د)\s*(\d*)\s*[-–:.)]\s*(.*)$/
 
 interface Head { level: number; no: string; title: string }
 function headOf(b: Extract<DocBlock, { type: 'p' }>): Head | null {
   const t = normalizeFa(b.text).replace(/\n/g, ' ').trim()
   const hs = /^heading\s*(\d)|^عنوان\s*(\d)|^title$/i.exec(b.style)
+  const c = CHAP.exec(t)
+  if (c && t.length <= 120) return { level: 0, no: `فصل ${c[1]}`, title: c[2] || '' }
   const a = ART.exec(t)
   if (a) return { level: 1, no: `ماده ${a[1]}`, title: a[2] || '' }
   if (hs && t.length <= 160) return { level: Number(hs[1] ?? hs[2] ?? 1), no: '', title: t }
@@ -35,6 +38,12 @@ function headOf(b: Extract<DocBlock, { type: 'p' }>): Head | null {
 }
 
 const numeric = (c: string): boolean => /^[\d\s.,٫٬/%-]+$/.test(normalizeFa(c))
+
+/** the article (ماده) a chunk belongs to — the unit shown when the reader asks for the full text; falls back to the first heading */
+export function articleOf(path: string): string {
+  const parts = path.split(' › ')
+  return parts.find((p) => /^ماده\s/.test(p)) ?? (parts.length > 1 && /^فصل\s/.test(parts[0]) ? parts[1] : parts[0]) ?? ''
+}
 
 /** Splits a parsed contract into searchable chunks: one per clause (long ones cut at paragraph boundaries), plus one per table row with its column titles, so «price of an item» finds the row. */
 export function buildChunks(blocks: DocBlock[]): Chunk[] {

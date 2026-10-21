@@ -9,6 +9,9 @@ export function normalizeFa(s: string): string {
     else if (ch === 'ي' || ch === 'ى') o += 'ی'
     else if (ch === 'ك') o += 'ک'
     else if (ch === 'ۀ' || ch === 'ة') o += 'ه'
+    else if (ch === 'أ' || ch === 'إ' || ch === 'ٱ') o += 'ا'
+    else if (ch === 'ؤ') o += 'و'
+    else if (ch === 'ئ') o += 'ی'
     else if (ch === '‌' || ch === '‏' || ch === '‎') o += ' '
     else if (ch === 'ـ' || /[ً-ٰٟ]/.test(ch)) continue
     else o += ch
@@ -25,6 +28,10 @@ export function stem(t: string): string {
   return t
 }
 
+/** every word, light-stemmed, stop words kept — for matching multi-word phrases such as «تغییر در کارها» */
+export function tokenizeAll(s: string): string[] {
+  return normalizeFa(s).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0).map(stem)
+}
 export function tokenize(s: string): string[] {
-  return normalizeFa(s).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 1 || /\d/.test(t)).map(stem).filter((t) => !STOP.has(t))
+  return tokenizeAll(s).filter((t) => (t.length > 1 || /\d/.test(t)) && !STOP.has(t))
 }
