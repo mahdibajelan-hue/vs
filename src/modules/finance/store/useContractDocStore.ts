@@ -43,7 +43,9 @@ async function writeChunks(docId: string, chunks: Chunk[]): Promise<string | nul
   }
   return null
 }
-const lowText = (rep: ParseReport, size: number): string => (rep.chars < 3000 && size > 150 * 1024 ? ' — هشدار: متن کمی از این فایل خوانده شد؛ اگر بخشی از متن تصویر/اسکن است، قابل جست‌وجو نیست.' : '')
+/** Too little text for the file size: the body is probably scanned pages or pictures. */
+export const isLowText = (chars: number, size: number): boolean => size > 150 * 1024 && (chars < 3000 || (chars < 20000 && chars * 200 < size))
+const lowText = (rep: ParseReport, size: number): string => (isLowText(rep.chars, size) ? ' — هشدار: متن کمی از این فایل خوانده شد؛ اگر بخشی از متن تصویر/اسکن است، قابل جست‌وجو نیست.' : '')
 
 interface State {
   projectId: string | null; loading: boolean; busy: string

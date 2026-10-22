@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileUp, Search, Trash2, FileText, Quote, Mic, Square, BookOpen, Download, RefreshCw, Copy, X, ScrollText } from 'lucide-react'
 import { useFinanceStore } from '../../store/useFinanceStore'
-import { PARSER_VERSION, useContractDocStore, type StoredChunk } from '../../store/useContractDocStore'
+import { isLowText, PARSER_VERSION, useContractDocStore, type StoredChunk } from '../../store/useContractDocStore'
 import { articleOf, buildIndex, extractFacts, highlight, search, SUGGESTED, type Hit } from '../../lib/contractDocs/search'
 import { useSpeech } from '../../lib/contractDocs/useSpeech'
 import { Chip, Section, fmtD, faDigits } from '../../components/fn'
@@ -62,6 +62,7 @@ export function ContractDocsPage({ masterProjectId }: { masterProjectId: string 
                     <span className="sub" style={{ marginInlineStart: 'auto' }}>{faDigits(String(d.chunkCount))} بند/ردیف · {kb(d.byteSize)} · {fmtD(d.createdAt.slice(0, 10))}</span>
                   </div>
                   {old && <p className="im-helper" style={{ margin: 0, color: '#b45309' }}>این سند با نسخهٔ قبلی خواننده فهرست شده و ممکن است متن بدنهٔ مواد آن خوانده نشده باشد. {d.storagePath ? 'دکمهٔ «خواندن دوباره» را بزنید.' : 'همین فایل را دوباره بارگذاری کنید تا با خوانندهٔ جدید جایگزین شود.'}</p>}
+                  {!old && d.stats.chars != null && isLowText(d.stats.chars, d.byteSize) && <p className="im-helper" style={{ margin: 0, color: '#b45309' }}>از این فایل {faDigits(d.stats.chars.toLocaleString('en'))} نویسه متن خوانده شد که برای حجم {kb(d.byteSize)} بسیار کم است؛ احتمالاً متن مواد به‌صورت تصویر یا اسکن در فایل آمده و قابل جست‌وجو نیست. نسخه‌ای از قرارداد را بارگذاری کنید که متن آن در Word قابل انتخاب و کپی باشد.</p>}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="im-btn im-btn-sm" onClick={() => setReader({ docId: d.id })}><BookOpen size={13} /> متن کامل سند</button>
                     {d.storagePath && <button className="im-btn im-btn-sm" onClick={() => void download(d.id)}><Download size={13} /> فایل اصلی</button>}
