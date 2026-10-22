@@ -3,7 +3,7 @@ import { CircleHelp, Search } from 'lucide-react'
 import { HELP, type HelpKey } from '../lib/help'
 import { normalizeFa } from '../lib/imText'
 
-const ORDER: HelpKey[] = ['hub', 'issues', 'newIssue', 'drawer', 'closing', 'tasks', 'extensions', 'tracking', 'calendar', 'mywork', 'decisions', 'knowledge', 'kpi', 'insights', 'tower', 'notifications', 'projects', 'settings', 'lateReport', 'rollup', 'field', 'assistant']
+const ORDER: HelpKey[] = ['hub', 'issues', 'newIssue', 'drawer', 'closing', 'tasks', 'extensions', 'tracking', 'calendar', 'mywork', 'decisions', 'knowledge', 'kpi', 'insights', 'tower', 'notifications', 'projects', 'settings', 'lateReport', 'rollup', 'assistant']
 
 /** Full guide: every section's help in one searchable page. */
 export function HelpPage() {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Bell, BookOpen, Building2, CalendarDays, CircleHelp, Gauge, Layers, ListChecks, OctagonAlert, Radar, Scale, ShieldAlert, Telescope } from 'lucide-react'
+import { Bell, BookOpen, Building2, CalendarDays, CircleHelp, Gauge, Layers, ListChecks, OctagonAlert, Scale, ShieldAlert, Telescope } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useScoped } from '../lib/useScoped'
 import { effectiveDue, isActiveIssue, priorityRank } from '../lib/imModel'
@@ -56,7 +56,6 @@ export function HubPage({ onGo }: { onGo: (tab: Tab) => void }) {
     { tab: 'mywork', en: 'My Work', fa: 'کارهای من', desc: 'منتظر تأیید و امروز', icon: ShieldAlert, color: '#ef4444' },
     { tab: 'knowledge', en: 'Lessons Learned', fa: 'دانش و درس‌آموخته', desc: 'تجربه‌های بسته‌شده', icon: BookOpen, color: '#ec4899' },
     { tab: 'projects', en: 'Projects', fa: 'پروژه‌ها', desc: 'از اطلاعات پایه سامانه', icon: Building2, color: '#0891b2' },
-    { tab: 'field', en: 'Field Monitoring', fa: 'پایش میدانی (قبلی)', desc: 'پایش اقدامات و پیگیری موانع', icon: Radar, color: '#d97706' },
     { tab: 'help', en: 'Guide', fa: 'راهنمای کامل', desc: 'آموزش هر بخش', icon: CircleHelp, color: '#64748b' },
   ]
 

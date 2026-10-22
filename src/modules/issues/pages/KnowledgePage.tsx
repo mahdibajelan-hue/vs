@@ -13,6 +13,8 @@ export function KnowledgePage({ onOpenIssue }: { onOpenIssue: (id: string) => vo
   const { lessons, loaded, fetchAll, setStatus, saveDraft } = useKnowledgeStore()
   const me = useAuthStore((s) => s.profile?.id)
   const projects = useIssuesStore((s) => s.projects)
+  const scope = useIssuesStore((s) => s.scopeProjectId)
+  const projectName = (id: string | null) => { const p = projects.find((x) => x.id === id); return p ? p.shortCode || p.name : '' }
   const members = useIssuesMembersStore((s) => s.membersByProject)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('all')
@@ -21,9 +23,9 @@ export function KnowledgePage({ onOpenIssue }: { onOpenIssue: (id: string) => vo
   useEffect(() => { if (!loaded) fetchAll() }, [loaded, fetchAll])
 
   const canPublish = (projectId: string | null) => !!projectId && (members[projectId] ?? []).some((m) => m.userId === me && m.role === 'admin')
-  const list = useMemo(() => lessons.filter((l) => (tab === 'published' ? l.status === 'published' : l.status !== 'published' && (l.createdBy === me || canPublish(l.projectId))))
+  const list = useMemo(() => lessons.filter((l) => scope === 'all' || l.projectId === scope).filter((l) => (tab === 'published' ? l.status === 'published' : l.status !== 'published' && (l.createdBy === me || canPublish(l.projectId))))
     .filter((l) => cat === 'all' || l.category === cat)
-    .filter((l) => !q.trim() || normalizeFa(q).split(' ').every((w) => normalizeFa([l.title, l.context, l.rootCause, l.solution, l.prevention, l.tags.join(' ')].join(' ')).includes(w))), [lessons, tab, cat, q, me, members])
+    .filter((l) => !q.trim() || normalizeFa(q).split(' ').every((w) => normalizeFa([l.title, l.context, l.rootCause, l.solution, l.prevention, l.tags.join(' ')].join(' ')).includes(w))), [lessons, scope, tab, cat, q, me, members])
   const [draft, setDraft] = useState<Record<string, { rootCause: string; solution: string; prevention: string }>>({})
 
   return (
@@ -40,7 +42,7 @@ export function KnowledgePage({ onOpenIssue }: { onOpenIssue: (id: string) => vo
           const d = draft[l.id] ?? { rootCause: l.rootCause, solution: l.solution, prevention: l.prevention }
           return (
             <div key={l.id} className="im-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b><BookOpen size={14} style={{ display: 'inline', marginLeft: 6 }} />{l.title}</b>{l.category && <span className="im-chip">{IM_CATEGORY_FA[l.category]}</span>}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b><BookOpen size={14} style={{ display: 'inline', marginLeft: 6 }} />{l.title}</b><span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>{scope === 'all' && projectName(l.projectId) && <span className="im-chip" title={projects.find((x) => x.id === l.projectId)?.name}>{projectName(l.projectId)}</span>}{l.category && <span className="im-chip">{IM_CATEGORY_FA[l.category]}</span>}</span></div>
               {editing === l.id ? (
                 <div style={{ marginTop: 10 }}>
                   {([['rootCause', 'علت ریشه‌ای'], ['solution', 'راه‌حل'], ['prevention', 'پیشگیری در پروژه‌های بعد']] as const).map(([k, label]) => <div className="im-field" key={k}><label>{label}</label><textarea style={{ minHeight: 54 }} value={d[k]} onChange={(e) => setDraft({ ...draft, [l.id]: { ...d, [k]: e.target.value } })} /></div>)}

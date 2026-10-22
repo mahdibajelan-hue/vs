@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart3, BookOpen, Building2, Plus, Radar, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, Network, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BarChart3, BookOpen, Building2, Plus, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, Network, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -35,9 +35,7 @@ import type { IssueFilter } from './lib/imRegister'
 import './issues.css'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
-const TaskIssueApp = lazy(() => import('../taskissue/TaskIssueApp').then((m) => ({ default: m.TaskIssueApp })))
-
-export type Tab = 'home' | 'issues' | 'tracking' | 'calendar' | 'mywork' | 'decisions' | 'tower' | 'kpi' | 'insights' | 'notifications' | 'knowledge' | 'projects' | 'report' | 'portfolio' | 'field' | 'settings' | 'help'
+export type Tab = 'home' | 'issues' | 'tracking' | 'calendar' | 'mywork' | 'decisions' | 'tower' | 'kpi' | 'insights' | 'notifications' | 'knowledge' | 'projects' | 'report' | 'portfolio' | 'settings' | 'help'
 type DrawerTab = 'overview' | 'tasks' | 'extensions' | 'decisions'
 
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string; help: HelpKey }[] = [
@@ -55,7 +53,6 @@ const NAV: { id: Tab; label: string; icon: LucideIcon; color: string; help: Help
   { id: 'projects', label: 'پروژه‌ها', icon: Building2, color: '#0891b2', help: 'projects' },
   { id: 'report', label: 'گزارش تأخیر', icon: BarChart3, color: '#fb923c', help: 'lateReport' },
   { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network, color: '#a78bfa', help: 'rollup' },
-  { id: 'field', label: 'پایش میدانی', icon: Radar, color: '#d97706', help: 'field' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8', help: 'settings' },
   { id: 'help', label: 'راهنما', icon: CircleHelp, color: '#64748b', help: 'hub' },
 ]
@@ -180,13 +177,6 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             {tab === 'projects' && <ProjectsPage onOpenProject={(id) => { setScope(id); setTab('tracking') }} />}
             {tab === 'report' && <div className="im-page"><ReportPage onSelectIssue={openIssue} /></div>}
             {tab === 'portfolio' && <div className="im-page"><PortfolioRollupPage onSelectIssue={openIssue} /></div>}
-            {tab === 'field' && (
-              <div className="im-page" style={{ height: 'calc(100vh - 190px)', minHeight: 420 }}>
-                <Suspense fallback={<div className="im-skeleton" style={{ height: 200 }} />}>
-                  <TaskIssueApp embedded onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
-                </Suspense>
-              </div>
-            )}
             {tab === 'settings' && <SettingsPage />}
             {tab === 'help' && <HelpPage />}
           </div>

@@ -9,7 +9,7 @@ export interface HelpTopic {
 
 export type HelpKey =
   | 'hub' | 'issues' | 'newIssue' | 'drawer' | 'tracking' | 'calendar' | 'mywork' | 'decisions' | 'knowledge' | 'kpi' | 'insights' | 'tower'
-  | 'notifications' | 'projects' | 'settings' | 'lateReport' | 'rollup' | 'field' | 'closing' | 'extensions' | 'tasks' | 'assistant'
+  | 'notifications' | 'projects' | 'settings' | 'lateReport' | 'rollup' | 'closing' | 'extensions' | 'tasks' | 'assistant'
 
 export const HELP: Record<HelpKey, HelpTopic> = {
   hub: {
@@ -140,11 +140,6 @@ export const HELP: Record<HelpKey, HelpTopic> = {
     title: 'تحلیل سه‌سطحی',
     purpose: 'مسائل را در سه سطح پورتفولیو، برنامه و پروژه تجمیع می‌کند (از ساختار «اطلاعات پایه»).',
     steps: ['یک سطح را باز کنید تا زیرمجموعه‌ها دیده شوند.'],
-  },
-  field: {
-    title: 'پایش میدانی (سامانهٔ قبلی)',
-    purpose: 'داده و صفحه‌های «پایش اقدامات» و «پیگیری موانع پروژه‌ها» با همان امکانات قبلی و داده‌های تاریخی حفظ شده است.',
-    steps: ['بین دو بخش بالا جابه‌جا شوید.', 'برای کار جدید از بخش «مسائل» استفاده کنید؛ این بخش برای دسترسی به سوابق است.'],
   },
   assistant: {
     title: 'دستیار هوشمند',
