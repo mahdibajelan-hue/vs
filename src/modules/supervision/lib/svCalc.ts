@@ -40,10 +40,10 @@ export function dayHours(checkIn: string | null, checkOut: string | null, s: SvS
   return h === null || h === 0 ? { hours: s.standardHours, overtime: 0 } : splitHours(h, s.standardHours)
 }
 
-/** Meals a person gets on a day: a present day gives the meals the person is entitled to; any other day none. */
-export function mealsOf(p: Pick<SvPerson, 'mealBreakfast' | 'mealLunch' | 'mealDinner'>, status: SvStatus): { breakfast: boolean; lunch: boolean; dinner: boolean } {
+/** Meals of a day: a supervisor who is present takes all three meals, however long the day; any other status none. */
+export function mealsOf(_p: unknown, status: SvStatus): { breakfast: boolean; lunch: boolean; dinner: boolean } {
   const on = status === 'present'
-  return { breakfast: on && p.mealBreakfast, lunch: on && p.mealLunch, dinner: on && p.mealDinner }
+  return { breakfast: on, lunch: on, dinner: on }
 }
 
 /** The values a day takes when its status is set: a present day takes the person's shift (or the standard 8 hours) and meals; mission counts the duty day. */
@@ -113,8 +113,8 @@ export function personMonth(p: SvPerson, rows: SvAttendance[], days: string[], s
     shortfall: Math.max(0, req - worked - sick), restAllowed, restOver: Math.max(0, rest - restAllowed),
     hours, overtime, overtimeCap: cap, overtimeLeft: r2(Math.max(0, cap - overtime)), overtimeOver: r2(Math.max(0, overtime - cap)),
     belowFloor: overtime < s.overtimeMin,
-    // meals follow attendance: every present day gives the person's meals
-    breakfast: p.mealBreakfast ? present : 0, lunch: p.mealLunch ? present : 0, dinner: p.mealDinner ? present : 0,
+    // meals follow attendance: every present day is breakfast, lunch and dinner
+    breakfast: present, lunch: present, dinner: present,
   }
 }
 

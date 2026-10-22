@@ -6,6 +6,7 @@ import { X } from 'lucide-react'
 export function CellPopover({ anchor, title, onClose, children }: { anchor: HTMLElement; title: ReactNode; onClose: () => void; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  // Follows the cell when the page or the grid scrolls (on a phone the keyboard or a picker scrolls the page) instead of closing.
   useLayoutEffect(() => {
     const place = () => {
       const r = anchor.getBoundingClientRect(), w = box.current?.offsetWidth ?? 300, h = box.current?.offsetHeight ?? 220
@@ -16,16 +17,15 @@ export function CellPopover({ anchor, title, onClose, children }: { anchor: HTML
     const ro = new ResizeObserver(place)
     if (box.current) ro.observe(box.current)
     window.addEventListener('resize', place)
-    return () => { ro.disconnect(); window.removeEventListener('resize', place) }
+    document.addEventListener('scroll', place, true)
+    return () => { ro.disconnect(); window.removeEventListener('resize', place); document.removeEventListener('scroll', place, true) }
   }, [anchor])
   useEffect(() => {
     const down = (e: PointerEvent) => { const t = e.target as Node; if (box.current && !box.current.contains(t) && !anchor.contains(t)) onClose() }
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { onClose(); anchor.focus() } }
-    const scroll = (e: Event) => { if (box.current && e.target instanceof Node && box.current.contains(e.target)) return; onClose() }
     document.addEventListener('pointerdown', down)
     document.addEventListener('keydown', key)
-    document.addEventListener('scroll', scroll, true)
-    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key); document.removeEventListener('scroll', scroll, true) }
+    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key) }
   }, [anchor, onClose])
   return createPortal(
     <div className="im-root sv-root sv-portal" dir="rtl">

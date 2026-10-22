@@ -5,6 +5,7 @@ import { fa, faNum, monthDays, monthLabel, type Ym } from '../lib/svMonth'
 import { dayHours } from '../lib/svCalc'
 import type { SvPerson, SvSettings } from '../types'
 import { Flash, MonthNav } from '../components/common'
+import { TimeField } from '../components/TimeField'
 
 const FIELDS: { k: keyof SvSettings; label: string; hint: string; step?: number }[] = [
   { k: 'dutyDays', label: 'روز موظفی در ماه', hint: 'از ۳۰ روز؛ بقیه روز استراحت است (پنجشنبه و جمعه هم روز کاری‌اند).' },
@@ -112,8 +113,8 @@ function ShiftRow({ p }: { p: SvPerson }) {
   return (
     <tr>
       <td><b>{p.fullName}</b><div className="sv-sub">{p.roleTitle}</div></td>
-      <td><input type="time" value={v.start} onChange={(e) => { setV({ ...v, start: e.target.value }); setState('') }} aria-label={`شروع کار ${p.fullName}`} style={{ width: 120 }} /></td>
-      <td><input type="time" value={v.end} onChange={(e) => { setV({ ...v, end: e.target.value }); setState('') }} aria-label={`پایان کار ${p.fullName}`} style={{ width: 120 }} /></td>
+      <td><TimeField label={`شروع کار ${p.fullName}`} value={v.start} onChange={(x) => { setV({ ...v, start: x }); setState('') }} /></td>
+      <td><TimeField label={`پایان کار ${p.fullName}`} value={v.end} onChange={(x) => { setV({ ...v, end: x }); setState('') }} /></td>
       <td className="sv-num">{faNum(h.hours)} ساعت{h.overtime > 0 && <span className="sv-warn"> (+{faNum(h.overtime)} اضافه‌کار)</span>}</td>
       <td style={{ whiteSpace: 'nowrap' }}>
         <button className="im-btn im-btn-ghost im-btn-sm" disabled={!dirty} onClick={save}><Save size={13} /> ذخیره</button>

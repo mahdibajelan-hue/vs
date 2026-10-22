@@ -7,6 +7,7 @@ import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } fr
 import type { SvPerson, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
 import { Empty, Flash, MonthNav, StatusSeg } from '../components/common'
 import { CellPopover } from '../components/CellEditor'
+import { TimeField } from '../components/TimeField'
 
 type Open = { kind: 'person' | 'vehicle' | 'day'; id: string; day: string; el: HTMLElement } | null
 const WD = 'شیدسچپج'
@@ -131,7 +132,7 @@ export function MonthPage({ month, onMonth, onGoRoster }: { month: Ym; onMonth: 
           </table>
         </div>
       )}
-      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. وعده‌های غذایی از روی روزهای حضور حساب می‌شوند. با زدن عدد روز در سرستون، همهٔ ثبت‌نشده‌های آن روز حاضر زده می‌شوند.</p>
+      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. هر روز حاضر صبحانه، ناهار و شام حساب می‌شود. با زدن عدد روز در سرستون، همهٔ ثبت‌نشده‌های آن روز حاضر زده می‌شوند.</p>
 
       {open?.kind === 'person' && (() => { const p = people.find((x) => x.id === open.id); return p ? <PersonDay key={open.id + open.day} p={p} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} /> : null })()}
       {open?.kind === 'vehicle' && (() => { const v = vehicles.find((x) => x.id === open.id); return v ? <VehicleDayEditor key={open.id + open.day} v={v} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} /> : null })()}
@@ -149,22 +150,17 @@ function PersonDay({ p, day, anchor, onClose, onError }: { p: SvPerson; day: str
   const row = useSupervisionStore((s) => s.att[attKey(p.id, day)])
   const setDay = useSupervisionStore((s) => s.setDay)
   const clearDay = useSupervisionStore((s) => s.clearDay)
-  const [times, setTimes] = useState({ in: row?.checkIn ?? '', out: row?.checkOut ?? '' })
-  const latest = useRef(times)
-  latest.current = times
-  useEffect(() => { setTimes({ in: row?.checkIn ?? '', out: row?.checkOut ?? '' }) }, [row?.status]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const pick = async (st: SvStatus) => {
     if (row?.status === st) return
     const keep = row && isWorking(row.status) && st === 'present' && row.checkIn ? { checkIn: row.checkIn, checkOut: row.checkOut, ...dayHours(row.checkIn, row.checkOut, settings), ...mealsOf(p, st) } : dayDefaults(p, st, settings)
     onError(await setDay(p.id, day, { status: st, note: row?.note ?? '', ...keep }))
   }
-  const saveTimes = async () => {
-    if (!row) return
-    const ci = latest.current.in || null, co = latest.current.out || null
-    if (ci === row.checkIn && co === row.checkOut) return
+  // every change of a time is saved at once (no blur juggling): hours and overtime follow from the pair
+  const setTimes = async (ci: string | null, co: string | null) => {
+    if (!row || (ci === row.checkIn && co === row.checkOut)) return
     onError(await setDay(p.id, day, { status: row.status, note: row.note, checkIn: ci, checkOut: co, ...dayHours(ci, co, settings), ...mealsOf(p, row.status) }))
   }
+  const shift = p.shiftStart && p.shiftEnd ? { in: p.shiftStart, out: p.shiftEnd } : null
   const clear = async () => { if (onError(await clearDay(p.id, day))) onClose() }
   const meals = row ? mealsOf(p, row.status) : null
   const mealText = meals ? [meals.breakfast && 'صبحانه', meals.lunch && 'ناهار', meals.dinner && 'شام'].filter(Boolean).join('، ') : ''
@@ -173,10 +169,16 @@ function PersonDay({ p, day, anchor, onClose, onError }: { p: SvPerson; day: str
     <CellPopover anchor={anchor} title={<><b>{p.fullName}</b><div className="sv-sub">{weekdayFa(day)} {fa(formatJalali(day))}{row?.source === 'clock' && ' · از کارت ساعت'}</div></>} onClose={onClose}>
       <StatusSeg label="وضعیت" value={row?.status ?? null} options={STATUS_ORDER} labels={STATUS_FA} onChange={pick} />
       {working && row.status === 'present' && (
-        <div className="sv-pop-times">
-          <label>ورود<input type="time" value={times.in} onChange={(e) => setTimes({ ...times, in: e.target.value })} onBlur={saveTimes} aria-label="ساعت ورود" autoFocus /></label>
-          <label>خروج<input type="time" value={times.out} onChange={(e) => setTimes({ ...times, out: e.target.value })} onBlur={saveTimes} aria-label="ساعت خروج" /></label>
-        </div>
+        <>
+          <div className="sv-pop-times">
+            <div className="sv-tf"><span>ورود</span><TimeField label="ساعت ورود" value={row.checkIn ?? ''} onChange={(v) => setTimes(v || null, row.checkOut)} /></div>
+            <div className="sv-tf"><span>خروج</span><TimeField label="ساعت خروج" value={row.checkOut ?? ''} onChange={(v) => setTimes(row.checkIn, v || null)} /></div>
+          </div>
+          <div className="sv-chips">
+            {shift && (shift.in !== row.checkIn || shift.out !== row.checkOut) && <button type="button" className="im-chip" onClick={() => setTimes(shift.in, shift.out)}>ساعت کاری: {fa(shift.in)} تا {fa(shift.out)}</button>}
+            {(row.checkIn || row.checkOut) && <button type="button" className="im-chip" onClick={() => setTimes(null, null)}>بدون ساعت ({fa(settings.standardHours)} ساعت)</button>}
+          </div>
+        </>
       )}
       {row && (
         <p className="sv-pop-sum">
@@ -186,7 +188,7 @@ function PersonDay({ p, day, anchor, onClose, onError }: { p: SvPerson; day: str
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <button className="im-btn im-btn-ghost im-btn-sm" onClick={clear} disabled={!row}><Eraser size={13} /> پاک کردن روز</button>
-        <button className="im-btn im-btn-primary im-btn-sm" onClick={async () => { await saveTimes(); onClose() }}>تأیید</button>
+        <button className="im-btn im-btn-primary im-btn-sm" onClick={onClose}>تأیید</button>
       </div>
     </CellPopover>
   )

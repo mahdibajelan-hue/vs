@@ -24,12 +24,13 @@ const fromPerson = (p: Partial<SvPerson>): Row => {
 }
 const toGuest = (r: Row): SvGuestMeal => ({ id: s(r.id), day: s(r.day), guestName: s(r.guest_name), organization: s(r.organization), host: s(r.host), breakfast: n(r.breakfast), lunch: n(r.lunch), dinner: n(r.dinner), note: s(r.note) })
 const toVehicle = (r: Row): SvVehicle => ({
-  id: s(r.id), projectId: s(r.master_project_id), title: s(r.title), plate: s(r.plate), kind: (r.kind as SvVehicle['kind']) ?? 'sedan', lessor: s(r.lessor), driver: s(r.driver),
+  id: s(r.id), projectId: s(r.master_project_id), title: s(r.title), plate: s(r.plate), kind: (r.kind as SvVehicle['kind']) ?? 'sedan',
+  modelYear: r.model_year == null ? null : n(r.model_year), engineCc: r.engine_cc == null ? null : n(r.engine_cc), gearbox: (r.gearbox as SvVehicle['gearbox']) ?? null, ownership: (r.ownership as SvVehicle['ownership']) ?? 'rented', lessor: s(r.lessor), driver: s(r.driver),
   personId: (r.person_id as string) ?? null, cardNo: s(r.card_no), startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null, active: !!r.active, note: s(r.note),
 })
 const fromVehicle = (v: Partial<SvVehicle>): Row => {
   const o: Row = {}
-  const m: [keyof SvVehicle, string][] = [['title', 'title'], ['plate', 'plate'], ['kind', 'kind'], ['lessor', 'lessor'], ['driver', 'driver'], ['personId', 'person_id'], ['cardNo', 'card_no'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
+  const m: [keyof SvVehicle, string][] = [['title', 'title'], ['plate', 'plate'], ['kind', 'kind'], ['modelYear', 'model_year'], ['engineCc', 'engine_cc'], ['gearbox', 'gearbox'], ['ownership', 'ownership'], ['lessor', 'lessor'], ['driver', 'driver'], ['personId', 'person_id'], ['cardNo', 'card_no'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
   for (const [k, c] of m) if (k in v) o[c] = v[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'person_id') ? null : v[k]
   return o
 }

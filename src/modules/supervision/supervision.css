@@ -103,3 +103,15 @@
 .sv-pop-sum { margin: 0; font-size: 12.5px; color: var(--im-muted-2); line-height: 1.8; }
 .sv-pop-sum b { color: var(--im-text); }
 @media print { .sv-print-keep { break-inside: avoid; } .sv-portal { display: none !important; } }
+
+/* round 3: 24-hour time as two lists (the phone opens its wheel) */
+.sv-timef { display: inline-flex; align-items: center; gap: 4px; direction: ltr; }
+.sv-root .sv-timef select { width: auto; min-width: 58px; min-height: 42px; padding: 6px 8px; font-size: 16px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.sv-timef span { font-weight: 800; color: var(--im-muted-2); }
+.sv-tf { display: grid; gap: 4px; justify-items: start; }
+.sv-tf > span { font-size: 11.5px; color: var(--im-muted-2); }
+.sv-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.sv-chips .im-chip { cursor: pointer; padding: 6px 10px; font-size: 11.5px; }
+.sv-range { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sv-range label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--im-muted-2); }
+.sv-h3 { font-size: 15px; font-weight: 900; margin: 4px 0 8px; }

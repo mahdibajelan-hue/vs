@@ -38,8 +38,8 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
       ['نام', 'سمت', 'طرف', 'روز در پروژه', 'موظف', 'کارکرد', 'حاضر', 'مأموریت', 'استراحت', 'استعلاجی', 'غیبت', 'ثبت‌نشده', 'کسری', 'ساعت کار', 'اضافه‌کار', 'سقف اضافه‌کار', 'مانده اضافه‌کار', 'صبحانه', 'ناهار', 'شام'].map(q).join(','),
       ...pm.map(({ p, m }) => [p.fullName, p.roleTitle, SIDE_FA[p.side], m.onProject, m.required, m.worked, m.present, m.mission, m.rest, m.sick, m.absent, m.unmarked, m.shortfall, m.hours, m.overtime, m.overtimeCap, m.overtimeLeft, m.breakfast, m.lunch, m.dinner].map(q).join(',')),
       '',
-      ['خودرو', 'پلاک', 'راننده', 'در اختیار', 'روز در پروژه', 'روز کارکرد', 'تعمیر', 'نبود', 'ثبت‌نشده', 'ساعت کار', 'کیلومتر'].map(q).join(','),
-      ...vm.map(({ v, m }) => [v.title, v.plate, v.driver, driver(v.personId), m.onProject, m.present, m.repair, m.absent, m.unmarked, m.hours, m.km].map(q).join(',')),
+      ['خودرو', 'پلاک', 'مالکیت', 'سال ساخت', 'حجم موتور', 'گیربکس', 'راننده', 'در اختیار', 'روز در پروژه', 'روز کارکرد', 'تعمیر', 'نبود', 'ثبت‌نشده', 'ساعت کار', 'کیلومتر'].map(q).join(','),
+      ...vm.map(({ v, m }) => [v.title, v.plate, v.ownership === 'company' ? 'شرکتی' : 'استیجاری', v.modelYear ?? '', v.engineCc ?? '', v.gearbox === 'automatic' ? 'اتوماتیک' : v.gearbox === 'manual' ? 'دستی' : '', v.driver, driver(v.personId), m.onProject, m.present, m.repair, m.absent, m.unmarked, m.hours, m.km].map(q).join(',')),
       '',
       ['جمع تسهیلات', 'روز حضور', 'صبحانه', 'ناهار', 'شام', 'روز-خودرو', 'ساعت خودرو'].map(q).join(','),
       ...sides.map((x) => [x.sd === 'supervision' ? 'دستگاه نظارت' : 'نمایندگان کارفرما', x.worked, x.b, x.l, x.d, '', ''].map(q).join(',')),
@@ -111,12 +111,13 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
       {vm.length > 0 && (
         <div className="im-table-wrap">
           <table className="im-table">
-            <thead><tr><th>خودرو</th><th>پلاک</th><th>راننده / در اختیار</th><th>روز کارکرد</th><th>تعمیر</th><th>نبود</th><th>ساعت کار</th><th>کیلومتر</th></tr></thead>
+            <thead><tr><th>خودرو</th><th>پلاک</th><th>مالکیت</th><th>راننده / در اختیار</th><th>روز کارکرد</th><th>تعمیر</th><th>نبود</th><th>ساعت کار</th><th>کیلومتر</th></tr></thead>
             <tbody>
               {vm.map(({ v, m }) => (
                 <tr key={v.id}>
                   <td><b>{v.title}</b>{v.lessor && <div className="sv-note" style={{ fontSize: 11 }}>موجر: {v.lessor}</div>}{m.unmarked > 0 && <div className="sv-warn" style={{ fontSize: 11 }}>{fa(m.unmarked)} روز ثبت‌نشده</div>}</td>
                   <td>{v.plate || '—'}</td>
+                  <td>{v.ownership === 'company' ? 'شرکتی' : 'استیجاری'}</td>
                   <td>{[v.driver, driver(v.personId)].filter(Boolean).join(' / ') || '—'}</td>
                   <td className="sv-num"><b>{fa(m.present)}</b> / {fa(m.onProject)}</td>
                   <td className="sv-num">{m.repair ? fa(m.repair) : '—'}</td>
@@ -140,11 +141,11 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
           </tbody>
         </table></div>
         <div className="im-table-wrap" style={{ marginTop: 10 }}><table className="im-table">
-          <thead><tr><th>خودروهای استیجاری</th><th>تعداد</th><th>روز کارکرد</th><th>ساعت کار</th><th>کیلومتر</th></tr></thead>
+          <thead><tr><th>خودروها</th><th>تعداد</th><th>روز کارکرد</th><th>ساعت کار</th><th>کیلومتر</th></tr></thead>
           <tbody><tr><td><b>جمع</b></td><td className="sv-num">{fa(vm.length)}</td><td className="sv-num"><b>{fa(tot.vehicleDays)}</b></td><td className="sv-num">{faNum(tot.vehicleHours)}</td><td className="sv-num">{faNum(vm.reduce((a, x) => a + x.m.km, 0), 0)}</td></tr></tbody>
         </table></div>
       </section>
-      <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور هر نفر حساب شده‌اند و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
+      <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور حساب شده‌اند (هر روز حاضر = صبحانه، ناهار و شام) و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
     </div>
   )
 }

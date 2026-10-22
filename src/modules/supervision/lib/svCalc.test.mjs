@@ -17,8 +17,8 @@ assert.deepEqual(c.splitHours(10.5, 8), { hours: 10.5, overtime: 2.5 })
 assert.deepEqual(c.splitHours(6, 8), { hours: 6, overtime: 0 })
 
 // ── defaults: no shift = the 8-hour duty day; a night shift 19:00–07:00 = 8 h + 4 h overtime
-assert.deepEqual(c.dayDefaults(person(), 'present', S), { checkIn: null, checkOut: null, hours: 8, overtime: 0, breakfast: true, lunch: true, dinner: false })
-assert.deepEqual(c.dayDefaults(person({ shiftStart: '19:00', shiftEnd: '07:00' }), 'present', S), { checkIn: '19:00', checkOut: '07:00', hours: 12, overtime: 4, breakfast: true, lunch: true, dinner: false })
+assert.deepEqual(c.dayDefaults(person(), 'present', S), { checkIn: null, checkOut: null, hours: 8, overtime: 0, breakfast: true, lunch: true, dinner: true })
+assert.deepEqual(c.dayDefaults(person({ shiftStart: '19:00', shiftEnd: '07:00' }), 'present', S), { checkIn: '19:00', checkOut: '07:00', hours: 12, overtime: 4, breakfast: true, lunch: true, dinner: true })
 assert.equal(c.dayDefaults(person(), 'mission', S).lunch, false)
 assert.equal(c.dayDefaults(person(), 'rest', S).hours, 0)
 assert.equal(c.dayDefaults(person(), 'sick', S).hours, 0)
@@ -42,7 +42,7 @@ assert.equal(m.belowFloor, false)
 assert.equal(m.hours, 21 * 11 + 8)
 assert.equal(m.breakfast, 21)
 assert.equal(m.lunch, 21)
-assert.equal(m.dinner, 0)
+assert.equal(m.dinner, 21, 'a present day is all three meals')
 assert.equal(m.unmarked, 0)
 
 // personal ceiling of 60h: 3h over
@@ -53,7 +53,7 @@ assert.equal(m60.overtimeOver, 3)
 // medical leave is excused: 20 present + 3 sick + 7 rest → no shortfall; meals only on the 20 present days
 const sickRows = days.map((d, i) => att(d, i < 20 ? 'present' : i < 23 ? 'sick' : 'rest'))
 const ms = c.personMonth(person(), sickRows, days, S, days[29])
-assert.deepEqual([ms.worked, ms.sick, ms.shortfall, ms.breakfast, ms.dinner], [20, 3, 0, 20, 0])
+assert.deepEqual([ms.worked, ms.sick, ms.shortfall, ms.breakfast, ms.dinner], [20, 3, 0, 20, 20])
 
 // ── running month: only days up to the 10th are expected; nothing recorded yet
 const early = c.personMonth(person(), [], days, S, days[9])

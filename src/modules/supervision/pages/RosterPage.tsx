@@ -5,12 +5,13 @@ import { JalaliDateField } from '../../issues/components/JalaliDateField'
 import { useSupervisionStore } from '../store/useSupervisionStore'
 import { formatJalali } from '../../../lib/jalali'
 import { fa } from '../lib/svMonth'
-import type { SvPerson, SvVehicle, SvVehicleKind } from '../types'
+import type { SvGearbox, SvOwnership, SvPerson, SvVehicle, SvVehicleKind } from '../types'
 import { Empty, Flash } from '../components/common'
 
 const SIDE_FA = { supervision: 'دستگاه نظارت', employer: 'نمایندهٔ کارفرما' } as const
 const KIND_FA: Record<SvVehicleKind, string> = { sedan: 'سواری', pickup: 'وانت', suv: 'شاسی‌بلند', van: 'ون', minibus: 'مینی‌بوس', other: 'سایر' }
-const MEALS = [['mealBreakfast', 'صبحانه'], ['mealLunch', 'ناهار'], ['mealDinner', 'شام']] as const
+const GEAR_FA: Record<SvGearbox, string> = { manual: 'دستی', automatic: 'اتوماتیک' }
+const OWN_FA: Record<SvOwnership, string> = { rented: 'استیجاری', company: 'شرکتی' }
 
 /** نفرات و خودروها — who is on the project and which cars are rented for them. */
 export function RosterPage() {
@@ -38,13 +39,12 @@ export function RosterPage() {
         </div>
         {!people.length ? <Empty>نفری ثبت نشده است.</Empty> : (
           <div className="im-table-wrap"><table className="im-table">
-            <thead><tr><th>نام</th><th>سمت</th><th>ساعت کار</th><th>وعده‌ها</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>دوره</th><th /></tr></thead>
+            <thead><tr><th>نام</th><th>سمت</th><th>ساعت کار</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>دوره</th><th /></tr></thead>
             <tbody>{people.map((p) => (
               <tr key={p.id} style={p.active ? undefined : { opacity: 0.55 }}>
                 <td><b>{p.fullName}</b>{!p.active && <span className="im-chip" style={{ marginInlineStart: 6 }}>غیرفعال</span>}<div className="sv-note" style={{ fontSize: 11 }}>{SIDE_FA[p.side]}{p.mobile && ` · ${fa(p.mobile)}`}</div></td>
                 <td>{p.roleTitle || '—'}</td>
                 <td className="sv-num">{p.shiftStart && p.shiftEnd ? `${fa(p.shiftStart)} تا ${fa(p.shiftEnd)}` : '—'}</td>
-                <td>{MEALS.filter(([k]) => p[k]).map(([, l]) => l).join('، ') || '—'}</td>
                 <td className="sv-num">{fa(p.overtimeCap ?? settings.overtimeMax)} ساعت{p.overtimeCap == null && <span className="sv-note"> (پیش‌فرض)</span>}</td>
                 <td>{p.cardNo ? fa(p.cardNo) : '—'}</td>
                 <td className="sv-note">{period(p.startDate, p.endDate) || '—'}</td>
@@ -57,16 +57,19 @@ export function RosterPage() {
 
       <section>
         <div className="im-topbar" style={{ marginBottom: 10 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}><Car size={17} style={{ display: 'inline', verticalAlign: -3 }} /> خودروهای استیجاری ({fa(vehicles.length)})</h2>
-          <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setEditV({ kind: 'sedan', active: true })}><Plus size={15} /> افزودن خودرو</button>
+          <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}><Car size={17} style={{ display: 'inline', verticalAlign: -3 }} /> خودروها ({fa(vehicles.length)})</h2>
+          <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setEditV({ kind: 'sedan', ownership: 'rented', active: true })}><Plus size={15} /> افزودن خودرو</button>
         </div>
         {!vehicles.length ? <Empty>خودرویی ثبت نشده است.</Empty> : (
           <div className="im-table-wrap"><table className="im-table">
-            <thead><tr><th>خودرو</th><th>پلاک</th><th>نوع</th><th>راننده</th><th>در اختیار</th><th>موجر</th><th>دوره</th><th /></tr></thead>
+            <thead><tr><th>خودرو</th><th>پلاک</th><th>مشخصات</th><th>مالکیت</th><th>راننده</th><th>در اختیار</th><th>دوره</th><th /></tr></thead>
             <tbody>{vehicles.map((v) => (
               <tr key={v.id} style={v.active ? undefined : { opacity: 0.55 }}>
                 <td><b>{v.title}</b>{!v.active && <span className="im-chip" style={{ marginInlineStart: 6 }}>غیرفعال</span>}</td>
-                <td>{v.plate || '—'}</td><td>{KIND_FA[v.kind]}</td><td>{v.driver || '—'}</td><td>{name(v.personId) || '—'}</td><td>{v.lessor || '—'}</td>
+                <td>{v.plate || '—'}</td>
+                <td className="sv-note">{[KIND_FA[v.kind], v.modelYear && `مدل ${fa(v.modelYear)}`, v.engineCc && `${fa(v.engineCc)} سی‌سی`, v.gearbox && `گیربکس ${GEAR_FA[v.gearbox]}`].filter(Boolean).join(' · ')}</td>
+                <td><span className="im-chip">{OWN_FA[v.ownership]}</span>{v.ownership === 'rented' && v.lessor && <div className="sv-sub">{v.lessor}</div>}</td>
+                <td>{v.driver || '—'}</td><td>{name(v.personId) || '—'}</td>
                 <td className="sv-note">{period(v.startDate, v.endDate) || '—'}</td>
                 <td style={{ whiteSpace: 'nowrap' }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setEditV(v)} aria-label={`ویرایش ${v.title}`}><Pencil size={13} /></button> <button className="im-btn im-btn-danger im-btn-sm" onClick={() => delV(v)} aria-label={`حذف ${v.title}`}><Trash2 size={13} /></button></td>
               </tr>
@@ -122,13 +125,8 @@ function PersonForm({ value, onClose, onSaved }: { value: Partial<SvPerson>; onC
         <div className="im-field"><label>شروع حضور در پروژه</label><JalaliDateField value={f.startDate ?? ''} onChange={(d) => up({ startDate: d })} /></div>
         <div className="im-field"><label>پایان حضور (اختیاری)</label><JalaliDateField value={f.endDate ?? ''} onChange={(d) => up({ endDate: d })} />{f.endDate && <button type="button" className="im-ghostlink" onClick={() => up({ endDate: null })}>پاک کردن</button>}</div>
       </div>
-      <fieldset style={{ border: 0, padding: 0, margin: '14px 0 0' }}>
-        <legend style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>وعده‌های غذایی هر روز حضور (خودکار از حضور و غیاب حساب می‌شود)</legend>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {MEALS.map(([k, l]) => <label key={k} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={!!f[k]} onChange={(e) => up({ [k]: e.target.checked })} />{l}</label>)}
-          <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginInlineStart: 'auto' }}><input type="checkbox" checked={f.active !== false} onChange={(e) => up({ active: e.target.checked })} />فعال</label>
-        </div>
-      </fieldset>
+      <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 12 }}><input type="checkbox" checked={f.active !== false} onChange={(e) => up({ active: e.target.checked })} />فعال</label>
+      <p className="sv-note" style={{ margin: '6px 0 0' }}>هر روزی که «حاضر» باشد صبحانه، ناهار و شام برایش حساب می‌شود.</p>
       <div className="im-field" style={{ marginTop: 12 }}><label htmlFor="sv-note">یادداشت</label><input id="sv-note" value={f.note ?? ''} onChange={(e) => up({ note: e.target.value })} /></div>
       {error && <p role="alert" style={{ color: 'var(--im-coral)', fontWeight: 700, margin: '10px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button><button className="im-btn im-btn-primary" disabled={busy} onClick={submit}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button></div>
@@ -144,6 +142,8 @@ function VehicleForm({ value, people, onClose, onSaved }: { value: Partial<SvVeh
   const up = (p: Partial<SvVehicle>) => setF((x) => ({ ...x, ...p }))
   const submit = async () => {
     if (!f.title?.trim()) return setError('نام خودرو را بنویسید (مثلاً «پژو پارس سفید»).')
+    if (f.modelYear != null && (f.modelYear < 1300 || f.modelYear > 2100)) return setError('سال ساخت را چهار رقمی بنویسید (مثلاً ۱۴۰۱ یا ۲۰۲۲).')
+    if (f.engineCc != null && (f.engineCc < 50 || f.engineCc > 20000)) return setError('حجم موتور را به سی‌سی بنویسید (مثلاً ۱۶۵۰).')
     setBusy(true)
     const r = await saveVehicle({ ...f, title: f.title.trim(), cardNo: f.cardNo?.trim() ?? '' })
     setBusy(false)
@@ -151,21 +151,31 @@ function VehicleForm({ value, people, onClose, onSaved }: { value: Partial<SvVeh
     onSaved(value.id ? 'تغییرات ذخیره شد.' : `خودروی «${f.title.trim()}» اضافه شد.`)
   }
   return (
-    <Modal title={value.id ? 'ویرایش خودرو' : 'افزودن خودروی استیجاری'} onClose={onClose}>
+    <Modal title={value.id ? 'ویرایش خودرو' : 'افزودن خودرو'} onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <div className="im-field"><label htmlFor="sv-vt">خودرو *</label><input id="sv-vt" autoFocus placeholder="مثلاً تویوتا هایلوکس سفید" value={f.title ?? ''} onChange={(e) => up({ title: e.target.value })} /></div>
         <div className="im-field"><label htmlFor="sv-vp">پلاک</label><input id="sv-vp" placeholder="۱۲ ب ۳۴۵ ایران ۳۶" value={f.plate ?? ''} onChange={(e) => up({ plate: e.target.value })} /></div>
+        <div className="im-field"><label htmlFor="sv-vo">مالکیت</label><select id="sv-vo" value={f.ownership ?? 'rented'} onChange={(e) => up({ ownership: e.target.value as SvOwnership })}><option value="rented">استیجاری</option><option value="company">شرکتی</option></select></div>
+        <div className="im-field"><label htmlFor="sv-vy">سال ساخت (مدل)</label><input id="sv-vy" inputMode="numeric" placeholder="مثلاً ۱۴۰۱" value={f.modelYear ?? ''} onChange={(e) => up({ modelYear: toInt(e.target.value) })} /></div>
+        <div className="im-field"><label htmlFor="sv-vcc">حجم موتور (سی‌سی)</label><input id="sv-vcc" inputMode="numeric" placeholder="مثلاً ۱۶۵۰" value={f.engineCc ?? ''} onChange={(e) => up({ engineCc: toInt(e.target.value) })} /></div>
+        <div className="im-field"><label htmlFor="sv-vg">گیربکس</label><select id="sv-vg" value={f.gearbox ?? ''} onChange={(e) => up({ gearbox: (e.target.value || null) as SvGearbox | null })}><option value="">—</option><option value="manual">دستی</option><option value="automatic">اتوماتیک</option></select></div>
         <div className="im-field"><label htmlFor="sv-vk">نوع</label><select id="sv-vk" value={f.kind ?? 'sedan'} onChange={(e) => up({ kind: e.target.value as SvVehicleKind })}>{Object.entries(KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
         <div className="im-field"><label htmlFor="sv-vd">راننده</label><input id="sv-vd" value={f.driver ?? ''} onChange={(e) => up({ driver: e.target.value })} /></div>
         <div className="im-field"><label htmlFor="sv-vperson">در اختیار</label><select id="sv-vperson" value={f.personId ?? ''} onChange={(e) => up({ personId: e.target.value || null })}><option value="">—</option>{people.filter((p) => p.active || p.id === f.personId).map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}</select></div>
-        <div className="im-field"><label htmlFor="sv-vl">موجر (شرکت یا شخص)</label><input id="sv-vl" value={f.lessor ?? ''} onChange={(e) => up({ lessor: e.target.value })} /></div>
+        {(f.ownership ?? 'rented') === 'rented' && <div className="im-field"><label htmlFor="sv-vl">موجر (شرکت یا شخص)</label><input id="sv-vl" value={f.lessor ?? ''} onChange={(e) => up({ lessor: e.target.value })} /></div>}
         <div className="im-field"><label htmlFor="sv-vc">شمارهٔ کارت ساعت</label><input id="sv-vc" dir="ltr" value={f.cardNo ?? ''} onChange={(e) => up({ cardNo: e.target.value })} /></div>
-        <div className="im-field"><label>شروع اجاره</label><JalaliDateField value={f.startDate ?? ''} onChange={(d) => up({ startDate: d })} /></div>
-        <div className="im-field"><label>پایان اجاره (اختیاری)</label><JalaliDateField value={f.endDate ?? ''} onChange={(d) => up({ endDate: d })} />{f.endDate && <button type="button" className="im-ghostlink" onClick={() => up({ endDate: null })}>پاک کردن</button>}</div>
+        <div className="im-field"><label>{(f.ownership ?? 'rented') === 'rented' ? 'شروع اجاره' : 'شروع کار در پروژه'}</label><JalaliDateField value={f.startDate ?? ''} onChange={(d) => up({ startDate: d })} /></div>
+        <div className="im-field"><label>{(f.ownership ?? 'rented') === 'rented' ? 'پایان اجاره (اختیاری)' : 'پایان (اختیاری)'}</label><JalaliDateField value={f.endDate ?? ''} onChange={(d) => up({ endDate: d })} />{f.endDate && <button type="button" className="im-ghostlink" onClick={() => up({ endDate: null })}>پاک کردن</button>}</div>
       </div>
       <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 12 }}><input type="checkbox" checked={f.active !== false} onChange={(e) => up({ active: e.target.checked })} />فعال</label>
       {error && <p role="alert" style={{ color: 'var(--im-coral)', fontWeight: 700, margin: '10px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button><button className="im-btn im-btn-primary" disabled={busy} onClick={submit}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button></div>
     </Modal>
   )
+}
+
+/** Persian or Latin digits → integer; '' → null */
+function toInt(v: string): number | null {
+  const t = v.replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[^0-9]/g, '')
+  return t === '' ? null : Number(t)
 }

@@ -5,6 +5,8 @@ export type SvSide = 'supervision' | 'employer'
 export type SvStatus = 'present' | 'mission' | 'rest' | 'sick' | 'absent'
 export type SvVehicleStatus = 'present' | 'absent' | 'repair'
 export type SvVehicleKind = 'sedan' | 'pickup' | 'suv' | 'van' | 'minibus' | 'other'
+export type SvGearbox = 'manual' | 'automatic'
+export type SvOwnership = 'rented' | 'company'
 export type SvSource = 'manual' | 'clock'
 
 export interface SvSettings {
@@ -57,6 +59,12 @@ export interface SvVehicle {
   title: string
   plate: string
   kind: SvVehicleKind
+  /** model year as written on the papers (e.g. 1401 or 2022) */
+  modelYear: number | null
+  /** engine size in cc */
+  engineCc: number | null
+  gearbox: SvGearbox | null
+  ownership: SvOwnership
   lessor: string
   driver: string
   personId: string | null
