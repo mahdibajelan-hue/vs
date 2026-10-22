@@ -1,11 +1,11 @@
-import type { SvAttendance, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleDay, SvVehicleStatus } from '../types'
+import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleDay, SvVehicleStatus } from '../types'
 
 export const DEFAULT_SETTINGS: SvSettings = { dutyDays: 23, standardHours: 8, overtimeMin: 60, overtimeMax: 80, vehicleHours: 8 }
 
-export const STATUS_FA: Record<SvStatus, string> = { present: 'حاضر', mission: 'مأموریت', rest: 'استراحت', absent: 'غایب' }
+export const STATUS_FA: Record<SvStatus, string> = { present: 'حاضر', mission: 'مأموریت', rest: 'استراحت', sick: 'استعلاجی', absent: 'غایب' }
 /** one-letter marks for the month grid */
-export const STATUS_MARK: Record<SvStatus, string> = { present: 'ح', mission: 'م', rest: 'ا', absent: 'غ' }
-export const STATUS_ORDER: SvStatus[] = ['present', 'mission', 'rest', 'absent']
+export const STATUS_MARK: Record<SvStatus, string> = { present: 'ح', mission: 'م', rest: 'ا', sick: 'ع', absent: 'غ' }
+export const STATUS_ORDER: SvStatus[] = ['present', 'mission', 'rest', 'sick', 'absent']
 export const VSTATUS_FA: Record<SvVehicleStatus, string> = { present: 'کارکرد', repair: 'تعمیر', absent: 'نبود' }
 export const VSTATUS_MARK: Record<SvVehicleStatus, string> = { present: 'ک', repair: 'ت', absent: '—' }
 export const VSTATUS_ORDER: SvVehicleStatus[] = ['present', 'repair', 'absent']
@@ -34,11 +34,23 @@ export function splitHours(total: number, standardHours: number): { hours: numbe
   return { hours: r2(t), overtime: r2(Math.max(0, t - standardHours)) }
 }
 
-/** The values a day takes when its status is set: a working day gets the standard hours and the person's meals. */
-export function dayDefaults(p: Pick<SvPerson, 'mealBreakfast' | 'mealLunch' | 'mealDinner'>, status: SvStatus, s: SvSettings): Pick<SvAttendance, 'hours' | 'overtime' | 'breakfast' | 'lunch' | 'dinner'> {
-  if (status === 'present') return { hours: s.standardHours, overtime: 0, breakfast: p.mealBreakfast, lunch: p.mealLunch, dinner: p.mealDinner }
-  if (status === 'mission') return { hours: s.standardHours, overtime: 0, breakfast: false, lunch: false, dinner: false }
-  return { hours: 0, overtime: 0, breakfast: false, lunch: false, dinner: false }
+/** Hours and overtime of a day from its times: everything past the duty day (8 h) is overtime. No times = the duty day. */
+export function dayHours(checkIn: string | null, checkOut: string | null, s: SvSettings): { hours: number; overtime: number } {
+  const h = hoursBetween(checkIn, checkOut)
+  return h === null || h === 0 ? { hours: s.standardHours, overtime: 0 } : splitHours(h, s.standardHours)
+}
+
+/** Meals a person gets on a day: a present day gives the meals the person is entitled to; any other day none. */
+export function mealsOf(p: Pick<SvPerson, 'mealBreakfast' | 'mealLunch' | 'mealDinner'>, status: SvStatus): { breakfast: boolean; lunch: boolean; dinner: boolean } {
+  const on = status === 'present'
+  return { breakfast: on && p.mealBreakfast, lunch: on && p.mealLunch, dinner: on && p.mealDinner }
+}
+
+/** The values a day takes when its status is set: a present day takes the person's shift (or the standard 8 hours) and meals; mission counts the duty day. */
+export function dayDefaults(p: Pick<SvPerson, 'mealBreakfast' | 'mealLunch' | 'mealDinner' | 'shiftStart' | 'shiftEnd'>, status: SvStatus, s: SvSettings): Pick<SvAttendance, 'checkIn' | 'checkOut' | 'hours' | 'overtime' | 'breakfast' | 'lunch' | 'dinner'> {
+  if (status === 'present') return { checkIn: p.shiftStart, checkOut: p.shiftEnd, ...dayHours(p.shiftStart, p.shiftEnd, s), ...mealsOf(p, status) }
+  if (status === 'mission') return { checkIn: null, checkOut: null, hours: s.standardHours, overtime: 0, ...mealsOf(p, status) }
+  return { checkIn: null, checkOut: null, hours: 0, overtime: 0, ...mealsOf(p, status) }
 }
 
 /** Days of the month the person (or car) is on the project: between start and end date, inclusive. */
@@ -57,6 +69,7 @@ export interface PersonMonth {
   present: number
   mission: number
   rest: number
+  sick: number
   absent: number
   /** days up to today with nothing recorded */
   unmarked: number
@@ -84,7 +97,7 @@ export function personMonth(p: SvPerson, rows: SvAttendance[], days: string[], s
   const on = activeDays(days, p.startDate, p.endDate)
   const mine = rows.filter((r) => r.personId === p.id && on.includes(r.day))
   const count = (st: SvStatus) => mine.filter((r) => r.status === st).length
-  const present = count('present'), mission = count('mission'), rest = count('rest'), absent = count('absent')
+  const present = count('present'), mission = count('mission'), rest = count('rest'), sick = count('sick'), absent = count('absent')
   const worked = present + mission
   // 23 duty days in a full month; someone on the project for part of the month owes a share of it (23 per 30 days).
   const req = on.length === days.length ? Math.min(s.dutyDays, on.length) : Math.min(s.dutyDays, on.length, Math.round((s.dutyDays * on.length) / 30))
@@ -95,11 +108,13 @@ export function personMonth(p: SvPerson, rows: SvAttendance[], days: string[], s
   const overtime = r2(mine.reduce((a, r) => a + (isWorking(r.status) ? r.overtime : 0), 0))
   const cap = p.overtimeCap ?? s.overtimeMax
   return {
-    personId: p.id, monthDays: days.length, onProject: on.length, required: req, worked, present, mission, rest, absent, unmarked,
-    shortfall: Math.max(0, req - worked), restAllowed, restOver: Math.max(0, rest - restAllowed),
+    personId: p.id, monthDays: days.length, onProject: on.length, required: req, worked, present, mission, rest, sick, absent, unmarked,
+    // medical leave is excused: it does not count as worked, but it is not a shortfall either
+    shortfall: Math.max(0, req - worked - sick), restAllowed, restOver: Math.max(0, rest - restAllowed),
     hours, overtime, overtimeCap: cap, overtimeLeft: r2(Math.max(0, cap - overtime)), overtimeOver: r2(Math.max(0, overtime - cap)),
     belowFloor: overtime < s.overtimeMin,
-    breakfast: mine.filter((r) => r.breakfast).length, lunch: mine.filter((r) => r.lunch).length, dinner: mine.filter((r) => r.dinner).length,
+    // meals follow attendance: every present day gives the person's meals
+    breakfast: p.mealBreakfast ? present : 0, lunch: p.mealLunch ? present : 0, dinner: p.mealDinner ? present : 0,
   }
 }
 
@@ -127,6 +142,14 @@ export function monthTotals(pm: PersonMonth[], vm: VehicleMonth[]): MonthTotals 
     hours: sum(pm, (x) => x.hours), overtime: sum(pm, (x) => x.overtime), overtimeLeft: sum(pm, (x) => x.overtimeLeft),
     breakfast: sum(pm, (x) => x.breakfast), lunch: sum(pm, (x) => x.lunch), dinner: sum(pm, (x) => x.dinner),
     vehicleDays: sum(vm, (x) => x.present), vehicleHours: sum(vm, (x) => x.hours), unmarked: sum(pm, (x) => x.unmarked) + sum(vm, (x) => x.unmarked),
+  }
+}
+
+export interface GuestTotals { entries: number; guests: number; breakfast: number; lunch: number; dinner: number }
+export function guestTotals(rows: SvGuestMeal[]): GuestTotals {
+  return {
+    entries: rows.length, guests: new Set(rows.map((r) => r.guestName.trim())).size,
+    breakfast: rows.reduce((a, r) => a + r.breakfast, 0), lunch: rows.reduce((a, r) => a + r.lunch, 0), dinner: rows.reduce((a, r) => a + r.dinner, 0),
   }
 }
 

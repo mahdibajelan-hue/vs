@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, Settings2, UsersRound } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -10,19 +10,19 @@ import '../issues/issues.css'
 import './supervision.css'
 import { useSupervisionStore } from './store/useSupervisionStore'
 import { thisMonth, type Ym } from './lib/svMonth'
-import { DayPage } from './pages/DayPage'
+import { MonthPage } from './pages/MonthPage'
 
-const MonthPage = lazy(() => import('./pages/MonthPage').then((m) => ({ default: m.MonthPage })))
+const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage').then((m) => ({ default: m.FacilitiesPage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })))
 const RosterPage = lazy(() => import('./pages/RosterPage').then((m) => ({ default: m.RosterPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
-type Tab = 'day' | 'month' | 'report' | 'roster' | 'settings'
+type Tab = 'month' | 'facilities' | 'report' | 'roster' | 'settings'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
-  { id: 'day', label: 'حضور روزانه', icon: ClipboardCheck, color: '#22d3ee' },
-  { id: 'month', label: 'جدول ماه', icon: CalendarDays, color: '#34d399' },
+  { id: 'month', label: 'حضور و غیاب', icon: CalendarDays, color: '#22d3ee' },
+  { id: 'facilities', label: 'تسهیلات', icon: UtensilsCrossed, color: '#f59e0b' },
   { id: 'report', label: 'گزارش ماه', icon: FileBarChart2, color: '#a78bfa' },
-  { id: 'roster', label: 'نفرات و خودروها', icon: UsersRound, color: '#f59e0b' },
+  { id: 'roster', label: 'نفرات و خودروها', icon: UsersRound, color: '#34d399' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8' },
 ]
 const PROJECT_KEY = 'sv.project'
@@ -38,7 +38,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const load = useSupervisionStore((s) => s.load)
   const loading = useSupervisionStore((s) => s.loading)
   const error = useSupervisionStore((s) => s.error)
-  const [tab, setTab] = useState<Tab>('day')
+  const [tab, setTab] = useState<Tab>('month')
   const [projectId, setProjectId] = useState<string | null>(null)
   const [month, setMonth] = useState<Ym>(thisMonth())
 
@@ -55,8 +55,8 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const body = () => {
     if (!projectId) return <div className="im-card im-empty">{mdLoaded && !projects.length ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'در حال بارگذاری پروژه‌ها…'}</div>
     switch (tab) {
-      case 'day': return <DayPage onGoRoster={() => setTab('roster')} />
-      case 'month': return <MonthPage month={month} onMonth={setMonth} />
+      case 'month': return <MonthPage month={month} onMonth={setMonth} onGoRoster={() => setTab('roster')} />
+      case 'facilities': return <FacilitiesPage month={month} onMonth={setMonth} />
       case 'report': return <ReportPage month={month} onMonth={setMonth} projectName={project?.officialName ?? ''} />
       case 'roster': return <RosterPage />
       case 'settings': return <SettingsPage month={month} onMonth={setMonth} />

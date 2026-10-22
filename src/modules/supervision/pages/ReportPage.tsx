@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { CalendarCheck, Car, Clock3, Download, Printer, Soup, TimerReset, TriangleAlert } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useSupervisionStore } from '../store/useSupervisionStore'
-import { activeDays, monthTotals, personMonth, vehicleMonth, type PersonMonth } from '../lib/svCalc'
+import { activeDays, guestTotals, monthTotals, personMonth, vehicleMonth, type PersonMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, monthLabel, recordedUpTo, type Ym } from '../lib/svMonth'
 import { Empty, MonthNav } from '../components/common'
 
@@ -16,6 +16,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const vdays = useSupervisionStore((s) => s.vdays)
   const settings = useSupervisionStore((s) => s.settings)
   const loadRange = useSupervisionStore((s) => s.loadRange)
+  const guests = useSupervisionStore((s) => s.guests)
   const days = useMemo(() => monthDays(month).map((d) => d.iso), [month])
   useEffect(() => { void loadRange(days[0], days[days.length - 1]) }, [days, loadRange])
   const upTo = recordedUpTo(month)
@@ -27,16 +28,23 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const pm = ppl.map((p) => ({ p, m: personMonth(p, rows, days, settings, upTo) }))
   const vm = cars.map((v) => ({ v, m: vehicleMonth(v, vrows, days, upTo) }))
   const tot = monthTotals(pm.map((x) => x.m), vm.map((x) => x.m))
+  const gt = guestTotals(guests.filter((g) => g.day >= days[0] && g.day <= days[days.length - 1]))
+  const sides = (['supervision', 'employer'] as const).map((sd) => { const xs = pm.filter((x) => x.p.side === sd).map((x) => x.m); return { sd, n: xs.length, worked: xs.reduce((a, m) => a + m.worked, 0), b: xs.reduce((a, m) => a + m.breakfast, 0), l: xs.reduce((a, m) => a + m.lunch, 0), d: xs.reduce((a, m) => a + m.dinner, 0) } }).filter((x) => x.n)
   const driver = (id: string | null) => people.find((p) => p.id === id)?.fullName ?? ''
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`
     const lines = [
-      ['نام', 'سمت', 'طرف', 'روز در پروژه', 'موظف', 'کارکرد', 'حاضر', 'مأموریت', 'استراحت', 'غیبت', 'ثبت‌نشده', 'کسری', 'ساعت کار', 'اضافه‌کار', 'سقف اضافه‌کار', 'مانده اضافه‌کار', 'صبحانه', 'ناهار', 'شام'].map(q).join(','),
-      ...pm.map(({ p, m }) => [p.fullName, p.roleTitle, SIDE_FA[p.side], m.onProject, m.required, m.worked, m.present, m.mission, m.rest, m.absent, m.unmarked, m.shortfall, m.hours, m.overtime, m.overtimeCap, m.overtimeLeft, m.breakfast, m.lunch, m.dinner].map(q).join(',')),
+      ['نام', 'سمت', 'طرف', 'روز در پروژه', 'موظف', 'کارکرد', 'حاضر', 'مأموریت', 'استراحت', 'استعلاجی', 'غیبت', 'ثبت‌نشده', 'کسری', 'ساعت کار', 'اضافه‌کار', 'سقف اضافه‌کار', 'مانده اضافه‌کار', 'صبحانه', 'ناهار', 'شام'].map(q).join(','),
+      ...pm.map(({ p, m }) => [p.fullName, p.roleTitle, SIDE_FA[p.side], m.onProject, m.required, m.worked, m.present, m.mission, m.rest, m.sick, m.absent, m.unmarked, m.shortfall, m.hours, m.overtime, m.overtimeCap, m.overtimeLeft, m.breakfast, m.lunch, m.dinner].map(q).join(',')),
       '',
       ['خودرو', 'پلاک', 'راننده', 'در اختیار', 'روز در پروژه', 'روز کارکرد', 'تعمیر', 'نبود', 'ثبت‌نشده', 'ساعت کار', 'کیلومتر'].map(q).join(','),
       ...vm.map(({ v, m }) => [v.title, v.plate, v.driver, driver(v.personId), m.onProject, m.present, m.repair, m.absent, m.unmarked, m.hours, m.km].map(q).join(',')),
+      '',
+      ['جمع تسهیلات', 'روز حضور', 'صبحانه', 'ناهار', 'شام', 'روز-خودرو', 'ساعت خودرو'].map(q).join(','),
+      ...sides.map((x) => [x.sd === 'supervision' ? 'دستگاه نظارت' : 'نمایندگان کارفرما', x.worked, x.b, x.l, x.d, '', ''].map(q).join(',')),
+      ['مهمانان', '', gt.breakfast, gt.lunch, gt.dinner, '', ''].map(q).join(','),
+      ['جمع کل', tot.worked, tot.breakfast + gt.breakfast, tot.lunch + gt.lunch, tot.dinner + gt.dinner, tot.vehicleDays, tot.vehicleHours].map(q).join(','),
     ]
     const url = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }))
     const a = Object.assign(document.createElement('a'), { href: url, download: `supervision-attendance-${month.jy}-${String(month.jm).padStart(2, '0')}.csv` })
@@ -48,7 +56,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
     { icon: TriangleAlert, c: tot.shortfall ? 'var(--im-coral)' : 'var(--im-mint)', n: fa(tot.shortfall), l: 'روز کسری حضور', warn: tot.shortfall > 0 },
     { icon: Clock3, c: 'var(--im-sky)', n: faNum(tot.hours), l: 'ساعت کار' },
     { icon: TimerReset, c: 'var(--im-violet)', n: `${faNum(tot.overtime)}`, l: `ساعت اضافه‌کار (مانده ${faNum(tot.overtimeLeft)})` },
-    { icon: Soup, c: 'var(--im-amber)', n: `${fa(tot.breakfast)} · ${fa(tot.lunch)} · ${fa(tot.dinner)}`, l: 'صبحانه · ناهار · شام' },
+    { icon: Soup, c: 'var(--im-amber)', n: `${fa(tot.breakfast + gt.breakfast)} · ${fa(tot.lunch + gt.lunch)} · ${fa(tot.dinner + gt.dinner)}`, l: 'صبحانه · ناهار · شام (با مهمانان)' },
     { icon: Car, c: 'var(--im-teal)', n: fa(tot.vehicleDays), l: `روز-خودرو (${faNum(tot.vehicleHours)} ساعت)` },
   ]
 
@@ -79,7 +87,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
       {pm.length === 0 ? <Empty>برای این ماه نفری ثبت نشده است.</Empty> : (
         <div className="im-table-wrap">
           <table className="im-table">
-            <thead><tr><th>نام</th><th>کارکرد / موظف</th><th>کسری</th><th>استراحت</th><th>غیبت</th><th>ساعت کار</th><th style={{ minWidth: 170 }}>اضافه‌کار (استفاده / سقف)</th><th>مانده</th><th>صبحانه</th><th>ناهار</th><th>شام</th></tr></thead>
+            <thead><tr><th>نام</th><th>کارکرد / موظف</th><th>کسری</th><th>استراحت</th><th>استعلاجی</th><th>غیبت</th><th>ساعت کار</th><th style={{ minWidth: 170 }}>اضافه‌کار (استفاده / سقف)</th><th>مانده</th><th>صبحانه</th><th>ناهار</th><th>شام</th></tr></thead>
             <tbody>
               {pm.map(({ p, m }) => (
                 <tr key={p.id}>
@@ -87,6 +95,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
                   <td className="sv-num"><b>{fa(m.worked)}</b> / {fa(m.required)}{m.mission > 0 && <div className="sv-note" style={{ fontSize: 11 }}>{fa(m.mission)} روز مأموریت</div>}</td>
                   <td className={`sv-num ${m.shortfall ? 'sv-bad' : 'sv-ok'}`}>{m.shortfall ? fa(m.shortfall) : '—'}</td>
                   <td className="sv-num"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
+                  <td className="sv-num">{m.sick ? fa(m.sick) : '—'}</td>
                   <td className={`sv-num ${m.absent ? 'sv-bad' : ''}`}>{m.absent ? fa(m.absent) : '—'}</td>
                   <td className="sv-num">{faNum(m.hours)}</td>
                   <td><OvertimeBar m={m} floor={settings.overtimeMin} /></td>
@@ -120,7 +129,22 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
           </table>
         </div>
       )}
-      <p className="sv-note">کارکرد = حاضر + مأموریت. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
+      <section className="sv-print-keep">
+        <h3 style={{ fontSize: 15, fontWeight: 900, margin: '4px 0 8px' }}>جمع حضور و تسهیلات — {monthLabel(month)}</h3>
+        <div className="im-table-wrap"><table className="im-table">
+          <thead><tr><th>گروه</th><th>نفر</th><th>روز حضور (کارکرد)</th><th>صبحانه</th><th>ناهار</th><th>شام</th><th>جمع وعده‌ها</th></tr></thead>
+          <tbody>
+            {sides.map((x) => <tr key={x.sd}><td><b>{x.sd === 'supervision' ? 'دستگاه نظارت' : 'نمایندگان کارفرما'}</b></td><td className="sv-num">{fa(x.n)}</td><td className="sv-num">{fa(x.worked)}</td><td className="sv-num">{fa(x.b)}</td><td className="sv-num">{fa(x.l)}</td><td className="sv-num">{fa(x.d)}</td><td className="sv-num">{fa(x.b + x.l + x.d)}</td></tr>)}
+            <tr><td><b>مهمانان</b></td><td className="sv-num">{fa(gt.guests)}</td><td className="sv-num">—</td><td className="sv-num">{fa(gt.breakfast)}</td><td className="sv-num">{fa(gt.lunch)}</td><td className="sv-num">{fa(gt.dinner)}</td><td className="sv-num">{fa(gt.breakfast + gt.lunch + gt.dinner)}</td></tr>
+            <tr style={{ background: 'var(--im-panel-2)' }}><td><b>جمع کل</b></td><td className="sv-num"><b>{fa(pm.length + gt.guests)}</b></td><td className="sv-num"><b>{fa(tot.worked)}</b></td><td className="sv-num"><b>{fa(tot.breakfast + gt.breakfast)}</b></td><td className="sv-num"><b>{fa(tot.lunch + gt.lunch)}</b></td><td className="sv-num"><b>{fa(tot.dinner + gt.dinner)}</b></td><td className="sv-num"><b>{fa(tot.breakfast + tot.lunch + tot.dinner + gt.breakfast + gt.lunch + gt.dinner)}</b></td></tr>
+          </tbody>
+        </table></div>
+        <div className="im-table-wrap" style={{ marginTop: 10 }}><table className="im-table">
+          <thead><tr><th>خودروهای استیجاری</th><th>تعداد</th><th>روز کارکرد</th><th>ساعت کار</th><th>کیلومتر</th></tr></thead>
+          <tbody><tr><td><b>جمع</b></td><td className="sv-num">{fa(vm.length)}</td><td className="sv-num"><b>{fa(tot.vehicleDays)}</b></td><td className="sv-num">{faNum(tot.vehicleHours)}</td><td className="sv-num">{faNum(vm.reduce((a, x) => a + x.m.km, 0), 0)}</td></tr></tbody>
+        </table></div>
+      </section>
+      <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور هر نفر حساب شده‌اند و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
     </div>
   )
 }

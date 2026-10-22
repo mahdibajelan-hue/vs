@@ -1,8 +1,8 @@
 /** حضور و غیاب دستگاه نظارت — supervisors / employer representatives, their days, meals and rented vehicles. */
 
 export type SvSide = 'supervision' | 'employer'
-/** present & mission are working days; rest = the monthly rest allowance; absent = unexcused. */
-export type SvStatus = 'present' | 'mission' | 'rest' | 'absent'
+/** present & mission are working days; rest = the monthly rest allowance; sick = medical leave (excused); absent = unexcused. */
+export type SvStatus = 'present' | 'mission' | 'rest' | 'sick' | 'absent'
 export type SvVehicleStatus = 'present' | 'absent' | 'repair'
 export type SvVehicleKind = 'sedan' | 'pickup' | 'suv' | 'van' | 'minibus' | 'other'
 export type SvSource = 'manual' | 'clock'
@@ -29,9 +29,25 @@ export interface SvPerson {
   mealBreakfast: boolean
   mealLunch: boolean
   mealDinner: boolean
+  /** usual working hours, e.g. 07:00–15:00, or 19:00–07:00 for a night shift (null = not set: a day counts the standard 8 hours) */
+  shiftStart: string | null
+  shiftEnd: string | null
   startDate: string | null
   endDate: string | null
   active: boolean
+  note: string
+}
+
+/** Meals given to a temporary guest (visitor) on one day, as counts. */
+export interface SvGuestMeal {
+  id: string
+  day: string
+  guestName: string
+  organization: string
+  host: string
+  breakfast: number
+  lunch: number
+  dinner: number
   note: string
 }
 

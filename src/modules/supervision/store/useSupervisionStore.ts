@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { SvAttendance, SvPerson, SvSettings, SvVehicle, SvVehicleDay } from '../types'
+import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
 
 type Row = Record<string, unknown>
@@ -13,15 +13,16 @@ const t = (v: unknown) => (v ? String(v).slice(0, 5) : null)
 const toPerson = (r: Row): SvPerson => ({
   id: s(r.id), projectId: s(r.master_project_id), fullName: s(r.full_name), side: (r.side as SvPerson['side']) ?? 'supervision', roleTitle: s(r.role_title),
   nationalId: s(r.national_id), mobile: s(r.mobile), cardNo: s(r.card_no), overtimeCap: r.overtime_cap == null ? null : n(r.overtime_cap),
-  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
+  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, shiftStart: t(r.shift_start), shiftEnd: t(r.shift_end), startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
   active: !!r.active, note: s(r.note),
 })
 const fromPerson = (p: Partial<SvPerson>): Row => {
   const o: Row = {}
-  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
-  for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date') ? null : p[k]
+  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['shiftStart', 'shift_start'], ['shiftEnd', 'shift_end'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
+  for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'shift_start' || c === 'shift_end') ? null : p[k]
   return o
 }
+const toGuest = (r: Row): SvGuestMeal => ({ id: s(r.id), day: s(r.day), guestName: s(r.guest_name), organization: s(r.organization), host: s(r.host), breakfast: n(r.breakfast), lunch: n(r.lunch), dinner: n(r.dinner), note: s(r.note) })
 const toVehicle = (r: Row): SvVehicle => ({
   id: s(r.id), projectId: s(r.master_project_id), title: s(r.title), plate: s(r.plate), kind: (r.kind as SvVehicle['kind']) ?? 'sedan', lessor: s(r.lessor), driver: s(r.driver),
   personId: (r.person_id as string) ?? null, cardNo: s(r.card_no), startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null, active: !!r.active, note: s(r.note),
@@ -56,6 +57,7 @@ interface State {
   /** attendance and vehicle days of the loaded range, keyed person|day and vehicle|day */
   att: Record<string, SvAttendance>
   vdays: Record<string, SvVehicleDay>
+  guests: SvGuestMeal[]
   range: { from: string; to: string } | null
   rangeLoading: boolean
   load: (projectId: string) => Promise<void>
@@ -69,16 +71,18 @@ interface State {
   saveVehicle: (v: Partial<SvVehicle> & { id?: string }) => Promise<Result>
   deleteVehicle: (id: string) => Promise<Result>
   saveSettings: (x: SvSettings) => Promise<Result>
+  saveGuest: (g: Omit<SvGuestMeal, 'id'> & { id?: string }) => Promise<Result>
+  deleteGuest: (id: string) => Promise<Result>
   clockCount: (from: string, to: string) => Promise<number>
   applyClock: (from: string, to: string) => Promise<Result & { people?: number; vehicles?: number }>
 }
 
 export const useSupervisionStore = create<State>()((set, get) => ({
-  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, range: null, rangeLoading: false,
+  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, rangeLoading: false,
 
   load: async (projectId) => {
     const fresh = get().projectId !== projectId
-    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, range: null, settings: DEFAULT_SETTINGS } : {}) })
+    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS } : {}) })
     const [st, pp, vv] = await Promise.all([
       supabase.from('sv_settings').select('*').eq('master_project_id', projectId).maybeSingle(),
       supabase.from('sv_people').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('full_name'),
@@ -93,15 +97,16 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     const pid = get().projectId, r = get().range
     if (!pid || (!force && r && r.from <= from && r.to >= to)) return
     set({ rangeLoading: true })
-    const [a, v] = await Promise.all([
+    const [a, v, g] = await Promise.all([
       supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
       supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
+      supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at'),
     ])
     if (get().projectId !== pid) return
     const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
     for (const x of ((a.data ?? []) as Row[]).map(toAtt)) att[key(x.personId, x.day)] = x
     for (const x of ((v.data ?? []) as Row[]).map(toVDay)) vdays[key(x.vehicleId, x.day)] = x
-    set({ att, vdays, range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
+    set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
   },
 
   setDay: async (personId, day, row) => {
@@ -177,6 +182,21 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, ...stamp() }, { onConflict: 'master_project_id' })
     if (error) return { ok: false, error: err(error) }
     set({ settings: x })
+    return { ok: true }
+  },
+  saveGuest: async (g) => {
+    const pid = get().projectId!
+    const row = { day: g.day, guest_name: g.guestName.trim(), organization: g.organization.trim(), host: g.host.trim(), breakfast: g.breakfast, lunch: g.lunch, dinner: g.dinner, note: g.note }
+    const { data, error } = g.id ? await supabase.from('sv_guest_meals').update(row).eq('id', g.id).select().single() : await supabase.from('sv_guest_meals').insert({ master_project_id: pid, ...row }).select().single()
+    if (error || !data) return { ok: false, error: err(error) ?? 'ذخیره نشد' }
+    const saved = toGuest(data as Row)
+    set((x) => ({ guests: (g.id ? x.guests.map((o) => (o.id === saved.id ? saved : o)) : [...x.guests, saved]).sort((a, b) => a.day.localeCompare(b.day)) }))
+    return { ok: true }
+  },
+  deleteGuest: async (id) => {
+    const { error } = await supabase.from('sv_guest_meals').delete().eq('id', id)
+    if (error) return { ok: false, error: err(error) }
+    set((x) => ({ guests: x.guests.filter((o) => o.id !== id) }))
     return { ok: true }
   },
   clockCount: async (from, to) => {

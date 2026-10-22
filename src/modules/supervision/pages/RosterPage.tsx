@@ -38,11 +38,12 @@ export function RosterPage() {
         </div>
         {!people.length ? <Empty>نفری ثبت نشده است.</Empty> : (
           <div className="im-table-wrap"><table className="im-table">
-            <thead><tr><th>نام</th><th>سمت</th><th>وعده‌ها</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>دوره</th><th /></tr></thead>
+            <thead><tr><th>نام</th><th>سمت</th><th>ساعت کار</th><th>وعده‌ها</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>دوره</th><th /></tr></thead>
             <tbody>{people.map((p) => (
               <tr key={p.id} style={p.active ? undefined : { opacity: 0.55 }}>
                 <td><b>{p.fullName}</b>{!p.active && <span className="im-chip" style={{ marginInlineStart: 6 }}>غیرفعال</span>}<div className="sv-note" style={{ fontSize: 11 }}>{SIDE_FA[p.side]}{p.mobile && ` · ${fa(p.mobile)}`}</div></td>
                 <td>{p.roleTitle || '—'}</td>
+                <td className="sv-num">{p.shiftStart && p.shiftEnd ? `${fa(p.shiftStart)} تا ${fa(p.shiftEnd)}` : '—'}</td>
                 <td>{MEALS.filter(([k]) => p[k]).map(([, l]) => l).join('، ') || '—'}</td>
                 <td className="sv-num">{fa(p.overtimeCap ?? settings.overtimeMax)} ساعت{p.overtimeCap == null && <span className="sv-note"> (پیش‌فرض)</span>}</td>
                 <td>{p.cardNo ? fa(p.cardNo) : '—'}</td>
@@ -122,7 +123,7 @@ function PersonForm({ value, onClose, onSaved }: { value: Partial<SvPerson>; onC
         <div className="im-field"><label>پایان حضور (اختیاری)</label><JalaliDateField value={f.endDate ?? ''} onChange={(d) => up({ endDate: d })} />{f.endDate && <button type="button" className="im-ghostlink" onClick={() => up({ endDate: null })}>پاک کردن</button>}</div>
       </div>
       <fieldset style={{ border: 0, padding: 0, margin: '14px 0 0' }}>
-        <legend style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>وعده‌های غذایی در روزهای حضور</legend>
+        <legend style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>وعده‌های غذایی هر روز حضور (خودکار از حضور و غیاب حساب می‌شود)</legend>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {MEALS.map(([k, l]) => <label key={k} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={!!f[k]} onChange={(e) => up({ [k]: e.target.checked })} />{l}</label>)}
           <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginInlineStart: 'auto' }}><input type="checkbox" checked={f.active !== false} onChange={(e) => up({ active: e.target.checked })} />فعال</label>
