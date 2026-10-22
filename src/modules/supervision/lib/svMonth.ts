@@ -29,3 +29,5 @@ const WD = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چه
 export const weekdayFa = (iso: string) => { const j = isoToJalali(iso)!; return WD[jalaliWeekday(j.jy, j.jm, j.jd)] }
 export const fa = (n: number | string) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 export const faNum = (n: number, digits = 1) => fa(Number.isInteger(n) ? n.toLocaleString('en') : n.toLocaleString('en', { maximumFractionDigits: digits }))
+/** "1405-07" — the key a month's sign-off is stored under. */
+export const ymKey = (m: Ym) => `${m.jy}-${String(m.jm).padStart(2, '0')}`

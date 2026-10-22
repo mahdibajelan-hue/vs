@@ -6,7 +6,7 @@ import { useSupervisionStore } from '../store/useSupervisionStore'
 import { guestTotals, mealsOf } from '../lib/svCalc'
 import { addDays, fa, faNum, monthDays, monthLabel, monthOf, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
 import type { SvGuestMeal } from '../types'
-import { Flash, MonthNav } from '../components/common'
+import { Flash, LockNote, MonthNav, useLockedIn } from '../components/common'
 
 type Draft = Omit<SvGuestMeal, 'id'> & { id?: string }
 const blank = (day: string): Draft => ({ day, guestName: '', organization: '', host: '', breakfast: 0, lunch: 0, dinner: 0, note: '' })
@@ -18,7 +18,7 @@ const MAX_DAYS = 400
  * تسهیلات — meals (all three on every present day for staff, typed-in counts for guests) and car days, for a month or for any
  * start–end range, totalled. Printable and exportable.
  */
-export function FacilitiesPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym) => void }) {
+export function FacilitiesPage({ month, onMonth, onGoReport }: { month: Ym; onMonth: (m: Ym) => void; onGoReport?: () => void }) {
   const people = useSupervisionStore((s) => s.people)
   const vehicles = useSupervisionStore((s) => s.vehicles)
   const att = useSupervisionStore((s) => s.att)
@@ -35,6 +35,8 @@ export function FacilitiesPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [showDays, setShowDays] = useState(false)
   useEffect(() => { void loadRange(range.from, range.to) }, [range, loadRange])
+  const locked = useLockedIn(range.from, range.to)
+  const isLocked = useSupervisionStore((s) => s.isLocked)
 
   const days = useMemo(() => { const out: string[] = []; for (let d = range.from; d <= range.to && out.length < MAX_DAYS; d = addDays(d, 1)) out.push(d); return out }, [range])
   const isMonth = range.from === monthRange(monthOf(range.from)).from && range.to === monthRange(monthOf(range.from)).to
@@ -143,6 +145,7 @@ export function FacilitiesPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym)
           </div>
         ))}
       </div>
+      <LockNote months={locked} onReport={onGoReport} />
       <Flash msg={msg} />
 
       {draft && (
@@ -208,7 +211,7 @@ export function FacilitiesPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym)
                 <td><b>{g.guestName}</b>{g.note && <div className="sv-sub">{g.note}</div>}</td>
                 <td>{[g.organization, g.host && `میزبان: ${g.host}`].filter(Boolean).join(' · ') || '—'}</td>
                 <td className="sv-num">{fa(g.breakfast)}</td><td className="sv-num">{fa(g.lunch)}</td><td className="sv-num">{fa(g.dinner)}</td>
-                <td className="no-print" style={{ whiteSpace: 'nowrap' }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setDraft(g)} aria-label={`ویرایش ${g.guestName}`}><Pencil size={13} /></button> <button className="im-btn im-btn-danger im-btn-sm" onClick={() => del(g)} aria-label={`حذف ${g.guestName}`}><Trash2 size={13} /></button></td>
+                <td className="no-print" style={{ whiteSpace: 'nowrap' }}>{isLocked(g.day) ? <span className="sv-note" title="ماه امضا شده است">قفل</span> : <><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setDraft(g)} aria-label={`ویرایش ${g.guestName}`}><Pencil size={13} /></button> <button className="im-btn im-btn-danger im-btn-sm" onClick={() => del(g)} aria-label={`حذف ${g.guestName}`}><Trash2 size={13} /></button></>}</td>
               </tr>
             ))}</tbody>
           </table></div>

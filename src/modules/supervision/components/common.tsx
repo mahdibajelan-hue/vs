@@ -1,6 +1,7 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Lock } from 'lucide-react'
+import { useSupervisionStore } from '../store/useSupervisionStore'
 import type { ReactNode } from 'react'
-import { monthLabel, sameYm, shiftYm, thisMonth, type Ym } from '../lib/svMonth'
+import { fa, monthLabel, sameYm, shiftYm, thisMonth, type Ym } from '../lib/svMonth'
 
 /** «‹ مهر ۱۴۰۵ ›» with a jump back to the running month. */
 export function MonthNav({ value, onChange }: { value: Ym; onChange: (m: Ym) => void }) {
@@ -32,4 +33,20 @@ export function Empty({ children }: { children: ReactNode }) {
 export function Flash({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null
   return <p role="status" className="im-helper" style={{ margin: '8px 0 0', color: msg.ok ? 'var(--im-mint)' : 'var(--im-coral)', fontWeight: 700 }}>{msg.text}</p>
+}
+
+/** Months in [from, to] whose report is signed (their days are read-only). */
+export function useLockedIn(from: string, to: string) {
+  return useSupervisionStore((s) => Object.values(s.signoffs).filter((x) => x.status !== 'open' && x.from <= to && x.to >= from).map((x) => x.month).sort().map((k) => fa(monthLabel({ jy: +k.slice(0, 4), jm: +k.slice(5, 7) }))).join('، '))
+}
+
+export function LockNote({ months, onReport }: { months: string; onReport?: () => void }) {
+  if (!months) return null
+  return (
+    <div className="sv-lock" role="status">
+      <Lock size={15} />
+      <span>گزارش {months} امضا شده و روزهایش قفل است؛ برای اصلاح باید در «گزارش ماه» آن را «بازگشت برای اصلاح» کنید.</span>
+      {onReport && <button className="im-ghostlink" onClick={onReport}>رفتن به گزارش</button>}
+    </div>
+  )
 }

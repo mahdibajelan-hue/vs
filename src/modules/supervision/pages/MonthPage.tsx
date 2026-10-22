@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Eraser, UserCheck } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
-import { useSupervisionStore, attKey } from '../store/useSupervisionStore'
+import { useSupervisionStore, attKey, LOCKED_MSG } from '../store/useSupervisionStore'
 import { STATUS_FA, STATUS_MARK, STATUS_ORDER, VSTATUS_FA, VSTATUS_MARK, VSTATUS_ORDER, activeDays, dayDefaults, dayHours, isWorking, mealsOf, personMonth, vehicleMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
 import type { SvPerson, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
-import { Empty, Flash, MonthNav, StatusSeg } from '../components/common'
+import { Empty, Flash, LockNote, MonthNav, StatusSeg, useLockedIn } from '../components/common'
 import { CellPopover } from '../components/CellEditor'
 import { TimeField } from '../components/TimeField'
 
@@ -16,7 +16,7 @@ const WD = 'شیدسچپج'
  * حضور و غیاب — the month grid is where everything is entered: tap an empty day to mark it present (with the person's shift),
  * tap any day to change its status and type the check-in / check-out below it; hours and overtime follow from the times.
  */
-export function MonthPage({ month, onMonth, onGoRoster }: { month: Ym; onMonth: (m: Ym) => void; onGoRoster: () => void }) {
+export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Ym; onMonth: (m: Ym) => void; onGoRoster: () => void; onGoReport?: () => void }) {
   const [view, setView] = useState<'people' | 'vehicles'>('people')
   const people = useSupervisionStore((s) => s.people)
   const vehicles = useSupervisionStore((s) => s.vehicles)
@@ -37,17 +37,21 @@ export function MonthPage({ month, onMonth, onGoRoster }: { month: Ym; onMonth: 
   const vrows = useMemo(() => Object.values(vdays), [vdays])
   const ppl = people.filter((p) => activeDays(isoDays, p.startDate, p.endDate).length > 0 && (p.active || rows.some((r) => r.personId === p.id)))
   const cars = vehicles.filter((v) => activeDays(isoDays, v.startDate, v.endDate).length > 0 && (v.active || vrows.some((r) => r.vehicleId === v.id)))
+  const locked = useLockedIn(days[0].iso, days[days.length - 1].iso)
+  const isLocked = useSupervisionStore((s) => s.isLocked)
   const fail = (r: { ok: boolean; error?: string }) => { if (!r.ok) setMsg({ ok: false, text: r.error ?? 'ذخیره نشد' }); return r.ok }
 
   const markPresent = (p: SvPerson, day: string) => setDay(p.id, day, { status: 'present', note: '', ...dayDefaults(p, 'present', settings) })
   const markCar = (v: SvVehicle, day: string) => setVehicleDay(v.id, day, { status: 'present', hours: settings.vehicleHours, km: null, note: '' })
   const tapPerson = async (p: SvPerson, day: string, el: HTMLElement) => {
     setMsg(null)
+    if (isLocked(day)) { setMsg({ ok: false, text: LOCKED_MSG }); return }
     if (!att[attKey(p.id, day)] && !fail(await markPresent(p, day))) return
     setOpen({ kind: 'person', id: p.id, day, el })
   }
   const tapCar = async (v: SvVehicle, day: string, el: HTMLElement) => {
     setMsg(null)
+    if (isLocked(day)) { setMsg({ ok: false, text: LOCKED_MSG }); return }
     if (!vdays[attKey(v.id, day)] && !fail(await markCar(v, day))) return
     setOpen({ kind: 'vehicle', id: v.id, day, el })
   }
@@ -76,16 +80,17 @@ export function MonthPage({ month, onMonth, onGoRoster }: { month: Ym; onMonth: 
           <span><i className="sv-dot empty" style={{ boxShadow: 'inset 0 0 0 1.5px var(--im-coral)' }} />ثبت‌نشده</span>
         </div>
       </div>
+      <LockNote months={locked} onReport={onGoReport} />
       <Flash msg={msg} />
       {list.length === 0 ? <Empty>{view === 'people' ? 'نفری برای این ماه نیست.' : 'خودرویی برای این ماه نیست.'}</Empty> : (
-        <div className="sv-grid-wrap">
+        <div className={`sv-grid-wrap ${locked ? 'is-locked' : ''}`}>
           <table className="sv-grid">
             <thead>
               <tr>
                 <th className="nm">{view === 'people' ? 'نام' : 'خودرو'}</th>
                 {days.map((d) => (
                   <th key={d.iso} className={`${d.weekday === 6 ? 'fri' : ''} ${d.iso === today ? 'today' : ''}`}>
-                    <button className="sv-dayhead" onClick={(e) => setOpen({ kind: 'day', id: '', day: d.iso, el: e.currentTarget })} aria-label={`روز ${fa(d.jd)}: حاضر زدن همه`}>{fa(d.jd)}<span>{WD[d.weekday]}</span></button>
+                    <button className="sv-dayhead" onClick={(e) => isLocked(d.iso) ? setMsg({ ok: false, text: LOCKED_MSG }) : setOpen({ kind: 'day', id: '', day: d.iso, el: e.currentTarget })} aria-label={`روز ${fa(d.jd)}: حاضر زدن همه`}>{fa(d.jd)}<span>{WD[d.weekday]}</span></button>
                   </th>
                 ))}
                 {view === 'people' ? <><th className="sum">کارکرد / موظف</th><th className="sum">استراحت</th><th className="sum">استعلاجی</th><th className="sum">غیبت</th><th className="sum">ساعت</th><th className="sum">اضافه‌کار / سقف</th></> : <><th className="sum">روز کارکرد</th><th className="sum">تعمیر</th><th className="sum">ساعت</th></>}

@@ -3,7 +3,9 @@ import { CalendarCheck, Car, Clock3, Download, Printer, Soup, TimerReset, Triang
 import { formatJalali } from '../../../lib/jalali'
 import { useSupervisionStore } from '../store/useSupervisionStore'
 import { activeDays, guestTotals, monthTotals, personMonth, vehicleMonth, type PersonMonth } from '../lib/svCalc'
-import { fa, faNum, monthDays, monthLabel, recordedUpTo, type Ym } from '../lib/svMonth'
+import { fa, faNum, monthDays, monthLabel, recordedUpTo, ymKey, type Ym } from '../lib/svMonth'
+import { SignoffPanel } from '../components/SignoffPanel'
+import type { SvSnapshot } from '../types'
 import { Empty, MonthNav } from '../components/common'
 
 const SIDE_FA = { supervision: 'نظارت', employer: 'کارفرما' } as const
@@ -30,6 +32,10 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const tot = monthTotals(pm.map((x) => x.m), vm.map((x) => x.m))
   const gt = guestTotals(guests.filter((g) => g.day >= days[0] && g.day <= days[days.length - 1]))
   const sides = (['supervision', 'employer'] as const).map((sd) => { const xs = pm.filter((x) => x.p.side === sd).map((x) => x.m); return { sd, n: xs.length, worked: xs.reduce((a, m) => a + m.worked, 0), b: xs.reduce((a, m) => a + m.breakfast, 0), l: xs.reduce((a, m) => a + m.lunch, 0), d: xs.reduce((a, m) => a + m.dinner, 0) } }).filter((x) => x.n)
+  const snapshot: SvSnapshot = {
+    people: pm.length, worked: tot.worked, required: tot.required, shortfall: tot.shortfall, hours: tot.hours, overtime: tot.overtime,
+    breakfast: tot.breakfast + gt.breakfast, lunch: tot.lunch + gt.lunch, dinner: tot.dinner + gt.dinner, vehicleDays: tot.vehicleDays, vehicleHours: tot.vehicleHours,
+  }
   const driver = (id: string | null) => people.find((p) => p.id === id)?.fullName ?? ''
 
   const csv = () => {
@@ -145,6 +151,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
           <tbody><tr><td><b>جمع</b></td><td className="sv-num">{fa(vm.length)}</td><td className="sv-num"><b>{fa(tot.vehicleDays)}</b></td><td className="sv-num">{faNum(tot.vehicleHours)}</td><td className="sv-num">{faNum(vm.reduce((a, x) => a + x.m.km, 0), 0)}</td></tr></tbody>
         </table></div>
       </section>
+      <SignoffPanel monthKey={ymKey(month)} from={days[0]} to={days[days.length - 1]} snapshot={snapshot} unmarked={tot.unmarked} />
       <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور حساب شده‌اند (هر روز حاضر = صبحانه، ناهار و شام) و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
     </div>
   )

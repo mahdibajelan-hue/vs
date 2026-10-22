@@ -40,7 +40,7 @@ export function SettingsPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym) =
     setBusy(true); setClockMsg(null)
     const r = await applyClock(range.from, range.to)
     setBusy(false)
-    setClockMsg(r.ok ? { ok: true, text: `${fa(r.people ?? 0)} روزِ نفرات و ${fa(r.vehicles ?? 0)} روزِ خودرو از کارت ساعت ثبت شد. روزهایی که دستی ثبت شده‌اند دست نخوردند.` } : { ok: false, text: r.error ?? '' })
+    setClockMsg(r.ok ? { ok: true, text: `${fa(r.people ?? 0)} روزِ نفرات و ${fa(r.vehicles ?? 0)} روزِ خودرو از کارت ساعت ثبت شد. روزهایی که دستی ثبت شده‌اند و روزهای ماه‌های امضاشده دست نخوردند.` } : { ok: false, text: r.error ?? '' })
   }
 
   return (

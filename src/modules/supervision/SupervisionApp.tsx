@@ -55,8 +55,8 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const body = () => {
     if (!projectId) return <div className="im-card im-empty">{mdLoaded && !projects.length ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'در حال بارگذاری پروژه‌ها…'}</div>
     switch (tab) {
-      case 'month': return <MonthPage month={month} onMonth={setMonth} onGoRoster={() => setTab('roster')} />
-      case 'facilities': return <FacilitiesPage month={month} onMonth={setMonth} />
+      case 'month': return <MonthPage month={month} onMonth={setMonth} onGoRoster={() => setTab('roster')} onGoReport={() => setTab('report')} />
+      case 'facilities': return <FacilitiesPage month={month} onMonth={setMonth} onGoReport={() => setTab('report')} />
       case 'report': return <ReportPage month={month} onMonth={setMonth} projectName={project?.officialName ?? ''} />
       case 'roster': return <RosterPage />
       case 'settings': return <SettingsPage month={month} onMonth={setMonth} />

@@ -99,8 +99,8 @@
 
 @page { size: A4; margin: 12mm; }
 @media print {
-  html, body { background: #fff !important; }
-  body * { visibility: hidden !important; }
+  html:has(.mt-printable), body:has(.mt-printable) { background: #fff !important; }
+  body:has(.mt-printable) * { visibility: hidden !important; } /* only when a material sheet is on screen: this stylesheet stays loaded for the whole session */
   .mt-root, .mt-root .im-main, .mt-root .im-page, .fn-reports, .fn-rep-body { height: auto !important; max-height: none !important; overflow: visible !important; }
   .mt-printable, .mt-printable * { visibility: visible !important; }
   .mt-printable { position: absolute !important; inset: 0 auto auto 0 !important; width: 100% !important; margin: 0 !important; }

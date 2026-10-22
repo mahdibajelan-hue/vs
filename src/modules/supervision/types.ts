@@ -90,6 +90,47 @@ export interface SvAttendance {
   note: string
 }
 
+/** Monthly sign-off: open → prepared (تهیه) → reviewed (بررسی) → approved (تأیید نهایی). Anything but open locks the month's days. */
+export type SvSignoffStatus = 'open' | 'prepared' | 'reviewed' | 'approved'
+export type SvSignStep = Exclude<SvSignoffStatus, 'open'>
+
+export interface SvSignoff {
+  month: string
+  status: SvSignoffStatus
+  from: string
+  to: string
+}
+
+/** Report totals frozen into a signature, to show when the figures changed after signing. */
+export interface SvSnapshot {
+  people: number
+  worked: number
+  required: number
+  shortfall: number
+  hours: number
+  overtime: number
+  breakfast: number
+  lunch: number
+  dinner: number
+  vehicleDays: number
+  vehicleHours: number
+}
+
+export interface SvSignature {
+  id: string
+  month: string
+  step: SvSignStep
+  userId: string
+  signerName: string
+  signerTitle: string
+  image: string
+  note: string
+  snapshot: Partial<SvSnapshot>
+  signedAt: string
+  revokedAt: string | null
+  revokeReason: string | null
+}
+
 export interface SvVehicleDay {
   vehicleId: string
   day: string

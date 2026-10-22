@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvVehicle, SvVehicleDay } from '../types'
+import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
 
 type Row = Record<string, unknown>
@@ -41,6 +41,24 @@ const toAtt = (r: Row): SvAttendance => ({
 const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note) })
 const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours) } : DEFAULT_SETTINGS
 
+const toSignoff = (r: Row): SvSignoff => ({ month: s(r.month), status: r.status as SvSignoff['status'], from: s(r.from_day), to: s(r.to_day) })
+const toSignature = (r: Row): SvSignature => ({
+  id: s(r.id), month: s(r.month), step: r.step as SvSignStep, userId: s(r.user_id), signerName: s(r.signer_name), signerTitle: s(r.signer_title), image: s(r.image),
+  note: s(r.note), snapshot: (r.snapshot ?? {}) as SvSignature['snapshot'], signedAt: s(r.signed_at), revokedAt: (r.revoked_at as string) ?? null, revokeReason: (r.revoke_reason as string) ?? null,
+})
+const STEP_FA: Record<string, string> = { open: 'باز', prepared: 'تهیه', reviewed: 'بررسی', approved: 'تأیید نهایی' }
+const signErr = (e: { message: string; code?: string }): string => {
+  const m = e.message
+  if (/step_not_allowed/.test(m)) return 'برای این مرحله دسترسی ندارید. در مرکز کاربران، برای ماژول «حضور و غیاب دستگاه نظارت» مجوز «ارسال» (تهیه)، «بررسی» یا «تأیید» لازم است.'
+  if (/wrong_order:(\w+)/.test(m)) return `ترتیب امضا رعایت نشده؛ وضعیت فعلی ماه «${STEP_FA[/wrong_order:(\w+)/.exec(m)![1]] ?? ''}» است. صفحه را تازه کنید.`
+  if (/same_signer/.test(m)) return 'هر نفر فقط یک مرحله را امضا می‌کند؛ مرحلهٔ بعد را نفر دیگری باید امضا کند.'
+  if (/reason_required/.test(m)) return 'دلیل بازگشت را بنویسید (دست‌کم سه حرف).'
+  if (/bad_signature/.test(m)) return 'تصویر امضا معتبر نیست یا حجم آن زیاد است.'
+  if (/not_allowed|not_authenticated/.test(m) || e.code === '42501') return 'اجازهٔ این کار را در این پروژه ندارید.'
+  return friendlyErrorMessage(e)
+}
+export const LOCKED_MSG = 'این روز در ماهی است که گزارشش امضا شده و قفل است. برای اصلاح، در «گزارش ماه» آن را «بازگشت برای اصلاح» کنید.'
+
 const err = (e: { message: string; code?: string } | null): string | undefined =>
   !e ? undefined : e.code === '42501' || /row-level security/i.test(e.message) ? 'اجازهٔ ثبت در این پروژه را ندارید (دسترسی «حضور و غیاب دستگاه نظارت»).'
     : /idx_sv_people_card|duplicate key/.test(e.message) ? 'این شمارهٔ کارت قبلاً برای نفر دیگری ثبت شده است.' : friendlyErrorMessage(e)
@@ -61,6 +79,13 @@ interface State {
   guests: SvGuestMeal[]
   range: { from: string; to: string } | null
   rangeLoading: boolean
+  /** sign-off state per Jalali month (YYYY-MM) and every signature of a month (revoked ones too, for the history) */
+  signoffs: Record<string, SvSignoff>
+  signatures: Record<string, SvSignature[]>
+  isLocked: (day: string) => boolean
+  loadSignatures: (month: string) => Promise<void>
+  sign: (a: { month: string; from: string; to: string; step: SvSignStep; image: string; title: string; note: string; snapshot: SvSnapshot }) => Promise<Result>
+  reopen: (month: string, reason: string) => Promise<Result>
   load: (projectId: string) => Promise<void>
   loadRange: (from: string, to: string, force?: boolean) => Promise<void>
   setDay: (personId: string, day: string, row: Omit<SvAttendance, 'personId' | 'day' | 'source'> & { source?: SvAttendance['source'] }) => Promise<Result>
@@ -79,17 +104,19 @@ interface State {
 }
 
 export const useSupervisionStore = create<State>()((set, get) => ({
-  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, rangeLoading: false,
+  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
 
   load: async (projectId) => {
     const fresh = get().projectId !== projectId
-    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS } : {}) })
-    const [st, pp, vv] = await Promise.all([
+    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS, signoffs: {}, signatures: {} } : {}) })
+    const [st, pp, vv, so] = await Promise.all([
       supabase.from('sv_settings').select('*').eq('master_project_id', projectId).maybeSingle(),
       supabase.from('sv_people').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('full_name'),
       supabase.from('sv_vehicles').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('title'),
+      supabase.from('sv_month_signoffs').select('*').eq('master_project_id', projectId),
     ])
     if (get().projectId !== projectId) return
+    set({ signoffs: Object.fromEntries(((so.data ?? []) as Row[]).map(toSignoff).map((x) => [x.month, x])) })
     const e = pp.error ?? vv.error ?? st.error
     set({ loading: false, error: e ? err(e) ?? '' : '', settings: toSettings(st.data as Row | null), people: ((pp.data ?? []) as Row[]).map(toPerson), vehicles: ((vv.data ?? []) as Row[]).map(toVehicle) })
   },
@@ -110,7 +137,36 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
   },
 
+  isLocked: (day) => Object.values(get().signoffs).some((x) => x.status !== 'open' && day >= x.from && day <= x.to),
+  loadSignatures: async (month) => {
+    const pid = get().projectId
+    if (!pid) return
+    const [g, so] = await Promise.all([
+      supabase.from('sv_month_signatures').select('*').eq('master_project_id', pid).eq('month', month).order('signed_at'),
+      supabase.from('sv_month_signoffs').select('*').eq('master_project_id', pid).eq('month', month).maybeSingle(),
+    ])
+    if (get().projectId !== pid) return
+    set((x) => {
+      const signoffs = { ...x.signoffs }
+      if (so.data) signoffs[month] = toSignoff(so.data as Row); else delete signoffs[month]
+      return { signoffs, signatures: { ...x.signatures, [month]: ((g.data ?? []) as Row[]).map(toSignature) } }
+    })
+  },
+  sign: async (a) => {
+    const pid = get().projectId!
+    const { error } = await supabase.rpc('sv_sign', { p_project: pid, p_month: a.month, p_from: a.from, p_to: a.to, p_step: a.step, p_image: a.image, p_title: a.title.trim(), p_note: a.note.trim(), p_snapshot: a.snapshot })
+    await get().loadSignatures(a.month)
+    return error ? { ok: false, error: signErr(error) } : { ok: true }
+  },
+  reopen: async (month, reason) => {
+    const pid = get().projectId!
+    const { error } = await supabase.rpc('sv_reopen', { p_project: pid, p_month: month, p_reason: reason.trim() })
+    await get().loadSignatures(month)
+    return error ? { ok: false, error: signErr(error) } : { ok: true }
+  },
+
   setDay: async (personId, day, row) => {
+    if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     const pid = get().projectId!
     const k = key(personId, day), prev = get().att[k]
     const next: SvAttendance = { personId, day, source: row.source ?? (prev?.source === 'clock' && prev.checkIn === row.checkIn && prev.checkOut === row.checkOut ? 'clock' : 'manual'), ...row }
@@ -123,6 +179,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   clearDay: async (personId, day) => {
+    if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     const k = key(personId, day), prev = get().att[k]
     if (!prev) return { ok: true }
     set((x) => { const att = { ...x.att }; delete att[k]; return { att } })
@@ -131,6 +188,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   setVehicleDay: async (vehicleId, day, row) => {
+    if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     const pid = get().projectId!
     const k = key(vehicleId, day), prev = get().vdays[k]
     const next: SvVehicleDay = { vehicleId, day, source: 'manual', ...row }
@@ -140,6 +198,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   clearVehicleDay: async (vehicleId, day) => {
+    if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     const k = key(vehicleId, day), prev = get().vdays[k]
     if (!prev) return { ok: true }
     set((x) => { const vdays = { ...x.vdays }; delete vdays[k]; return { vdays } })
@@ -186,6 +245,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   saveGuest: async (g) => {
+    if (get().isLocked(g.day) || (g.id && get().isLocked(get().guests.find((o) => o.id === g.id)?.day ?? ''))) return { ok: false, error: LOCKED_MSG }
     const pid = get().projectId!
     const row = { day: g.day, guest_name: g.guestName.trim(), organization: g.organization.trim(), host: g.host.trim(), breakfast: g.breakfast, lunch: g.lunch, dinner: g.dinner, note: g.note }
     const { data, error } = g.id ? await supabase.from('sv_guest_meals').update(row).eq('id', g.id).select().single() : await supabase.from('sv_guest_meals').insert({ master_project_id: pid, ...row }).select().single()
@@ -195,6 +255,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   deleteGuest: async (id) => {
+    if (get().isLocked(get().guests.find((o) => o.id === id)?.day ?? '')) return { ok: false, error: LOCKED_MSG }
     const { error } = await supabase.from('sv_guest_meals').delete().eq('id', id)
     if (error) return { ok: false, error: err(error) }
     set((x) => ({ guests: x.guests.filter((o) => o.id !== id) }))
