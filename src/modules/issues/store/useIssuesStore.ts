@@ -54,26 +54,24 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
   setScope: (id) => set({ scopeProjectId: id }),
 
   fetchAll: async () => {
-    set({ loading: true })
+    // First visit shows the skeleton; later visits keep the previous data on screen while it refreshes.
+    if (!get().projects.length) set({ loading: true })
+    // Projects and issues are read in parallel (row-level security already limits both to what the user may see).
+    const read = () => Promise.all([
+      supabase.from('im_projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('im_issues').select('*').order('created_at', { ascending: false }),
+    ])
     // Projects are owned by Master Data: platform admins keep the issue projects in step with it (names, new projects).
-    if (useAuthStore.getState().profile?.isAdmin) await supabase.rpc('im_sync_master_projects')
-    const { data: projectRows, error: projectError } = await supabase.from('im_projects').select('*').order('created_at', { ascending: false })
-    if (reportError('بارگذاری پروژه‌ها', projectError)) {
-      set({ loading: false })
-      return
-    }
-    const projects = ((projectRows ?? []) as ImProjectRow[]).map(imProjectFromRow)
-    const projectIds = projects.map((p) => p.id)
-    if (projectIds.length === 0) {
-      set({ projects, issues: [], loading: false })
-      return
-    }
-    const { data: issueRows, error: issueError } = await supabase.from('im_issues').select('*').in('project_id', projectIds).order('created_at', { ascending: false })
-    if (reportError('بارگذاری مشکلات', issueError)) {
-      set({ projects, loading: false })
-      return
-    }
-    set({ projects, issues: ((issueRows ?? []) as ImIssueRow[]).map(imIssueFromRow), loading: false })
+    // The sync runs alongside the reads; only if it actually changed something are the projects read again.
+    const sync = useAuthStore.getState().profile?.isAdmin ? supabase.rpc('im_sync_master_projects') : Promise.resolve(null)
+    let [[p, i], synced] = await Promise.all([read(), sync])
+    const changed = synced?.data as { created?: number; renamed?: number } | null | undefined
+    if (changed && ((changed.created ?? 0) > 0 || (changed.renamed ?? 0) > 0)) [p, i] = await read()
+    if (reportError('بارگذاری پروژه‌ها', p.error)) { set({ loading: false }); return }
+    const projects = ((p.data ?? []) as ImProjectRow[]).map(imProjectFromRow)
+    if (reportError('بارگذاری مشکلات', i.error)) { set({ projects, loading: false }); return }
+    const known = new Set(projects.map((x) => x.id))
+    set({ projects, issues: ((i.data ?? []) as ImIssueRow[]).filter((r) => known.has(r.project_id)).map(imIssueFromRow), loading: false })
   },
 
   createIssue: async (projectId, data) => {

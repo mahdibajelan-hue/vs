@@ -29,7 +29,7 @@ interface IssuesMembersState {
   membersByProject: Record<string, ImProjectMember[]>
   loading: Record<string, boolean>
   fetchForProject: (projectId: string) => Promise<void>
-  /** several projects at once: the legacy-role table is read with one query for all of them (the people directory is a per-project RPC) */
+  /** several projects at once: one query for the legacy roles and one RPC (im_people_many) for the people directory */
   fetchMany: (projectIds: string[]) => Promise<void>
 }
 
@@ -41,17 +41,16 @@ export const useIssuesMembersStore = create<IssuesMembersState>()((set, get) => 
     const ids = projectIds.filter((id) => !get().loading[id])
     if (!ids.length) return
     set((s) => ({ loading: { ...s.loading, ...Object.fromEntries(ids.map((id) => [id, true])) } }))
-    const [legacy, ...people] = await Promise.all([
+    const [legacy, people] = await Promise.all([
       supabase.from('im_project_members').select('project_id, user_id, role').in('project_id', ids),
-      ...ids.map((id) => supabase.rpc('im_people', { p_project: id })),
+      supabase.rpc('im_people_many', { p_projects: ids }),
     ])
     const rolesBy = new Map<string, Map<string, ImUserRole>>()
     for (const r of (legacy.data ?? []) as { project_id: string; user_id: string; role: ImUserRole }[]) { const m = rolesBy.get(r.project_id) ?? new Map(); m.set(r.user_id, r.role); rolesBy.set(r.project_id, m) }
-    const next: Record<string, ImProjectMember[]> = {}
-    ids.forEach((id, i) => {
-      const lr = rolesBy.get(id)
-      next[id] = ((people[i].data ?? []) as PeopleRow[]).map((p) => ({ userId: p.id, email: p.email ?? '', fullName: p.full_name ?? '', position: p.position_title ?? '', organization: p.organization ?? '', projectRoles: p.project_roles ?? [], role: p.is_admin ? 'admin' : lr?.get(p.id) ?? 'pursuer' }))
-    })
+    const next: Record<string, ImProjectMember[]> = Object.fromEntries(ids.map((id) => [id, []]))
+    for (const p of (people.data ?? []) as (PeopleRow & { project_id: string })[]) {
+      next[p.project_id]?.push({ userId: p.id, email: p.email ?? '', fullName: p.full_name ?? '', position: p.position_title ?? '', organization: p.organization ?? '', projectRoles: p.project_roles ?? [], role: p.is_admin ? 'admin' : rolesBy.get(p.project_id)?.get(p.id) ?? 'pursuer' })
+    }
     set((s) => ({ membersByProject: { ...s.membersByProject, ...next }, loading: { ...s.loading, ...Object.fromEntries(ids.map((id) => [id, false])) } }))
   },
 

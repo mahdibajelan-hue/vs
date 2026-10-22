@@ -374,6 +374,7 @@ button.im-stat-card:active, .im-kpi-grid > button:active .im-stat-card { transfo
   .im-drawer { width: 100%; }
   .im-table .hide-sm { display: none; }
   .im-fab { display: inline-flex; }
+  .im-head-new { display: none; } /* the floating button takes over on small screens */
   .im-banner { padding: 22px 16px; border-radius: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {

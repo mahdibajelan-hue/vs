@@ -83,7 +83,7 @@ export function PortfolioRollupPage({ onSelectIssue }: { onSelectIssue: (issueId
         <div>
           <p className="im-page-title">تحلیل سه‌سطحی مشکلات — پورتفولیو / طرح / پروژه</p>
           <p className="im-page-sub">
-            ساختار پورتفولیو، طرح و پروژه از ماژول «داده‌های پایه» گرفته می‌شود — {mappedCount} از {masterProjects.length} پروژه به ماژول مدیریت رخداد متصل است.
+            ساختار پورتفولیو، طرح و پروژه از ماژول «داده‌های پایه» گرفته می‌شود — {mappedCount} از {masterProjects.length} پروژه به ماژول مدیریت موانع و اقدامات متصل است.
           </p>
         </div>
       </div>
@@ -327,7 +327,7 @@ function ProjectRow({ summary }: { summary: ProjectIssueSummary }) {
           )}
         </span>
       ) : (
-        <span style={{ fontSize: 11, color: 'var(--im-muted)' }}>به ماژول مدیریت رخداد متصل نیست</span>
+        <span style={{ fontSize: 11, color: 'var(--im-muted)' }}>به ماژول مدیریت موانع و اقدامات متصل نیست</span>
       )}
     </div>
   )

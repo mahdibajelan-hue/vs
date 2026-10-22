@@ -89,3 +89,6 @@ alter table im_issues
   drop column if exists corporate_issue_id,
   drop column if exists source_snapshot;
 alter table im_projects drop column if exists scope_level, drop column if exists master_ref_id, drop column if exists short_code;
+
+-- 023_people_many
+drop function if exists im_people_many(uuid[]);

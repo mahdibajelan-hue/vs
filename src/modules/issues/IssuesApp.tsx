@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, BookOpen, Building2, Plus, Radar, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, Network, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -85,9 +85,16 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const goRegister = (f?: Partial<IssueFilter>) => { setRegisterFilter(f); setRegisterKey((k) => k + 1); setTab('issues') }
   const openNew = (projectId?: string) => setNewIssueProjectId(projectId ?? 'pick')
 
-  useEffect(() => { fetchAll() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
+  // Everything the module needs is requested at once on entry (no waterfall); tasks and decisions are re-read when the
+  // number of issues changes afterwards (a new issue may bring template tasks with it).
+  useEffect(() => { void fetchAll(); void fetchWork(); void fetchDecisions() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
-  useEffect(() => { if (!loading) { fetchWork(); fetchDecisions() } }, [loading, issuesCount, fetchWork, fetchDecisions])
+  const seenCount = useRef<number | null>(null)
+  useEffect(() => {
+    if (loading) return
+    if (seenCount.current !== null && seenCount.current !== issuesCount) { void fetchWork(); void fetchDecisions() }
+    seenCount.current = issuesCount
+  }, [loading, issuesCount, fetchWork, fetchDecisions])
   useEffect(() => { void fetchMembersMany(projects.filter((p) => !(p.id in membersByProject)).map((p) => p.id)) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projects])
 
   // Arrived from Project Radar with a project in context: the whole module is scoped to that project (and the picker is hidden).
@@ -135,7 +142,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
               </select>
             )}
             {tab !== 'help' && <HelpButton topic={cur.help} />}
-            <button className="im-btn im-btn-primary im-btn-lg" onClick={() => openNew()}><Plus size={18} strokeWidth={2.6} /> مسئلهٔ جدید</button>
+            <button className="im-btn im-btn-primary im-btn-lg im-head-new" onClick={() => openNew()}><Plus size={18} strokeWidth={2.6} /> مسئلهٔ جدید</button>
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>

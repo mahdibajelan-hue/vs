@@ -85,23 +85,11 @@ export const useIssueWorkStore = create<WorkState>()((set, get) => ({
 
   fetchAll: async () => {
     set({ loadingAll: true })
-    const ids = useIssuesStore.getState().issues.map((i) => i.id)
-    if (!ids.length) { set({ tasks: [], extensions: [], loadingAll: false }); return }
-    // chunk the IN() list to keep URLs short
-    const chunks: string[][] = []
-    for (let i = 0; i < ids.length; i += 150) chunks.push(ids.slice(i, i + 150))
-    const tasks: ImTask[] = []
-    const exts: ImExtension[] = []
-    for (const ch of chunks) {
-      const [t, e] = await Promise.all([
-        supabase.from('im_issue_tasks').select('*').in('issue_id', ch),
-        supabase.from('im_extensions').select('*').in('issue_id', ch),
-      ])
-      if (t.error) { fail('بارگذاری اقدامات', t.error); break }
-      tasks.push(...((t.data ?? []) as ImTaskRow[]).map(imTaskFromRow))
-      exts.push(...((e.data ?? []) as ImExtensionRow[]).map(imExtensionFromRow))
-    }
-    set({ tasks, extensions: exts, loadingAll: false })
+    // Not filtered by issue id: row-level security returns only the tasks/extensions of issues the user can see, so this
+    // can start together with the issue list instead of waiting for it (and needs no long IN() lists).
+    const [t, e] = await Promise.all([supabase.from('im_issue_tasks').select('*'), supabase.from('im_extensions').select('*')])
+    if (t.error) fail('بارگذاری اقدامات', t.error)
+    set({ tasks: ((t.data ?? []) as ImTaskRow[]).map(imTaskFromRow), extensions: ((e.data ?? []) as ImExtensionRow[]).map(imExtensionFromRow), loadingAll: false })
   },
 
   fetchIssueDetail: async (issueId) => {
