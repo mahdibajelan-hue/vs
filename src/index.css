@@ -1601,7 +1601,7 @@ select option {
 }
 @media (min-width: 1024px) {
   .launchpad-module-grid {
-    grid-template-areas: 'a radar b' 'c d e' 'f g h' 'i j k' 'l m n' 'o p p';
+    grid-template-areas: 'a radar b' 'c d e' 'f g h' 'i j k' 'l m n' 'o p q';
   }
   .launchpad-module-grid .area-a { grid-area: a; }
   .launchpad-module-grid .area-radar { grid-area: radar; }
@@ -1620,6 +1620,7 @@ select option {
   .launchpad-module-grid .area-n { grid-area: n; }
   .launchpad-module-grid .area-o { grid-area: o; }
   .launchpad-module-grid .area-p { grid-area: p; }
+  .launchpad-module-grid .area-q { grid-area: q; }
 }
 
 /* ===== Farin launchpad showcase box =====

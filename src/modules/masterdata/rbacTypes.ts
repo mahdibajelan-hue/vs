@@ -18,6 +18,7 @@ export type ModuleKeyRef =
   | 'landacq'
   | 'stagegate'
   | 'taskissue'
+  | 'supervision'
   | 'admin'
 
 export interface RastaModule {

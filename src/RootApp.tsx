@@ -34,6 +34,7 @@ const moduleLoaders = {
   MissionsApp: () => import('./modules/missions/MissionsApp').then((m) => ({ default: m.MissionsApp })),
   LandAcqApp: () => import('./modules/landacq/LandAcqApp').then((m) => ({ default: m.LandAcqApp })),
   StageGateApp: () => import('./modules/stagegate/StageGateApp').then((m) => ({ default: m.StageGateApp })),
+  SupervisionApp: () => import('./modules/supervision/SupervisionApp').then((m) => ({ default: m.SupervisionApp })),
   AdminApp: () => import('./pages/AdminApp').then((m) => ({ default: m.AdminApp })),
   App: () => import('./App').then((m) => ({ default: m.default })),
 }
@@ -54,6 +55,7 @@ const LifecycleApp = lazy(moduleLoaders.LifecycleApp)
 const MissionsApp = lazy(moduleLoaders.MissionsApp)
 const LandAcqApp = lazy(moduleLoaders.LandAcqApp)
 const StageGateApp = lazy(moduleLoaders.StageGateApp)
+const SupervisionApp = lazy(moduleLoaders.SupervisionApp)
 const AdminApp = lazy(moduleLoaders.AdminApp)
 /** warm the module chunks one by one while the hub is idle, so a click finds its code already downloaded */
 function warmModules() {
@@ -203,6 +205,8 @@ export function RootApp() {
     <LandAcqApp repo={landRepo} onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'taskissue' ? (
     <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'supervision' ? (
+    <SupervisionApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'stagegate' ? (
     <StageGateApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (

@@ -11,6 +11,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'landacq', fa: 'تحصیل اراضی', en: 'Land Acquisition', words: 'زمین اراضی پارسل مالک عبور' },
   { key: 'stagegate', fa: 'چرخه عمر Stage-Gate', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر برنامه جامع' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },
+  { key: 'supervision', fa: 'حضور و غیاب دستگاه نظارت', en: 'Supervision Attendance', words: 'ناظر نظارت نماینده کارفرما حضور غیاب اضافه کار ساعت کار صبحانه ناهار شام خودرو استیجاری کارت ساعت' },
   { key: 'risk', fa: 'مدیریت ریسک', en: 'Risk Management', words: 'ریسک خطر کنترل KRI' },
   { key: 'change', fa: 'مدیریت تغییرات', en: 'Change Management', words: 'تغییر درخواست تغییر CR' },
   { key: 'finance', fa: 'کنترل قراردادها و مالی', en: 'Finance Control', words: 'مالی قرارداد صورت‌وضعیت پرداخت ضمانت‌نامه بودجه' },
