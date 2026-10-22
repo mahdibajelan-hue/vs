@@ -11,10 +11,9 @@ import type { SvSignature, SvSignoffStatus, SvSignStep, SvSnapshot } from '../ty
 
 export const STEPS: { step: SvSignStep; role: string; title: string; need: SvSignoffStatus }[] = [
   { step: 'prepared', role: 'تهیه‌کننده', title: 'سرپرست دستگاه نظارت', need: 'open' },
-  { step: 'reviewed', role: 'بررسی‌کننده', title: 'نمایندهٔ کارفرما', need: 'prepared' },
-  { step: 'approved', role: 'تأیید نهایی', title: 'مدیر پروژه', need: 'reviewed' },
+  { step: 'approved', role: 'تأییدکننده', title: 'مدیر پروژهٔ کارفرما', need: 'prepared' },
 ]
-const STATUS_FA: Record<SvSignoffStatus, string> = { open: 'در حال ثبت', prepared: 'تهیه و امضا شده', reviewed: 'بررسی و امضا شده', approved: 'تأیید نهایی شده' }
+const STATUS_FA: Record<SvSignoffStatus, string> = { open: 'در حال ثبت', prepared: 'تهیه شده، در انتظار تأیید', reviewed: 'بررسی شده', approved: 'تأیید شده' }
 const SNAP_FA: Record<keyof SvSnapshot, string> = {
   people: 'نفرات', worked: 'نفر-روز کارکرد', required: 'روز موظف', shortfall: 'روز کسری', hours: 'ساعت کار', overtime: 'اضافه‌کار',
   breakfast: 'صبحانه', lunch: 'ناهار', dinner: 'شام', vehicleDays: 'روز-خودرو', vehicleHours: 'ساعت خودرو',
@@ -31,7 +30,7 @@ export function snapshotDiff(signed: Partial<SvSnapshot>, now: SvSnapshot) {
 }
 
 /**
- * تأیید و امضای ماهانه — three signatures under the report (prepared → reviewed → approved). The first signature locks the
+ * تأیید و امضای ماهانه — two signatures under the report: prepared by the head of supervision → approved by the employer's project manager. The first signature locks the
  * month's attendance, vehicle days and guest meals; «بازگشت برای اصلاح» revokes every signature (with a reason) and unlocks it.
  */
 export function SignoffPanel({ monthKey, from, to, snapshot, unmarked }: { monthKey: string; from: string; to: string; snapshot: SvSnapshot; unmarked: number }) {

@@ -46,12 +46,12 @@ const toSignature = (r: Row): SvSignature => ({
   id: s(r.id), month: s(r.month), step: r.step as SvSignStep, userId: s(r.user_id), signerName: s(r.signer_name), signerTitle: s(r.signer_title), image: s(r.image),
   note: s(r.note), snapshot: (r.snapshot ?? {}) as SvSignature['snapshot'], signedAt: s(r.signed_at), revokedAt: (r.revoked_at as string) ?? null, revokeReason: (r.revoke_reason as string) ?? null,
 })
-const STEP_FA: Record<string, string> = { open: 'باز', prepared: 'تهیه', reviewed: 'بررسی', approved: 'تأیید نهایی' }
+const STEP_FA: Record<string, string> = { open: 'باز', prepared: 'تهیه', reviewed: 'بررسی', approved: 'تأیید' }
 const signErr = (e: { message: string; code?: string }): string => {
   const m = e.message
-  if (/step_not_allowed/.test(m)) return 'برای این مرحله دسترسی ندارید. در مرکز کاربران، برای ماژول «حضور و غیاب دستگاه نظارت» مجوز «ارسال» (تهیه)، «بررسی» یا «تأیید» لازم است.'
+  if (/step_not_allowed/.test(m)) return 'برای این مرحله دسترسی ندارید. در مرکز کاربران، برای ماژول «حضور و غیاب دستگاه نظارت» مجوز «ارسال» (تهیه، سرپرست نظارت) یا «تأیید» (مدیر پروژهٔ کارفرما) لازم است.'
   if (/wrong_order:(\w+)/.test(m)) return `ترتیب امضا رعایت نشده؛ وضعیت فعلی ماه «${STEP_FA[/wrong_order:(\w+)/.exec(m)![1]] ?? ''}» است. صفحه را تازه کنید.`
-  if (/same_signer/.test(m)) return 'هر نفر فقط یک مرحله را امضا می‌کند؛ مرحلهٔ بعد را نفر دیگری باید امضا کند.'
+  if (/same_signer/.test(m)) return 'تهیه‌کننده نمی‌تواند همان گزارش را تأیید هم بکند؛ تأیید با مدیر پروژهٔ کارفرماست.'
   if (/reason_required/.test(m)) return 'دلیل بازگشت را بنویسید (دست‌کم سه حرف).'
   if (/bad_signature/.test(m)) return 'تصویر امضا معتبر نیست یا حجم آن زیاد است.'
   if (/not_allowed|not_authenticated/.test(m) || e.code === '42501') return 'اجازهٔ این کار را در این پروژه ندارید.'

@@ -90,7 +90,8 @@ export interface SvAttendance {
   note: string
 }
 
-/** Monthly sign-off: open → prepared (تهیه) → reviewed (بررسی) → approved (تأیید نهایی). Anything but open locks the month's days. */
+/** Monthly sign-off: open → prepared (تهیه، سرپرست نظارت) → approved (تأیید، مدیر پروژهٔ کارفرما). Anything but open locks the month's days.
+ *  'reviewed' is a retired middle step kept only for old rows. */
 export type SvSignoffStatus = 'open' | 'prepared' | 'reviewed' | 'approved'
 export type SvSignStep = Exclude<SvSignoffStatus, 'open'>
 

@@ -122,8 +122,8 @@
 .sv-sign-head .sv-h3 { display: inline-flex; align-items: center; gap: 6px; }
 .sv-sign-head .im-btn { margin-inline-start: auto; }
 .sv-sign-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); --c: var(--im-muted-2); }
-.sv-sign-chip.s-prepared { --c: var(--im-sky); } .sv-sign-chip.s-reviewed { --c: var(--im-violet); } .sv-sign-chip.s-approved { --c: var(--im-mint); }
-.sv-sign-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sv-sign-chip.s-prepared, .sv-sign-chip.s-reviewed { --c: var(--im-amber); } .sv-sign-chip.s-approved { --c: var(--im-mint); }
+.sv-sign-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .sv-sign-box { display: grid; grid-template-rows: auto 1fr; gap: 8px; min-height: 150px; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--im-line-2); background: var(--im-panel-2); }
 .sv-sign-box.next { border-style: solid; border-color: var(--im-accent); }
 .sv-sign-box.done { border-style: solid; border-color: color-mix(in srgb, var(--im-mint) 45%, transparent); }
@@ -150,7 +150,7 @@
 @media print {
   .sv-root { --im-text: #111827; --im-muted: #4b5563; --im-muted-2: #374151; --im-line: #d1d5db; --im-line-2: #9ca3af; --im-panel: #fff; --im-panel-2: #f8fafc; --im-panel-3: #eef2f7; color: #111827 !important; background: #fff !important; }
   .sv-sign { background: #fff; border-color: #bbb; }
-  .sv-sign-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  .sv-sign-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .sv-sign-box { background: #fff; border: 1px solid #999 !important; }
   .sv-sign-chip { color: #000; background: none; border: 1px solid #999; }
 }
