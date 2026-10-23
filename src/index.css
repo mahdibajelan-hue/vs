@@ -2069,3 +2069,16 @@ select option {
   .tb-cap { font-size: 9.5px; }
   .tb-user { padding: 3px 4px 2px !important; }
 }
+
+/* «PMIS» beside the FARIN wordmark: same face and metal, ~40% size, on a recessed plate with engraved edges */
+.lp-pmis-plate { display: inline-flex; align-items: center; align-self: center; padding: 0.14em 0.36em 0.12em; border-radius: 0.2em; line-height: 1;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0.06em 0.1em rgba(0, 0, 0, 0.75), inset 0 -0.02em 0 rgba(255, 255, 255, 0.14), 0 0.02em 0 rgba(255, 255, 255, 0.1); }
+.lp-pmis-txt { font-size: 0.4em; font-weight: 700; letter-spacing: 0.06em; line-height: 1; color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(180deg, #ffffff, #d4d4d8 45%, #71717a);
+  filter: drop-shadow(0 -0.02em 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0.02em 0 rgba(255, 255, 255, 0.2)); }
+/* on the light signed-in card the wordmark is dark ink; the plate is pressed into the paper */
+.launchpad-frame.is-authed .lp-pmis-plate { background: linear-gradient(180deg, rgba(15, 23, 42, 0.09), rgba(15, 23, 42, 0.02));
+  box-shadow: inset 0 0.06em 0.1em rgba(15, 23, 42, 0.32), inset 0 -0.03em 0 rgba(255, 255, 255, 0.95), 0 0.02em 0 rgba(255, 255, 255, 0.9); }
+.launchpad-frame.is-authed .lp-pmis-txt { font-weight: 800; background-image: linear-gradient(180deg, #020617, #1e293b);
+  filter: drop-shadow(0 0.025em 0 rgba(255, 255, 255, 0.9)); }

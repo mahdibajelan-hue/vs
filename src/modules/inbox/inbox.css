@@ -247,3 +247,11 @@
 .ibh-bar em { font-style: normal; font-size: 8.5px; color: #94a3b8; white-space: nowrap; }
 @media (max-width: 900px) { .ibh { grid-template-columns: 1fr; } .ibh-viz { border-inline-start: 0; border-top: 1px solid rgba(125, 211, 252, .25); } }
 @media (prefers-reduced-motion: reduce) { .ibh-card, .ibh-face, .ibh-bar i { animation: none; } }
+/* FARIN PMIS above «کارتابل من» */
+.ibh-brand { display: inline-flex; align-items: center; gap: 7px; justify-self: start; font-size: 20px; line-height: 1; margin-bottom: 2px; }
+.ibh-brand-farin { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, #ffffff, #cbd5e1 50%, #94a3b8); }
+.ibh-brand .lp-pmis-plate { font-size: 17px; }
+.ibh-brand .lp-pmis-txt { font-size: 0.62em; }
+/* the inbox card is dark even on the light signed-in frame: light metal on a pressed dark plate */
+.launchpad-frame .ibh-brand .lp-pmis-plate, .ibh-brand .lp-pmis-plate { background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 0.08em 0.12em rgba(0, 0, 0, 0.8), inset 0 -0.03em 0 rgba(255, 255, 255, 0.16), 0 0.03em 0 rgba(255, 255, 255, 0.12); }
+.launchpad-frame .ibh-brand .lp-pmis-txt, .ibh-brand .lp-pmis-txt { font-weight: 800; background-image: linear-gradient(180deg, #ffffff, #cbd5e1 50%, #94a3b8); filter: drop-shadow(0 -0.03em 0 rgba(0, 0, 0, 0.7)); }

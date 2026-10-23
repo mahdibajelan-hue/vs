@@ -44,3 +44,11 @@ export function FarinMark({ size = 40, className = '' }: { size?: number; classN
     />
   )
 }
+
+/**
+ * «PMIS» beside the FARIN wordmark: the same face and metal gradient, ~40% of its size, set on a recessed plate
+ * (engraved edges). `className` carries the wordmark's own font-size so the plate scales with it.
+ */
+export function PmisMark({ className = '' }: { className?: string }) {
+  return <span className={`lp-pmis-plate ${className}`} aria-label="PMIS"><span className="lp-pmis-txt">PMIS</span></span>
+}

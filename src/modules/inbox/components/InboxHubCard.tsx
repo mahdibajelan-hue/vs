@@ -1,3 +1,4 @@
+import { PmisMark } from '../../../components/common/Logo'
 import { useMemo } from 'react'
 import { ArrowLeft, Bell, Inbox } from 'lucide-react'
 import { useNotificationStore } from '../../../store/useNotificationStore'
@@ -38,6 +39,7 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
           <span className="ibh-face">{loaded ? md.face : '📬'}</span>
         </span>
         <span className="ibh-txt">
+          <span className="ibh-brand" dir="ltr" aria-label="FARIN PMIS"><span className="ibh-brand-farin">FARIN</span><PmisMark className="ibh-brand-pmis" /></span>
           <span className="ibh-tag"><Inbox size={13} /> Unified Inbox</span>
           <b>کارتابل من</b>
           <span className="ibh-sub">{locked ? 'پس از ورود، همهٔ کارهای شما در همهٔ ماژول‌ها یک‌جاست' : loaded ? md.text : 'در حال بارگذاری…'}</span>

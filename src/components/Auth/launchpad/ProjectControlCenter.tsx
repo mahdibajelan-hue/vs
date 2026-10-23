@@ -9,7 +9,7 @@ import { AboutNote } from './AboutNote'
 import { Footer } from './Footer'
 import { LoginCard } from './LoginCard'
 import { ProjectHeroArt } from './ProjectHeroArt'
-import { FARIN_NAME_FA, FARIN_TAGLINE_FA } from '../../common/Logo'
+import { FARIN_NAME_FA, FARIN_TAGLINE_FA, PmisMark } from '../../common/Logo'
 
 /** FARIN wordmark + Persian name + tagline — the hero title that sits under the lamp. `children`
  * (the signed-out About note) follows the tagline directly. */
@@ -17,16 +17,20 @@ function BrandName({ className = '', compact }: { className?: string; compact?: 
   if (compact) {
     // Signed in: the wordmark shrinks to one line so the modules sit above the fold.
     return (
-      <div className={`flex items-baseline justify-center gap-3 ${className}`}>
-        <span dir="ltr" className="lp-brand-farin bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">FARIN</span>
+      <div className={`flex items-center justify-center gap-3 ${className}`}>
+        <span dir="ltr" className="flex items-center gap-2.5">
+          <span className="lp-brand-farin bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">FARIN</span>
+          <PmisMark className="text-4xl md:text-5xl" />
+        </span>
         <span className="lp-brand-fa text-3xl font-extrabold leading-tight text-[#c9a227] md:text-4xl">{FARIN_NAME_FA}</span>
       </div>
     )
   }
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      <span dir="ltr" className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-7xl">
-        FARIN
+      <span dir="ltr" className="flex items-center gap-3">
+        <span className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-7xl">FARIN</span>
+        <PmisMark className="text-6xl md:text-7xl" />
       </span>
       <span className="text-5xl font-extrabold leading-tight text-[#c9a227] md:text-6xl">{FARIN_NAME_FA}</span>
     </div>
