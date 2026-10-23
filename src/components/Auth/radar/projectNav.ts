@@ -1,0 +1,79 @@
+import type { LucideIcon } from 'lucide-react'
+import {
+  Activity, BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, Orbit, PackageCheck,
+  PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
+} from 'lucide-react'
+import type { ModuleKey } from '../../../store/useModuleStore'
+import type { MasterProject } from '../../../modules/masterdata/types'
+
+/**
+ * اتاق فرمان پروژه — what lives inside the radar (project-scoped modules), grouped the way a project team thinks.
+ * Organization-wide modules (portfolio, reporting, estimation, missions, supervision, competency, users) stay on the home page.
+ */
+export interface ProjectNavItem {
+  id: string
+  /** null = a view inside the radar itself (overview / universe) */
+  module: ModuleKey | null
+  label: string
+  icon: LucideIcon
+  accent: string
+}
+export interface ProjectNavGroup { id: string; label: string; items: ProjectNavItem[] }
+
+export const PROJECT_NAV: ProjectNavGroup[] = [
+  { id: 'watch', label: 'پایش', items: [
+    { id: 'overview', module: null, label: 'رادار پروژه', icon: Radar, accent: '#22c55e' },
+    { id: 'universe', module: null, label: 'جهان ریسک و مسئله', icon: Orbit, accent: '#a78bfa' },
+    { id: 'lifecycle', module: 'lifecycle', label: 'چرخهٔ عمر و برج کنترل EPC', icon: GitBranch, accent: '#22d3ee' },
+    { id: 'stagegate', module: 'stagegate', label: 'گیت‌های Stage-Gate', icon: Route, accent: '#38bdf8' },
+  ] },
+  { id: 'time', label: 'زمان و اجرا', items: [
+    { id: 'scheduling', module: 'scheduling', label: 'برنامه‌ریزی و کنترل زمان', icon: CalendarClock, accent: '#14b8a6' },
+    { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: PencilRuler, accent: '#818cf8' },
+    { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: PackageCheck, accent: '#f59e0b' },
+    { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: HardHat, accent: '#fb923c' },
+  ] },
+  { id: 'money', label: 'قرارداد و هزینه', items: [
+    { id: 'finance', module: 'finance', label: 'قراردادها و مالی', icon: BadgeDollarSign, accent: '#10b981' },
+    { id: 'change', module: 'change', label: 'مدیریت تغییرات', icon: GitPullRequestArrow, accent: '#eab308' },
+  ] },
+  { id: 'risk', label: 'ریسک و مسائل', items: [
+    { id: 'risk', module: 'risk', label: 'مدیریت ریسک', icon: ShieldAlert, accent: '#f43f5e' },
+    { id: 'taskissue', module: 'taskissue', label: 'موانع و اقدامات', icon: ClipboardList, accent: '#f97316' },
+    { id: 'issues', module: 'issues', label: 'مدیریت مسائل', icon: Activity, accent: '#c084fc' },
+  ] },
+  { id: 'assets', label: 'زمین و دارایی', items: [
+    { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: Sprout, accent: '#84cc16' },
+    { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: Sparkles, accent: '#0ea5e9' },
+    { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: Cpu, accent: '#38bdf8' },
+  ] },
+]
+
+/** Modules reached only through the radar (they are no longer tiles on the home page). */
+export const PROJECT_MODULES = new Set<ModuleKey>(PROJECT_NAV.flatMap((g) => g.items.map((i) => i.module).filter((m): m is ModuleKey => !!m)))
+
+// ── recently opened projects (per browser) ──────────────────────────────────
+const RECENT_KEY = 'farin.radar.recent'
+export function recentProjects(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] }
+}
+export function rememberProject(id: string) {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...recentProjects().filter((x) => x !== id)].slice(0, 8))) } catch { /* private mode */ }
+}
+/** Recent first (in visit order), then the rest by name. */
+export function orderProjects(list: MasterProject[]): MasterProject[] {
+  const rec = recentProjects()
+  const rank = (p: MasterProject) => { const i = rec.indexOf(p.id); return i < 0 ? 999 : i }
+  return [...list].sort((a, b) => rank(a) - rank(b) || a.officialName.localeCompare(b.officialName, 'fa'))
+}
+
+/** Share of the contract period already elapsed (0–100), from real master data; null when the dates are missing. */
+export function timeElapsed(p: MasterProject, today = new Date()): number | null {
+  const start = p.contractStartDate ?? p.plannedStartDate
+  const end = p.revisedCompletionDate ?? p.contractualCompletionDate ?? p.plannedFinishDate
+  if (!start || !end) return null
+  const s = Date.parse(start), e = Date.parse(end)
+  if (!(e > s)) return null
+  return Math.max(0, Math.min(100, Math.round(((today.getTime() - s) / (e - s)) * 100)))
+}
+export const projectEnd = (p: MasterProject) => p.revisedCompletionDate ?? p.contractualCompletionDate ?? p.plannedFinishDate

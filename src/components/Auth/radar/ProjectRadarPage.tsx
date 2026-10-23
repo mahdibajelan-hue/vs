@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowRight, Bell, CheckCircle2,
-  ChevronsRight, Clock3, FileText, GitBranch, Heart, Orbit, Radar as RadarIcon, RefreshCw, Route,
-  ShieldAlert, ShieldCheck, Sparkles, X,
-  MapPinned, Sprout,
+  Activity, ArrowRight, Bell, CheckCircle2,
+  Clock3, Heart, PanelRightOpen, Radar as RadarIcon, RefreshCw,
+  ShieldAlert, X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import { MISSIONS_MODULE } from '../../../modules/missions/integration/manifest'
-import { LANDACQ_MODULE } from '../../../modules/landacq/integration/manifest'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
+import { useNotificationStore } from '../../../store/useNotificationStore'
+import { RadarProjectPicker } from './RadarProjectPicker'
+import { RadarSidebar } from './RadarSidebar'
+import { rememberProject, type ProjectNavItem } from './projectNav'
+import './radarShell.css'
 import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
@@ -22,23 +23,6 @@ import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type RadarData, type SignalCategory,
 } from './radarTypes'
-
-/** Sidebar entries — the per-project operational modules named explicitly in the brief (Risk,
- * Issue, Change, Finance, Contract, PipePulse, Digital Twin, ...) plus the Lifecycle/EPC pages
- * this radar itself summarizes. Cross-cutting/strategic modules (Portfolio, Reporting,
- * Competency, Estimator, Admin) live on the Home screen instead, not here. */
-interface NavItem {
-  id: string
-  moduleKey: ModuleKey | null
-  title: string
-  icon: LucideIcon
-  accent: string
-  badge?: number
-  /** Overrides the default moduleKey/toast behavior entirely — used for the Risk & Issue
-   * Universe entry, which swaps in a sibling view inside Radar itself rather than navigating
-   * to a separate top-level module. */
-  onClick?: () => void
-}
 
 const CATEGORY_FILTERS: { key: SignalCategory | 'all'; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -54,19 +38,20 @@ const CATEGORY_FILTERS: { key: SignalCategory | 'all'; label: string }[] = [
 const SCAN_DURATION_MS = 1400
 
 export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void; onEnterModule: (key: ModuleKey) => void }) {
-  const [notice, setNotice] = useState<string | null>(null)
-  const noticeTimer = useRef<number | undefined>(undefined)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const masterProjects = useMasterDataStore((s) => s.projects)
-  const masterPortfolios = useMasterDataStore((s) => s.portfolios)
-  const masterPrograms = useMasterDataStore((s) => s.programs)
-  const {
-    portfolioId: contextPortfolioId, programId: contextProgramId, projectId: contextProjectId,
-    setPortfolio: setContextPortfolio, setProgram: setContextProgram, setProject: setContextProject,
-  } = useProjectContextStore()
+  const contextProjectId = useProjectContextStore((s) => s.projectId)
+  // the whole context follows the chosen project, so modules that filter by portfolio/program agree with it
+  const pickProject = (id: string | null) => {
+    const p = id ? masterProjects.find((x) => x.id === id) : null
+    if (p) rememberProject(p.id)
+    useProjectContextStore.setState({ portfolioId: p?.portfolioId ?? null, programId: p?.programId ?? null, projectId: p?.id ?? null, phaseId: null })
+  }
+  const notifications = useNotificationStore((s) => s.items)
+  const badgeFor = (key: ModuleKey) => notifications.filter((n) => n.module === key).length
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -74,16 +59,6 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   }, [])
 
   const selectedProject = useMemo(() => masterProjects.find((p) => p.id === contextProjectId) ?? null, [masterProjects, contextProjectId])
-
-  // Portfolio → Program → Project cascade for the picker below — each level narrows the next,
-  // same pattern as the global ContextSwitcher (masterdata module), reused here so the Radar's
-  // own picker stays in sync with the shared project context that Risk/Issue/Finance/... read.
-  const programOptions = contextPortfolioId ? masterPrograms.filter((p) => p.portfolioId === contextPortfolioId) : masterPrograms
-  const projectOptions = contextProgramId
-    ? masterProjects.filter((p) => p.programId === contextProgramId)
-    : contextPortfolioId
-      ? masterProjects.filter((p) => p.portfolioId === contextPortfolioId)
-      : masterProjects
 
   // Shows the deterministic mock instantly (no loading flicker), then upgrades in place to live
   // Risk/Issue data once fetchProjectIntelligence resolves — a project with no confirmed module
@@ -146,31 +121,11 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
 
   const isVisible = (key: ModuleKey) => hasModuleAccess(accessibleModules, key)
 
-  const ALL_NAV_ITEMS: NavItem[] = [
-    { id: 'lifecycle-nav', moduleKey: 'lifecycle', title: 'Lifecycle Navigator', icon: GitBranch, accent: 'var(--radar-cyan)' },
-    { id: 'epc-tower', moduleKey: 'lifecycle', title: 'EPC Control Tower', icon: ShieldCheck, accent: 'var(--radar-amber)' },
-    { id: 'missions', moduleKey: 'missions', title: MISSIONS_MODULE.labelEn, icon: MapPinned, accent: MISSIONS_MODULE.accent },
-    { id: 'landacq', moduleKey: 'landacq', title: 'Land Acquisition & ROW', icon: Sprout, accent: LANDACQ_MODULE.accent },
-    { id: 'issue', moduleKey: 'issues', title: 'Issue Management', icon: Activity, accent: '#a78bfa', badge: data.kpi.openIssues },
-    { id: 'universe', moduleKey: null, title: 'Risk & Issue Universe', icon: Orbit, accent: '#a78bfa', onClick: () => setUniverseOpen(true) },
-    { id: 'pipepulse', moduleKey: 'pipepulse', title: 'PipePulse', icon: Sparkles, accent: '#0ea5e9' },
-    { id: 'twin', moduleKey: 'pipelinedigitaltwin', title: 'Digital Twin', icon: Route, accent: '#38bdf8' },
-    { id: 'docs', moduleKey: null, title: 'Document Center', icon: FileText, accent: '#64748b' },
-  ]
-  const NAV_ITEMS = ALL_NAV_ITEMS.filter((n) => n.moduleKey === null || isVisible(n.moduleKey))
-
-  const handleNavClick = (item: NavItem) => {
-    if (item.onClick) {
-      item.onClick()
-      return
-    }
-    if (!item.moduleKey) {
-      setNotice(`"${item.title}" is coming soon`)
-      window.clearTimeout(noticeTimer.current)
-      noticeTimer.current = window.setTimeout(() => setNotice(null), 2600)
-      return
-    }
-    onEnterModule(item.moduleKey)
+  const handleNavClick = (item: ProjectNavItem) => {
+    if (!isDesktop) setSidebarOpen(false)
+    if (item.id === 'universe') { setUniverseOpen(true); return }
+    if (!item.module) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    onEnterModule(item.module)
   }
 
   const statusColor = STATUS_COLOR[data.status]
@@ -187,6 +142,10 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const qualityColor = data.kpi.qualityPct >= 70 ? 'var(--radar-green)' : 'var(--radar-amber)'
   const qualityCaption = data.kpi.qualityPct >= 85 ? 'EXCELLENT' : data.kpi.qualityPct >= 70 ? 'GOOD' : 'FAIR'
 
+  if (!contextProjectId || (mdLoaded && !selectedProject)) {
+    return <RadarProjectPicker onPick={pickProject} onBack={onBack} />
+  }
+
   if (universeOpen) {
     return (
       <RiskIssueUniversePage
@@ -198,17 +157,17 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   }
 
   return (
-    <div dir="ltr" className="radar-en relative min-h-screen w-screen" style={{ background: 'var(--bg-app)' }}>
+    <div dir="ltr" className="radar-en relative min-h-screen w-screen overflow-x-clip" style={{ background: 'var(--bg-app)' }}>
       <div className="radar-page-texture" aria-hidden="true" />
       {/* Reserves space for the floating sidebar instead of letting it overlap the content
           (the sidebar itself is `position: fixed`, so it takes no layout space on its own). */}
-      <div className="relative z-10 transition-[margin] duration-300" style={{ marginInlineStart: isDesktop && sidebarOpen ? '16rem' : 0 }}>
+      <div className="relative z-10 transition-[margin] duration-300" style={{ marginRight: isDesktop && sidebarOpen ? '17rem' : 0 }}>
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2.5">
           <button
             onClick={onBack}
-            title="Back to Modules"
+            title="صفحهٔ اصلی"
             className="flex h-10 w-10 items-center justify-center rounded-xl border transition-colors hover:bg-white/5"
             style={{ borderColor: 'var(--border-soft)' }}
           >
@@ -223,47 +182,11 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
           </div>
         </div>
 
-        <div dir="rtl" className="flex flex-wrap items-center gap-1.5 text-[11px]">
-          <select
-            value={contextPortfolioId ?? ''}
-            onChange={(e) => setContextPortfolio(e.target.value || null)}
-            className="input max-w-[9.5rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none"
-            style={{ borderColor: 'var(--border-soft)' }}
-          >
-            <option value="">سبد پروژه: همه</option>
-            {masterPortfolios.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
-          <select
-            value={contextProgramId ?? ''}
-            onChange={(e) => setContextProgram(e.target.value || null)}
-            disabled={programOptions.length === 0}
-            className="input max-w-[9.5rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none disabled:opacity-40"
-            style={{ borderColor: 'var(--border-soft)' }}
-          >
-            <option value="">طرح: همه</option>
-            {programOptions.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
-          <select
-            value={contextProjectId ?? ''}
-            onChange={(e) => setContextProject(e.target.value || null)}
-            className="input max-w-[11rem] truncate rounded-lg px-2 py-1.5 font-bold outline-none"
-            style={{ borderColor: 'var(--radar-green)', color: 'var(--radar-green)' }}
-          >
-            <option value="">پروژه: نمونه پیش‌فرض</option>
-            {projectOptions.map((p) => (
-              <option key={p.id} value={p.id}>{p.officialName}</option>
-            ))}
-          </select>
-
-          <span dir="ltr" className="hidden text-muted sm:inline">ID:</span>
-          <span dir="ltr" className="num hidden font-bold sm:inline">{data.projectIdCode}</span>
-        </div>
+        {!sidebarOpen && (
+          <button type="button" dir="rtl" onClick={() => setSidebarOpen(true)} className="rs-open">
+            <PanelRightOpen size={15} aria-hidden /> ماژول‌های پروژه
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           <button
@@ -311,7 +234,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 p-4 ps-10 sm:p-6 sm:ps-12">
+      <main className="min-w-0 flex-1 p-4 sm:p-6">
         {/* Bold project title, with the Project Status + Radar Mode indicators pulled up beside it
             (previously a separate row below) so the wide empty space next to the headline on
             desktop gets used instead of left blank. */}
@@ -429,59 +352,18 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
       </main>
       </div>
 
-      {/* ── Floating sidebar (all breakpoints) — docked to the visual right edge, which in this
-          RTL app is `inset-inline-start` (inline-end resolves to the LEFT under dir="rtl"). ── */}
-      <aside
-        className="fixed bottom-0 top-0 z-40 w-64 overflow-y-auto border-e p-3 shadow-2xl transition-transform duration-300"
-        style={{
-          insetInlineStart: 0,
-          background: 'var(--bg-panel-solid)',
-          borderColor: 'var(--border-soft)',
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-        }}
-      >
-        <div className="mb-3 flex items-center justify-between px-1">
-          <p className="text-[10px] font-bold text-muted">PROJECT MODULES</p>
-          <button onClick={() => setSidebarOpen(false)} className="flex h-6 w-6 items-center justify-center rounded-lg hover:bg-white/5" title="Hide Menu">
-            <ChevronsRight size={14} className="rotate-180 text-muted" />
-          </button>
-        </div>
-        <div className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
-            <SidebarButton key={item.id} item={item} onClick={() => handleNavClick(item)} />
-          ))}
-        </div>
-      </aside>
-
-      {/* Toggle tab — stays reachable when the drawer is hidden, slides with it when open. */}
-      <button
-        onClick={() => setSidebarOpen((v) => !v)}
-        className="fixed top-24 z-40 flex h-9 w-7 items-center justify-center rounded-e-lg border border-s-0 shadow-lg transition-[inset-inline-start] duration-300"
-        style={{
-          insetInlineStart: sidebarOpen ? '16rem' : 0,
-          background: 'var(--bg-panel-solid)',
-          borderColor: 'var(--border-soft)',
-        }}
-        title={sidebarOpen ? 'Hide Menu' : 'Show Menu'}
-      >
-        <ChevronsRight size={14} className="text-muted transition-transform duration-300" style={{ transform: sidebarOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-      </button>
-
-      {notice && (
-        <div className="hub-toast fixed bottom-8 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/15 bg-[var(--bg-panel-solid)] px-5 py-2.5 text-xs font-medium shadow-2xl">
-          <span className="flex items-center gap-2">
-            <AlertTriangle size={14} className="text-brand-400" />
-            {notice}
-          </span>
-        </div>
-      )}
-
-      {/* On mobile the sidebar overlays instead of pushing content, so tapping outside it closes it. */}
-      {sidebarOpen && !isDesktop && (
-        <button
-          className="fixed inset-0 z-30 cursor-default bg-black/50"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close menu"
+      {selectedProject && (
+        <RadarSidebar
+          project={selectedProject}
+          active="overview"
+          canSee={isVisible}
+          badgeFor={badgeFor}
+          open={sidebarOpen}
+          overlay={!isDesktop}
+          onItem={handleNavClick}
+          onSwitch={() => pickProject(null)}
+          onHome={onBack}
+          onClose={() => setSidebarOpen(false)}
         />
       )}
 
@@ -493,20 +375,5 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
         />
       )}
     </div>
-  )
-}
-
-function SidebarButton({ item, onClick }: { item: NavItem; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] font-bold transition-colors hover:bg-white/5"
-    >
-      <item.icon size={15} style={{ color: item.accent }} />
-      <span className="min-w-0 flex-1 truncate">{item.title}</span>
-      {item.badge !== undefined && item.badge > 0 && (
-        <span className="num rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-bold">{item.badge}</span>
-      )}
-    </button>
   )
 }

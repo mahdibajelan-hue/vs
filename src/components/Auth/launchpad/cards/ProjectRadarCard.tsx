@@ -8,7 +8,7 @@ export function ProjectRadarCard({ onSelect, locked, badge }: { onSelect: () => 
       number="01"
       title="رادار پروژه‌ها"
       englishTag="Project Intelligence & Control"
-      description="مرکز فرماندهی هر پروژه — سیگنال‌ها، چرخه عمر، گیت‌ها، ریسک، مسائل، قرارداد و مالی."
+      description="اتاق فرمان هر پروژه — پروژه را انتخاب کنید؛ برنامهٔ زمانی، مالی، ریسک، مسائل، کالا، اجرا و اراضی همان پروژه در یک جا."
       icon={RadarIcon}
       accent="#059669"
       hero

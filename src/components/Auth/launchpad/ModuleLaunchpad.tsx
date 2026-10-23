@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { useNotificationStore } from '../../../store/useNotificationStore'
@@ -10,51 +10,32 @@ import { TechnicalCompetencyCard } from './cards/TechnicalCompetencyCard'
 import { ProjectEstimationCard } from './cards/ProjectEstimationCard'
 import { UserManagementCard } from './cards/UserManagementCard'
 import { MissionDebriefCard } from './cards/MissionDebriefCard'
-import { LandAcquisitionCard } from './cards/LandAcquisitionCard'
-import { StageGateCard } from './cards/StageGateCard'
-import { TaskIssueCard } from './cards/TaskIssueCard'
-import { RiskManagementCard } from './cards/RiskManagementCard'
-import { ChangeManagementCard } from './cards/ChangeManagementCard'
-import { FinanceControlCard } from './cards/FinanceControlCard'
-import { MaterialControlCard } from './cards/MaterialControlCard'
-import { ExecutionControlCard } from './cards/ExecutionControlCard'
-import { EngineeringControlCard } from './cards/EngineeringControlCard'
-import { SchedulingControlCard } from './cards/SchedulingControlCard'
 import { SupervisionAttendanceCard } from './cards/SupervisionAttendanceCard'
 import { InboxHubCard } from '../../../modules/inbox/components/InboxHubCard'
+import { useProjectContextStore } from '../../../store/useProjectContextStore'
+import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
+import { MyProjectsPanel } from './MyProjectsPanel'
+import { PROJECT_MODULES } from '../radar/projectNav'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
 
-/** Every launchpad entry point. Project Radar has no RBAC gate (it's always the entry point, not
- * one of the `hasModuleAccess`-checked ones), so it's kept out of the filtered list and placed
- * explicitly in the grid's `radar` area (see `.launchpad-module-grid` in index.css) — the other
- * five fill areas a/b/c/d/e around it in this order. New modules are added here as one more
- * `{ key, Card, area }` entry (pick any still-open area). The Personality & Behavioral Assessment
- * module used to have its own card/area-f here; it's now reached through the Competency module's
- * own candidate wizard instead (see AssessmentWizardPage's panel/personality stages) rather
- * than as an independently-navigable top-level module. */
+/**
+ * The home page holds only organization-wide tools. Everything that belongs to one project (schedule, finance,
+ * risk, issues, material, execution, land, …) is reached through Project Radar, after the project is chosen —
+ * see `PROJECT_NAV` in radar/projectNav.ts. Project Radar itself is not RBAC-gated and always comes first.
+ */
 const REGULAR_MODULES: { key: ModuleKey; Card: CardComponent }[] = [
   { key: 'executive', Card: PortfolioManagementCard },
   { key: 'reporting', Card: SmartAnalyticsCard },
-  { key: 'competency', Card: TechnicalCompetencyCard },
   { key: 'estimator', Card: ProjectEstimationCard },
   { key: 'missions', Card: MissionDebriefCard },
-  { key: 'landacq', Card: LandAcquisitionCard },
-  { key: 'stagegate', Card: StageGateCard },
-  { key: 'taskissue', Card: TaskIssueCard },
-  { key: 'risk', Card: RiskManagementCard },
-  { key: 'change', Card: ChangeManagementCard },
-  { key: 'finance', Card: FinanceControlCard },
-  { key: 'material', Card: MaterialControlCard },
-  { key: 'execution', Card: ExecutionControlCard },
-  { key: 'engineering', Card: EngineeringControlCard },
-  { key: 'scheduling', Card: SchedulingControlCard },
   { key: 'supervision', Card: SupervisionAttendanceCard },
+  { key: 'competency', Card: TechnicalCompetencyCard },
   // User management is deliberately always the LAST tile.
   { key: 'admin', Card: UserManagementCard },
 ]
-/** Grid areas are handed out by position among the modules the user can see, so there are never holes and the last module stays last. */
-const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h', 'area-i', 'area-j', 'area-k', 'area-l', 'area-m', 'area-n', 'area-o', 'area-p', 'area-q']
+/** Signed-out preview grid: areas handed out by position, so there are never holes. */
+const AREAS = ['area-a', 'area-b', 'area-c', 'area-d', 'area-e', 'area-f', 'area-g', 'area-h']
 
 /** `embedded`: rendered inside another column (the signed-out hero, under the login card) — no
  * page-level width/padding and no hint line, just the icon grid. */
@@ -63,34 +44,69 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
   const visibleModules = REGULAR_MODULES.filter((m) => hasModuleAccess(accessibleModules, m.key))
   const locked = !isAuthed
-  // The bell's items, counted per module so every tile shows its own share of the bell's total. A module that is entered through another card (issues → «موانع و اقدامات») counts there.
+  // The bell's items, counted per module so every tile shows its own share of the bell's total.
   const notifications = useNotificationStore((s) => s.items)
-  const countFor = (key: ModuleKey) => notifications.filter((n) => (n.module === 'issues' ? 'taskissue' : n.module) === key).length
+  const countFor = (key: ModuleKey) => notifications.filter((n) => n.module === key).length
+  const projectCount = notifications.filter((n) => PROJECT_MODULES.has(n.module)).length
+  const mdLoaded = useMasterDataStore((s) => s.loaded)
+  useEffect(() => {
+    if (isAuthed && !mdLoaded) useMasterDataStore.getState().fetchAll()
+  }, [isAuthed, mdLoaded])
+
+  /** null = open the radar on its project picker */
+  const openRadar = (projectId: string | null) => {
+    const p = projectId ? useMasterDataStore.getState().projects.find((x) => x.id === projectId) : null
+    useProjectContextStore.setState({ portfolioId: p?.portfolioId ?? null, programId: p?.programId ?? null, projectId: p?.id ?? null, phaseId: null })
+    onSelect('radar')
+  }
+
+  if (locked || embedded) {
+    return (
+      <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto w-full max-w-4xl py-2'}>
+        {!embedded && <p className="lp-hint hub-fade-in mb-3 text-center text-xs font-medium text-secondary">برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید</p>}
+        <div className="launchpad-module-grid">
+          <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>
+            <ProjectRadarCard onSelect={() => openRadar(null)} locked={locked} />
+          </div>
+          {visibleModules.map(({ key, Card }, i) => (
+            <div key={key} className={`hub-fade-in ${AREAS[i]}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
+              <Card onSelect={() => onSelect(key)} locked={locked} badge={countFor(key)} />
+            </div>
+          ))}
+        </div>
+      </main>
+    )
+  }
 
   return (
-    <main className={embedded ? 'relative z-10 mx-auto w-full max-w-sm' : 'relative z-10 mx-auto w-full max-w-4xl py-2'}>
-      {!embedded && (
-        <p className="lp-hint hub-fade-in mb-3 text-center text-xs font-medium text-secondary" style={{ animationDelay: '80ms' }}>
-          {locked ? 'برای ورود به ماژول‌ها ابتدا وارد حساب کاربری خود شوید' : 'یک ماژول را برای ورود انتخاب کنید'}
-        </p>
-      )}
-
-      {!embedded && (
-        <div className="hub-fade-in mb-3" style={{ animationDelay: '100ms' }}>
-          <InboxHubCard locked={locked} />
-        </div>
-      )}
-
-      <div className={locked || embedded ? 'launchpad-module-grid' : 'launchpad-bento'}>
-        <div className="hub-fade-in area-radar" style={{ animationDelay: '140ms' }}>
-          <ProjectRadarCard onSelect={() => onSelect('radar')} locked={locked} />
-        </div>
-        {visibleModules.map(({ key, Card }, i) => (
-          <div key={key} className={`hub-fade-in ${AREAS[i]}`} style={{ animationDelay: `${200 + i * 50}ms` }}>
-            <Card onSelect={() => onSelect(key)} locked={locked} badge={countFor(key)} />
-          </div>
-        ))}
+    <main className="relative z-10 mx-auto w-full max-w-4xl py-2">
+      <div className="hub-fade-in mb-3" style={{ animationDelay: '100ms' }}>
+        <InboxHubCard locked={locked} />
       </div>
+
+      <div className="lp-home-top">
+        <div className="hub-fade-in" style={{ animationDelay: '140ms' }}>
+          <ProjectRadarCard onSelect={() => openRadar(null)} badge={projectCount} />
+        </div>
+        <div className="hub-fade-in" style={{ animationDelay: '180ms' }}>
+          <MyProjectsPanel onOpen={openRadar} />
+        </div>
+      </div>
+
+      {visibleModules.length > 0 && (
+        <>
+          <h2 className="lp-section-title hub-fade-in" style={{ animationDelay: '220ms' }}>
+            ابزارهای سازمانی <span>— مستقل از پروژه، برای کل سازمان</span>
+          </h2>
+          <div className="lp-org-grid">
+            {visibleModules.map(({ key, Card }, i) => (
+              <div key={key} className={`hub-fade-in ${key === 'executive' ? 'is-wide' : ''}`} style={{ animationDelay: `${240 + i * 40}ms` }}>
+                <Card onSelect={() => onSelect(key)} badge={countFor(key)} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </main>
   )
 }
