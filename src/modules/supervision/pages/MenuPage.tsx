@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BellRing, ChefHat, ChevronLeft, ChevronRight, Save, Sparkles, X } from 'lucide-react'
+import { Apple, Beef, BellRing, ChefHat, ChevronLeft, ChevronRight, Coffee, Fish, Flame, IceCreamCone, Moon, Save, Soup, Sparkles, X } from 'lucide-react'
 import { useSupervisionStore } from '../store/useSupervisionStore'
-import { formatJalali, isoToJalali, jalaliWeekday } from '../../../lib/jalali'
+import { JALALI_MONTHS, formatJalali, isoToJalali, jalaliWeekday } from '../../../lib/jalali'
 import { addDays, fa, faNum, todayLocal, weekdayFa } from '../lib/svMonth'
 import { FACES, FACE_FA, LOW_COOK_AVG, LOW_COOK_MIN, LOW_DISH_AVG, LOW_DISH_MIN, MEALS, MEAL_FA, dishScores, faceFor, overall, planWeek, type Meal, type MenuItem } from '../lib/svMenu'
+import { DAY_TARGET, dayLevel, energySplit, mealNutrition, sumNutri, type MealNutri, type Nutri } from '../lib/svNutrition'
 import { loadCookTeam, loadMenus, saveCookTeam, saveMenus, type SvMenu, type SvRating } from '../lib/menuApi'
 import { Flash } from '../components/common'
 
@@ -102,36 +103,81 @@ export function MenuPage() {
         </div>
       )}
 
-      <div className="sv-menu-week" role="table" aria-label="منوی هفته">
-        <div className="sv-menu-row head" role="row"><span role="columnheader">روز</span>{MEALS.map((m) => <span key={m} role="columnheader">{MEAL_FA[m]}{m === 'lunch' ? ' + دسر' : m === 'dinner' ? ' + میوه' : ''}</span>)}</div>
-        {days.map((day) => (
-          <div key={day} className={`sv-menu-row${day === today ? ' today' : ''}`} role="row">
-            <span role="rowheader" className="sv-menu-day"><b>{weekdayFa(day)}</b><small>{fa(formatJalali(day).slice(5))}</small></span>
-            {MEALS.map((meal) => {
-              const k = cellKey(day, meal), m = byCell.get(k), d = draft?.[k]
-              if (d) return (
-                <div key={meal} role="cell" data-meal={MEAL_FA[meal]} className="sv-menu-cell edit">
-                  <input aria-label={`${MEAL_FA[meal]} ${weekdayFa(day)}`} placeholder={meal === 'breakfast' ? 'صبحانه' : 'غذای اصلی'} value={d.main} onChange={(e) => set(k, 'main', e.target.value)} />
-                  {meal !== 'breakfast' && <input aria-label="همراه" placeholder="همراه (سالاد، ماست…)" value={d.side} onChange={(e) => set(k, 'side', e.target.value)} />}
-                  {meal === 'lunch' && <input aria-label="دسر" placeholder="دسر" value={d.dessert} onChange={(e) => set(k, 'dessert', e.target.value)} />}
-                  {meal === 'dinner' && <input aria-label="میوه" placeholder="میوه" value={d.fruit} onChange={(e) => set(k, 'fruit', e.target.value)} />}
-                </div>
-              )
-              const a = cellAvg(m?.id)
-              const bad = a && a.n >= LOW_DISH_MIN && a.avg <= LOW_DISH_AVG
-              return (
-                <div key={meal} role="cell" data-meal={MEAL_FA[meal]} className={`sv-menu-cell${bad ? ' bad' : ''}`}>
-                  {m?.main ? <>
-                    <b>{m.main}</b>
-                    {(m.side || m.dessert || m.fruit) && <small>{[m.side, m.dessert && `دسر: ${m.dessert}`, m.fruit && `میوه: ${m.fruit}`].filter(Boolean).join('، ')}</small>}
-                    {a && <span className="sv-menu-score" title={`${FACE_FA[Math.round(a.avg) - 1] ?? ''}، ${fa(a.n)} نظر`}>{faceFor(a.avg)} {faNum(a.avg)}<small>({fa(a.n)})</small></span>}
-                  </> : <span className="sv-note">—</span>}
-                </div>
-              )
-            })}
-          </div>
-        ))}
+      <WeekStats days={days} cell={(day, meal) => draft?.[cellKey(day, meal)] ?? byCell.get(cellKey(day, meal))} />
+
+      <div className="sv-cal" role="table" aria-label="منوی هفته">
+        <div className="sv-cal-labels" role="row" aria-hidden>
+          <span className="sv-cal-corner" />
+          {MEALS.map((meal) => { const I = MEAL_ICON[meal]; return <span key={meal} className={`sv-cal-label ${meal}`}><I size={16} />{MEAL_FA[meal]}<small>{meal === 'lunch' ? '+ دسر' : meal === 'dinner' ? '+ میوه' : ''}</small></span> })}
+          <span className="sv-cal-label total"><Flame size={16} />جمع روز</span>
+        </div>
+        {days.map((day) => {
+          const j = isoToJalali(day)!
+          const items = MEALS.map((meal) => draft?.[cellKey(day, meal)] ?? byCell.get(cellKey(day, meal)))
+          const nut = items.map((x) => (x ? mealNutrition(x) : null))
+          const total = sumNutri(nut.filter((x): x is NonNullable<typeof x> => !!x))
+          const lvl = dayLevel(total.kcal)
+          const split = energySplit(total)
+          return (
+            <div key={day} className={`sv-cal-day${day === today ? ' today' : ''}${day < today ? ' past' : ''}`} role="row">
+              <div className="sv-cal-head" role="rowheader">
+                <span className="wd">{weekdayFa(day)}</span>
+                <b className="dn">{fa(j.jd)}</b>
+                <span className="mn">{JALALI_MONTHS[j.jm - 1]}</span>
+                {day === today && <span className="sv-cal-today">امروز</span>}
+              </div>
+              {MEALS.map((meal, mi) => {
+                const k = cellKey(day, meal), m = byCell.get(k), d = draft?.[k], v = nut[mi]
+                if (d) return (
+                  <div key={meal} role="cell" className={`sv-cal-cell ${meal} edit`}>
+                    <span className="sv-cal-mtag">{MEAL_FA[meal]}</span>
+                    <input aria-label={`${MEAL_FA[meal]} ${weekdayFa(day)}`} placeholder={meal === 'breakfast' ? 'صبحانه' : 'غذای اصلی'} value={d.main} onChange={(e) => set(k, 'main', e.target.value)} />
+                    {meal !== 'breakfast' && <input aria-label="همراه" placeholder="همراه" value={d.side} onChange={(e) => set(k, 'side', e.target.value)} />}
+                    {meal === 'lunch' && <input aria-label="دسر" placeholder="دسر" value={d.dessert} onChange={(e) => set(k, 'dessert', e.target.value)} />}
+                    {meal === 'dinner' && <input aria-label="میوه" placeholder="میوه" value={d.fruit} onChange={(e) => set(k, 'fruit', e.target.value)} />}
+                    {v && v.kcal > 0 && <Kcal v={v} />}
+                  </div>
+                )
+                const a = cellAvg(m?.id)
+                const bad = a && a.n >= LOW_DISH_MIN && a.avg <= LOW_DISH_AVG
+                return (
+                  <div key={meal} role="cell" className={`sv-cal-cell ${meal}${bad ? ' bad' : ''}${m?.main ? '' : ' empty'}`}>
+                    <span className="sv-cal-mtag">{MEAL_FA[meal]}</span>
+                    {m?.main ? <>
+                      <b className="dish">{m.main}</b>
+                      {m.side && <span className="side">{m.side}</span>}
+                      {(m.dessert || m.fruit) && (
+                        <span className="extras">
+                          {m.dessert && <span className="chip dessert"><IceCreamCone size={12} />{m.dessert}</span>}
+                          {m.fruit && <span className="chip fruit"><Apple size={12} />{m.fruit}</span>}
+                        </span>
+                      )}
+                      <span className="foot">
+                        {v && <Kcal v={v} />}
+                        {a && <span className="sv-menu-score" title={`${FACE_FA[Math.round(a.avg) - 1] ?? ''}، ${fa(a.n)} نظر`}>{faceFor(a.avg)} {faNum(a.avg)}<small>({fa(a.n)})</small></span>}
+                      </span>
+                    </> : <span className="sv-cal-none">—</span>}
+                  </div>
+                )
+              })}
+              <div className={`sv-cal-total ${total.kcal ? lvl : 'none'}`} role="cell">
+                {total.kcal ? <>
+                  <b>{fa(Math.round(total.kcal).toLocaleString('en'))}<small> کیلوکالری</small></b>
+                  <span className="meter" aria-hidden><i style={{ width: `${Math.min(100, (total.kcal / DAY_TARGET.high) * 100)}%` }} /><em style={{ insetInlineStart: `${(DAY_TARGET.low / DAY_TARGET.high) * 100}%` }} /></span>
+                  <span className="macro" title={`پروتئین ${fa(split.protein)}٪، کربوهیدرات ${fa(split.carbs)}٪، چربی ${fa(split.fat)}٪ انرژی`} aria-label={`پروتئین ${fa(Math.round(total.protein))} گرم، کربوهیدرات ${fa(Math.round(total.carbs))} گرم، چربی ${fa(Math.round(total.fat))} گرم`}>
+                    <i className="p" style={{ flexGrow: split.protein }} /><i className="c" style={{ flexGrow: split.carbs }} /><i className="f" style={{ flexGrow: split.fat }} />
+                  </span>
+                  <small className="grams">پ {fa(Math.round(total.protein))}  ک {fa(Math.round(total.carbs))}  چ {fa(Math.round(total.fat))} گرم</small>
+                </> : <span className="sv-cal-none">—</span>}
+              </div>
+            </div>
+          )
+        })}
       </div>
+      <p className="sv-note sv-cal-legend">
+        <span><i className="p" /> پروتئین</span><span><i className="c" /> کربوهیدرات</span><span><i className="f" /> چربی</span>
+        <span>ارزش غذایی تقریبی برای یک پرس معمول کمپ است (جداول ترکیبات غذایی ایرانی). انرژی مناسب روزانه برای کار در کارگاه حدود {fa(DAY_TARGET.low.toLocaleString('en'))} تا {fa(DAY_TARGET.high.toLocaleString('en'))} کیلوکالری؛ کمتر زرد و بیشتر نارنجی نشان داده می‌شود. غذای دستی که در فهرست نیست با «≈» برآورد می‌شود.</span>
+      </p>
       {!menus.length && !draft && <p className="sv-note" style={{ margin: 0 }}>برای این هفته منویی ثبت نشده است.{canEdit ? ' «پیشنهاد هفته» یک برنامهٔ متنوع با دسر و میوهٔ فصل می‌چیند (ماهی حداقل یک بار، بدون غذای تکراری، شام‌های سبک، بدون غذاهای کم‌رضایت).' : ''}</p>}
 
       <div className="im-card">
@@ -154,6 +200,40 @@ export function MenuPage() {
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+const MEAL_ICON = { breakfast: Coffee, lunch: Soup, dinner: Moon } as const
+
+/** energy of one meal; «≈» when the dish was typed by hand and estimated by kind, «+» when a part is unknown */
+function Kcal({ v }: { v: MealNutri }) {
+  return (
+    <span className="sv-kcal" title={`پروتئین ${fa(v.protein)} گرم، کربوهیدرات ${fa(v.carbs)} گرم، چربی ${fa(v.fat)} گرم${v.estimated ? ' — برآورد' : ''}${v.complete ? '' : ' — بخشی از وعده در فهرست ارزش غذایی نیست'}`}>
+      <Flame size={11} />{v.estimated ? '≈' : ''}{fa(Math.round(v.kcal).toLocaleString('en'))}{v.complete ? '' : '+'}<small>کالری</small>
+    </span>
+  )
+}
+
+/** the week at a glance: average energy, protein, fish and red-meat meals, fruit days */
+function WeekStats({ days, cell }: { days: string[]; cell: (day: string, meal: Meal) => MenuItem | undefined }) {
+  const planned = days.filter((d) => MEALS.some((m) => cell(d, m)?.main))
+  if (!planned.length) return null
+  const totals = planned.map((d) => sumNutri(MEALS.map((m) => cell(d, m)).filter((x): x is MenuItem => !!x).map(mealNutrition)))
+  const avg = (f: (x: Nutri) => number) => totals.reduce((s, x) => s + f(x), 0) / totals.length
+  const mains = days.flatMap((d) => (['lunch', 'dinner'] as Meal[]).map((m) => cell(d, m)?.main ?? '')).filter(Boolean)
+  const kind = (re: RegExp) => mains.filter((x) => re.test(x)).length
+  const fruitDays = days.filter((d) => cell(d, 'dinner')?.fruit).length
+  const kcal = avg((x) => x.kcal)
+  const stats = [
+    { icon: Flame, label: 'میانگین انرژی روزانه', value: `${fa(Math.round(kcal).toLocaleString('en'))} کیلوکالری`, tone: dayLevel(kcal) },
+    { icon: Beef, label: 'میانگین پروتئین روزانه', value: `${fa(Math.round(avg((x) => x.protein)))} گرم`, tone: 'ok' },
+    { icon: Fish, label: 'وعدهٔ ماهی', value: `${fa(kind(/ماهی/))} بار در هفته`, tone: kind(/ماهی/) ? 'ok' : 'low' },
+    { icon: Apple, label: 'میوه در شام', value: `${fa(fruitDays)} روز از ${fa(days.length)}`, tone: fruitDays >= 5 ? 'ok' : 'low' },
+  ]
+  return (
+    <div className="sv-wstats">
+      {stats.map((x) => <div key={x.label} className={`sv-wstat ${x.tone}`}><x.icon size={18} aria-hidden /><span><small>{x.label}</small><b>{x.value}</b></span></div>)}
     </div>
   )
 }

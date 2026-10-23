@@ -8,6 +8,7 @@ import { addDays, fa, faNum, monthDays, monthLabel, thisMonth, todayLocal, weekd
 import type { SvStatus } from '../types'
 import { FACES, FACE_FA, MEAL_FA } from '../lib/svMenu'
 import { myMenu, rateMeal, type MyMeal } from '../lib/menuApi'
+import { mealNutrition } from '../lib/svNutrition'
 
 export interface MyLink { person_id: string; project_id: string; project_name: string; full_name: string; role_title: string; shift_start: string | null; shift_end: string | null; sites: number }
 type Day = { day: string; status: SvStatus; check_in: string | null; check_out: string | null; hours: number; overtime: number; source: string }
@@ -186,7 +187,7 @@ function MealRating({ personId }: { personId: string }) {
       <div className="sv-me-head"><b>غذا چطور بود؟</b><span>با یک شکلک؛ غذای کم‌رضایت به سرپرست نظارت و مدیر پروژه اعلام می‌شود</span></div>
       {shown.map((m) => (
         <div key={m.id} className="sv-rate-meal">
-          <div><b>{MEAL_FA[m.meal]} {m.day === today ? 'امروز' : 'دیروز'}: {m.main}</b><small>{[m.dessert && `دسر: ${m.dessert}`, m.fruit && `میوه: ${m.fruit}`].filter(Boolean).join('، ')}</small></div>
+          <div><b>{MEAL_FA[m.meal]} {m.day === today ? 'امروز' : 'دیروز'}: {m.main}</b><small>{[m.dessert && `دسر: ${m.dessert}`, m.fruit && `میوه: ${m.fruit}`, `${fa(Math.round(mealNutrition(m).kcal).toLocaleString('en'))} کیلوکالری`].filter(Boolean).join('، ')}</small></div>
           <div className="sv-faces" role="group" aria-label={`نظر دربارهٔ ${m.main}`}>
             {FACES.map((f, i) => <button key={f} aria-pressed={m.mine === i + 1} aria-label={FACE_FA[i]} title={FACE_FA[i]} onClick={() => void rate(m, i + 1)}>{f}</button>)}
           </div>
