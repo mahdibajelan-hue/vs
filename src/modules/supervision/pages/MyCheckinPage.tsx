@@ -3,6 +3,7 @@ import { Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, TriangleAlert }
 import { supabase } from '../../../lib/supabaseClient'
 import { formatJalali } from '../../../lib/jalali'
 import { STATUS_FA } from '../lib/svCalc'
+import { bestFix, isApproximate } from '../lib/geo'
 import { addDays, fa, faNum, monthDays, monthLabel, thisMonth, todayLocal, weekdayFa } from '../lib/svMonth'
 import type { SvStatus } from '../types'
 
@@ -20,22 +21,6 @@ const dist = (m: number) => (m >= 1000 ? `${faNum(Math.round(m / 100) / 10)} ک�
 const clock = (iso: string) => { const d = new Date(iso); return fa(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`) }
 const REASON: Record<string, string> = { outside: 'خارج از محدوده', low_accuracy: 'دقت کم', no_check_in: 'بدون ورود', locked: 'ماه بسته', '': '' }
 
-/** Ask the phone for one fresh, high-accuracy fix. Only called when a button is pressed. */
-function locateOnce(opts: PositionOptions): Promise<GeolocationPosition> {
-  return new Promise((res, rej) => {
-    if (!('geolocation' in navigator)) return rej(new Error('unsupported'))
-    navigator.geolocation.getCurrentPosition(res, rej, opts)
-  })
-}
-/** GPS first; indoors (no fix in time) fall back once to the network position, which the server still checks for accuracy. */
-async function locate(): Promise<GeolocationPosition> {
-  try {
-    return await locateOnce({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
-  } catch (e) {
-    if ((e as GeolocationPositionError)?.code === 1) throw e
-    return locateOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 })
-  }
-}
 const IOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
 function geoError(e: unknown): string {
   const code = (e as GeolocationPositionError)?.code
@@ -47,6 +32,9 @@ function geoError(e: unknown): string {
   if (typeof window !== 'undefined' && !window.isSecureContext) return 'مرورگر فقط روی نشانی امن (https) موقعیت می‌دهد؛ سامانه را با https باز کنید.'
   return 'این مرورگر موقعیت مکانی را پشتیبانی نمی‌کند.'
 }
+const APPROX_MSG = (acc: number) => IOS
+  ? `گوشی فقط «موقعیت تقریبی» می‌دهد (±${fa(Math.round(acc))} متر)، چون «Precise Location» برای مرورگر خاموش است. در آیفون: Settings ← Privacy & Security ← Location Services ← Chrome (یا Safari Websites) ← «Precise Location» را روشن کنید و «While Using the App» را انتخاب کنید. سپس این صفحه را تازه کنید و دوباره بزنید.`
+  : `گوشی فقط «موقعیت تقریبی» می‌دهد (±${fa(Math.round(acc))} متر). در تنظیمات گوشی ← Location ← دسترسی برنامه‌ها ← مرورگر، «Use precise location / موقعیت دقیق» را روشن کنید و GPS را روشن نگه دارید، سپس صفحه را تازه کنید و دوباره بزنید.`
 function rpcError(m: string): string {
   if (/no_site/.test(m)) return 'هنوز محدودهٔ کارگاه برای این پروژه تعریف نشده است؛ به سرپرست دستگاه نظارت اطلاع دهید.'
   if (/not_linked/.test(m)) return 'حساب شما به نفری در این پروژه وصل نیست یا غیرفعال شده است.'
@@ -65,6 +53,7 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
   const [att, setAtt] = useState<Day[]>([])
   const [punches, setPunches] = useState<Punch[]>([])
   const [busy, setBusy] = useState<'in' | 'out' | null>(null)
+  const [acc, setAcc] = useState<number | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const today = todayLocal()
 
@@ -80,7 +69,10 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
     if (!link) return
     setBusy(kind); setMsg(null)
     let pos: GeolocationPosition
-    try { pos = await locate() } catch (e) { setBusy(null); setMsg({ ok: false, text: geoError(e) }); return }
+    setAcc(null)
+    try { pos = await bestFix({ target: 50, maxMs: 15000, onProgress: setAcc }) } catch (e) { setBusy(null); setMsg({ ok: false, text: geoError(e) }); return }
+    // approximate location is a deliberately blurred point: no use sending it, say how to switch precise location on
+    if (isApproximate(pos.coords.accuracy)) { setBusy(null); setMsg({ ok: false, text: APPROX_MSG(pos.coords.accuracy) }); return }
     const { data, error } = await supabase.rpc('sv_self_punch', { p_person: link.person_id, p_kind: kind, p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_device: navigator.userAgent })
     setBusy(null)
     if (error) { setMsg({ ok: false, text: rpcError(error.message) }); return }
@@ -139,7 +131,7 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
             {busy === 'out' ? <Loader2 className="animate-spin" size={26} /> : <LogOut size={26} />}<span>ثبت خروج</span>
           </button>
         </div>
-        {busy && <p className="sv-note" style={{ textAlign: 'center' }}>در حال گرفتن موقعیت گوشی…</p>}
+        {busy && <p className="sv-note" style={{ textAlign: 'center' }}>در حال گرفتن موقعیت دقیق گوشی{acc != null ? ` — دقت فعلی ±${fa(Math.round(acc))} متر` : ''}… (تا ۱۵ ثانیه؛ در فضای باز سریع‌تر است)</p>}
         {msg && <p className={`sv-me-msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.ok ? <ShieldCheck size={16} /> : <TriangleAlert size={16} />}{msg.text}</p>}
         <p className="sv-note sv-me-privacy"><MapPin size={12} /> موقعیت فقط هنگام زدن دکمه یک بار خوانده می‌شود و با محدودهٔ کارگاه مقایسه می‌شود؛ ساعت ثبت، ساعت سرور است نه ساعت گوشی.</p>
       </section>

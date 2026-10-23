@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useSupervisionStore } from '../store/useSupervisionStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { fa } from '../lib/svMonth'
+import { bestFix, isApproximate } from '../lib/geo'
 import type { SvPerson, SvSite } from '../types'
 import { Flash } from './common'
 
@@ -23,14 +24,19 @@ export function SitesCard() {
   const [locating, setLocating] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  const here = () => {
+  // the site centre is only as good as the fix it was taken from: an approximate (±km) point is refused
+  const here = async () => {
     if (!d) return
-    setLocating(true)
-    navigator.geolocation?.getCurrentPosition(
-      (p) => { setLocating(false); setD({ ...d, lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) }); setMsg({ ok: true, text: `موقعیت فعلی گرفته شد (دقت ±${fa(Math.round(p.coords.accuracy))} متر).` }) },
-      () => { setLocating(false); setMsg({ ok: false, text: 'موقعیت گرفته نشد؛ دسترسی موقعیت مکانی مرورگر را روشن کنید یا مختصات را از نقشه بنویسید.' }) },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
-    )
+    setLocating(true); setMsg(null)
+    try {
+      const p = await bestFix({ target: 25, maxMs: 20000 })
+      const acc = Math.round(p.coords.accuracy)
+      if (isApproximate(acc)) { setMsg({ ok: false, text: `گوشی فقط «موقعیت تقریبی» داد (±${fa(acc)} متر)؛ این مختصات قابل استفاده نیست. «Precise Location / موقعیت دقیق» را برای مرورگر روشن کنید (آیفون: Settings ← Privacy & Security ← Location Services ← مرورگر) و دوباره بزنید، یا مختصات را از نقشه بنویسید.` }); return }
+      setD({ ...d, lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) })
+      setMsg(acc <= 60 ? { ok: true, text: `موقعیت فعلی گرفته شد (دقت ±${fa(acc)} متر).` } : { ok: false, text: `موقعیت گرفته شد ولی دقت آن ±${fa(acc)} متر است؛ برای مرکز محل، در فضای باز دوباره بزنید یا مختصات را از نقشه اصلاح کنید.` })
+    } catch {
+      setMsg({ ok: false, text: 'موقعیت گرفته نشد؛ دسترسی موقعیت مکانی مرورگر را روشن کنید یا مختصات را از نقشه بنویسید.' })
+    } finally { setLocating(false) }
   }
   const save = async () => {
     if (!d) return
@@ -38,6 +44,7 @@ export function SitesCard() {
     if (!d.name.trim()) return setMsg({ ok: false, text: 'نام محل را بنویسید (مثلاً کمپ کوهدشت).' })
     if (!(lat >= 24 && lat <= 40 && lng >= 44 && lng <= 64)) return setMsg({ ok: false, text: 'مختصات معتبر نیست؛ عرض جغرافیایی ایران بین ۲۴ و ۴۰ و طول بین ۴۴ و ۶۴ است.' })
     if (!(radiusM >= 30 && radiusM <= 20000)) return setMsg({ ok: false, text: 'شعاع باید بین ۳۰ متر و ۲۰ کیلومتر باشد.' })
+    if (radiusM < 80 && !window.confirm('شعاع کمتر از ۸۰ متر است؛ دقت GPS گوشی در ساختمان معمولاً ۲۰ تا ۶۵ متر است و بسیاری از ثبت‌ها رد می‌شوند. همین شعاع ذخیره شود؟')) return
     const r = await saveSite({ id: d.id, name: d.name, lat, lng, radiusM, active: d.active })
     setMsg(r.ok ? { ok: true, text: 'محل ذخیره شد.' } : { ok: false, text: r.error ?? '' })
     if (r.ok) setD(null)
