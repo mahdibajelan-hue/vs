@@ -21,17 +21,30 @@ const clock = (iso: string) => { const d = new Date(iso); return fa(`${String(d.
 const REASON: Record<string, string> = { outside: 'خارج از محدوده', low_accuracy: 'دقت کم', no_check_in: 'بدون ورود', locked: 'ماه بسته', '': '' }
 
 /** Ask the phone for one fresh, high-accuracy fix. Only called when a button is pressed. */
-function locate(): Promise<GeolocationPosition> {
+function locateOnce(opts: PositionOptions): Promise<GeolocationPosition> {
   return new Promise((res, rej) => {
     if (!('geolocation' in navigator)) return rej(new Error('unsupported'))
-    navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 })
+    navigator.geolocation.getCurrentPosition(res, rej, opts)
   })
 }
+/** GPS first; indoors (no fix in time) fall back once to the network position, which the server still checks for accuracy. */
+async function locate(): Promise<GeolocationPosition> {
+  try {
+    return await locateOnce({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+  } catch (e) {
+    if ((e as GeolocationPositionError)?.code === 1) throw e
+    return locateOnce({ enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 })
+  }
+}
+const IOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
 function geoError(e: unknown): string {
   const code = (e as GeolocationPositionError)?.code
-  if (code === 1) return 'اجازهٔ دسترسی به موقعیت داده نشده است. از تنظیمات مرورگر یا گوشی، دسترسی «موقعیت مکانی» را برای این سایت روشن کنید و دوباره بزنید.'
+  if (code === 1) return IOS
+    ? 'اجازهٔ موقعیت داده نشده است. در آیفون: Settings ← Privacy & Security ← Location Services را روشن کنید، سپس در همان صفحه مرورگرتان (Chrome یا Safari) را روی «While Using the App» بگذارید و «Precise Location» را روشن کنید. بعد صفحه را تازه کنید و دوباره بزنید؛ اگر مرورگر پرسید «Allow» را بزنید.'
+    : 'اجازهٔ موقعیت داده نشده است. روی آیکون قفل کنار نشانی سایت بزنید، «Location / موقعیت» را روی «اجازه» بگذارید، صفحه را تازه کنید و دوباره بزنید. موقعیت (GPS) گوشی هم باید روشن باشد.'
   if (code === 2) return 'موقعیت در دسترس نیست. GPS (مکان‌یاب) گوشی را روشن کنید و ترجیحاً در فضای باز دوباره امتحان کنید.'
   if (code === 3) return 'گرفتن موقعیت طول کشید. GPS را روشن کنید و دوباره بزنید.'
+  if (typeof window !== 'undefined' && !window.isSecureContext) return 'مرورگر فقط روی نشانی امن (https) موقعیت می‌دهد؛ سامانه را با https باز کنید.'
   return 'این مرورگر موقعیت مکانی را پشتیبانی نمی‌کند.'
 }
 function rpcError(m: string): string {
@@ -87,7 +100,7 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
     await refresh()
   }
 
-  if (!link) return <div className="im-card im-empty">حساب شما به هیچ نفری در پروژه‌ها وصل نیست. سرپرست دستگاه نظارت باید در «نفرات و خودروها» حساب شما را به نام شما وصل کند.</div>
+  if (!link) return <div className="im-card im-empty">حساب شما به هیچ نفری وصل نیست. برای ثبت ورود و خروج با گوشی، سرپرست دستگاه نظارت باید در «تنظیمات ← ثبت حضور با گوشی ← حساب کاربری نفرات» حساب شما را جلوی نام شما انتخاب کند و دست‌کم یک «محل مجاز» تعریف شده باشد؛ بلافاصله بعد از آن همین صفحه فعال می‌شود.</div>
   const t = att.find((a) => a.day === today)
   // a night shift checked in yesterday evening is closed with «خروج» this morning
   const yesterdayOpen = att.find((a) => a.day === addDays(today, -1) && a.check_in && !a.check_out)

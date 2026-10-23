@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, MapPin, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -45,7 +45,16 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const [month, setMonth] = useState<Ym>(thisMonth())
   // people linked to the signed-in account check in with their phone; for them that page comes first
   const [links, setLinks] = useState<MyLink[] | null>(null)
-  useEffect(() => { void loadMyLinks().then((l) => { setLinks(l); if (l.length) setTab('me') }) }, [])
+  // re-read whenever an account is linked or unlinked in «تنظیمات», so the tab appears without leaving the module
+  const linkKey = useSupervisionStore((s) => s.people.filter((p) => p.userId).map((p) => `${p.id}:${p.userId}:${p.active}`).join(','))
+  const firstLinks = useRef(true)
+  useEffect(() => {
+    void loadMyLinks().then((l) => {
+      setLinks(l)
+      if (firstLinks.current && l.length) setTab('me')
+      firstLinks.current = false
+    })
+  }, [linkKey])
 
   useEffect(() => { if (!mdLoaded) void fetchMasterData() }, [mdLoaded, fetchMasterData])
   useEffect(() => {
@@ -91,7 +100,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های حضور و غیاب دستگاه نظارت">
-          {NAV.filter((n) => n.id !== 'me' || (links?.length ?? 0) > 0).map((n) => (
+          {((links?.length ?? 0) > 0 ? NAV : [...NAV.filter((n) => n.id !== 'me'), NAV[0]]).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>

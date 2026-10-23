@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Crosshair, Loader2, MapPin, Plus, Save, Smartphone, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSupervisionStore } from '../store/useSupervisionStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { fa } from '../lib/svMonth'
 import type { SvPerson, SvSite } from '../types'
 import { Flash } from './common'
@@ -112,11 +113,12 @@ function AccountLinks() {
 
 function LinkRow({ p, profiles, taken }: { p: SvPerson; profiles: Profile[] | null; taken: Set<string> }) {
   const savePerson = useSupervisionStore((s) => s.savePerson)
+  const me = useAuthStore((s) => s.profile?.id)
   const [state, setState] = useState('')
   const change = async (userId: string) => {
     setState('…')
     const r = await savePerson({ id: p.id, userId: userId || null })
-    setState(r.ok ? 'ذخیره شد' : r.error ?? 'ذخیره نشد')
+    setState(!r.ok ? r.error ?? 'ذخیره نشد' : userId && userId === me ? 'وصل شد؛ تب «ورود و خروج من» در بالای صفحه' : 'ذخیره شد')
   }
   return (
     <tr>
@@ -127,7 +129,7 @@ function LinkRow({ p, profiles, taken }: { p: SvPerson; profiles: Profile[] | nu
           {(profiles ?? []).filter((u) => !taken.has(u.id)).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}{u.full_name && u.email ? ` (${u.email})` : ''}</option>)}
         </select>
       </td>
-      <td className="sv-note" style={{ whiteSpace: 'nowrap' }}>{state}</td>
+      <td className="sv-note">{state}</td>
     </tr>
   )
 }
