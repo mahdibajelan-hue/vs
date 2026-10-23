@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
-import { Home, Inbox, LayoutDashboard, Search, Sun, UserCircle2, X } from 'lucide-react'
+import { Home, Inbox, LayoutDashboard, Radar, Search, Sun, UserCircle2, X } from 'lucide-react'
 
 const KEY = 'farin.toolbarGuide.v1'
 const seen = () => { try { return localStorage.getItem(KEY) === '1' } catch { return true } }
@@ -13,7 +13,7 @@ export const useToolbarGuide = create<{ open: boolean; show: () => void; close: 
   close: () => { try { localStorage.setItem(KEY, '1') } catch { /* private mode */ } set({ open: false }) },
 }))
 
-export const TOOLBAR_ACCENTS = { user: '#22d3ee', inbox: '#fb7185', search: '#a78bfa', theme: '#fbbf24', module: '#2dd4bf', home: '#38bdf8' } as const
+export const TOOLBAR_ACCENTS = { user: '#22d3ee', inbox: '#fb7185', search: '#a78bfa', theme: '#fbbf24', module: '#2dd4bf', radar: '#22c55e', home: '#38bdf8' } as const
 
 const ROWS = [
   { icon: UserCircle2, c: TOOLBAR_ACCENTS.user, t: 'حساب من', d: 'مشخصات، عکس و امضای شما؛ خروج از حساب. راهنمای همین نوار هم این‌جاست.' },
@@ -21,6 +21,7 @@ const ROWS = [
   { icon: Search, c: TOOLBAR_ACCENTS.search, t: 'جستجو', d: 'پیدا کردن ماژول، پروژه یا کار؛ میانبر Ctrl+K.' },
   { icon: Sun, c: TOOLBAR_ACCENTS.theme, t: 'تم', d: 'جابه‌جایی بین حالت روشن و تیره.' },
   { icon: LayoutDashboard, c: TOOLBAR_ACCENTS.module, t: 'صفحهٔ اول', d: 'بازگشت به صفحهٔ اول همین ماژول.', moduleOnly: true },
+  { icon: Radar, c: TOOLBAR_ACCENTS.radar, t: 'رادار', d: 'در ماژول‌های یک پروژه: بازگشت به رادار همان پروژه.', moduleOnly: true },
   { icon: Home, c: TOOLBAR_ACCENTS.home, t: 'خانه', d: 'بازگشت به صفحهٔ اصلی سامانه و فهرست همهٔ ماژول‌ها.', moduleOnly: true },
 ]
 

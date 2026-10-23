@@ -11,6 +11,7 @@ import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { useNotificationStore } from '../../../store/useNotificationStore'
 import { RadarProjectPicker } from './RadarProjectPicker'
 import { RadarSidebar } from './RadarSidebar'
+import { MobileRadar } from './MobileRadar'
 import { navModule, rememberProject, type ProjectNavItem } from './projectNav'
 import './radarShell.css'
 import { SignOutButton } from '../SignOutButton'
@@ -100,6 +101,14 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+  // phones get their own one-column radar (MobileRadar); the instrument panel below is for wider screens
+  const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const on = (e: MediaQueryListEvent) => setIsPhone(e.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
 
   const runScan = () => {
     if (scanning) return
@@ -153,6 +162,20 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
         projectName={displayName}
         seed={selectedProject?.id ?? 'default'}
         onBack={() => setUniverseOpen(false)}
+      />
+    )
+  }
+
+  if (isPhone && selectedProject) {
+    return (
+      <MobileRadar
+        project={selectedProject}
+        data={data}
+        canSee={isVisible}
+        badgeFor={badgeFor}
+        onItem={handleNavClick}
+        onSwitch={() => pickProject(null)}
+        onHome={onBack}
       />
     )
   }
