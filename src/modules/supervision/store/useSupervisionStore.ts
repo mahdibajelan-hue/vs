@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
+import { fetchPages } from '../lib/fetchPages'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { SvAttendance, SvGuestMeal, SvPerson, SvPunch, SvSettings, SvSite, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
@@ -122,6 +123,25 @@ interface State {
   applyClock: (from: string, to: string) => Promise<Result & { people?: number; vehicles?: number }>
 }
 
+
+let inflight: { key: string; promise: Promise<void> } | null = null
+/** attendance, vehicle days, guest meals and phone punches of a range, the four requests in parallel */
+async function fetchRange(pid: string, from: string, to: string) {
+  const store = useSupervisionStore
+  store.setState({ rangeLoading: true })
+  const [a, v, g, pu] = await Promise.all([
+    fetchPages<Row>((a, b) => supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('id').range(a, b)),
+    fetchPages<Row>((a, b) => supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('id').range(a, b)),
+    fetchPages<Row>((a, b) => supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at').order('id').range(a, b)),
+    fetchPages<Row>((a, b) => supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id,quality').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at').order('id').range(a, b)),
+  ])
+  if (store.getState().projectId !== pid) return
+  const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
+  for (const x of a.data.map(toAtt)) att[key(x.personId, x.day)] = x
+  for (const x of v.data.map(toVDay)) vdays[key(x.vehicleId, x.day)] = x
+  store.setState({ att, vdays, guests: g.data.map(toGuest), punches: pu.data.map(toPunch), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : store.getState().error })
+}
+
 export const useSupervisionStore = create<State>()((set, get) => ({
   projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], sites: [], punches: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
 
@@ -145,18 +165,12 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   loadRange: async (from, to, force) => {
     const pid = get().projectId, r = get().range
     if (!pid || (!force && r && r.from <= from && r.to >= to)) return
-    set({ rangeLoading: true })
-    const [a, v, g, pu] = await Promise.all([
-      supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
-      supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
-      supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at'),
-      supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id,quality').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at'),
-    ])
-    if (get().projectId !== pid) return
-    const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
-    for (const x of ((a.data ?? []) as Row[]).map(toAtt)) att[key(x.personId, x.day)] = x
-    for (const x of ((v.data ?? []) as Row[]).map(toVDay)) vdays[key(x.vehicleId, x.day)] = x
-    set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), punches: ((pu.data ?? []) as Row[]).map(toPunch), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
+    // several pages ask for the same month at once (tab switch, report + facilities): share the request in flight
+    const k = `${pid}|${from}|${to}`
+    if (!force && inflight?.key === k) return inflight.promise
+    const promise = fetchRange(pid, from, to)
+    inflight = { key: k, promise }
+    try { await promise } finally { if (inflight?.promise === promise) inflight = null }
   },
 
   canHand: () => {

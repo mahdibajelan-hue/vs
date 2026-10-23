@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Eraser, UserCheck } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useSupervisionStore, attKey, LOCKED_MSG, FUTURE_MSG, HEAD_MSG } from '../store/useSupervisionStore'
 import { STATUS_FA, STATUS_MARK, STATUS_ORDER, VSTATUS_FA, VSTATUS_MARK, VSTATUS_ORDER, activeDays, dayDefaults, dayHours, isWorking, mealsOf, personMonth, vehicleMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
-import type { SvPerson, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
+import type { SvAttendance, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
 import { Empty, Flash, LockNote, MonthNav, StatusSeg, useLockedIn } from '../components/common'
 import { CellPopover } from '../components/CellEditor'
 import { LateReason, EntryHistory, DayPunches } from '../components/EntryGuard'
@@ -34,9 +34,9 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
   const isoDays = useMemo(() => days.map((d) => d.iso), [days])
   useEffect(() => { void loadRange(days[0].iso, days[days.length - 1].iso); setOpen(null) }, [days, loadRange])
   const upTo = recordedUpTo(month), today = todayLocal()
-  const rows = useMemo(() => Object.values(att), [att])
+  const byPerson = useGrouped(att)
   const vrows = useMemo(() => Object.values(vdays), [vdays])
-  const ppl = people.filter((p) => activeDays(isoDays, p.startDate, p.endDate).length > 0 && (p.active || rows.some((r) => r.personId === p.id)))
+  const ppl = people.filter((p) => activeDays(isoDays, p.startDate, p.endDate).length > 0 && (p.active || byPerson.has(p.id)))
   const cars = vehicles.filter((v) => activeDays(isoDays, v.startDate, v.endDate).length > 0 && (v.active || vrows.some((r) => r.vehicleId === v.id)))
   const locked = useLockedIn(days[0].iso, days[days.length - 1].iso)
   const isLocked = useSupervisionStore((s) => s.isLocked)
@@ -51,12 +51,13 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
 
   const markPresent = (p: SvPerson, day: string) => setDay(p.id, day, { status: 'present', note: '', lateReason: reasons[day], ...dayDefaults(p, 'present', settings) })
   const markCar = (v: SvVehicle, day: string) => setVehicleDay(v.id, day, { status: 'present', hours: settings.vehicleHours, km: null, note: '', lateReason: reasons[day] })
-  const tapPerson = async (p: SvPerson, day: string, el: HTMLElement) => {
+  // stable, so a tap re-renders only the rows whose selection changed (a 60 × 31 grid stays smooth)
+  const tapPerson = useCallback((p: SvPerson, day: string, el: HTMLElement) => {
     setMsg(null)
     if (isLocked(day)) { setMsg({ ok: false, text: LOCKED_MSG }); return }
     // people check in with their phone; a tap opens the day (the head of supervision can correct it there)
     setOpen({ kind: 'person', id: p.id, day, el })
-  }
+  }, [isLocked])
   const tapCar = async (v: SvVehicle, day: string, el: HTMLElement) => {
     setMsg(null)
     if (isLocked(day)) { setMsg({ ok: false, text: LOCKED_MSG }); return }
@@ -113,26 +114,9 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
               </tr>
             </thead>
             <tbody>
-              {view === 'people' ? ppl.map((p) => {
-                const m = personMonth(p, rows, isoDays, settings, upTo)
-                const on = new Set(activeDays(isoDays, p.startDate, p.endDate))
-                return (
-                  <tr key={p.id}>
-                    <td className="nm">{p.fullName}<div className="sv-sub">{p.roleTitle}{p.shiftStart && p.shiftEnd && ` · از ${fa(p.shiftStart)} تا ${fa(p.shiftEnd)}`}</div></td>
-                    {days.map((d) => {
-                      const r = att[attKey(p.id, d.iso)]
-                      const sel = open?.kind === 'person' && open.id === p.id && open.day === d.iso
-                      return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${r?.source === 'gps' ? 'gps' : ''} ${r?.source === 'auto' ? 'auto' : ''} ${sel ? 'sel' : ''}`} onClick={(e) => tapPerson(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={sel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : '', r?.source === 'gps' ? 'ثبت با گوشی در محدودهٔ کارگاه' : '', r?.source === 'auto' ? 'غیبت خودکار: ورود و خروج ثبت نشد' : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
-                    })}
-                    <td className="sum"><b className={m.shortfall ? 'sv-bad' : ''}>{fa(m.worked)}</b> / {fa(m.required)}</td>
-                    <td className="sum"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
-                    <td className="sum">{m.sick ? fa(m.sick) : '—'}</td>
-                    <td className="sum"><span className={m.absent ? 'sv-bad' : ''}>{m.absent ? fa(m.absent) : '—'}</span></td>
-                    <td className="sum">{faNum(m.hours)}</td>
-                    <td className="sum"><b className={m.overtimeOver ? 'sv-bad' : ''}>{faNum(m.overtime)}</b> / {fa(m.overtimeCap)}</td>
-                  </tr>
-                )
-              }) : cars.map((v) => {
+              {view === 'people' ? ppl.map((p) => (
+                <PersonRow key={p.id} p={p} days={days} isoDays={isoDays} upTo={upTo} settings={settings} rows={byPerson.get(p.id) ?? NONE} sel={open?.kind === 'person' && open.id === p.id ? open.day : null} onTap={tapPerson} />
+              )) : cars.map((v) => {
                 const m = vehicleMonth(v, vrows, isoDays, upTo)
                 const on = new Set(activeDays(isoDays, v.startDate, v.endDate))
                 return (
@@ -168,6 +152,48 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
 }
 
 type Guard = { reason: string; onReason: (r: string) => void }
+const NONE: SvAttendance[] = []
+
+/**
+ * Attendance grouped by person. A person whose rows did not change keeps the same array, so their memoized row is
+ * not re-rendered when someone else's day is saved.
+ */
+function useGrouped(att: Record<string, SvAttendance>) {
+  const prev = useRef(new Map<string, SvAttendance[]>())
+  return useMemo(() => {
+    const next = new Map<string, SvAttendance[]>()
+    for (const r of Object.values(att)) { const l = next.get(r.personId); if (l) l.push(r); else next.set(r.personId, [r]) }
+    for (const [k, l] of next) {
+      const old = prev.current.get(k)
+      if (old && old.length === l.length && old.every((x) => att[attKey(x.personId, x.day)] === x)) next.set(k, old)
+    }
+    prev.current = next
+    return next
+  }, [att])
+}
+
+const PersonRow = memo(function PersonRow({ p, days, isoDays, upTo, settings, rows, sel, onTap }: { p: SvPerson; days: ReturnType<typeof monthDays>; isoDays: string[]; upTo: string; settings: SvSettings; rows: SvAttendance[]; sel: string | null; onTap: (p: SvPerson, day: string, el: HTMLElement) => void }) {
+  const m = personMonth(p, rows, isoDays, settings, upTo)
+  const on = new Set(activeDays(isoDays, p.startDate, p.endDate))
+  const byDay = new Map(rows.map((r) => [r.day, r]))
+  return (
+    <tr>
+      <td className="nm">{p.fullName}<div className="sv-sub">{p.roleTitle}{p.shiftStart && p.shiftEnd && ` · از ${fa(p.shiftStart)} تا ${fa(p.shiftEnd)}`}</div></td>
+      {days.map((d) => {
+        const r = byDay.get(d.iso)
+        const isSel = sel === d.iso
+        return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${r?.source === 'gps' ? 'gps' : ''} ${r?.source === 'auto' ? 'auto' : ''} ${isSel ? 'sel' : ''}`} onClick={(e) => onTap(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={isSel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : '', r?.source === 'gps' ? 'ثبت با گوشی در محدودهٔ کارگاه' : '', r?.source === 'auto' ? 'غیبت خودکار: ورود و خروج ثبت نشد' : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
+      })}
+      <td className="sum"><b className={m.shortfall ? 'sv-bad' : ''}>{fa(m.worked)}</b> / {fa(m.required)}</td>
+      <td className="sum"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
+      <td className="sum">{m.sick ? fa(m.sick) : '—'}</td>
+      <td className="sum"><span className={m.absent ? 'sv-bad' : ''}>{m.absent ? fa(m.absent) : '—'}</span></td>
+      <td className="sum">{faNum(m.hours)}</td>
+      <td className="sum"><b className={m.overtimeOver ? 'sv-bad' : ''}>{faNum(m.overtime)}</b> / {fa(m.overtimeCap)}</td>
+    </tr>
+  )
+})
+
 function PersonDay({ p, day, anchor, onClose, onError, reason, onReason }: { p: SvPerson; day: string; anchor: HTMLElement; onClose: () => void; onError: (r: { ok: boolean; error?: string }) => boolean } & Guard) {
   const settings = useSupervisionStore((s) => s.settings)
   const row = useSupervisionStore((s) => s.att[attKey(p.id, day)])

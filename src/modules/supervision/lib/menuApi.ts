@@ -1,10 +1,12 @@
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
+import { fetchPages } from './fetchPages'
 import type { Meal, MenuItem } from './svMenu'
 
 /** منوی غذا — the week's menu rows, ratings, and the cook team. Kept out of the attendance store: it has its own life. */
 export interface SvMenu extends MenuItem { id: string; cookTeam: string; note: string }
-export interface SvRating { menuId: string; personId: string; userId: string; score: number; comment: string; at: string }
+/** `dish` = the main dish when it was rated; a rating counts only while the cell still holds that dish */
+export interface SvRating { menuId: string; personId: string; userId: string; score: number; comment: string; at: string; dish: string }
 export interface MyMeal { id: string; day: string; meal: Meal; main: string; side: string; dessert: string; fruit: string; mine: number | null }
 
 type Row = Record<string, unknown>
@@ -13,12 +15,14 @@ const toMenu = (r: Row): SvMenu => ({ id: s(r.id), day: s(r.day), meal: r.meal a
 const msg = (e: { message: string; code?: string } | null) => !e ? undefined : e.code === '42501' || /row-level security/i.test(e.message) ? 'فقط سرپرست نظارت منو را تنظیم می‌کند.' : friendlyErrorMessage(e)
 
 export async function loadMenus(projectId: string, from: string, to: string): Promise<{ menus: SvMenu[]; ratings: SvRating[]; error?: string }> {
-  const { data, error } = await supabase.from('sv_menu').select('*').eq('master_project_id', projectId).gte('day', from).lte('day', to)
+  const { data, error } = await fetchPages<Row>((a, b) => supabase.from('sv_menu').select('*').eq('master_project_id', projectId).gte('day', from).lte('day', to).order('day').order('id').range(a, b))
   if (error) return { menus: [], ratings: [], error: msg(error) }
-  const menus = ((data ?? []) as Row[]).map(toMenu)
+  const menus = data.map(toMenu)
   if (!menus.length) return { menus, ratings: [] }
-  const r = await supabase.from('sv_meal_ratings').select('menu_id,person_id,user_id,score,comment,at').in('menu_id', menus.map((m) => m.id))
-  return { menus, ratings: ((r.data ?? []) as Row[]).map((x) => ({ menuId: s(x.menu_id), personId: s(x.person_id), userId: s(x.user_id), score: Number(x.score), comment: s(x.comment), at: s(x.at) })) }
+  // ratings by the menus' project and days (an id list of 90 menus would make a very long URL); paged past 1000 rows
+  const mainOf = new Map(menus.map((m) => [m.id, m.main]))
+  const r = await fetchPages<Row>((a, b) => supabase.from('sv_meal_ratings').select('menu_id,person_id,user_id,score,comment,at,dish, sv_menu!inner(day)').eq('master_project_id', projectId).gte('sv_menu.day', from).lte('sv_menu.day', to).order('id').range(a, b))
+  return { menus, ratings: r.data.filter((x) => mainOf.has(s(x.menu_id)) && s(x.dish) === mainOf.get(s(x.menu_id))).map((x) => ({ menuId: s(x.menu_id), personId: s(x.person_id), userId: s(x.user_id), score: Number(x.score), comment: s(x.comment), at: s(x.at), dish: s(x.dish) })) }
 }
 
 /** Upsert the given cells (one row per day+meal); an empty dish removes nothing — it just stores blanks. */

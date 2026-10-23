@@ -32,9 +32,14 @@ export function MenuPage() {
 
   const refresh = useCallback(async () => {
     if (!projectId) return
-    const [w, r, c] = await Promise.all([loadMenus(projectId, days[0], days[6]), loadMenus(projectId, addDays(today, -30), today), loadCookTeam(projectId)])
-    setMenus(w.menus); setRatings(w.ratings); setRecent(r); setCook(c); setCookSaved(c)
-    if (w.error) setMsg({ ok: false, text: w.error })
+    // one request for the shown week and the last 30 days (they usually overlap), split here
+    const from30 = addDays(today, -30)
+    const lo = days[0] < from30 ? days[0] : from30, hi = days[6] > today ? days[6] : today
+    const [all, c] = await Promise.all([loadMenus(projectId, lo, hi), loadCookTeam(projectId)])
+    const pick = (a: string, b: string) => { const m = all.menus.filter((x) => x.day >= a && x.day <= b), ids = new Set(m.map((x) => x.id)); return { menus: m, ratings: all.ratings.filter((x) => ids.has(x.menuId)) } }
+    const w = pick(days[0], days[6])
+    setMenus(w.menus); setRatings(w.ratings); setRecent(pick(from30, today)); setCook(c); setCookSaved(c)
+    if (all.error) setMsg({ ok: false, text: all.error })
   }, [projectId, days, today])
   useEffect(() => { setDraft(null); void refresh() }, [refresh])
 

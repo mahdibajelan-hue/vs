@@ -50,10 +50,17 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   // re-read whenever an account is linked or unlinked in «تنظیمات», so the tab appears without leaving the module
   const linkKey = useSupervisionStore((s) => s.people.filter((p) => p.userId).map((p) => `${p.id}:${p.userId}:${p.active}`).join(','))
   const firstLinks = useRef(true)
+  const picked = useRef(false)
+  const lastLinkKey = useRef<string | null>(null)
   useEffect(() => {
+    // the first people load turns the key from '' into the real list: that is not a change worth a second request
+    const prev = lastLinkKey.current
+    lastLinkKey.current = linkKey
+    if (prev !== null && (prev === '' || linkKey === '' || prev === linkKey)) return
     void loadMyLinks().then((l) => {
       setLinks(l)
-      if (firstLinks.current && l.length) setTab('me')
+      // the phone page comes first for linked people — unless they already picked a tab while this was loading
+      if (firstLinks.current && l.length && !picked.current) setTab('me')
       firstLinks.current = false
     })
   }, [linkKey])
@@ -104,7 +111,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های حضور و غیاب دستگاه نظارت">
           {((links?.length ?? 0) > 0 ? NAV : [...NAV.filter((n) => n.id !== 'me'), NAV[0]]).map((n) => (
-            <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
+            <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => { picked.current = true; setTab(n.id) }}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>
           ))}
