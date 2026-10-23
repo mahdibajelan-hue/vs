@@ -13,6 +13,7 @@ const FIELDS: { k: keyof SvSettings; label: string; hint: string; step?: number 
   { k: 'overtimeMin', label: 'کف اضافه‌کار ماهانه (ساعت)', hint: 'در گزارش، کمتر از این مقدار با رنگ زرد نشان داده می‌شود.' },
   { k: 'overtimeMax', label: 'سقف اضافه‌کار ماهانه (ساعت)', hint: 'پیش‌فرض هر نفر؛ برای هر نفر جداگانه هم قابل تغییر است.' },
   { k: 'vehicleHours', label: 'ساعت کار روزانهٔ خودرو', hint: 'روز کارکرد خودرو با این مقدار ثبت می‌شود.', step: 0.5 },
+  { k: 'entryGraceDays', label: 'مهلت ثبت (روز)', hint: 'هر روز را تا این تعداد روز بعد می‌توان بی‌دلیل ثبت کرد؛ بعد از آن نوشتن دلیل لازم است و «ثبت با تأخیر» در گزارش شمرده می‌شود.' },
 ]
 
 /** تنظیمات — the rules behind the report, and the time-clock bridge. */

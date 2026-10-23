@@ -4,6 +4,7 @@ import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
+import { addDays, todayLocal } from '../lib/svMonth'
 
 type Row = Record<string, unknown>
 const s = (v: unknown) => (v ?? '') as string
@@ -22,7 +23,7 @@ const fromPerson = (p: Partial<SvPerson>): Row => {
   for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'shift_start' || c === 'shift_end') ? null : p[k]
   return o
 }
-const toGuest = (r: Row): SvGuestMeal => ({ id: s(r.id), day: s(r.day), guestName: s(r.guest_name), organization: s(r.organization), host: s(r.host), breakfast: n(r.breakfast), lunch: n(r.lunch), dinner: n(r.dinner), note: s(r.note) })
+const toGuest = (r: Row): SvGuestMeal => ({ id: s(r.id), day: s(r.day), guestName: s(r.guest_name), organization: s(r.organization), host: s(r.host), breakfast: n(r.breakfast), lunch: n(r.lunch), dinner: n(r.dinner), note: s(r.note), lateReason: s(r.late_reason) })
 const toVehicle = (r: Row): SvVehicle => ({
   id: s(r.id), projectId: s(r.master_project_id), title: s(r.title), plate: s(r.plate), kind: (r.kind as SvVehicle['kind']) ?? 'sedan',
   modelYear: r.model_year == null ? null : n(r.model_year), engineCc: r.engine_cc == null ? null : n(r.engine_cc), gearbox: (r.gearbox as SvVehicle['gearbox']) ?? null, ownership: (r.ownership as SvVehicle['ownership']) ?? 'rented', lessor: s(r.lessor), driver: s(r.driver),
@@ -37,9 +38,10 @@ const fromVehicle = (v: Partial<SvVehicle>): Row => {
 const toAtt = (r: Row): SvAttendance => ({
   personId: s(r.person_id), day: s(r.day), status: r.status as SvAttendance['status'], checkIn: t(r.check_in), checkOut: t(r.check_out), hours: n(r.hours), overtime: n(r.overtime),
   breakfast: !!r.breakfast, lunch: !!r.lunch, dinner: !!r.dinner, source: (r.source as SvAttendance['source']) ?? 'manual', note: s(r.note),
+  lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at),
 })
-const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note) })
-const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours) } : DEFAULT_SETTINGS
+const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note), lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at) })
+const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days) } : DEFAULT_SETTINGS
 
 const toSignoff = (r: Row): SvSignoff => ({ month: s(r.month), status: r.status as SvSignoff['status'], from: s(r.from_day), to: s(r.to_day) })
 const toSignature = (r: Row): SvSignature => ({
@@ -57,6 +59,9 @@ const signErr = (e: { message: string; code?: string }): string => {
   if (/not_allowed|not_authenticated/.test(m) || e.code === '42501') return 'اجازهٔ این کار را در این پروژه ندارید.'
   return friendlyErrorMessage(e)
 }
+export const LATE_MSG = 'این روز از مهلت ثبت گذشته است؛ دلیل ثبت با تأخیر را بنویسید (دست‌کم ۵ حرف). دلیل و زمان ثبت در سابقه می‌ماند و در گزارش دیده می‌شود.'
+export const FUTURE_MSG = 'روزهای آینده را فقط می‌توان «استراحت» یا «مأموریت» برنامه‌ریزی کرد؛ حضور و خودرو و وعده بعد از وقوع ثبت می‌شود.'
+const lateOk = (reason: string | undefined) => (reason ?? '').trim().length >= 5
 export const LOCKED_MSG = 'این روز در ماهی است که گزارشش امضا شده و قفل است. برای اصلاح، در «گزارش ماه» آن را «بازگشت برای اصلاح» کنید.'
 
 const err = (e: { message: string; code?: string } | null): string | undefined =>
@@ -83,6 +88,9 @@ interface State {
   signoffs: Record<string, SvSignoff>
   signatures: Record<string, SvSignature[]>
   isLocked: (day: string) => boolean
+  /** older than today − entryGraceDays: a written reason is required (also enforced by RLS) */
+  needsReason: (day: string) => boolean
+  isFuture: (day: string) => boolean
   loadSignatures: (month: string) => Promise<void>
   sign: (a: { month: string; from: string; to: string; step: SvSignStep; image: string; title: string; note: string; snapshot: SvSnapshot }) => Promise<Result>
   reopen: (month: string, reason: string) => Promise<Result>
@@ -137,6 +145,8 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
   },
 
+  needsReason: (day) => day < addDays(todayLocal(), -get().settings.entryGraceDays),
+  isFuture: (day) => day > todayLocal(),
   isLocked: (day) => Object.values(get().signoffs).some((x) => x.status !== 'open' && day >= x.from && day <= x.to),
   loadSignatures: async (month) => {
     const pid = get().projectId
@@ -167,15 +177,19 @@ export const useSupervisionStore = create<State>()((set, get) => ({
 
   setDay: async (personId, day, row) => {
     if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
+    if (get().isFuture(day) && row.status !== 'rest' && row.status !== 'mission') return { ok: false, error: FUTURE_MSG }
+    const late = get().needsReason(day)
+    if (late && !lateOk(row.lateReason)) return { ok: false, error: LATE_MSG }
     const pid = get().projectId!
     const k = key(personId, day), prev = get().att[k]
     const next: SvAttendance = { personId, day, source: row.source ?? (prev?.source === 'clock' && prev.checkIn === row.checkIn && prev.checkOut === row.checkOut ? 'clock' : 'manual'), ...row }
     set((x) => ({ att: { ...x.att, [k]: next } }))
     const { error } = await supabase.from('sv_attendance').upsert({
       master_project_id: pid, person_id: personId, day, status: next.status, check_in: next.checkIn, check_out: next.checkOut, hours: next.hours, overtime: next.overtime,
-      breakfast: next.breakfast, lunch: next.lunch, dinner: next.dinner, source: next.source, note: next.note, ...stamp(),
+      breakfast: next.breakfast, lunch: next.lunch, dinner: next.dinner, source: next.source, note: next.note, late_reason: late ? (row.lateReason ?? '').trim() : '', ...stamp(),
     }, { onConflict: 'person_id,day' })
     if (error) { set((x) => { const att = { ...x.att }; if (prev) att[k] = prev; else delete att[k]; return { att } }); return { ok: false, error: err(error) } }
+    set((x) => ({ att: { ...x.att, [k]: { ...next, lateReason: late ? (row.lateReason ?? '').trim() : '', createdAt: prev?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() } } }))
     return { ok: true }
   },
   clearDay: async (personId, day) => {
@@ -189,11 +203,14 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   },
   setVehicleDay: async (vehicleId, day, row) => {
     if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
+    if (get().isFuture(day)) return { ok: false, error: FUTURE_MSG }
+    const late = get().needsReason(day)
+    if (late && !lateOk(row.lateReason)) return { ok: false, error: LATE_MSG }
     const pid = get().projectId!
     const k = key(vehicleId, day), prev = get().vdays[k]
     const next: SvVehicleDay = { vehicleId, day, source: 'manual', ...row }
     set((x) => ({ vdays: { ...x.vdays, [k]: next } }))
-    const { error } = await supabase.from('sv_vehicle_days').upsert({ master_project_id: pid, vehicle_id: vehicleId, day, status: next.status, hours: next.hours, km: next.km, source: 'manual', note: next.note, ...stamp() }, { onConflict: 'vehicle_id,day' })
+    const { error } = await supabase.from('sv_vehicle_days').upsert({ master_project_id: pid, vehicle_id: vehicleId, day, status: next.status, hours: next.hours, km: next.km, source: 'manual', note: next.note, late_reason: late ? (row.lateReason ?? '').trim() : '', ...stamp() }, { onConflict: 'vehicle_id,day' })
     if (error) { set((x) => { const vdays = { ...x.vdays }; if (prev) vdays[k] = prev; else delete vdays[k]; return { vdays } }); return { ok: false, error: err(error) } }
     return { ok: true }
   },
@@ -239,15 +256,18 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   },
   saveSettings: async (x) => {
     const pid = get().projectId!
-    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, ...stamp() }, { onConflict: 'master_project_id' })
+    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, entry_grace_days: x.entryGraceDays, ...stamp() }, { onConflict: 'master_project_id' })
     if (error) return { ok: false, error: err(error) }
     set({ settings: x })
     return { ok: true }
   },
   saveGuest: async (g) => {
     if (get().isLocked(g.day) || (g.id && get().isLocked(get().guests.find((o) => o.id === g.id)?.day ?? ''))) return { ok: false, error: LOCKED_MSG }
+    if (get().isFuture(g.day)) return { ok: false, error: FUTURE_MSG }
+    const late = get().needsReason(g.day)
+    if (late && !lateOk(g.lateReason)) return { ok: false, error: LATE_MSG }
     const pid = get().projectId!
-    const row = { day: g.day, guest_name: g.guestName.trim(), organization: g.organization.trim(), host: g.host.trim(), breakfast: g.breakfast, lunch: g.lunch, dinner: g.dinner, note: g.note }
+    const row = { day: g.day, guest_name: g.guestName.trim(), organization: g.organization.trim(), host: g.host.trim(), breakfast: g.breakfast, lunch: g.lunch, dinner: g.dinner, note: g.note, late_reason: late ? (g.lateReason ?? '').trim() : '' }
     const { data, error } = g.id ? await supabase.from('sv_guest_meals').update(row).eq('id', g.id).select().single() : await supabase.from('sv_guest_meals').insert({ master_project_id: pid, ...row }).select().single()
     if (error || !data) return { ok: false, error: err(error) ?? 'ذخیره نشد' }
     const saved = toGuest(data as Row)

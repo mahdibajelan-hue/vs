@@ -15,6 +15,8 @@ export interface SvSettings {
   overtimeMin: number
   overtimeMax: number
   vehicleHours: number
+  /** days back (besides today) that can be recorded without a written reason */
+  entryGraceDays: number
 }
 
 export interface SvPerson {
@@ -51,6 +53,7 @@ export interface SvGuestMeal {
   lunch: number
   dinner: number
   note: string
+  lateReason?: string
 }
 
 export interface SvVehicle {
@@ -88,6 +91,11 @@ export interface SvAttendance {
   dinner: boolean
   source: SvSource
   note: string
+  /** why the day was written after the entry window (server-enforced) */
+  lateReason?: string
+  /** server time of the first entry / last change (set by a trigger, not the browser) */
+  createdAt?: string
+  updatedAt?: string
 }
 
 /** Monthly sign-off: open → prepared (تهیه، سرپرست نظارت) → approved (تأیید، مدیر پروژهٔ کارفرما). Anything but open locks the month's days.
@@ -140,4 +148,7 @@ export interface SvVehicleDay {
   km: number | null
   source: SvSource
   note: string
+  lateReason?: string
+  createdAt?: string
+  updatedAt?: string
 }

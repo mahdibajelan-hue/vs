@@ -1,6 +1,6 @@
 import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleDay, SvVehicleStatus } from '../types'
 
-export const DEFAULT_SETTINGS: SvSettings = { dutyDays: 23, standardHours: 8, overtimeMin: 60, overtimeMax: 80, vehicleHours: 8 }
+export const DEFAULT_SETTINGS: SvSettings = { dutyDays: 23, standardHours: 8, overtimeMin: 60, overtimeMax: 80, vehicleHours: 8, entryGraceDays: 2 }
 
 export const STATUS_FA: Record<SvStatus, string> = { present: 'حاضر', mission: 'مأموریت', rest: 'استراحت', sick: 'استعلاجی', absent: 'غایب' }
 /** one-letter marks for the month grid */

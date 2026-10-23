@@ -1,10 +1,13 @@
-import { useEffect, useMemo } from 'react'
-import { CalendarCheck, Car, Clock3, Download, Printer, Soup, TimerReset, TriangleAlert } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { CalendarCheck, Car, Clock3, Download, FileText, Printer, ShieldAlert, ShieldCheck, Soup, TimerReset, TriangleAlert } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useSupervisionStore } from '../store/useSupervisionStore'
 import { activeDays, guestTotals, monthTotals, personMonth, vehicleMonth, type PersonMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, monthLabel, recordedUpTo, ymKey, type Ym } from '../lib/svMonth'
 import { SignoffPanel } from '../components/SignoffPanel'
+import { AttendanceSheet, FacilitiesSheet, type SheetData } from '../components/ReportSheets'
+import { personCheck, projectCheck } from '../lib/svIntegrity'
 import type { SvSnapshot } from '../types'
 import { Empty, MonthNav } from '../components/common'
 
@@ -19,7 +22,11 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const settings = useSupervisionStore((s) => s.settings)
   const loadRange = useSupervisionStore((s) => s.loadRange)
   const guests = useSupervisionStore((s) => s.guests)
-  const days = useMemo(() => monthDays(month).map((d) => d.iso), [month])
+  const mdays = useMemo(() => monthDays(month), [month])
+  const days = useMemo(() => mdays.map((d) => d.iso), [mdays])
+  const signatures = useSupervisionStore((s) => s.signatures[ymKey(month)])
+  const [view, setView] = useState<'summary' | 'att' | 'fac'>('summary')
+  const [printing, setPrinting] = useState<'att' | 'fac' | null>(null)
   useEffect(() => { void loadRange(days[0], days[days.length - 1]) }, [days, loadRange])
   const upTo = recordedUpTo(month)
 
@@ -37,6 +44,25 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
     breakfast: tot.breakfast + gt.breakfast, lunch: tot.lunch + gt.lunch, dinner: tot.dinner + gt.dinner, vehicleDays: tot.vehicleDays, vehicleHours: tot.vehicleHours,
   }
   const driver = (id: string | null) => people.find((p) => p.id === id)?.fullName ?? ''
+  const checks = pm.map(({ p, m }) => ({ p, c: personCheck(rows.filter((r) => r.personId === p.id), m, settings.entryGraceDays) }))
+  const pcheck = projectCheck(rows, settings.entryGraceDays, checks.reduce((a, x) => a + x.c.flags.length, 0))
+  const sheet: SheetData = {
+    projectName, month, days: mdays, settings, pm: pm.map((x, i) => ({ ...x, late: checks[i].c.late })), vm, att, tot, gt,
+    guests: guests.filter((g) => g.day >= days[0] && g.day <= days[days.length - 1]), sides,
+    signatures: (signatures ?? []).filter((x) => !x.revokedAt), timelyPct: pcheck.timelyPct, driver,
+  }
+  // one form per print job, on its own paper orientation; everything else on the page is hidden while printing
+  useEffect(() => {
+    if (!printing) return
+    const st = document.createElement('style')
+    st.textContent = `@page { size: A4 ${printing === 'att' ? 'landscape' : 'portrait'}; margin: 8mm; }`
+    document.head.appendChild(st)
+    document.body.classList.add('sv-printing')
+    const done = () => setPrinting(null)
+    window.addEventListener('afterprint', done)
+    const t = window.setTimeout(() => window.print(), 60)
+    return () => { window.clearTimeout(t); window.removeEventListener('afterprint', done); document.body.classList.remove('sv-printing'); st.remove() }
+  }, [printing])
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`
@@ -70,11 +96,24 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
     <div style={{ display: 'grid', gap: 14 }}>
       <div className="im-card no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 12 }}>
         <MonthNav value={month} onChange={onMonth} />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="im-btn im-btn-ghost im-btn-sm" onClick={csv} disabled={!pm.length && !vm.length}><Download size={14} /> خروجی اکسل (CSV)</button>
-          <button className="im-btn im-btn-ghost im-btn-sm" onClick={() => window.print()}><Printer size={14} /> چاپ</button>
+        <div className="im-seg" role="tablist" aria-label="نما">
+          <button role="tab" aria-selected={view === 'summary'} className={view === 'summary' ? 'on' : ''} onClick={() => setView('summary')}>خلاصه و امضا</button>
+          <button role="tab" aria-selected={view === 'att'} className={view === 'att' ? 'on' : ''} onClick={() => setView('att')}>فرم کارکرد</button>
+          <button role="tab" aria-selected={view === 'fac'} className={view === 'fac' ? 'on' : ''} onClick={() => setView('fac')}>فرم تسهیلات</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="im-btn im-btn-ghost im-btn-sm" onClick={csv} disabled={!pm.length && !vm.length}><Download size={14} /> CSV</button>
+          <button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setPrinting('att')} disabled={!pm.length}><Printer size={14} /> چاپ فرم کارکرد</button>
+          <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setPrinting('fac')}><Printer size={14} /> چاپ فرم تسهیلات</button>
         </div>
       </div>
+      {printing && createPortal(<div className="sv-print-host">{printing === 'att' ? <AttendanceSheet d={sheet} /> : <FacilitiesSheet d={sheet} />}</div>, document.body)}
+      {view !== 'summary' ? (
+        <div className="sv-paper-wrap">
+          <p className="sv-note no-print" style={{ margin: '0 0 8px' }}><FileText size={13} /> پیش‌نمایش {view === 'att' ? 'فرم کارکرد (A4 افقی)' : 'فرم تسهیلات (A4 عمودی)'}؛ هر فرم جداگانه چاپ و به صورت‌وضعیت ضمیمه می‌شود. امضاها پس از تأیید در «خلاصه و امضا» روی فرم می‌آیند.</p>
+          <div className={`sv-paper ${view === 'att' ? 'landscape' : 'portrait'}`}>{view === 'att' ? <AttendanceSheet d={sheet} /> : <FacilitiesSheet d={sheet} />}</div>
+        </div>
+      ) : <>
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>گزارش حضور دستگاه نظارت — {monthLabel(month)}</h2>
         <p className="sv-note" style={{ margin: '2px 0 0' }}>{projectName} · موظفی {fa(settings.dutyDays)} روز در ماه · روز کاری {faNum(settings.standardHours)} ساعت · اضافه‌کار ماهانه {fa(settings.overtimeMin)} تا {fa(settings.overtimeMax)} ساعت{upTo && upTo < days[days.length - 1] ? ` · ثبت‌شده تا ${fa(formatJalali(upTo))}` : ''}</p>
@@ -151,9 +190,39 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
           <tbody><tr><td><b>جمع</b></td><td className="sv-num">{fa(vm.length)}</td><td className="sv-num"><b>{fa(tot.vehicleDays)}</b></td><td className="sv-num">{faNum(tot.vehicleHours)}</td><td className="sv-num">{faNum(vm.reduce((a, x) => a + x.m.km, 0), 0)}</td></tr></tbody>
         </table></div>
       </section>
+      <IntegrityCard pcheck={pcheck} checks={checks} grace={settings.entryGraceDays} />
       <SignoffPanel monthKey={ymKey(month)} from={days[0]} to={days[days.length - 1]} snapshot={snapshot} unmarked={tot.unmarked} />
       <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور حساب شده‌اند (هر روز حاضر = صبحانه، ناهار و شام) و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
+      </>}
     </div>
+  )
+}
+
+/** کنترل صحت ثبت — what the approver should look at before signing. */
+function IntegrityCard({ pcheck, checks, grace }: { pcheck: ReturnType<typeof projectCheck>; checks: { p: { id: string; fullName: string }; c: ReturnType<typeof personCheck> }[]; grace: number }) {
+  const flagged = checks.filter((x) => x.c.flags.length)
+  const Icon = pcheck.level === 'ok' ? ShieldCheck : ShieldAlert
+  return (
+    <section className={`sv-integ lv-${pcheck.level} no-print`} aria-label="کنترل صحت ثبت">
+      <div className="sv-integ-head">
+        <Icon size={17} />
+        <b>کنترل صحت ثبت</b>
+        <span>{pcheck.level === 'ok' ? 'نشانه‌ای از ثبت فرمالیته دیده نشد' : pcheck.level === 'warn' ? 'پیش از تأیید بررسی شود' : 'احتمال ثبت فرمالیته؛ پیش از تأیید با سرپرست بررسی شود'}</span>
+      </div>
+      <div className="sv-integ-stats">
+        <span>ثبت به‌موقع <b>{fa(pcheck.timelyPct)}٪</b></span>
+        <span>ثبت دیرهنگام (بعد از {fa(grace)} روز) <b>{fa(pcheck.late)}</b> از {fa(pcheck.rows)}</span>
+        {pcheck.bulk && <span>بیشترین ثبت پشت‌سرهم <b>{fa(pcheck.bulk.count)}</b> ردیف در ۱۵ دقیقه</span>}
+        {pcheck.sameForAll > 0 && <span>روزهای با ساعت یکسان برای همه <b>{fa(pcheck.sameForAll)}</b></span>}
+      </div>
+      {(pcheck.flags.length > 0 || flagged.length > 0) && (
+        <ul>
+          {pcheck.flags.map((f) => <li key={f}>{fa(f)}</li>)}
+          {flagged.map((x) => <li key={x.p.id}><b>{x.p.fullName}:</b> {fa(x.c.flags.join('؛ '))}</li>)}
+        </ul>
+      )}
+      <p className="sv-note" style={{ margin: 0 }}>زمان ثبت هر خانه را سرور می‌گذارد (نه مرورگر) و هر تغییر با نام کاربر در سابقهٔ همان خانه می‌ماند؛ برای دیدنش در جدول ماه روی خانه بزنید و «سابقه» را باز کنید.</p>
+    </section>
   )
 }
 

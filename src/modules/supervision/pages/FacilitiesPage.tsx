@@ -7,6 +7,7 @@ import { guestTotals, mealsOf } from '../lib/svCalc'
 import { addDays, fa, faNum, monthDays, monthLabel, monthOf, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
 import type { SvGuestMeal } from '../types'
 import { Flash, LockNote, MonthNav, useLockedIn } from '../components/common'
+import { LateReason } from '../components/EntryGuard'
 
 type Draft = Omit<SvGuestMeal, 'id'> & { id?: string }
 const blank = (day: string): Draft => ({ day, guestName: '', organization: '', host: '', breakfast: 0, lunch: 0, dinner: 0, note: '' })
@@ -37,6 +38,7 @@ export function FacilitiesPage({ month, onMonth, onGoReport }: { month: Ym; onMo
   useEffect(() => { void loadRange(range.from, range.to) }, [range, loadRange])
   const locked = useLockedIn(range.from, range.to)
   const isLocked = useSupervisionStore((s) => s.isLocked)
+  const needsReason = useSupervisionStore((s) => s.needsReason)
 
   const days = useMemo(() => { const out: string[] = []; for (let d = range.from; d <= range.to && out.length < MAX_DAYS; d = addDays(d, 1)) out.push(d); return out }, [range])
   const isMonth = range.from === monthRange(monthOf(range.from)).from && range.to === monthRange(monthOf(range.from)).to
@@ -161,6 +163,7 @@ export function FacilitiesPage({ month, onMonth, onGoReport }: { month: Ym; onMo
             ))}
             <div className="im-field" style={{ margin: 0 }}><label htmlFor="g-note">یادداشت</label><input id="g-note" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></div>
           </div>
+          {needsReason(draft.day) && <LateReason value={draft.lateReason ?? ''} onChange={(r) => setDraft({ ...draft, lateReason: r })} />}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setDraft(null)}>انصراف</button><button className="im-btn im-btn-primary im-btn-sm" onClick={submit}>ذخیره</button></div>
         </div>
       )}
