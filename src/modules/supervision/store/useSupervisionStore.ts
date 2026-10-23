@@ -14,12 +14,12 @@ const t = (v: unknown) => (v ? String(v).slice(0, 5) : null)
 const toPerson = (r: Row): SvPerson => ({
   id: s(r.id), projectId: s(r.master_project_id), fullName: s(r.full_name), side: (r.side as SvPerson['side']) ?? 'supervision', roleTitle: s(r.role_title),
   nationalId: s(r.national_id), mobile: s(r.mobile), cardNo: s(r.card_no), overtimeCap: r.overtime_cap == null ? null : n(r.overtime_cap),
-  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, shiftStart: t(r.shift_start), shiftEnd: t(r.shift_end), userId: (r.user_id as string) ?? null, startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
+  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, shiftStart: t(r.shift_start), shiftEnd: t(r.shift_end), userId: (r.user_id as string) ?? null, isHead: !!r.is_head, startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
   active: !!r.active, note: s(r.note),
 })
 const fromPerson = (p: Partial<SvPerson>): Row => {
   const o: Row = {}
-  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['shiftStart', 'shift_start'], ['shiftEnd', 'shift_end'], ['userId', 'user_id'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
+  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['shiftStart', 'shift_start'], ['shiftEnd', 'shift_end'], ['userId', 'user_id'], ['isHead', 'is_head'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
   for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'shift_start' || c === 'shift_end' || c === 'user_id') ? null : p[k]
   return o
 }
@@ -41,10 +41,10 @@ const toAtt = (r: Row): SvAttendance => ({
   lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at),
 })
 const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note), lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at) })
-const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days) } : DEFAULT_SETTINGS
+const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days), networkMaxM: r.network_max_m == null ? 2000 : n(r.network_max_m) } : DEFAULT_SETTINGS
 
 const toSite = (r: Row): SvSite => ({ id: s(r.id), name: s(r.name), lat: n(r.lat), lng: n(r.lng), radiusM: n(r.radius_m), active: !!r.active })
-const toPunch = (r: Row): SvPunch => ({ id: s(r.id), personId: s(r.person_id), kind: r.kind as SvPunch['kind'], at: s(r.at), day: s(r.day), accepted: !!r.accepted, reason: s(r.reason), distanceM: r.distance_m == null ? null : n(r.distance_m), accuracyM: r.accuracy_m == null ? null : n(r.accuracy_m), siteId: (r.site_id as string) ?? null })
+const toPunch = (r: Row): SvPunch => ({ id: s(r.id), personId: s(r.person_id), kind: r.kind as SvPunch['kind'], at: s(r.at), day: s(r.day), accepted: !!r.accepted, reason: s(r.reason), distanceM: r.distance_m == null ? null : n(r.distance_m), accuracyM: r.accuracy_m == null ? null : n(r.accuracy_m), siteId: (r.site_id as string) ?? null, quality: (r.quality as SvPunch['quality']) ?? 'gps' })
 const toSignoff = (r: Row): SvSignoff => ({ month: s(r.month), status: r.status as SvSignoff['status'], from: s(r.from_day), to: s(r.to_day) })
 const toSignature = (r: Row): SvSignature => ({
   id: s(r.id), month: s(r.month), step: r.step as SvSignStep, userId: s(r.user_id), signerName: s(r.signer_name), signerTitle: s(r.signer_title), image: s(r.image),
@@ -64,6 +64,7 @@ const signErr = (e: { message: string; code?: string }): string => {
 export const LATE_MSG = 'این روز از مهلت ثبت گذشته است؛ دلیل ثبت با تأخیر را بنویسید (دست‌کم ۵ حرف). دلیل و زمان ثبت در سابقه می‌ماند و در گزارش دیده می‌شود.'
 export const FUTURE_MSG = 'روزهای آینده را فقط می‌توان «استراحت» یا «مأموریت» برنامه‌ریزی کرد؛ حضور و خودرو و وعده بعد از وقوع ثبت می‌شود.'
 const lateOk = (reason: string | undefined) => (reason ?? '').trim().length >= 5
+export const HEAD_MSG = 'ثبت و اصلاح دستی حضور نفرات فقط با سرپرست نظارت پروژه است؛ نفرات خودشان با گوشی ورود و خروج می‌زنند.'
 export const LOCKED_MSG = 'این روز در ماهی است که گزارشش امضا شده و قفل است. برای اصلاح، در «گزارش ماه» آن را «بازگشت برای اصلاح» کنید.'
 
 const err = (e: { message: string; code?: string } | null): string | undefined =>
@@ -95,6 +96,9 @@ interface State {
   signoffs: Record<string, SvSignoff>
   signatures: Record<string, SvSignature[]>
   isLocked: (day: string) => boolean
+  /** may record / correct attendance by hand: platform admin, a head of supervision of this project, or anyone with
+   *  edit access while no head is named (the server enforces the same rule in sv_is_head) */
+  canHand: () => boolean
   /** older than today − entryGraceDays: a written reason is required (also enforced by RLS) */
   needsReason: (day: string) => boolean
   isFuture: (day: string) => boolean
@@ -146,7 +150,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
       supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
       supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
       supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at'),
-      supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at'),
+      supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id,quality').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at'),
     ])
     if (get().projectId !== pid) return
     const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
@@ -155,6 +159,11 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), punches: ((pu.data ?? []) as Row[]).map(toPunch), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
   },
 
+  canHand: () => {
+    const me = useAuthStore.getState().profile
+    const heads = get().people.filter((p) => p.isHead && p.active)
+    return !!me?.isAdmin || !heads.length || heads.some((p) => p.userId === me?.id)
+  },
   needsReason: (day) => day < addDays(todayLocal(), -get().settings.entryGraceDays),
   isFuture: (day) => day > todayLocal(),
   isLocked: (day) => Object.values(get().signoffs).some((x) => x.status !== 'open' && day >= x.from && day <= x.to),
@@ -186,6 +195,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   },
 
   setDay: async (personId, day, row) => {
+    if (!get().canHand()) return { ok: false, error: HEAD_MSG }
     if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     if (get().isFuture(day) && row.status !== 'rest' && row.status !== 'mission') return { ok: false, error: FUTURE_MSG }
     const late = get().needsReason(day)
@@ -203,6 +213,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     return { ok: true }
   },
   clearDay: async (personId, day) => {
+    if (!get().canHand()) return { ok: false, error: HEAD_MSG }
     if (get().isLocked(day)) return { ok: false, error: LOCKED_MSG }
     const k = key(personId, day), prev = get().att[k]
     if (!prev) return { ok: true }
@@ -266,7 +277,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   },
   saveSettings: async (x) => {
     const pid = get().projectId!
-    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, entry_grace_days: x.entryGraceDays, ...stamp() }, { onConflict: 'master_project_id' })
+    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, entry_grace_days: x.entryGraceDays, network_max_m: x.networkMaxM, ...stamp() }, { onConflict: 'master_project_id' })
     if (error) return { ok: false, error: err(error) }
     set({ settings: x })
     return { ok: true }

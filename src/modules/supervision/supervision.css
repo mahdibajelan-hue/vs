@@ -281,3 +281,9 @@
 .sv-site-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; padding: 12px; border-radius: 14px; background: var(--im-panel-2); }
 .sv-select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--im-line-2); background: var(--im-panel); color: var(--im-text); font: inherit; font-size: 13px; max-width: 100%; }
 .sv-cell.gps { position: relative; }
+
+/* leave (مرخصی) and the nightly automatic absence */
+.sv-root { --sv-leave: #2dd4bf; }
+.sv-c-leave { --c: var(--sv-leave); }
+.sv-cell.auto { background: transparent; color: var(--sv-absent); box-shadow: inset 0 0 0 1.5px var(--sv-absent); }
+.sv-head-only { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; color: var(--im-muted-2); background: var(--im-panel-2); box-shadow: inset 0 0 0 1px var(--im-line); }

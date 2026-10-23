@@ -44,7 +44,13 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
     breakfast: tot.breakfast + gt.breakfast, lunch: tot.lunch + gt.lunch, dinner: tot.dinner + gt.dinner, vehicleDays: tot.vehicleDays, vehicleHours: tot.vehicleHours,
   }
   const driver = (id: string | null) => people.find((p) => p.id === id)?.fullName ?? ''
-  const checks = pm.map(({ p, m }) => ({ p, c: personCheck(rows.filter((r) => r.personId === p.id), m, settings.entryGraceDays, !!p.userId) }))
+  const punches = useSupervisionStore((s) => s.punches)
+  const checks = pm.map(({ p, m }) => {
+    const c = personCheck(rows.filter((r) => r.personId === p.id), m, settings.entryGraceDays, !!p.userId)
+    const net = new Set(punches.filter((x) => x.personId === p.id && x.accepted && x.quality === 'network' && x.day >= days[0] && x.day <= days[days.length - 1]).map((x) => x.day)).size
+    const flags = [...c.flags, ...(net >= 3 ? [`${net} روز با موقعیت آنتن (کم‌دقت) ثبت شده`] : []), ...(m.autoAbsent ? [`${m.autoAbsent} روز بدون تردد (غیبت خودکار)`] : [])]
+    return { p, c: { ...c, flags } }
+  })
   const pcheck = projectCheck(rows, settings.entryGraceDays, checks.reduce((a, x) => a + x.c.flags.length, 0))
   const sheet: SheetData = {
     projectName, month, days: mdays, settings, pm: pm.map((x, i) => ({ ...x, late: checks[i].c.late })), vm, att, tot, gt,
@@ -66,8 +72,8 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`
     const lines = [
-      ['نام', 'سمت', 'طرف', 'روز در پروژه', 'موظف', 'کارکرد', 'حاضر', 'مأموریت', 'استراحت', 'استعلاجی', 'غیبت', 'ثبت‌نشده', 'کسری', 'ساعت کار', 'اضافه‌کار', 'سقف اضافه‌کار', 'مانده اضافه‌کار', 'صبحانه', 'ناهار', 'شام'].map(q).join(','),
-      ...pm.map(({ p, m }) => [p.fullName, p.roleTitle, SIDE_FA[p.side], m.onProject, m.required, m.worked, m.present, m.mission, m.rest, m.sick, m.absent, m.unmarked, m.shortfall, m.hours, m.overtime, m.overtimeCap, m.overtimeLeft, m.breakfast, m.lunch, m.dinner].map(q).join(',')),
+      ['نام', 'سمت', 'طرف', 'روز در پروژه', 'موظف', 'کارکرد', 'حاضر', 'مأموریت', 'استراحت', 'مرخصی', 'استعلاجی', 'غیبت', 'غیبت بدون تردد', 'ثبت‌نشده', 'کسری', 'ساعت کار', 'اضافه‌کار', 'سقف اضافه‌کار', 'مانده اضافه‌کار', 'صبحانه', 'ناهار', 'شام'].map(q).join(','),
+      ...pm.map(({ p, m }) => [p.fullName, p.roleTitle, SIDE_FA[p.side], m.onProject, m.required, m.worked, m.present, m.mission, m.rest, m.leave, m.sick, m.absent, m.autoAbsent, m.unmarked, m.shortfall, m.hours, m.overtime, m.overtimeCap, m.overtimeLeft, m.breakfast, m.lunch, m.dinner].map(q).join(',')),
       '',
       ['خودرو', 'پلاک', 'مالکیت', 'سال ساخت', 'حجم موتور', 'گیربکس', 'راننده', 'در اختیار', 'روز در پروژه', 'روز کارکرد', 'تعمیر', 'نبود', 'ثبت‌نشده', 'ساعت کار', 'کیلومتر'].map(q).join(','),
       ...vm.map(({ v, m }) => [v.title, v.plate, v.ownership === 'company' ? 'شرکتی' : 'استیجاری', v.modelYear ?? '', v.engineCc ?? '', v.gearbox === 'automatic' ? 'اتوماتیک' : v.gearbox === 'manual' ? 'دستی' : '', v.driver, driver(v.personId), m.onProject, m.present, m.repair, m.absent, m.unmarked, m.hours, m.km].map(q).join(',')),
@@ -136,7 +142,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
       {pm.length === 0 ? <Empty>برای این ماه نفری ثبت نشده است.</Empty> : (
         <div className="im-table-wrap">
           <table className="im-table">
-            <thead><tr><th>نام</th><th>کارکرد / موظف</th><th>کسری</th><th>استراحت</th><th>استعلاجی</th><th>غیبت</th><th>ساعت کار</th><th style={{ minWidth: 170 }}>اضافه‌کار (استفاده / سقف)</th><th>مانده</th><th>صبحانه</th><th>ناهار</th><th>شام</th></tr></thead>
+            <thead><tr><th>نام</th><th>کارکرد / موظف</th><th>کسری</th><th>استراحت</th><th>مرخصی</th><th>استعلاجی</th><th>غیبت</th><th>ساعت کار</th><th style={{ minWidth: 170 }}>اضافه‌کار (استفاده / سقف)</th><th>مانده</th><th>صبحانه</th><th>ناهار</th><th>شام</th></tr></thead>
             <tbody>
               {pm.map(({ p, m }) => (
                 <tr key={p.id}>
@@ -144,6 +150,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
                   <td className="sv-num"><b>{fa(m.worked)}</b> / {fa(m.required)}{m.mission > 0 && <div className="sv-note" style={{ fontSize: 11 }}>{fa(m.mission)} روز مأموریت</div>}</td>
                   <td className={`sv-num ${m.shortfall ? 'sv-bad' : 'sv-ok'}`}>{m.shortfall ? fa(m.shortfall) : '—'}</td>
                   <td className="sv-num"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
+                  <td className="sv-num">{m.leave ? fa(m.leave) : '—'}</td>
                   <td className="sv-num">{m.sick ? fa(m.sick) : '—'}</td>
                   <td className={`sv-num ${m.absent ? 'sv-bad' : ''}`}>{m.absent ? fa(m.absent) : '—'}</td>
                   <td className="sv-num">{faNum(m.hours)}</td>

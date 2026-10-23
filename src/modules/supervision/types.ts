@@ -2,12 +2,13 @@
 
 export type SvSide = 'supervision' | 'employer'
 /** present & mission are working days; rest = the monthly rest allowance; sick = medical leave (excused); absent = unexcused. */
-export type SvStatus = 'present' | 'mission' | 'rest' | 'sick' | 'absent'
+export type SvStatus = 'present' | 'mission' | 'rest' | 'leave' | 'sick' | 'absent'
 export type SvVehicleStatus = 'present' | 'absent' | 'repair'
 export type SvVehicleKind = 'sedan' | 'pickup' | 'suv' | 'van' | 'minibus' | 'other'
 export type SvGearbox = 'manual' | 'automatic'
 export type SvOwnership = 'rented' | 'company'
-export type SvSource = 'manual' | 'clock' | 'gps'
+/** manual = typed by the head of supervision; gps = the person's phone; clock = time clock; auto = nightly «absent» for a day with no record */
+export type SvSource = 'manual' | 'clock' | 'gps' | 'auto'
 
 export interface SvSettings {
   dutyDays: number
@@ -17,6 +18,8 @@ export interface SvSettings {
   vehicleHours: number
   /** days back (besides today) that can be recorded without a written reason */
   entryGraceDays: number
+  /** largest error (m) of a cell / Wi-Fi position still accepted when GPS is not precise */
+  networkMaxM: number
 }
 
 export interface SvPerson {
@@ -38,6 +41,8 @@ export interface SvPerson {
   shiftEnd: string | null
   /** platform account that checks in with its own phone (null = recorded by the supervisor) */
   userId: string | null
+  /** head of supervision: the only one who records or corrects attendance by hand */
+  isHead: boolean
   startDate: string | null
   endDate: string | null
   active: boolean
@@ -176,5 +181,7 @@ export interface SvPunch {
   reason: string
   distanceM: number | null
   accuracyM: number | null
+  /** gps = satellite fix; network = cell / Wi-Fi position (less precise) */
+  quality: 'gps' | 'network'
   siteId: string | null
 }

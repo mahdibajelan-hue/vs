@@ -60,7 +60,7 @@ export function SitesCard() {
       <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 6px' }}><Smartphone size={17} style={{ display: 'inline', verticalAlign: -3 }} /> ثبت حضور با گوشی</h2>
       <p className="sv-note" style={{ margin: '0 0 12px' }}>
         هر نفری که حسابش در جدول پایین وصل شود، در این ماژول صفحهٔ «ورود و خروج من» را می‌بیند و با گوشی خودش ورود و خروج می‌زند. موقعیت گوشی فقط هنگام زدن دکمه خوانده می‌شود و ثبت فقط وقتی پذیرفته است که در شعاع یکی از محل‌های زیر باشد.
-        ساعت، ساعت سرور است. هر تلاش، پذیرفته یا رد، با فاصله و دقت موقعیت در سابقه می‌ماند. برای شیفت شب، «خروج» صبح روز بعد روزِ دیروز را می‌بندد.
+        ساعت، ساعت سرور است. اگر GPS گوشی دقیق نباشد (مثلاً داخل ساختمان)، موقعیت آنتن و شبکهٔ خود گوشی به کار می‌رود و تا حد «حداکثر خطای موقعیت آنتن» (تنظیمات بالا) پذیرفته و با برچسب «آنتن» برای سرپرست مشخص می‌شود. هر تلاش، پذیرفته یا رد، با فاصله و دقت موقعیت در سابقه می‌ماند. برای شیفت شب، «خروج» صبح روز بعد روزِ دیروز را می‌بندد.
       </p>
       <h3 className="sv-h3"><MapPin size={14} style={{ display: 'inline', verticalAlign: -2 }} /> محل‌های مجاز (کمپ، دفتر کارگاه، جبهه‌ها)</h3>
       {sites.length > 0 && (
@@ -110,11 +110,20 @@ function AccountLinks() {
   useEffect(() => { void supabase.from('profiles').select('id,full_name,email').order('full_name').then(({ data }) => setProfiles((data ?? []) as Profile[])) }, [])
   const active = people.filter((p) => p.active)
   if (!active.length) return <p className="sv-note">نفر فعالی نیست.</p>
+  const unlinked = active.filter((p) => !p.userId).length
+  const heads = active.filter((p) => p.isHead).length
   return (
+    <>
+    <p className="sv-note" style={{ margin: '0 0 8px' }}>
+      همهٔ نفرات باید خودشان با گوشی ورود و خروج بزنند؛ روزی که تردد نداشته باشد شب همان روز خودکار «غایب» ثبت می‌شود. فقط «سرپرست نظارت» (تیک ستون سوم) می‌تواند حضور را دستی ثبت یا اصلاح کند، مثلاً غیبت را به استراحت، مرخصی، استعلاجی یا مأموریت تبدیل کند.
+      {!heads && <b className="sv-warn"> هنوز سرپرستی تعیین نشده؛ تا تعیین آن هر کس دسترسی ویرایش دارد می‌تواند دستی ثبت کند.</b>}
+      {unlinked > 0 && <b className="sv-warn"> {fa(unlinked)} نفر حساب کاربری وصل ندارد و نمی‌تواند با گوشی ثبت کند؛ روزهایش «غایب» می‌شود مگر سرپرست دستی ثبت کند.</b>}
+    </p>
     <div className="im-table-wrap"><table className="im-table">
-      <thead><tr><th>نفر</th><th>حساب کاربری برای ثبت با گوشی</th><th /></tr></thead>
+      <thead><tr><th>نفر</th><th>حساب کاربری برای ثبت با گوشی</th><th>سرپرست نظارت</th><th /></tr></thead>
       <tbody>{active.map((p) => <LinkRow key={p.id} p={p} profiles={profiles} taken={new Set(active.filter((o) => o.id !== p.id && o.userId).map((o) => o.userId!))} />)}</tbody>
     </table></div>
+    </>
   )
 }
 
@@ -136,6 +145,7 @@ function LinkRow({ p, profiles, taken }: { p: SvPerson; profiles: Profile[] | nu
           {(profiles ?? []).filter((u) => !taken.has(u.id)).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}{u.full_name && u.email ? ` (${u.email})` : ''}</option>)}
         </select>
       </td>
+      <td><label className="sv-check" style={{ margin: 0 }}><input type="checkbox" checked={p.isHead} onChange={async (e) => { setState('…'); const r = await savePerson({ id: p.id, isHead: e.target.checked }); setState(r.ok ? (e.target.checked ? 'سرپرست شد' : 'ذخیره شد') : r.error ?? 'ذخیره نشد') }} aria-label={`سرپرست نظارت: ${p.fullName}`} /> ثبت دستی</label></td>
       <td className="sv-note">{state}</td>
     </tr>
   )

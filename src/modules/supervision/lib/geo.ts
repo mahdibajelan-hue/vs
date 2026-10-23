@@ -33,3 +33,26 @@ export async function bestFix(opts: { target?: number; maxMs?: number; onProgres
 }
 
 export const isApproximate = (accuracy: number) => accuracy >= APPROXIMATE_M
+
+function networkFix(timeout: number): Promise<GeolocationPosition | null> {
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { enableHighAccuracy: false, maximumAge: 60000, timeout })
+  })
+}
+
+/**
+ * GPS first; when it does not get precise (indoors, no sky), also ask the phone for its network position — cell towers
+ * and Wi-Fi — and keep whichever is more accurate. A browser cannot read cell-tower IDs itself; this is the phone's own
+ * cell/Wi-Fi location. The server accepts a network fix within the project's limit and marks it as such.
+ */
+export async function fixWithNetworkFallback(opts: { target?: number; maxMs?: number; onProgress?: (accuracy: number) => void } = {}): Promise<GeolocationPosition> {
+  let gps: GeolocationPosition | null = null
+  let gpsErr: unknown = null
+  try { gps = await bestFix(opts) } catch (e) { gpsErr = e }
+  if ((gpsErr as GeolocationPositionError | null)?.code === 1) throw gpsErr
+  if (gps && gps.coords.accuracy <= (opts.target ?? 50)) return gps
+  const net = await networkFix(10000)
+  if (net && (!gps || net.coords.accuracy < gps.coords.accuracy)) { opts.onProgress?.(net.coords.accuracy); return net }
+  if (gps) return gps
+  throw gpsErr ?? { code: 2 }
+}

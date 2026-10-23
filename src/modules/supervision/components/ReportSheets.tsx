@@ -35,7 +35,7 @@ export const ORIENTATION: Record<DocKind, Orientation> = { att: 'landscape', fac
 
 const WD = 'شیدسچپج'
 const SIDE_FA = { supervision: 'دستگاه نظارت', employer: 'نمایندهٔ کارفرما' } as const
-const SRC_FA = { manual: 'دستی', gps: 'گوشی', clock: 'کارت' } as const
+const SRC_FA = { manual: 'سرپرست', gps: 'گوشی', clock: 'کارت', auto: 'بدون تردد' } as const
 const dash = (n: number) => (n ? fa(n) : '—')
 const ymCode = (m: Ym) => `${m.jy}${String(m.jm).padStart(2, '0')}`
 
@@ -82,18 +82,17 @@ interface Section { title: string; subtitle?: string; items: Item[]; signers: Si
 interface Signer { role: string; title: string; sig?: SvSignature }
 export interface Doc { kind: DocKind; formNo: string; sections: Section[] }
 
-function signers(d: SheetData, withPerson?: SvPerson): Signer[] {
-  const s = STEPS.map((st) => ({ role: st.role, title: st.title, sig: d.signatures.filter((x) => x.step === st.step).at(-1) }))
-  return withPerson ? [{ role: 'نفر', title: withPerson.fullName }, ...s] : s
+function signers(d: SheetData): Signer[] {
+  return STEPS.map((st) => ({ role: st.role, title: st.title, sig: d.signatures.filter((x) => x.step === st.step).at(-1) }))
 }
 
 function attendanceDoc(d: SheetData): Doc {
   const cap = d.days.length
   const tbl: Tbl = {
     cls: 'sv-sh-grid', headH: 9,
-    cols: <colgroup><col style={{ width: '5mm' }} /><col style={{ width: '33mm' }} />{d.days.map((x) => <col key={x.iso} />)}{Array.from({ length: 9 }, (_, i) => <col key={i} style={{ width: '9.6mm' }} />)}</colgroup>,
+    cols: <colgroup><col style={{ width: '5mm' }} /><col style={{ width: '33mm' }} />{d.days.map((x) => <col key={x.iso} />)}{Array.from({ length: 10 }, (_, i) => <col key={i} style={{ width: '9mm' }} />)}</colgroup>,
     head: <>
-      <tr><th rowSpan={2}>#</th><th rowSpan={2} className="nm">نام و سمت</th>{d.days.map((x) => <th key={x.iso} className={x.weekday === 6 ? 'fri' : ''}>{fa(x.jd)}</th>)}{['کارکرد', 'موظف', 'کسری', 'استراحت', 'استعلاجی', 'غیبت', 'ساعت کار', 'اضافه‌کار', 'ثبت دیرهنگام'].map((h) => <th key={h} rowSpan={2} className="sm">{h}</th>)}</tr>
+      <tr><th rowSpan={2}>#</th><th rowSpan={2} className="nm">نام و سمت</th>{d.days.map((x) => <th key={x.iso} className={x.weekday === 6 ? 'fri' : ''}>{fa(x.jd)}</th>)}{['کارکرد', 'موظف', 'کسری', 'استراحت', 'مرخصی', 'استعلاجی', 'غیبت', 'ساعت کار', 'اضافه‌کار', 'ثبت دیرهنگام'].map((h) => <th key={h} rowSpan={2} className="sm">{h}</th>)}</tr>
       <tr>{d.days.map((x) => <th key={x.iso} className={`wd ${x.weekday === 6 ? 'fri' : ''}`}>{WD[x.weekday]}</th>)}</tr>
     </>,
   }
@@ -103,11 +102,11 @@ function attendanceDoc(d: SheetData): Doc {
       <td>{fa(i + 1)}</td>
       <td className="nm"><b>{p.fullName}</b><small>{p.roleTitle || SIDE_FA[p.side]}</small></td>
       {d.days.map((x) => { const r = d.att[p.id + '|' + x.iso]; return <td key={x.iso} className={`mk ${r ? 's-' + r.status : ''} ${r?.source === 'gps' ? 'gps' : ''} ${x.weekday === 6 ? 'fri' : ''}`}>{r ? STATUS_MARK[r.status] : ''}</td> })}
-      <td><b>{fa(m.worked)}</b></td><td>{fa(m.required)}</td><td>{dash(m.shortfall)}</td><td>{fa(m.rest)}</td><td>{dash(m.sick)}</td><td>{dash(m.absent)}</td><td>{faNum(m.hours)}</td><td><b>{faNum(m.overtime)}</b></td><td>{dash(late)}</td>
+      <td><b>{fa(m.worked)}</b></td><td>{fa(m.required)}</td><td>{dash(m.shortfall)}</td><td>{fa(m.rest)}</td><td>{dash(m.leave)}</td><td>{dash(m.sick)}</td><td>{dash(m.absent)}</td><td>{faNum(m.hours)}</td><td><b>{faNum(m.overtime)}</b></td><td>{dash(late)}</td>
     </tr>,
   }))
   const sum = (f: (m: PersonMonth) => number) => d.pm.reduce((a, x) => a + f(x.m), 0)
-  items.push({ t: 'row', tbl, h: 6.5, node: <tr className="tot"><td colSpan={2}>جمع ({fa(d.pm.length)} نفر)</td><td colSpan={cap} className="legend">ح حاضر · م مأموریت · ا استراحت · ع استعلاجی · غ غایب · خانهٔ خالی: ثبت‌نشده یا خارج از پروژه · خط زیر علامت: ثبت با گوشی</td><td>{fa(d.tot.worked)}</td><td>{fa(d.tot.required)}</td><td>{dash(d.tot.shortfall)}</td><td>{fa(sum((m) => m.rest))}</td><td>{dash(sum((m) => m.sick))}</td><td>{dash(sum((m) => m.absent))}</td><td>{faNum(d.tot.hours)}</td><td>{faNum(d.tot.overtime)}</td><td>{dash(d.pm.reduce((a, x) => a + x.late, 0))}</td></tr> })
+  items.push({ t: 'row', tbl, h: 6.5, node: <tr className="tot"><td colSpan={2}>جمع ({fa(d.pm.length)} نفر)</td><td colSpan={cap} className="legend">ح حاضر · م مأموریت · ا استراحت · ر مرخصی · ع استعلاجی · غ غایب (بدون تردد یا ثبت سرپرست) · خط زیر علامت: ورود و خروج با گوشی</td><td>{fa(d.tot.worked)}</td><td>{fa(d.tot.required)}</td><td>{dash(d.tot.shortfall)}</td><td>{fa(sum((m) => m.rest))}</td><td>{dash(sum((m) => m.leave))}</td><td>{dash(sum((m) => m.sick))}</td><td>{dash(sum((m) => m.absent))}</td><td>{faNum(d.tot.hours)}</td><td>{faNum(d.tot.overtime)}</td><td>{dash(d.pm.reduce((a, x) => a + x.late, 0))}</td></tr> })
   items.push({ t: 'block', h: 10, node: <p className="sv-sh-note">موظفی {fa(d.settings.dutyDays)} روز از ۳۰ روز (پنجشنبه و جمعه روز کاری)، روز کاری {faNum(d.settings.standardHours)} ساعت و مازاد آن اضافه‌کار؛ کارکرد = حاضر + مأموریت؛ استعلاجی کسری نیست. {fa(d.gpsPct)}٪ روزهای حضور را خود نفرات با گوشی در محدودهٔ کارگاه ثبت کرده‌اند؛ از ثبت‌های دستی {fa(d.timelyPct)}٪ در مهلت {fa(d.settings.entryGraceDays)} روزه وارد شده و «ثبت دیرهنگام» روزهایی است که پس از مهلت و با ذکر دلیل وارد شده‌اند.</p> })
   return { kind: 'att', formNo: `SV-A-${ymCode(d.month)}`, sections: [{ title: 'گزارش کارکرد ماهانهٔ دستگاه نظارت', items, signers: signers(d) }] }
 }
@@ -188,11 +187,11 @@ function timesheetDoc(d: SheetData, personIds: string[]): Doc {
       t: 'block', h: 12,
       node: <div className="sv-sh-kpis">
         <span>موظف <b>{fa(m.required)}</b></span><span>کارکرد <b>{fa(m.worked)}</b></span><span>کسری <b>{dash(m.shortfall)}</b></span>
-        <span>مأموریت <b>{dash(m.mission)}</b></span><span>استراحت <b>{fa(m.rest)}</b> از {fa(m.restAllowed)}</span><span>استعلاجی <b>{dash(m.sick)}</b></span><span>غیبت <b>{dash(m.absent)}</b></span>
+        <span>مأموریت <b>{dash(m.mission)}</b></span><span>استراحت <b>{fa(m.rest)}</b> از {fa(m.restAllowed)}</span><span>مرخصی <b>{dash(m.leave)}</b></span><span>استعلاجی <b>{dash(m.sick)}</b></span><span>غیبت <b>{dash(m.absent)}</b>{m.autoAbsent ? ` (${fa(m.autoAbsent)} بدون تردد)` : ''}</span>
         <span>اضافه‌کار <b>{faNum(m.overtime)}</b> از سقف {fa(m.overtimeCap)}</span><span>ثبت دیرهنگام <b>{dash(late)}</b></span>
       </div>,
     })
-    return { title: 'کارکرد ماهانهٔ نفر (تایم‌شیت)', subtitle: p.fullName, items, signers: signers(d, p) }
+    return { title: 'کارکرد ماهانهٔ نفر (تایم‌شیت)', subtitle: p.fullName, items, signers: signers(d) }
   })
   return { kind: 'ts', formNo: `SV-T-${ymCode(d.month)}`, sections }
 }

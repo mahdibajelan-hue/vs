@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Eraser, UserCheck } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
-import { useSupervisionStore, attKey, LOCKED_MSG, FUTURE_MSG } from '../store/useSupervisionStore'
+import { useSupervisionStore, attKey, LOCKED_MSG, FUTURE_MSG, HEAD_MSG } from '../store/useSupervisionStore'
 import { STATUS_FA, STATUS_MARK, STATUS_ORDER, VSTATUS_FA, VSTATUS_MARK, VSTATUS_ORDER, activeDays, dayDefaults, dayHours, isWorking, mealsOf, personMonth, vehicleMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
 import type { SvPerson, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
@@ -40,6 +40,8 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
   const cars = vehicles.filter((v) => activeDays(isoDays, v.startDate, v.endDate).length > 0 && (v.active || vrows.some((r) => r.vehicleId === v.id)))
   const locked = useLockedIn(days[0].iso, days[days.length - 1].iso)
   const isLocked = useSupervisionStore((s) => s.isLocked)
+  const hand = useSupervisionStore((s) => s.canHand())
+  const heads = people.filter((p) => p.isHead && p.active).map((p) => p.fullName)
   const needsReason = useSupervisionStore((s) => s.needsReason)
   const isFuture = useSupervisionStore((s) => s.isFuture)
   // reasons typed for overdue days in this sitting (one per day), sent with every write of that day
@@ -52,7 +54,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
   const tapPerson = async (p: SvPerson, day: string, el: HTMLElement) => {
     setMsg(null)
     if (isLocked(day)) { setMsg({ ok: false, text: LOCKED_MSG }); return }
-    if (!att[attKey(p.id, day)] && !needsReason(day) && !isFuture(day) && !fail(await markPresent(p, day))) return
+    // people check in with their phone; a tap opens the day (the head of supervision can correct it there)
     setOpen({ kind: 'person', id: p.id, day, el })
   }
   const tapCar = async (v: SvVehicle, day: string, el: HTMLElement) => {
@@ -63,7 +65,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
     setOpen({ kind: 'vehicle', id: v.id, day, el })
   }
   const markDay = async (day: string) => {
-    const todo = view === 'people' ? ppl.filter((p) => !att[attKey(p.id, day)] && activeDays([day], p.startDate, p.endDate).length) : []
+    const todo = view === 'people' ? ppl.filter((p) => !p.userId && !att[attKey(p.id, day)] && activeDays([day], p.startDate, p.endDate).length) : []
     const vtodo = view === 'vehicles' ? cars.filter((v) => !vdays[attKey(v.id, day)] && activeDays([day], v.startDate, v.endDate).length) : []
     const rs = await Promise.all([...todo.map((p) => markPresent(p, day)), ...vtodo.map((v) => markCar(v, day))])
     const bad = rs.find((r) => !r.ok)
@@ -88,6 +90,13 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
         </div>
       </div>
       <LockNote months={locked} onReport={onGoReport} />
+      {view === 'people' && (
+        <div className="sv-head-only" role="note">
+          {hand
+            ? <>نفرات خودشان با گوشی ورود و خروج می‌زنند؛ روزی که تردد نداشته باشد شب همان روز خودکار «غایب» می‌شود (خانهٔ قرمز توخالی). شما به‌عنوان سرپرست نظارت می‌توانید با زدن روی هر خانه آن را به استراحت، مرخصی، استعلاجی یا مأموریت تبدیل کنید.</>
+            : <>ثبت و اصلاح دستی فقط با سرپرست نظارت{heads.length ? ` (${heads.join('، ')})` : ''} است. نفرات خودشان با گوشی ورود و خروج می‌زنند و روز بدون تردد خودکار «غایب» می‌شود. با زدن روی هر خانه جزئیات و سابقهٔ آن را می‌بینید.</>}
+        </div>
+      )}
       <Flash msg={msg} />
       {list.length === 0 ? <Empty>{view === 'people' ? 'نفری برای این ماه نیست.' : 'خودرویی برای این ماه نیست.'}</Empty> : (
         <div className={`sv-grid-wrap ${locked ? 'is-locked' : ''}`}>
@@ -97,7 +106,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
                 <th className="nm">{view === 'people' ? 'نام' : 'خودرو'}</th>
                 {days.map((d) => (
                   <th key={d.iso} className={`${d.weekday === 6 ? 'fri' : ''} ${d.iso === today ? 'today' : ''}`}>
-                    <button className="sv-dayhead" onClick={(e) => isLocked(d.iso) ? setMsg({ ok: false, text: LOCKED_MSG }) : isFuture(d.iso) ? setMsg({ ok: false, text: FUTURE_MSG }) : setOpen({ kind: 'day', id: '', day: d.iso, el: e.currentTarget })} aria-label={`روز ${fa(d.jd)}: حاضر زدن همه`}>{fa(d.jd)}<span>{WD[d.weekday]}</span></button>
+                    <button className="sv-dayhead" onClick={(e) => view === 'people' && !hand ? setMsg({ ok: false, text: HEAD_MSG }) : isLocked(d.iso) ? setMsg({ ok: false, text: LOCKED_MSG }) : isFuture(d.iso) ? setMsg({ ok: false, text: FUTURE_MSG }) : setOpen({ kind: 'day', id: '', day: d.iso, el: e.currentTarget })} aria-label={`روز ${fa(d.jd)}: حاضر زدن همه`}>{fa(d.jd)}<span>{WD[d.weekday]}</span></button>
                   </th>
                 ))}
                 {view === 'people' ? <><th className="sum">کارکرد / موظف</th><th className="sum">استراحت</th><th className="sum">استعلاجی</th><th className="sum">غیبت</th><th className="sum">ساعت</th><th className="sum">اضافه‌کار / سقف</th></> : <><th className="sum">روز کارکرد</th><th className="sum">تعمیر</th><th className="sum">ساعت</th></>}
@@ -113,7 +122,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
                     {days.map((d) => {
                       const r = att[attKey(p.id, d.iso)]
                       const sel = open?.kind === 'person' && open.id === p.id && open.day === d.iso
-                      return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${r?.source === 'gps' ? 'gps' : ''} ${sel ? 'sel' : ''}`} onClick={(e) => tapPerson(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={sel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : '', r?.source === 'gps' ? 'ثبت با گوشی در محدودهٔ کارگاه' : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
+                      return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${r?.source === 'gps' ? 'gps' : ''} ${r?.source === 'auto' ? 'auto' : ''} ${sel ? 'sel' : ''}`} onClick={(e) => tapPerson(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={sel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : '', r?.source === 'gps' ? 'ثبت با گوشی در محدودهٔ کارگاه' : '', r?.source === 'auto' ? 'غیبت خودکار: ورود و خروج ثبت نشد' : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
                     })}
                     <td className="sum"><b className={m.shortfall ? 'sv-bad' : ''}>{fa(m.worked)}</b> / {fa(m.required)}</td>
                     <td className="sum"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
@@ -144,14 +153,14 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
           </table>
         </div>
       )}
-      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. هر روز حاضر صبحانه، ناهار و شام حساب می‌شود. با زدن عدد روز در سرستون، همهٔ ثبت‌نشده‌های آن روز حاضر زده می‌شوند. ثبت هر روز تا {fa(settings.entryGraceDays)} روز بعد آزاد است؛ پس از آن نوشتن دلیل لازم است و زمان واقعی ثبت، نویسنده و دلیل در سابقهٔ همان خانه و در گزارش ماه دیده می‌شود. خانه‌های خط‌چین با تأخیر ثبت شده‌اند و خانه‌های با نقطهٔ سبز را خود نفر با گوشی در محدودهٔ کارگاه ثبت کرده است.</p>
+      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. هر روز حاضر صبحانه، ناهار و شام حساب می‌شود. با زدن عدد روز در سرستون، نفراتِ بدون حساب گوشی که آن روز ثبت‌نشده‌اند حاضر زده می‌شوند. ثبت هر روز تا {fa(settings.entryGraceDays)} روز بعد آزاد است؛ پس از آن نوشتن دلیل لازم است و زمان واقعی ثبت، نویسنده و دلیل در سابقهٔ همان خانه و در گزارش ماه دیده می‌شود. خانه‌های خط‌چین با تأخیر ثبت شده‌اند و خانه‌های با نقطهٔ سبز را خود نفر با گوشی در محدودهٔ کارگاه ثبت کرده است.</p>
 
       {open?.kind === 'person' && (() => { const p = people.find((x) => x.id === open.id); return p ? <PersonDay key={open.id + open.day} p={p} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} reason={reasons[open.day] ?? ''} onReason={(r) => setReason(open.day, r)} /> : null })()}
       {open?.kind === 'vehicle' && (() => { const v = vehicles.find((x) => x.id === open.id); return v ? <VehicleDayEditor key={open.id + open.day} v={v} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} reason={reasons[open.day] ?? ''} onReason={(r) => setReason(open.day, r)} /> : null })()}
       {open?.kind === 'day' && (
         <CellPopover anchor={open.el} title={<b>{weekdayFa(open.day)} {fa(formatJalali(open.day))}</b>} onClose={() => setOpen(null)}>
           {needsReason(open.day) && <LateReason value={reasons[open.day] ?? ''} onChange={(r) => setReason(open.day, r)} />}
-          <button className="im-btn im-btn-primary im-btn-sm" style={{ width: '100%' }} disabled={needsReason(open.day) && (reasons[open.day] ?? '').trim().length < 5} onClick={() => markDay(open.day)}><UserCheck size={14} /> حاضر زدن همهٔ {view === 'people' ? 'نفرات' : 'خودروهای'} ثبت‌نشده</button>
+          <button className="im-btn im-btn-primary im-btn-sm" style={{ width: '100%' }} disabled={needsReason(open.day) && (reasons[open.day] ?? '').trim().length < 5} onClick={() => markDay(open.day)}><UserCheck size={14} /> {view === 'people' ? 'حاضر زدن نفرات بدون گوشیِ ثبت‌نشده' : 'حاضر زدن همهٔ خودروهای ثبت‌نشده'}</button>
         </CellPopover>
       )}
     </div>
@@ -166,7 +175,8 @@ function PersonDay({ p, day, anchor, onClose, onError, reason, onReason }: { p: 
   const clearDay = useSupervisionStore((s) => s.clearDay)
   const late = useSupervisionStore((s) => s.needsReason(day))
   const future = useSupervisionStore((s) => s.isFuture(day))
-  const blocked = late && reason.trim().length < 5
+  const hand = useSupervisionStore((s) => s.canHand())
+  const blocked = !hand || (late && reason.trim().length < 5)
   const pick = async (st: SvStatus) => {
     if (row?.status === st) return
     const keep = row && isWorking(row.status) && st === 'present' && row.checkIn ? { checkIn: row.checkIn, checkOut: row.checkOut, ...dayHours(row.checkIn, row.checkOut, settings), ...mealsOf(p, st) } : dayDefaults(p, st, settings)
@@ -184,9 +194,11 @@ function PersonDay({ p, day, anchor, onClose, onError, reason, onReason }: { p: 
   const working = !!row && isWorking(row.status)
   return (
     <CellPopover anchor={anchor} title={<><b>{p.fullName}</b><div className="sv-sub">{weekdayFa(day)} {fa(formatJalali(day))}{row?.source === 'clock' && ' · از کارت ساعت'}</div></>} onClose={onClose}>
-      {late && <LateReason value={reason} onChange={onReason} />}
-      {future && <p className="sv-note" style={{ margin: 0 }}>روز آینده: فقط استراحت یا مأموریت را می‌توان از پیش ثبت کرد.</p>}
-      <StatusSeg label="وضعیت" value={row?.status ?? null} options={future ? STATUS_ORDER.filter((x) => x === 'rest' || x === 'mission') : STATUS_ORDER} labels={STATUS_FA} onChange={pick} disabled={blocked} />
+      {row?.source === 'auto' && <p className="sv-note" style={{ margin: 0, color: 'var(--sv-absent)' }}>غیبت خودکار: در این روز ورود و خروج با گوشی ثبت نشد.{hand ? ' در صورت استراحت، مرخصی، استعلاجی یا مأموریت، وضعیت را عوض کنید.' : ''}</p>}
+      {!hand && <p className="sv-note" style={{ margin: 0 }}>فقط سرپرست نظارت می‌تواند این روز را تغییر دهد.</p>}
+      {hand && late && <LateReason value={reason} onChange={onReason} />}
+      {future && <p className="sv-note" style={{ margin: 0 }}>روز آینده: فقط استراحت، مرخصی یا مأموریت را می‌توان از پیش ثبت کرد.</p>}
+      <StatusSeg label="وضعیت" value={row?.status ?? null} options={future ? STATUS_ORDER.filter((x) => x === 'rest' || x === 'mission' || x === 'leave') : STATUS_ORDER} labels={STATUS_FA} onChange={pick} disabled={blocked} />
       {working && row.status === 'present' && !blocked && (
         <>
           <div className="sv-pop-times">
@@ -208,8 +220,8 @@ function PersonDay({ p, day, anchor, onClose, onError, reason, onReason }: { p: 
       <DayPunches personId={p.id} day={day} />
       {row && <EntryHistory kind="person" subjectId={p.id} day={day} row={row} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <button className="im-btn im-btn-ghost im-btn-sm" onClick={clear} disabled={!row}><Eraser size={13} /> پاک کردن روز</button>
-        <button className="im-btn im-btn-primary im-btn-sm" onClick={onClose}>تأیید</button>
+        <button className="im-btn im-btn-ghost im-btn-sm" onClick={clear} disabled={!row || !hand}><Eraser size={13} /> پاک کردن روز</button>
+        <button className="im-btn im-btn-primary im-btn-sm" onClick={onClose}>{hand ? 'تأیید' : 'بستن'}</button>
       </div>
     </CellPopover>
   )

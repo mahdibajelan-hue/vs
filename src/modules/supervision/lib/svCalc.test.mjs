@@ -84,4 +84,13 @@ assert.equal(c.nextVehicleStatus('repair'), 'absent')
 const g = c.guestTotals([{ id: '1', day: days[0], guestName: 'بازدید کارفرما', organization: '', host: '', breakfast: 0, lunch: 4, dinner: 4, note: '' }, { id: '2', day: days[1], guestName: 'بازدید کارفرما ', organization: '', host: '', breakfast: 4, lunch: 4, dinner: 0, note: '' }])
 assert.deepEqual(g, { entries: 2, guests: 1, breakfast: 4, lunch: 8, dinner: 4 })
 
+// ── leave (مرخصی) is excused like sick days; the nightly «absent» (source auto) is counted separately
+const leaveRows = days.map((d, i) => i < 20 ? att(d, 'present') : i < 23 ? att(d, 'leave') : i < 25 ? att(d, 'absent', { source: 'auto' }) : att(d, 'rest'))
+const ml = c.personMonth(person(), leaveRows, days, S, days[29])
+assert.equal(ml.leave, 3)
+assert.equal(ml.shortfall, 0, '20 worked + 3 leave covers the 23 duty days')
+assert.equal(ml.absent, 2)
+assert.equal(ml.autoAbsent, 2)
+assert.equal(c.STATUS_MARK.leave, 'ر')
+
 console.log('supervision/svCalc: all assertions passed')

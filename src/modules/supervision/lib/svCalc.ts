@@ -1,11 +1,11 @@
 import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleDay, SvVehicleStatus } from '../types'
 
-export const DEFAULT_SETTINGS: SvSettings = { dutyDays: 23, standardHours: 8, overtimeMin: 60, overtimeMax: 80, vehicleHours: 8, entryGraceDays: 2 }
+export const DEFAULT_SETTINGS: SvSettings = { dutyDays: 23, standardHours: 8, overtimeMin: 60, overtimeMax: 80, vehicleHours: 8, entryGraceDays: 2, networkMaxM: 2000 }
 
-export const STATUS_FA: Record<SvStatus, string> = { present: 'حاضر', mission: 'مأموریت', rest: 'استراحت', sick: 'استعلاجی', absent: 'غایب' }
+export const STATUS_FA: Record<SvStatus, string> = { present: 'حاضر', mission: 'مأموریت', rest: 'استراحت', leave: 'مرخصی', sick: 'استعلاجی', absent: 'غایب' }
 /** one-letter marks for the month grid */
-export const STATUS_MARK: Record<SvStatus, string> = { present: 'ح', mission: 'م', rest: 'ا', sick: 'ع', absent: 'غ' }
-export const STATUS_ORDER: SvStatus[] = ['present', 'mission', 'rest', 'sick', 'absent']
+export const STATUS_MARK: Record<SvStatus, string> = { present: 'ح', mission: 'م', rest: 'ا', leave: 'ر', sick: 'ع', absent: 'غ' }
+export const STATUS_ORDER: SvStatus[] = ['present', 'mission', 'rest', 'leave', 'sick', 'absent']
 export const VSTATUS_FA: Record<SvVehicleStatus, string> = { present: 'کارکرد', repair: 'تعمیر', absent: 'نبود' }
 export const VSTATUS_MARK: Record<SvVehicleStatus, string> = { present: 'ک', repair: 'ت', absent: '—' }
 export const VSTATUS_ORDER: SvVehicleStatus[] = ['present', 'repair', 'absent']
@@ -69,8 +69,12 @@ export interface PersonMonth {
   present: number
   mission: number
   rest: number
+  /** leave (مرخصی): excused like sick days */
+  leave: number
   sick: number
   absent: number
+  /** absent days written by the nightly job because nothing was recorded (no check-in) */
+  autoAbsent: number
   /** days up to today with nothing recorded */
   unmarked: number
   shortfall: number
@@ -97,7 +101,8 @@ export function personMonth(p: SvPerson, rows: SvAttendance[], days: string[], s
   const on = activeDays(days, p.startDate, p.endDate)
   const mine = rows.filter((r) => r.personId === p.id && on.includes(r.day))
   const count = (st: SvStatus) => mine.filter((r) => r.status === st).length
-  const present = count('present'), mission = count('mission'), rest = count('rest'), sick = count('sick'), absent = count('absent')
+  const present = count('present'), mission = count('mission'), rest = count('rest'), leave = count('leave'), sick = count('sick'), absent = count('absent')
+  const autoAbsent = mine.filter((r) => r.status === 'absent' && r.source === 'auto').length
   const worked = present + mission
   // 23 duty days in a full month; someone on the project for part of the month owes a share of it (23 per 30 days).
   const req = on.length === days.length ? Math.min(s.dutyDays, on.length) : Math.min(s.dutyDays, on.length, Math.round((s.dutyDays * on.length) / 30))
@@ -108,9 +113,9 @@ export function personMonth(p: SvPerson, rows: SvAttendance[], days: string[], s
   const overtime = r2(mine.reduce((a, r) => a + (isWorking(r.status) ? r.overtime : 0), 0))
   const cap = p.overtimeCap ?? s.overtimeMax
   return {
-    personId: p.id, monthDays: days.length, onProject: on.length, required: req, worked, present, mission, rest, sick, absent, unmarked,
-    // medical leave is excused: it does not count as worked, but it is not a shortfall either
-    shortfall: Math.max(0, req - worked - sick), restAllowed, restOver: Math.max(0, rest - restAllowed),
+    personId: p.id, monthDays: days.length, onProject: on.length, required: req, worked, present, mission, rest, leave, sick, absent, autoAbsent, unmarked,
+    // medical leave and leave are excused: not worked, but not a shortfall either
+    shortfall: Math.max(0, req - worked - sick - leave), restAllowed, restOver: Math.max(0, rest - restAllowed),
     hours, overtime, overtimeCap: cap, overtimeLeft: r2(Math.max(0, cap - overtime)), overtimeOver: r2(Math.max(0, overtime - cap)),
     belowFloor: overtime < s.overtimeMin,
     // meals follow attendance: every present day is breakfast, lunch and dinner

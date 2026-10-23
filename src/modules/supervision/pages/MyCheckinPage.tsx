@@ -3,14 +3,14 @@ import { Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, TriangleAlert }
 import { supabase } from '../../../lib/supabaseClient'
 import { formatJalali } from '../../../lib/jalali'
 import { STATUS_FA } from '../lib/svCalc'
-import { bestFix, isApproximate } from '../lib/geo'
+import { fixWithNetworkFallback, isApproximate } from '../lib/geo'
 import { addDays, fa, faNum, monthDays, monthLabel, thisMonth, todayLocal, weekdayFa } from '../lib/svMonth'
 import type { SvStatus } from '../types'
 
 export interface MyLink { person_id: string; project_id: string; project_name: string; full_name: string; role_title: string; shift_start: string | null; shift_end: string | null; sites: number }
 type Day = { day: string; status: SvStatus; check_in: string | null; check_out: string | null; hours: number; overtime: number; source: string }
 type Punch = { kind: 'in' | 'out'; at: string; day: string; accepted: boolean; reason: string; distance_m: number | null; site: string | null }
-type Result = { accepted: boolean; reason: string; distance_m: number; radius_m: number; site: string; day: string; check_in: string | null; check_out: string | null }
+type Result = { accepted: boolean; reason: string; quality: 'gps' | 'network'; distance_m: number; radius_m: number; site: string; day: string; accuracy_m: number; network_max_m: number; check_in: string | null; check_out: string | null }
 
 export async function loadMyLinks(): Promise<MyLink[]> {
   const { data, error } = await supabase.rpc('sv_my_links')
@@ -70,20 +70,21 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
     setBusy(kind); setMsg(null)
     let pos: GeolocationPosition
     setAcc(null)
-    try { pos = await bestFix({ target: 50, maxMs: 15000, onProgress: setAcc }) } catch (e) { setBusy(null); setMsg({ ok: false, text: geoError(e) }); return }
-    // approximate location is a deliberately blurred point: no use sending it, say how to switch precise location on
-    if (isApproximate(pos.coords.accuracy)) { setBusy(null); setMsg({ ok: false, text: APPROX_MSG(pos.coords.accuracy) }); return }
+    try { pos = await fixWithNetworkFallback({ target: 50, maxMs: 15000, onProgress: setAcc }) } catch (e) { setBusy(null); setMsg({ ok: false, text: geoError(e) }); return }
+    // every reading goes to the server, which decides (GPS, or a cell/Wi-Fi position within the project's limit) and keeps the attempt
     const { data, error } = await supabase.rpc('sv_self_punch', { p_person: link.person_id, p_kind: kind, p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_device: navigator.userAgent })
     setBusy(null)
     if (error) { setMsg({ ok: false, text: rpcError(error.message) }); return }
     const r = data as Result
     if (r.accepted) {
       const t = kind === 'in' ? r.check_in : r.check_out
-      setMsg({ ok: true, text: `${kind === 'in' ? 'ورود' : 'خروج'} ثبت شد${t ? ` — ساعت ${fa(t)}` : ''}؛ «${r.site}»، ${dist(r.distance_m)} از مرکز.${r.day !== today ? ` (برای روز ${fa(formatJalali(r.day))})` : ''}` })
+      setMsg({ ok: true, text: `${kind === 'in' ? 'ورود' : 'خروج'} ثبت شد${t ? ` — ساعت ${fa(t)}` : ''}؛ «${r.site}»، ${dist(r.distance_m)} از مرکز${r.quality === 'network' ? `، با موقعیت آنتن/شبکهٔ گوشی (±${dist(r.accuracy_m)})؛ برای دقت بیشتر GPS را روشن نگه دارید` : ''}.${r.day !== today ? ` (برای روز ${fa(formatJalali(r.day))})` : ''}` })
     } else if (r.reason === 'outside') {
       setMsg({ ok: false, text: `خارج از محدودهٔ کارگاه هستید: ${dist(r.distance_m)} تا «${r.site}» (شعاع مجاز ${fa(r.radius_m)} متر). ثبت نشد؛ این تلاش در سابقه می‌ماند.` })
     } else if (r.reason === 'low_accuracy') {
-      setMsg({ ok: false, text: `دقت موقعیت گوشی کافی نیست (±${fa(Math.round(pos.coords.accuracy))} متر). GPS را روشن کنید، چند لحظه در فضای باز بمانید و دوباره بزنید.` })
+      setMsg({ ok: false, text: isApproximate(r.accuracy_m)
+        ? `${APPROX_MSG(r.accuracy_m)} (حتی موقعیت آنتن تا ±${dist(r.network_max_m)} پذیرفته می‌شود.)`
+        : `دقت موقعیت گوشی کافی نیست (±${dist(r.accuracy_m)}؛ حداکثر مجاز ±${dist(r.network_max_m)}). GPS را روشن کنید، چند لحظه در فضای باز بمانید و دوباره بزنید.` })
     } else if (r.reason === 'no_check_in') {
       setMsg({ ok: false, text: 'امروز «ورود» ثبت نشده است؛ اول ورود را بزنید.' })
     } else if (r.reason === 'locked') {
@@ -131,7 +132,7 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
             {busy === 'out' ? <Loader2 className="animate-spin" size={26} /> : <LogOut size={26} />}<span>ثبت خروج</span>
           </button>
         </div>
-        {busy && <p className="sv-note" style={{ textAlign: 'center' }}>در حال گرفتن موقعیت دقیق گوشی{acc != null ? ` — دقت فعلی ±${fa(Math.round(acc))} متر` : ''}… (تا ۱۵ ثانیه؛ در فضای باز سریع‌تر است)</p>}
+        {busy && <p className="sv-note" style={{ textAlign: 'center' }}>در حال گرفتن موقعیت گوشی (GPS، و اگر دقیق نشد آنتن و شبکه){acc != null ? ` — دقت فعلی ±${fa(Math.round(acc))} متر` : ''}…</p>}
         {msg && <p className={`sv-me-msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.ok ? <ShieldCheck size={16} /> : <TriangleAlert size={16} />}{msg.text}</p>}
         <p className="sv-note sv-me-privacy"><MapPin size={12} /> موقعیت فقط هنگام زدن دکمه یک بار خوانده می‌شود و با محدودهٔ کارگاه مقایسه می‌شود؛ ساعت ثبت، ساعت سرور است نه ساعت گوشی.</p>
       </section>
