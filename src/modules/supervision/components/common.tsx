@@ -1,5 +1,8 @@
-import { ChevronLeft, ChevronRight, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Lock, Users } from 'lucide-react'
 import { useSupervisionStore } from '../store/useSupervisionStore'
+import { useAuthStore } from '../../../store/useAuthStore'
+import { useDeepLinkStore } from '../../../store/useDeepLinkStore'
+import { useModuleStore } from '../../../store/useModuleStore'
 import type { ReactNode } from 'react'
 import { fa, monthLabel, sameYm, shiftYm, thisMonth, type Ym } from '../lib/svMonth'
 
@@ -47,6 +50,30 @@ export function LockNote({ months, onReport }: { months: string; onReport?: () =
       <Lock size={15} />
       <span>گزارش {months} امضا شده و روزهایش قفل است؛ برای اصلاح باید در «گزارش ماه» آن را «بازگشت برای اصلاح» کنید.</span>
       {onReport && <button className="im-ghostlink" onClick={onReport}>رفتن به گزارش</button>}
+    </div>
+  )
+}
+
+/**
+ * Supervisors are defined once, in master data (داده‌های پایه → پروژه → ساختار و تیم → نظارت کارگاهی), and copied here by
+ * the database. This opens that page for the current project; master data is open to platform admins only.
+ */
+export function TeamLink({ compact = false }: { compact?: boolean }) {
+  const projectId = useSupervisionStore((s) => s.projectId)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const go = () => {
+    if (!projectId) return
+    useDeepLinkStore.getState().request({ module: 'admin', recordId: projectId })
+    useModuleStore.getState().enterModule('admin')
+  }
+  return (
+    <div className={compact ? 'sv-teamlink compact' : 'im-card sv-teamlink'}>
+      <Users size={18} aria-hidden />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <b>ناظران در داده‌های پایه تعریف می‌شوند</b>
+        <p className="sv-note" style={{ margin: '2px 0 0' }}>نام، سمت، ساعت کاری، سقف اضافه‌کار، کد ملی، کارت ساعت، حساب کاربری و سرپرست نظارت هر نفر در «مدیریت کاربران ← داده‌های پایه ← پروژه ← ساختار و تیم ← نظارت کارگاهی» ثبت می‌شود و خودکار به این‌جا می‌آید.{!isAdmin && ' این صفحه فقط برای مدیر سامانه باز است؛ تغییرات را از او بخواهید.'}</p>
+      </div>
+      {isAdmin && <button className="im-btn im-btn-primary im-btn-sm" onClick={go} disabled={!projectId}><ExternalLink size={14} /> تغییر ناظران در داده‌های پایه</button>}
     </div>
   )
 }

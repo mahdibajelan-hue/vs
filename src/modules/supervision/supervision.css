@@ -287,3 +287,64 @@
 .sv-c-leave { --c: var(--sv-leave); }
 .sv-cell.auto { background: transparent; color: var(--sv-absent); box-shadow: inset 0 0 0 1.5px var(--sv-absent); }
 .sv-head-only { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; color: var(--im-muted-2); background: var(--im-panel-2); box-shadow: inset 0 0 0 1px var(--im-line); }
+
+/* link to master data, where supervisors are defined */
+.sv-teamlink { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-inline-start: 3px solid var(--im-teal, #14b8a6); }
+.sv-teamlink > svg { color: var(--im-teal, #14b8a6); flex-shrink: 0; }
+.sv-teamlink.compact { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--im-teal, #14b8a6) 7%, transparent); }
+
+/* ── منوی غذا ───────────────────────────────────────────── */
+.sv-menu-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sv-menu-cook { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 12.5px; color: var(--im-muted-2); }
+.sv-menu-cook > svg { color: #fb7185; }
+.sv-root .sv-menu-cook input { width: 200px; max-width: 46vw; min-height: 36px; padding: 6px 10px; }
+.sv-menu-alarm { display: flex; gap: 12px; padding: 13px 15px; border-radius: 14px; border: 1px solid color-mix(in srgb, #f43f5e 45%, transparent); background: color-mix(in srgb, #f43f5e 9%, var(--im-panel)); }
+.sv-menu-alarm > svg { color: #f43f5e; flex-shrink: 0; margin-top: 2px; }
+.sv-menu-alarm b { font-size: 13.5px; }
+.sv-menu-alarm ul { margin: 6px 0 0; padding-inline-start: 18px; display: grid; gap: 4px; font-size: 12.5px; line-height: 1.9; }
+.sv-menu-week { display: grid; border: 1px solid var(--im-line); border-radius: 16px; overflow: hidden; background: var(--im-panel); }
+.sv-menu-row { display: grid; grid-template-columns: 92px repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--im-line); }
+.sv-menu-row.head { border-top: 0; background: var(--im-panel-2); font-size: 12px; font-weight: 800; color: var(--im-muted-2); }
+.sv-menu-row.head > span { padding: 9px 12px; }
+.sv-menu-row.today { background: color-mix(in srgb, #22d3ee 6%, transparent); }
+.sv-menu-row.today .sv-menu-day b { color: #22d3ee; }
+.sv-menu-day { display: grid; align-content: center; gap: 2px; padding: 10px 12px; border-inline-end: 1px solid var(--im-line); }
+.sv-menu-day small { color: var(--im-muted-2); font-size: 11.5px; }
+.sv-menu-cell { display: grid; align-content: start; gap: 3px; padding: 10px 12px; min-width: 0; border-inline-end: 1px solid var(--im-line); }
+.sv-menu-cell:last-child { border-inline-end: 0; }
+.sv-menu-cell b { font-size: 13px; line-height: 1.7; }
+.sv-menu-cell small { font-size: 11.5px; color: var(--im-muted-2); line-height: 1.7; }
+.sv-menu-cell.bad { background: color-mix(in srgb, #f43f5e 10%, transparent); }
+.sv-menu-cell.edit { gap: 5px; }
+.sv-root .sv-menu-cell.edit input { min-height: 32px; padding: 4px 8px; font-size: 12.5px; }
+.sv-menu-score { display: inline-flex; align-items: center; gap: 4px; width: fit-content; margin-top: 2px; padding: 1px 8px; border-radius: 99px; background: var(--im-panel-2); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sv-menu-overall { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.sv-menu-overall > div { display: grid; gap: 2px; }
+.sv-menu-overall small { font-size: 12px; color: var(--im-muted-2); }
+.sv-menu-big { font-size: 38px; line-height: 1; }
+.sv-menu-scores { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sv-menu-scores li { display: grid; grid-template-columns: 26px minmax(110px, 1.3fr) minmax(60px, 2fr) 74px; align-items: center; gap: 10px; font-size: 12.5px; }
+.sv-menu-scores li.bad .n { color: #f43f5e; font-weight: 800; }
+.sv-menu-scores .f { font-size: 18px; }
+.sv-menu-scores .bar { height: 7px; border-radius: 99px; background: var(--im-panel-2); overflow: hidden; }
+.sv-menu-scores .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f43f5e, #f59e0b 50%, #22c55e); background-size: 200px 100%; }
+.sv-menu-scores li.bad .bar i { background: #f43f5e; }
+.sv-menu-scores .v { font-weight: 800; font-variant-numeric: tabular-nums; text-align: end; }
+@media (max-width: 760px) {
+  .sv-menu-row.head { display: none; }
+  .sv-menu-row { grid-template-columns: 1fr; }
+  .sv-menu-day { grid-auto-flow: column; justify-content: start; gap: 8px; border-inline-end: 0; background: var(--im-panel-2); }
+  .sv-menu-cell { border-inline-end: 0; border-top: 1px dashed var(--im-line); }
+  .sv-menu-cell::before { content: attr(data-meal); font-size: 11px; font-weight: 800; color: var(--im-muted-2); }
+}
+
+/* ── نظر دربارهٔ غذا (ورود و خروج من) ── */
+.sv-rate { display: grid; gap: 10px; }
+.sv-rate-meal { display: grid; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--im-panel-2); }
+.sv-rate-meal > div:first-child { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.sv-rate-meal small { color: var(--im-muted-2); }
+.sv-faces { display: flex; gap: 6px; }
+.sv-faces button { flex: 1; min-height: 44px; border-radius: 12px; border: 1px solid var(--im-line); background: var(--im-panel); font-size: 22px; line-height: 1; filter: grayscale(0.85); opacity: 0.7; transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 140ms ease, opacity 140ms ease, border-color 140ms ease; }
+.sv-faces button:active { transform: scale(0.94); }
+.sv-faces button[aria-pressed='true'] { filter: none; opacity: 1; border-color: #f59e0b; background: color-mix(in srgb, #f59e0b 14%, var(--im-panel)); transform: scale(1.04); }
+@media (hover: hover) { .sv-faces button:hover { filter: none; opacity: 1; } }

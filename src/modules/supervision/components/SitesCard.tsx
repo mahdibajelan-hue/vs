@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Crosshair, Loader2, MapPin, Plus, Save, Smartphone, Trash2 } from 'lucide-react'
-import { supabase } from '../../../lib/supabaseClient'
 import { useSupervisionStore } from '../store/useSupervisionStore'
-import { useAuthStore } from '../../../store/useAuthStore'
 import { fa } from '../lib/svMonth'
 import { bestFix, isApproximate } from '../lib/geo'
-import type { SvPerson, SvSite } from '../types'
-import { Flash } from './common'
+import type { SvSite } from '../types'
+import { Flash, TeamLink } from './common'
 
 type Draft = { id?: string; name: string; lat: string; lng: string; radiusM: string; active: boolean }
 const blank: Draft = { name: '', lat: '', lng: '', radiusM: '300', active: true }
@@ -59,7 +57,7 @@ export function SitesCard() {
     <div className="im-card">
       <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 6px' }}><Smartphone size={17} style={{ display: 'inline', verticalAlign: -3 }} /> ثبت حضور با گوشی</h2>
       <p className="sv-note" style={{ margin: '0 0 12px' }}>
-        هر نفری که حسابش در جدول پایین وصل شود، در این ماژول صفحهٔ «ورود و خروج من» را می‌بیند و با گوشی خودش ورود و خروج می‌زند. موقعیت گوشی فقط هنگام زدن دکمه خوانده می‌شود و ثبت فقط وقتی پذیرفته است که در شعاع یکی از محل‌های زیر باشد.
+        هر ناظری که در داده‌های پایه «کاربر سامانه» برایش انتخاب شده باشد، در این ماژول صفحهٔ «ورود و خروج من» را می‌بیند و با گوشی خودش ورود و خروج می‌زند. موقعیت گوشی فقط هنگام زدن دکمه خوانده می‌شود و ثبت فقط وقتی پذیرفته است که در شعاع یکی از محل‌های زیر باشد.
         ساعت، ساعت سرور است. اگر GPS گوشی دقیق نباشد (مثلاً داخل ساختمان)، موقعیت آنتن و شبکهٔ خود گوشی به کار می‌رود و تا حد «حداکثر خطای موقعیت آنتن» (تنظیمات بالا) پذیرفته و با برچسب «آنتن» برای سرپرست مشخص می‌شود. هر تلاش، پذیرفته یا رد، با فاصله و دقت موقعیت در سابقه می‌ماند. برای شیفت شب، «خروج» صبح روز بعد روزِ دیروز را می‌بندد.
       </p>
       <h3 className="sv-h3"><MapPin size={14} style={{ display: 'inline', verticalAlign: -2 }} /> محل‌های مجاز (کمپ، دفتر کارگاه، جبهه‌ها)</h3>
@@ -97,56 +95,26 @@ export function SitesCard() {
         </div>
       )}
       <Flash msg={msg} />
-      <h3 className="sv-h3" style={{ marginTop: 16 }}>حساب کاربری نفرات</h3>
+      <h3 className="sv-h3" style={{ marginTop: 16 }}>ثبت با گوشی و سرپرست نظارت</h3>
       <AccountLinks />
     </div>
   )
 }
 
-type Profile = { id: string; full_name: string; email: string }
+/** Who checks in by phone — read-only here; accounts and the head of supervision are set in master data. */
 function AccountLinks() {
   const people = useSupervisionStore((s) => s.people)
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
-  useEffect(() => { void supabase.from('profiles').select('id,full_name,email').order('full_name').then(({ data }) => setProfiles((data ?? []) as Profile[])) }, [])
   const active = people.filter((p) => p.active)
-  if (!active.length) return <p className="sv-note">نفر فعالی نیست.</p>
-  const unlinked = active.filter((p) => !p.userId).length
-  const heads = active.filter((p) => p.isHead).length
+  const unlinked = active.filter((p) => !p.userId)
+  const head = active.find((p) => p.isHead)
   return (
     <>
-    <p className="sv-note" style={{ margin: '0 0 8px' }}>
-      همهٔ نفرات باید خودشان با گوشی ورود و خروج بزنند؛ روزی که تردد نداشته باشد شب همان روز خودکار «غایب» ثبت می‌شود. فقط «سرپرست نظارت» (تیک ستون سوم) می‌تواند حضور را دستی ثبت یا اصلاح کند، مثلاً غیبت را به استراحت، مرخصی، استعلاجی یا مأموریت تبدیل کند.
-      {!heads && <b className="sv-warn"> هنوز سرپرستی تعیین نشده؛ تا تعیین آن هر کس دسترسی ویرایش دارد می‌تواند دستی ثبت کند.</b>}
-      {unlinked > 0 && <b className="sv-warn"> {fa(unlinked)} نفر حساب کاربری وصل ندارد و نمی‌تواند با گوشی ثبت کند؛ روزهایش «غایب» می‌شود مگر سرپرست دستی ثبت کند.</b>}
-    </p>
-    <div className="im-table-wrap"><table className="im-table">
-      <thead><tr><th>نفر</th><th>حساب کاربری برای ثبت با گوشی</th><th>سرپرست نظارت</th><th /></tr></thead>
-      <tbody>{active.map((p) => <LinkRow key={p.id} p={p} profiles={profiles} taken={new Set(active.filter((o) => o.id !== p.id && o.userId).map((o) => o.userId!))} />)}</tbody>
-    </table></div>
+      <p className="sv-note" style={{ margin: '0 0 8px' }}>
+        همهٔ نفرات خودشان با گوشی ورود و خروج می‌زنند؛ روزی که تردد نداشته باشد شب همان روز خودکار «غایب» ثبت می‌شود. فقط سرپرست نظارت{head && <b> ({head.fullName})</b>} می‌تواند حضور را دستی ثبت یا اصلاح کند، مثلاً غیبت را به استراحت، مرخصی، استعلاجی یا مأموریت تبدیل کند.
+        {!head && <b className="sv-warn"> هنوز سرپرست نظارت تعیین نشده؛ تا تعیین آن هر کس دسترسی ویرایش دارد می‌تواند دستی ثبت کند.</b>}
+        {unlinked.length > 0 && <b className="sv-warn"> {fa(unlinked.length)} نفر حساب کاربری ندارند و نمی‌توانند با گوشی ثبت کنند: {unlinked.map((p) => p.fullName).join('، ')}.</b>}
+      </p>
+      <TeamLink compact />
     </>
-  )
-}
-
-function LinkRow({ p, profiles, taken }: { p: SvPerson; profiles: Profile[] | null; taken: Set<string> }) {
-  const savePerson = useSupervisionStore((s) => s.savePerson)
-  const me = useAuthStore((s) => s.profile?.id)
-  const [state, setState] = useState('')
-  const change = async (userId: string) => {
-    setState('…')
-    const r = await savePerson({ id: p.id, userId: userId || null })
-    setState(!r.ok ? r.error ?? 'ذخیره نشد' : userId && userId === me ? 'وصل شد؛ تب «ورود و خروج من» در بالای صفحه' : 'ذخیره شد')
-  }
-  return (
-    <tr>
-      <td><b>{p.fullName}</b><div className="sv-sub">{p.roleTitle}</div></td>
-      <td>
-        <select className="sv-select" value={p.userId ?? ''} onChange={(e) => change(e.target.value)} disabled={profiles === null} aria-label={`حساب کاربری ${p.fullName}`}>
-          <option value="">— ثبت توسط سرپرست —</option>
-          {(profiles ?? []).filter((u) => !taken.has(u.id)).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}{u.full_name && u.email ? ` (${u.email})` : ''}</option>)}
-        </select>
-      </td>
-      <td><label className="sv-check" style={{ margin: 0 }}><input type="checkbox" checked={p.isHead} onChange={async (e) => { setState('…'); const r = await savePerson({ id: p.id, isHead: e.target.checked }); setState(r.ok ? (e.target.checked ? 'سرپرست شد' : 'ذخیره شد') : r.error ?? 'ذخیره نشد') }} aria-label={`سرپرست نظارت: ${p.fullName}`} /> ثبت دستی</label></td>
-      <td className="sv-note">{state}</td>
-    </tr>
   )
 }

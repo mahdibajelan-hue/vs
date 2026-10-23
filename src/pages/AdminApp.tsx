@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Database, Users } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
+import { useDeepLinkStore } from '../store/useDeepLinkStore'
 import { UserCenterApp } from '../modules/usercenter/UserCenterApp'
 import { MasterDataApp } from '../modules/masterdata/MasterDataApp'
 import { ModuleHeaderActions } from '../components/common/ModuleHeaderActions'
@@ -16,7 +17,8 @@ type Tab = 'users' | 'masterdata'
  */
 export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
-  const [tab, setTab] = useState<Tab>('users')
+  // «تغییر ناظران» in the supervision module lands straight on master data → that project's team
+  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'admin' ? 'masterdata' : 'users'))
 
   if (!isAdmin) {
     return (

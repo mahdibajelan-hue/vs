@@ -6,8 +6,8 @@ import { create } from 'zustand'
  * consumes it once it has loaded — so no module has to know another module's internal routing.
  */
 export interface DeepLink {
-  module: 'issues' | 'risk' | 'reporting' | 'missions' | 'change'
-  /** The Issue / Risk / Action id — or, for module 'missions', the mission id. */
+  module: 'issues' | 'risk' | 'reporting' | 'missions' | 'change' | 'admin'
+  /** The Issue / Risk / Action id — or, for module 'missions', the mission id; for 'admin', the master-data project whose team opens. */
   recordId: string
   masterProjectId?: string
 }

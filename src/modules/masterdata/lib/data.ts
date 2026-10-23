@@ -360,8 +360,8 @@ export function projectDependencyToRow(p: { projectId: string; dependsOnProjectI
 export interface ProjectPartyRow { id: string; project_id: string; organization_id: string; role: string; notes: string }
 export const projectPartyFromRow = (r: ProjectPartyRow): ProjectParty => ({ id: r.id, projectId: r.project_id, organizationId: r.organization_id, role: r.role as PartyRole, notes: r.notes ?? '' })
 
-export interface TeamMemberRow { id: string; project_id: string; user_id: string | null; person_name: string; position_key: string; position_title: string; organization_id: string | null; parent_id: string | null; phone: string; email: string; sort: number }
-export const teamMemberFromRow = (r: TeamMemberRow): TeamMember => ({ id: r.id, projectId: r.project_id, userId: r.user_id, personName: r.person_name ?? '', positionKey: r.position_key, positionTitle: r.position_title ?? '', organizationId: r.organization_id, parentId: r.parent_id, phone: r.phone ?? '', email: r.email ?? '', sort: r.sort ?? 0 })
+export interface TeamMemberRow { id: string; project_id: string; user_id: string | null; person_name: string; position_key: string; position_title: string; organization_id: string | null; parent_id: string | null; phone: string; email: string; sort: number; national_id?: string | null; shift_start?: string | null; shift_end?: string | null; overtime_cap?: number | null; start_date?: string | null; end_date?: string | null; card_no?: string | null }
+export const teamMemberFromRow = (r: TeamMemberRow): TeamMember => ({ id: r.id, projectId: r.project_id, userId: r.user_id, personName: r.person_name ?? '', positionKey: r.position_key, positionTitle: r.position_title ?? '', organizationId: r.organization_id, parentId: r.parent_id, phone: r.phone ?? '', email: r.email ?? '', sort: r.sort ?? 0, nationalId: r.national_id ?? '', shiftStart: r.shift_start?.slice(0, 5) ?? null, shiftEnd: r.shift_end?.slice(0, 5) ?? null, overtimeCap: r.overtime_cap ?? null, startDate: r.start_date ?? null, endDate: r.end_date ?? null, cardNo: r.card_no ?? '' })
 export const teamMemberToRow = (projectId: string, m: Partial<TeamMember>) => {
   const row: Record<string, unknown> = { project_id: projectId }
   if (m.userId !== undefined) row.user_id = m.userId || null
@@ -373,5 +373,12 @@ export const teamMemberToRow = (projectId: string, m: Partial<TeamMember>) => {
   if (m.phone !== undefined) row.phone = m.phone
   if (m.email !== undefined) row.email = m.email
   if (m.sort !== undefined) row.sort = m.sort
+  if (m.nationalId !== undefined) row.national_id = m.nationalId
+  if (m.shiftStart !== undefined) row.shift_start = m.shiftStart || null
+  if (m.shiftEnd !== undefined) row.shift_end = m.shiftEnd || null
+  if (m.overtimeCap !== undefined) row.overtime_cap = m.overtimeCap
+  if (m.startDate !== undefined) row.start_date = m.startDate || null
+  if (m.endDate !== undefined) row.end_date = m.endDate || null
+  if (m.cardNo !== undefined) row.card_no = m.cardNo
   return row
 }

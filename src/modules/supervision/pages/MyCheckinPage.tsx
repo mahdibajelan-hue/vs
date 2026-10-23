@@ -6,6 +6,8 @@ import { STATUS_FA } from '../lib/svCalc'
 import { fixWithNetworkFallback, isApproximate } from '../lib/geo'
 import { addDays, fa, faNum, monthDays, monthLabel, thisMonth, todayLocal, weekdayFa } from '../lib/svMonth'
 import type { SvStatus } from '../types'
+import { FACES, FACE_FA, MEAL_FA } from '../lib/svMenu'
+import { myMenu, rateMeal, type MyMeal } from '../lib/menuApi'
 
 export interface MyLink { person_id: string; project_id: string; project_name: string; full_name: string; role_title: string; shift_start: string | null; shift_end: string | null; sites: number }
 type Day = { day: string; status: SvStatus; check_in: string | null; check_out: string | null; hours: number; overtime: number; source: string }
@@ -137,6 +139,8 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
         <p className="sv-note sv-me-privacy"><MapPin size={12} /> موقعیت فقط هنگام زدن دکمه یک بار خوانده می‌شود و با محدودهٔ کارگاه مقایسه می‌شود؛ ساعت ثبت، ساعت سرور است نه ساعت گوشی.</p>
       </section>
 
+      <MealRating personId={link.person_id} />
+
       <section className="sv-me-card">
         <div className="sv-me-head"><b>{fa(monthLabel(thisMonth()))}</b><span>{fa(worked)} روز کارکرد، {fa(gps)} روز با گوشی</span><button className="sv-iconbtn" onClick={() => void refresh()} aria-label="تازه کردن"><RefreshCw size={15} /></button></div>
         <div className="im-table-wrap"><table className="im-table sv-me-table">
@@ -160,5 +164,35 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
         )}
       </section>
     </div>
+  )
+}
+
+/** نظر دربارهٔ غذا — one face per meal, for today's and yesterday's menu (the server takes a meal up to two days back). */
+function MealRating({ personId }: { personId: string }) {
+  const [meals, setMeals] = useState<MyMeal[] | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const today = todayLocal()
+  useEffect(() => { setMeals(null); void myMenu(personId, addDays(today, -1), today).then(setMeals) }, [personId, today])
+  if (!meals?.length) return null
+  const rate = async (m: MyMeal, score: number) => {
+    setMeals((x) => x?.map((o) => (o.id === m.id ? { ...o, mine: score } : o)) ?? x)
+    const r = await rateMeal(m.id, score)
+    if (!r.ok) setMeals((x) => x?.map((o) => (o.id === m.id ? { ...o, mine: m.mine } : o)) ?? x)
+    setMsg(r.ok ? { ok: true, text: 'نظرتان ثبت شد؛ ممنون.' } : { ok: false, text: r.error ?? 'ثبت نشد' })
+  }
+  const shown = [...meals].filter((m) => m.main).reverse()
+  return (
+    <section className="sv-me-card sv-rate">
+      <div className="sv-me-head"><b>غذا چطور بود؟</b><span>با یک شکلک؛ غذای کم‌رضایت به سرپرست نظارت و مدیر پروژه اعلام می‌شود</span></div>
+      {shown.map((m) => (
+        <div key={m.id} className="sv-rate-meal">
+          <div><b>{MEAL_FA[m.meal]} {m.day === today ? 'امروز' : 'دیروز'}: {m.main}</b><small>{[m.dessert && `دسر: ${m.dessert}`, m.fruit && `میوه: ${m.fruit}`].filter(Boolean).join('، ')}</small></div>
+          <div className="sv-faces" role="group" aria-label={`نظر دربارهٔ ${m.main}`}>
+            {FACES.map((f, i) => <button key={f} aria-pressed={m.mine === i + 1} aria-label={FACE_FA[i]} title={FACE_FA[i]} onClick={() => void rate(m, i + 1)}>{f}</button>)}
+          </div>
+        </div>
+      ))}
+      {msg && <p className={`sv-me-msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.text}</p>}
+    </section>
   )
 }

@@ -270,6 +270,8 @@ export const TEAM_POSITIONS: { key: string; label: string }[] = [
   { key: 'qc_manager', label: 'مدیر کنترل کیفیت' },
   { key: 'legal_officer', label: 'مسئول حقوقی' },
   { key: 'land_officer', label: 'مسئول تملک اراضی' },
+  { key: 'supervision_head', label: 'سرپرست نظارت کارگاهی' },
+  { key: 'site_supervisor', label: 'ناظر کارگاهی' },
   { key: 'employer_rep', label: 'نمایندهٔ کارفرما' },
   { key: 'consultant_rep', label: 'نمایندهٔ مشاور' },
   { key: 'contractor_rep', label: 'نمایندهٔ پیمانکار' },
@@ -292,4 +294,17 @@ export interface TeamMember {
   phone: string
   email: string
   sort: number
+  /** نظارت کارگاهی (supervision_head / site_supervisor / employer_rep): these feed the attendance module's people list */
+  nationalId: string
+  /** usual working hours «HH:MM»; a night shift ends the next morning */
+  shiftStart: string | null
+  shiftEnd: string | null
+  /** monthly overtime ceiling in hours (null = the project's default) */
+  overtimeCap: number | null
+  startDate: string | null
+  endDate: string | null
+  cardNo: string
 }
+
+/** Positions that make up the site supervision team (حضور و غیاب دستگاه نظارت reads them). */
+export const SUPERVISION_POSITIONS = ['supervision_head', 'site_supervisor', 'employer_rep']

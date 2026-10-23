@@ -5,7 +5,7 @@ import { useModuleStore } from '../../../store/useModuleStore'
 import { useNotificationStore, type AppNotification } from '../../../store/useNotificationStore'
 import { useInboxStore } from '../store/useInboxStore'
 
-const SOURCE_LABEL: Record<string, string> = { missions: 'مأموریت‌ها', issues: 'مدیریت مسائل', risk: 'مدیریت ریسک', finance: 'مدیریت مالی', landacq: 'تحصیل اراضی', change: 'مدیریت تغییرات', material: 'کنترل متریال', execution: 'مدیریت اجرا' }
+const SOURCE_LABEL: Record<string, string> = { missions: 'مأموریت‌ها', issues: 'مدیریت مسائل', risk: 'مدیریت ریسک', finance: 'مدیریت مالی', landacq: 'تحصیل اراضی', change: 'مدیریت تغییرات', material: 'کنترل متریال', execution: 'مدیریت اجرا', supervision: 'حضور و غیاب نظارت' }
 const SEV = { warn: { color: '#fb7185', label: 'هشدار' }, action: { color: '#38bdf8', label: 'نیازمند اقدام' }, info: { color: '#94a3b8', label: 'اطلاع' } } as const
 const DEEP = new Set(['issues', 'risk', 'missions', 'change'])
 

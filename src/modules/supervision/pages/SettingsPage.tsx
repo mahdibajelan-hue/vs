@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Clock3, Fingerprint, Save } from 'lucide-react'
+import { Fingerprint, Save } from 'lucide-react'
 import { useSupervisionStore } from '../store/useSupervisionStore'
-import { fa, faNum, monthDays, monthLabel, type Ym } from '../lib/svMonth'
-import { dayHours } from '../lib/svCalc'
-import type { SvPerson, SvSettings } from '../types'
-import { Flash, MonthNav } from '../components/common'
-import { TimeField } from '../components/TimeField'
+import { fa, monthDays, monthLabel, type Ym } from '../lib/svMonth'
+import type { SvSettings } from '../types'
+import { Flash, MonthNav, TeamLink } from '../components/common'
 import { SitesCard } from '../components/SitesCard'
 
 const FIELDS: { k: keyof SvSettings; label: string; hint: string; step?: number }[] = [
@@ -62,14 +60,14 @@ export function SettingsPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym) =
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}><button className="im-btn im-btn-primary" onClick={save}><Save size={15} /> ذخیرهٔ قواعد</button><Flash msg={msg} /></div>
       </div>
 
-      <ShiftCard />
+      <TeamLink />
 
       <SitesCard />
 
       <div className="im-card">
         <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 6px' }}><Fingerprint size={17} style={{ display: 'inline', verticalAlign: -3 }} /> کارت ساعت و دستگاه حضور و غیاب</h2>
         <p className="sv-note" style={{ margin: '0 0 12px' }}>
-          هر دستگاه کارت‌خوان یا اثرانگشت می‌تواند هر تردد را به‌صورت یک ردیف در جدول <code>sv_clock_events</code> بفرستد (شمارهٔ کارت، زمان، نام دستگاه). برای هر نفر یا خودرو، شمارهٔ کارت را در «نفرات و خودروها» وارد کنید.
+          هر دستگاه کارت‌خوان یا اثرانگشت می‌تواند هر تردد را به‌صورت یک ردیف در جدول <code>sv_clock_events</code> بفرستد (شمارهٔ کارت، زمان، نام دستگاه). شمارهٔ کارت هر نفر در داده‌های پایه (نظارت کارگاهی) و هر خودرو در «نفرات و خودروها» نوشته می‌شود.
           با دکمهٔ زیر، اولین تردد هر روز «ورود» و آخرین تردد «خروج» حساب می‌شود و ساعت کار و اضافه‌کار خودکار ثبت می‌شود. روزهایی که دستی ثبت شده‌اند تغییر نمی‌کنند.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -80,51 +78,5 @@ export function SettingsPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym) =
         <Flash msg={clockMsg} />
       </div>
     </div>
-  )
-}
-
-/** ساعت کاری هر نفر — the shift a «present» day takes when no clock times are typed (day or night). */
-function ShiftCard() {
-  const people = useSupervisionStore((s) => s.people)
-  const settings = useSupervisionStore((s) => s.settings)
-  const active = people.filter((p) => p.active)
-  return (
-    <div className="im-card">
-      <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 6px' }}><Clock3 size={17} style={{ display: 'inline', verticalAlign: -3 }} /> ساعت کاری نفرات</h2>
-      <p className="sv-note" style={{ margin: '0 0 12px' }}>ساعت شروع و پایان کار هر نفر؛ روزی که «حاضر» زده می‌شود همین ساعت‌ها را می‌گیرد و {fa(settings.standardHours)} ساعت اول موظفی و بقیه اضافه‌کار حساب می‌شود. برای شیفت شب، خروج را صبح روز بعد بنویسید (مثلاً ۱۹:۰۰ تا ۰۷:۰۰). خالی = {fa(settings.standardHours)} ساعت بدون اضافه‌کار. ساعت ورود و خروج هر روز را در جدول حضور هم می‌توان جداگانه تغییر داد.</p>
-      {active.length === 0 ? <p className="sv-note">نفر فعالی نیست.</p> : (
-        <div className="im-table-wrap"><table className="im-table">
-          <thead><tr><th>نام</th><th>شروع</th><th>پایان</th><th>کارکرد روزانه</th><th /></tr></thead>
-          <tbody>{active.map((p) => <ShiftRow key={p.id} p={p} />)}</tbody>
-        </table></div>
-      )}
-    </div>
-  )
-}
-
-function ShiftRow({ p }: { p: SvPerson }) {
-  const settings = useSupervisionStore((s) => s.settings)
-  const savePerson = useSupervisionStore((s) => s.savePerson)
-  const [v, setV] = useState({ start: p.shiftStart ?? '', end: p.shiftEnd ?? '' })
-  const [state, setState] = useState<'' | 'saved' | string>('')
-  useEffect(() => setV({ start: p.shiftStart ?? '', end: p.shiftEnd ?? '' }), [p.shiftStart, p.shiftEnd])
-  const dirty = v.start !== (p.shiftStart ?? '') || v.end !== (p.shiftEnd ?? '')
-  const h = dayHours(v.start || null, v.end || null, settings)
-  const save = async () => {
-    if (!!v.start !== !!v.end) return setState('هر دو ساعت را بنویسید یا هر دو را خالی بگذارید.')
-    const r = await savePerson({ id: p.id, shiftStart: v.start || null, shiftEnd: v.end || null })
-    setState(r.ok ? 'saved' : r.error ?? 'ذخیره نشد')
-  }
-  return (
-    <tr>
-      <td><b>{p.fullName}</b><div className="sv-sub">{p.roleTitle}</div></td>
-      <td><TimeField label={`شروع کار ${p.fullName}`} value={v.start} onChange={(x) => { setV({ ...v, start: x }); setState('') }} /></td>
-      <td><TimeField label={`پایان کار ${p.fullName}`} value={v.end} onChange={(x) => { setV({ ...v, end: x }); setState('') }} /></td>
-      <td className="sv-num">{faNum(h.hours)} ساعت{h.overtime > 0 && <span className="sv-warn"> (+{faNum(h.overtime)} اضافه‌کار)</span>}</td>
-      <td style={{ whiteSpace: 'nowrap' }}>
-        <button className="im-btn im-btn-ghost im-btn-sm" disabled={!dirty} onClick={save}><Save size={13} /> ذخیره</button>
-        {state === 'saved' ? <span className="sv-ok" style={{ fontSize: 12, marginInlineStart: 6 }}>ذخیره شد</span> : state && <span className="sv-bad" style={{ fontSize: 12, marginInlineStart: 6 }}>{state}</span>}
-      </td>
-    </tr>
   )
 }

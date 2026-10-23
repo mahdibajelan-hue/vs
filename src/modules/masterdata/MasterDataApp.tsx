@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { Loader2 } from 'lucide-react'
 import './masterdata.css'
 import { useMasterDataStore } from './store/useMasterDataStore'
@@ -35,7 +36,12 @@ const TOOLS: { id: Tab; label: string }[] = [
  */
 export function MasterDataApp() {
   const [tab, setTab] = useState<Tab>('overview')
-  const [openProject, setOpenProject] = useState<{ id: string } | null>(null)
+  // a deep link (e.g. «تغییر ناظران» from the supervision module) opens that project's team at once
+  const [openProject, setOpenProject] = useState<{ id: string; team?: boolean } | null>(() => {
+    const p = useDeepLinkStore.getState().pending
+    return p?.module === 'admin' ? { id: p.recordId, team: true } : null
+  })
+  useEffect(() => { if (useDeepLinkStore.getState().pending?.module === 'admin') useDeepLinkStore.getState().clear() }, [])
   const loaded = useMasterDataStore((s) => s.loaded)
   const loading = useMasterDataStore((s) => s.loading)
   const fetchAll = useMasterDataStore((s) => s.fetchAll)
@@ -68,7 +74,7 @@ export function MasterDataApp() {
         {loading && !loaded ? (
           <div className="flex h-64 items-center justify-center"><Loader2 size={22} className="animate-spin" style={{ color: 'var(--md-accent)' }} aria-label="در حال بارگذاری" /></div>
         ) : openProject ? (
-          <ProjectWorkspace key={openProject.id} projectId={openProject.id} onBack={() => setOpenProject(null)} />
+          <ProjectWorkspace key={openProject.id} projectId={openProject.id} initialTab={openProject.team ? 'team' : undefined} onBack={() => setOpenProject(null)} />
         ) : (
           <div key={tab} className="md-in">
             {tab === 'overview' && <OverviewPage go={go} />}

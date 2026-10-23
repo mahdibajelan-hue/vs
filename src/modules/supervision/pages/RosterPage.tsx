@@ -6,7 +6,7 @@ import { useSupervisionStore } from '../store/useSupervisionStore'
 import { formatJalali } from '../../../lib/jalali'
 import { fa } from '../lib/svMonth'
 import type { SvGearbox, SvOwnership, SvPerson, SvVehicle, SvVehicleKind } from '../types'
-import { Empty, Flash } from '../components/common'
+import { Empty, Flash, TeamLink } from '../components/common'
 
 const SIDE_FA = { supervision: 'دستگاه نظارت', employer: 'نمایندهٔ کارفرما' } as const
 const KIND_FA: Record<SvVehicleKind, string> = { sedan: 'سواری', pickup: 'وانت', suv: 'شاسی‌بلند', van: 'ون', minibus: 'مینی‌بوس', other: 'سایر' }
@@ -18,14 +18,11 @@ export function RosterPage() {
   const people = useSupervisionStore((s) => s.people)
   const vehicles = useSupervisionStore((s) => s.vehicles)
   const settings = useSupervisionStore((s) => s.settings)
-  const deletePerson = useSupervisionStore((s) => s.deletePerson)
   const deleteVehicle = useSupervisionStore((s) => s.deleteVehicle)
-  const [editP, setEditP] = useState<Partial<SvPerson> | null>(null)
   const [editV, setEditV] = useState<Partial<SvVehicle> | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const name = (id: string | null) => people.find((p) => p.id === id)?.fullName
 
-  const delP = async (p: SvPerson) => { if (!window.confirm(`«${p.fullName}» و همهٔ روزهای ثبت‌شده‌اش حذف شود؟ برای کسی که از پروژه رفته، بهتر است «فعال» را بردارید.`)) return; const r = await deletePerson(p.id); setMsg(r.ok ? { ok: true, text: 'حذف شد.' } : { ok: false, text: r.error ?? '' }) }
   const delV = async (v: SvVehicle) => { if (!window.confirm(`خودروی «${v.title}» و روزهای ثبت‌شده‌اش حذف شود؟`)) return; const r = await deleteVehicle(v.id); setMsg(r.ok ? { ok: true, text: 'حذف شد.' } : { ok: false, text: r.error ?? '' }) }
   const period = (a: string | null, b: string | null) => a || b ? `${a ? 'از ' + fa(formatJalali(a)) : ''}${b ? ' تا ' + fa(formatJalali(b)) : ''}` : ''
 
@@ -35,20 +32,20 @@ export function RosterPage() {
       <section>
         <div className="im-topbar" style={{ marginBottom: 10 }}>
           <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}><UserRound size={17} style={{ display: 'inline', verticalAlign: -3 }} /> ناظران و نمایندگان کارفرما ({fa(people.length)})</h2>
-          <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setEditP({ side: 'supervision', mealBreakfast: true, mealLunch: true, mealDinner: true, active: true, overtimeCap: null })}><Plus size={15} /> افزودن نفر</button>
         </div>
-        {!people.length ? <Empty>نفری ثبت نشده است.</Empty> : (
+        <div style={{ marginBottom: 10 }}><TeamLink compact /></div>
+        {!people.length ? <Empty>هنوز ناظری در داده‌های پایه برای این پروژه تعریف نشده است.</Empty> : (
           <div className="im-table-wrap"><table className="im-table">
-            <thead><tr><th>نام</th><th>سمت</th><th>ساعت کار</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>دوره</th><th /></tr></thead>
+            <thead><tr><th>نام</th><th>سمت</th><th>ساعت کار</th><th>سقف اضافه‌کار</th><th>کارت ساعت</th><th>ثبت تردد</th><th>دوره</th></tr></thead>
             <tbody>{people.map((p) => (
               <tr key={p.id} style={p.active ? undefined : { opacity: 0.55 }}>
-                <td><b>{p.fullName}</b>{!p.active && <span className="im-chip" style={{ marginInlineStart: 6 }}>غیرفعال</span>}<div className="sv-note" style={{ fontSize: 11 }}>{SIDE_FA[p.side]}{p.mobile && ` · ${fa(p.mobile)}`}</div></td>
+                <td><b>{p.fullName}</b>{p.isHead && <span className="im-chip" style={{ marginInlineStart: 6 }}>سرپرست نظارت</span>}{!p.active && <span className="im-chip" style={{ marginInlineStart: 6 }}>غیرفعال</span>}<div className="sv-note" style={{ fontSize: 11 }}>{SIDE_FA[p.side]}{p.mobile && ` · ${fa(p.mobile)}`}</div></td>
                 <td>{p.roleTitle || '—'}</td>
                 <td className="sv-num">{p.shiftStart && p.shiftEnd ? `${fa(p.shiftStart)} تا ${fa(p.shiftEnd)}` : '—'}</td>
                 <td className="sv-num">{fa(p.overtimeCap ?? settings.overtimeMax)} ساعت{p.overtimeCap == null && <span className="sv-note"> (پیش‌فرض)</span>}</td>
                 <td>{p.cardNo ? fa(p.cardNo) : '—'}</td>
+                <td>{p.userId ? 'با گوشی' : <span className="sv-warn">فقط سرپرست</span>}</td>
                 <td className="sv-note">{period(p.startDate, p.endDate) || '—'}</td>
-                <td style={{ whiteSpace: 'nowrap' }}><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setEditP(p)} aria-label={`ویرایش ${p.fullName}`}><Pencil size={13} /></button> <button className="im-btn im-btn-danger im-btn-sm" onClick={() => delP(p)} aria-label={`حذف ${p.fullName}`}><Trash2 size={13} /></button></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -77,7 +74,6 @@ export function RosterPage() {
           </table></div>
         )}
       </section>
-      {editP && <PersonForm value={editP} onClose={() => setEditP(null)} onSaved={(t) => { setEditP(null); setMsg({ ok: true, text: t }) }} />}
       {editV && <VehicleForm value={editV} people={people} onClose={() => setEditV(null)} onSaved={(t) => { setEditV(null); setMsg({ ok: true, text: t }) }} />}
     </div>
   )
@@ -93,44 +89,6 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         </div>
       </div>
     </ModalPortal>
-  )
-}
-
-function PersonForm({ value, onClose, onSaved }: { value: Partial<SvPerson>; onClose: () => void; onSaved: (msg: string) => void }) {
-  const savePerson = useSupervisionStore((s) => s.savePerson)
-  const settings = useSupervisionStore((s) => s.settings)
-  const [f, setF] = useState<Partial<SvPerson>>(value)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const up = (p: Partial<SvPerson>) => setF((x) => ({ ...x, ...p }))
-  const submit = async () => {
-    if (!f.fullName?.trim()) return setError('نام را بنویسید.')
-    if (f.startDate && f.endDate && f.endDate < f.startDate) return setError('تاریخ پایان قبل از تاریخ شروع است.')
-    setBusy(true)
-    const r = await savePerson({ ...f, fullName: f.fullName.trim(), roleTitle: f.roleTitle?.trim() ?? '', cardNo: f.cardNo?.trim() ?? '' })
-    setBusy(false)
-    if (!r.ok) return setError(r.error ?? 'ذخیره نشد')
-    onSaved(value.id ? 'تغییرات ذخیره شد.' : `«${f.fullName.trim()}» اضافه شد.`)
-  }
-  return (
-    <Modal title={value.id ? 'ویرایش نفر' : 'افزودن ناظر یا نماینده'} onClose={onClose}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-        <div className="im-field"><label htmlFor="sv-name">نام و نام خانوادگی *</label><input id="sv-name" autoFocus value={f.fullName ?? ''} onChange={(e) => up({ fullName: e.target.value })} /></div>
-        <div className="im-field"><label htmlFor="sv-side">طرف</label><select id="sv-side" value={f.side ?? 'supervision'} onChange={(e) => up({ side: e.target.value as SvPerson['side'] })}><option value="supervision">دستگاه نظارت</option><option value="employer">نمایندهٔ کارفرما</option></select></div>
-        <div className="im-field"><label htmlFor="sv-role">سمت</label><input id="sv-role" placeholder="مثلاً ناظر مقیم جوش" value={f.roleTitle ?? ''} onChange={(e) => up({ roleTitle: e.target.value })} /></div>
-        <div className="im-field"><label htmlFor="sv-mobile">موبایل</label><input id="sv-mobile" inputMode="tel" dir="ltr" value={f.mobile ?? ''} onChange={(e) => up({ mobile: e.target.value })} /></div>
-        <div className="im-field"><label htmlFor="sv-nid">کد ملی</label><input id="sv-nid" inputMode="numeric" dir="ltr" value={f.nationalId ?? ''} onChange={(e) => up({ nationalId: e.target.value })} /></div>
-        <div className="im-field"><label htmlFor="sv-cap">سقف اضافه‌کار ماهانه (ساعت)</label><input id="sv-cap" inputMode="numeric" placeholder={`پیش‌فرض پروژه: ${settings.overtimeMax}`} value={f.overtimeCap ?? ''} onChange={(e) => up({ overtimeCap: e.target.value.trim() === '' ? null : Math.max(0, Math.min(200, Number(e.target.value) || 0)) })} /></div>
-        <div className="im-field"><label htmlFor="sv-card">شمارهٔ کارت ساعت</label><input id="sv-card" dir="ltr" placeholder="برای اتصال دستگاه حضور و غیاب" value={f.cardNo ?? ''} onChange={(e) => up({ cardNo: e.target.value })} /></div>
-        <div className="im-field"><label>شروع حضور در پروژه</label><JalaliDateField value={f.startDate ?? ''} onChange={(d) => up({ startDate: d })} /></div>
-        <div className="im-field"><label>پایان حضور (اختیاری)</label><JalaliDateField value={f.endDate ?? ''} onChange={(d) => up({ endDate: d })} />{f.endDate && <button type="button" className="im-ghostlink" onClick={() => up({ endDate: null })}>پاک کردن</button>}</div>
-      </div>
-      <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 12 }}><input type="checkbox" checked={f.active !== false} onChange={(e) => up({ active: e.target.checked })} />فعال</label>
-      <p className="sv-note" style={{ margin: '6px 0 0' }}>هر روزی که «حاضر» باشد صبحانه، ناهار و شام برایش حساب می‌شود.</p>
-      <div className="im-field" style={{ marginTop: 12 }}><label htmlFor="sv-note">یادداشت</label><input id="sv-note" value={f.note ?? ''} onChange={(e) => up({ note: e.target.value })} /></div>
-      {error && <p role="alert" style={{ color: 'var(--im-coral)', fontWeight: 700, margin: '10px 0 0' }}>{error}</p>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button><button className="im-btn im-btn-primary" disabled={busy} onClick={submit}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button></div>
-    </Modal>
   )
 }
 

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, MapPin, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
+import { CalendarDays, ChefHat, ClipboardCheck, FileBarChart2, Loader2, MapPin, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -15,14 +15,16 @@ import { MyCheckinPage, loadMyLinks, type MyLink } from './pages/MyCheckinPage'
 
 const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage').then((m) => ({ default: m.FacilitiesPage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })))
+const MenuPage = lazy(() => import('./pages/MenuPage').then((m) => ({ default: m.MenuPage })))
 const RosterPage = lazy(() => import('./pages/RosterPage').then((m) => ({ default: m.RosterPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
-type Tab = 'me' | 'month' | 'facilities' | 'report' | 'roster' | 'settings'
+type Tab = 'me' | 'month' | 'facilities' | 'menu' | 'report' | 'roster' | 'settings'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'me', label: 'ورود و خروج من', icon: MapPin, color: '#4ade80' },
   { id: 'month', label: 'حضور و غیاب', icon: CalendarDays, color: '#22d3ee' },
   { id: 'facilities', label: 'تسهیلات', icon: UtensilsCrossed, color: '#f59e0b' },
+  { id: 'menu', label: 'منوی غذا', icon: ChefHat, color: '#fb7185' },
   { id: 'report', label: 'گزارش ماه', icon: FileBarChart2, color: '#a78bfa' },
   { id: 'roster', label: 'نفرات و خودروها', icon: UsersRound, color: '#34d399' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8' },
@@ -72,6 +74,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
     switch (tab) {
       case 'month': return <MonthPage month={month} onMonth={setMonth} onGoRoster={() => setTab('roster')} onGoReport={() => setTab('report')} />
       case 'facilities': return <FacilitiesPage month={month} onMonth={setMonth} onGoReport={() => setTab('report')} />
+      case 'menu': return <MenuPage />
       case 'report': return <ReportPage month={month} onMonth={setMonth} projectName={project?.officialName ?? ''} />
       case 'roster': return <RosterPage />
       case 'settings': return <SettingsPage month={month} onMonth={setMonth} />
