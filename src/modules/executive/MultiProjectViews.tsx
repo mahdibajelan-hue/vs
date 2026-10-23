@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { ArrowLeft, BadgeDollarSign, ClipboardList, GitBranch, GitPullRequestArrow, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, BadgeDollarSign, ListTree, ClipboardList, GitBranch, GitPullRequestArrow, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
@@ -17,10 +17,9 @@ const VIEWS: { module: ModuleKey; tab?: string; title: string; text: string; ico
  * نماهای چندپروژه‌ای — the same project modules, opened for every project of the portfolio at once.
  * Inside a project (from the radar) these modules show one project only; here they show them all.
  */
-export function MultiProjectViews() {
+export function MultiProjectViews({ onOpenPipeline }: { onOpenPipeline: () => void }) {
   const access = useModuleAccessStore((s) => s.accessibleModules)
   const list = VIEWS.filter((v) => hasModuleAccess(access, v.module))
-  if (!list.length) return null
   return (
     <section className="mpv" dir="rtl" aria-labelledby="mpv-title">
       <div className="mpv-head">
@@ -28,6 +27,12 @@ export function MultiProjectViews() {
         <p>همان ماژول‌های پروژه، این‌بار برای همهٔ پروژه‌های سبد. برای کار روی یک پروژه از «رادار پروژه‌ها» وارد شوید.</p>
       </div>
       <div className="mpv-grid">
+        <button type="button" className="mpv-card is-feature" style={{ '--c': '#6366f1' } as CSSProperties} onClick={onOpenPipeline}>
+          <span className="mpv-ico"><ListTree size={17} aria-hidden /></span>
+          <span className="mpv-title">پروژه‌ها در مراحل چرخهٔ عمر</span>
+          <span className="mpv-text">چند پروژه در هر مرحلهٔ G1 تا G9، گام جاری و آخرین اقدام هر کدام</span>
+          <ArrowLeft size={14} className="mpv-go" aria-hidden />
+        </button>
         {list.map((v) => (
           <button key={v.module} type="button" className="mpv-card" style={{ '--c': v.color } as CSSProperties} onClick={() => openPortfolioView(v.module, v.tab)}>
             <span className="mpv-ico"><v.icon size={17} aria-hidden /></span>

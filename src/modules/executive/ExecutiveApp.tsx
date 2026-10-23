@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Briefcase, Loader2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
@@ -6,6 +6,8 @@ import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions
 import { ScheduleStatusCard } from './ScheduleStatusCard'
 import { PortfolioDashboardPage } from '../reporting/pages/PortfolioDashboardPage'
 import { MultiProjectViews } from './MultiProjectViews'
+import { LifecyclePipelinePage } from './LifecyclePipelinePage'
+import { useModuleStore } from '../../store/useModuleStore'
 import './mpv.css'
 
 const MODULE_ACCENT = '#6366f1'
@@ -19,6 +21,8 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
+  // 'pipeline' = the lifecycle-stage report (also re-opened when coming back from Stage-Gate)
+  const [view, setView] = useState<'dashboard' | 'pipeline'>(() => (useModuleStore.getState().takeEntryTab() === 'pipeline' ? 'pipeline' : 'dashboard'))
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
@@ -54,9 +58,13 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
-        <MultiProjectViews />
-        <ScheduleStatusCard />
-        <PortfolioDashboardPage />
+        {view === 'pipeline' ? <LifecyclePipelinePage onBack={() => setView('dashboard')} /> : (
+          <>
+            <MultiProjectViews onOpenPipeline={() => setView('pipeline')} />
+            <ScheduleStatusCard />
+            <PortfolioDashboardPage />
+          </>
+        )}
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Orbit } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useModuleStore } from '../../store/useModuleStore'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { createStageGateEngine } from './legacy/engine'
@@ -35,6 +36,13 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     })
   }, [profile, projects])
   engineRef.current = engine
+
+  // opened from the lifecycle report with a project named: load it once the engine is ready
+  const [entry] = useState(() => useModuleStore.getState().takeEntryTab())
+  useEffect(() => {
+    if (entry && engine && projects.includes(entry) && !selected) void load(entry)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry, engine, projects])
 
   async function load(name: string) {
     setSelected(name)
