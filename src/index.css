@@ -2061,3 +2061,11 @@ select option {
 .tb-guide-ok { width: 100%; margin-top: 11px; padding: 8px; border: 0; border-radius: 10px; font: inherit; font-size: 12.5px; font-weight: 800; color: #04252c; background: #22d3ee; cursor: pointer; transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
 .tb-guide-ok:active { transform: scale(0.97); }
 @media (max-width: 639px) { .tb-guide { position: fixed !important; top: auto !important; bottom: 14px; left: 12px; right: 12px; inset-inline-end: auto; width: auto; transform-origin: bottom; z-index: 90; } }
+/* phones: the six labelled shortcuts must fit one row beside a module's own button */
+@media (max-width: 639px) {
+  .tb-bar { gap: 1px !important; max-width: 100%; }
+  .tb-act { min-width: 42px; padding: 3px 2px 2px; gap: 2px; }
+  .tb-act .tb-ico { width: 28px; height: 26px; }
+  .tb-cap { font-size: 9.5px; }
+  .tb-user { padding: 3px 4px 2px !important; }
+}

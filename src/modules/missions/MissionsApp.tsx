@@ -98,9 +98,10 @@ export function MissionsApp({ onExitToHub, onBackToRadar, repo, initialView, emb
             ))}
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
             {ai.enhanced && (
-              <span className="hidden lg:inline-flex">
+              // only on very wide screens: below that it pushes the shortcut bar onto a second row
+              <span className="hidden 2xl:inline-flex">
                 <span className="ms-pill" title="موتور تحلیل پاسخ‌ها">
                   <Sparkles size={12} aria-hidden /> {ai.label}
                 </span>

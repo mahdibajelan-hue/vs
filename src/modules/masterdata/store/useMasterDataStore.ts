@@ -104,8 +104,7 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
     set({ loading: true })
     inflight = (async () => {
       // everything in one parallel wave; the tables added by later migrations may be missing and must never block the rest
-      const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }, { data: deps, error: e6 }, { data: parties, error: e7 }, { data: team, error: e8 }] =
-        await Promise.all([
+      const wave = () => Promise.all([
           supabase.from('organizations').select('*').order('name'),
           supabase.from('portfolios').select('*').order('name'),
           supabase.from('programs').select('*').order('name'),
@@ -115,6 +114,10 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
           supabase.from('master_project_parties').select('*'),
           supabase.from('master_project_team').select('*').order('sort'),
         ])
+      let res = await wave()
+      // right after sign-in the first wave can go out before the new session is attached (401); try once more before alarming
+      if (res.slice(0, 5).some((r) => r.error)) { await new Promise((r) => setTimeout(r, 900)); res = await wave() }
+      const [{ data: orgs, error: e1 }, { data: pf, error: e2 }, { data: pg, error: e3 }, { data: pj, error: e4 }, { data: users, error: e5 }, { data: deps, error: e6 }, { data: parties, error: e7 }, { data: team, error: e8 }] = res
       if (reportError('بارگذاری داده‌های پایه', e1 ?? e2 ?? e3 ?? e4 ?? e5)) {
         set({ loading: false })
         return
