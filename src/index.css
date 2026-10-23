@@ -2025,3 +2025,39 @@ select option {
 @keyframes ha-pulse { 0%, 100% { opacity: 0.55; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
 @keyframes ha-sweep { to { transform: rotate(-360deg); } }
 @media (prefers-reduced-motion: reduce) { .hero-art .ha-bar { opacity: 1; animation: none !important; } .hero-art .ha-pulse, .hero-art .ha-sweep { animation: none !important; } .hero-art .ha-curve { animation: none !important; stroke-dashoffset: 0; } }
+
+/* ── labelled shortcut bar: coloured icon chip over a short word, so each button says what it does ── */
+.tb-act { --acc: var(--radar-cyan, #38bdf8); position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; flex-shrink: 0; min-width: 50px; padding: 4px 5px 3px; border-radius: 14px; border: 1px solid transparent; background: transparent; color: var(--text-primary); font-family: inherit; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+.tb-act:active { transform: scale(0.95); }
+.tb-act:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.tb-ico { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 28px; border-radius: 10px; color: var(--acc, var(--text-secondary)); background: color-mix(in srgb, var(--acc, #94a3b8) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc, #94a3b8) 30%, transparent); transition: background-color 0.15s, box-shadow 0.15s; }
+.tb-cap { font-size: 10.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; color: var(--text-secondary); transition: color 0.15s; }
+@media (hover: hover) and (pointer: fine) {
+  .tb-act:hover { background: color-mix(in srgb, var(--acc) 9%, transparent); border-color: color-mix(in srgb, var(--acc) 35%, transparent); }
+  .tb-act:hover .tb-ico { background: color-mix(in srgb, var(--acc) 24%, transparent); }
+  .tb-act:hover .tb-cap { color: var(--text-primary); }
+}
+.tb-act .tb-badge { top: -7px; inset-inline-start: auto; inset-inline-end: -9px; min-width: 19px; height: 19px; line-height: 19px; font-size: 10px; }
+/* something is waiting: the inbox chip rings a few times when the page opens, then stays tinted */
+.tb-act[data-attn] .tb-ico { background: color-mix(in srgb, var(--acc) 24%, transparent); }
+.tb-act[data-attn] .tb-ico::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 color-mix(in srgb, var(--acc) 60%, transparent); animation: tb-ring 1.6s cubic-bezier(0.23, 1, 0.32, 1) 0.6s 3; pointer-events: none; }
+@keyframes tb-ring { to { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .tb-act[data-attn] .tb-ico::after { animation: none; } }
+@media (max-width: 639px) {
+  .tb-user { flex-direction: column; gap: 2px; padding: 3px 6px 2px !important; border-radius: 14px !important; }
+  .tb-user img, .tb-user > span:first-child, .tb-user > div:first-child { width: 28px !important; height: 28px !important; }
+}
+@media (max-width: 380px) { .tb-act { min-width: 44px; padding-inline: 3px; } .tb-cap { font-size: 9.5px; } .tb-ico { width: 30px; } }
+
+/* «میانبرهای بالای صفحه» — shown once, reopened from the account menu */
+.tb-guide { width: min(340px, calc(100vw - 24px)); padding: 12px; inset-inline-end: 0; }
+.tb-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13.5px; }
+.tb-guide-x { display: inline-flex; padding: 5px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.tb-guide ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.tb-guide li { display: flex; align-items: flex-start; gap: 10px; }
+.tb-guide li > span:last-child { display: grid; gap: 1px; min-width: 0; }
+.tb-guide li b { font-size: 12.5px; color: var(--acc); }
+.tb-guide li small { font-size: 11.5px; line-height: 1.7; color: var(--text-secondary); }
+.tb-guide-ok { width: 100%; margin-top: 11px; padding: 8px; border: 0; border-radius: 10px; font: inherit; font-size: 12.5px; font-weight: 800; color: #04252c; background: #22d3ee; cursor: pointer; transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+.tb-guide-ok:active { transform: scale(0.97); }
+@media (max-width: 639px) { .tb-guide { position: fixed !important; top: auto !important; bottom: 14px; left: 12px; right: 12px; inset-inline-end: auto; width: auto; transform-origin: bottom; z-index: 90; } }

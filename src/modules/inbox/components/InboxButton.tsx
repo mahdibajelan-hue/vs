@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Inbox } from 'lucide-react'
 import { ToolbarButton } from '../../../components/common/ToolbarButton'
+import { TOOLBAR_ACCENTS } from '../../../components/common/ToolbarGuide'
 import { useNotificationStore } from '../../../store/useNotificationStore'
 import { selectVisible, useInboxStore } from '../store/useInboxStore'
 
@@ -16,7 +17,7 @@ export function InboxButton() {
     return () => clearInterval(t)
   }, [refresh, refreshNotes])
   return (
-    <ToolbarButton label={n ? `کارتابل من — ${n.toLocaleString('fa-IR')} مورد در انتظار` : 'کارتابل من'} badge={n} onClick={() => setOpen(true)}>
+    <ToolbarButton label={n ? `کارتابل من — ${n.toLocaleString('fa-IR')} مورد در انتظار` : 'کارتابل من'} caption="کارتابل" accent={TOOLBAR_ACCENTS.inbox} attention={n > 0} badge={n} onClick={() => setOpen(true)}>
       <Inbox size={16} />
     </ToolbarButton>
   )

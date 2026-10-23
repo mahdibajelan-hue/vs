@@ -12,6 +12,7 @@ import { SOURCE_COLOR, SOURCE_ICON } from '../../modules/inbox/lib/look'
 import { useInboxStore } from '../../modules/inbox/store/useInboxStore'
 import { ModalPortal } from '../common/ModalPortal'
 import { ToolbarButton } from '../common/ToolbarButton'
+import { TOOLBAR_ACCENTS } from '../common/ToolbarGuide'
 import { MODULE_CATALOG } from './moduleCatalog'
 import './search.css'
 
@@ -21,7 +22,7 @@ export const useSearchStore = create<SearchState>()((set) => ({ open: false, set
 /** Header shortcut: opens the global search (also Ctrl/⌘ + K, or «/» when nothing is being typed). */
 export function SearchButton() {
   const setOpen = useSearchStore((s) => s.setOpen)
-  return <ToolbarButton label="جستجو در سامانه (Ctrl+K)" onClick={() => setOpen(true)}><Search size={16} /></ToolbarButton>
+  return <ToolbarButton label="جستجو در سامانه (Ctrl+K)" caption="جستجو" accent={TOOLBAR_ACCENTS.search} onClick={() => setOpen(true)}><Search size={16} /></ToolbarButton>
 }
 
 type Hit = { id: string; group: string; title: string; sub: string; color: string; icon: 'mod' | 'inbox' | 'note' | 'project'; run: () => void }

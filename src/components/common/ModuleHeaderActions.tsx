@@ -5,6 +5,7 @@ import { ThemeSwitch } from './ThemeSwitch'
 import { ToolbarButton } from './ToolbarButton'
 import { InboxButton } from '../../modules/inbox/components/InboxButton'
 import { SearchButton } from '../search/GlobalSearch'
+import { TOOLBAR_ACCENTS, ToolbarGuide } from './ToolbarGuide'
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -21,17 +22,18 @@ interface ModuleHeaderActionsProps {
 export function ModuleHeaderActions({ onExitToHub, className = '' }: ModuleHeaderActionsProps) {
   const goModuleHome = useModuleStore((s) => s.goModuleHome)
   return (
-    <div className={`flex shrink-0 items-center gap-1.5 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
+    <div className={`tb-bar relative flex shrink-0 items-center gap-1 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
       <UserChip />
       <InboxButton />
       <SearchButton />
       <ThemeSwitch />
-      <ToolbarButton label="صفحهٔ اول این ماژول" onClick={goModuleHome}>
+      <ToolbarButton label="صفحهٔ اول این ماژول" caption="صفحهٔ اول" accent={TOOLBAR_ACCENTS.module} onClick={goModuleHome}>
         <LayoutDashboard size={16} />
       </ToolbarButton>
-      <ToolbarButton label="خانه (صفحهٔ اول سامانه)" onClick={onExitToHub}>
+      <ToolbarButton label="خانه — صفحهٔ اصلی سامانه و همهٔ ماژول‌ها" caption="خانه" accent={TOOLBAR_ACCENTS.home} onClick={onExitToHub}>
         <Home size={16} />
       </ToolbarButton>
+      <ToolbarGuide />
     </div>
   )
 }

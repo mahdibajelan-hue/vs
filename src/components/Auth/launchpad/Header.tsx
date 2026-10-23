@@ -5,6 +5,7 @@ import { SignOutButton } from '../SignOutButton'
 import { ThemeSwitch } from '../../common/ThemeSwitch'
 import { InboxButton } from '../../../modules/inbox/components/InboxButton'
 import { SearchButton } from '../../search/GlobalSearch'
+import { ToolbarGuide, useToolbarGuide } from '../../common/ToolbarGuide'
 import { ProfileModal } from '../ProfileModal'
 import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 
@@ -39,7 +40,7 @@ export function Header() {
       </div>
 
       {isAuthed && (
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="tb-bar relative flex items-center gap-1 sm:gap-1.5" role="toolbar" aria-label="میانبرهای سامانه">
           <span
             className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-bold tracking-wide sm:flex"
             style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 35%, transparent)', color: 'var(--radar-green)', background: 'color-mix(in srgb, var(--radar-green) 8%, transparent)' }}
@@ -56,7 +57,8 @@ export function Header() {
           <div className="relative">
             <button
               onClick={(e) => { setMenuTop(e.currentTarget.getBoundingClientRect().bottom + 8); setProfileOpen((v) => !v) }}
-              className="flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 py-1 pr-1 pl-2 transition-colors hover:bg-white/20"
+              className="tb-user flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 py-1 pr-1 pl-2 transition-colors hover:bg-white/20"
+              aria-label="حساب من"
             >
               {currentUser?.avatarUrl ? (
                 <img src={currentUser.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full bg-white object-cover" />
@@ -66,6 +68,7 @@ export function Header() {
                 </div>
               )}
               <span className="hidden max-w-[9rem] truncate text-xs font-bold sm:block">{currentUser?.fullName || 'کاربر'}</span>
+              <span className="tb-cap sm:hidden" aria-hidden>حساب من</span>
             </button>
 
             {profileOpen && (
@@ -85,6 +88,12 @@ export function Header() {
                   >
                     پروفایل و امضای من
                   </button>
+                  <button
+                    onClick={() => { setProfileOpen(false); useToolbarGuide.getState().show() }}
+                    className="lp-menu-item mt-2 flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-xs"
+                  >
+                    راهنمای نوار بالا
+                  </button>
                   <div className="lp-menu-sep mt-3 border-t pt-3">
                     <SignOutButton className="lp-menu-out flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors" />
                   </div>
@@ -92,6 +101,7 @@ export function Header() {
               </>
             )}
           </div>
+          <ToolbarGuide inModule={false} />
         </div>
       )}
       {profileModal && <ProfileModal onClose={() => setProfileModal(false)} />}

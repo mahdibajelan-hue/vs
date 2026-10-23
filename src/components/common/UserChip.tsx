@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { LogOut, UserCircle2, UserCog } from 'lucide-react'
+import { HelpCircle, LogOut, UserCircle2, UserCog } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 import { ProfileModal } from '../Auth/ProfileModal'
+import { useToolbarGuide } from './ToolbarGuide'
 
 /**
- * The signed-in user as every page shows them: just a photo and a name. Opening it offers exactly two things:
- * edit my details (photo, name, password, sample signature) and sign out.
+ * The signed-in user as every page shows them: just a photo and a name. Opening it offers:
+ * edit my details (photo, name, password, sample signature), the shortcut-bar guide, and sign out.
  */
 export function UserChip({ className = '' }: { className?: string }) {
   const user = useAuthStore((s) => s.currentUser())
@@ -35,7 +36,7 @@ export function UserChip({ className = '' }: { className?: string }) {
           aria-haspopup="menu"
           aria-expanded={menu}
           title={name}
-          className={`flex min-w-0 items-center gap-2 rounded-full border py-1 pr-1 pl-2.5 transition-colors hover:bg-white/5 ${className}`}
+          className={`tb-user flex min-w-0 items-center gap-2 rounded-full border py-1 pr-1 pl-2.5 transition-colors hover:bg-white/5 ${className}`}
           style={{ borderColor: 'var(--border-soft)' }}
         >
           {user.avatarUrl ? (
@@ -46,6 +47,7 @@ export function UserChip({ className = '' }: { className?: string }) {
             </span>
           )}
           <span className="hidden max-w-[9rem] truncate text-xs font-bold sm:block">{name}</span>
+          <span className="tb-cap sm:hidden" aria-hidden>حساب من</span>
         </button>
         {menu && (
           <div className="tb-pop" style={{ width: 230 }} role="menu" dir="rtl">
@@ -59,6 +61,9 @@ export function UserChip({ className = '' }: { className?: string }) {
             <div className="p-1.5">
               <button role="menuitem" className="tb-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-right text-[12.5px] font-medium" onClick={() => { setMenu(false); setProfile(true) }}>
                 <UserCog size={15} aria-hidden /> مشخصات و پروفایل من
+              </button>
+              <button role="menuitem" className="tb-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-right text-[12.5px] font-medium" onClick={() => { setMenu(false); useToolbarGuide.getState().show() }}>
+                <HelpCircle size={15} aria-hidden /> راهنمای نوار بالا
               </button>
               <button role="menuitem" className="tb-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-right text-[12.5px] font-medium" style={{ color: '#f87171' }} onClick={() => signOut()}>
                 <LogOut size={15} aria-hidden /> خروج از حساب
