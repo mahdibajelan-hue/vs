@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock3, History } from 'lucide-react'
+import { Clock3, History, MapPin } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { toJalali } from '../../../lib/jalali'
 import { fa } from '../lib/svMonth'
@@ -56,6 +56,22 @@ export function EntryHistory({ kind, subjectId, day, row }: { kind: 'person' | '
           {logs.map((l, i) => <li key={i}>{when(l.at)} · {l.who} · {ACT[l.action] ?? l.action} {describe(kind, l.new_val ?? l.old_val)}{l.late_reason ? ` · دلیل: ${l.late_reason}` : ''}</li>)}
         </ul>
       )}
+    </div>
+  )
+}
+
+const REJECT: Record<string, string> = { outside: 'خارج از محدوده', low_accuracy: 'دقت کم موقعیت', no_check_in: 'خروج بدون ورود', locked: 'ماه بسته' }
+/** Phone check-in attempts of one person on one day (accepted and rejected). */
+export function DayPunches({ personId, day }: { personId: string; day: string }) {
+  const all = useSupervisionStore((s) => s.punches)
+  const sites = useSupervisionStore((s) => s.sites)
+  const list = all.filter((x) => x.personId === personId && x.day === day)
+  if (!list.length) return null
+  const m = (d: number | null) => (d == null ? '' : d >= 1000 ? `${fa((Math.round(d / 100) / 10).toString())} کیلومتر` : `${fa(Math.round(d))} متر`)
+  return (
+    <div className="sv-hist">
+      <span><b><MapPin size={12} style={{ display: 'inline', verticalAlign: -2 }} /> ثبت با گوشی</b></span>
+      <ul>{list.map((x) => <li key={x.id} className={x.accepted ? '' : 'sv-warn'}>{when(x.at)} · {x.kind === 'in' ? 'ورود' : 'خروج'} · {x.accepted ? 'پذیرفته' : `رد (${REJECT[x.reason] ?? x.reason})`} · {m(x.distanceM)}{x.siteId ? ` تا ${sites.find((s) => s.id === x.siteId)?.name ?? ''}` : ''}{x.accuracyM != null ? ` · دقت ±${fa(Math.round(x.accuracyM))}` : ''}</li>)}</ul>
     </div>
   )
 }

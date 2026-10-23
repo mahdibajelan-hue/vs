@@ -14,7 +14,7 @@ const plusDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:
 
 /** Written after the entry window (today and `grace` days back), by its reason or by when it was first stored. */
 export function isLateRow(r: Pick<SvAttendance, 'day' | 'lateReason' | 'createdAt' | 'source'>, grace: number): boolean {
-  if (r.source === 'clock') return false
+  if (r.source !== 'manual') return false
   if ((r.lateReason ?? '').trim()) return true
   return !!r.createdAt && entryDay(r.createdAt) > plusDays(r.day, grace)
 }
@@ -25,8 +25,8 @@ export interface PersonFigures { rest: number; onProject: number; overtime: numb
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0)
 
 /** One person's month: late rows and the patterns that suggest the days were filled in rather than recorded. */
-export function personCheck(rows: SvAttendance[], m: PersonFigures, grace: number): PersonCheck {
-  const manual = rows.filter((r) => r.source !== 'clock')
+export function personCheck(rows: SvAttendance[], m: PersonFigures, grace: number, linked = false): PersonCheck {
+  const manual = rows.filter((r) => r.source === 'manual')
   const late = manual.filter((r) => isLateRow(r, grace)).length
   const flags: string[] = []
   if (manual.length && late / manual.length >= 0.3) flags.push(`${pct(late, manual.length)}٪ روزها با تأخیر ثبت شده`)
@@ -39,6 +39,9 @@ export function personCheck(rows: SvAttendance[], m: PersonFigures, grace: numbe
   }
   const present = manual.filter((r) => r.status === 'present')
   if (present.length >= 8 && present.filter((r) => !r.checkIn && !r.checkOut).length / present.length >= 0.8) flags.push('در بیشتر روزها ساعت ورود و خروج ثبت نشده')
+  // someone who checks in with their phone but whose present days were typed by hand
+  const handPresent = linked ? rows.filter((r) => r.status === 'present' && r.source === 'manual').length : 0
+  if (handPresent >= 3) flags.push(`${handPresent} روز «حاضر» دستی ثبت شده در حالی که باید با گوشی ثبت کند`)
   if (m.onProject >= 20 && m.rest === 0) flags.push('در کل ماه حتی یک روز استراحت ندارد')
   if (m.overtimeCap > 0 && m.overtime >= m.overtimeCap - 0.5 && m.overtime <= m.overtimeCap + 0.5) flags.push('اضافه‌کار دقیقاً برابر سقف')
   return { late, flags }
@@ -53,12 +56,16 @@ export interface ProjectCheck {
   bulk: { count: number; at: string } | null
   /** days on which 3+ people present all carry exactly the same check-in/out */
   sameForAll: number
+  /** share of present days recorded by the person's phone inside a site, 0–100 */
+  gpsPct: number
   flags: string[]
   level: 'ok' | 'warn' | 'bad'
 }
 
 export function projectCheck(rows: SvAttendance[], grace: number, personFlags = 0): ProjectCheck {
-  const manual = rows.filter((r) => r.source !== 'clock')
+  const present = rows.filter((r) => r.status === 'present')
+  const gpsPct = pct(present.filter((r) => r.source === 'gps').length, present.length)
+  const manual = rows.filter((r) => r.source === 'manual')
   const late = manual.filter((r) => isLateRow(r, grace)).length
   const timelyPct = manual.length ? 100 - pct(late, manual.length) : 100
   // bulk: sliding 15-minute window over first-entry times
@@ -79,5 +86,5 @@ export function projectCheck(rows: SvAttendance[], grace: number, personFlags = 
   if (bulk) flags.push(`ثبت انبوه: ${bulk.count} ردیف در کمتر از ۱۵ دقیقه`)
   if (sameForAll >= 5) flags.push(`در ${sameForAll} روز ساعت ورود و خروج همهٔ نفرات عین هم است`)
   const n = flags.length + personFlags
-  return { rows: manual.length, late, timelyPct, bulk, sameForAll, flags, level: n === 0 ? 'ok' : bulk || timelyPct < 50 || n >= 4 ? 'bad' : 'warn' }
+  return { rows: manual.length, late, timelyPct, bulk, sameForAll, gpsPct, flags, level: n === 0 ? 'ok' : bulk || timelyPct < 50 || n >= 4 ? 'bad' : 'warn' }
 }

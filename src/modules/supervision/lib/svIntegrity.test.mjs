@@ -48,4 +48,13 @@ assert.equal(pt.level, 'bad')
 const legacy = days.map((d) => row(d, { createdAt: undefined }))
 assert.equal(k.projectCheck(legacy, 2).timelyPct, 100)
 
+// phone check-ins: not late, counted in gpsPct; a linked person with hand-typed present days is flagged
+const viaPhone = days.slice(0, 10).map((d) => row(d, { source: 'gps', checkIn: '07:02', checkOut: '17:40', createdAt: '2026-03-01T10:00:00Z' }))
+assert.equal(k.projectCheck(viaPhone, 2).timelyPct, 100)
+assert.equal(k.projectCheck(viaPhone, 2).gpsPct, 100)
+const mixed = [...viaPhone, ...days.slice(10, 14).map((d) => row(d))]
+assert.equal(k.projectCheck(mixed, 2).gpsPct, 71)
+assert.ok(k.personCheck(mixed, fig, 2, true).flags.some((f) => f.includes('گوشی')))
+assert.ok(!k.personCheck(mixed, fig, 2, false).flags.some((f) => f.includes('گوشی')), 'not linked: no phone flag')
+
 console.log('supervision/lib/svIntegrity: all assertions passed')

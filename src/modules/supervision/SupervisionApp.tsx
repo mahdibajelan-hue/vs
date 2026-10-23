@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, FileBarChart2, Loader2, MapPin, Settings2, UsersRound, UtensilsCrossed } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -11,14 +11,16 @@ import './supervision.css'
 import { useSupervisionStore } from './store/useSupervisionStore'
 import { thisMonth, type Ym } from './lib/svMonth'
 import { MonthPage } from './pages/MonthPage'
+import { MyCheckinPage, loadMyLinks, type MyLink } from './pages/MyCheckinPage'
 
 const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage').then((m) => ({ default: m.FacilitiesPage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })))
 const RosterPage = lazy(() => import('./pages/RosterPage').then((m) => ({ default: m.RosterPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
-type Tab = 'month' | 'facilities' | 'report' | 'roster' | 'settings'
+type Tab = 'me' | 'month' | 'facilities' | 'report' | 'roster' | 'settings'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
+  { id: 'me', label: 'ورود و خروج من', icon: MapPin, color: '#4ade80' },
   { id: 'month', label: 'حضور و غیاب', icon: CalendarDays, color: '#22d3ee' },
   { id: 'facilities', label: 'تسهیلات', icon: UtensilsCrossed, color: '#f59e0b' },
   { id: 'report', label: 'گزارش ماه', icon: FileBarChart2, color: '#a78bfa' },
@@ -41,6 +43,9 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const [tab, setTab] = useState<Tab>('month')
   const [projectId, setProjectId] = useState<string | null>(null)
   const [month, setMonth] = useState<Ym>(thisMonth())
+  // people linked to the signed-in account check in with their phone; for them that page comes first
+  const [links, setLinks] = useState<MyLink[] | null>(null)
+  useEffect(() => { void loadMyLinks().then((l) => { setLinks(l); if (l.length) setTab('me') }) }, [])
 
   useEffect(() => { if (!mdLoaded) void fetchMasterData() }, [mdLoaded, fetchMasterData])
   useEffect(() => {
@@ -53,6 +58,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
 
   const project = useMemo(() => projects.find((p) => p.id === projectId), [projects, projectId])
   const body = () => {
+    if (tab === 'me') return links === null ? null : <MyCheckinPage links={links} />
     if (!projectId) return <div className="im-card im-empty">{mdLoaded && !projects.length ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'در حال بارگذاری پروژه‌ها…'}</div>
     switch (tab) {
       case 'month': return <MonthPage month={month} onMonth={setMonth} onGoRoster={() => setTab('roster')} onGoReport={() => setTab('report')} />
@@ -60,6 +66,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
       case 'report': return <ReportPage month={month} onMonth={setMonth} projectName={project?.officialName ?? ''} />
       case 'roster': return <RosterPage />
       case 'settings': return <SettingsPage month={month} onMonth={setMonth} />
+      default: return null
     }
   }
 
@@ -84,7 +91,7 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های حضور و غیاب دستگاه نظارت">
-          {NAV.map((n) => (
+          {NAV.filter((n) => n.id !== 'me' || (links?.length ?? 0) > 0).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>

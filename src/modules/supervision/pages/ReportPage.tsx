@@ -6,7 +6,7 @@ import { useSupervisionStore } from '../store/useSupervisionStore'
 import { activeDays, guestTotals, monthTotals, personMonth, vehicleMonth, type PersonMonth } from '../lib/svCalc'
 import { fa, faNum, monthDays, monthLabel, recordedUpTo, ymKey, type Ym } from '../lib/svMonth'
 import { SignoffPanel } from '../components/SignoffPanel'
-import { AttendanceSheet, FacilitiesSheet, type SheetData } from '../components/ReportSheets'
+import { ORIENTATION, PagedDoc, PagedPreview, buildDoc, type DocKind, type SheetData } from '../components/ReportSheets'
 import { personCheck, projectCheck } from '../lib/svIntegrity'
 import type { SvSnapshot } from '../types'
 import { Empty, MonthNav } from '../components/common'
@@ -25,8 +25,8 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
   const mdays = useMemo(() => monthDays(month), [month])
   const days = useMemo(() => mdays.map((d) => d.iso), [mdays])
   const signatures = useSupervisionStore((s) => s.signatures[ymKey(month)])
-  const [view, setView] = useState<'summary' | 'att' | 'fac'>('summary')
-  const [printing, setPrinting] = useState<'att' | 'fac' | null>(null)
+  const [view, setView] = useState<'summary' | DocKind>('summary')
+  const [tsPerson, setTsPerson] = useState<string>('all')
   useEffect(() => { void loadRange(days[0], days[days.length - 1]) }, [days, loadRange])
   const upTo = recordedUpTo(month)
 
@@ -44,25 +44,24 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
     breakfast: tot.breakfast + gt.breakfast, lunch: tot.lunch + gt.lunch, dinner: tot.dinner + gt.dinner, vehicleDays: tot.vehicleDays, vehicleHours: tot.vehicleHours,
   }
   const driver = (id: string | null) => people.find((p) => p.id === id)?.fullName ?? ''
-  const checks = pm.map(({ p, m }) => ({ p, c: personCheck(rows.filter((r) => r.personId === p.id), m, settings.entryGraceDays) }))
+  const checks = pm.map(({ p, m }) => ({ p, c: personCheck(rows.filter((r) => r.personId === p.id), m, settings.entryGraceDays, !!p.userId) }))
   const pcheck = projectCheck(rows, settings.entryGraceDays, checks.reduce((a, x) => a + x.c.flags.length, 0))
   const sheet: SheetData = {
     projectName, month, days: mdays, settings, pm: pm.map((x, i) => ({ ...x, late: checks[i].c.late })), vm, att, tot, gt,
     guests: guests.filter((g) => g.day >= days[0] && g.day <= days[days.length - 1]), sides,
-    signatures: (signatures ?? []).filter((x) => !x.revokedAt), timelyPct: pcheck.timelyPct, driver,
+    signatures: (signatures ?? []).filter((x) => !x.revokedAt), timelyPct: pcheck.timelyPct, gpsPct: pcheck.gpsPct, driver,
   }
-  // one form per print job, on its own paper orientation; everything else on the page is hidden while printing
+  const doc = view === 'summary' ? null : buildDoc(view, sheet, tsPerson === 'all' ? pm.map((x) => x.p.id) : [tsPerson])
+  // While a form is shown, printing (button or Ctrl+P) prints exactly its pages: page size and orientation set, zero
+  // margins (so the browser adds no header/footer of its own), everything else on the screen hidden.
   useEffect(() => {
-    if (!printing) return
+    if (view === 'summary') return
     const st = document.createElement('style')
-    st.textContent = `@page { size: A4 ${printing === 'att' ? 'landscape' : 'portrait'}; margin: 8mm; }`
+    st.textContent = `@page { size: A4 ${ORIENTATION[view]}; margin: 0; }`
     document.head.appendChild(st)
     document.body.classList.add('sv-printing')
-    const done = () => setPrinting(null)
-    window.addEventListener('afterprint', done)
-    const t = window.setTimeout(() => window.print(), 60)
-    return () => { window.clearTimeout(t); window.removeEventListener('afterprint', done); document.body.classList.remove('sv-printing'); st.remove() }
-  }, [printing])
+    return () => { document.body.classList.remove('sv-printing'); st.remove() }
+  }, [view])
 
   const csv = () => {
     const q = (x: string | number) => `"${String(x).replace(/"/g, '""')}"`
@@ -97,21 +96,26 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
       <div className="im-card no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 12 }}>
         <MonthNav value={month} onChange={onMonth} />
         <div className="im-seg" role="tablist" aria-label="نما">
-          <button role="tab" aria-selected={view === 'summary'} className={view === 'summary' ? 'on' : ''} onClick={() => setView('summary')}>خلاصه و امضا</button>
-          <button role="tab" aria-selected={view === 'att'} className={view === 'att' ? 'on' : ''} onClick={() => setView('att')}>فرم کارکرد</button>
-          <button role="tab" aria-selected={view === 'fac'} className={view === 'fac' ? 'on' : ''} onClick={() => setView('fac')}>فرم تسهیلات</button>
+          {([['summary', 'خلاصه و امضا'], ['att', 'فرم کارکرد'], ['fac', 'فرم تسهیلات'], ['ts', 'تایم‌شیت نفرات']] as const).map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>
+          ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {view === 'ts' && (
+            <select className="sv-select" value={tsPerson} onChange={(e) => setTsPerson(e.target.value)} aria-label="نفر">
+              <option value="all">همهٔ نفرات (هر نفر یک صفحه)</option>
+              {pm.map(({ p }) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+            </select>
+          )}
           <button className="im-btn im-btn-ghost im-btn-sm" onClick={csv} disabled={!pm.length && !vm.length}><Download size={14} /> CSV</button>
-          <button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setPrinting('att')} disabled={!pm.length}><Printer size={14} /> چاپ فرم کارکرد</button>
-          <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setPrinting('fac')}><Printer size={14} /> چاپ فرم تسهیلات</button>
+          {view !== 'summary' && <button className="im-btn im-btn-primary im-btn-sm" onClick={() => window.print()} disabled={!pm.length && view !== 'fac'}><Printer size={14} /> چاپ / PDF</button>}
         </div>
       </div>
-      {printing && createPortal(<div className="sv-print-host">{printing === 'att' ? <AttendanceSheet d={sheet} /> : <FacilitiesSheet d={sheet} />}</div>, document.body)}
+      {doc && createPortal(<div className="sv-print-host"><PagedDoc doc={doc} d={sheet} /></div>, document.body)}
       {view !== 'summary' ? (
         <div className="sv-paper-wrap">
-          <p className="sv-note no-print" style={{ margin: '0 0 8px' }}><FileText size={13} /> پیش‌نمایش {view === 'att' ? 'فرم کارکرد (A4 افقی)' : 'فرم تسهیلات (A4 عمودی)'}؛ هر فرم جداگانه چاپ و به صورت‌وضعیت ضمیمه می‌شود. امضاها پس از تأیید در «خلاصه و امضا» روی فرم می‌آیند.</p>
-          <div className={`sv-paper ${view === 'att' ? 'landscape' : 'portrait'}`}>{view === 'att' ? <AttendanceSheet d={sheet} /> : <FacilitiesSheet d={sheet} />}</div>
+          <p className="sv-note no-print" style={{ margin: '0 0 8px' }}><FileText size={13} /> پیش‌نمایش چاپ ({view === 'att' ? 'A4 افقی' : 'A4 عمودی'})؛ سربرگ، امضاها و شمارهٔ صفحه روی همهٔ صفحه‌ها می‌آید. در پنجرهٔ چاپ «Save as PDF» را برای فایل PDF انتخاب کنید. امضاها پس از تأیید در «خلاصه و امضا» روی فرم‌ها می‌آیند.</p>
+          {doc && <PagedPreview doc={doc} d={sheet} />}
         </div>
       ) : <>
       <div>
@@ -210,6 +214,7 @@ function IntegrityCard({ pcheck, checks, grace }: { pcheck: ReturnType<typeof pr
         <span>{pcheck.level === 'ok' ? 'نشانه‌ای از ثبت فرمالیته دیده نشد' : pcheck.level === 'warn' ? 'پیش از تأیید بررسی شود' : 'احتمال ثبت فرمالیته؛ پیش از تأیید با سرپرست بررسی شود'}</span>
       </div>
       <div className="sv-integ-stats">
+        <span>حضور با گوشی <b>{fa(pcheck.gpsPct)}٪</b></span>
         <span>ثبت به‌موقع <b>{fa(pcheck.timelyPct)}٪</b></span>
         <span>ثبت دیرهنگام (بعد از {fa(grace)} روز) <b>{fa(pcheck.late)}</b> از {fa(pcheck.rows)}</span>
         {pcheck.bulk && <span>بیشترین ثبت پشت‌سرهم <b>{fa(pcheck.bulk.count)}</b> ردیف در ۱۵ دقیقه</span>}

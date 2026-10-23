@@ -7,7 +7,7 @@ export type SvVehicleStatus = 'present' | 'absent' | 'repair'
 export type SvVehicleKind = 'sedan' | 'pickup' | 'suv' | 'van' | 'minibus' | 'other'
 export type SvGearbox = 'manual' | 'automatic'
 export type SvOwnership = 'rented' | 'company'
-export type SvSource = 'manual' | 'clock'
+export type SvSource = 'manual' | 'clock' | 'gps'
 
 export interface SvSettings {
   dutyDays: number
@@ -36,6 +36,8 @@ export interface SvPerson {
   /** usual working hours, e.g. 07:00–15:00, or 19:00–07:00 for a night shift (null = not set: a day counts the standard 8 hours) */
   shiftStart: string | null
   shiftEnd: string | null
+  /** platform account that checks in with its own phone (null = recorded by the supervisor) */
+  userId: string | null
   startDate: string | null
   endDate: string | null
   active: boolean
@@ -151,4 +153,28 @@ export interface SvVehicleDay {
   lateReason?: string
   createdAt?: string
   updatedAt?: string
+}
+
+/** A place people check in at with their phone: centre and radius (camp, site office, spread). */
+export interface SvSite {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  radiusM: number
+  active: boolean
+}
+
+/** One «ورود» / «خروج» attempt from a phone, accepted or not (server time, distance to the nearest site). */
+export interface SvPunch {
+  id: string
+  personId: string
+  kind: 'in' | 'out'
+  at: string
+  day: string
+  accepted: boolean
+  reason: string
+  distanceM: number | null
+  accuracyM: number | null
+  siteId: string | null
 }

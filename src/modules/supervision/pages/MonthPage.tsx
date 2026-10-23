@@ -7,7 +7,7 @@ import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } fr
 import type { SvPerson, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
 import { Empty, Flash, LockNote, MonthNav, StatusSeg, useLockedIn } from '../components/common'
 import { CellPopover } from '../components/CellEditor'
-import { LateReason, EntryHistory } from '../components/EntryGuard'
+import { LateReason, EntryHistory, DayPunches } from '../components/EntryGuard'
 import { TimeField } from '../components/TimeField'
 
 type Open = { kind: 'person' | 'vehicle' | 'day'; id: string; day: string; el: HTMLElement } | null
@@ -113,7 +113,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
                     {days.map((d) => {
                       const r = att[attKey(p.id, d.iso)]
                       const sel = open?.kind === 'person' && open.id === p.id && open.day === d.iso
-                      return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${sel ? 'sel' : ''}`} onClick={(e) => tapPerson(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={sel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
+                      return <td key={d.iso}><button className={`sv-cell ${r ? `sv-c-${r.status}` : 'empty'} ${!r && d.iso <= upTo ? 'due' : ''} ${on.has(d.iso) ? '' : 'off'} ${r && r.overtime > 0 ? 'has-ot' : ''} ${r?.lateReason ? 'was-late' : ''} ${r?.source === 'gps' ? 'gps' : ''} ${sel ? 'sel' : ''}`} onClick={(e) => tapPerson(p, d.iso, e.currentTarget)} aria-label={`${p.fullName} ${fa(d.jd)}: ${r ? STATUS_FA[r.status] : 'ثبت‌نشده'}`} aria-expanded={sel} title={[r && isWorking(r.status) ? `${r.checkIn ? `${r.checkIn}–${r.checkOut ?? '…'} · ` : ''}${r.hours} ساعت${r.overtime ? ` (اضافه‌کار ${r.overtime})` : ''}` : '', r?.lateReason ? `ثبت با تأخیر: ${r.lateReason}` : '', r?.source === 'gps' ? 'ثبت با گوشی در محدودهٔ کارگاه' : ''].filter(Boolean).join(' — ') || undefined}>{r ? STATUS_MARK[r.status] : ''}</button></td>
                     })}
                     <td className="sum"><b className={m.shortfall ? 'sv-bad' : ''}>{fa(m.worked)}</b> / {fa(m.required)}</td>
                     <td className="sum"><span className={m.restOver ? 'sv-warn' : ''}>{fa(m.rest)}</span> / {fa(m.restAllowed)}</td>
@@ -144,7 +144,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
           </table>
         </div>
       )}
-      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. هر روز حاضر صبحانه، ناهار و شام حساب می‌شود. با زدن عدد روز در سرستون، همهٔ ثبت‌نشده‌های آن روز حاضر زده می‌شوند. ثبت هر روز تا {fa(settings.entryGraceDays)} روز بعد آزاد است؛ پس از آن نوشتن دلیل لازم است و زمان واقعی ثبت، نویسنده و دلیل در سابقهٔ همان خانه و در گزارش ماه دیده می‌شود. خانه‌های خط‌چین با تأخیر ثبت شده‌اند.</p>
+      <p className="sv-note">روی هر خانه بزنید: خانهٔ خالی «حاضر» می‌شود (با ساعت کاری همان نفر) و زیرش می‌توانید وضعیت را عوض کنید یا ساعت ورود و خروج را بنویسید. ۸ ساعت اول موظفی و بیشتر از آن اضافه‌کار حساب می‌شود. هر روز حاضر صبحانه، ناهار و شام حساب می‌شود. با زدن عدد روز در سرستون، همهٔ ثبت‌نشده‌های آن روز حاضر زده می‌شوند. ثبت هر روز تا {fa(settings.entryGraceDays)} روز بعد آزاد است؛ پس از آن نوشتن دلیل لازم است و زمان واقعی ثبت، نویسنده و دلیل در سابقهٔ همان خانه و در گزارش ماه دیده می‌شود. خانه‌های خط‌چین با تأخیر ثبت شده‌اند و خانه‌های با نقطهٔ سبز را خود نفر با گوشی در محدودهٔ کارگاه ثبت کرده است.</p>
 
       {open?.kind === 'person' && (() => { const p = people.find((x) => x.id === open.id); return p ? <PersonDay key={open.id + open.day} p={p} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} reason={reasons[open.day] ?? ''} onReason={(r) => setReason(open.day, r)} /> : null })()}
       {open?.kind === 'vehicle' && (() => { const v = vehicles.find((x) => x.id === open.id); return v ? <VehicleDayEditor key={open.id + open.day} v={v} day={open.day} anchor={open.el} onClose={() => setOpen(null)} onError={fail} reason={reasons[open.day] ?? ''} onReason={(r) => setReason(open.day, r)} /> : null })()}
@@ -205,6 +205,7 @@ function PersonDay({ p, day, anchor, onClose, onError, reason, onReason }: { p: 
           {mealText && <> · وعده: {mealText}</>}
         </p>
       )}
+      <DayPunches personId={p.id} day={day} />
       {row && <EntryHistory kind="person" subjectId={p.id} day={day} row={row} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <button className="im-btn im-btn-ghost im-btn-sm" onClick={clear} disabled={!row}><Eraser size={13} /> پاک کردن روز</button>

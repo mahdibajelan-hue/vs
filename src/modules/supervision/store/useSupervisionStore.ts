@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { SvAttendance, SvGuestMeal, SvPerson, SvSettings, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
+import type { SvAttendance, SvGuestMeal, SvPerson, SvPunch, SvSettings, SvSite, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
 import { addDays, todayLocal } from '../lib/svMonth'
 
@@ -14,13 +14,13 @@ const t = (v: unknown) => (v ? String(v).slice(0, 5) : null)
 const toPerson = (r: Row): SvPerson => ({
   id: s(r.id), projectId: s(r.master_project_id), fullName: s(r.full_name), side: (r.side as SvPerson['side']) ?? 'supervision', roleTitle: s(r.role_title),
   nationalId: s(r.national_id), mobile: s(r.mobile), cardNo: s(r.card_no), overtimeCap: r.overtime_cap == null ? null : n(r.overtime_cap),
-  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, shiftStart: t(r.shift_start), shiftEnd: t(r.shift_end), startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
+  mealBreakfast: !!r.meal_breakfast, mealLunch: !!r.meal_lunch, mealDinner: !!r.meal_dinner, shiftStart: t(r.shift_start), shiftEnd: t(r.shift_end), userId: (r.user_id as string) ?? null, startDate: (r.start_date as string) ?? null, endDate: (r.end_date as string) ?? null,
   active: !!r.active, note: s(r.note),
 })
 const fromPerson = (p: Partial<SvPerson>): Row => {
   const o: Row = {}
-  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['shiftStart', 'shift_start'], ['shiftEnd', 'shift_end'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
-  for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'shift_start' || c === 'shift_end') ? null : p[k]
+  const m: [keyof SvPerson, string][] = [['fullName', 'full_name'], ['side', 'side'], ['roleTitle', 'role_title'], ['nationalId', 'national_id'], ['mobile', 'mobile'], ['cardNo', 'card_no'], ['overtimeCap', 'overtime_cap'], ['mealBreakfast', 'meal_breakfast'], ['mealLunch', 'meal_lunch'], ['mealDinner', 'meal_dinner'], ['shiftStart', 'shift_start'], ['shiftEnd', 'shift_end'], ['userId', 'user_id'], ['startDate', 'start_date'], ['endDate', 'end_date'], ['active', 'active'], ['note', 'note']]
+  for (const [k, c] of m) if (k in p) o[c] = p[k] === '' && (c === 'start_date' || c === 'end_date' || c === 'shift_start' || c === 'shift_end' || c === 'user_id') ? null : p[k]
   return o
 }
 const toGuest = (r: Row): SvGuestMeal => ({ id: s(r.id), day: s(r.day), guestName: s(r.guest_name), organization: s(r.organization), host: s(r.host), breakfast: n(r.breakfast), lunch: n(r.lunch), dinner: n(r.dinner), note: s(r.note), lateReason: s(r.late_reason) })
@@ -43,6 +43,8 @@ const toAtt = (r: Row): SvAttendance => ({
 const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note), lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at) })
 const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days) } : DEFAULT_SETTINGS
 
+const toSite = (r: Row): SvSite => ({ id: s(r.id), name: s(r.name), lat: n(r.lat), lng: n(r.lng), radiusM: n(r.radius_m), active: !!r.active })
+const toPunch = (r: Row): SvPunch => ({ id: s(r.id), personId: s(r.person_id), kind: r.kind as SvPunch['kind'], at: s(r.at), day: s(r.day), accepted: !!r.accepted, reason: s(r.reason), distanceM: r.distance_m == null ? null : n(r.distance_m), accuracyM: r.accuracy_m == null ? null : n(r.accuracy_m), siteId: (r.site_id as string) ?? null })
 const toSignoff = (r: Row): SvSignoff => ({ month: s(r.month), status: r.status as SvSignoff['status'], from: s(r.from_day), to: s(r.to_day) })
 const toSignature = (r: Row): SvSignature => ({
   id: s(r.id), month: s(r.month), step: r.step as SvSignStep, userId: s(r.user_id), signerName: s(r.signer_name), signerTitle: s(r.signer_title), image: s(r.image),
@@ -82,6 +84,11 @@ interface State {
   att: Record<string, SvAttendance>
   vdays: Record<string, SvVehicleDay>
   guests: SvGuestMeal[]
+  sites: SvSite[]
+  /** phone check-in attempts of the loaded range */
+  punches: SvPunch[]
+  saveSite: (x: Omit<SvSite, 'id'> & { id?: string }) => Promise<Result>
+  deleteSite: (id: string) => Promise<Result>
   range: { from: string; to: string } | null
   rangeLoading: boolean
   /** sign-off state per Jalali month (YYYY-MM) and every signature of a month (revoked ones too, for the history) */
@@ -112,18 +119,20 @@ interface State {
 }
 
 export const useSupervisionStore = create<State>()((set, get) => ({
-  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
+  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], sites: [], punches: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
 
   load: async (projectId) => {
     const fresh = get().projectId !== projectId
-    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS, signoffs: {}, signatures: {} } : {}) })
-    const [st, pp, vv, so] = await Promise.all([
+    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS, signoffs: {}, signatures: {}, sites: [], punches: [] } : {}) })
+    const [st, pp, vv, so, si] = await Promise.all([
       supabase.from('sv_settings').select('*').eq('master_project_id', projectId).maybeSingle(),
       supabase.from('sv_people').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('full_name'),
       supabase.from('sv_vehicles').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('title'),
       supabase.from('sv_month_signoffs').select('*').eq('master_project_id', projectId),
+      supabase.from('sv_sites').select('*').eq('master_project_id', projectId).order('created_at'),
     ])
     if (get().projectId !== projectId) return
+    set({ sites: ((si.data ?? []) as Row[]).map(toSite) })
     set({ signoffs: Object.fromEntries(((so.data ?? []) as Row[]).map(toSignoff).map((x) => [x.month, x])) })
     const e = pp.error ?? vv.error ?? st.error
     set({ loading: false, error: e ? err(e) ?? '' : '', settings: toSettings(st.data as Row | null), people: ((pp.data ?? []) as Row[]).map(toPerson), vehicles: ((vv.data ?? []) as Row[]).map(toVehicle) })
@@ -133,16 +142,17 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     const pid = get().projectId, r = get().range
     if (!pid || (!force && r && r.from <= from && r.to >= to)) return
     set({ rangeLoading: true })
-    const [a, v, g] = await Promise.all([
+    const [a, v, g, pu] = await Promise.all([
       supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
       supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to),
       supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at'),
+      supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at'),
     ])
     if (get().projectId !== pid) return
     const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
     for (const x of ((a.data ?? []) as Row[]).map(toAtt)) att[key(x.personId, x.day)] = x
     for (const x of ((v.data ?? []) as Row[]).map(toVDay)) vdays[key(x.vehicleId, x.day)] = x
-    set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
+    set({ att, vdays, guests: ((g.data ?? []) as Row[]).map(toGuest), punches: ((pu.data ?? []) as Row[]).map(toPunch), range: { from, to }, rangeLoading: false, error: a.error || v.error ? err(a.error ?? v.error) ?? '' : get().error })
   },
 
   needsReason: (day) => day < addDays(todayLocal(), -get().settings.entryGraceDays),
@@ -279,6 +289,21 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     const { error } = await supabase.from('sv_guest_meals').delete().eq('id', id)
     if (error) return { ok: false, error: err(error) }
     set((x) => ({ guests: x.guests.filter((o) => o.id !== id) }))
+    return { ok: true }
+  },
+  saveSite: async (x) => {
+    const pid = get().projectId!
+    const row = { name: x.name.trim(), lat: x.lat, lng: x.lng, radius_m: Math.round(x.radiusM), active: x.active }
+    const { data, error } = x.id ? await supabase.from('sv_sites').update(row).eq('id', x.id).select().single() : await supabase.from('sv_sites').insert({ master_project_id: pid, ...row }).select().single()
+    if (error || !data) return { ok: false, error: err(error) ?? 'ذخیره نشد' }
+    const saved = toSite(data as Row)
+    set((st) => ({ sites: x.id ? st.sites.map((o) => (o.id === saved.id ? saved : o)) : [...st.sites, saved] }))
+    return { ok: true }
+  },
+  deleteSite: async (id) => {
+    const { error } = await supabase.from('sv_sites').delete().eq('id', id)
+    if (error) return { ok: false, error: err(error) }
+    set((st) => ({ sites: st.sites.filter((o) => o.id !== id) }))
     return { ok: true }
   },
   clockCount: async (from, to) => {
