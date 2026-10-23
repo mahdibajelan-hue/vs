@@ -6,7 +6,7 @@ import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleA
 import { useNotificationStore } from '../../../store/useNotificationStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { RadarSidebar } from './RadarSidebar'
-import { PROJECT_NAV, navModule, type ProjectNavItem } from './projectNav'
+import { PROJECT_NAV, navModule, projectBadges, type ProjectNavItem } from './projectNav'
 import './radarShell.css'
 
 const KEY = 'farin.workspace.sidebar'
@@ -22,6 +22,7 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const access = useModuleAccessStore((s) => s.accessibleModules)
   const notifications = useNotificationStore((s) => s.items)
+  const projectOf = useNotificationStore((s) => s.projectOf)
   const [desktop, setDesktop] = useState(wide)
   const [open, setOpen] = useState(() => {
     if (!wide()) return false
@@ -43,7 +44,6 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
     if (!desktop) setOpen(false)
     const store = useModuleStore.getState()
     if (item.id === 'overview') store.backToRadar()
-    else if (item.id === 'universe') { useModuleStore.setState({ radarUniverse: true }); store.backToRadar() }
     else if (item.module && item.module !== (active && navModule(active))) store.enterModule(item.module, 'project')
   }
 
@@ -60,7 +60,7 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
         project={project}
         active={activeId}
         canSee={(k) => hasModuleAccess(access, k)}
-        badgeFor={(k) => notifications.filter((n) => navModule(n.module) === k).length}
+        badgeFor={projectBadges(notifications, projectOf, projectId)}
         open={open}
         overlay={!desktop}
         onItem={onItem}

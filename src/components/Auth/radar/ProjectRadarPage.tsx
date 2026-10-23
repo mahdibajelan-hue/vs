@@ -12,14 +12,13 @@ import { useNotificationStore } from '../../../store/useNotificationStore'
 import { RadarProjectPicker } from './RadarProjectPicker'
 import { RadarSidebar } from './RadarSidebar'
 import { MobileRadar } from './MobileRadar'
-import { navModule, rememberProject, type ProjectNavItem } from './projectNav'
+import { projectBadges, rememberProject, type ProjectNavItem } from './projectNav'
 import './radarShell.css'
 import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
 import { buildRadarData } from './radarLiveData'
-import { RiskIssueUniversePage } from './universe/RiskIssueUniversePage'
 import {
   DEFAULT_RADAR_DATA, SIGNAL_CATEGORY_LABEL_EN, STATUS_COLOR, STATUS_LABEL_EN, buildMockRadarData,
   type RadarData, type SignalCategory,
@@ -52,7 +51,8 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
     useProjectContextStore.setState({ portfolioId: p?.portfolioId ?? null, programId: p?.programId ?? null, projectId: p?.id ?? null, phaseId: null })
   }
   const notifications = useNotificationStore((s) => s.items)
-  const badgeFor = (key: ModuleKey) => notifications.filter((n) => navModule(n.module) === key).length
+  const projectOf = useNotificationStore((s) => s.projectOf)
+  const badgeFor = useMemo(() => projectBadges(notifications, projectOf, contextProjectId), [notifications, projectOf, contextProjectId])
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -85,8 +85,6 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   const [scanProgress, setScanProgress] = useState(100)
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
-  // a project module's sidebar can ask for the Universe directly (one-shot flag)
-  const [universeOpen, setUniverseOpen] = useState(() => { const u = useModuleStore.getState().radarUniverse; if (u) useModuleStore.setState({ radarUniverse: false }); return u })
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
   // closed so the radar itself isn't squeezed into a sliver on a phone screen.
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -133,7 +131,6 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
   const handleNavClick = (item: ProjectNavItem) => {
     if (!isDesktop) setSidebarOpen(false)
-    if (item.id === 'universe') { setUniverseOpen(true); return }
     if (!item.module) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     useModuleStore.getState().enterModule(item.module, 'project')
   }
@@ -156,15 +153,6 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
     return <RadarProjectPicker onPick={pickProject} onBack={onBack} />
   }
 
-  if (universeOpen) {
-    return (
-      <RiskIssueUniversePage
-        projectName={displayName}
-        seed={selectedProject?.id ?? 'default'}
-        onBack={() => setUniverseOpen(false)}
-      />
-    )
-  }
 
   if (isPhone && selectedProject) {
     return (

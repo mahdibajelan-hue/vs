@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, Orbit, PackageCheck,
+  BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, PackageCheck,
   PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -12,7 +12,7 @@ import type { MasterProject } from '../../../modules/masterdata/types'
  */
 export interface ProjectNavItem {
   id: string
-  /** null = a view inside the radar itself (overview / universe) */
+  /** null = the radar overview itself */
   module: ModuleKey | null
   label: string
   icon: LucideIcon
@@ -23,7 +23,6 @@ export interface ProjectNavGroup { id: string; label: string; items: ProjectNavI
 export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'watch', label: 'پایش', items: [
     { id: 'overview', module: null, label: 'رادار پروژه', icon: Radar, accent: '#22c55e' },
-    { id: 'universe', module: null, label: 'جهان ریسک و مسئله', icon: Orbit, accent: '#a78bfa' },
     { id: 'lifecycle', module: 'lifecycle', label: 'چرخهٔ عمر و برج کنترل EPC', icon: GitBranch, accent: '#22d3ee' },
     { id: 'stagegate', module: 'stagegate', label: 'گیت‌های Stage-Gate', icon: Route, accent: '#38bdf8' },
   ] },
@@ -53,6 +52,13 @@ export const PROJECT_MODULES = PROJECT_SCOPED_MODULES
 
 /** 'issues' and 'taskissue' are the same module (مدیریت موانع و اقدامات): one menu entry, one badge. */
 export const navModule = (key: ModuleKey): ModuleKey => (key === 'issues' ? 'taskissue' : key)
+
+/** Menu badge inside a project: only that project's items of the module (the bell itself still shows everything). */
+export function projectBadges(items: { id: string; module: ModuleKey }[], projectOf: Record<string, string>, projectId: string | null): (key: ModuleKey) => number {
+  const counts = new Map<ModuleKey, number>()
+  if (projectId) for (const n of items) if (projectOf[n.id] === projectId) counts.set(navModule(n.module), (counts.get(navModule(n.module)) ?? 0) + 1)
+  return (key) => counts.get(key) ?? 0
+}
 
 // ── recently opened projects (per browser) ──────────────────────────────────
 const RECENT_KEY = 'farin.radar.recent'

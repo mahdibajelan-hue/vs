@@ -32,8 +32,6 @@ interface ModuleState {
    *  runs the initializer again, so it stays until the next enterModule / «صفحهٔ اول ماژول» replaces it. */
   entryTab: string | null
   takeEntryTab: () => string | null
-  /** One-shot: Project Radar opens on the Risk & Issue Universe instead of its overview. */
-  radarUniverse: boolean
   /** "بازگشت به ماژول‌ها" — always the plain launchpad, never Radar. */
   exitToHub: () => void
   /** "بازگشت به رادار" — from inside any module, straight back to Project Radar. */
@@ -48,7 +46,6 @@ export const useModuleStore = create<ModuleState>()((set, get) => ({
   moduleResetKey: 0,
   workspace: null,
   entryTab: null,
-  radarUniverse: false,
   goModuleHome: () => set((s) => ({ moduleResetKey: s.moduleResetKey + 1, entryTab: null })),
   enterModule: (key, workspace, tab) => set((s) => ({
     activeModule: key,
