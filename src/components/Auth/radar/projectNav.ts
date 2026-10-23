@@ -1,9 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  Activity, BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, Orbit, PackageCheck,
+  BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, Orbit, PackageCheck,
   PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
-import type { ModuleKey } from '../../../store/useModuleStore'
+import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
 import type { MasterProject } from '../../../modules/masterdata/types'
 
 /**
@@ -40,7 +40,6 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'risk', label: 'ریسک و مسائل', items: [
     { id: 'risk', module: 'risk', label: 'مدیریت ریسک', icon: ShieldAlert, accent: '#f43f5e' },
     { id: 'taskissue', module: 'taskissue', label: 'موانع و اقدامات', icon: ClipboardList, accent: '#f97316' },
-    { id: 'issues', module: 'issues', label: 'مدیریت مسائل', icon: Activity, accent: '#c084fc' },
   ] },
   { id: 'assets', label: 'زمین و دارایی', items: [
     { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: Sprout, accent: '#84cc16' },
@@ -50,7 +49,10 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
 ]
 
 /** Modules reached only through the radar (they are no longer tiles on the home page). */
-export const PROJECT_MODULES = new Set<ModuleKey>(PROJECT_NAV.flatMap((g) => g.items.map((i) => i.module).filter((m): m is ModuleKey => !!m)))
+export const PROJECT_MODULES = PROJECT_SCOPED_MODULES
+
+/** 'issues' and 'taskissue' are the same module (مدیریت موانع و اقدامات): one menu entry, one badge. */
+export const navModule = (key: ModuleKey): ModuleKey => (key === 'issues' ? 'taskissue' : key)
 
 // ── recently opened projects (per browser) ──────────────────────────────────
 const RECENT_KEY = 'farin.radar.recent'

@@ -18,6 +18,8 @@ import { RiskFormModal } from './components/RiskFormModal'
 import { useQuantNavStore } from './store/useQuantNavStore'
 import { HubPage } from './pages/HubPage'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useModuleStore } from '../../store/useModuleStore'
+import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 const AssessmentPage = lazy(() => import('./pages/AssessmentPage').then((m) => ({ default: m.AssessmentPage })))
@@ -67,7 +69,7 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
   const fetchAll = useRiskStore((s) => s.fetchAll)
   const syncProjects = useRiskStore((s) => s.syncProjects)
   const fetchPeople = useRiskPeopleStore((s) => s.fetchAll)
-  const [tab, setTab] = useState<RiskTab>('home')
+  const [tab, setTab] = useState<RiskTab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as RiskTab) : 'home' })
   const [openRisk, setOpenRisk] = useState<{ id: string; tab: RiskTabId } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   const role = useRiskRole(scope === 'all' ? null : scope)
@@ -120,13 +122,15 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.shortCode ? p.shortCode + ' · ' : ''}{p.name}</option>)}
               </select>
             )}
+            {locked && <PortfolioViewButton module="risk" tab="portfolio" />}
             {tab !== 'help' && <HelpButton content={RK_HELP[cur.help]} />}
             {role.canEdit && <button className="im-btn im-btn-primary im-btn-lg" onClick={() => setNewOpen(true)}><Plus size={18} strokeWidth={2.6} /> ریسک جدید</button>}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت ریسک">
-          {NAV.map((n) => (
+          {/* inside one project the portfolio-wide tab has nothing to show — it lives in the portfolio view */}
+          {NAV.filter((n) => !locked || n.id !== 'portfolio').map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>

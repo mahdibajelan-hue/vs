@@ -61,11 +61,11 @@ function BrandTitle({ centered, nameOnDesktopOnly, children }: { centered?: bool
 export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const radarOpen = useModuleStore((s) => s.radarOpen)
   const openRadar = useModuleStore((s) => s.openRadar)
-  const closeRadar = useModuleStore((s) => s.closeRadar)
+  const exitToHub = useModuleStore((s) => s.exitToHub)
   const isAuthed = useAuthStore((s) => s.isAuthed)
 
   if (radarOpen) {
-    return <ProjectRadarPage onBack={closeRadar} onEnterModule={onEnterModule} />
+    return <ProjectRadarPage onBack={exitToHub} />
   }
 
   const handleSelect = (key: 'radar' | ModuleKey) => {

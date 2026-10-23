@@ -10,6 +10,8 @@ import './finance-dashboard.css'
 import { useFinanceStore } from './store/useFinanceStore'
 import { useFinanceControlStore } from './store/useFinanceControlStore'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useModuleStore } from '../../store/useModuleStore'
+import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
 export const FINANCE_ACCENT = '#059669'
@@ -58,8 +60,12 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const controlLoaded = useFinanceControlStore((s) => s.loaded)
   const fetchControl = useFinanceControlStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<FinTab>('dashboard')
-  const [subs, setSubs] = useState<Partial<Record<FinTab, string>>>({})
+  // entry from the portfolio view: 'tab' or 'tab:sub' (e.g. 'cash:portfolio')
+  const [entry] = useState(() => { const [t, sb] = (useModuleStore.getState().takeEntryTab() ?? '').split(':'); return NAV.some((n) => n.id === t) ? { tab: t as FinTab, sub: sb } : null })
+  // opened inside one project (from the radar): portfolio-wide views are offered through «دیدن در سطح پرتفولیو» instead
+  const [inProject] = useState(() => !!useProjectContextStore.getState().projectId)
+  const [tab, setTab] = useState<FinTab>(entry?.tab ?? 'dashboard')
+  const [subs, setSubs] = useState<Partial<Record<FinTab, string>>>(entry?.sub ? { [entry.tab]: entry.sub } : {})
   const [projectId, setProjectId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -74,8 +80,11 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   }, [projects, projectId, contextProjectId])
   useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 
-  const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
-  const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
+  const cur = useMemo(() => {
+    const n = NAV.find((x) => x.id === tab)!
+    return inProject && n.subs ? { ...n, subs: n.subs.filter((x) => x.id !== 'portfolio') } : n
+  }, [tab, inProject])
+  const sub = cur.subs ? (cur.subs.some((x) => x.id === subs[tab]) ? subs[tab]! : cur.subs[0].id) : ''
   const go = (t: FinTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   const loading = !financeLoaded || !mdLoaded
 
@@ -111,6 +120,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}
               </select>
             )}
+            {inProject && <PortfolioViewButton module="finance" tab="cash:portfolio" />}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>

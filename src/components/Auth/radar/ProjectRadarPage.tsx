@@ -4,14 +4,14 @@ import {
   Clock3, Heart, PanelRightOpen, Radar as RadarIcon, RefreshCw,
   ShieldAlert, X,
 } from 'lucide-react'
-import type { ModuleKey } from '../../../store/useModuleStore'
+import { useModuleStore, type ModuleKey } from '../../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { useNotificationStore } from '../../../store/useNotificationStore'
 import { RadarProjectPicker } from './RadarProjectPicker'
 import { RadarSidebar } from './RadarSidebar'
-import { rememberProject, type ProjectNavItem } from './projectNav'
+import { navModule, rememberProject, type ProjectNavItem } from './projectNav'
 import './radarShell.css'
 import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
@@ -37,7 +37,7 @@ const CATEGORY_FILTERS: { key: SignalCategory | 'all'; label: string }[] = [
 
 const SCAN_DURATION_MS = 1400
 
-export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void; onEnterModule: (key: ModuleKey) => void }) {
+export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
 
   const mdLoaded = useMasterDataStore((s) => s.loaded)
@@ -51,7 +51,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     useProjectContextStore.setState({ portfolioId: p?.portfolioId ?? null, programId: p?.programId ?? null, projectId: p?.id ?? null, phaseId: null })
   }
   const notifications = useNotificationStore((s) => s.items)
-  const badgeFor = (key: ModuleKey) => notifications.filter((n) => n.module === key).length
+  const badgeFor = (key: ModuleKey) => notifications.filter((n) => navModule(n.module) === key).length
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -84,7 +84,8 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
   const [scanProgress, setScanProgress] = useState(100)
   const [categoryFilter, setCategoryFilter] = useState<SignalCategory | 'all'>('all')
   const [notifOpen, setNotifOpen] = useState(false)
-  const [universeOpen, setUniverseOpen] = useState(false)
+  // a project module's sidebar can ask for the Universe directly (one-shot flag)
+  const [universeOpen, setUniverseOpen] = useState(() => { const u = useModuleStore.getState().radarUniverse; if (u) useModuleStore.setState({ radarUniverse: false }); return u })
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts
   // closed so the radar itself isn't squeezed into a sliver on a phone screen.
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -125,7 +126,7 @@ export function ProjectRadarPage({ onBack, onEnterModule }: { onBack: () => void
     if (!isDesktop) setSidebarOpen(false)
     if (item.id === 'universe') { setUniverseOpen(true); return }
     if (!item.module) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
-    onEnterModule(item.module)
+    useModuleStore.getState().enterModule(item.module, 'project')
   }
 
   const statusColor = STATUS_COLOR[data.status]

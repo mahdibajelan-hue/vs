@@ -2,7 +2,9 @@ import { Fragment, lazy, Suspense, useEffect } from 'react'
 import { useMasterDataStore } from './modules/masterdata/store/useMasterDataStore'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAppThemeSync } from './components/common/useAppTheme'
-import { useModuleStore } from './store/useModuleStore'
+import { PROJECT_SCOPED_MODULES, useModuleStore } from './store/useModuleStore'
+import { ProjectWorkspace } from './components/Auth/radar/ProjectWorkspace'
+import { PortfolioReturn } from './modules/executive/PortfolioReturn'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
@@ -92,6 +94,7 @@ export function RootApp() {
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const backToRadar = useModuleStore((s) => s.backToRadar)
   const accessibleModules = useModuleAccessStore((s) => s.accessibleModules)
+  const workspace = useModuleStore((s) => s.workspace)
 
   // right after sign-in: load the shared project list (most modules wait for it) and warm the module code in the background
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
@@ -229,8 +232,11 @@ export function RootApp() {
   return (
     <>
       <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}><Loader2 size={26} className="animate-spin text-brand-400" /></div>}>
-        <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>
+        {workspace === 'project' && PROJECT_SCOPED_MODULES.has(activeModule)
+          ? <ProjectWorkspace><Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment></ProjectWorkspace>
+          : <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>}
       </Suspense>
+      {workspace === 'portfolio' && PROJECT_SCOPED_MODULES.has(activeModule) && <PortfolioReturn />}
       <InboxOverlay />
       <GlobalSearch />
     </>

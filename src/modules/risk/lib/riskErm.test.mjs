@@ -153,3 +153,15 @@ const mk = (projectId, i, o = {}) => risk({ projectId, title: 'ریسک ' + i, .
   assert.equal(corp[0].projects, 2); assert.equal(corp[0].worst, 'critical')
 }
 console.log('erm libs ok')
+
+// ---- shared («مشترک») risks
+{
+  const a = risk({ projectId: 'P1' }), b = risk({ projectId: 'P2' }), c = risk({ projectId: 'P1' }), d = risk({ projectId: 'P3', corporateRiskId: 'C1' })
+  const L = (riskId, targetId, targetType = 'risk') => ({ id: 'l' + ++n, riskId, targetType, targetId, targetLabel: '', relation: 'shared_cause', createdAt: '' })
+  const m = pf.sharedRisks([a, b, c, d], [L(a.id, b.id), L(a.id, c.id), L(c.id, 'I1', 'issue')])
+  assert.deepEqual(m.get(a.id), { projectIds: ['P2'], corporate: false })
+  assert.deepEqual(m.get(b.id), { projectIds: ['P1'], corporate: false }, 'the link counts in both directions')
+  assert.equal(m.has(c.id), false, 'a link inside the same project is not sharing')
+  assert.deepEqual(m.get(d.id), { projectIds: [], corporate: true })
+}
+console.log('risk/lib/riskErm: shared risks ok')

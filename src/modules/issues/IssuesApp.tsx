@@ -1,3 +1,5 @@
+import { useModuleStore } from '../../store/useModuleStore'
+import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, BookOpen, Building2, Plus, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, Network, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -71,7 +73,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const cfgLoaded = useIssueConfigStore((s) => s.loaded)
   const fetchCfg = useIssueConfigStore((s) => s.fetch)
   const fetchDecisions = useDecisionStore((s) => s.fetchAll)
-  const [tab, setTab] = useState<Tab>('home')
+  const [tab, setTab] = useState<Tab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as Tab) : 'home' })
   const [newIssueProjectId, setNewIssueProjectId] = useState<string | null | 'pick'>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')
@@ -138,13 +140,15 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.shortCode ? p.shortCode + ' · ' : ''}{p.name}</option>)}
               </select>
             )}
+            {locked && <PortfolioViewButton module="issues" tab="portfolio" />}
             {tab !== 'help' && <HelpButton topic={cur.help} />}
             <button className="im-btn im-btn-primary im-btn-lg im-head-new" onClick={() => openNew()}><Plus size={18} strokeWidth={2.6} /> مسئلهٔ جدید</button>
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت موانع و اقدامات">
-          {NAV.map((n) => (
+          {/* inside one project the portfolio-wide tabs live in the portfolio view instead */}
+          {NAV.filter((n) => !locked || (n.id !== 'insights' && n.id !== 'portfolio')).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>

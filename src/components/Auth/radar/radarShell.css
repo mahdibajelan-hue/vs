@@ -173,3 +173,24 @@
   .rpk-card, .rpk-card.is-skel { animation: none; }
   .rs-side, .rs-side.is-open { transition: none; }
 }
+
+/* ── project workspace: a module beside the project sidebar ─────────────── */
+.pws-main { min-height: 100dvh; transition: margin-right 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.pws-main.is-pushed { margin-right: 17rem; }
+/* modules size themselves to the viewport; inside the workspace they take the space left of the sidebar */
+.pws-main.is-pushed .w-screen { width: 100% !important; }
+/* the project is chosen in the sidebar — a module's own project picker would contradict it */
+.pws-main select[aria-label="پروژه"] { display: none !important; }
+.pws-tab {
+  position: fixed; right: 0; top: 50%; z-index: 38; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.7rem 0.4rem;
+  border-radius: 0.8rem 0 0 0.8rem; font-size: 11px; font-weight: 800; color: var(--radar-green, #22c55e);
+  background: var(--bg-panel-solid); border: 1px solid color-mix(in srgb, var(--radar-green, #22c55e) 45%, transparent); border-right: 0;
+  box-shadow: -10px 0 24px -14px rgba(0, 0, 0, 0.6); transition: padding 160ms ease;
+}
+.pws-tab span { writing-mode: vertical-rl; }
+.pws-tab:hover { padding-left: 0.6rem; }
+@media (prefers-reduced-motion: reduce) { .pws-main { transition: none; } }
+/* light theme: the neon radar green is unreadable on white — use a deep green for the sidebar chrome */
+:root[data-theme="light"] .rs-side, :root[data-theme="light"] .pws-tab { --radar-green: #047857; }
+@media (max-width: 639px) { .pws-tab { padding: 0.55rem 0.35rem; } .pws-tab span { display: none; } }

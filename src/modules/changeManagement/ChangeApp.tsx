@@ -16,6 +16,8 @@ import { RequestDrawer, type DrawerTab } from './components/RequestDrawer'
 import { RequestFormModal } from './components/RequestFormModal'
 import { DashboardPage } from './pages/DashboardPage'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useModuleStore } from '../../store/useModuleStore'
+import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -41,7 +43,7 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const setScope = useChangeStore((s) => s.setScope)
   const fetchAll = useChangeStore((s) => s.fetchAll)
   const ctx = useChangeCtx()
-  const [tab, setTab] = useState<ChangeTab>('dashboard')
+  const [tab, setTab] = useState<ChangeTab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as ChangeTab) : 'dashboard' })
   const [open, setOpen] = useState<{ id: string; tab: DrawerTab } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   useEffect(() => { fetchAll() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
@@ -78,6 +80,7 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
                 <option value="all">همهٔ پروژه‌ها</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code ? p.code + ' · ' : ''}{p.name}</option>)}
               </select>
             )}
+            {locked && <PortfolioViewButton module="change" tab="dashboard" />}
             {tab !== 'help' && <HelpButton content={CM_HELP[cur.help]} />}
             {canNew && <button className="im-btn im-btn-primary im-btn-lg" onClick={() => setNewOpen(true)}><Plus size={18} strokeWidth={2.6} /> درخواست جدید</button>}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />

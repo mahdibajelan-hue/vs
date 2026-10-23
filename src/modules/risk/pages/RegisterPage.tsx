@@ -6,7 +6,7 @@ import { HelpButton } from '../../issues/components/Help'
 import { useRiskData, useRiskDirectory, useRiskRole } from '../lib/useRiskData'
 import { useRiskStore } from '../store/useRiskStore'
 import { RK_HELP } from '../lib/help'
-import { comparePriority } from '../lib/riskPortfolio'
+import { comparePriority, sharedRisks } from '../lib/riskPortfolio'
 import { REGISTER_HEADERS, downloadText, downloadXlsx, printTable, registerRows } from '../lib/riskExport'
 import { parseRiskImport, importTemplateCsv, toCsv } from '../lib/riskImport'
 import { RM_RISK_STATUS_LABEL_FA, RM_SOURCE_LABEL_FA, type RmRisk, type RmSource } from '../types'
@@ -22,6 +22,10 @@ type SortKey = 'priority' | 'code' | 'current' | 'residual' | 'review'
 
 export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
   const d = useRiskData()
+  // «مشترک»: rolls up into an organization-level risk or is linked to another project's risk (looked up across all projects)
+  const allRisks = useRiskStore((x) => x.risks)
+  const allLinks = useRiskStore((x) => x.links)
+  const shared = useMemo(() => sharedRisks(allRisks, allLinks), [allRisks, allLinks])
   const dir = useRiskDirectory()
   const role = useRiskRole(d.scope === 'all' ? null : d.scope)
   const catLabel = useCategoryLabel()
@@ -141,7 +145,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
                   <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`انتخاب ${r.code}`} checked={sel.has(r.id)} onChange={(e) => setSel((o) => { const n = new Set(o); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} /></td>
                   <td><span className="im-code">{r.code}</span>{d.scope === 'all' && <div className="im-helper" style={{ fontSize: 10 }}>{projName(r.projectId).slice(0, 22)}</div>}</td>
                   <td style={{ minWidth: 260 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.title}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.title}{shared.has(r.id) && <SharedBadge info={shared.get(r.id)!} projName={projName} />}</div>
                     {r.status !== 'closed' && s.attention.length > 0 && <div className="rk-flags">{s.attention.slice(0, 3).map((a) => <span key={a} className="rk-flag" style={{ ['--c' as string]: '#f59e0b' }}>{a}</span>)}{s.attention.length > 3 && <span className="rk-flag" style={{ ['--c' as string]: '#94a3b8' }}>+{s.attention.length - 3}</span>}</div>}
                   </td>
                   <td className="im-helper">{catLabel(r.category)}</td>
@@ -202,4 +206,9 @@ function ImportModal({ projectId, onClose, onDone, bulkAdd, categories }: { proj
     </div>
     </ModalPortal>
   )
+}
+
+function SharedBadge({ info, projName }: { info: { projectIds: string[]; corporate: boolean }; projName: (id: string) => string }) {
+  const why = [info.corporate ? 'بخشی از یک ریسک سازمانی است' : '', info.projectIds.length ? `مرتبط با ریسک پروژه‌های: ${info.projectIds.map(projName).join('، ')}` : ''].filter(Boolean).join(' — ')
+  return <span className="rk-shared" title={why}>مشترک</span>
 }

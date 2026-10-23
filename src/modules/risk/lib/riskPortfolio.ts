@@ -173,3 +173,26 @@ export function orgAdvice(clusters: RiskCluster[], factors: Factor[], corps: Cor
 }
 
 export const LEVEL_LABEL = RISK_LEVEL_LABEL_FA
+
+/**
+ * «مشترک» — a project risk that is not only this project's: it rolls up into an organization-level (corporate) risk,
+ * or it is linked to a risk of another project (either direction). Returns, per risk id, the other projects involved.
+ */
+export function sharedRisks(risks: RmRisk[], links: RmLink[]): Map<string, { projectIds: string[]; corporate: boolean }> {
+  const byId = new Map(risks.map((r) => [r.id, r]))
+  const out = new Map<string, { projectIds: Set<string>; corporate: boolean }>()
+  const mark = (r: RmRisk, otherProject?: string, corporate = false) => {
+    const e = out.get(r.id) ?? { projectIds: new Set<string>(), corporate: false }
+    if (otherProject && otherProject !== r.projectId) e.projectIds.add(otherProject)
+    e.corporate ||= corporate
+    if (e.projectIds.size || e.corporate) out.set(r.id, e)
+  }
+  for (const r of risks) if (r.corporateRiskId) mark(r, undefined, true)
+  for (const l of links) {
+    if (l.targetType !== 'risk') continue
+    const a = byId.get(l.riskId), b = byId.get(l.targetId)
+    if (!a || !b || a.projectId === b.projectId) continue
+    mark(a, b.projectId); mark(b, a.projectId)
+  }
+  return new Map([...out].map(([k, v]) => [k, { projectIds: [...v.projectIds], corporate: v.corporate }]))
+}
