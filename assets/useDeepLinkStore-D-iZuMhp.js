@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{c as e}from"./supabaseClient-DhpnHyoy.js";var t=2e4,n=e()((e,n)=>({pending:null,request:r=>{e({pending:r}),setTimeout(()=>{n().pending===r&&e({pending:null})},t)},clear:()=>e({pending:null})}));export{n as t};

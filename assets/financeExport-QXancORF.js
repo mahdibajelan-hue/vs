@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{i as e}from"./index-HNAnk0XG.js";async function t(t,n){let r=await e(()=>import(`./xlsx-BstPU0uw.js`),[]),i=r.utils.book_new();r.utils.book_append_sheet(i,r.utils.json_to_sheet(t),`گزارش مالی`),r.writeFile(i,n)}export{t};

@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{i as e}from"./rolldown-runtime-B224aVVh.js";import{t}from"./react-B8qfVPIJ.js";import{t as n}from"./FinanceApp-DWwyX4R2.js";import{a as r}from"./financeControl-d8SkfPCL.js";var i=e(t(),1);function a(){let e=n(e=>e.settingsVersions);return(0,i.useMemo)(()=>r(e,new Date().toISOString().slice(0,10)),[e])}export{a as t};
