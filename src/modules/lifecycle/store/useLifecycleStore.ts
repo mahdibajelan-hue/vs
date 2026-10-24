@@ -96,6 +96,9 @@ export interface ProjectLifecycleBundle {
   actions: LifecycleAction[]
   decisions: GateDecision[]
   progressLog: ProgressLogEntry[]
+  /** a Stage-Gate bundle carries the lifecycle module's own progress per phase (actual / planned / weight), so the
+   * tower shows the same numbers as the Stage-Gate orbit */
+  sgProgress?: Record<string, { actual: number; planned: number; weight: number }>
 }
 
 const EMPTY_BUNDLE: ProjectLifecycleBundle = {

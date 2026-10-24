@@ -28,10 +28,15 @@ const input = {
 const today = new Date('2026-10-24T00:00:00Z')
 const b = buildStageGateBundle(input, today)
 
-// stages: G1, G2 passed (conditional counts) → G3 current with half of its steps done
+// stages: G1, G2 passed (conditional counts) → G3 current; each stage's progress is the Stage-Gate engine's own number
+// (rollup of its Gantt items — the single G3 item is at 40%; phases with no items read 0, exactly as in the module)
 assert.equal(b.lifecycle.currentStageKey, 'G3')
 assert.equal(b.lifecycle.stageEnteredAt, '2026-08-01')
-assert.deepEqual(b.stages.map((s) => [s.stageKey, s.status, s.progress]), [['G1', 'completed', 100], ['G2', 'completed', 100], ['G3', 'in_progress', 50], ['G4', 'not_started', 0], ['G5', 'not_started', 0], ['G6', 'not_started', 0]])
+assert.deepEqual(b.stages.map((s) => [s.stageKey, s.status, s.progress]), [['G1', 'completed', 0], ['G2', 'completed', 0], ['G3', 'in_progress', 40], ['G4', 'not_started', 0], ['G5', 'not_started', 0], ['G6', 'not_started', 0]])
+// the tower reads actual / planned / weight from the same engine: G3's planned window 08-01 … 12-01 is ~69% elapsed on 10-24
+assert.equal(b.sgProgress.G3.actual, 40)
+assert.equal(b.sgProgress.G3.planned, 69)
+assert.equal(Math.round(b.sgProgress.G1.weight * 6), 100, 'no weights → equal shares')
 // gates from decisions; the conditional one carries its condition
 assert.equal(b.gates.find((g) => g.stageKey === 'G1').status, 'approved')
 const g2 = b.gates.find((g) => g.stageKey === 'G2')

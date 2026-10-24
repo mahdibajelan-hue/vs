@@ -43,3 +43,77 @@
 .sg-root select option { background-color: #101a30; color: var(--c-input-text); }
 .sg-root input::placeholder, .sg-root textarea::placeholder { color: #64748b; }
 .sg-root *:focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
+.sg-root { --sg-head: #101a30; --sg-nav: #0d1528; }
+
+/* ── Light theme ───────────────────────────────────────────────────────────
+   The module was ported as a dark "control room". Under the app's light theme the remapped Tailwind tokens go back
+   to their light values, and the legacy panels (.lc-dark-panel, drawn with inline colours) are re-tinted here, so the
+   whole module follows the theme toggle. Colours are matched on the inline values the legacy engine writes. */
+:root[data-theme="light"] .sg-root {
+  --color-white: #ffffff;
+  --color-slate-50: #f8fafc; --color-slate-100: #f1f5f9; --color-slate-200: #e2e8f0; --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8; --color-slate-500: #64748b; --color-slate-600: #475569; --color-slate-700: #334155;
+  --color-slate-800: #1e293b; --color-slate-900: #0f172a; --color-slate-950: #020617;
+  --color-blue-50: #eff6ff; --color-blue-100: #dbeafe; --color-blue-200: #bfdbfe; --color-blue-700: #1d4ed8; --color-blue-800: #1e40af; --color-blue-900: #1d4ed8;
+  --color-emerald-50: #ecfdf5; --color-emerald-100: #d1fae5; --color-emerald-200: #a7f3d0; --color-emerald-600: #059669; --color-emerald-700: #047857; --color-emerald-800: #065f46; --color-emerald-900: #064e3b;
+  --color-amber-50: #fffbeb; --color-amber-100: #fef3c7; --color-amber-500: #f59e0b; --color-amber-600: #d97706; --color-amber-700: #b45309; --color-amber-800: #92400e; --color-amber-900: #78350f;
+  --color-red-50: #fef2f2; --color-red-100: #fee2e2; --color-red-200: #fecaca; --color-red-600: #dc2626; --color-red-700: #b91c1c; --color-red-800: #991b1b;
+  --color-purple-50: #faf5ff; --color-purple-100: #f3e8ff; --color-purple-200: #e9d5ff; --color-purple-700: #7e22ce; --color-purple-800: #6b21a8;
+  --c-border: #dbe3ee; --c-input-bg: #ffffff; --c-input-text: #0f172a;
+  --sg-head: #ffffff; --sg-nav: #f6f8fc;
+  background: #f3f6fb; color: #1e293b; color-scheme: light;
+}
+:root[data-theme="light"] .sg-root select option { background-color: #ffffff; }
+:root[data-theme="light"] .sg-root .text-emerald-400 { color: #059669; }
+:root[data-theme="light"] .sg-root .text-red-400 { color: #dc2626; }
+:root[data-theme="light"] .sg-root .text-blue-300 { color: #2563eb; }
+:root[data-theme="light"] .sg-root .text-amber-400 { color: #d97706; }
+
+/* the legacy dark panels become light cards */
+:root[data-theme="light"] .sg-root .lc-dark-panel {
+  background: radial-gradient(ellipse 90% 70% at 50% 0%, #eaf2ff 0%, #ffffff 70%) !important;
+  border: 1px solid #dbe3ee !important; box-shadow: 0 10px 30px -18px rgba(30, 64, 175, .35);
+}
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-white,
+:root[data-theme="light"] .sg-root .lc-dark-panel .hover\:text-white:hover { color: #0f172a !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-slate-200,
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-slate-300 { color: #334155 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-slate-400,
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-slate-500 { color: #64748b !important; }
+:root[data-theme="light"] .sg-root [style*="color:#93c5fd"] { color: #2563eb !important; }
+:root[data-theme="light"] .sg-root [style*="color:#7dd3fc"] { color: #0284c7 !important; }
+:root[data-theme="light"] .sg-root [style*="color:#94a3b8"] { color: #64748b !important; }
+:root[data-theme="light"] .sg-root [style*="color:#cbd5e1"] { color: #475569 !important; }
+:root[data-theme="light"] .sg-root [style*="color:#e2e8f0"],
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#fff;"],
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#ffffff"] { color: #0f172a !important; }
+:root[data-theme="light"] .sg-root [style*="color:#39ff8a"] { color: #059669 !important; }
+:root[data-theme="light"] .sg-root [style*="background:rgba(255,255,255"] { background: #f1f5f9 !important; }
+:root[data-theme="light"] .sg-root [style*="rgba(255,255,255,."] { border-color: #e2e8f0 !important; }
+/* orbit drawing */
+:root[data-theme="light"] .sg-root #lcCoreGrad stop:first-child { stop-color: #ffffff; }
+:root[data-theme="light"] .sg-root #lcCoreGrad stop:last-child { stop-color: #e6eefb; }
+:root[data-theme="light"] .sg-root svg circle[stroke="#020617"] { stroke: #cbd5e1; }
+:root[data-theme="light"] .sg-root svg circle[stroke="#ffffff"][stroke-opacity="0.06"] { stroke: #94a3b8; stroke-opacity: .35; }
+:root[data-theme="light"] .sg-root svg [stroke="rgba(255,255,255,.28)"] { stroke: #94a3b8; }
+:root[data-theme="light"] .sg-root svg [fill="rgba(255,255,255,.28)"] { fill: #94a3b8; }
+/* the hover callout stays a dark glass tooltip: readable over the light orbit */
+:root[data-theme="light"] .sg-root .lc-callout .text-white { color: #ffffff !important; }
+:root[data-theme="light"] .sg-root .lc-callout [style*="color:#cbd5e1"] { color: #cbd5e1 !important; }
+:root[data-theme="light"] .sg-root .lc-callout [style*="rgba(255,255,255,."] { border-color: rgba(255, 255, 255, .14) !important; }
+/* Tailwind v4 borders default to currentColor — keep every divider on the module's border token in both themes */
+.sg-root.border-b, .sg-root .border-b, .sg-root .border-t, .sg-root .border-l, .sg-root .border-r { border-color: var(--c-border); }
+:root[data-theme="light"] .sg-root svg [stroke="#39ff8a"] { stroke: #10b981; }
+:root[data-theme="light"] .sg-root svg circle[style*="stroke:#39ff8a"] { stroke: #10b981 !important; filter: none !important; }
+/* Gantt on white: the planned bar's 20% sky tint vanishes — give it a real fill and edge */
+:root[data-theme="light"] .sg-root [style*="background:#7dd3fc33"] { background: #e0f2fe !important; border-color: #38bdf8 !important; }
+:root[data-theme="light"] .sg-root [style*="background:#39ff8a"] { background: #10b981 !important; box-shadow: none !important; }
+:root[data-theme="light"] .sg-root [style*="background:#ffffff; opacity:.025"] { background: #0f172a !important; }
+:root[data-theme="light"] .sg-root .text-slate-200, :root[data-theme="light"] .sg-root .text-slate-300 { color: #334155; }
+:root[data-theme="light"] .sg-root [style*="color:#475569"] { color: #64748b !important; }
+/* phones: keep the phase titles that fan out around the orbit inside the panel */
+@media (max-width: 640px) {
+  .sg-root #lcOrbitStage > div { padding-inline: 2.25rem; }
+  .sg-root .lc-node-title { font-size: 8px; }
+}
+:root[data-theme="light"] .sg-root .lc-callout [style*="color:#39ff8a"] { color: #39ff8a !important; }

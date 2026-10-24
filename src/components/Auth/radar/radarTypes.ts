@@ -164,6 +164,8 @@ export interface RadarData {
   kpi: RadarKpi
   signals: RadarSignal[]
   lifecycle: RadarLifecycleStage[]
+  /** overall lifecycle progress as the Stage-Gate module computes it (phases weighted); the panel averages the stages when absent */
+  lifecycleOverallPct?: number
   currentStageLabel: string
   nextGate: RadarGate
   epc: EpcDimension[] | null

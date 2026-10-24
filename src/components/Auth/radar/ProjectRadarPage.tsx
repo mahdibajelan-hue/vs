@@ -341,12 +341,12 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
           <LifecyclePanel
             stages={data.lifecycle}
-            overallPct={Math.round(data.lifecycle.reduce((sum, s) => sum + s.progressPct, 0) / data.lifecycle.length)}
+            overallPct={data.lifecycleOverallPct ?? Math.round(data.lifecycle.reduce((sum, s) => sum + s.progressPct, 0) / data.lifecycle.length)}
           />
         </div>
 
         {/* Bottom row: critical signals | next gate | contract summary */}
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_2.3fr_1.5fr]">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2.3fr)_minmax(0,1.5fr)]">
           <CriticalSignalsPanel signals={data.signals} />
           <NextGatePanel gate={data.nextGate} stages={data.lifecycle} />
           <ContractPanel contract={data.contract} />

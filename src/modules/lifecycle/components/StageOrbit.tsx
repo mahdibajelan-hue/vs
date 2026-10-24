@@ -3,6 +3,7 @@ import { CheckCircle2 } from 'lucide-react'
 import type { GateStatus, ProjectGate, ProjectStage } from '../types'
 import { executiveSummary, type StageProgressInfo } from '../lib/gateProgress'
 import { faNum } from './ui'
+import { useStore } from '../../../store/useStore'
 
 export interface ProjectIdentity { name: string; contractType: string; contractor: string; consultant: string }
 
@@ -24,6 +25,23 @@ const ORBIT_META: Record<OrbitStatus, { label: string; color: string; dark: stri
 }
 const NEON_GREEN = '#39ff8a'
 const PLANNED_COLOR = '#fb923c'
+
+/** The orbit follows the app theme: a dark control room, or a light card with the same layout. */
+const PALETTE = {
+  dark: {
+    panel: 'radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%)', panelBorder: 'rgba(255,255,255,.07)',
+    cell: 'rgba(255,255,255,.04)', cellBorder: 'rgba(255,255,255,.07)', line: 'rgba(255,255,255,.1)',
+    strong: '#ffffff', text: '#e2e8f0', soft: '#cbd5e1', muted: '#94a3b8', accent: '#93c5fd',
+    core0: '#123159', core1: '#08152c', ringBg: '#020617', orbit: 'rgba(255,255,255,.06)', seg: 'rgba(255,255,255,.28)', neon: NEON_GREEN, glow: true,
+  },
+  light: {
+    panel: 'radial-gradient(ellipse 90% 70% at 50% 0%, #eaf2ff 0%, #ffffff 70%)', panelBorder: '#dbe3ee',
+    cell: '#f8fafc', cellBorder: '#e2e8f0', line: '#e2e8f0',
+    strong: '#0f172a', text: '#1e293b', soft: '#475569', muted: '#64748b', accent: '#2563eb',
+    core0: '#ffffff', core1: '#e6eefb', ringBg: '#cbd5e1', orbit: 'rgba(100,116,139,.35)', seg: '#94a3b8', neon: '#10b981', glow: false,
+  },
+}
+type Palette = typeof PALETTE.dark
 
 /**
  * GateStatus has no "conditional pass" of its own — the module instead records that as an
@@ -90,12 +108,13 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
 
   if (n === 0) return null
 
+  const P: Palette = useStore((st) => st.theme) === 'light' ? PALETTE.light : PALETTE.dark
   const summary = executiveSummary(stages, progressInfo, gateStatuses, currentStageKey)
   const overallActual = summary.actual
   const overallPlanned = summary.planned
   const variance = summary.deviation
   const varianceLabel = variance < -5 ? 'عقب از برنامه' : variance > 2 ? 'جلوتر از برنامه' : 'مطابق برنامه'
-  const varianceColor = variance < -5 ? '#f87171' : variance > 2 ? '#39ff8a' : '#93c5fd'
+  const varianceColor = variance < -5 ? '#ef4444' : variance > 2 ? P.neon : P.accent
   const activeNode = nodes.find((x) => x.stage.stageKey === currentStageKey) ?? nodes.find((x) => x.status === 'active')
 
   const ringLen = (r: number) => 2 * Math.PI * r
@@ -111,35 +130,35 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
   return (
     <div
       className="rounded-2xl p-4 md:p-6"
-      style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%)', border: '1px solid rgba(255,255,255,.07)' }}
+      style={{ background: P.panel, border: `1px solid ${P.panelBorder}` }}
     >
       {identity && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)' }}>
-          <span className="text-[13px] font-extrabold text-white">{identity.name}</span>
-          <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]" style={{ color: '#94a3b8' }}>
-            {identity.contractType && <span>نوع قرارداد: <b style={{ color: '#e2e8f0' }}>{identity.contractType}</b></span>}
-            {identity.contractor && <span>پیمانکار: <b style={{ color: '#e2e8f0' }}>{identity.contractor}</b></span>}
-            {identity.consultant && <span>مشاور: <b style={{ color: '#e2e8f0' }}>{identity.consultant}</b></span>}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl px-3 py-2" style={{ background: P.cell, border: `1px solid ${P.cellBorder}` }}>
+          <span className="text-[13px] font-extrabold" style={{ color: P.strong }}>{identity.name}</span>
+          <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]" style={{ color: P.muted }}>
+            {identity.contractType && <span>نوع قرارداد: <b style={{ color: P.text }}>{identity.contractType}</b></span>}
+            {identity.contractor && <span>پیمانکار: <b style={{ color: P.text }}>{identity.contractor}</b></span>}
+            {identity.consultant && <span>مشاور: <b style={{ color: P.text }}>{identity.consultant}</b></span>}
           </span>
         </div>
       )}
 
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6" data-testid="exec-strip">
-        <StripCell label="پیشرفت واقعی" value={`${faNum(summary.actual)}٪`} color={NEON_GREEN} />
-        <StripCell label="پیشرفت برنامه‌ای" value={`${faNum(summary.planned)}٪`} color={PLANNED_COLOR} />
-        <StripCell label="انحراف" value={`${variance >= 0 ? '+' : ''}${faNum(variance)}٪`} color={varianceColor} />
-        <StripCell label="فاز جاری" value={summary.phaseName} color="#e2e8f0" small />
-        <StripCell label="وضعیت گیت فاز" value={summary.gateStatusLabel} color="#93c5fd" small />
-        <StripCell label="معیار الزامی باقی‌مانده"
+        <StripCell P={P} label="پیشرفت واقعی" value={`${faNum(summary.actual)}٪`} color={P.neon} />
+        <StripCell P={P} label="پیشرفت برنامه‌ای" value={`${faNum(summary.planned)}٪`} color={PLANNED_COLOR} />
+        <StripCell P={P} label="انحراف" value={`${variance >= 0 ? '+' : ''}${faNum(variance)}٪`} color={varianceColor} />
+        <StripCell P={P} label="فاز جاری" value={summary.phaseName} color={P.text} small />
+        <StripCell P={P} label="وضعیت گیت فاز" value={summary.gateStatusLabel} color={P.accent} small />
+        <StripCell P={P} label="معیار الزامی باقی‌مانده"
           value={summary.remainingCriteria > 0 ? `${faNum(summary.remainingCriteria)} معیار` : 'هیچ'}
-          color={summary.remainingCriteria > 0 ? '#f87171' : '#39ff8a'} small />
+          color={summary.remainingCriteria > 0 ? '#ef4444' : P.neon} small />
       </div>
 
       <div className="relative mx-auto" style={{ width: '100%', maxWidth: 600 }}>
         <svg viewBox={`0 0 ${VB} ${VB}`} className="h-auto w-full select-none" style={{ overflow: 'visible' }}>
           <defs>
             <radialGradient id="orbitCoreGrad" cx="50%" cy="35%" r="75%">
-              <stop offset="0%" stopColor="#123159" /><stop offset="100%" stopColor="#08152c" />
+              <stop offset="0%" stopColor={P.core0} /><stop offset="100%" stopColor={P.core1} />
             </radialGradient>
             <filter id="orbitNodeBlur" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="7" /></filter>
             {(Object.entries(ORBIT_META) as [OrbitStatus, typeof ORBIT_META[OrbitStatus]][]).map(([key, m]) => (
@@ -149,14 +168,14 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
             ))}
           </defs>
 
-          <circle cx={CX} cy={CY} r={NODE_ORBIT_R} fill="none" stroke="#ffffff" strokeOpacity={0.06} strokeWidth={1} strokeDasharray="2 6" />
+          <circle cx={CX} cy={CY} r={NODE_ORBIT_R} fill="none" stroke={P.orbit} strokeWidth={1} strokeDasharray="2 6" />
 
           {nodes.map(({ stage, index, angle, status }) => {
             const nextAngle = -90 + (360 / n) * (index + 1)
             const midAngle = (angle + nextAngle) / 2
             const midRad = (midAngle * Math.PI) / 180
             const isPassed = status === 'completed'
-            const segColor = isPassed ? NEON_GREEN : 'rgba(255,255,255,.28)'
+            const segColor = isPassed ? P.neon : P.seg
             const midX = CX + NODE_ORBIT_R * Math.cos(midRad)
             const midY = CY + NODE_ORBIT_R * Math.sin(midRad)
             const tangentDeg = midAngle + 90
@@ -164,7 +183,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
               <g key={`seg-${stage.id}`}>
                 <path d={arcPath(angle, nextAngle)} fill="none" stroke={segColor} strokeOpacity={isPassed ? 0.85 : 0.5}
                   strokeWidth={2.5} strokeDasharray={isPassed ? '0' : '1 7'} strokeLinecap="round"
-                  style={isPassed ? { filter: `drop-shadow(0 0 4px ${NEON_GREEN})` } : undefined} />
+                  style={isPassed && P.glow ? { filter: `drop-shadow(0 0 4px ${NEON_GREEN})` } : undefined} />
                 <path d="M -4,-3 L 4,0 L -4,3 Z" fill={segColor} opacity={isPassed ? 0.95 : 0.55}
                   transform={`translate(${midX} ${midY}) rotate(${tangentDeg})`} />
               </g>
@@ -174,8 +193,8 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
           <circle cx={CX} cy={CY} r={CORE_R} fill="url(#orbitCoreGrad)" />
           {ring(PLANNED_R, overallPlanned, { stroke: PLANNED_COLOR, strokeWidth: 3.5, opacity: 0.7 })}
           {ring(ACTUAL_R, overallActual, {
-            stroke: NEON_GREEN, strokeWidth: 4,
-            filter: `drop-shadow(0 0 5px ${NEON_GREEN}) drop-shadow(0 0 12px ${NEON_GREEN}aa)`,
+            stroke: P.neon, strokeWidth: 4,
+            filter: P.glow ? `drop-shadow(0 0 5px ${NEON_GREEN}) drop-shadow(0 0 12px ${NEON_GREEN}aa)` : undefined,
           })}
 
           {nodes.map(({ stage, nx, ny, status, planned, actual }) => {
@@ -190,14 +209,15 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
             return (
               <g key={stage.id} transform={`translate(${nx} ${ny})`} style={{ cursor: 'pointer' }}
                 onClick={() => { setSelected(stage.stageKey); onSelectStage(stage.stageKey) }}>
+                <title>{`${stage.nameFa} — برنامه‌ای ${faNum(Math.round(planned))}٪ · واقعی ${faNum(Math.round(actual))}٪`}</title>
                 <circle r={NODE_R + 15} fill={meta.color} opacity={isSelected ? 0.28 : 0.14} filter="url(#orbitNodeBlur)" />
-                <circle r={plannedR} fill="none" stroke="#020617" strokeOpacity={0.55} strokeWidth={3} />
-                <circle r={actualR} fill="none" stroke="#020617" strokeOpacity={0.55} strokeWidth={3.5} />
+                <circle r={plannedR} fill="none" stroke={P.ringBg} strokeOpacity={0.55} strokeWidth={3} />
+                <circle r={actualR} fill="none" stroke={P.ringBg} strokeOpacity={0.55} strokeWidth={3.5} />
                 <circle r={plannedR} fill="none" stroke={PLANNED_COLOR} strokeWidth={2} strokeLinecap="round"
                   strokeDasharray={`${plannedDash} ${plannedLen - plannedDash}`} transform="rotate(-90)" opacity={0.95} />
-                <circle r={actualR} fill="none" stroke={NEON_GREEN} strokeWidth={2.5} strokeLinecap="round"
+                <circle r={actualR} fill="none" stroke={P.neon} strokeWidth={2.5} strokeLinecap="round"
                   strokeDasharray={`${actualDash} ${actualLen - actualDash}`} transform="rotate(-90)" opacity={0.95}
-                  style={{ filter: `drop-shadow(0 0 3px ${NEON_GREEN})` }} />
+                  style={P.glow ? { filter: `drop-shadow(0 0 3px ${NEON_GREEN})` } : undefined} />
                 <circle r={NODE_R} fill={`url(#orbitGrad-${status})`} stroke={isSelected ? '#ffffff' : meta.color}
                   strokeWidth={isSelected ? 3 : 1.5} strokeOpacity={isSelected ? 0.95 : 0.5} />
                 {status === 'completed' ? (
@@ -216,21 +236,21 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
 
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center">
           <div style={{ maxWidth: 230 }}>
-            <p className="text-[11px] font-bold tracking-wide" style={{ color: '#93c5fd' }}>پیشرفت کلی پروژه</p>
-            <p className="mt-1.5 text-5xl font-extrabold leading-none text-white">{faNum(overallActual)}<span className="text-xl">٪</span></p>
-            <p className="mt-1 text-[11px]" style={{ color: '#cbd5e1' }}>واقعی</p>
-            <p className="mt-2 text-xs" style={{ color: '#94a3b8' }}>برنامه‌ای: <b style={{ color: '#e2e8f0' }}>{faNum(overallPlanned)}٪</b></p>
+            <p className="text-[11px] font-bold tracking-wide" style={{ color: P.accent }}>پیشرفت کلی پروژه</p>
+            <p className="mt-1.5 text-5xl font-extrabold leading-none" style={{ color: P.strong }}>{faNum(overallActual)}<span className="text-xl">٪</span></p>
+            <p className="mt-1 text-[11px]" style={{ color: P.soft }}>واقعی</p>
+            <p className="mt-2 text-xs" style={{ color: P.muted }}>برنامه‌ای: <b style={{ color: P.text }}>{faNum(overallPlanned)}٪</b></p>
             <p className="mt-1 text-xs font-bold" style={{ color: varianceColor }}>{variance >= 0 ? '+' : ''}{faNum(variance)}٪ — {varianceLabel}</p>
             {activeNode && (
-              <p className="mt-2 border-t pt-2 text-[11px]" style={{ borderColor: 'rgba(255,255,255,.12)', color: '#93c5fd' }}>
-                فاز جاری: <b style={{ color: '#fff' }}>{activeNode.stage.nameFa}</b>
+              <p className="mt-2 border-t pt-2 text-[11px]" style={{ borderColor: P.line, color: P.accent }}>
+                فاز جاری: <b style={{ color: P.strong }}>{activeNode.stage.nameFa}</b>
               </p>
             )}
           </div>
         </div>
 
         <div className="pointer-events-none absolute inset-0">
-          {nodes.map(({ stage, nx, ny, angle, status, planned, actual }) => {
+          {nodes.map(({ stage, nx, ny, angle, status }) => {
             const meta = ORBIT_META[status]
             const leftPct = (nx / VB) * 100
             const topPct = (ny / VB) * 100
@@ -248,14 +268,6 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
                   right: `${100 - titleLeftPct}%`, top: `${titleTopPct}%`, transform: 'translate(50%, -50%)', width: 130, zIndex: 2,
                 }}>
                   <span className="text-[10px] font-extrabold leading-tight" style={{ color: meta.color }}>{stage.nameFa}</span>
-                  <div className="mt-1 flex items-center justify-center gap-1">
-                    <span className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-[8px] font-extrabold" style={{ background: `${PLANNED_COLOR}26`, color: PLANNED_COLOR }} title="پیشرفت برنامه‌ای">
-                      ب {faNum(Math.round(planned))}٪
-                    </span>
-                    <span className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-[8px] font-extrabold" style={{ background: `${NEON_GREEN}26`, color: NEON_GREEN }} title="پیشرفت واقعی">
-                      و {faNum(Math.round(actual))}٪
-                    </span>
-                  </div>
                 </div>
               </div>
             )
@@ -263,9 +275,9 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t pt-3" style={{ borderColor: 'rgba(255,255,255,.08)' }}>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t pt-3" style={{ borderColor: P.line }}>
         {(Object.values(ORBIT_META)).map((m) => (
-          <span key={m.label} className="inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: '#94a3b8' }}>
+          <span key={m.label} className="inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: P.muted }}>
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} />
             {m.label}
           </span>
@@ -275,10 +287,10 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
   )
 }
 
-function StripCell({ label, value, color, small }: { label: string; value: string; color: string; small?: boolean }) {
+function StripCell({ P, label, value, color, small }: { P: Palette; label: string; value: string; color: string; small?: boolean }) {
   return (
-    <div className="rounded-xl px-2.5 py-2" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.07)' }}>
-      <p className="text-[9px] font-semibold" style={{ color: '#94a3b8' }}>{label}</p>
+    <div className="rounded-xl px-2.5 py-2" style={{ background: P.cell, border: `1px solid ${P.cellBorder}` }}>
+      <p className="text-[9px] font-semibold" style={{ color: P.muted }}>{label}</p>
       <p className={`${small ? 'text-[12px]' : 'text-lg'} mt-0.5 font-extrabold leading-tight`} style={{ color }}>{value}</p>
     </div>
   )

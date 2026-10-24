@@ -87,7 +87,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" dir="rtl" style={{ background: 'var(--bg-app)' }}>
-      <header className="sg-root no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ background: '#101a30' }}>
+      <header className="sg-root no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ background: 'var(--sg-head)' }}>
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[#ffffff]" style={{ background: 'linear-gradient(135deg, #0e2a5e, #0f766e)' }}>
             <Orbit size={20} />
@@ -102,7 +102,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       {selected && (
-        <nav className="sg-root no-print flex shrink-0 gap-1 border-b px-3 py-2 sm:px-5" style={{ background: '#0d1528' }} role="tablist" aria-label="بخش‌های چرخه عمر">
+        <nav className="sg-root no-print flex shrink-0 gap-1 border-b px-3 py-2 sm:px-5" style={{ background: 'var(--sg-nav)' }} role="tablist" aria-label="بخش‌های چرخه عمر">
           <SgTab on={view === 'lifecycle'} onClick={() => setView('lifecycle')} icon={<Orbit size={14} />} label="چرخهٔ عمر و گیت‌ها" />
           <SgTab on={view !== 'lifecycle'} onClick={() => setView('tower')} icon={<Target size={14} />} label="برج کنترل EPC" disabled={!master} title={master ? undefined : 'برای برج کنترل، پروژه باید به اطلاعات پایه وصل باشد'} />
         </nav>

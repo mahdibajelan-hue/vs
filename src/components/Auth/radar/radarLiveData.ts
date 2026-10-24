@@ -14,6 +14,7 @@
  * project never looks broken, just not-yet-connected.
  */
 import { supabase, isSupabaseConfigured } from '../../../lib/supabaseClient'
+import { formatJalali } from '../../../lib/jalali'
 import { fetchProjectIntelligence } from '../../../modules/reporting/lib/dataAdapter'
 import { currentState, riskLevel } from '../../../modules/risk/lib/riskScore'
 import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
@@ -360,6 +361,12 @@ function applyScheduleSection(base: RadarData, s: ScheduleSummary): RadarData {
 export async function buildRadarData(masterProjectId: string, projectName: string, projectIdCode: string): Promise<RadarData> {
   const base = buildMockRadarData(masterProjectId, projectName, projectIdCode)
   if (!isSupabaseConfigured) return base
+  // the report is as of now (when the live data is read), not the mock's fixed date
+  const now = new Date()
+  const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const stamp = `${formatJalali(iso)} - ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  base.reportDateEn = stamp
+  base.reportDateFa = stamp.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 
   const { data: afterRiskIssue, criticalCounts } = await applyRiskIssueSection(base, masterProjectId)
   let result = afterRiskIssue
@@ -402,7 +409,11 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // Health and EPC come from the control tower engines above; the lifecycle strip and the next gate from Stage-Gate's own readiness.
   try {
     const sg = await loadStageGateRadar(masterProjectId)
-    if (sg) result = { ...result, lifecycle: sg.lifecycle, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }
+    if (sg) {
+      result = { ...result, lifecycle: sg.lifecycle, lifecycleOverallPct: sg.overallPct, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }
+      // time performance = the lifecycle's actual vs planned progress (the mock figures otherwise stay on screen)
+      if (sg.overallPct != null && sg.overallPlannedPct != null) result = { ...result, kpi: { ...result.kpi, progressActual: sg.overallPct, progressPlanned: sg.overallPlannedPct } }
+    }
   } catch (err) {
     console.warn('[radar] Stage-Gate fetch failed, keeping the previous lifecycle picture', err)
   }

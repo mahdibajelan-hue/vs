@@ -51,10 +51,12 @@ export function ControlTowerPage({
   const users = useMasterDataStore((s) => s.users)
   const orgs = useMasterDataStore((s) => s.organizations)
   const analysis = useProjectAnalysis(bundle)
-  const progressInfo = useMemo(
-    () => stageProgressMap(bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, new Date().toISOString().slice(0, 10)),
-    [bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog],
-  )
+  const progressInfo = useMemo(() => {
+    const m = stageProgressMap(bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, new Date().toISOString().slice(0, 10))
+    // a Stage-Gate project shows the lifecycle module's own actual / planned / phase weights
+    if (bundle.sgProgress) for (const [k, v] of Object.entries(bundle.sgProgress)) { const i = m.get(k); if (i) m.set(k, { ...i, actual: v.actual, planned: v.planned, weight: v.weight }) }
+    return m
+  }, [bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, bundle.sgProgress])
 
   const currentStageKey = bundle.lifecycle?.currentStageKey ?? ''
   // stage names come with the bundle (Stage-Gate G1…G9); the old fixed labels only as a fallback

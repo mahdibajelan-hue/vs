@@ -827,10 +827,6 @@ export function createStageGateEngine(env) {
                 <div data-lc-phase="${p.code}" class="lc-node-hit" style="position:absolute; right:${100 - leftPct}%; top:${topPct}%; width:${nodeR * 2}px; height:${nodeR * 2}px; transform:translate(50%, -50%); pointer-events:auto; cursor:pointer;">
                     <div class="lc-node-title-wrap text-center pointer-events-none" style="position:absolute; right:${100 - titleLeftPct}%; top:${titleTopPct}%; transform:translate(50%, -50%); width:130px; z-index:2;">
                         <span class="lc-node-title" style="color:${meta.color};">${esc(p.title)}</span>
-                        <div class="flex items-center justify-center gap-1 mt-1">
-                            <span class="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap" style="background:${LC_NODE_PLANNED_COLOR}26; color:${LC_NODE_PLANNED_COLOR};" title="پیشرفت برنامه‌ای">ب ${toPersianDigits(Math.round(planned))}٪</span>
-                            <span class="text-[8px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap" style="background:${LC_NEON_GREEN}26; color:${LC_NEON_GREEN};" title="پیشرفت واقعی">و ${toPersianDigits(Math.round(actual))}٪</span>
-                        </div>
                     </div>
                     ${delay ? `<div class="pointer-events-none text-center" style="position:absolute; right:${100 - titleLeftPct}%; top:${titleTopPct}%; transform:translate(50%, calc(-50% + 15px)); width:160px; z-index:6;">
                         <span class="animate-pulse text-[8px] font-extrabold px-1.5 py-0.5 rounded-full inline-block" style="background:#dc2626; color:#ffffff; box-shadow:0 0 6px rgba(220,38,38,.7);" title="زیرفعالیت تاخیردار">⚠ ${esc(lcTitleWithReviewFlag(delay.item.title).clean)} (+${toPersianDigits(delay.delayDays)} روز)</span>
@@ -1861,7 +1857,11 @@ export function createStageGateEngine(env) {
                     ${soloPhase && lcState.canEdit ? `<div data-lc-open-schedule-editor data-kind="phase" data-phase="${esc(soloPhase.phaseCode)}" data-item-id="" class="inline-block cursor-pointer text-[11px] font-bold px-3 py-1.5 rounded-lg border text-slate-200 hover:bg-white/5">+ افزودن اولین زیرفاز/فعالیت</div>` : ''}
                 </div>${lcScheduleEditorHtml()}`;
             }
-            const ticks = lcJalaliMonthTicks(range);
+            // a multi-year range would print ~80 month labels on top of each other — keep every Nth month so
+            // labels stay at least ~38px apart, and print the year only where it changes
+            const allTicks = lcJalaliMonthTicks(range);
+            const tickStep = [1, 2, 3, 6, 12].find(n => (lcGanttTimelineW() / Math.max(1, allTicks.length)) * n >= 38) || 12;
+            const ticks = allTicks.filter((_, i) => i % tickStep === 0).map((t, i, a) => ({ ...t, yearLabel: i === 0 || a[i - 1].yearLabel !== t.yearLabel ? t.yearLabel : '' }));
             const todayIso = new Date().toISOString().slice(0, 10);
             const todayPct = (todayIso >= range.minIso && todayIso <= range.maxIso) ? lcPctForDate(todayIso, range) : null;
             const bodyH = rows.length * LC_GANTT_ROW_H;

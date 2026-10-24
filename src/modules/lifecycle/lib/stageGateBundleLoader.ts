@@ -15,7 +15,7 @@ export async function loadStageGateBundle(masterProjectId: string): Promise<Proj
   const { data: proj } = await supabase.from('sg_projects').select('name').eq('master_project_id', masterProjectId).maybeSingle()
   const project = sn((proj as Row | null)?.name)
   if (!project) return null
-  const [ph, du, ob, out, cr, it, dc, pr, sc, hi, ms, hl, wn, ac, lc] = await Promise.all([
+  const [ph, du, ob, out, cr, it, dc, pr, sc, hi, ms, hl, wn, ac, lc, rep] = await Promise.all([
     supabase.from('sg_lifecycle_phases').select('*').eq('is_active', true),
     supabase.from('sg_lifecycle_phase_durations').select('phase_code, duration_days'),
     supabase.from('sg_lifecycle_objectives').select('id, phase_code, seq, title, description').eq('is_active', true),
@@ -31,6 +31,7 @@ export async function loadStageGateBundle(masterProjectId: string): Promise<Proj
     supabase.from('plc_early_warnings').select('*').eq('project_id', masterProjectId).eq('status', 'open'),
     supabase.from('rasta_actions').select('*').eq('master_project_id', masterProjectId),
     supabase.from('plc_project_lifecycle').select('health_override, health_override_reason, health_override_by, health_override_at').eq('project_id', masterProjectId).maybeSingle(),
+    supabase.from('sg_client_reports').select('*').eq('project_name', project).order('created_at', { ascending: false }).limit(1),
   ])
   if (ph.error) return null
   const milestones = ((ms.data ?? []) as PlcMilestoneRow[]).map(milestoneFromRow)
@@ -54,7 +55,8 @@ export async function loadStageGateBundle(masterProjectId: string): Promise<Proj
       submittedBy: sn(r.submitted_by), verifiedBy: sn(r.verified_by), verificationDate: sn(r.verification_date),
     })),
     decisions: ((dc.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), decision: s(r.decision), decidedAt: s(r.decided_at), decidedBy: sn(r.decided_by), reason: s(r.reason), conditionText: s(r.condition_text), conditionDue: sn(r.condition_due_date) })),
-    phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), gateStatus: sn(r.gate_status), actualStart: sn(r.actual_start), actualFinish: sn(r.actual_finish), plannedStart: sn(r.planned_start), plannedFinish: sn(r.planned_finish), manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct) })),
+    phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), gateStatus: sn(r.gate_status), actualStart: sn(r.actual_start), actualFinish: sn(r.actual_finish), plannedStart: sn(r.planned_start), plannedFinish: sn(r.planned_finish), manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct), weightPct: r.weight_pct == null ? null : Number(r.weight_pct) })),
+    clientReport: ((rep.data ?? []) as Row[])[0] ?? null,
     schedule: ((sc.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), parentId: r.parent_id == null ? null : Number(r.parent_id), seq: Number(r.seq ?? 0), title: s(r.title), plannedStart: sn(r.planned_start), plannedFinish: sn(r.planned_finish), weight: r.weight_pct == null ? null : Number(r.weight_pct), manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct) })),
     progress: ((hi.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), newPct: Number(r.new_pct ?? 0), comment: s(r.comment), recordedBy: sn(r.recorded_by), recordedAt: s(r.recorded_at) })),
     milestones,

@@ -16,11 +16,12 @@ import type {
   Milestone, MilestoneForecastPoint, ProgressLogEntry, ProjectGate, ProjectLifecycle, ProjectStage, StageStatus,
 } from '../types'
 import type { GateEngine, GateItemKind, PhaseGroup } from './gateModel'
+import { sgProgress } from '../../stagegate/sgProgress'
 
 export interface SgPhaseDef { code: string; sort: number; title: string; gateName: string; threshold: number | null; group: string; engine: string; icon: string; responsible: string; standardDays: number | null }
 export interface SgItemDef { id: number; phase: string; kind: GateItemKind; seq: number; title: string; description: string; mandatory: boolean }
 export interface SgProjectItem extends SgItem { owner: string | null; dueDate: string | null; completionDate: string | null; evidence: string; evidenceUrl: string; comment: string; submittedBy: string | null; verifiedBy: string | null; verificationDate: string | null }
-export interface SgPhaseRowFull extends SgPhaseRow { plannedStart: string | null; plannedFinish: string | null; actualFinish: string | null; manualPct: number | null }
+export interface SgPhaseRowFull extends SgPhaseRow { plannedStart: string | null; plannedFinish: string | null; actualFinish: string | null; manualPct: number | null; weightPct?: number | null }
 export interface SgScheduleItem { id: number; phase: string; parentId: number | null; seq: number; title: string; plannedStart: string | null; plannedFinish: string | null; weight: number | null; manualPct: number | null }
 export interface SgProgressPoint { id: number; phase: string; newPct: number; comment: string; recordedBy: string | null; recordedAt: string }
 
@@ -40,6 +41,8 @@ export interface SgBundleInput {
   health: HealthScore[]
   warnings: EarlyWarning[]
   actions: LifecycleAction[]
+  /** the latest Stage-Gate client report (feeds the EPC-engine phase) */
+  clientReport?: Record<string, unknown> | null
   /** a hand-set overall health verdict, if one exists for the master project */
   healthOverride?: Pick<ProjectLifecycle, 'healthOverride' | 'healthOverrideReason' | 'healthOverrideBy' | 'healthOverrideAt'> | null
 }
@@ -81,9 +84,19 @@ export function buildStageGateBundle(input: SgBundleInput, today = new Date()): 
     }
   })
 
-  const stepShare = (code: string) => {
-    const steps = checklist.filter((c) => c.stageKey === code && c.kind === 'objective')
-    return steps.length ? Math.round((steps.filter((c) => c.status === 'completed').length / steps.length) * 100) : 0
+  // the Stage-Gate module's own progress engine — same numbers as its orbit
+  const prog = sgProgress({
+    phases: phases.map((p) => ({ code: p.code, engine: p.engine })),
+    phaseRows: input.phaseRows.map((r) => ({ phase: r.phase, plannedStart: r.plannedStart, plannedFinish: r.plannedFinish, manualPct: r.manualPct, weightPct: r.weightPct ?? null })),
+    schedule: input.schedule.map((x) => ({ id: x.id, phase: x.phase, parentId: x.parentId, weightPct: x.weight, manualPct: x.manualPct })),
+    clientReport: input.clientReport ?? null,
+  }, today)
+  const n = phases.length || 1
+  const sgProg: Record<string, { actual: number; planned: number; weight: number }> = {}
+  for (const p of phases) {
+    const v = prog.phases.get(p.code)!
+    const w = rows.get(p.code)?.weightPct
+    sgProg[p.code] = { actual: v.actual, planned: v.planned, weight: typeof w === 'number' ? w : 100 / n }
   }
   const stages: ProjectStage[] = phases.map((p, i) => {
     const r = rows.get(p.code)
@@ -92,7 +105,7 @@ export function buildStageGateBundle(input: SgBundleInput, today = new Date()): 
       id: `sg-stage-${p.code}`, projectId: pid, stageKey: p.code, nameFa: p.title, sequence: i, status, // 0-based like the former stages (the orbit shows sequence + 1)
       plannedStart: r?.plannedStart ?? null, plannedFinish: r?.plannedFinish ?? null, actualStart: r?.actualStart ?? null, actualFinish: r?.actualFinish ?? null,
       forecastFinish: r?.actualFinish ?? r?.plannedFinish ?? null,
-      progress: status === 'completed' ? 100 : status === 'not_started' ? 0 : r?.manualPct != null ? Math.round(r.manualPct) : stepShare(p.code),
+      progress: Math.round(sgProg[p.code].actual),
       standardDays: p.standardDays ?? 0,
     }
   })
@@ -144,5 +157,6 @@ export function buildStageGateBundle(input: SgBundleInput, today = new Date()): 
     lifecycle, stages, gates, checklist, activities, decisions, progressLog,
     milestones: input.milestones.map((m) => (isStageGateKey(m.stageKey) ? m : { ...m, stageKey: PLC_TO_SG[m.stageKey] ?? m.stageKey })),
     forecastHistory: input.forecastHistory, health: input.health, warnings: input.warnings, actions: input.actions,
+    sgProgress: sgProg,
   }
 }

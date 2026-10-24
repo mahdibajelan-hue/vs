@@ -11,8 +11,10 @@ export interface SgRadarInput {
   items: SgItem[]
   decisions: SgDecision[]
   phaseRows: (SgPhaseRow & { plannedFinish: string | null; actualFinish: string | null; manualPct: number | null })[]
+  /** the Stage-Gate module's own progress per phase + overall (sgProgress); when given it replaces the step share */
+  engine?: { phases: Map<string, { actual: number }>; overall: number; overallPlanned?: number }
 }
-export interface SgRadarSection { lifecycle: RadarLifecycleStage[]; currentStageLabel: string; nextGate: RadarGate | null }
+export interface SgRadarSection { lifecycle: RadarLifecycleStage[]; currentStageLabel: string; nextGate: RadarGate | null; overallPct?: number; overallPlannedPct?: number }
 
 const VERIFIED = new Set(['verified', 'completed'])
 /** English labels for the radar's English panels (G1…G9 of the 9-gate model) */
@@ -30,7 +32,8 @@ export function stageGateRadarSection(input: SgRadarInput, today = new Date()): 
     const row = rows.get(p.code)
     const state = i < curIdx ? 'done' : i === curIdx ? 'current' : 'upcoming'
     const stepPct = line.steps.length ? Math.round((line.stepsDone / line.steps.length) * 100) : 0
-    const progressPct = state === 'done' ? 100 : state === 'upcoming' ? 0 : row?.manualPct != null ? Math.round(row.manualPct) : stepPct
+    const eng = input.engine?.phases.get(p.code)
+    const progressPct = eng ? Math.round(eng.actual) : state === 'done' ? 100 : state === 'upcoming' ? 0 : row?.manualPct != null ? Math.round(row.manualPct) : stepPct
     return { key: p.code, label: p.title, labelEn: EN[p.code] ?? p.code, state, dateFa: faDate(row?.actualFinish ?? row?.plannedFinish ?? null), progressPct }
   })
 
@@ -50,6 +53,6 @@ export function stageGateRadarSection(input: SgRadarInput, today = new Date()): 
       readinessPct: passedGate ? 100 : req.length ? Math.round((done / req.length) * 100) : 0,
     }
   }
-  return { lifecycle, currentStageLabel: line.phase === 'done' ? 'پایان چرخه' : `${line.phase} — ${phases[curIdx]?.title ?? ''}`, nextGate }
+  return { lifecycle, overallPct: input.engine ? Math.round(input.engine.overall) : undefined, overallPlannedPct: input.engine?.overallPlanned != null ? Math.round(input.engine.overallPlanned) : undefined, currentStageLabel: line.phase === 'done' ? 'پایان چرخه' : `${line.phase} — ${phases[curIdx]?.title ?? ''}`, nextGate }
 }
 
