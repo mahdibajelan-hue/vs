@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitBranch, GitPullRequestArrow, HardHat, PackageCheck,
+  BadgeDollarSign, CalendarClock, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
   PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -23,8 +23,8 @@ export interface ProjectNavGroup { id: string; label: string; items: ProjectNavI
 export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'watch', label: 'پایش', items: [
     { id: 'overview', module: null, label: 'رادار پروژه', icon: Radar, accent: '#22c55e' },
-    { id: 'lifecycle', module: 'lifecycle', label: 'چرخهٔ عمر و برج کنترل EPC', icon: GitBranch, accent: '#22d3ee' },
-    { id: 'stagegate', module: 'stagegate', label: 'گیت‌های Stage-Gate', icon: Route, accent: '#38bdf8' },
+    // Stage-Gate is the lifecycle of record; the EPC control tower lives inside it as a tab
+    { id: 'stagegate', module: 'stagegate', label: 'چرخهٔ عمر و برج کنترل', icon: Route, accent: '#38bdf8' },
   ] },
   { id: 'time', label: 'زمان و اجرا', items: [
     { id: 'scheduling', module: 'scheduling', label: 'برنامه‌ریزی و کنترل زمان', icon: CalendarClock, accent: '#14b8a6' },

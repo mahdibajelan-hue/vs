@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { BookOpen, ChartGantt, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload, Users } from 'lucide-react'
+import { BookOpen, ChartGantt, Orbit, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -13,9 +13,10 @@ import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
-export type SchTab = 'dash' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
+export type SchTab = 'dash' | 'lifeplan' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
 const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد برنامه', icon: Gauge, color: '#0ea5a4' },
+  { id: 'lifeplan', label: 'مستر پلن چرخه عمر پروژه', icon: Orbit, color: '#3b82f6' },
   { id: 'import', label: 'ورود برنامه', icon: Upload, color: '#6366f1' },
   { id: 'versions', label: 'نسخه‌ها و خط مبنا', icon: GitCompare, color: '#8b5cf6' },
   { id: 'gantt', label: 'گانت', icon: ChartGantt, color: '#0ea5e9' },
@@ -29,6 +30,7 @@ const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'help', label: 'راهنمای ماژول', icon: BookOpen, color: '#64748b' },
 ]
 const SchPage = lazy(() => import('./pages/SchPage').then((m) => ({ default: m.SchPage })))
+const LifecycleMasterPlan = lazy(() => import('./pages/LifecycleMasterPlan').then((m) => ({ default: m.LifecycleMasterPlan })))
 
 /**
  * «برنامه‌ریزی و کنترل زمان پروژه» — the project's schedule: import from Excel / Primavera P6, versions and the approved baseline, critical path and forecast,
@@ -96,7 +98,7 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
           <div className="im-page"><div className="im-card im-empty">{projects.length === 0 ? 'ابتدا از «اطلاعات پایه» یک پروژه تعریف کنید.' : 'یک پروژه را از بالای صفحه انتخاب کنید.'}</div></div>
         ) : (
           <div className="im-page" key={`${tab}:${projectId}`}>
-            <ErrorBoundary area="برنامه‌ریزی و کنترل زمان"><Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}><SchPage projectId={projectId} tab={tab} go={setTab} /></Suspense></ErrorBoundary>
+            <ErrorBoundary area="برنامه‌ریزی و کنترل زمان"><Suspense fallback={<div className="im-skeleton" style={{ height: 240 }} />}>{tab === 'lifeplan' ? <LifecycleMasterPlan projectId={projectId} /> : <SchPage projectId={projectId} tab={tab as Exclude<SchTab, 'lifeplan'>} go={setTab} />}</Suspense></ErrorBoundary>
           </div>
         )}
       </main>

@@ -19,6 +19,7 @@ import { currentState, riskLevel } from '../../../modules/risk/lib/riskScore'
 import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
 import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
+import { loadStageGateRadar } from './stageGateRadar'
 import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
 
 import {
@@ -392,6 +393,15 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     }
   } catch (err) {
     console.warn('[radar] live lifecycle fetch failed, showing mock lifecycle/gate/EPC instead', err)
+  }
+
+  // --- Lifecycle / next gate of record: Stage-Gate (G1…G9) -----------------------
+  // Health and EPC stay with the control tower above; the lifecycle strip and the next gate come from Stage-Gate.
+  try {
+    const sg = await loadStageGateRadar(masterProjectId)
+    if (sg) result = { ...result, lifecycle: sg.lifecycle, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }
+  } catch (err) {
+    console.warn('[radar] Stage-Gate fetch failed, keeping the previous lifecycle picture', err)
   }
 
   // --- Contract ---------------------------------------------------------------

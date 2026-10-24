@@ -6,6 +6,8 @@
 // took from its host page are injected through `env`.
 export function createStageGateEngine(env) {
   const { _supabase, currentUser, currentProfile, onGotoClientReport } = env
+  // planOnly: only the Master Schedule (Gantt) — used by the Scheduling module's «مستر پلن چرخه عمر پروژه»
+  const planOnly = !!env.planOnly
   let myProjectAccess = env.myProjectAccess || []
   let pickedProjectContext = null
   const switchView = (v) => { if (v === 'clientReport' && onGotoClientReport) onGotoClientReport() }
@@ -351,9 +353,10 @@ export function createStageGateEngine(env) {
             // lcState persists for the whole SPA session, so without this a
             // previous visit's Gantt tab or open phase page would still be
             // showing instead of the orbit the user actually expects to land on.
-            lcState.activeTab = 'orbit';
+            lcState.activeTab = planOnly ? 'plan' : 'orbit';
             lcState.selectedPhase = null;
-            document.getElementById('lcProjectNameLabel').textContent = projectName;
+            const nameLabel = document.getElementById('lcProjectNameLabel');
+            if (nameLabel) nameLabel.textContent = projectName;
             document.getElementById('lcBody').innerHTML = '<p class="text-center text-slate-400 p-10">در حال بارگذاری چرخه عمر پروژه...</p>';
 
             const [{ data: phases, error: phasesErr }, { data: projectPhases }, { data: items }, { data: gateDecisions }, { data: progressHistory }, { data: clientReports }, { data: scheduleItems }, { data: scheduleDeps }, { data: baselines }, { data: phaseDurations }, { data: strategyDeps }, { data: masterSchedule }, { data: scheduleVersions }, { data: successTemplates }] = await Promise.all([
@@ -608,12 +611,12 @@ export function createStageGateEngine(env) {
                     .lc-dark-panel .text-slate-400 { color: #94a3b8 !important; }
                     .lc-dark-panel .text-slate-500 { color: #94a3b8 !important; }
                 </style>
-                ${lcTabBarHtml()}
-                ${lcExecStripHtml()}
-                ${lcState.activeTab === 'plan' ? lcMasterPlanHtml()
+                ${planOnly ? '' : lcTabBarHtml()}
+                ${planOnly ? '' : lcExecStripHtml()}
+                ${planOnly || lcState.activeTab === 'plan' ? lcMasterPlanHtml()
                     : lcState.selectedPhase ? lcPhaseDetailPageHtml(lcState.phases.find(p => p.code === lcState.selectedPhase))
                     : lcOrbitPageHtml()}
-                ${lcMetadataBarHtml()}
+                ${planOnly ? '' : lcMetadataBarHtml()}
             `;
             lcBindEvents();
         }

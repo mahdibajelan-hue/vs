@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { ArrowLeft, BadgeDollarSign, ListTree, ClipboardList, GitBranch, GitPullRequestArrow, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, BadgeDollarSign, ListTree, ClipboardList, GitPullRequestArrow, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../store/useModuleAccessStore'
@@ -10,7 +10,6 @@ const VIEWS: { module: ModuleKey; tab?: string; title: string; text: string; ico
   { module: 'issues', tab: 'portfolio', title: 'موانع و مسائل سه‌سطحی', text: 'پروژه ← طرح ← سبد: تجمیع موانع و تأخیرها', icon: ClipboardList, color: '#f97316' },
   { module: 'finance', tab: 'cash:portfolio', title: 'نقدینگی سبد پروژه‌ها', text: 'جریان نقدی پیش‌بینی‌شدهٔ همهٔ پروژه‌ها کنار هم', icon: BadgeDollarSign, color: '#10b981' },
   { module: 'change', tab: 'dashboard', title: 'تغییرات همهٔ پروژه‌ها', text: 'درخواست‌های تغییر، اثر هزینه و زمان در کل سبد', icon: GitPullRequestArrow, color: '#eab308' },
-  { module: 'lifecycle', title: 'چرخهٔ عمر سبد', text: 'مرحله و گیت بعدی هر پروژه در یک نما', icon: GitBranch, color: '#22d3ee' },
 ]
 
 /**
