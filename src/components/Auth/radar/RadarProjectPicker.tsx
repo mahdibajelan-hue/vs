@@ -99,16 +99,22 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   )
 }
 
-/** What kind of asset the project builds, read from its name — gives each card its own icon and hue. */
+/** What kind of asset the project builds — gives each card its own icon and hue. Read from the project's category
+ * (master data); the name is only a fallback when the category is empty. The label shown is the category itself. */
 const KINDS: { re: RegExp; icon: LucideIcon; hue: string; label: string }[] = [
   { re: /SCADA|پایش|هوشمند|سامانه|نشت/, icon: Cpu, hue: '#f472b6', label: 'پایش هوشمند' },
   { re: /خط لوله|خطوط لوله|انتقال گاز/, icon: Waypoints, hue: '#22d3ee', label: 'خط لوله' },
   { re: /تقویت فشار|ایستگاه/, icon: Gauge, hue: '#a78bfa', label: 'ایستگاه' },
-  { re: /شیرین|پالایش|گوگرد|واحد/, icon: FlaskConical, hue: '#fbbf24', label: 'فرآورش' },
+  { re: /شیرین|پالایش|فرآورش|گوگرد|واحد/, icon: FlaskConical, hue: '#fbbf24', label: 'فرآورش' },
   { re: /مخزن|مخازن|ذخیره/, icon: Database, hue: '#fb923c', label: 'ذخیره‌سازی' },
   { re: /توزیع|شبکه/, icon: Network, hue: '#60a5fa', label: 'شبکهٔ توزیع' },
 ]
-const kindOf = (name: string) => KINDS.find((k) => k.re.test(name)) ?? { icon: Factory, hue: '#34d399', label: 'تأسیسات' }
+const OTHER = { icon: Factory, hue: '#34d399', label: 'تأسیسات' }
+function kindOf(p: MasterProject) {
+  const cat = p.projectCategory?.trim()
+  if (cat) return { ...(KINDS.find((k) => k.re.test(cat)) ?? OTHER), label: cat }
+  return KINDS.find((k) => k.re.test(p.officialName)) ?? OTHER
+}
 
 function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, onPick }: {
   p: MasterProject; index: number; recent: boolean; portfolio: string; program: string
@@ -120,7 +126,7 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
   const end = projectEnd(p)
   const code = p.projectIdCode || p.projectCode
   const prog = progress === 'loading' ? null : progress
-  const kind = kindOf(p.officialName)
+  const kind = kindOf(p)
   const Icon = kind.icon
   return (
     <button
