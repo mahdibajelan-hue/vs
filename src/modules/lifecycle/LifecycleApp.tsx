@@ -37,6 +37,8 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [view, setView] = useState<View>({ kind: 'portfolio' })
 
   useEffect(() => {
+    // this legacy module always shows its own data (the Stage-Gate tower switches the store to Stage-Gate)
+    useLifecycleStore.getState().setSgMode(false)
     fetchMasterData()
     fetchPortfolioWide()
     fetchTemplates()

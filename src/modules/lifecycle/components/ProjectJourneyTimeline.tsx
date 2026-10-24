@@ -127,7 +127,7 @@ export function ProjectJourneyTimeline({
               const label = isEpc ? 'گیت EPC' : node.stage.nameFa || STAGE_LABEL_FA[node.stage.stageKey as StageKey] || node.stage.stageKey
               const tooltip = isEpc
                 ? `گیت EPC — ${node.stages.map((s) => STAGE_LABEL_FA[s.stageKey as StageKey] ?? s.stageKey).join(' · ')}`
-                : `${STAGE_LABEL_FA[node.stage.stageKey as StageKey] ?? node.stage.stageKey} — ${STAGE_LABEL_EN[node.stage.stageKey as StageKey] ?? ''}`
+                : `${STAGE_LABEL_FA[node.stage.stageKey as StageKey] ?? node.stage.nameFa ?? node.stage.stageKey} — ${STAGE_LABEL_EN[node.stage.stageKey as StageKey] ?? node.stage.stageKey}`
               const targetKey = isEpc
                 ? (node.stages.find((s) => s.stageKey === currentStageKey) ?? node.stages[0])?.stageKey
                 : node.stage.stageKey

@@ -20,6 +20,7 @@ import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
 import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
 import { loadStageGateRadar } from './stageGateRadar'
+import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
 import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
 
 import {
@@ -204,7 +205,8 @@ function buildGate(bundle: ProjectLifecycleBundle, analysis: ProjectAnalysis, cu
   }
 }
 
-const EPC_RELEVANT_STAGES = new Set(['procurement', 'execution', 'commissioning'])
+// Stage-Gate G5 (procurement), G6 (execution), G7 (commissioning); the former module's keys for unlinked projects
+const EPC_RELEVANT_STAGES = new Set(['G5', 'G6', 'G7', 'procurement', 'execution', 'commissioning'])
 
 function buildEpc(analysis: ProjectAnalysis, currentStageKey: string): EpcDimension[] | null {
   if (!EPC_RELEVANT_STAGES.has(currentStageKey)) return null
@@ -364,7 +366,8 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- Lifecycle / Gate / EPC ------------------------------------------------
   try {
-    const plcBundle = await fetchLifecycleBundle(masterProjectId)
+    // the control tower's engines run on Stage-Gate (G1…G9) for linked projects; the former lifecycle rows only otherwise
+    const plcBundle = (await loadStageGateBundle(masterProjectId)) ?? (await fetchLifecycleBundle(masterProjectId))
     if (plcBundle && plcBundle.lifecycle) {
       const analysis = analyseProject(plcBundle, {
         openCriticalRisks: criticalCounts.openCriticalRisks,
@@ -396,7 +399,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   }
 
   // --- Lifecycle / next gate of record: Stage-Gate (G1…G9) -----------------------
-  // Health and EPC stay with the control tower above; the lifecycle strip and the next gate come from Stage-Gate.
+  // Health and EPC come from the control tower engines above; the lifecycle strip and the next gate from Stage-Gate's own readiness.
   try {
     const sg = await loadStageGateRadar(masterProjectId)
     if (sg) result = { ...result, lifecycle: sg.lifecycle, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }

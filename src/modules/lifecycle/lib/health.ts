@@ -34,7 +34,10 @@ export interface HealthInput {
   /** Scores an operator entered by hand for dimensions the platform cannot derive yet
    * (quality, HSE, cost, contract, cash flow currently come from other modules or manual entry). */
   stored: HealthScore[]
+  /** Which stages feed the stage-bound dimensions. Defaults to the former 11-stage keys; the Stage-Gate model passes G codes. */
+  stageOf?: { engineering: string[]; procurement: string[]; construction: string[] }
 }
+const DEFAULT_STAGE_OF = { engineering: ['engineering'], procurement: ['procurement'], construction: ['execution'] }
 
 export interface DerivedHealth {
   dimension: HealthDimension
@@ -89,7 +92,8 @@ function riskHealth(input: HealthInput): DerivedHealth {
 
 /** Procurement health leans on procurement-stage milestones plus overdue procurement actions. */
 function procurementHealth(input: HealthInput): DerivedHealth {
-  const procMilestones = input.milestones.filter((m) => m.stageKey === 'procurement')
+  const procStages = (input.stageOf ?? DEFAULT_STAGE_OF).procurement
+  const procMilestones = input.milestones.filter((m) => procStages.includes(m.stageKey))
   const kpis = computeMilestoneKpis(procMilestones)
   const overdueProcActions = input.actions.filter(
     (a) => isActionOverdue(a) && (a.priority === 'critical' || a.priority === 'high'),
@@ -113,8 +117,9 @@ function procurementHealth(input: HealthInput): DerivedHealth {
   }
 }
 
-function stageMilestoneHealth(input: HealthInput, dimension: HealthDimension, stageKey: string): DerivedHealth {
-  const list = input.milestones.filter((m) => m.stageKey === stageKey)
+function stageMilestoneHealth(input: HealthInput, dimension: 'engineering' | 'construction'): DerivedHealth {
+  const keys = (input.stageOf ?? DEFAULT_STAGE_OF)[dimension]
+  const list = input.milestones.filter((m) => keys.includes(m.stageKey))
   if (list.length === 0) {
     return { dimension, score: 100, status: 'green', explanation: 'موردی ثبت نشده است', isManual: false }
   }
@@ -138,8 +143,8 @@ const DERIVED: Partial<Record<HealthDimension, (i: HealthInput) => DerivedHealth
   schedule: scheduleHealth,
   risk: riskHealth,
   procurement: procurementHealth,
-  engineering: (i) => stageMilestoneHealth(i, 'engineering', 'engineering'),
-  construction: (i) => stageMilestoneHealth(i, 'construction', 'execution'),
+  engineering: (i) => stageMilestoneHealth(i, 'engineering'),
+  construction: (i) => stageMilestoneHealth(i, 'construction'),
 }
 
 export function computeHealth(input: HealthInput): DerivedHealth[] {
@@ -185,8 +190,10 @@ export function computeOverallHealth(
     }
   }
 
+  const avg = dimensions.length ? Math.round(dimensions.reduce((s, d) => s + d.score, 0) / dimensions.length) : 100
+  // a blocked gate turns the verdict black, but the score stays the real average (a bare 0 reads as "no data")
   if (blockedGateCount > 0) {
-    return { status: 'black', score: 0, drivenBy: null, isOverridden: false, overrideReason: '' }
+    return { status: 'black', score: avg, drivenBy: null, isOverridden: false, overrideReason: '' }
   }
 
   if (dimensions.length === 0) {
@@ -194,7 +201,6 @@ export function computeOverallHealth(
   }
 
   const worst = dimensions.reduce((acc, d) => (STATUS_RANK[d.status] > STATUS_RANK[acc.status] ? d : acc))
-  const avg = Math.round(dimensions.reduce((s, d) => s + d.score, 0) / dimensions.length)
 
   return {
     status: worst.status,

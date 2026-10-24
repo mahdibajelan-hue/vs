@@ -1,3 +1,4 @@
+import { loadStageGateBundle } from '../lib/stageGateBundleLoader'
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
@@ -125,6 +126,10 @@ interface LifecycleState {
   fetchPortfolioWide: () => Promise<void>
   fetchTemplates: () => Promise<void>
   selectProject: (projectId: string | null) => Promise<void>
+  /** true: the open project's bundle is built from Stage-Gate (G1…G9) — set by the Stage-Gate module's control tower.
+   *  Every reload after a save then rebuilds it from Stage-Gate too. */
+  sgMode: boolean
+  setSgMode: (on: boolean) => void
   fetchAuditTrail: (projectId: string) => Promise<void>
 
   seedTemplates: () => Promise<void>
@@ -208,12 +213,20 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     set({ templates: ((data ?? []) as PlcTemplateRow[]).map(templateFromRow) })
   },
 
+  sgMode: false,
+  setSgMode: (on) => set({ sgMode: on }),
+
   selectProject: async (projectId) => {
     if (!projectId) {
       set({ currentProjectId: null, bundle: EMPTY_BUNDLE, auditTrail: [] })
       return
     }
     set({ currentProjectId: projectId, loadingProject: true })
+    if (get().sgMode) {
+      const sgBundle = await loadStageGateBundle(projectId)
+      set((s) => (s.currentProjectId !== projectId ? { loadingProject: false } : { loadingProject: false, bundle: sgBundle ?? EMPTY_BUNDLE }))
+      return
+    }
 
     const [lc, st, gt, cl, ms, act, hl, wn, ac, dc, pl] = await Promise.all([
       supabase.from('plc_project_lifecycle').select('*').eq('project_id', projectId).maybeSingle(),

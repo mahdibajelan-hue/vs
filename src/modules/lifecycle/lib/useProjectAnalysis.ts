@@ -5,6 +5,7 @@ import { computeHealth, computeOverallHealth, type DerivedHealth, type OverallHe
 import { computeMilestoneKpis, computeScheduleVariance, baselineCompletion, forecastCompletion, daysBetween, type MilestoneKpis, type ScheduleVariance } from './milestones'
 import { computeWarnings, computeManagementAttention, type AttentionItem, type ComputedWarning } from './earlyWarning'
 import { isActionOverdue, type GateStatus, type LifecycleAction } from '../types'
+import { SG_DIMENSION_STAGES, isStageGateKey } from './stageGateBundle'
 
 /** One place that runs every engine over a project bundle, so the Control Tower, the dashboards
  * and the reports can never disagree about a project's numbers. */
@@ -75,6 +76,8 @@ export function analyseProject(
     openCriticalIssues,
     blockedGateCount,
     stored: bundle.health,
+    // a bundle built from Stage-Gate (G1…G9) reads its stage-bound dimensions from the G phases
+    stageOf: bundle.stages.some((s) => isStageGateKey(s.stageKey)) ? SG_DIMENSION_STAGES : undefined,
   })
   const overall = computeOverallHealth(health, bundle.lifecycle, blockedGateCount)
 

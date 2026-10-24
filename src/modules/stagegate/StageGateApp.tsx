@@ -69,7 +69,12 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   // the control tower reads the former lifecycle module's data for the linked master project
   const selectPlcProject = useLifecycleStore((s) => s.selectProject)
-  useEffect(() => { if (master && view !== 'lifecycle') void selectPlcProject(master.id) }, [master, view, selectPlcProject])
+  // the tower reads its bundle from Stage-Gate (G1…G9), not from the former lifecycle templates
+  useEffect(() => {
+    if (!master || view === 'lifecycle') return
+    useLifecycleStore.getState().setSgMode(true)
+    void selectPlcProject(master.id)
+  }, [master, view, selectPlcProject])
   // the engine renders into #lcBody: when coming back to the lifecycle tab, draw it again
   useEffect(() => { if (view === 'lifecycle' && selected && engineRef.current) void engineRef.current.openLifecyclePreview(selected) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [view])
 
@@ -145,7 +150,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
         {view !== 'lifecycle' && master && (
           <div className="plc-canvas min-h-full">
             {view === 'tower' ? (
-              <ControlTowerPage project={master} onBack={() => setView('lifecycle')} onOpenStage={() => setView('lifecycle')} onOpenMilestones={() => setView('milestones')} />
+              <ControlTowerPage project={master} backLabel="چرخهٔ عمر و گیت‌ها" onBack={() => setView('lifecycle')} onOpenStage={() => setView('lifecycle')} onOpenMilestones={() => setView('milestones')} />
             ) : (
               <MilestonesPage projectId={master.id} onBack={() => setView('tower')} />
             )}

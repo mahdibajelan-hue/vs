@@ -36,7 +36,8 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
   const [filter, setFilter] = useState<Filter>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
-  const [draft, setDraft] = useState({ name: '', baselineDate: '', forecastDate: '', isCritical: false })
+  const [draft, setDraft] = useState({ name: '', stageKey: '', baselineDate: '', forecastDate: '', isCritical: false })
+  const draftStage = draft.stageKey || bundle.lifecycle?.currentStageKey || bundle.stages[0]?.stageKey || ''
   const [forecastEdit, setForecastEdit] = useState<{ id: string; date: string; reason: string } | null>(null)
   const [actionDraft, setActionDraft] = useState<{ milestoneId: string; title: string } | null>(null)
 
@@ -115,6 +116,15 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                 className="mb-2 w-full rounded-lg border bg-black/20 px-2.5 py-2 text-xs outline-none"
                 style={{ borderColor: 'var(--border-soft)' }}
               />
+              {bundle.stages.length > 0 && (
+                <label className="mb-2 block text-[10px] text-muted">
+                  مرحله
+                  <select value={draftStage} onChange={(e) => setDraft({ ...draft, stageKey: e.target.value })}
+                    className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }}>
+                    {bundle.stages.map((st) => <option key={st.stageKey} value={st.stageKey}>{st.stageKey} — {st.nameFa}</option>)}
+                  </select>
+                </label>
+              )}
               <div className="mb-2 grid grid-cols-2 gap-2">
                 <label className="text-[10px] text-muted">
                   تاریخ Baseline (میلادی)
@@ -136,11 +146,12 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                 onClick={async () => {
                   await createMilestone(projectId, {
                     name: draft.name.trim(),
+                    stageKey: draftStage || undefined,
                     baselineDate: draft.baselineDate || null,
                     forecastDate: draft.forecastDate || null,
                     isCritical: draft.isCritical,
                   })
-                  setDraft({ name: '', baselineDate: '', forecastDate: '', isCritical: false })
+                  setDraft({ name: '', stageKey: '', baselineDate: '', forecastDate: '', isCritical: false })
                   setShowNew(false)
                 }}
                 className="rounded-lg px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
@@ -174,7 +185,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                               {MILESTONE_TYPE_LABEL_FA[ms.milestoneType]}
                             </span>
                             {ms.stageKey && (
-                              <span className="text-[10px] text-muted">{STAGE_LABEL_FA[ms.stageKey as StageKey] ?? ms.stageKey}</span>
+                              <span className="text-[10px] text-muted">{bundle.stages.find((st) => st.stageKey === ms.stageKey)?.nameFa ?? STAGE_LABEL_FA[ms.stageKey as StageKey] ?? ms.stageKey}</span>
                             )}
                           </div>
                           <div className="mt-1 flex flex-wrap gap-2 plc-stat-sub">

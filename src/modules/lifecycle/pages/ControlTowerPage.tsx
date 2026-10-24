@@ -37,9 +37,10 @@ import { Card, EmptyState, SeverityPill, StatusDot, STATUS_COLOR, STATUS_TEXT_CO
  * Reading order: verdict → health → where the project is → what is shut → what is late → why.
  */
 export function ControlTowerPage({
-  project, onBack, onOpenStage, onOpenMilestones,
+  project, onBack, onOpenStage, onOpenMilestones, backLabel = 'فهرست پروژه‌ها',
 }: {
   project: MasterProject
+  backLabel?: string
   onBack: () => void
   onOpenStage: (stageKey: string) => void
   onOpenMilestones: () => void
@@ -56,7 +57,9 @@ export function ControlTowerPage({
   )
 
   const currentStageKey = bundle.lifecycle?.currentStageKey ?? ''
-  const stageLabel = STAGE_LABEL_FA[currentStageKey as StageKey] ?? currentStageKey ?? '—'
+  // stage names come with the bundle (Stage-Gate G1…G9); the old fixed labels only as a fallback
+  const sgMode = useLifecycleStore((s) => s.sgMode)
+  const stageLabel = bundle.stages.find((s) => s.stageKey === currentStageKey)?.nameFa || STAGE_LABEL_FA[currentStageKey as StageKey] || currentStageKey || '—'
 
   if (loading) return <EmptyState message="در حال بارگذاری..." />
 
@@ -68,10 +71,17 @@ export function ControlTowerPage({
         </button>
         <Card>
           <p className="mb-1 text-sm font-bold">چرخه عمر برای این پروژه تعریف نشده است</p>
-          <p className="text-xs text-muted">
-            برای فعال‌سازی برج کنترل، ابتدا یک قالب چرخه عمر به پروژه «{project.officialName}» تخصیص دهید
-            (تب «قالب‌ها»). با تخصیص قالب، مراحل، گیت‌ها و چک‌لیست‌های آن به پروژه کپی می‌شوند.
-          </p>
+          {sgMode ? (
+            <p className="text-xs text-muted">
+              پروژهٔ «{project.officialName}» هنوز به یک پروژهٔ Stage-Gate وصل نیست یا مراحل G1 تا G9 تعریف نشده‌اند.
+              از تب «چرخهٔ عمر و گیت‌ها» پروژه را به داده‌های پایه وصل کنید.
+            </p>
+          ) : (
+            <p className="text-xs text-muted">
+              برای فعال‌سازی برج کنترل، ابتدا یک قالب چرخه عمر به پروژه «{project.officialName}» تخصیص دهید
+              (تب «قالب‌ها»). با تخصیص قالب، مراحل، گیت‌ها و چک‌لیست‌های آن به پروژه کپی می‌شوند.
+            </p>
+          )}
         </Card>
       </div>
     )
@@ -102,7 +112,7 @@ export function ControlTowerPage({
       {/* Identity strip — deliberately thin. The project's name is context, not the message. */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-primary">
-          <ArrowLeft size={13} /> فهرست پروژه‌ها
+          <ArrowLeft size={13} /> {backLabel}
         </button>
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={analysis.overall.status} size={8} />
