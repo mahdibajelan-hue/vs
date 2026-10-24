@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, CalendarCheck2, Layers, MapPin, Radar as RadarIcon, Search, Clock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarCheck2, Layers, MapPin, Radar as RadarIcon, Search, Clock, Waypoints, Gauge, FlaskConical, Database, Cpu, Network, Factory, TrendingUp, TrendingDown, Minus, Hourglass, type LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { PROJECT_STATUS_LABEL_FA, PROJECT_STATUS_TONE, type MasterProject } from '../../../modules/masterdata/types'
 import { formatJalali } from '../../../lib/jalali'
@@ -99,6 +99,17 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   )
 }
 
+/** What kind of asset the project builds, read from its name — gives each card its own icon and hue. */
+const KINDS: { re: RegExp; icon: LucideIcon; hue: string; label: string }[] = [
+  { re: /SCADA|پایش|هوشمند|سامانه|نشت/, icon: Cpu, hue: '#f472b6', label: 'پایش هوشمند' },
+  { re: /خط لوله|خطوط لوله|انتقال گاز/, icon: Waypoints, hue: '#22d3ee', label: 'خط لوله' },
+  { re: /تقویت فشار|ایستگاه/, icon: Gauge, hue: '#a78bfa', label: 'ایستگاه' },
+  { re: /شیرین|پالایش|گوگرد|واحد/, icon: FlaskConical, hue: '#fbbf24', label: 'فرآورش' },
+  { re: /مخزن|مخازن|ذخیره/, icon: Database, hue: '#fb923c', label: 'ذخیره‌سازی' },
+  { re: /توزیع|شبکه/, icon: Network, hue: '#60a5fa', label: 'شبکهٔ توزیع' },
+]
+const kindOf = (name: string) => KINDS.find((k) => k.re.test(name)) ?? { icon: Factory, hue: '#34d399', label: 'تأسیسات' }
+
 function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, onPick }: {
   p: MasterProject; index: number; recent: boolean; portfolio: string; program: string
   progress: PickerProgress | null | 'loading'
@@ -109,23 +120,28 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
   const end = projectEnd(p)
   const code = p.projectIdCode || p.projectCode
   const prog = progress === 'loading' ? null : progress
+  const kind = kindOf(p.officialName)
+  const Icon = kind.icon
   return (
     <button
       type="button"
       className="rpk-card"
-      style={{ '--tone': tone, animationDelay: `${Math.min(index, 10) * 40}ms` } as CSSProperties}
+      style={{ '--tone': tone, '--hue': kind.hue, animationDelay: `${Math.min(index, 12) * 35}ms` } as CSSProperties}
       onClick={() => onPick(p.id)}
       onMouseEnter={() => onHover(p.id)} onMouseLeave={() => onHover(null)}
       onFocus={() => onHover(p.id)} onBlur={() => onHover(null)}
       aria-label={`${p.officialName}${prog ? ` — پیشرفت چرخهٔ عمر ${faNum(prog.pct)}٪، فاز ${prog.phaseTitle}` : ''}`}
     >
+      <span className="rpk-card-glow" aria-hidden />
       <span className="rpk-card-top">
+        <span className="rpk-kind" title={kind.label}><Icon size={17} strokeWidth={2} aria-hidden /></span>
         <span className="rpk-status"><i aria-hidden />{PROJECT_STATUS_LABEL_FA[p.status] ?? p.status}</span>
         {recent && <span className="rpk-recent"><Clock size={11} aria-hidden /> اخیر</span>}
         {code && <span className="rpk-code" dir="ltr">{code}</span>}
       </span>
       <span className="rpk-card-body">
         <span className="rpk-card-main">
+          <span className="rpk-kind-label">{kind.label}</span>
           <ProjectName name={p.officialName} />
           <span className="rpk-meta">
             {p.location && <span><MapPin size={12} aria-hidden />{p.location}</span>}
@@ -140,7 +156,7 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
         ) : (
           <>
             <span className="rpk-clock-row">
-              <span><i className="rpk-tick" aria-hidden />زمان سپری‌شدهٔ قرارداد</span>
+              <span><Hourglass size={12} aria-hidden /> زمان سپری‌شدهٔ قرارداد</span>
               <b>{faNum(used)}٪</b>
             </span>
             <span className="rpk-track"><span style={{ width: `${used}%` }} /></span>
@@ -185,42 +201,87 @@ const arc = (a0: number, a1: number) => {
   const [x0, y0] = polar(a0), [x1, y1] = polar(a1)
   return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${DIAL.r} ${DIAL.r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`
 }
-/** behind the contract clock by more than 20 points → red, by more than 5 → amber; otherwise on track */
-const paceColor = (pct: number, elapsed: number | null) =>
-  elapsed == null ? 'var(--radar-cyan, #38bdf8)' : elapsed - pct > 20 ? '#f87171' : elapsed - pct > 5 ? '#f0a836' : 'var(--radar-green)'
+/** one colour per gate along the lifecycle: definition violet → design/tender blue → execution amber → handover green */
+const GATE_HUES = ['#a78bfa', '#818cf8', '#60a5fa', '#38bdf8', '#22d3ee', '#fbbf24', '#fb923c', '#34d399', '#22c55e']
+/** pace = lifecycle progress against the share of contract time spent */
+function paceOf(pct: number, elapsed: number | null): { color: string; label: string; Icon: LucideIcon } {
+  if (elapsed == null) return { color: '#38bdf8', label: 'بدون تاریخ قرارداد', Icon: Minus }
+  const d = pct - elapsed
+  if (d >= -5) return { color: '#22c55e', label: d > 5 ? `جلوتر ${faNum(Math.round(d))}٪` : 'مطابق زمان', Icon: d > 5 ? TrendingUp : Minus }
+  return { color: d >= -20 ? '#f0a836' : '#f87171', label: `عقب ${faNum(Math.round(-d))}٪`, Icon: TrendingDown }
+}
 
-/** Gate dial: each Stage-Gate phase is one arc segment filled by its own completion; the tick marks how much contract time is spent. */
+/** Counts up to `to` once (skipped under reduced motion). */
+function useCountUp(to: number | null, ms = 900) {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    if (to == null) return
+    if (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(to); return }
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms)
+      setV(Math.round(to * (1 - Math.pow(1 - k, 3))))
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [to, ms])
+  return v
+}
+
+/** Gate dial: each Stage-Gate phase is one coloured arc segment filled by its own completion; the needle points at the
+ * overall progress, the white tick marks how much contract time is spent, the badge below says ahead or behind. */
 function GateDial({ progress, elapsed }: { progress: PickerProgress | null | 'loading'; elapsed: number | null }) {
   const loading = progress === 'loading'
   const prog = loading ? null : progress
   const segs = prog?.segments ?? Array.from({ length: 9 }, (_, i) => ({ code: `G${i + 1}`, pct: 0, state: 'upcoming' as const }))
   const step = DIAL.sweep / segs.length
-  const color = prog ? paceColor(prog.pct, elapsed) : 'var(--text-muted)'
+  const shown = useCountUp(prog?.pct ?? null)
+  const pace = prog ? paceOf(prog.pct, elapsed) : null
   const tickAt = elapsed == null ? null : DIAL.from + (DIAL.sweep * Math.min(100, Math.max(0, elapsed))) / 100
+  const needleDeg = prog ? DIAL.from + (DIAL.sweep * prog.pct) / 100 : DIAL.from
+  const curIdx = segs.findIndex((x) => x.state === 'current')
+  const curHue = GATE_HUES[Math.max(0, curIdx)] ?? GATE_HUES[8]
   return (
-    <span className={`rpk-dial ${loading ? 'is-loading' : ''} ${!prog && !loading ? 'is-empty' : ''}`} style={{ '--pace': color } as CSSProperties}>
+    <span className={`rpk-dial ${loading ? 'is-loading' : ''} ${!prog && !loading ? 'is-empty' : ''}`} style={{ '--pace': pace?.color ?? 'var(--text-muted)', '--cur': curHue } as CSSProperties}>
       <svg viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <radialGradient id="rpk-dial-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--cur)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="var(--cur)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {prog && <circle cx={DIAL.c} cy={DIAL.c} r={36} fill="url(#rpk-dial-core)" className="rpk-dial-core" />}
         {segs.map((sg, i) => {
           const a0 = DIAL.from + i * step + DIAL.gap / 2
           const a1 = a0 + step - DIAL.gap
           const fillTo = a0 + ((a1 - a0) * sg.pct) / 100
+          const hue = GATE_HUES[Math.round((i / Math.max(1, segs.length - 1)) * (GATE_HUES.length - 1))]
           return (
-            <g key={sg.code} className={`rpk-seg is-${sg.state}`}>
+            <g key={sg.code} className={`rpk-seg is-${sg.state}`} style={{ '--seg': hue } as CSSProperties}>
               <path d={arc(a0, a1)} className="rpk-seg-track" />
-              {sg.pct > 0 && <path d={arc(a0, fillTo)} pathLength={1} className="rpk-seg-fill" style={{ animationDelay: `${120 + i * 70}ms` }} />}
+              {sg.pct > 0 && <path d={arc(a0, fillTo)} pathLength={1} className="rpk-seg-fill" style={{ animationDelay: `${120 + i * 80}ms` }} />}
               <title>{`${sg.code}: ${faNum(sg.pct)}٪`}</title>
             </g>
           )
         })}
         {tickAt != null && (() => {
-          const [x0, y0] = polar(tickAt, DIAL.r - 7), [x1, y1] = polar(tickAt, DIAL.r + 8)
+          const [x0, y0] = polar(tickAt, DIAL.r - 6), [x1, y1] = polar(tickAt, DIAL.r + 9)
           return <line x1={x0} y1={y0} x2={x1} y2={y1} className="rpk-dial-tick"><title>{`زمان سپری‌شدهٔ قرارداد: ${faNum(elapsed ?? 0)}٪`}</title></line>
         })()}
+        {prog && (
+          <g className="rpk-needle" style={{ '--to': `${needleDeg}deg` } as CSSProperties}>
+            {/* a short pointer just inside the arc, clear of the number in the centre */}
+            <line x1={DIAL.c + 28} y1={DIAL.c} x2={DIAL.c + DIAL.r - 9} y2={DIAL.c} />
+            <circle cx={DIAL.c + DIAL.r - 9} cy={DIAL.c} r={2.6} />
+          </g>
+        )}
       </svg>
       <span className="rpk-dial-center">
         {prog ? (
           <>
-            <b className="rpk-dial-pct">{faNum(prog.pct)}<small>٪</small></b>
+            <b className="rpk-dial-pct">{faNum(shown)}<small>٪</small></b>
             <span className="rpk-dial-phase" dir="ltr">{prog.phaseCode}</span>
           </>
         ) : (
@@ -228,6 +289,7 @@ function GateDial({ progress, elapsed }: { progress: PickerProgress | null | 'lo
         )}
       </span>
       <span className="rpk-dial-cap">{prog ? prog.phaseTitle : loading ? '\u00a0' : 'بدون دادهٔ چرخهٔ عمر'}</span>
+      {pace && <span className="rpk-pace"><pace.Icon size={11} strokeWidth={2.5} aria-hidden />{pace.label}</span>}
     </span>
   )
 }
