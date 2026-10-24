@@ -90,7 +90,48 @@
 .rpk-status i, .rs-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 6px var(--tone); }
 .rpk-recent { display: inline-flex; align-items: center; gap: 0.25rem; height: 1.45rem; padding: 0 0.5rem; border-radius: 99px; font-size: 10px; font-weight: 700; color: var(--radar-green); border: 1px solid color-mix(in srgb, var(--radar-green) 35%, transparent); }
 .rpk-code { margin-inline-start: auto; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--text-muted); }
-.rpk-name { font-size: 15px; font-weight: 800; line-height: 1.6; }
+.rpk-card-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; }
+.rpk-card-main { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+
+/* the project's name as a title: figures + unit in the accent, the section on its own line */
+.rpk-name { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.rpk-name-main { font-size: 16px; font-weight: 900; line-height: 1.55; letter-spacing: -0.005em; text-wrap: balance; }
+.rpk-name-fig {
+  display: inline-flex; align-items: baseline; gap: 0.18rem; padding: 0 0.32rem; margin: 0 0.05rem; border-radius: 0.4rem;
+  font-weight: 900; font-variant-numeric: tabular-nums; color: var(--radar-green);
+  background: color-mix(in srgb, var(--radar-green) 11%, transparent);
+}
+.rpk-name-fig small { font-size: 0.72em; font-weight: 700; opacity: 0.85; }
+.rpk-name-sec { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.rpk-name-sec::before { content: ''; width: 0.9rem; height: 2px; border-radius: 2px; background: var(--tone); flex: none; }
+
+/* gate dial: one arc segment per Stage-Gate phase, the tick = contract time spent */
+.rpk-dial { --pace: var(--radar-green); position: relative; display: flex; flex-direction: column; align-items: center; width: 7.25rem; flex: none; }
+.rpk-dial svg { width: 7.25rem; height: 7.25rem; overflow: visible; }
+.rpk-seg-track { fill: none; stroke: color-mix(in srgb, var(--text-muted) 20%, transparent); stroke-width: 8; stroke-linecap: butt; }
+.rpk-seg-fill {
+  fill: none; stroke: var(--pace); stroke-width: 8; stroke-linecap: butt;
+  stroke-dasharray: 1; stroke-dashoffset: 0;
+  animation: rpk-fill 700ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.rpk-seg.is-done .rpk-seg-fill { opacity: 0.82; }
+.rpk-seg.is-current .rpk-seg-track { stroke: color-mix(in srgb, var(--pace) 24%, transparent); }
+.rpk-seg.is-current .rpk-seg-fill { filter: drop-shadow(0 0 4px var(--pace)); }
+@keyframes rpk-fill { from { stroke-dashoffset: 1; } }
+.rpk-dial-tick { stroke: var(--text-primary); stroke-width: 2; stroke-linecap: round; }
+.rpk-dial.is-loading .rpk-seg-track { animation: rpk-pulse 1.4s ease-in-out infinite; }
+.rpk-dial.is-empty .rpk-seg-track { stroke-dasharray: 2 3; }
+.rpk-dial-center { position: absolute; top: 0; inset-inline: 0; height: 7.25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; pointer-events: none; }
+.rpk-dial-pct { font-size: 1.55rem; font-weight: 900; line-height: 1; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rpk-dial-pct small { font-size: 0.55em; font-weight: 800; color: var(--pace); margin-inline-start: 0.08rem; }
+.rpk-dial-pct.is-muted { color: var(--text-muted); }
+.rpk-dial-phase {
+  font-family: ui-monospace, monospace; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; padding: 0.05rem 0.4rem; border-radius: 99px;
+  color: var(--pace); background: color-mix(in srgb, var(--pace) 14%, transparent);
+}
+.rpk-dial-cap { margin-top: -0.85rem; max-width: 7.25rem; font-size: 10px; font-weight: 700; color: var(--text-secondary); text-align: center; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rpk-card:hover .rpk-seg.is-current .rpk-seg-fill { filter: drop-shadow(0 0 7px var(--pace)); }
+.rpk-tick { display: inline-block; width: 2px; height: 0.7rem; margin-inline-end: 0.35rem; vertical-align: -0.1rem; border-radius: 2px; background: var(--text-primary); }
 .rpk-meta { display: flex; flex-direction: column; gap: 0.25rem; font-size: 11.5px; color: var(--text-secondary); }
 .rpk-meta > span { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .rpk-meta svg { flex: none; color: var(--text-muted); }
@@ -170,7 +211,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rpk-sweep { animation: none; opacity: 0.5; }
-  .rpk-card, .rpk-card.is-skel { animation: none; }
+  .rpk-card, .rpk-card.is-skel, .rpk-seg-fill, .rpk-dial.is-loading .rpk-seg-track { animation: none; }
   .rs-side, .rs-side.is-open { transition: none; }
 }
 

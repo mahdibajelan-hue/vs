@@ -1,9 +1,11 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, CalendarCheck2, Layers, MapPin, Radar as RadarIcon, Search, Clock } from 'lucide-react'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { PROJECT_STATUS_LABEL_FA, PROJECT_STATUS_TONE, type MasterProject } from '../../../modules/masterdata/types'
 import { formatJalali } from '../../../lib/jalali'
 import { orderProjects, projectEnd, recentProjects, timeElapsed } from './projectNav'
+import { loadPickerProgress } from './pickerProgress'
+import type { PickerProgress } from './pickerProgressCore'
 
 const TONE: Record<'neutral' | 'green' | 'amber' | 'red', string> = { neutral: '#94a3b8', green: '#22c55e', amber: '#f59e0b', red: '#ef4444' }
 const faNum = (n: number) => n.toLocaleString('fa-IR')
@@ -23,6 +25,13 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   const [pf, setPf] = useState<string | null>(null)
   const [hot, setHot] = useState<string | null>(null)
   const recent = useMemo(() => new Set(recentProjects()), [])
+  // lifecycle progress per project (Stage-Gate); undefined while loading, a map (possibly empty) once known
+  const [progress, setProgress] = useState<Map<string, PickerProgress> | undefined>(undefined)
+  useEffect(() => {
+    let alive = true
+    loadPickerProgress().then((m) => { if (alive) setProgress(m) }).catch(() => { if (alive) setProgress(new Map()) })
+    return () => { alive = false }
+  }, [])
 
   const ordered = useMemo(() => orderProjects(projects), [projects])
   const usedPortfolios = portfolios.filter((p) => projects.some((x) => x.portfolioId === p.id))
@@ -79,6 +88,7 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
           {list.map((p, i) => (
             <ProjectCard
               key={p.id} p={p} index={i} recent={recent.has(p.id)}
+              progress={progress === undefined ? 'loading' : progress.get(p.id) ?? null}
               portfolio={nameOf(portfolios, p.portfolioId)} program={nameOf(programs, p.programId)}
               onHover={setHot} onPick={onPick}
             />
@@ -89,14 +99,16 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   )
 }
 
-function ProjectCard({ p, index, recent, portfolio, program, onHover, onPick }: {
+function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, onPick }: {
   p: MasterProject; index: number; recent: boolean; portfolio: string; program: string
+  progress: PickerProgress | null | 'loading'
   onHover: (id: string | null) => void; onPick: (id: string) => void
 }) {
   const tone = TONE[PROJECT_STATUS_TONE[p.status] ?? 'neutral']
   const used = timeElapsed(p)
   const end = projectEnd(p)
   const code = p.projectIdCode || p.projectCode
+  const prog = progress === 'loading' ? null : progress
   return (
     <button
       type="button"
@@ -105,16 +117,22 @@ function ProjectCard({ p, index, recent, portfolio, program, onHover, onPick }: 
       onClick={() => onPick(p.id)}
       onMouseEnter={() => onHover(p.id)} onMouseLeave={() => onHover(null)}
       onFocus={() => onHover(p.id)} onBlur={() => onHover(null)}
+      aria-label={`${p.officialName}${prog ? ` — پیشرفت چرخهٔ عمر ${faNum(prog.pct)}٪، فاز ${prog.phaseTitle}` : ''}`}
     >
       <span className="rpk-card-top">
         <span className="rpk-status"><i aria-hidden />{PROJECT_STATUS_LABEL_FA[p.status] ?? p.status}</span>
         {recent && <span className="rpk-recent"><Clock size={11} aria-hidden /> اخیر</span>}
         {code && <span className="rpk-code" dir="ltr">{code}</span>}
       </span>
-      <span className="rpk-name">{p.officialName}</span>
-      <span className="rpk-meta">
-        {p.location && <span><MapPin size={12} aria-hidden />{p.location}</span>}
-        {(portfolio || program) && <span><Layers size={12} aria-hidden />{[portfolio, program].filter(Boolean).join(' › ')}</span>}
+      <span className="rpk-card-body">
+        <span className="rpk-card-main">
+          <ProjectName name={p.officialName} />
+          <span className="rpk-meta">
+            {p.location && <span><MapPin size={12} aria-hidden />{p.location}</span>}
+            {(portfolio || program) && <span><Layers size={12} aria-hidden />{[portfolio, program].filter(Boolean).join(' › ')}</span>}
+          </span>
+        </span>
+        <GateDial progress={progress} elapsed={used} />
       </span>
       <span className="rpk-clock">
         {used == null ? (
@@ -122,7 +140,7 @@ function ProjectCard({ p, index, recent, portfolio, program, onHover, onPick }: 
         ) : (
           <>
             <span className="rpk-clock-row">
-              <span>زمان سپری‌شدهٔ قرارداد</span>
+              <span><i className="rpk-tick" aria-hidden />زمان سپری‌شدهٔ قرارداد</span>
               <b>{faNum(used)}٪</b>
             </span>
             <span className="rpk-track"><span style={{ width: `${used}%` }} /></span>
@@ -132,6 +150,85 @@ function ProjectCard({ p, index, recent, portfolio, program, onHover, onPick }: 
       </span>
       <span className="rpk-go">ورود به اتاق فرمان <ArrowLeft size={14} aria-hidden /></span>
     </button>
+  )
+}
+
+const UNIT = /^(اینچ|کیلومتر|کیلوولت|مگاوات|متر|هکتار|تن|مترمکعب|میلیون|هزار)$/
+/** The project's name as a title: figures and their unit lifted out in the accent, the section after a dash on its own line. */
+function ProjectName({ name }: { name: string }) {
+  const [main, ...rest] = name.split(/\s+[-–—]\s+/)
+  const words = main.split(/\s+/)
+  const parts: ReactNode[] = []
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]
+    // only a measure (figure + unit, e.g. «۴۲ اینچ») is lifted out; bare numbers stay part of the text
+    if (/^[0-9۰-۹.٫/]+$/.test(w) && words[i + 1] && UNIT.test(words[i + 1])) {
+      parts.push(<b key={i} className="rpk-name-fig">{w}<small>{words[++i]}</small></b>)
+    } else parts.push(<span key={i}>{w}</span>)
+    if (i < words.length - 1) parts.push(' ')
+  }
+  return (
+    <span className="rpk-name">
+      <span className="rpk-name-main">{parts}</span>
+      {rest.length > 0 && <span className="rpk-name-sec">{rest.join(' — ')}</span>}
+    </span>
+  )
+}
+
+// gate dial geometry: a 270° arc opening at the bottom, one segment per gate, G1 at the lower left
+const DIAL = { c: 60, r: 46, from: 135, sweep: 270, gap: 4 }
+const polar = (deg: number, r = DIAL.r) => {
+  const a = (deg * Math.PI) / 180
+  return [DIAL.c + r * Math.cos(a), DIAL.c + r * Math.sin(a)] as const
+}
+const arc = (a0: number, a1: number) => {
+  const [x0, y0] = polar(a0), [x1, y1] = polar(a1)
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${DIAL.r} ${DIAL.r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`
+}
+/** behind the contract clock by more than 20 points → red, by more than 5 → amber; otherwise on track */
+const paceColor = (pct: number, elapsed: number | null) =>
+  elapsed == null ? 'var(--radar-cyan, #38bdf8)' : elapsed - pct > 20 ? '#f87171' : elapsed - pct > 5 ? '#f0a836' : 'var(--radar-green)'
+
+/** Gate dial: each Stage-Gate phase is one arc segment filled by its own completion; the tick marks how much contract time is spent. */
+function GateDial({ progress, elapsed }: { progress: PickerProgress | null | 'loading'; elapsed: number | null }) {
+  const loading = progress === 'loading'
+  const prog = loading ? null : progress
+  const segs = prog?.segments ?? Array.from({ length: 9 }, (_, i) => ({ code: `G${i + 1}`, pct: 0, state: 'upcoming' as const }))
+  const step = DIAL.sweep / segs.length
+  const color = prog ? paceColor(prog.pct, elapsed) : 'var(--text-muted)'
+  const tickAt = elapsed == null ? null : DIAL.from + (DIAL.sweep * Math.min(100, Math.max(0, elapsed))) / 100
+  return (
+    <span className={`rpk-dial ${loading ? 'is-loading' : ''} ${!prog && !loading ? 'is-empty' : ''}`} style={{ '--pace': color } as CSSProperties}>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        {segs.map((sg, i) => {
+          const a0 = DIAL.from + i * step + DIAL.gap / 2
+          const a1 = a0 + step - DIAL.gap
+          const fillTo = a0 + ((a1 - a0) * sg.pct) / 100
+          return (
+            <g key={sg.code} className={`rpk-seg is-${sg.state}`}>
+              <path d={arc(a0, a1)} className="rpk-seg-track" />
+              {sg.pct > 0 && <path d={arc(a0, fillTo)} pathLength={1} className="rpk-seg-fill" style={{ animationDelay: `${120 + i * 70}ms` }} />}
+              <title>{`${sg.code}: ${faNum(sg.pct)}٪`}</title>
+            </g>
+          )
+        })}
+        {tickAt != null && (() => {
+          const [x0, y0] = polar(tickAt, DIAL.r - 7), [x1, y1] = polar(tickAt, DIAL.r + 8)
+          return <line x1={x0} y1={y0} x2={x1} y2={y1} className="rpk-dial-tick"><title>{`زمان سپری‌شدهٔ قرارداد: ${faNum(elapsed ?? 0)}٪`}</title></line>
+        })()}
+      </svg>
+      <span className="rpk-dial-center">
+        {prog ? (
+          <>
+            <b className="rpk-dial-pct">{faNum(prog.pct)}<small>٪</small></b>
+            <span className="rpk-dial-phase" dir="ltr">{prog.phaseCode}</span>
+          </>
+        ) : (
+          <b className="rpk-dial-pct is-muted">{loading ? '' : '—'}</b>
+        )}
+      </span>
+      <span className="rpk-dial-cap">{prog ? prog.phaseTitle : loading ? '\u00a0' : 'بدون دادهٔ چرخهٔ عمر'}</span>
+    </span>
   )
 }
 
